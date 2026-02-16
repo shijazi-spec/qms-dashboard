@@ -1,5 +1,3 @@
-import { google } from 'googleapis';
-
 let connectionSettings: any;
 
 async function getAccessToken() {
@@ -36,15 +34,26 @@ async function getAccessToken() {
   return accessToken;
 }
 
-export async function getUncachableGoogleCalendarClient() {
+const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
+
+async function calendarApiRequest(path: string, params?: Record<string, string>) {
   const accessToken = await getAccessToken();
-
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
+  const url = new URL(`${CALENDAR_API_BASE}${path}`);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  const response = await fetch(url.toString(), {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
   });
-
-  return google.calendar({ version: 'v3', auth: oauth2Client });
+  if (!response.ok) {
+    throw new Error(`Calendar API error: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
 }
 
 export interface CalendarEvent {
@@ -65,18 +74,18 @@ export async function fetchCalendarEvents(
   endDate: Date,
   calendarId: string = 'primary'
 ): Promise<CalendarEvent[]> {
-  const calendar = await getUncachableGoogleCalendarClient();
-  
-  const response = await calendar.events.list({
-    calendarId,
-    timeMin: startDate.toISOString(),
-    timeMax: endDate.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 250,
-  });
+  const data = await calendarApiRequest(
+    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    {
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '250',
+    }
+  );
 
-  const events = response.data.items || [];
+  const events = data.items || [];
   
   return events.map((event: any) => ({
     id: event.id || '',
@@ -93,11 +102,9 @@ export async function fetchCalendarEvents(
 }
 
 export async function getCalendarList(): Promise<{ id: string; summary: string }[]> {
-  const calendar = await getUncachableGoogleCalendarClient();
+  const data = await calendarApiRequest('/users/me/calendarList');
   
-  const response = await calendar.calendarList.list();
-  
-  return (response.data.items || []).map((cal: any) => ({
+  return (data.items || []).map((cal: any) => ({
     id: cal.id || '',
     summary: cal.summary || 'Unnamed Calendar',
   }));
