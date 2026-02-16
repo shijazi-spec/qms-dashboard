@@ -39,12 +39,28 @@ function getMockDataPath(filename: string): string {
 function loadMockData<T>(filename: string): T {
   const path = getMockDataPath(filename);
   try {
+    if (!existsSync(path)) {
+      console.warn(`[MockData] File not found: ${filename} - returning empty data`);
+      return getEmptyMockData(filename) as T;
+    }
     const content = readFileSync(path, 'utf-8');
     return JSON.parse(content);
   } catch (error) {
-    console.error(`Error loading mock data from ${path}:`, error);
-    throw new Error(`Failed to load mock data: ${filename}`);
+    console.warn(`[MockData] Could not load ${filename} - returning empty data`);
+    return getEmptyMockData(filename) as T;
   }
+}
+
+function getEmptyMockData(filename: string): any {
+  const emptyMap: Record<string, any> = {
+    'leads.json': { leads: [] },
+    'deals.json': { deals: [] },
+    'activities.json': { activities: [] },
+    'users.json': { users: [] },
+    'calendarEvents.json': { calendarEvents: [] },
+    'five9Calls.json': { calls: [] },
+  };
+  return emptyMap[filename] || {};
 }
 
 export interface Lead {
