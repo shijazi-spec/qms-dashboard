@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WalaPlus - Duplicate Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; height: 100%; }
+        body { font-family: 'Inter', sans-serif; height: 100%; margin: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .tab-active { background-color: #1E3A8A; color: white; }
+        .tab-inactive { background-color: #E5E7EB; color: #374151; }
+        .confidence-high { background-color: #DCFCE7; color: #166534; }
+        .confidence-medium { background-color: #FEF3C7; color: #92400E; }
+        .confidence-low { background-color: #FEE2E2; color: #991B1B; }
+        .read-only-badge { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); }
+        .cluster-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .cluster-card { transition: all 0.2s ease; }
+        .timeline-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .timeline-line { width: 2px; background: #E5E7EB; }
+        .chart-container { height: 220px; position: relative; }
+        .main-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-100">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('duplicates');
+        });
+    </script>
+
+    <div class="main-scroll bg-gray-100">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Duplicate Radar – Leads & Deals</h1>
+                <p class="text-sm text-gray-500 mt-1">AI-powered duplicate detection for CRM hygiene (Zoho-aligned, Read-Only)</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="scanZohoCRM()" id="scanZohoBtn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                    </svg>
+                    Scan from Zoho
+                </button>
+                <button onclick="generateMockData()" id="generateBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                    </svg>
+                    Generate Test Data
+                </button>
+                <button onclick="exportData()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    Export CSV
+                </button>
+                <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="flex gap-2 mb-6 flex-wrap">
+            <button onclick="showTab('summary')" id="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
+            <button onclick="showTab('search')" id="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Search
+            </button>
+            <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
+            <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
+            <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
+            <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
+            <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
+            <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
+        </div>
+
+        <div id="content-summary" class="tab-content">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-600">
+                    <div class="text-sm text-gray-500">Total Clusters</div>
+                    <div id="totalClusters" class="text-2xl font-bold text-blue-600">-</div>
+                    <div class="text-xs text-gray-400">Company domains</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+                    <div class="text-sm text-gray-500">Duplicate Leads</div>
+                    <div id="totalLeads" class="text-2xl font-bold text-amber-600">-</div>
+                    <div id="leadRate" class="text-xs text-amber-500">-% duplicate rate</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+                    <div class="text-sm text-gray-500">Duplicate Deals</div>
+                    <div id="totalDeals" class="text-2xl font-bold text-red-600">-</div>
+                    <div id="dealRate" class="text-xs text-red-500">-% duplicate rate</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+                    <div class="text-sm text-gray-500">High Confidence</div>
+                    <div id="highConfidence" class="text-2xl font-bold text-green-600">-</div>
+                    <div class="text-xs text-green-500">≥90% match</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+                    <div class="text-sm text-gray-500">Medium Confidence</div>
+                    <div id="mediumConfidence" class="text-2xl font-bold text-yellow-600">-</div>
+                    <div class="text-xs text-yellow-500">60-89% match</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+                    <div class="text-sm text-gray-500">Pipeline Inflation</div>
+                    <div id="pipelineInflation" class="text-2xl font-bold text-purple-600">-</div>
+                    <div class="text-xs text-purple-500">Estimated duplicate value</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Duplicates by Source</h3>
+                    <div class="chart-container">
+                        <canvas id="sourceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Confidence Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="confidenceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Data Hygiene KPIs</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Duplicate Lead Rate</div>
+                        <div id="kpiLeadRate" class="text-xl font-bold text-blue-600">-%</div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Duplicate Deal Rate</div>
+                        <div id="kpiDealRate" class="text-xl font-bold text-blue-600">-%</div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Domains with Multiple Deals</div>
+                        <div id="kpiMultiDeal" class="text-xl font-bold text-blue-600">-</div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Active Clusters</div>
+                        <div id="kpiActive" class="text-xl font-bold text-blue-600">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-search" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    Search for Potential Duplicates
+                </h3>
+                <p class="text-sm text-gray-500 mb-4">Search by any criteria to find and verify potential duplicate records. Results will show all matching records grouped by cluster.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Domain</label>
+                        <input type="text" id="searchDomain" placeholder="e.g., acme-corp.com" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mobile / Phone</label>
+                        <input type="text" id="searchPhone" placeholder="e.g., +966501234567" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                        <input type="text" id="searchCompany" placeholder="e.g., Acme Corporation" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Contract / Record #</label>
+                        <input type="text" id="searchContract" placeholder="e.g., ZCR-12345" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                        <input type="text" id="searchEmail" placeholder="e.g., john@company.com" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Lead/Deal Name</label>
+                        <input type="text" id="searchName" placeholder="e.g., John Smith" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Owner Email</label>
+                        <input type="text" id="searchOwner" placeholder="e.g., sara@walaplus.com" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="performSearch()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            Search
+                        </button>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="clearSearch()" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
+                </div>
+            </div>
+
+            <div id="searchResults" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-2">
+                        <h4 class="text-lg font-semibold text-gray-900">Search Results</h4>
+                        <span id="searchResultsCount" class="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">0 records</span>
+                    </div>
+                    <div class="text-sm text-gray-500" id="searchClusterInfo">Found in 0 clusters</div>
+                </div>
+
+                <div id="searchClustersSection" class="mb-6">
+                    <h5 class="text-md font-medium text-gray-700 mb-3">Related Clusters</h5>
+                    <div id="searchClustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cluster</th>
+                            </tr>
+                        </thead>
+                        <tbody id="searchResultsTable" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+
+                <div id="duplicateVerification" class="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4 hidden">
+                    <h5 class="text-md font-medium text-amber-800 mb-2 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        Duplicate Verification Checklist
+                    </h5>
+                    <ul class="text-sm text-amber-700 space-y-1 list-disc list-inside">
+                        <li>Compare company names - are they the same organization?</li>
+                        <li>Check phone numbers - do they match or belong to same contact?</li>
+                        <li>Verify domain ownership - same company email domain?</li>
+                        <li>Review record owners - different salespeople working same lead?</li>
+                        <li>Check deal values - potential double-counting in pipeline?</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="noSearchResults" class="hidden text-center py-12">
+                <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <h4 class="text-lg font-medium text-gray-500">No matching records found</h4>
+                <p class="text-sm text-gray-400 mt-1">Try adjusting your search criteria</p>
+            </div>
+        </div>
+
+        <div id="content-clusters" class="tab-content hidden">
+            <div class="mb-4 flex gap-4">
+                <select id="clusterFilter" onchange="filterClusters()" class="border rounded-lg px-3 py-2">
+                    <option value="">All Confidence Levels</option>
+                    <option value="high">High Confidence (≥90%)</option>
+                    <option value="medium">Medium Confidence (60-89%)</option>
+                    <option value="low">Low Confidence (<60%)</option>
+                </select>
+                <select id="statusFilter" onchange="filterClusters()" class="border rounded-lg px-3 py-2">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="ignored">Ignored</option>
+                </select>
+            </div>
+            <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            </div>
+        </div>
+
+        <div id="content-leads" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadsTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="content-deals" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deal Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dealsTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="content-owners" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicate Leads</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicate Deals</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Duplicates</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ownersTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="content-export" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Export Duplicate Data</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Export Type</label>
+                        <select id="exportType" class="w-full border rounded-lg px-3 py-2">
+                            <option value="all">All Duplicates</option>
+                            <option value="cluster">By Domain Cluster</option>
+                            <option value="owner">By Owner</option>
+                            <option value="time_period">By Time Period</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <input type="date" id="exportStartDate" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                        <input type="date" id="exportEndDate" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <button onclick="downloadExport()" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+                    Download Excel/CSV Export
+                </button>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6 mt-6">
+                <h3 class="text-lg font-semibold mb-4">Export Columns</h3>
+                <div class="text-sm text-gray-600">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Record ID (Zoho ID)</li>
+                        <li>Record Type (Lead / Deal)</li>
+                        <li>Record Name</li>
+                        <li>Company Name</li>
+                        <li>Domain</li>
+                        <li>Owner Name</li>
+                        <li>Status / Stage</li>
+                        <li>Deal Value (if applicable)</li>
+                        <li>Source</li>
+                        <li>Created Date</li>
+                        <li>Duplicate Confidence Score</li>
+                        <li>AI Recommendation</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-logs" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Records Scanned</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clusters Found</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicates</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="clusterModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 id="modalTitle" class="text-xl font-bold text-gray-900">Cluster Details</h3>
+                            <p id="modalDomain" class="text-sm text-gray-500"></p>
+                        </div>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="modalContent"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+    </div>
+
+    <script>
+        let summary = {};
+        let clusters = [];
+        let sourceChart = null;
+        let confidenceChart = null;
+
+        async function refreshData() {
+            try {
+                const [summaryRes, clustersRes, ownersRes, logsRes] = await Promise.all([
+                    fetch('/api/duplicates/summary'),
+                    fetch('/api/duplicates/clusters'),
+                    fetch('/api/duplicates/by-owner'),
+                    fetch('/api/duplicates/logs')
+                ]);
+
+                summary = await summaryRes.json();
+                const clustersData = await clustersRes.json();
+                clusters = clustersData.clusters || [];
+                const ownersData = await ownersRes.json();
+                const logsData = await logsRes.json();
+
+                updateSummary(summary);
+                renderClusters(clusters);
+                renderOwners(ownersData.owners || []);
+                renderLogs(logsData.logs || []);
+                await loadLeadsAndDeals();
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+            }
+        }
+
+        function updateSummary(data) {
+            document.getElementById('totalClusters').textContent = data.totalClusters || 0;
+            document.getElementById('totalLeads').textContent = data.totalDuplicateLeads || 0;
+            document.getElementById('totalDeals').textContent = data.totalDuplicateDeals || 0;
+            document.getElementById('highConfidence').textContent = data.highConfidence || 0;
+            document.getElementById('mediumConfidence').textContent = data.mediumConfidence || 0;
+            document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
+
+            document.getElementById('leadRate').textContent = `${data.kpis?.duplicateLeadRate || 0}% duplicate rate`;
+            document.getElementById('dealRate').textContent = `${data.kpis?.duplicateDealRate || 0}% duplicate rate`;
+
+            document.getElementById('kpiLeadRate').textContent = `${data.kpis?.duplicateLeadRate || 0}%`;
+            document.getElementById('kpiDealRate').textContent = `${data.kpis?.duplicateDealRate || 0}%`;
+            document.getElementById('kpiMultiDeal').textContent = data.kpis?.domainsWithMultipleDeals || 0;
+            document.getElementById('kpiActive').textContent = data.activeCount || 0;
+
+            updateCharts(data);
+        }
+
+        function updateCharts(data) {
+            const sourceData = data.kpis?.duplicateBySource || [];
+            
+            if (sourceChart) sourceChart.destroy();
+            sourceChart = new Chart(document.getElementById('sourceChart'), {
+                type: 'bar',
+                data: {
+                    labels: sourceData.map(s => s.source || 'Unknown'),
+                    datasets: [{
+                        label: 'Duplicates by Source',
+                        data: sourceData.map(s => parseInt(s.total) || 0),
+                        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            if (confidenceChart) confidenceChart.destroy();
+            confidenceChart = new Chart(document.getElementById('confidenceChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['High (≥90%)', 'Medium (60-89%)', 'Low (<60%)'],
+                    datasets: [{
+                        data: [data.highConfidence || 0, data.mediumConfidence || 0, data.lowConfidence || 0],
+                        backgroundColor: ['#22C55E', '#F59E0B', '#EF4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        function renderClusters(clusters) {
+            const grid = document.getElementById('clustersGrid');
+            grid.innerHTML = clusters.map(c => `
+                <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" onclick="showClusterDetails(${c.id})">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h4 class="font-semibold text-gray-900">${c.domain}</h4>
+                            <p class="text-sm text-gray-500">${c.company_name || c.company_name_arabic || 'Unknown'}</p>
+                        </div>
+                        <span class="confidence-${c.confidence_level} px-2 py-1 rounded text-xs font-medium">
+                            ${c.confidence_score}%
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                            <span class="text-gray-500">Leads:</span>
+                            <span class="font-medium text-amber-600">${c.total_leads}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Deals:</span>
+                            <span class="font-medium text-red-600">${c.total_deals}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Value:</span>
+                            <span class="font-medium">${formatCurrency(c.estimated_pipeline_value || 0)}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Status:</span>
+                            <span class="font-medium capitalize">${c.status}</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t text-xs text-gray-400">
+                        ${c.owners_involved?.length || 0} owner(s) involved
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadLeadsAndDeals() {
+            try {
+                const [leadsRes, dealsRes] = await Promise.all([
+                    fetch('/api/duplicates/leads'),
+                    fetch('/api/duplicates/deals')
+                ]);
+
+                const leadsData = await leadsRes.json();
+                const dealsData = await dealsRes.json();
+
+                renderLeads(leadsData.groups || []);
+                renderDeals(dealsData.groups || []);
+            } catch (error) {
+                console.error('Error loading leads/deals:', error);
+            }
+        }
+
+        function renderLeads(groups) {
+            const tbody = document.getElementById('leadsTable');
+            let rows = '';
+            for (const group of groups) {
+                for (const lead of group.leads) {
+                    rows += `
+                        <tr>
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${lead.record_name}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${lead.company_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${lead.owner_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="px-2 py-1 rounded text-xs bg-gray-100">${lead.status || '-'}</span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="confidence-${getConfidenceLevel(lead.confidence_score)} px-2 py-1 rounded text-xs">
+                                    ${lead.confidence_score}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                ${lead.is_primary ? '<span class="text-green-600 font-medium">Primary</span>' : '<span class="text-gray-400">Duplicate</span>'}
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+            tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate leads found</td></tr>';
+        }
+
+        function renderDeals(groups) {
+            const tbody = document.getElementById('dealsTable');
+            let rows = '';
+            for (const group of groups) {
+                for (const deal of group.deals) {
+                    rows += `
+                        <tr>
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${deal.record_name}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${deal.company_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${deal.owner_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${deal.stage || '-'}</span>
+                            </td>
+                            <td class="px-6 py-4 text-sm font-medium text-green-600">${formatCurrency(deal.deal_value || 0)}</td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="confidence-${getConfidenceLevel(deal.confidence_score)} px-2 py-1 rounded text-xs">
+                                    ${deal.confidence_score}%
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+            tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
+        }
+
+        function renderOwners(owners) {
+            const tbody = document.getElementById('ownersTable');
+            tbody.innerHTML = owners.map(o => `
+                <tr>
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">${o.owner_name || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${o.owner_email || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-amber-600 font-medium">${o.lead_count || 0}</td>
+                    <td class="px-6 py-4 text-sm text-red-600 font-medium">${o.deal_count || 0}</td>
+                    <td class="px-6 py-4 text-sm font-bold">${o.total_duplicates || 0}</td>
+                    <td class="px-6 py-4 text-sm">
+                        <button onclick="exportByOwner('${o.owner_email}')" class="text-blue-600 hover:underline">Export</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No owner data found</td></tr>';
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logsTable');
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td class="px-6 py-4 text-sm text-gray-500">${formatDate(l.created_at)}</td>
+                    <td class="px-6 py-4 text-sm capitalize">${l.detection_type}</td>
+                    <td class="px-6 py-4 text-sm">${l.total_records_scanned}</td>
+                    <td class="px-6 py-4 text-sm">${l.total_clusters_found}</td>
+                    <td class="px-6 py-4 text-sm">${l.total_duplicates_detected}</td>
+                    <td class="px-6 py-4 text-sm">${l.detection_duration_ms ? l.detection_duration_ms + 'ms' : '-'}</td>
+                    <td class="px-6 py-4 text-sm">
+                        <span class="px-2 py-1 rounded text-xs ${l.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                            ${l.status}
+                        </span>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No logs found</td></tr>';
+        }
+
+        async function showClusterDetails(id) {
+            try {
+                const res = await fetch(`/api/duplicates/clusters/${id}`);
+                const data = await res.json();
+
+                document.getElementById('modalTitle').textContent = data.cluster.company_name || data.cluster.domain;
+                document.getElementById('modalDomain').textContent = data.cluster.domain;
+
+                let content = `
+                    <div class="grid grid-cols-3 gap-4 mb-4">
+                        <div class="bg-gray-50 p-3 rounded">
+                            <div class="text-sm text-gray-500">Total Records</div>
+                            <div class="text-xl font-bold">${data.cluster.total_records}</div>
+                        </div>
+                        <div class="bg-amber-50 p-3 rounded">
+                            <div class="text-sm text-gray-500">Leads</div>
+                            <div class="text-xl font-bold text-amber-600">${data.cluster.total_leads}</div>
+                        </div>
+                        <div class="bg-red-50 p-3 rounded">
+                            <div class="text-sm text-gray-500">Deals</div>
+                            <div class="text-xl font-bold text-red-600">${data.cluster.total_deals}</div>
+                        </div>
+                    </div>
+
+                    <h4 class="font-semibold mb-2">Timeline</h4>
+                    <div class="space-y-3 mb-4">
+                `;
+
+                const sortedRecords = data.records.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+                for (const record of sortedRecords) {
+                    const typeColor = record.record_type === 'lead' ? 'bg-amber-500' : 'bg-red-500';
+                    content += `
+                        <div class="flex items-start gap-3">
+                            <div class="timeline-dot ${typeColor} mt-1"></div>
+                            <div class="flex-1">
+                                <div class="flex justify-between">
+                                    <span class="font-medium">${record.record_name}</span>
+                                    <span class="text-xs text-gray-500">${formatDate(record.created_date)}</span>
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    ${record.record_type.toUpperCase()} | ${record.owner_name || 'No owner'} | ${record.status || record.stage || '-'}
+                                    ${record.is_primary ? '<span class="ml-2 text-green-600 font-medium">(Primary)</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                content += `
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="updateClusterStatus(${id}, 'resolved')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">
+                            Mark Resolved
+                        </button>
+                        <button onclick="updateClusterStatus(${id}, 'ignored')" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm">
+                            Ignore
+                        </button>
+                        <button onclick="getAIRecommendation(${id})" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm">
+                            Get AI Recommendation
+                        </button>
+                    </div>
+                `;
+
+                document.getElementById('modalContent').innerHTML = content;
+                document.getElementById('clusterModal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading cluster details:', error);
+            }
+        }
+
+        async function updateClusterStatus(id, status) {
+            try {
+                await fetch(`/api/duplicates/clusters/${id}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                closeModal();
+                refreshData();
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function getAIRecommendation(id) {
+            try {
+                const res = await fetch(`/api/duplicates/ai-recommendations/${id}`, { method: 'POST' });
+                const data = await res.json();
+                alert(`AI Recommendation:\n\n${data.ai_summary}`);
+            } catch (error) {
+                console.error('Error getting AI recommendation:', error);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('clusterModal').classList.add('hidden');
+        }
+
+        async function scanZohoCRM() {
+            const btn = document.getElementById('scanZohoBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Scanning Zoho...';
+
+            try {
+                const res = await fetch('/api/duplicates/scan-zoho', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Scanned ${data.totalRecordsScanned} records from Zoho CRM!\n\nFound ${data.totalClustersFound} clusters with ${data.duplicatesDetected} duplicates.\n\nBreakdown:\n${data.moduleBreakdown.map(m => `- ${m.module}: ${m.count}`).join('\n')}`);
+                    refreshData();
+                } else {
+                    alert('Scan failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error scanning Zoho CRM:', error);
+                alert('Failed to scan Zoho CRM: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
+            }
+        }
+
+        async function generateMockData() {
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Generating...';
+
+            try {
+                const res = await fetch('/api/duplicates/generate-mock-data', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Generated ${data.stats.clusters} clusters with ${data.stats.leads} leads and ${data.stats.deals} deals`);
+                    refreshData();
+                }
+            } catch (error) {
+                console.error('Error generating mock data:', error);
+                alert('Failed to generate mock data');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                    </svg>
+                    Generate Test Data
+                `;
+            }
+        }
+
+        function exportData() {
+            window.location.href = '/api/duplicates/export';
+        }
+
+        function downloadExport() {
+            const type = document.getElementById('exportType').value;
+            const startDate = document.getElementById('exportStartDate').value;
+            const endDate = document.getElementById('exportEndDate').value;
+            
+            let url = `/api/duplicates/export?type=${type}`;
+            if (startDate) url += `&start_date=${startDate}`;
+            if (endDate) url += `&end_date=${endDate}`;
+            
+            window.location.href = url;
+        }
+
+        function exportByOwner(email) {
+            window.location.href = `/api/duplicates/export?owner=${encodeURIComponent(email)}`;
+        }
+
+        function filterClusters() {
+            const confidence = document.getElementById('clusterFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            
+            let filtered = clusters;
+            if (confidence) filtered = filtered.filter(c => c.confidence_level === confidence);
+            if (status) filtered = filtered.filter(c => c.status === status);
+            
+            renderClusters(filtered);
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('tab-active');
+                el.classList.add('tab-inactive');
+            });
+            
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabId}`).classList.remove('tab-inactive');
+            document.getElementById(`tab-${tabId}`).classList.add('tab-active');
+        }
+
+        function getConfidenceLevel(score) {
+            if (score >= 90) return 'high';
+            if (score >= 60) return 'medium';
+            return 'low';
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-SA', { style: 'currency', currency: 'SAR', maximumFractionDigits: 0 }).format(value);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleDateString('en-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        async function performSearch() {
+            const params = {
+                domain: document.getElementById('searchDomain').value.trim(),
+                phone: document.getElementById('searchPhone').value.trim(),
+                company_name: document.getElementById('searchCompany').value.trim(),
+                contract_number: document.getElementById('searchContract').value.trim(),
+                email: document.getElementById('searchEmail').value.trim(),
+                record_name: document.getElementById('searchName').value.trim(),
+                owner_email: document.getElementById('searchOwner').value.trim()
+            };
+
+            const hasAnyValue = Object.values(params).some(v => v);
+            if (!hasAnyValue) {
+                alert('Please enter at least one search criteria');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/duplicates/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                displaySearchResults(data);
+            } catch (error) {
+                console.error('Search error:', error);
+                alert('Error performing search');
+            }
+        }
+
+        function displaySearchResults(data) {
+            const resultsSection = document.getElementById('searchResults');
+            const noResultsSection = document.getElementById('noSearchResults');
+            const verificationSection = document.getElementById('duplicateVerification');
+
+            if (data.total_records === 0) {
+                resultsSection.classList.add('hidden');
+                noResultsSection.classList.remove('hidden');
+                return;
+            }
+
+            noResultsSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+
+            document.getElementById('searchResultsCount').textContent = `${data.total_records} records`;
+            document.getElementById('searchClusterInfo').textContent = `Found in ${data.clusters.length} clusters`;
+
+            const clustersGrid = document.getElementById('searchClustersGrid');
+            clustersGrid.innerHTML = data.clusters.map(cluster => `
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 ${getConfidenceBorderColor(cluster.confidence_level)} cursor-pointer hover:shadow-lg transition-shadow" onclick="openCluster(${cluster.id})">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="font-semibold text-gray-900">${cluster.domain}</div>
+                        <span class="px-2 py-0.5 text-xs rounded-full ${getConfidenceBadgeClass(cluster.confidence_level)}">${cluster.confidence_level}</span>
+                    </div>
+                    <div class="text-sm text-gray-600">${cluster.company_name || 'Unknown Company'}</div>
+                    <div class="flex gap-4 mt-2 text-xs text-gray-500">
+                        <span>${cluster.total_leads || 0} leads</span>
+                        <span>${cluster.total_deals || 0} deals</span>
+                        <span class="text-purple-600">${formatCurrency(cluster.estimated_pipeline_value || 0)}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            const tableBody = document.getElementById('searchResultsTable');
+            tableBody.innerHTML = data.records.map(record => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-sm">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium ${record.record_type === 'lead' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                            ${record.record_type}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${record.record_name || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.company_name || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.domain || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.email || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.phone || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.owner_name || '-'}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <span class="px-2 py-0.5 rounded text-xs ${getConfidenceBadgeClass(record.confidence_level || getConfidenceLevel(record.confidence_score))}">
+                            ${record.confidence_score || 0}%
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm">
+                        <button onclick="openCluster(${record.cluster_id})" class="text-blue-600 hover:text-blue-800 text-xs underline">
+                            View (${record.cluster_total || '?'} records)
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            if (data.clusters.some(c => c.total_records > 1)) {
+                verificationSection.classList.remove('hidden');
+            } else {
+                verificationSection.classList.add('hidden');
+            }
+        }
+
+        function getConfidenceBorderColor(level) {
+            switch(level) {
+                case 'high': return 'border-green-500';
+                case 'medium': return 'border-yellow-500';
+                case 'low': return 'border-red-500';
+                default: return 'border-gray-300';
+            }
+        }
+
+        function getConfidenceBadgeClass(level) {
+            switch(level) {
+                case 'high': return 'bg-green-100 text-green-800';
+                case 'medium': return 'bg-yellow-100 text-yellow-800';
+                case 'low': return 'bg-red-100 text-red-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('searchDomain').value = '';
+            document.getElementById('searchPhone').value = '';
+            document.getElementById('searchCompany').value = '';
+            document.getElementById('searchContract').value = '';
+            document.getElementById('searchEmail').value = '';
+            document.getElementById('searchName').value = '';
+            document.getElementById('searchOwner').value = '';
+            document.getElementById('searchResults').classList.add('hidden');
+            document.getElementById('noSearchResults').classList.add('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', refreshData);
+    </script>
+</body>
+</html>

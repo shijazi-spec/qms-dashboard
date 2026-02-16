@@ -1,0 +1,1300 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>WalaPlus Quality Management System</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            /* QMS Industry Standard Color Palette */
+            :root {
+                --qms-blue: #1E3A8A;        /* Quality/Governance */
+                --qms-blue-light: #2563EB;
+                --qms-blue-bg: #DBEAFE;
+                --qms-green: #047857;       /* Compliance/Pass */
+                --qms-green-light: #22C55E;
+                --qms-green-bg: #D1FAE5;
+                --qms-amber: #D97706;       /* Warning/At-Risk */
+                --qms-amber-light: #F59E0B;
+                --qms-amber-bg: #FEF3C7;
+                --qms-red: #B91C1C;         /* Nonconformance/Fail */
+                --qms-red-light: #EF4444;
+                --qms-red-bg: #FEE2E2;
+                --qms-purple: #6D28D9;      /* Continuous Improvement */
+                --qms-purple-light: #A855F7;
+                --qms-purple-bg: #EDE9FE;
+                --qms-gray: #374151;        /* Neutral/Typography */
+            }
+            html { 
+                scroll-behavior: smooth;
+            }
+            body {
+                min-height: 100vh;
+                overflow-x: hidden;
+                overflow-y: scroll !important;
+                -webkit-overflow-scrolling: touch;
+            }
+            .hidden {
+                display: none !important;
+                pointer-events: none !important;
+            }
+            .tab-active {
+                background-color: var(--qms-blue);
+                color: white;
+            }
+            .status-open {
+                background-color: var(--qms-amber-bg);
+                color: var(--qms-amber);
+            }
+            .status-closed {
+                background-color: var(--qms-green-bg);
+                color: var(--qms-green);
+            }
+            .status-in-progress {
+                background-color: var(--qms-blue-bg);
+                color: var(--qms-blue);
+            }
+            .severity-critical {
+                background-color: var(--qms-red-bg);
+                color: var(--qms-red);
+            }
+            .severity-major {
+                background-color: var(--qms-amber-bg);
+                color: var(--qms-amber);
+            }
+            .severity-minor {
+                background-color: var(--qms-amber-bg);
+                color: var(--qms-amber);
+            }
+            .severity-observation {
+                background-color: var(--qms-purple-bg);
+                color: var(--qms-purple);
+            }
+            /* QMS Status Colors */
+            .qms-compliant { background-color: var(--qms-green-bg); color: var(--qms-green); }
+            .qms-at-risk { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+            .qms-non-compliant { background-color: var(--qms-red-bg); color: var(--qms-red); }
+            .qms-improvement { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+            .qms-governance { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        </style>
+        <link rel="stylesheet" href="/css/navigation.css">
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+        <div id="walaplus-nav"></div>
+        <script src="/js/navigation.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                WalaPlusNav.init('qms');
+            });
+        </script>
+
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="flex space-x-2 mb-6 border-b border-gray-200">
+                <button
+                    onclick="showTab('overview')"
+                    id="tab-overview"
+                    class="px-4 py-2 font-medium rounded-t-lg tab-active"
+                >
+                    Overview
+                </button>
+                <button
+                    onclick="showTab('evaluations')"
+                    id="tab-evaluations"
+                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
+                >
+                    Deal Evaluations
+                </button>
+                <button
+                    onclick="showTab('capa')"
+                    id="tab-capa"
+                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
+                >
+                    CAPA
+                </button>
+                <button
+                    onclick="showTab('nc')"
+                    id="tab-nc"
+                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
+                >
+                    Nonconformances
+                </button>
+                <button
+                    onclick="showTab('training')"
+                    id="tab-training"
+                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
+                >
+                    Training
+                </button>
+                <button
+                    onclick="showTab('framework')"
+                    id="tab-framework"
+                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
+                >
+                    Framework
+                </button>
+                <button
+                    onclick="showTab('triggers')"
+                    id="tab-triggers"
+                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100 relative"
+                >
+                    Triggers
+                    <span id="triggers-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                </button>
+            </div>
+
+            <div id="content-overview" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">
+                                    Evaluations (30d)
+                                </p>
+                                <p
+                                    class="text-3xl font-bold text-blue-600"
+                                    id="stat-evaluations"
+                                >
+                                    -
+                                </p>
+                            </div>
+                            <div
+                                class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center"
+                            >
+                                <svg
+                                    class="w-6 h-6 text-blue-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2">
+                            Avg Score:
+                            <span id="stat-avg-score" class="font-semibold"
+                                >-</span
+                            >%
+                        </p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">Open CAPA</p>
+                                <p
+                                    class="text-3xl font-bold text-orange-600"
+                                    id="stat-capa-open"
+                                >
+                                    -
+                                </p>
+                            </div>
+                            <div
+                                class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center"
+                            >
+                                <svg
+                                    class="w-6 h-6 text-orange-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                    />
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2">
+                            Overdue:
+                            <span
+                                id="stat-capa-overdue"
+                                class="font-semibold text-red-600"
+                                >-</span
+                            >
+                        </p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">Open NC</p>
+                                <p
+                                    class="text-3xl font-bold text-red-600"
+                                    id="stat-nc-open"
+                                >
+                                    -
+                                </p>
+                            </div>
+                            <div
+                                class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center"
+                            >
+                                <svg
+                                    class="w-6 h-6 text-red-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12"
+                                    />
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2">
+                            Critical:
+                            <span
+                                id="stat-nc-critical"
+                                class="font-semibold text-red-600"
+                                >-</span
+                            >
+                        </p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">
+                                    Training Completion
+                                </p>
+                                <p
+                                    class="text-3xl font-bold text-green-600"
+                                    id="stat-training-completed"
+                                >
+                                    -
+                                </p>
+                            </div>
+                            <div
+                                class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center"
+                            >
+                                <svg
+                                    class="w-6 h-6 text-green-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M12 14l9-5-9-5-9 5 9 5zm0 7l-9-5v-2l9 5 9-5v2l-9 5z"
+                                    />
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-2">
+                            Overdue:
+                            <span
+                                id="stat-training-overdue"
+                                class="font-semibold text-amber-600"
+                                >-</span
+                            >
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4">
+                            Recent Evaluations
+                        </h3>
+                        <div id="recent-evaluations" class="space-y-2">
+                            <p class="text-gray-500 text-center py-4">
+                                Loading...
+                            </p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4">Recent CAPA</h3>
+                        <div id="recent-capa" class="space-y-2">
+                            <p class="text-gray-500 text-center py-4">
+                                Loading...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-evaluations" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Deal Evaluations</h3>
+                        <button
+                            onclick="triggerEvaluation()"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                        >
+                            Run Evaluation
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2 px-3">Deal</th>
+                                    <th class="text-left py-2 px-3">Score</th>
+                                    <th class="text-left py-2 px-3">Status</th>
+                                    <th class="text-left py-2 px-3">
+                                        Critical
+                                    </th>
+                                    <th class="text-left py-2 px-3">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evaluations-table">
+                                <tr>
+                                    <td
+                                        colspan="5"
+                                        class="text-center py-4 text-gray-500"
+                                    >
+                                        Loading...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-capa" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">
+                            Corrective and Preventive Actions
+                        </h3>
+                        <button
+                            onclick="showCapaModal()"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                        >
+                            New CAPA
+                        </button>
+                    </div>
+                    <div class="flex space-x-2 mb-4">
+                        <select
+                            id="capa-status-filter"
+                            onchange="loadCapa()"
+                            class="border rounded px-3 py-1 text-sm"
+                        >
+                            <option value="">All Status</option>
+                            <option value="open">Open</option>
+                            <option value="investigation">Investigation</option>
+                            <option value="action_plan">Action Plan</option>
+                            <option value="implementation">
+                                Implementation
+                            </option>
+                            <option value="verification">Verification</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                        <select
+                            id="capa-severity-filter"
+                            onchange="loadCapa()"
+                            class="border rounded px-3 py-1 text-sm"
+                        >
+                            <option value="">All Severity</option>
+                            <option value="critical">Critical</option>
+                            <option value="major">Major</option>
+                            <option value="minor">Minor</option>
+                            <option value="observation">Observation</option>
+                        </select>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2 px-3">CAPA #</th>
+                                    <th class="text-left py-2 px-3">Title</th>
+                                    <th class="text-left py-2 px-3">Type</th>
+                                    <th class="text-left py-2 px-3">
+                                        Severity
+                                    </th>
+                                    <th class="text-left py-2 px-3">Status</th>
+                                    <th class="text-left py-2 px-3">
+                                        Assigned To
+                                    </th>
+                                    <th class="text-left py-2 px-3">
+                                        Target Date
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="capa-table">
+                                <tr>
+                                    <td
+                                        colspan="7"
+                                        class="text-center py-4 text-gray-500"
+                                    >
+                                        Loading...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-nc" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">
+                            Nonconformance Records
+                        </h3>
+                        <button
+                            onclick="showNcModal()"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                        >
+                            New NC
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2 px-3">NC #</th>
+                                    <th class="text-left py-2 px-3">Title</th>
+                                    <th class="text-left py-2 px-3">Type</th>
+                                    <th class="text-left py-2 px-3">
+                                        Severity
+                                    </th>
+                                    <th class="text-left py-2 px-3">Status</th>
+                                    <th class="text-left py-2 px-3">
+                                        Detected
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="nc-table">
+                                <tr>
+                                    <td
+                                        colspan="6"
+                                        class="text-center py-4 text-gray-500"
+                                    >
+                                        Loading...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-training" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4">
+                            Training Courses
+                        </h3>
+                        <div id="training-list" class="space-y-2">
+                            <p class="text-gray-500 text-center py-4">
+                                Loading...
+                            </p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4">
+                            Training Assignments
+                        </h3>
+                        <div id="assignments-list" class="space-y-2">
+                            <p class="text-gray-500 text-center py-4">
+                                Loading...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-framework" class="tab-content hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">
+                        Evaluation Framework
+                    </h3>
+                    <div id="framework-content" class="space-y-4">
+                        <p class="text-gray-500 text-center py-4">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-triggers" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">Pending Triggers</p>
+                                <p class="text-3xl font-bold text-amber-600" id="trigger-pending-count">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">Decisions Pending</p>
+                                <p class="text-3xl font-bold text-red-600" id="trigger-decisions-count">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">Acknowledged</p>
+                                <p class="text-3xl font-bold text-blue-600" id="trigger-acknowledged-count">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">Actioned</p>
+                                <p class="text-3xl font-bold text-green-600" id="trigger-actioned-count">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Pending Audit Triggers</h3>
+                        <button onclick="loadTriggers()" class="text-blue-600 hover:text-blue-800 text-sm flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div id="triggers-list" class="space-y-3">
+                        <p class="text-gray-500 text-center py-4">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow p-6 mt-6">
+                    <h3 class="text-lg font-semibold mb-4">Unread Notifications</h3>
+                    <div id="notifications-list" class="space-y-3">
+                        <p class="text-gray-500 text-center py-4">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div
+            id="capa-modal"
+            class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"
+        >
+            <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+                <h3 class="text-lg font-semibold mb-4">Create New CAPA</h3>
+                <form id="capa-form" onsubmit="createCapa(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1"
+                                >Title</label
+                            >
+                            <input
+                                type="text"
+                                name="title"
+                                required
+                                class="w-full border rounded px-3 py-2"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1"
+                                >Description</label
+                            >
+                            <textarea
+                                name="description"
+                                rows="3"
+                                class="w-full border rounded px-3 py-2"
+                            ></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1"
+                                    >Type</label
+                                >
+                                <select
+                                    name="capaType"
+                                    required
+                                    class="w-full border rounded px-3 py-2"
+                                >
+                                    <option value="corrective">
+                                        Corrective
+                                    </option>
+                                    <option value="preventive">
+                                        Preventive
+                                    </option>
+                                    <option value="improvement">
+                                        Improvement
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1"
+                                    >Severity</label
+                                >
+                                <select
+                                    name="severity"
+                                    required
+                                    class="w-full border rounded px-3 py-2"
+                                >
+                                    <option value="critical">Critical</option>
+                                    <option value="major">Major</option>
+                                    <option value="minor">Minor</option>
+                                    <option value="observation">
+                                        Observation
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1"
+                                    >Assigned To</label
+                                >
+                                <input
+                                    type="text"
+                                    name="assignedTo"
+                                    class="w-full border rounded px-3 py-2"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1"
+                                    >Target Date</label
+                                >
+                                <input
+                                    type="date"
+                                    name="targetDate"
+                                    class="w-full border rounded px-3 py-2"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 mt-6">
+                        <button
+                            type="button"
+                            onclick="hideCapaModal()"
+                            class="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                            Create CAPA
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            let adminKey = localStorage.getItem("adminKey") || "";
+
+            function checkAuth() {
+                if (!adminKey) {
+                    const key = prompt(
+                        "Enter Admin API Key to access QMS Dashboard:",
+                    );
+                    if (key) {
+                        adminKey = key;
+                        localStorage.setItem("adminKey", adminKey);
+                        return true;
+                    }
+                    document.body.innerHTML = `
+                    <div class="min-h-screen flex items-center justify-center bg-gray-50">
+                        <div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center">
+                            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                </svg>
+                            </div>
+                            <h1 class="text-xl font-bold text-gray-900 mb-2">Authentication Required</h1>
+                            <p class="text-gray-600 mb-4">Admin API key is required to access the QMS Dashboard.</p>
+                            <button onclick="location.reload()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Try Again</button>
+                            <p class="mt-4"><a href="/dashboard" class="text-blue-600 hover:underline">Return to Main Dashboard</a></p>
+                        </div>
+                    </div>
+                `;
+                    return false;
+                }
+                return true;
+            }
+
+            async function apiCall(endpoint) {
+                const res = await fetch(endpoint, {
+                    headers: { "X-Admin-Key": adminKey },
+                });
+                if (res.status === 401) {
+                    localStorage.removeItem("adminKey");
+                    adminKey = "";
+                    alert(
+                        "Authentication failed. Please reload and enter a valid admin key.",
+                    );
+                    location.reload();
+                    return null;
+                }
+                return res.json();
+            }
+
+            function showTab(tab) {
+                document
+                    .querySelectorAll(".tab-content")
+                    .forEach((el) => el.classList.add("hidden"));
+                document
+                    .querySelectorAll('[id^="tab-"]')
+                    .forEach((el) => el.classList.remove("tab-active"));
+                document
+                    .getElementById(`content-${tab}`)
+                    .classList.remove("hidden");
+                document
+                    .getElementById(`tab-${tab}`)
+                    .classList.add("tab-active");
+
+                switch (tab) {
+                    case "evaluations":
+                        loadEvaluations();
+                        break;
+                    case "capa":
+                        loadCapa();
+                        break;
+                    case "nc":
+                        loadNc();
+                        break;
+                    case "training":
+                        loadTraining();
+                        break;
+                    case "framework":
+                        loadFramework();
+                        break;
+                    case "triggers":
+                        loadTriggers();
+                        break;
+                }
+            }
+
+            async function loadDashboard() {
+                try {
+                    const data = await apiCall("/api/qms/dashboard");
+                    if (!data) return;
+
+                    document.getElementById("stat-evaluations").textContent =
+                        data.evaluations?.total || 0;
+                    document.getElementById("stat-avg-score").textContent =
+                        Math.round(data.evaluations?.avgScore || 0);
+                    document.getElementById("stat-capa-open").textContent =
+                        data.capa?.open || 0;
+                    document.getElementById("stat-capa-overdue").textContent =
+                        data.capa?.overdue || 0;
+                    document.getElementById("stat-nc-open").textContent =
+                        data.nonconformances?.open || 0;
+                    document.getElementById("stat-nc-critical").textContent =
+                        data.nonconformances?.critical || 0;
+                    document.getElementById(
+                        "stat-training-completed",
+                    ).textContent = data.training?.completed || 0;
+                    document.getElementById(
+                        "stat-training-overdue",
+                    ).textContent = data.training?.overdue || 0;
+
+                    const recentEvalHtml =
+                        (data.recentEvaluations || [])
+                            .slice(0, 5)
+                            .map(
+                                (e) => `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <div>
+                            <p class="font-medium text-sm">${e.deal_name || "Unknown"}</p>
+                            <p class="text-xs text-gray-500">${new Date(e.evaluation_date).toLocaleDateString()}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-block px-2 py-1 rounded text-xs font-medium ${e.overall_score >= 70 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
+                                ${Math.round(e.overall_score)}%
+                            </span>
+                        </div>
+                    </div>
+                `,
+                            )
+                            .join("") ||
+                        '<p class="text-gray-500 text-center py-4">No evaluations yet</p>';
+                    document.getElementById("recent-evaluations").innerHTML =
+                        recentEvalHtml;
+
+                    const recentCapaHtml =
+                        (data.recentCapas || [])
+                            .slice(0, 5)
+                            .map(
+                                (c) => `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <div>
+                            <p class="font-medium text-sm">${c.capa_number}</p>
+                            <p class="text-xs text-gray-500 truncate max-w-xs">${c.title}</p>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium severity-${c.severity}">${c.severity}</span>
+                    </div>
+                `,
+                            )
+                            .join("") ||
+                        '<p class="text-gray-500 text-center py-4">No CAPA records yet</p>';
+                    document.getElementById("recent-capa").innerHTML =
+                        recentCapaHtml;
+                } catch (error) {
+                    console.error("Error loading dashboard:", error);
+                }
+            }
+
+            async function loadEvaluations() {
+                try {
+                    const data = await apiCall("/api/qms/evaluations?limit=50");
+                    if (!data) return;
+
+                    const html =
+                        (data.evaluations || [])
+                            .map(
+                                (e) => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2 px-3">${e.deal_name || e.deal_id}</td>
+                        <td class="py-2 px-3">
+                            <span class="inline-block px-2 py-1 rounded text-xs font-medium ${e.overall_score >= 70 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
+                                ${Math.round(e.overall_score)}%
+                            </span>
+                        </td>
+                        <td class="py-2 px-3">${e.overall_score >= 70 ? "Passed" : "Failed"}</td>
+                        <td class="py-2 px-3">${e.critical_findings || 0}</td>
+                        <td class="py-2 px-3">${new Date(e.evaluation_date).toLocaleDateString()}</td>
+                    </tr>
+                `,
+                            )
+                            .join("") ||
+                        '<tr><td colspan="5" class="text-center py-4 text-gray-500">No evaluations found</td></tr>';
+                    document.getElementById("evaluations-table").innerHTML =
+                        html;
+                } catch (error) {
+                    console.error("Error loading evaluations:", error);
+                }
+            }
+
+            async function loadCapa() {
+                try {
+                    const status =
+                        document.getElementById("capa-status-filter").value;
+                    const severity = document.getElementById(
+                        "capa-severity-filter",
+                    ).value;
+                    let url = "/api/qms/capa?limit=50";
+                    if (status) url += `&status=${status}`;
+                    if (severity) url += `&severity=${severity}`;
+
+                    const data = await apiCall(url);
+                    if (!data) return;
+
+                    const html =
+                        (data.records || [])
+                            .map(
+                                (c) => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2 px-3 font-mono text-xs">${c.capa_number}</td>
+                        <td class="py-2 px-3">${c.title}</td>
+                        <td class="py-2 px-3 capitalize">${c.capa_type}</td>
+                        <td class="py-2 px-3"><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${c.severity}</span></td>
+                        <td class="py-2 px-3"><span class="px-2 py-1 rounded text-xs status-${c.status.includes("progress") || c.status === "investigation" ? "in-progress" : c.status}">${c.status.replace("_", " ")}</span></td>
+                        <td class="py-2 px-3">${c.assigned_to || "-"}</td>
+                        <td class="py-2 px-3">${c.target_date ? new Date(c.target_date).toLocaleDateString() : "-"}</td>
+                    </tr>
+                `,
+                            )
+                            .join("") ||
+                        '<tr><td colspan="7" class="text-center py-4 text-gray-500">No CAPA records found</td></tr>';
+                    document.getElementById("capa-table").innerHTML = html;
+                } catch (error) {
+                    console.error("Error loading CAPA:", error);
+                }
+            }
+
+            async function loadNc() {
+                try {
+                    const data = await apiCall("/api/qms/nc?limit=50");
+                    if (!data) return;
+
+                    const html =
+                        (data.records || [])
+                            .map(
+                                (n) => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2 px-3 font-mono text-xs">${n.nc_number}</td>
+                        <td class="py-2 px-3">${n.title}</td>
+                        <td class="py-2 px-3">${n.nc_type}</td>
+                        <td class="py-2 px-3"><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${n.severity}</span></td>
+                        <td class="py-2 px-3"><span class="px-2 py-1 rounded text-xs status-${n.status === "closed" ? "closed" : "open"}">${n.status.replace("_", " ")}</span></td>
+                        <td class="py-2 px-3">${n.detected_date ? new Date(n.detected_date).toLocaleDateString() : "-"}</td>
+                    </tr>
+                `,
+                            )
+                            .join("") ||
+                        '<tr><td colspan="6" class="text-center py-4 text-gray-500">No NC records found</td></tr>';
+                    document.getElementById("nc-table").innerHTML = html;
+                } catch (error) {
+                    console.error("Error loading NC:", error);
+                }
+            }
+
+            async function loadTraining() {
+                try {
+                    const [training, assignments] = await Promise.all([
+                        apiCall("/api/qms/training?limit=20"),
+                        apiCall("/api/qms/training/assignments?limit=20"),
+                    ]);
+                    if (!training || !assignments) return;
+
+                    const trainingHtml =
+                        (training.records || [])
+                            .map(
+                                (t) => `
+                    <div class="p-3 bg-gray-50 rounded">
+                        <p class="font-medium">${t.title}</p>
+                        <p class="text-xs text-gray-500">${t.training_type} ${t.is_mandatory ? "(Mandatory)" : ""}</p>
+                    </div>
+                `,
+                            )
+                            .join("") ||
+                        '<p class="text-gray-500 text-center py-4">No training records</p>';
+                    document.getElementById("training-list").innerHTML =
+                        trainingHtml;
+
+                    const assignHtml =
+                        (assignments.assignments || [])
+                            .map(
+                                (a) => `
+                    <div class="p-3 bg-gray-50 rounded flex justify-between items-center">
+                        <div>
+                            <p class="font-medium">${a.employee_name}</p>
+                            <p class="text-xs text-gray-500">${a.training_title || a.training_id}</p>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs status-${a.status === "completed" ? "closed" : "open"}">${a.status}</span>
+                    </div>
+                `,
+                            )
+                            .join("") ||
+                        '<p class="text-gray-500 text-center py-4">No training assignments</p>';
+                    document.getElementById("assignments-list").innerHTML =
+                        assignHtml;
+                } catch (error) {
+                    console.error("Error loading training:", error);
+                }
+            }
+
+            async function loadFramework() {
+                try {
+                    const framework = await apiCall("/api/qms/framework");
+                    if (!framework) return;
+
+                    let html = `
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-lg">${framework.name}</h4>
+                        <p class="text-sm text-gray-500">${framework.description}</p>
+                        <div class="flex space-x-2 mt-2">
+                            ${(framework.standards || []).map((s) => `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${s}</span>`).join("")}
+                        </div>
+                    </div>
+                `;
+
+                    html += '<div class="space-y-4">';
+                    for (const dim of framework.dimensions || []) {
+                        html += `
+                        <div class="border rounded-lg p-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <h5 class="font-medium">${dim.name}</h5>
+                                <span class="text-sm text-gray-500">Weight: ${dim.weight}%</span>
+                            </div>
+                            <p class="text-sm text-gray-600 mb-2">${dim.description}</p>
+                            <div class="text-xs text-gray-500">${(dim.criteria || []).length} criteria</div>
+                        </div>
+                    `;
+                    }
+                    html += "</div>";
+
+                    document.getElementById("framework-content").innerHTML =
+                        html;
+                } catch (error) {
+                    console.error("Error loading framework:", error);
+                }
+            }
+
+            function showCapaModal() {
+                if (!adminKey) {
+                    adminKey = prompt("Enter Admin API Key:");
+                    if (adminKey) localStorage.setItem("adminKey", adminKey);
+                }
+                if (adminKey) {
+                    document
+                        .getElementById("capa-modal")
+                        .classList.remove("hidden");
+                    document.getElementById("capa-modal").classList.add("flex");
+                }
+            }
+
+            function hideCapaModal() {
+                document.getElementById("capa-modal").classList.add("hidden");
+                document.getElementById("capa-modal").classList.remove("flex");
+            }
+
+            async function createCapa(e) {
+                e.preventDefault();
+                const form = e.target;
+                const data = {
+                    title: form.title.value,
+                    description: form.description.value,
+                    capaType: form.capaType.value,
+                    severity: form.severity.value,
+                    assignedTo: form.assignedTo.value,
+                    targetDate: form.targetDate.value || null,
+                };
+
+                try {
+                    const res = await fetch("/api/qms/capa", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Admin-Key": adminKey,
+                        },
+                        body: JSON.stringify(data),
+                    });
+
+                    if (res.ok) {
+                        hideCapaModal();
+                        form.reset();
+                        loadCapa();
+                        alert("CAPA created successfully!");
+                    } else {
+                        const err = await res.json();
+                        alert(
+                            "Error: " + (err.error || "Failed to create CAPA"),
+                        );
+                    }
+                } catch (error) {
+                    alert("Error creating CAPA");
+                }
+            }
+
+            async function triggerEvaluation() {
+                alert(
+                    "Deal evaluation will be run as part of the scheduled quality audit. You can trigger a manual audit from the main dashboard.",
+                );
+            }
+
+            async function loadTriggers() {
+                try {
+                    const headers = { 'X-Admin-Key': adminKey };
+                    const [statsRes, triggersRes, notificationsRes] = await Promise.all([
+                        fetch('/api/triggers/stats', { headers }),
+                        fetch('/api/triggers', { headers }),
+                        fetch('/api/notifications', { headers })
+                    ]);
+
+                    const stats = await statsRes.json();
+                    const triggersData = await triggersRes.json();
+                    const notificationsData = await notificationsRes.json();
+
+                    if (stats.success) {
+                        document.getElementById('trigger-pending-count').textContent = stats.pendingCount || 0;
+                        document.getElementById('trigger-decisions-count').textContent = stats.pendingDecisions || 0;
+                        document.getElementById('trigger-acknowledged-count').textContent = stats.acknowledgedCount || 0;
+                        document.getElementById('trigger-actioned-count').textContent = stats.actionedCount || 0;
+
+                        const badge = document.getElementById('triggers-badge');
+                        if (stats.pendingCount > 0) {
+                            badge.textContent = stats.pendingCount > 9 ? '9+' : stats.pendingCount;
+                            badge.classList.remove('hidden');
+                        } else {
+                            badge.classList.add('hidden');
+                        }
+                    }
+
+                    const triggersContainer = document.getElementById('triggers-list');
+                    if (triggersData.success && triggersData.triggers.length > 0) {
+                        triggersContainer.innerHTML = triggersData.triggers.map(t => `
+                            <div class="border rounded-lg p-4 ${getSeverityBgClass(t.severity)}">
+                                <div class="flex justify-between items-start">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs px-2 py-1 rounded ${getSeverityBadgeClass(t.severity)}">${t.severity.toUpperCase()}</span>
+                                            <span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">${t.trigger_type.replace(/_/g, ' ')}</span>
+                                        </div>
+                                        <h4 class="font-semibold mt-2">${t.title}</h4>
+                                        <p class="text-sm text-gray-600 mt-1">${t.description || ''}</p>
+                                        ${t.action_required ? `<p class="text-sm text-amber-700 mt-2"><strong>Action Required:</strong> ${t.action_required}</p>` : ''}
+                                        <p class="text-xs text-gray-500 mt-2">Assigned to: ${t.assigned_role || 'N/A'} | Created: ${new Date(t.created_at).toLocaleString()}</p>
+                                    </div>
+                                    <div class="flex gap-2 ml-4">
+                                        <button onclick="acknowledgeTrigger(${t.id})" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-300 rounded">
+                                            Acknowledge
+                                        </button>
+                                        ${t.trigger_type === 'DECISION_PENDING' ? `
+                                            <button onclick="decideTrigger(${t.id}, 'approved')" class="text-green-600 hover:text-green-800 text-sm px-2 py-1 border border-green-300 rounded">Approve</button>
+                                            <button onclick="decideTrigger(${t.id}, 'rejected')" class="text-red-600 hover:text-red-800 text-sm px-2 py-1 border border-red-300 rounded">Reject</button>
+                                        ` : ''}
+                                        <button onclick="dismissTrigger(${t.id})" class="text-gray-500 hover:text-gray-700 text-sm">
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        triggersContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No pending triggers</p>';
+                    }
+
+                    const notificationsContainer = document.getElementById('notifications-list');
+                    if (notificationsData.success && notificationsData.notifications.length > 0) {
+                        notificationsContainer.innerHTML = notificationsData.notifications.map(n => `
+                            <div class="border rounded-lg p-4 bg-gray-50 flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold">${n.subject}</h4>
+                                    <p class="text-sm text-gray-600 mt-1">${n.message}</p>
+                                    <p class="text-xs text-gray-500 mt-2">For: ${n.recipient_role} | ${new Date(n.created_at).toLocaleString()}</p>
+                                </div>
+                                <button onclick="markNotificationRead(${n.id})" class="text-blue-600 hover:text-blue-800 text-sm">
+                                    Mark Read
+                                </button>
+                            </div>
+                        `).join('');
+                    } else {
+                        notificationsContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No unread notifications</p>';
+                    }
+                } catch (error) {
+                    console.error('Error loading triggers:', error);
+                    document.getElementById('triggers-list').innerHTML = '<p class="text-red-500 text-center py-4">Error loading triggers</p>';
+                }
+            }
+
+            function getSeverityBgClass(severity) {
+                switch(severity) {
+                    case 'critical': return 'bg-red-50 border-red-200';
+                    case 'warning': return 'bg-amber-50 border-amber-200';
+                    default: return 'bg-blue-50 border-blue-200';
+                }
+            }
+
+            function getSeverityBadgeClass(severity) {
+                switch(severity) {
+                    case 'critical': return 'bg-red-100 text-red-700';
+                    case 'warning': return 'bg-amber-100 text-amber-700';
+                    default: return 'bg-blue-100 text-blue-700';
+                }
+            }
+
+            async function acknowledgeTrigger(triggerId) {
+                try {
+                    const res = await fetch(`/api/triggers/${triggerId}/action`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+                        body: JSON.stringify({ action: 'acknowledge' })
+                    });
+                    if (res.ok) {
+                        loadTriggers();
+                    } else {
+                        alert('Failed to acknowledge trigger');
+                    }
+                } catch (error) {
+                    alert('Error acknowledging trigger');
+                }
+            }
+
+            async function dismissTrigger(triggerId) {
+                if (!confirm('Are you sure you want to dismiss this trigger?')) return;
+                try {
+                    const res = await fetch(`/api/triggers/${triggerId}/action`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+                        body: JSON.stringify({ action: 'dismiss' })
+                    });
+                    if (res.ok) {
+                        loadTriggers();
+                    } else {
+                        alert('Failed to dismiss trigger');
+                    }
+                } catch (error) {
+                    alert('Error dismissing trigger');
+                }
+            }
+
+            async function decideTrigger(triggerId, decision) {
+                const notes = prompt(`Enter notes for ${decision} decision (optional):`);
+                const decidedBy = prompt('Enter your name or email:');
+                if (!decidedBy) {
+                    alert('Decision requires your name/email');
+                    return;
+                }
+                try {
+                    const res = await fetch(`/api/triggers/${triggerId}/action`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+                        body: JSON.stringify({ action: 'decide', decision, decidedBy, notes })
+                    });
+                    if (res.ok) {
+                        loadTriggers();
+                        alert(`Trigger ${decision} successfully`);
+                    } else {
+                        alert('Failed to process decision');
+                    }
+                } catch (error) {
+                    alert('Error processing decision');
+                }
+            }
+
+            async function markNotificationRead(notificationId) {
+                try {
+                    const res = await fetch(`/api/notifications/${notificationId}/read`, {
+                        method: 'POST',
+                        headers: { 'X-Admin-Key': adminKey }
+                    });
+                    if (res.ok) {
+                        loadTriggers();
+                    }
+                } catch (error) {
+                    console.error('Error marking notification read:', error);
+                }
+            }
+
+            async function loadTriggerBadge() {
+                try {
+                    const res = await fetch('/api/triggers/stats', {
+                        headers: { 'X-Admin-Key': adminKey }
+                    });
+                    const stats = await res.json();
+                    if (stats.success && stats.pendingCount > 0) {
+                        const badge = document.getElementById('triggers-badge');
+                        badge.textContent = stats.pendingCount > 9 ? '9+' : stats.pendingCount;
+                        badge.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Error loading trigger badge:', error);
+                }
+            }
+
+            if (checkAuth()) {
+                loadDashboard();
+                loadTriggerBadge();
+            }
+        </script>
+    </body>
+</html>

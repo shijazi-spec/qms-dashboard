@@ -1,0 +1,121 @@
+AGENTIC AI AUDIT – DATE RANGE & RECORD COVERAGE ISSUE
+===============================================
+
+Context:
+The Quality Dashboard shows that only 24 records were audited, while Zoho CRM clearly contains:
+- 100+ Leads
+- 100+ Accounts
+- 100+ Contacts
+- 100+ Deals
+
+This indicates a functional gap in how the AI Audit is executed and how records are selected.
+
+-----------------------------------------------
+1) DATE RANGE–BASED AUDIT (CORE REQUIREMENT)
+-----------------------------------------------
+
+Problem:
+Currently, the AI Audit appears to evaluate records from the beginning (or an undefined subset), instead of a user-defined date range.
+
+Business Requirement:
+The audit MUST run based on a selected date range, not on the full historical dataset.
+
+Expected Behavior:
+- User selects:
+  - Start Date
+  - End Date
+- Agentic AI evaluates ONLY records that fall within this range
+- Date filtering applies to:
+  - Created Time
+  - Modified Time
+  - Last Activity Time
+  - Stage Change Date (Deals)
+  - Conversion Date (Leads)
+
+Example:
+If user selects:
+- Start Date: 01-Jan-2026
+- End Date: 22-Jan-2026
+
+Then:
+- Only Leads/Deals/Accounts/Contacts that were created OR modified OR interacted with within this range are audited
+- Older records are ignored unless updated in the range
+
+-----------------------------------------------
+2) RECORD SELECTION LOGIC (WHY ONLY 24 RECORDS?)
+-----------------------------------------------
+
+Observed Issue:
+Dashboard shows:
+- Records Audited: 24
+
+Despite:
+- Zoho showing 100+ records per module
+
+Possible Root Causes to Address:
+- Hardcoded record limit (e.g., first 25 records)
+- Pagination not handled (only page 1 audited)
+- Only records with activities/events audited
+- Only records linked to calendar events audited
+- Missing module-wide fetch logic
+- Filters applied silently (e.g., only Qualified leads)
+
+Required Fix:
+Agentic AI must:
+- Fetch ALL records matching:
+  - Selected CRM Module
+  - Selected Date Range
+- Handle pagination properly
+- Loop through ALL pages until full dataset is covered
+
+-----------------------------------------------
+3) AUDIT SCOPE DEFINITION (MANDATORY)
+-----------------------------------------------
+
+Before running audit, system must explicitly define:
+- CRM Module (Leads / Deals / Accounts / Contacts)
+- Team (SDR / Sales / Other)
+- Linked Governance Document
+- Linked Evaluation Scorecard
+- Date Range
+- Max Records (optional override, default = ALL)
+
+-----------------------------------------------
+4) TRANSPARENCY & TRACEABILITY
+-----------------------------------------------
+
+System must display:
+- Total records available in Zoho (for selected module)
+- Total records matching date range
+- Total records audited
+- Reason why any records were excluded (e.g., out of date range)
+
+Example Dashboard Text:
+"Audited 24 out of 113 Leads (89 excluded due to date range)"
+
+-----------------------------------------------
+5) AI AUDIT EXECUTION RULE
+-----------------------------------------------
+
+Pseudo Logic:
+1. Fetch total records count from Zoho
+2. Apply date range filter
+3. Paginate through all result pages
+4. Run evaluation attributes on each record
+5. Aggregate results into scorecard
+6. Display full audit coverage metrics
+
+-----------------------------------------------
+6) CRITICAL OUTCOME
+-----------------------------------------------
+
+Without fixing this:
+- Quality scores are misleading
+- Compliance rate is inaccurate
+- AI recommendations are incomplete
+- Governance credibility is compromised
+
+This is a BLOCKER for production readiness.
+
+-----------------------------------------------
+END OF REQUIREMENT

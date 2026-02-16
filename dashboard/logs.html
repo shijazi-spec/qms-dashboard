@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Event Logs - WalaPlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --qms-blue: #1E3A8A;
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;
+            --qms-amber-light: #F59E0B;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;
+            --qms-red-light: #EF4444;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;
+            --qms-purple-light: #A855F7;
+            --qms-purple-bg: #EDE9FE;
+        }
+        html { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .badge-info { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        .badge-warning { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .badge-critical { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .badge-ai-yes { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+        .badge-ai-no { background-color: #F3F4F6; color: #6B7280; }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .log-details { transition: max-height 0.3s ease-out; overflow: hidden; }
+        .log-row:hover { background-color: #F9FAFB; }
+        .log-row { cursor: pointer; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('logs');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Total Logs</p>
+                        <p id="totalLogs" class="text-3xl font-bold text-gray-900">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Last 24 Hours</p>
+                        <p id="last24Hours" class="text-3xl font-bold text-green-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Critical Events</p>
+                        <p id="criticalEvents" class="text-3xl font-bold text-red-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">AI Actions</p>
+                        <p id="aiActions" class="text-3xl font-bold text-purple-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Log Activity (Last 7 Days)</h3>
+            <div class="chart-container">
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                    <input type="date" id="filterFromDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                    <input type="date" id="filterToDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Action Type</label>
+                    <select id="filterActionType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Actions</option>
+                        <option value="CREATE">CREATE</option>
+                        <option value="UPDATE">UPDATE</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="STATUS_CHANGE">STATUS_CHANGE</option>
+                        <option value="ASSIGN">ASSIGN</option>
+                        <option value="AI_ACTION">AI_ACTION</option>
+                        <option value="LOGIN">LOGIN</option>
+                        <option value="LOGOUT">LOGOUT</option>
+                        <option value="EXPORT">EXPORT</option>
+                        <option value="IMPORT">IMPORT</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Entity Type</label>
+                    <select id="filterEntityType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Entities</option>
+                        <option value="PROJECT">PROJECT</option>
+                        <option value="TRAINING">TRAINING</option>
+                        <option value="ROI">ROI</option>
+                        <option value="USER">USER</option>
+                        <option value="TEAM_MEMBER">TEAM_MEMBER</option>
+                        <option value="CALL">CALL</option>
+                        <option value="NC">NC</option>
+                        <option value="CAPA">CAPA</option>
+                        <option value="TABLE_F">TABLE_F</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Module</label>
+                    <select id="filterModule" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Modules</option>
+                        <option value="ROI">ROI</option>
+                        <option value="QMS">QMS</option>
+                        <option value="Team">Team</option>
+                        <option value="Projects">Projects</option>
+                        <option value="Calls">Calls</option>
+                        <option value="TableF">Table F</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Dashboard">Dashboard</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                    <select id="filterSeverity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All Severities</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">AI Involved</label>
+                    <select id="filterAI" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">All</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                    <input type="text" id="filterSearch" placeholder="User or description..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4">
+                <button onclick="clearFilters()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                    Clear Filters
+                </button>
+                <button onclick="applyFilters()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900">Event Logs</h3>
+                <div class="text-sm text-gray-500">
+                    Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity Type</th>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity</th>
+                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
+                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">AI</th>
+                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Severity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+                                <div class="flex flex-col items-center">
+                                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <p>Loading event logs...</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-700">Page Size:</span>
+                    <select id="pageSize" onchange="loadLogs(1)" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="prevPage" onclick="loadLogs(currentPage - 1)" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Previous
+                    </button>
+                    <span class="text-sm text-gray-700">Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span></span>
+                    <button id="nextPage" onclick="loadLogs(currentPage + 1)" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentPage = 1;
+        let totalPagesCount = 1;
+        let activityChart = null;
+        let expandedRows = new Set();
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/logs/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalLogs').textContent = (stats.totalLogs || 0).toLocaleString();
+                document.getElementById('last24Hours').textContent = (stats.last24Hours || 0).toLocaleString();
+                document.getElementById('criticalEvents').textContent = (stats.criticalEvents || 0).toLocaleString();
+                document.getElementById('aiActions').textContent = (stats.aiActions || 0).toLocaleString();
+                
+                if (stats.activityByDay) {
+                    updateActivityChart(stats.activityByDay);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function updateActivityChart(activityData) {
+            const ctx = document.getElementById('activityChart').getContext('2d');
+            
+            const labels = activityData.map(d => {
+                const date = new Date(d.date);
+                return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            });
+            const data = activityData.map(d => d.count);
+            
+            if (activityChart) {
+                activityChart.destroy();
+            }
+            
+            activityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Log Events',
+                        data: data,
+                        borderColor: '#2563EB',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#2563EB',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadLogs(page = 1) {
+            currentPage = page;
+            const pageSize = document.getElementById('pageSize').value;
+            
+            const params = new URLSearchParams({
+                page: page.toString(),
+                pageSize: pageSize
+            });
+            
+            const fromDate = document.getElementById('filterFromDate').value;
+            const toDate = document.getElementById('filterToDate').value;
+            const actionType = document.getElementById('filterActionType').value;
+            const entityType = document.getElementById('filterEntityType').value;
+            const module = document.getElementById('filterModule').value;
+            const severity = document.getElementById('filterSeverity').value;
+            const aiInvolved = document.getElementById('filterAI').value;
+            const search = document.getElementById('filterSearch').value;
+            
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (actionType) params.append('actionType', actionType);
+            if (entityType) params.append('entityType', entityType);
+            if (module) params.append('module', module);
+            if (severity) params.append('severity', severity);
+            if (aiInvolved) params.append('aiInvolved', aiInvolved);
+            if (search) params.append('search', search);
+            
+            try {
+                const response = await fetch(`/api/logs?${params}`);
+                const data = await response.json();
+                
+                renderLogsTable(data.logs || []);
+                updatePagination(data);
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                document.getElementById('logsTable').innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-6 py-12 text-center text-red-500">
+                            Error loading logs. Please try again.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderLogsTable(logs) {
+            const tbody = document.getElementById('logsTable');
+            
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+                            <div class="flex flex-col items-center">
+                                <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <p>No event logs found.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = logs.map(log => `
+                <tr class="log-row" onclick="toggleLogDetails(${log.id})">
+                    <td class="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                        ${formatDateTime(log.timestamp || log.created_at)}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        ${log.user_name || 'System'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        ${log.user_role || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">
+                        ${log.action_type || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        ${log.entity_type || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        ${log.entity_name || log.entity_id || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${log.description || ''}">
+                        ${log.description || '-'}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${renderAIBadge(log.ai_involved)}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${renderSeverityBadge(log.severity)}
+                    </td>
+                </tr>
+                <tr id="details-${log.id}" class="hidden bg-gray-50">
+                    <td colspan="9" class="px-6 py-4">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="font-medium text-gray-700 mb-1">Old Value:</p>
+                                <pre class="bg-white border border-gray-200 rounded p-2 text-xs overflow-x-auto max-h-40">${formatJson(log.old_value)}</pre>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700 mb-1">New Value:</p>
+                                <pre class="bg-white border border-gray-200 rounded p-2 text-xs overflow-x-auto max-h-40">${formatJson(log.new_value)}</pre>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">IP Address:</p>
+                                <p class="text-gray-600">${log.ip_address || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">User Agent:</p>
+                                <p class="text-gray-600 truncate" title="${log.user_agent || ''}">${log.user_agent || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">Correlation ID:</p>
+                                <p class="text-gray-600 font-mono text-xs">${log.correlation_id || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-700">Checksum:</p>
+                                <p class="text-gray-600 font-mono text-xs">${log.checksum || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleLogDetails(id) {
+            const detailsRow = document.getElementById(`details-${id}`);
+            if (detailsRow) {
+                if (expandedRows.has(id)) {
+                    detailsRow.classList.add('hidden');
+                    expandedRows.delete(id);
+                } else {
+                    detailsRow.classList.remove('hidden');
+                    expandedRows.add(id);
+                }
+            }
+        }
+
+        function formatJson(obj) {
+            if (!obj) return 'N/A';
+            try {
+                if (typeof obj === 'string') {
+                    obj = JSON.parse(obj);
+                }
+                return JSON.stringify(obj, null, 2);
+            } catch {
+                return String(obj);
+            }
+        }
+
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function renderSeverityBadge(severity) {
+            const severityUpper = (severity || 'INFO').toUpperCase();
+            const classes = {
+                'INFO': 'badge-info',
+                'WARNING': 'badge-warning',
+                'CRITICAL': 'badge-critical'
+            };
+            const badgeClass = classes[severityUpper] || 'badge-info';
+            return `<span class="px-2 py-1 rounded-full text-xs font-medium ${badgeClass}">${severityUpper}</span>`;
+        }
+
+        function renderAIBadge(aiInvolved) {
+            if (aiInvolved) {
+                return '<span class="px-2 py-1 rounded-full text-xs font-medium badge-ai-yes">Yes</span>';
+            }
+            return '<span class="px-2 py-1 rounded-full text-xs font-medium badge-ai-no">No</span>';
+        }
+
+        function updatePagination(data) {
+            const total = data.total || 0;
+            const pageSize = parseInt(document.getElementById('pageSize').value);
+            totalPagesCount = Math.ceil(total / pageSize) || 1;
+            
+            const from = total === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+            const to = Math.min(currentPage * pageSize, total);
+            
+            document.getElementById('showingFrom').textContent = from;
+            document.getElementById('showingTo').textContent = to;
+            document.getElementById('totalRecords').textContent = total;
+            document.getElementById('currentPageNum').textContent = currentPage;
+            document.getElementById('totalPages').textContent = totalPagesCount;
+            
+            document.getElementById('prevPage').disabled = currentPage <= 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPagesCount;
+        }
+
+        function applyFilters() {
+            loadLogs(1);
+        }
+
+        function clearFilters() {
+            document.getElementById('filterFromDate').value = '';
+            document.getElementById('filterToDate').value = '';
+            document.getElementById('filterActionType').value = '';
+            document.getElementById('filterEntityType').value = '';
+            document.getElementById('filterModule').value = '';
+            document.getElementById('filterSeverity').value = '';
+            document.getElementById('filterAI').value = '';
+            document.getElementById('filterSearch').value = '';
+            loadLogs(1);
+        }
+
+        function exportCSV() {
+            const params = new URLSearchParams();
+            
+            const fromDate = document.getElementById('filterFromDate').value;
+            const toDate = document.getElementById('filterToDate').value;
+            const actionType = document.getElementById('filterActionType').value;
+            const entityType = document.getElementById('filterEntityType').value;
+            const module = document.getElementById('filterModule').value;
+            const severity = document.getElementById('filterSeverity').value;
+            const aiInvolved = document.getElementById('filterAI').value;
+            const search = document.getElementById('filterSearch').value;
+            
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (actionType) params.append('actionType', actionType);
+            if (entityType) params.append('entityType', entityType);
+            if (module) params.append('module', module);
+            if (severity) params.append('severity', severity);
+            if (aiInvolved) params.append('aiInvolved', aiInvolved);
+            if (search) params.append('search', search);
+            
+            const url = `/api/logs/export${params.toString() ? '?' + params.toString() : ''}`;
+            window.location.href = url;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadLogs(1);
+        });
+    </script>
+</body>
+</html>

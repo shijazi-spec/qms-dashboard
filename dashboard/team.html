@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quality Team Performance Tracker - WalaPlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --qms-blue: #1E3A8A;
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;
+            --qms-amber-light: #F59E0B;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;
+            --qms-red-light: #EF4444;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;
+            --qms-purple-light: #A855F7;
+            --qms-purple-bg: #EDE9FE;
+        }
+        html { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .tab-active { background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); color: var(--qms-blue); }
+        .badge-active { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .badge-inactive { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .badge-on_leave { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .badge-probation { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+        .badge-critical { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .badge-high { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .badge-medium { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        .badge-low { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .modal-backdrop { background: rgba(0, 0, 0, 0.5); }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('team');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
+            <button onclick="showTab('overview')" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active">
+                Overview
+            </button>
+            <button onclick="showTab('members')" id="tab-members" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Team Members
+            </button>
+            <button onclick="showTab('courses')" id="tab-courses" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Training Courses
+            </button>
+            <button onclick="showTab('training')" id="tab-training" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Training Matrix
+            </button>
+            <button onclick="showTab('projects')" id="tab-projects" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Projects
+            </button>
+            <button onclick="showTab('analytics')" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Analytics
+            </button>
+        </div>
+
+        <div id="content-overview" class="fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Total Team Members</p>
+                            <p id="totalMembers" class="text-3xl font-bold text-gray-900">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Avg Performance</p>
+                            <p id="avgPerformance" class="text-3xl font-bold text-green-600">0%</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Training Compliance</p>
+                            <p id="trainingCompliance" class="text-3xl font-bold text-indigo-600">0%</p>
+                        </div>
+                        <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Active Projects</p>
+                            <p id="activeProjects" class="text-3xl font-bold text-amber-600">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Team by Department</h3>
+                    <div class="chart-container">
+                        <canvas id="departmentChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Project Status</h3>
+                    <div class="chart-container">
+                        <canvas id="projectStatusChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Team Status</h3>
+                    <div class="chart-container">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Top Performers</h3>
+                <div id="topPerformers" class="space-y-4">
+                    <p class="text-gray-500 text-center py-8">No performance data available</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-members" class="hidden fade-in">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Team Members</h3>
+                    <div class="flex items-center space-x-4">
+                        <select id="filterDepartment" onchange="loadMembers()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="">All Departments</option>
+                        </select>
+                        <select id="filterStatus" onchange="loadMembers()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="on_leave">On Leave</option>
+                            <option value="probation">Probation</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Performance</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Training</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersTable" class="divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                    <p id="membersPagination" class="text-sm text-gray-500">Showing 0 members</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-courses" class="hidden fade-in">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Training Courses Catalog</h3>
+                    <div class="flex items-center space-x-4">
+                        <select id="filterCourseType" onchange="loadCourses()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="">All Types</option>
+                            <option value="mandatory">Mandatory</option>
+                            <option value="optional">Optional</option>
+                        </select>
+                        <button onclick="openNewCourseModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
+                            Add Course
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Passing Score</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coursesTable" class="divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-training" class="hidden fade-in">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Training Compliance Matrix</h3>
+                <div id="trainingMatrix" class="overflow-x-auto">
+                    <p class="text-gray-500 text-center py-8">Loading training matrix...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-projects" class="hidden fade-in">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Project Assignments</h3>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex bg-gray-100 rounded-lg p-1">
+                            <button onclick="setProjectView('table')" id="viewTable" class="px-3 py-1 rounded text-sm font-medium bg-white shadow">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                                Table
+                            </button>
+                            <button onclick="setProjectView('kanban')" id="viewKanban" class="px-3 py-1 rounded text-sm font-medium text-gray-600">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                                Kanban
+                            </button>
+                        </div>
+                        <select id="filterProjectStatus" onchange="loadProjects()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                            <option value="">All Status</option>
+                            <option value="assigned">Assigned</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="on_hold">On Hold</option>
+                        </select>
+                        <button onclick="openNewProjectModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
+                            New Assignment
+                        </button>
+                    </div>
+                </div>
+                <div id="projectTableView" class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectsTable" class="divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="projectKanbanView" class="hidden grid grid-cols-5 gap-4">
+                <div class="bg-gray-100 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold text-gray-700 flex items-center">
+                            <span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>Backlog
+                        </h4>
+                        <span id="kanban-backlog-count" class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="kanban-backlog" class="space-y-3 min-h-[200px]"></div>
+                </div>
+                <div class="bg-gray-100 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold text-gray-700 flex items-center">
+                            <span class="w-3 h-3 bg-amber-500 rounded-full mr-2"></span>In Progress
+                        </h4>
+                        <span id="kanban-progress-count" class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="kanban-progress" class="space-y-3 min-h-[200px]"></div>
+                </div>
+                <div class="bg-gray-100 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold text-gray-700 flex items-center">
+                            <span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>Waiting Stakeholder
+                        </h4>
+                        <span id="kanban-waiting-count" class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="kanban-waiting" class="space-y-3 min-h-[200px]"></div>
+                </div>
+                <div class="bg-gray-100 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold text-gray-700 flex items-center">
+                            <span class="w-3 h-3 bg-indigo-500 rounded-full mr-2"></span>Review
+                        </h4>
+                        <span id="kanban-review-count" class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="kanban-review" class="space-y-3 min-h-[200px]"></div>
+                </div>
+                <div class="bg-gray-100 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold text-gray-700 flex items-center">
+                            <span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>Completed
+                        </h4>
+                        <span id="kanban-completed-count" class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="kanban-completed" class="space-y-3 min-h-[200px]"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-analytics" class="hidden fade-in">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance by Department</h3>
+                    <div class="chart-container">
+                        <canvas id="performanceDeptChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Overdue Assignments</h3>
+                    <div class="flex items-center justify-center h-64">
+                        <div class="text-center">
+                            <p id="overdueCount" class="text-6xl font-bold text-red-600">0</p>
+                            <p class="text-gray-500 mt-2">Overdue Tasks</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="newMemberModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 modal-backdrop" onclick="closeNewMemberModal()"></div>
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Team Member</h3>
+                <form id="newMemberForm" onsubmit="createMember(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                            <input type="text" name="full_name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                            <input type="email" name="email" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                                <select name="role" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="Quality Analyst">Quality Analyst</option>
+                                    <option value="Quality Specialist">Quality Specialist</option>
+                                    <option value="Quality Lead">Quality Lead</option>
+                                    <option value="Quality Manager">Quality Manager</option>
+                                    <option value="QA Engineer">QA Engineer</option>
+                                    <option value="Process Analyst">Process Analyst</option>
+                                    <option value="Training Coordinator">Training Coordinator</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                                <select name="department" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="Quality Assurance">Quality Assurance</option>
+                                    <option value="Operations">Operations</option>
+                                    <option value="Customer Service">Customer Service</option>
+                                    <option value="Sales">Sales</option>
+                                    <option value="Training">Training</option>
+                                    <option value="Compliance">Compliance</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                            <input type="text" name="job_title" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                            <input type="tel" name="phone" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Hire Date</label>
+                            <input type="date" name="hire_date" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeNewMemberModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Member</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="newProjectModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 modal-backdrop" onclick="closeNewProjectModal()"></div>
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">New Project Assignment</h3>
+                <form id="newProjectForm" onsubmit="createProject(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+                            <input type="text" name="project_name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Project Type *</label>
+                                <select name="project_type" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="quality_improvement">Quality Improvement</option>
+                                    <option value="capa">CAPA</option>
+                                    <option value="audit">Audit</option>
+                                    <option value="training">Training</option>
+                                    <option value="process">Process</option>
+                                    <option value="compliance">Compliance</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Priority *</label>
+                                <select name="priority" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Assign To *</label>
+                            <select name="member_id" id="projectMemberSelect" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Role in Project *</label>
+                            <input type="text" name="role_in_project" required placeholder="e.g., Lead, Contributor, Reviewer" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                                <input type="date" name="due_date" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Effort (Hours)</label>
+                                <input type="number" name="effort_hours" min="0" step="0.5" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Deliverables</label>
+                            <textarea name="deliverables" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeNewProjectModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Assignment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="newCourseModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 modal-backdrop" onclick="closeNewCourseModal()"></div>
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Training Course</h3>
+                <form id="newCourseForm" onsubmit="createCourse(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Course Name *</label>
+                            <input type="text" name="name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Course Type *</label>
+                                <select name="course_type" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="mandatory">Mandatory</option>
+                                    <option value="optional">Optional</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                                <select name="department" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">All Departments</option>
+                                    <option value="Quality Assurance">Quality Assurance</option>
+                                    <option value="Operations">Operations</option>
+                                    <option value="Customer Service">Customer Service</option>
+                                    <option value="Sales">Sales</option>
+                                    <option value="Training">Training</option>
+                                    <option value="Compliance">Compliance</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea name="description" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Duration (Hours)</label>
+                                <input type="number" name="duration_hours" min="0.5" step="0.5" value="1" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Passing Score (%)</label>
+                                <input type="number" name="passing_score" min="0" max="100" value="80" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeNewCourseModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Course</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let departmentChart, projectStatusChart, statusChart, performanceDeptChart;
+        let allMembers = [];
+        let currentProjectView = 'table';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAnalytics();
+            loadMembers();
+            loadProjects();
+            loadCourses();
+        });
+
+        function showTab(tab) {
+            ['overview', 'members', 'courses', 'training', 'projects', 'analytics'].forEach(t => {
+                document.getElementById(`content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-600');
+            });
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-600');
+
+            if (tab === 'training') loadTrainingMatrix();
+            if (tab === 'courses') loadCourses();
+            if (tab === 'projects' && currentProjectView === 'kanban') loadKanbanBoard();
+        }
+
+        function setProjectView(view) {
+            currentProjectView = view;
+            const tableBtn = document.getElementById('viewTable');
+            const kanbanBtn = document.getElementById('viewKanban');
+            const tableView = document.getElementById('projectTableView');
+            const kanbanView = document.getElementById('projectKanbanView');
+            
+            if (view === 'table') {
+                tableBtn.classList.add('bg-white', 'shadow');
+                tableBtn.classList.remove('text-gray-600');
+                kanbanBtn.classList.remove('bg-white', 'shadow');
+                kanbanBtn.classList.add('text-gray-600');
+                tableView.classList.remove('hidden');
+                kanbanView.classList.add('hidden');
+            } else {
+                kanbanBtn.classList.add('bg-white', 'shadow');
+                kanbanBtn.classList.remove('text-gray-600');
+                tableBtn.classList.remove('bg-white', 'shadow');
+                tableBtn.classList.add('text-gray-600');
+                tableView.classList.add('hidden');
+                kanbanView.classList.remove('hidden');
+                loadKanbanBoard();
+            }
+        }
+
+        async function loadKanbanBoard() {
+            try {
+                const res = await fetch('/api/team/kanban');
+                const data = await res.json();
+                
+                const columns = {
+                    'backlog': data.backlog || [],
+                    'progress': data.in_progress || [],
+                    'waiting': data.waiting_stakeholder || [],
+                    'review': data.review || [],
+                    'completed': data.completed || []
+                };
+                
+                Object.keys(columns).forEach(col => {
+                    const container = document.getElementById(`kanban-${col}`);
+                    const count = document.getElementById(`kanban-${col}-count`);
+                    count.textContent = columns[col].length;
+                    
+                    if (columns[col].length === 0) {
+                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">No items</div>';
+                    } else {
+                        container.innerHTML = columns[col].map(p => `
+                            <div class="bg-white rounded-lg shadow-sm border p-3 cursor-pointer hover:shadow-md transition">
+                                <div class="flex items-start justify-between mb-2">
+                                    <h5 class="font-medium text-gray-900 text-sm">${p.project_name}</h5>
+                                    <span class="badge-${p.priority} px-1.5 py-0.5 rounded text-xs">${p.priority}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-2">${p.member_name || 'Unassigned'}</p>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-gray-400">${p.project_type?.replace('_', ' ') || ''}</span>
+                                    ${p.due_date ? `<span class="text-gray-500">${new Date(p.due_date).toLocaleDateString()}</span>` : ''}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading Kanban board:', error);
+            }
+        }
+
+        async function loadCourses() {
+            try {
+                const courseType = document.getElementById('filterCourseType')?.value || '';
+                const params = new URLSearchParams();
+                if (courseType) params.append('course_type', courseType);
+                
+                const res = await fetch(`/api/team/courses?${params}`);
+                const data = await res.json();
+                const courses = data.courses || [];
+                
+                const tbody = document.getElementById('coursesTable');
+                if (!courses.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No training courses found. Click "Add Course" to create one.</td></tr>';
+                } else {
+                    tbody.innerHTML = courses.map(c => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <div>
+                                    <p class="font-medium text-gray-900">${c.name}</p>
+                                    <p class="text-sm text-gray-500">${c.description || ''}</p>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="${c.course_type === 'mandatory' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded-full text-xs font-medium capitalize">${c.course_type}</span>
+                            </td>
+                            <td class="px-6 py-4 text-gray-700">${c.department || 'All'}</td>
+                            <td class="px-6 py-4 text-gray-700">${parseFloat(c.duration_hours || 0)} hrs</td>
+                            <td class="px-6 py-4 text-gray-700">${c.passing_score || 0}%</td>
+                            <td class="px-6 py-4">
+                                <span class="${c.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium">${c.is_active ? 'Active' : 'Inactive'}</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <button onclick="deleteCourse('${c.course_id}')" class="text-red-600 hover:text-red-800">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading courses:', error);
+            }
+        }
+
+        function openNewCourseModal() {
+            document.getElementById('newCourseModal').classList.remove('hidden');
+        }
+
+        function closeNewCourseModal() {
+            document.getElementById('newCourseModal').classList.add('hidden');
+            document.getElementById('newCourseForm').reset();
+        }
+
+        async function createCourse(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const res = await fetch('/api/team/courses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    closeNewCourseModal();
+                    loadCourses();
+                } else {
+                    const error = await res.json();
+                    alert(error.error || 'Failed to create course');
+                }
+            } catch (error) {
+                console.error('Error creating course:', error);
+                alert('Failed to create course');
+            }
+        }
+
+        async function deleteCourse(courseId) {
+            if (!confirm('Are you sure you want to delete this course?')) return;
+
+            try {
+                const res = await fetch(`/api/team/courses/${courseId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    loadCourses();
+                }
+            } catch (error) {
+                console.error('Error deleting course:', error);
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/team/analytics');
+                const data = await res.json();
+
+                document.getElementById('totalMembers').textContent = data.totalMembers || 0;
+                document.getElementById('avgPerformance').textContent = `${Math.round(data.avgPerformance || 0)}%`;
+                document.getElementById('trainingCompliance').textContent = `${Math.round(data.avgTrainingCompliance || 0)}%`;
+                document.getElementById('activeProjects').textContent = data.totalActiveProjects || 0;
+                document.getElementById('overdueCount').textContent = data.overdueAssignments || 0;
+
+                renderDepartmentChart(data.byDepartment || []);
+                renderProjectStatusChart(data.projectsByStatus || {});
+                renderStatusChart(data.byStatus || {});
+                renderTopPerformers(data.topPerformers || []);
+                renderPerformanceDeptChart(data.byDepartment || []);
+                populateDepartmentFilter(data.byDepartment || []);
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        function renderDepartmentChart(departments) {
+            const ctx = document.getElementById('departmentChart').getContext('2d');
+            if (departmentChart) departmentChart.destroy();
+
+            departmentChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: departments.map(d => d.department),
+                    datasets: [{
+                        data: departments.map(d => d.count),
+                        backgroundColor: ['#2563EB', '#047857', '#D97706', '#6D28D9', '#B91C1C', '#0EA5E9'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        function renderProjectStatusChart(status) {
+            const ctx = document.getElementById('projectStatusChart').getContext('2d');
+            if (projectStatusChart) projectStatusChart.destroy();
+
+            projectStatusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Assigned', 'In Progress', 'Completed', 'On Hold'],
+                    datasets: [{
+                        data: [status.assigned || 0, status.in_progress || 0, status.completed || 0, status.on_hold || 0],
+                        backgroundColor: ['#2563EB', '#F59E0B', '#22C55E', '#6B7280'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        function renderStatusChart(status) {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            if (statusChart) statusChart.destroy();
+
+            statusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Active', 'Inactive', 'On Leave', 'Probation'],
+                    datasets: [{
+                        data: [status.active || 0, status.inactive || 0, status.on_leave || 0, status.probation || 0],
+                        backgroundColor: ['#22C55E', '#EF4444', '#F59E0B', '#A855F7'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        function renderPerformanceDeptChart(departments) {
+            const ctx = document.getElementById('performanceDeptChart').getContext('2d');
+            if (performanceDeptChart) performanceDeptChart.destroy();
+
+            performanceDeptChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: departments.map(d => d.department),
+                    datasets: [{
+                        label: 'Avg Performance',
+                        data: departments.map(d => d.avg_performance || 0),
+                        backgroundColor: '#2563EB',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100 } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderTopPerformers(performers) {
+            const container = document.getElementById('topPerformers');
+            if (!performers.length) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">No performance data available</p>';
+                return;
+            }
+
+            container.innerHTML = performers.map((p, i) => `
+                <div class="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                        ${i + 1}
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-medium text-gray-900">${p.full_name}</p>
+                        <p class="text-sm text-gray-500">${p.role} - ${p.department}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-2xl font-bold text-green-600">${Math.round(p.performance_score || 0)}%</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function populateDepartmentFilter(departments) {
+            const select = document.getElementById('filterDepartment');
+            select.innerHTML = '<option value="">All Departments</option>' +
+                departments.map(d => `<option value="${d.department}">${d.department}</option>`).join('');
+        }
+
+        async function loadMembers() {
+            try {
+                const department = document.getElementById('filterDepartment').value;
+                const status = document.getElementById('filterStatus').value;
+                const params = new URLSearchParams();
+                if (department) params.append('department', department);
+                if (status) params.append('status', status);
+
+                const res = await fetch(`/api/team/members?${params}`);
+                const data = await res.json();
+                allMembers = data.members || [];
+
+                const tbody = document.getElementById('membersTable');
+                if (!allMembers.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No team members found. Click "Add Member" to create one.</td></tr>';
+                } else {
+                    tbody.innerHTML = allMembers.map(m => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium">
+                                        ${m.full_name.split(' ').map(n => n[0]).join('').substring(0,2)}
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-gray-900">${m.full_name}</p>
+                                        <p class="text-sm text-gray-500">${m.email}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-gray-700">${m.role}</td>
+                            <td class="px-6 py-4 text-gray-700">${m.department}</td>
+                            <td class="px-6 py-4">
+                                <span class="badge-${m.status} px-2 py-1 rounded-full text-xs font-medium capitalize">${m.status.replace('_', ' ')}</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-24 bg-gray-200 rounded-full h-2">
+                                        <div class="bg-green-500 h-2 rounded-full progress-bar" style="width: ${m.performance_score || 0}%"></div>
+                                    </div>
+                                    <span class="text-sm text-gray-600">${Math.round(m.performance_score || 0)}%</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-24 bg-gray-200 rounded-full h-2">
+                                        <div class="bg-indigo-500 h-2 rounded-full progress-bar" style="width: ${m.training_compliance_rate || 0}%"></div>
+                                    </div>
+                                    <span class="text-sm text-gray-600">${Math.round(m.training_compliance_rate || 0)}%</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <button onclick="deleteMember('${m.member_id}')" class="text-red-600 hover:text-red-800">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+
+                document.getElementById('membersPagination').textContent = `Showing ${allMembers.length} of ${data.total} members`;
+                populateProjectMemberSelect();
+            } catch (error) {
+                console.error('Error loading members:', error);
+            }
+        }
+
+        function populateProjectMemberSelect() {
+            const select = document.getElementById('projectMemberSelect');
+            select.innerHTML = allMembers.map(m => 
+                `<option value="${m.member_id}" data-name="${m.full_name}">${m.full_name} (${m.role})</option>`
+            ).join('');
+        }
+
+        async function loadProjects() {
+            try {
+                const status = document.getElementById('filterProjectStatus').value;
+                const params = new URLSearchParams();
+                if (status) params.append('status', status);
+
+                const res = await fetch(`/api/team/projects?${params}`);
+                const data = await res.json();
+                const projects = data.assignments || [];
+
+                const tbody = document.getElementById('projectsTable');
+                if (!projects.length) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">No project assignments found.</td></tr>';
+                } else {
+                    tbody.innerHTML = projects.map(p => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 font-medium text-gray-900">${p.project_name}</td>
+                            <td class="px-6 py-4 text-gray-700 capitalize">${p.project_type.replace('_', ' ')}</td>
+                            <td class="px-6 py-4 text-gray-700">${p.member_name}</td>
+                            <td class="px-6 py-4 text-gray-700">${p.role_in_project}</td>
+                            <td class="px-6 py-4 text-gray-700">${p.due_date ? new Date(p.due_date).toLocaleDateString() : '-'}</td>
+                            <td class="px-6 py-4">
+                                <span class="badge-${p.priority} px-2 py-1 rounded-full text-xs font-medium capitalize">${p.priority}</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <select onchange="updateProjectStatus('${p.assignment_id}', this.value)" class="text-sm border border-gray-200 rounded px-2 py-1">
+                                    <option value="assigned" ${p.status === 'assigned' ? 'selected' : ''}>Assigned</option>
+                                    <option value="in_progress" ${p.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="completed" ${p.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                    <option value="on_hold" ${p.status === 'on_hold' ? 'selected' : ''}>On Hold</option>
+                                </select>
+                            </td>
+                            <td class="px-6 py-4">
+                                <button onclick="deleteProject('${p.assignment_id}')" class="text-red-600 hover:text-red-800">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        }
+
+        async function loadTrainingMatrix() {
+            try {
+                const res = await fetch('/api/team/training-matrix');
+                const data = await res.json();
+                const members = data.members || [];
+
+                const container = document.getElementById('trainingMatrix');
+                if (!members.length) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">No training data available. Add team members and assign training courses.</p>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium text-gray-500">Team Member</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-500">Department</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-500">Training Courses</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-500">Compliance</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            ${members.map(m => `
+                                <tr>
+                                    <td class="px-4 py-3 font-medium text-gray-900">${m.full_name}</td>
+                                    <td class="px-4 py-3 text-gray-600">${m.department}</td>
+                                    <td class="px-4 py-3">
+                                        ${m.training_assignments.length ? m.training_assignments.map(t => `
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mr-1 mb-1
+                                                ${t.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                                  t.status === 'overdue' ? 'bg-red-100 text-red-800' : 
+                                                  'bg-amber-100 text-amber-800'}">
+                                                ${t.title || 'Training'}
+                                            </span>
+                                        `).join('') : '<span class="text-gray-400">No training assigned</span>'}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="w-24 bg-gray-200 rounded-full h-2">
+                                                <div class="bg-indigo-500 h-2 rounded-full" style="width: ${m.compliance_rate}%"></div>
+                                            </div>
+                                            <span class="text-gray-600">${Math.round(m.compliance_rate)}%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                console.error('Error loading training matrix:', error);
+            }
+        }
+
+        function openNewMemberModal() {
+            document.getElementById('newMemberModal').classList.remove('hidden');
+        }
+
+        function closeNewMemberModal() {
+            document.getElementById('newMemberModal').classList.add('hidden');
+            document.getElementById('newMemberForm').reset();
+        }
+
+        function openNewProjectModal() {
+            document.getElementById('newProjectModal').classList.remove('hidden');
+        }
+
+        function closeNewProjectModal() {
+            document.getElementById('newProjectModal').classList.add('hidden');
+            document.getElementById('newProjectForm').reset();
+        }
+
+        async function createMember(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const res = await fetch('/api/team/members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    closeNewMemberModal();
+                    loadMembers();
+                    loadAnalytics();
+                } else {
+                    const error = await res.json();
+                    alert(error.error || 'Failed to create team member');
+                }
+            } catch (error) {
+                console.error('Error creating member:', error);
+                alert('Failed to create team member');
+            }
+        }
+
+        async function createProject(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            const select = document.getElementById('projectMemberSelect');
+            const selectedOption = select.options[select.selectedIndex];
+            data.member_name = selectedOption.dataset.name;
+
+            try {
+                const res = await fetch('/api/team/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    closeNewProjectModal();
+                    loadProjects();
+                    loadAnalytics();
+                } else {
+                    const error = await res.json();
+                    alert(error.error || 'Failed to create project assignment');
+                }
+            } catch (error) {
+                console.error('Error creating project:', error);
+                alert('Failed to create project assignment');
+            }
+        }
+
+        async function deleteMember(memberId) {
+            if (!confirm('Are you sure you want to delete this team member?')) return;
+
+            try {
+                const res = await fetch(`/api/team/members/${memberId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    loadMembers();
+                    loadAnalytics();
+                }
+            } catch (error) {
+                console.error('Error deleting member:', error);
+            }
+        }
+
+        async function deleteProject(assignmentId) {
+            if (!confirm('Are you sure you want to delete this assignment?')) return;
+
+            try {
+                const res = await fetch(`/api/team/projects/${assignmentId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    loadProjects();
+                    loadAnalytics();
+                }
+            } catch (error) {
+                console.error('Error deleting project:', error);
+            }
+        }
+
+        async function updateProjectStatus(assignmentId, status) {
+            try {
+                await fetch(`/api/team/projects/${assignmentId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                loadAnalytics();
+            } catch (error) {
+                console.error('Error updating project status:', error);
+            }
+        }
+    </script>
+</body>
+</html>

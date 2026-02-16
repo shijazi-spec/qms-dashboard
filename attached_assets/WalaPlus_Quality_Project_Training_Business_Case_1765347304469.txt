@@ -1,0 +1,153 @@
+WalaPlus Quality Team Projects & Training Module – Business Case
+Version: 1.0 – For Replit Development
+
+------------------------------------------------------------
+1. PURPOSE
+------------------------------------------------------------
+Create a centralized Quality Project & Training Management System embedded inside WalaPlus QMS. 
+The system will support project scoping, governance documentation, workload tracking, training assignments,
+audit trail logging, and Agentic AI assistance.
+
+------------------------------------------------------------
+2. MODULES INCLUDED
+------------------------------------------------------------
+A. Project Assignment Module
+B. Training Management Module
+C. Activity Logs (Audit Trail)
+D. AI-Assisted Project Scoping & Insights
+E. Role-Based Access Control (RBAC)
+F. Technical Requirements
+
+------------------------------------------------------------
+A. PROJECT ASSIGNMENT MODULE
+------------------------------------------------------------
+Fields:
+- Project Title
+- Department
+- Project Type (Governance, Audit, CAPA, RCA, Six Sigma, Redesign, Training)
+- Assigned To
+- Role (Owner, Contributor, Reviewer, Approver)
+- Description
+- Scope
+- Expected Outputs
+- Start Date / Due Date
+- Priority (High, Medium, Low)
+- Stakeholders to Meet
+- Google Calendar Meeting Scheduler Integration
+- Risks
+- Dependencies
+- AI Scope Generator Button
+
+Views:
+- Kanban View (Backlog, In Progress, Waiting for Stakeholder, Review, Completed)
+- Status Logic (Green, Yellow, Red)
+- Analytics Dashboard
+
+------------------------------------------------------------
+B. TRAINING MANAGEMENT MODULE
+------------------------------------------------------------
+Training Courses:
+- Course name
+- Type
+- Description
+- Attachments
+- Duration
+- AI-generated summary
+
+Training Assignments:
+- Assigned to
+- Due date
+- Priority
+- Assessment requirement
+
+Training Matrix:
+- Completed
+- Pending
+- Scores
+- Re-training needs
+- AI-driven TNA suggestions
+
+------------------------------------------------------------
+C. COMPLETE AUDIT TRAIL (LOGGING SYSTEM)
+------------------------------------------------------------
+Log every action:
+- Create / Edit / Update / Delete
+- Assignments
+- Status changes
+- File uploads
+- CAPA actions
+- Non-conformities
+- Training changes
+
+Each log stores:
+- Action ID
+- User
+- Timestamp
+- Module
+- Old value / New value
+- IP
+- AI involvement
+
+------------------------------------------------------------
+D. AGENTIC AI USE CASES
+------------------------------------------------------------
+AI Scope Builder:
+- Generates governance scope, SOP list, KPIs, risks, timeline
+
+AI Gap Analysis:
+- Checks SOP completeness
+- Detects misalignments
+- Suggests missing processes
+
+AI Performance Insights:
+- Team workload
+- Department delays
+- Governance risk score
+- Training needs
+
+------------------------------------------------------------
+E. ROLE-BASED ACCESS CONTROL
+------------------------------------------------------------
+Admin:
+- Full access
+
+Quality Manager:
+- Edit + Approve
+
+Quality Specialist:
+- Edit own only
+
+Reviewer / Approver:
+- Only assigned items
+
+Stakeholder:
+- View only
+
+------------------------------------------------------------
+F. TECHNICAL REQUIREMENTS
+------------------------------------------------------------
+Database tables needed:
+- projects
+- project_assignments
+- project_logs
+- training_courses
+- training_assignments
+- training_logs
+- quality_users
+
+Integration:
+- Google Calendar
+- Agentic AI
+- Future SLA / Scorecard automation
+
+------------------------------------------------------------
+EXPECTED OUTCOMES
+------------------------------------------------------------
+- Full visibility over quality workload
+- Professional logging & governance
+- AI-driven scoping & insights
+- Accurate project tracking
+- Training compliance
+- Capacity management
+
+END OF DOCUMENT

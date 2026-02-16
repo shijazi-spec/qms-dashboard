@@ -1,0 +1,2027 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>WalaPlus Quality Admin Panel</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            /* QMS Industry Standard Color Palette */
+            :root {
+                --qms-blue: #1E3A8A;        /* Quality/Governance */
+                --qms-blue-light: #2563EB;
+                --qms-blue-bg: #DBEAFE;
+                --qms-green: #047857;       /* Compliance/Pass */
+                --qms-green-light: #22C55E;
+                --qms-green-bg: #D1FAE5;
+                --qms-amber: #D97706;       /* Warning/At-Risk */
+                --qms-amber-light: #F59E0B;
+                --qms-amber-bg: #FEF3C7;
+                --qms-red: #B91C1C;         /* Nonconformance/Fail */
+                --qms-red-light: #EF4444;
+                --qms-red-bg: #FEE2E2;
+                --qms-purple: #6D28D9;      /* Continuous Improvement */
+                --qms-purple-light: #A855F7;
+                --qms-purple-bg: #EDE9FE;
+                --qms-gray: #374151;        /* Neutral/Typography */
+            }
+            html { 
+                font-family: "Inter", sans-serif;
+                scroll-behavior: smooth;
+            }
+            body {
+                font-family: "Inter", sans-serif;
+                min-height: 100vh;
+                overflow-x: hidden;
+                overflow-y: scroll !important;
+                -webkit-overflow-scrolling: touch;
+            }
+            .hidden {
+                display: none !important;
+                pointer-events: none !important;
+            }
+            .tab-active {
+                border-bottom: 2px solid var(--qms-blue);
+                color: var(--qms-blue);
+            }
+            .fade-in {
+                animation: fadeIn 0.3s ease-in;
+            }
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                }
+                to {
+                    opacity: 1;
+                }
+            }
+            .modal-backdrop {
+                background: rgba(0, 0, 0, 0.5);
+            }
+            /* QMS Status Colors */
+            .qms-compliant { background-color: var(--qms-green-bg); color: var(--qms-green); }
+            .qms-at-risk { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+            .qms-non-compliant { background-color: var(--qms-red-bg); color: var(--qms-red); }
+            .qms-improvement { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+            .qms-governance { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        </style>
+        <link rel="stylesheet" href="/css/navigation.css">
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+        <div id="walaplus-nav"></div>
+        <script src="/js/navigation.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                WalaPlusNav.init('admin');
+            });
+        </script>
+
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="flex space-x-8">
+                    <button
+                        onclick="switchTab('documents')"
+                        id="tab-documents"
+                        class="py-3 px-1 tab-active font-medium text-sm"
+                    >
+                        Governance Documents
+                    </button>
+                    <button
+                        onclick="switchTab('scorecard')"
+                        id="tab-scorecard"
+                        class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
+                    >
+                        Evaluation Scorecard
+                    </button>
+                    <button
+                        onclick="switchTab('settings')"
+                        id="tab-settings"
+                        class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
+                    >
+                        Settings
+                    </button>
+                    <button
+                        onclick="switchTab('audit')"
+                        id="tab-audit"
+                        class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
+                    >
+                        Audit Trail
+                    </button>
+                </nav>
+            </div>
+
+            <div id="content-documents" class="fade-in">
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">
+                                Governance Documents
+                            </h2>
+                            <p class="text-sm text-gray-500">
+                                Upload and manage governance documents for
+                                quality audits
+                            </p>
+                        </div>
+                        <button
+                            onclick="showUploadModal()"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                        >
+                            <svg
+                                class="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            <span>Upload New Version</span>
+                        </button>
+                    </div>
+
+                    <div id="documents-list" class="space-y-4">
+                        <div class="text-center py-8 text-gray-500">
+                            Loading documents...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        Active Document Preview
+                    </h3>
+                    <div
+                        id="document-preview"
+                        class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"
+                    >
+                        <p class="text-gray-500">
+                            Select a document to preview its rules
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-scorecard" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Department Scorecard Selection</h3>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="showCreateScorecardModal()" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center space-x-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                <span>Create New</span>
+                            </button>
+                            <button onclick="cloneCurrentScorecard()" id="clone-scorecard-btn" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 text-sm flex items-center space-x-1 hidden">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                <span>Clone</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">CRM Module</label>
+                            <select id="scorecard-crm-module" onchange="onModuleChange()" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="Leads">Leads (SDR Team)</option>
+                                <option value="Deals">Deals (Sales Team)</option>
+                                <option value="Contacts">Contacts</option>
+                                <option value="Accounts">Accounts</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Team</label>
+                            <select id="scorecard-team" onchange="loadScorecardsList()" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="SDR">SDR Team</option>
+                                <option value="Sales">Sales Team</option>
+                                <option value="CS">CS Team</option>
+                                <option value="Marketplace">Marketplace Team</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Scorecard Name</label>
+                            <select id="scorecard-name-select" onchange="onScorecardSelect()" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="">Select scorecard...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Linked Governance Doc</label>
+                            <select id="scorecard-gov-doc" onchange="linkGovernanceDoc()" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="">Select document...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between mt-3">
+                        <p id="scorecard-dept-status" class="text-sm text-gray-500">Select a department to manage its scorecard</p>
+                        <div id="scorecard-actions" class="hidden flex items-center space-x-3">
+                            <span id="scorecard-version" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v1.0</span>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="scorecard-active-toggle" onchange="toggleScorecardActive()" class="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500">
+                                <span class="text-sm font-medium text-gray-700">Set as Active</span>
+                            </label>
+                            <button onclick="deleteCurrentScorecard()" class="text-red-600 hover:text-red-800 text-sm flex items-center space-x-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white rounded-xl shadow-sm border p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                            Dimension Weights
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label
+                                    class="flex justify-between text-sm font-medium text-gray-700 mb-1"
+                                >
+                                    <span>People</span>
+                                    <span id="people-weight-value">25%</span>
+                                </label>
+                                <input
+                                    type="range"
+                                    id="people-weight"
+                                    min="0"
+                                    max="100"
+                                    value="25"
+                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                    onchange="updateWeightDisplay('people')"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    class="flex justify-between text-sm font-medium text-gray-700 mb-1"
+                                >
+                                    <span>Process</span>
+                                    <span id="process-weight-value">35%</span>
+                                </label>
+                                <input
+                                    type="range"
+                                    id="process-weight"
+                                    min="0"
+                                    max="100"
+                                    value="35"
+                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                    onchange="updateWeightDisplay('process')"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    class="flex justify-between text-sm font-medium text-gray-700 mb-1"
+                                >
+                                    <span>Governance</span>
+                                    <span id="governance-weight-value"
+                                        >40%</span
+                                    >
+                                </label>
+                                <input
+                                    type="range"
+                                    id="governance-weight"
+                                    min="0"
+                                    max="100"
+                                    value="40"
+                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                    onchange="updateWeightDisplay('governance')"
+                                />
+                            </div>
+                            <div
+                                id="weight-warning"
+                                class="hidden text-amber-600 text-sm mt-2"
+                            >
+                                Total must equal 100%
+                            </div>
+                            <button
+                                onclick="saveWeights()"
+                                id="save-weights-btn"
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mt-4"
+                            >
+                                Save Weights
+                            </button>
+                        </div>
+                    </div>
+
+                    <div
+                        class="lg:col-span-2 bg-white rounded-xl shadow-sm border p-6"
+                    >
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Scorecard Attributes
+                            </h3>
+                            <button
+                                onclick="showAttributeModal()"
+                                class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center space-x-1"
+                            >
+                                <svg
+                                    class="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M12 4v16m8-8H4"
+                                    />
+                                </svg>
+                                <span>Add Attribute</span>
+                            </button>
+                        </div>
+                        <div
+                            id="attributes-list"
+                            class="space-y-2 max-h-96 overflow-y-auto"
+                        >
+                            <div class="text-center py-8 text-gray-500">
+                                Loading attributes...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        Scorecard Configuration
+                    </h3>
+                    <div id="scorecard-info" class="text-gray-600">
+                        Loading scorecard information...
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-settings" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        Audit Schedule
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-2"
+                                >Cron Expression</label
+                            >
+                            <input
+                                type="text"
+                                id="cron-expression"
+                                placeholder="0 8 * * 1"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <p class="text-sm text-gray-500 mt-1">
+                                Current: Mondays at 8 AM UTC
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-2"
+                                >Email Recipients</label
+                            >
+                            <input
+                                type="text"
+                                id="email-recipients"
+                                placeholder="email@example.com"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <p class="text-sm text-gray-500 mt-1">
+                                Comma-separated email addresses
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onclick="saveSettings()"
+                        class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    >
+                        Save Settings
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        Integration Status
+                    </h3>
+                    <div class="space-y-3">
+                        <div
+                            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"
+                                >
+                                    <svg
+                                        class="w-6 h-6 text-blue-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                        />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900">
+                                        Google Calendar
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        Meeting and event tracking
+                                    </p>
+                                </div>
+                            </div>
+                            <span
+                                id="calendar-status"
+                                class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                                >Connected</span
+                            >
+                        </div>
+                        <div
+                            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center"
+                                >
+                                    <svg
+                                        class="w-6 h-6 text-orange-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                                        />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900">
+                                        Zoho CRM
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        Data hygiene and governance audits
+                                    </p>
+                                </div>
+                            </div>
+                            <span
+                                id="zoho-status"
+                                class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
+                                >Needs Token</span
+                            >
+                        </div>
+                        <div
+                            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center"
+                                >
+                                    <svg
+                                        class="w-6 h-6 text-purple-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                        />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900">
+                                        Email (Replit Mail)
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        Quality report delivery
+                                    </p>
+                                </div>
+                            </div>
+                            <span
+                                class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                                >Connected</span
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        Quick Actions
+                    </h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button
+                            onclick="triggerAudit()"
+                            id="trigger-audit-btn"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                        >
+                            <svg
+                                class="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                                />
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                            </svg>
+                            <span>Run Audit Now</span>
+                        </button>
+                        <button
+                            onclick="seedDefaultData()"
+                            class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+                        >
+                            <svg
+                                class="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            <span>Reset to Defaults</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-audit" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">System Audit Trail</h2>
+                            <p class="text-sm text-gray-500">Complete activity log across all modules</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <select id="auditModuleFilter" onchange="loadAuditTrail()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                                <option value="">All Modules</option>
+                                <option value="team">Team</option>
+                                <option value="training">Training</option>
+                                <option value="project">Projects</option>
+                                <option value="roi">ROI</option>
+                                <option value="qms">QMS</option>
+                                <option value="calls">Calls</option>
+                            </select>
+                            <select id="auditActionFilter" onchange="loadAuditTrail()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                                <option value="">All Actions</option>
+                                <option value="create">Create</option>
+                                <option value="update">Update</option>
+                                <option value="delete">Delete</option>
+                            </select>
+                            <button onclick="loadAuditTrail()" class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="audit-trail-list" class="space-y-3">
+                        <div class="text-center py-8 text-gray-500">Loading audit trail...</div>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <p id="auditPagination" class="text-sm text-gray-500">Showing 0 entries</p>
+                        <div class="flex space-x-2">
+                            <button onclick="loadAuditTrail(Math.max(0, currentAuditOffset - 20))" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Previous</button>
+                            <button onclick="loadAuditTrail(currentAuditOffset + 20)" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div
+            id="upload-modal"
+            class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop"
+        >
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        Upload Governance Document
+                    </h3>
+                    <button
+                        onclick="closeUploadModal()"
+                        class="text-gray-400 hover:text-gray-600"
+                    >
+                        <svg
+                            class="w-6 h-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            />
+                        </svg>
+                    </button>
+                </div>
+                <form id="upload-form" onsubmit="uploadDocument(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Document Name</label
+                            >
+                            <input
+                                type="text"
+                                id="doc-name"
+                                required
+                                placeholder="WalaPlus Sales Management Process"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Version</label
+                            >
+                            <input
+                                type="text"
+                                id="doc-version"
+                                required
+                                placeholder="v1.2"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Document Type</label
+                            >
+                            <select
+                                id="doc-type"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="sales">Sales</option>
+                                <option value="operations">Operations</option>
+                                <option value="governance">Governance</option>
+                                <option value="compliance">Compliance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >CRM Module (AI Evaluation Target)</label
+                            >
+                            <select
+                                id="doc-crm-module"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="">-- Select Module --</option>
+                                <option value="Leads">Leads (SDR Team)</option>
+                                <option value="Deals">Deals (Sales Team)</option>
+                                <option value="Contacts">Contacts</option>
+                                <option value="Accounts">Accounts</option>
+                            </select>
+                            <p class="text-sm text-gray-500 mt-1">
+                                AI will use this document when evaluating records from the selected CRM module
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Team Name (Optional)</label
+                            >
+                            <input
+                                type="text"
+                                id="doc-team-name"
+                                placeholder="e.g., SDR Team, Sales Team, Account Management"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Governance Rules (JSON or Text)</label
+                            >
+                            <textarea
+                                id="doc-content"
+                                rows="8"
+                                required
+                                placeholder="Paste your governance rules here..."
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                            ></textarea>
+                            <p class="text-sm text-gray-500 mt-1">
+                                Paste the governance rules in JSON format or
+                                plain text
+                            </p>
+                        </div>
+                        <div class="flex items-center">
+                            <input
+                                type="checkbox"
+                                id="doc-active"
+                                checked
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <label
+                                for="doc-active"
+                                class="ml-2 text-sm text-gray-700"
+                                >Set as active document</label
+                            >
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button
+                            type="button"
+                            onclick="closeUploadModal()"
+                            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                            Upload Document
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div
+            id="attribute-modal"
+            class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop"
+        >
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3
+                        class="text-lg font-semibold text-gray-900"
+                        id="attribute-modal-title"
+                    >
+                        Add Attribute
+                    </h3>
+                    <button
+                        onclick="closeAttributeModal()"
+                        class="text-gray-400 hover:text-gray-600"
+                    >
+                        <svg
+                            class="w-6 h-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                            />
+                        </svg>
+                    </button>
+                </div>
+                <form id="attribute-form" onsubmit="saveAttribute(event)">
+                    <input type="hidden" id="attr-id" />
+                    <div class="space-y-4">
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Attribute Name</label
+                            >
+                            <input
+                                type="text"
+                                id="attr-name"
+                                required
+                                placeholder="Customer Inquiry Timeliness"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Description</label
+                            >
+                            <textarea
+                                id="attr-description"
+                                rows="2"
+                                placeholder="First response within 24 hours"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            ></textarea>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Dimension</label
+                            >
+                            <select
+                                id="attr-dimension"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="people">People</option>
+                                <option value="process">Process</option>
+                                <option value="governance">Governance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                                >Weight (within dimension)</label
+                            >
+                            <input
+                                type="number"
+                                id="attr-weight"
+                                required
+                                min="0"
+                                max="100"
+                                value="10"
+                                step="1"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Target (%)</label>
+                                <input type="number" id="attr-target" required min="0" max="100" value="100" step="1"
+                                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                                <select id="attr-severity" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="Minor">Minor</option>
+                                    <option value="Major">Major</option>
+                                    <option value="Critical">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Logic (how AI checks it)</label>
+                            <textarea id="attr-evaluation-logic" rows="2" placeholder="e.g., Check if Last_Activity_Date is within 48 hours of Lead creation"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Fields (CRM fields to check)</label>
+                            <input type="text" id="attr-evidence-fields" placeholder="e.g., Last_Activity_Date, Status, Owner"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="attr-is-active" checked class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                            <label for="attr-is-active" class="ml-2 text-sm text-gray-700">Active (include in evaluations)</label>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeAttributeModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Attribute</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="create-scorecard-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Create New Scorecard</h3>
+                    <button onclick="closeCreateScorecardModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <form id="create-scorecard-form" onsubmit="createNewScorecard(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Scorecard Name</label>
+                            <input type="text" id="new-scorecard-name" required placeholder="e.g., SDR Lead Hygiene Scorecard"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea id="new-scorecard-description" rows="2" placeholder="Brief description of this scorecard's purpose"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">CRM Module</label>
+                                <select id="new-scorecard-crm-module" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                                    <option value="Leads">Leads</option>
+                                    <option value="Deals">Deals</option>
+                                    <option value="Contacts">Contacts</option>
+                                    <option value="Accounts">Accounts</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Team</label>
+                                <select id="new-scorecard-team" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                                    <option value="SDR">SDR Team</option>
+                                    <option value="Sales">Sales Team</option>
+                                    <option value="CS">CS Team</option>
+                                    <option value="Marketplace">Marketplace Team</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Version</label>
+                            <input type="text" id="new-scorecard-version" placeholder="v1.0" value="v1.0"
+                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeCreateScorecardModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Create Scorecard</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div
+            id="toast"
+            class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300"
+        >
+            <span id="toast-message"></span>
+        </div>
+
+        <script>
+            let currentScorecard = null;
+            let currentDocuments = [];
+            let adminKey = localStorage.getItem("adminKey") || "";
+
+            function getAdminHeaders() {
+                return {
+                    "Content-Type": "application/json",
+                    "X-Admin-Key": adminKey,
+                };
+            }
+
+            function promptForAdminKey() {
+                const key = prompt("Enter your Admin API Key:");
+                if (key) {
+                    adminKey = key;
+                    localStorage.setItem("adminKey", key);
+                    loadDocuments();
+                    loadScorecard();
+                }
+            }
+
+            function handleUnauthorized(response) {
+                if (response.status === 401) {
+                    localStorage.removeItem("adminKey");
+                    adminKey = "";
+                    showToast(
+                        "Authentication required. Please enter your admin key.",
+                        "error",
+                    );
+                    promptForAdminKey();
+                    return true;
+                }
+                return false;
+            }
+
+            let currentAuditOffset = 0;
+
+            function switchTab(tab) {
+                ["documents", "scorecard", "settings", "audit"].forEach((t) => {
+                    document
+                        .getElementById(`content-${t}`)
+                        .classList.add("hidden");
+                    document
+                        .getElementById(`tab-${t}`)
+                        .classList.remove("tab-active");
+                    document
+                        .getElementById(`tab-${t}`)
+                        .classList.add("text-gray-500");
+                });
+                document
+                    .getElementById(`content-${tab}`)
+                    .classList.remove("hidden");
+                document
+                    .getElementById(`tab-${tab}`)
+                    .classList.add("tab-active");
+                document
+                    .getElementById(`tab-${tab}`)
+                    .classList.remove("text-gray-500");
+            }
+
+            function showToast(message, type = "success") {
+                const toast = document.getElementById("toast");
+                const toastMsg = document.getElementById("toast-message");
+                toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 ${
+                    type === "success"
+                        ? "bg-green-600 text-white"
+                        : type === "error"
+                          ? "bg-red-600 text-white"
+                          : "bg-blue-600 text-white"
+                }`;
+                toastMsg.textContent = message;
+                toast.classList.remove("hidden");
+                setTimeout(() => toast.classList.add("hidden"), 3000);
+            }
+
+            function showUploadModal() {
+                document
+                    .getElementById("upload-modal")
+                    .classList.remove("hidden");
+            }
+
+            function closeUploadModal() {
+                document.getElementById("upload-modal").classList.add("hidden");
+                document.getElementById("upload-form").reset();
+            }
+
+            function showAttributeModal(attr = null) {
+                const modal = document.getElementById("attribute-modal");
+                const title = document.getElementById("attribute-modal-title");
+
+                if (attr) {
+                    title.textContent = "Edit Attribute";
+                    document.getElementById("attr-id").value = attr.id || "";
+                    document.getElementById("attr-name").value =
+                        attr.name || "";
+                    document.getElementById("attr-description").value =
+                        attr.description || "";
+                    document.getElementById("attr-dimension").value =
+                        attr.dimension || "people";
+                    document.getElementById("attr-weight").value =
+                        attr.weight || 10;
+                    document.getElementById("attr-target").value =
+                        attr.target || 100;
+                } else {
+                    title.textContent = "Add Attribute";
+                    document.getElementById("attribute-form").reset();
+                }
+                modal.classList.remove("hidden");
+            }
+
+            function closeAttributeModal() {
+                document
+                    .getElementById("attribute-modal")
+                    .classList.add("hidden");
+                document.getElementById("attribute-form").reset();
+            }
+
+            async function loadDocuments() {
+                try {
+                    const response = await fetch("/api/admin/documents", {
+                        headers: getAdminHeaders(),
+                    });
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok)
+                        throw new Error("Failed to load documents");
+                    const documents = await response.json();
+                    currentDocuments = documents;
+                    renderDocuments(documents);
+                } catch (error) {
+                    console.error("Error loading documents:", error);
+                    document.getElementById("documents-list").innerHTML =
+                        '<div class="text-center py-8 text-red-500">Error loading documents</div>';
+                }
+            }
+
+            function renderDocuments(documents) {
+                const container = document.getElementById("documents-list");
+                if (!documents || documents.length === 0) {
+                    container.innerHTML =
+                        '<div class="text-center py-8 text-gray-500">No documents uploaded yet</div>';
+                    return;
+                }
+
+                const getModuleBadge = (doc) => {
+                    if (!doc.crm_module) return '';
+                    const colors = {
+                        'Leads': 'bg-purple-100 text-purple-700',
+                        'Deals': 'bg-blue-100 text-blue-700',
+                        'Contacts': 'bg-cyan-100 text-cyan-700',
+                        'Accounts': 'bg-indigo-100 text-indigo-700'
+                    };
+                    const teamLabel = doc.team_name ? ` (${doc.team_name})` : '';
+                    return `<span class="px-2 py-0.5 ${colors[doc.crm_module] || 'bg-gray-100 text-gray-700'} rounded text-xs font-medium">${doc.crm_module}${teamLabel}</span>`;
+                };
+
+                container.innerHTML = documents
+                    .map(
+                        (doc) => `
+                <div class="flex items-center justify-between p-4 border rounded-lg ${doc.is_active ? "border-green-300 bg-green-50" : "border-gray-200"}">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 ${doc.is_active ? "bg-green-100" : "bg-gray-100"} rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 ${doc.is_active ? "text-green-600" : "text-gray-400"}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <h4 class="font-medium text-gray-900">${doc.name}</h4>
+                                ${getModuleBadge(doc)}
+                            </div>
+                            <div class="flex items-center space-x-3 text-sm text-gray-500">
+                                <span>Version ${doc.version}</span>
+                                <span>|</span>
+                                <span>${doc.document_type}</span>
+                                <span>|</span>
+                                <span>${new Date(doc.created_at).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${
+                            doc.is_active
+                                ? '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">Active</span>'
+                                : `<button onclick="activateDocument(${doc.id})" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Activate</button>`
+                        }
+                        <button onclick="previewDocument(${doc.id})" class="px-3 py-1 border border-blue-300 text-blue-600 rounded-lg text-sm hover:bg-blue-50">Preview</button>
+                    </div>
+                </div>
+            `,
+                    )
+                    .join("");
+            }
+
+            async function uploadDocument(event) {
+                event.preventDefault();
+
+                const crmModule = document.getElementById("doc-crm-module").value;
+                const teamName = document.getElementById("doc-team-name").value;
+
+                const data = {
+                    name: document.getElementById("doc-name").value,
+                    version: document.getElementById("doc-version").value,
+                    document_type: document.getElementById("doc-type").value,
+                    content_text: document.getElementById("doc-content").value,
+                    is_active: document.getElementById("doc-active").checked,
+                    crm_module: crmModule || null,
+                    team_name: teamName || null,
+                };
+
+                try {
+                    let rulesJson = null;
+                    try {
+                        rulesJson = JSON.parse(data.content_text);
+                    } catch (e) {
+                        rulesJson = { rawText: data.content_text };
+                    }
+                    data.rules_json = rulesJson;
+
+                    const response = await fetch("/api/admin/documents", {
+                        method: "POST",
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify(data),
+                    });
+
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok)
+                        throw new Error("Failed to upload document");
+
+                    showToast("Document uploaded successfully!");
+                    closeUploadModal();
+                    loadDocuments();
+                } catch (error) {
+                    console.error("Error uploading document:", error);
+                    showToast("Failed to upload document", "error");
+                }
+            }
+
+            async function activateDocument(id) {
+                try {
+                    const response = await fetch(
+                        `/api/admin/documents/${id}/activate`,
+                        {
+                            method: "PUT",
+                            headers: getAdminHeaders(),
+                        },
+                    );
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok)
+                        throw new Error("Failed to activate document");
+                    showToast("Document activated successfully!");
+                    loadDocuments();
+                } catch (error) {
+                    console.error("Error activating document:", error);
+                    showToast("Failed to activate document", "error");
+                }
+            }
+
+            function previewDocument(id) {
+                const doc = currentDocuments.find((d) => d.id === id);
+                if (!doc) return;
+
+                const preview = document.getElementById("document-preview");
+                let content = "";
+
+                if (doc.rules_json) {
+                    const rules =
+                        typeof doc.rules_json === "string"
+                            ? JSON.parse(doc.rules_json)
+                            : doc.rules_json;
+                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${JSON.stringify(rules, null, 2)}</pre>`;
+                } else if (doc.content_text) {
+                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${doc.content_text}</pre>`;
+                } else {
+                    content =
+                        '<p class="text-gray-500">No content available</p>';
+                }
+
+                preview.innerHTML = `
+                <div class="mb-4 pb-4 border-b">
+                    <h4 class="font-semibold text-gray-900">${doc.name}</h4>
+                    <p class="text-sm text-gray-500">Version ${doc.version} | ${doc.document_type}</p>
+                </div>
+                ${content}
+            `;
+            }
+
+            async function loadScorecard() {
+                try {
+                    const response = await fetch("/api/scorecard");
+                    if (!response.ok)
+                        throw new Error("Failed to load scorecard");
+                    const scorecard = await response.json();
+                    currentScorecard = scorecard;
+                    renderScorecard(scorecard);
+                } catch (error) {
+                    console.error("Error loading scorecard:", error);
+                    document.getElementById("scorecard-info").innerHTML =
+                        '<div class="text-red-500">Error loading scorecard</div>';
+                }
+            }
+
+            function renderScorecard(scorecard) {
+                if (!scorecard || !scorecard.dimensions) {
+                    document.getElementById("scorecard-info").innerHTML =
+                        '<div class="text-gray-500">No scorecard configured</div>';
+                    return;
+                }
+
+                const dims =
+                    typeof scorecard.dimensions === "string"
+                        ? JSON.parse(scorecard.dimensions)
+                        : scorecard.dimensions;
+
+                if (dims.dimensions) {
+                    document.getElementById("people-weight").value =
+                        (dims.dimensions.people?.weight || 0.25) * 100;
+                    document.getElementById("process-weight").value =
+                        (dims.dimensions.process?.weight || 0.35) * 100;
+                    document.getElementById("governance-weight").value =
+                        (dims.dimensions.governance?.weight || 0.4) * 100;
+                    updateWeightDisplay("people");
+                    updateWeightDisplay("process");
+                    updateWeightDisplay("governance");
+                }
+
+                const allAttributes = [];
+                if (dims.dimensions) {
+                    ["people", "process", "governance"].forEach((dim) => {
+                        if (dims.dimensions[dim]?.attributes) {
+                            dims.dimensions[dim].attributes.forEach((attr) => {
+                                allAttributes.push({ ...attr, dimension: dim });
+                            });
+                        }
+                    });
+                }
+
+                renderAttributes(allAttributes);
+
+                document.getElementById("scorecard-info").innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Name</p>
+                        <p class="font-medium">${scorecard.name || "Quality Scorecard"}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Framework</p>
+                        <p class="font-medium">${dims.framework || "ISO 9001 + COPC"}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Total Attributes</p>
+                        <p class="font-medium">${allAttributes.length}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Last Updated</p>
+                        <p class="font-medium">${scorecard.created_at ? new Date(scorecard.created_at).toLocaleDateString() : "N/A"}</p>
+                    </div>
+                </div>
+            `;
+            }
+
+            function renderAttributes(attributes) {
+                const container = document.getElementById("attributes-list");
+                if (!attributes || attributes.length === 0) {
+                    container.innerHTML =
+                        '<div class="text-center py-8 text-gray-500">No attributes configured</div>';
+                    return;
+                }
+
+                const dimColors = {
+                    people: "bg-blue-100 text-blue-800",
+                    process: "bg-purple-100 text-purple-800",
+                    governance: "bg-green-100 text-green-800",
+                };
+
+                container.innerHTML = attributes
+                    .map(
+                        (attr, index) => `
+                <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                    <div class="flex items-center space-x-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || "bg-gray-100 text-gray-800"}">
+                            ${attr.dimension}
+                        </span>
+                        <div>
+                            <p class="font-medium text-gray-900 text-sm">${attr.name}</p>
+                            <p class="text-xs text-gray-500">${attr.description || ""}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-right">
+                            <p class="text-sm font-medium">${attr.weight || 0}%</p>
+                            <p class="text-xs text-gray-500">weight</p>
+                        </div>
+                        <button onclick='showAttributeModal(${JSON.stringify(attr).replace(/'/g, "\\'")})'
+                                class="p-1 text-gray-400 hover:text-blue-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `,
+                    )
+                    .join("");
+            }
+
+            function updateWeightDisplay(dimension) {
+                const value = document.getElementById(
+                    `${dimension}-weight`,
+                ).value;
+                document.getElementById(
+                    `${dimension}-weight-value`,
+                ).textContent = `${value}%`;
+                checkWeightTotal();
+            }
+
+            function checkWeightTotal() {
+                const people = parseInt(
+                    document.getElementById("people-weight").value,
+                );
+                const process = parseInt(
+                    document.getElementById("process-weight").value,
+                );
+                const governance = parseInt(
+                    document.getElementById("governance-weight").value,
+                );
+                const total = people + process + governance;
+
+                const warning = document.getElementById("weight-warning");
+                const btn = document.getElementById("save-weights-btn");
+
+                if (total !== 100) {
+                    warning.textContent = `Total: ${total}% (must equal 100%)`;
+                    warning.classList.remove("hidden");
+                    btn.disabled = true;
+                    btn.classList.add("opacity-50", "cursor-not-allowed");
+                } else {
+                    warning.classList.add("hidden");
+                    btn.disabled = false;
+                    btn.classList.remove("opacity-50", "cursor-not-allowed");
+                }
+            }
+
+            async function saveWeights() {
+                const people =
+                    parseInt(document.getElementById("people-weight").value) /
+                    100;
+                const process =
+                    parseInt(document.getElementById("process-weight").value) /
+                    100;
+                const governance =
+                    parseInt(
+                        document.getElementById("governance-weight").value,
+                    ) / 100;
+
+                try {
+                    const response = await fetch(
+                        "/api/admin/scorecard/weights",
+                        {
+                            method: "PUT",
+                            headers: getAdminHeaders(),
+                            body: JSON.stringify({
+                                people,
+                                process,
+                                governance,
+                            }),
+                        },
+                    );
+
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error("Failed to save weights");
+                    showToast("Weights saved successfully!");
+                    loadScorecard();
+                } catch (error) {
+                    console.error("Error saving weights:", error);
+                    showToast("Failed to save weights", "error");
+                }
+            }
+
+            async function saveAttribute(event) {
+                event.preventDefault();
+                
+                const attrId = document.getElementById("attr-id").value;
+                const data = {
+                    attribute_name: document.getElementById("attr-name").value,
+                    description: document.getElementById("attr-description").value,
+                    dimension: document.getElementById("attr-dimension").value,
+                    weight: parseFloat(document.getElementById("attr-weight").value),
+                    target: parseInt(document.getElementById("attr-target").value),
+                    severity: document.getElementById("attr-severity")?.value || 'Minor',
+                    evaluation_logic: document.getElementById("attr-evaluation-logic")?.value || '',
+                    evidence_fields: document.getElementById("attr-evidence-fields")?.value || '',
+                    is_active: document.getElementById("attr-is-active")?.checked !== false,
+                    order_index: 0
+                };
+
+                try {
+                    let response;
+                    if (attrId && selectedScorecardId) {
+                        response = await fetch(`/api/admin/attributes/${attrId}`, {
+                            method: "PUT",
+                            headers: getAdminHeaders(),
+                            body: JSON.stringify(data),
+                        });
+                    } else if (selectedScorecardId) {
+                        response = await fetch(`/api/admin/scorecards/${selectedScorecardId}/attributes`, {
+                            method: "POST",
+                            headers: getAdminHeaders(),
+                            body: JSON.stringify(data),
+                        });
+                    } else {
+                        response = await fetch("/api/admin/scorecard/attributes", {
+                            method: "POST",
+                            headers: getAdminHeaders(),
+                            body: JSON.stringify({ ...data, name: data.attribute_name }),
+                        });
+                    }
+
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error("Failed to save attribute");
+                    showToast("Attribute saved successfully!");
+                    closeAttributeModal();
+                    if (selectedScorecardId) {
+                        loadScorecardAttributes(selectedScorecardId);
+                    } else {
+                        loadScorecard();
+                    }
+                } catch (error) {
+                    console.error("Error saving attribute:", error);
+                    showToast("Failed to save attribute", "error");
+                }
+            }
+
+            async function saveSettings() {
+                showToast("Settings feature coming soon", "info");
+            }
+
+            async function triggerAudit() {
+                const btn = document.getElementById("trigger-audit-btn");
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<span class="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"></span>Running...';
+
+                try {
+                    const response = await fetch("/api/audit/trigger", {
+                        method: "POST",
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        showToast(
+                            "Audit triggered! Check dashboard for results.",
+                        );
+                    } else {
+                        showToast(
+                            result.error || "Failed to trigger audit",
+                            "error",
+                        );
+                    }
+                } catch (error) {
+                    console.error("Error triggering audit:", error);
+                    showToast("Failed to trigger audit", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>Run Audit Now</span>
+                `;
+                }
+            }
+
+            async function loadAuditTrail(offset = 0) {
+                currentAuditOffset = offset;
+                const module = document.getElementById('auditModuleFilter')?.value || '';
+                const action = document.getElementById('auditActionFilter')?.value || '';
+                const params = new URLSearchParams();
+                if (module) params.append('module', module);
+                if (action) params.append('action_type', action);
+                params.append('limit', '20');
+                params.append('offset', offset.toString());
+
+                try {
+                    const response = await fetch(`/api/audit-trail?${params}`);
+                    const data = await response.json();
+                    const logs = data.logs || [];
+
+                    const container = document.getElementById('audit-trail-list');
+                    if (!logs.length) {
+                        container.innerHTML = '<div class="text-center py-8 text-gray-500">No audit entries found</div>';
+                    } else {
+                        container.innerHTML = logs.map(log => {
+                            const actionColors = {
+                                'create': 'bg-green-100 text-green-800',
+                                'update': 'bg-blue-100 text-blue-800',
+                                'delete': 'bg-red-100 text-red-800'
+                            };
+                            const actionColor = actionColors[log.action_type] || 'bg-gray-100 text-gray-800';
+                            const date = new Date(log.created_at).toLocaleString();
+                            
+                            return `
+                                <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="${actionColor} px-2 py-1 rounded text-xs font-medium uppercase">${log.action_type}</span>
+                                            <span class="text-sm font-medium text-gray-900">${log.entity_type}</span>
+                                            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">${log.module}</span>
+                                        </div>
+                                        <span class="text-xs text-gray-400">${date}</span>
+                                    </div>
+                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                        <span>ID: ${log.entity_id}</span>
+                                        ${log.user_name ? `<span>by ${log.user_name}</span>` : ''}
+                                    </div>
+                                    ${log.new_value ? `
+                                        <details class="mt-2">
+                                            <summary class="text-xs text-indigo-600 cursor-pointer hover:text-indigo-800">View Details</summary>
+                                            <pre class="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto max-h-32">${JSON.stringify(log.new_value, null, 2)}</pre>
+                                        </details>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }).join('');
+                    }
+
+                    document.getElementById('auditPagination').textContent = 
+                        `Showing ${offset + 1} to ${offset + logs.length} of ${data.total} entries`;
+                } catch (error) {
+                    console.error('Error loading audit trail:', error);
+                    document.getElementById('audit-trail-list').innerHTML = 
+                        '<div class="text-center py-8 text-red-500">Failed to load audit trail</div>';
+                }
+            }
+
+            async function seedDefaultData() {
+                if (
+                    !confirm(
+                        "This will reset governance documents and scorecard to defaults. Continue?",
+                    )
+                )
+                    return;
+
+                try {
+                    const response = await fetch("/api/admin/seed-defaults", {
+                        method: "POST",
+                        headers: getAdminHeaders(),
+                    });
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok)
+                        throw new Error("Failed to seed defaults");
+                    showToast("Defaults restored successfully!");
+                    loadDocuments();
+                    loadScorecard();
+                } catch (error) {
+                    console.error("Error seeding defaults:", error);
+                    showToast("Failed to restore defaults", "error");
+                }
+            }
+
+            async function checkIntegrationStatus() {
+                try {
+                    const response = await fetch('/api/integrations/status');
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    
+                    const zohoStatus = document.getElementById('zoho-status');
+                    if (zohoStatus && data.zoho) {
+                        if (data.zoho.connected) {
+                            zohoStatus.textContent = 'Connected';
+                            zohoStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
+                            zohoStatus.title = data.zoho.message;
+                        } else {
+                            zohoStatus.textContent = 'Needs Token';
+                            zohoStatus.className = 'px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium';
+                        }
+                    }
+                    
+                    const calendarStatus = document.getElementById('calendar-status');
+                    if (calendarStatus && data.googleCalendar) {
+                        if (data.googleCalendar.connected) {
+                            calendarStatus.textContent = 'Connected';
+                            calendarStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking integration status:', error);
+                }
+            }
+
+            let currentDeptScorecard = null;
+            let scorecardsList = [];
+            let selectedScorecardId = null;
+            
+            function onModuleChange() {
+                const module = document.getElementById('scorecard-crm-module').value;
+                const teamSelect = document.getElementById('scorecard-team');
+                
+                if (module === 'Leads') teamSelect.value = 'SDR';
+                else if (module === 'Deals') teamSelect.value = 'Sales';
+                
+                loadScorecardsList();
+            }
+            
+            async function loadScorecardsList() {
+                const crmModule = document.getElementById('scorecard-crm-module').value;
+                const team = document.getElementById('scorecard-team').value;
+                const statusEl = document.getElementById('scorecard-dept-status');
+                const select = document.getElementById('scorecard-name-select');
+                
+                try {
+                    statusEl.innerHTML = '<span class="text-blue-600">Loading scorecards...</span>';
+                    
+                    const response = await fetch(`/api/admin/scorecards?crm_module=${encodeURIComponent(crmModule)}&team_name=${encodeURIComponent(team)}`, {
+                        headers: getAdminHeaders()
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to load scorecards');
+                    
+                    scorecardsList = await response.json();
+                    
+                    select.innerHTML = '<option value="">Select scorecard...</option>';
+                    scorecardsList.forEach(sc => {
+                        const opt = document.createElement('option');
+                        opt.value = sc.id;
+                        opt.textContent = `${sc.name} (${sc.version || 'v1.0'})${sc.is_active ? ' - Active' : ''}`;
+                        select.appendChild(opt);
+                    });
+                    
+                    const activeScorecard = scorecardsList.find(s => s.is_active);
+                    if (activeScorecard) {
+                        select.value = activeScorecard.id;
+                        onScorecardSelect();
+                    } else if (scorecardsList.length > 0) {
+                        statusEl.innerHTML = `<span class="text-amber-600">${scorecardsList.length} scorecard(s) found. Select one to manage.</span>`;
+                        hideActionsPanel();
+                    } else {
+                        statusEl.innerHTML = `<span class="text-amber-600">No scorecards for ${team} team. Click "Create New" to add one.</span>`;
+                        hideActionsPanel();
+                    }
+                } catch (error) {
+                    console.error('Error loading scorecards:', error);
+                    statusEl.innerHTML = '<span class="text-red-600">Error loading scorecards</span>';
+                }
+            }
+            
+            function onScorecardSelect() {
+                const id = parseInt(document.getElementById('scorecard-name-select').value);
+                if (!id) { hideActionsPanel(); return; }
+                
+                const scorecard = scorecardsList.find(s => s.id === id);
+                if (!scorecard) return;
+                
+                selectedScorecardId = id;
+                currentDeptScorecard = scorecard;
+                
+                document.getElementById('scorecard-actions').classList.remove('hidden');
+                document.getElementById('clone-scorecard-btn').classList.remove('hidden');
+                document.getElementById('scorecard-version').textContent = scorecard.version || 'v1.0';
+                document.getElementById('scorecard-active-toggle').checked = scorecard.is_active;
+                
+                if (scorecard.governance_doc_id) {
+                    document.getElementById('scorecard-gov-doc').value = scorecard.governance_doc_id;
+                }
+                
+                const team = document.getElementById('scorecard-team').value;
+                const crmModule = document.getElementById('scorecard-crm-module').value;
+                document.getElementById('scorecard-dept-status').innerHTML = 
+                    `<span class="${scorecard.is_active ? 'text-green-600' : 'text-blue-600'}">Editing: ${scorecard.name}${scorecard.is_active ? ' (Active)' : ''}</span>`;
+                
+                renderScorecard(scorecard);
+                loadScorecardAttributes(id);
+            }
+            
+            function hideActionsPanel() {
+                document.getElementById('scorecard-actions').classList.add('hidden');
+                document.getElementById('clone-scorecard-btn').classList.add('hidden');
+                selectedScorecardId = null;
+            }
+            
+            async function loadScorecardAttributes(scorecardId) {
+                try {
+                    const response = await fetch(`/api/admin/scorecards/${scorecardId}/attributes`, {
+                        headers: getAdminHeaders()
+                    });
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) return;
+                    
+                    const attributes = await response.json();
+                    renderScorecardAttributes(attributes);
+                } catch (error) {
+                    console.error('Error loading attributes:', error);
+                }
+            }
+            
+            function renderScorecardAttributes(attributes) {
+                const container = document.getElementById("attributes-list");
+                if (!attributes || attributes.length === 0) {
+                    container.innerHTML = '<div class="text-center py-8 text-gray-500">No attributes configured. Click "Add Attribute" to create one.</div>';
+                    return;
+                }
+                
+                const dimColors = {
+                    people: "bg-blue-100 text-blue-800",
+                    process: "bg-purple-100 text-purple-800",
+                    governance: "bg-green-100 text-green-800",
+                    People: "bg-blue-100 text-blue-800",
+                    Process: "bg-purple-100 text-purple-800",
+                    Governance: "bg-green-100 text-green-800"
+                };
+                
+                const severityColors = {
+                    Critical: "bg-red-100 text-red-800",
+                    Major: "bg-amber-100 text-amber-800",
+                    Minor: "bg-gray-100 text-gray-600"
+                };
+                
+                container.innerHTML = attributes.map((attr, index) => `
+                    <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 ${!attr.is_active ? 'opacity-50' : ''}" draggable="true" data-id="${attr.id}">
+                        <div class="flex items-center space-x-3 flex-1">
+                            <div class="flex flex-col items-center space-y-1">
+                                <button onclick="moveAttribute(${attr.id}, 'up')" class="p-0.5 text-gray-400 hover:text-gray-600" title="Move up">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                </button>
+                                <button onclick="moveAttribute(${attr.id}, 'down')" class="p-0.5 text-gray-400 hover:text-gray-600" title="Move down">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                            </div>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || 'bg-gray-100 text-gray-800'}">${attr.dimension}</span>
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-2">
+                                    <p class="font-medium text-gray-900 text-sm">${attr.attribute_name}</p>
+                                    ${attr.severity ? `<span class="px-1.5 py-0.5 rounded text-xs ${severityColors[attr.severity] || 'bg-gray-100 text-gray-600'}">${attr.severity}</span>` : ''}
+                                    ${!attr.is_active ? '<span class="px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500">Disabled</span>' : ''}
+                                </div>
+                                <p class="text-xs text-gray-500">${attr.description || ''}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-right">
+                                <p class="text-sm font-medium">${attr.weight || 0}%</p>
+                                <p class="text-xs text-gray-500">weight</p>
+                            </div>
+                            <button onclick='editAttribute(${JSON.stringify(attr).replace(/'/g, "\\'")})' class="p-1 text-gray-400 hover:text-blue-600" title="Edit">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                            </button>
+                            <button onclick="deleteAttribute(${attr.id})" class="p-1 text-gray-400 hover:text-red-600" title="Delete">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join("");
+            }
+            
+            async function toggleScorecardActive() {
+                const isActive = document.getElementById('scorecard-active-toggle').checked;
+                if (!selectedScorecardId || !isActive) return;
+                
+                const crmModule = document.getElementById('scorecard-crm-module').value;
+                const team = document.getElementById('scorecard-team').value;
+                
+                try {
+                    const response = await fetch(`/api/admin/scorecards/${selectedScorecardId}/activate`, {
+                        method: 'PUT',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify({ crm_module: crmModule, team_name: team })
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to activate scorecard');
+                    
+                    showToast('Scorecard set as active!');
+                    loadScorecardsList();
+                } catch (error) {
+                    console.error('Error activating scorecard:', error);
+                    showToast('Failed to activate scorecard', 'error');
+                }
+            }
+            
+            async function deleteCurrentScorecard() {
+                if (!selectedScorecardId) return;
+                if (!confirm('Are you sure you want to delete this scorecard?')) return;
+                
+                try {
+                    const response = await fetch(`/api/admin/scorecards/${selectedScorecardId}`, {
+                        method: 'DELETE',
+                        headers: getAdminHeaders()
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to delete scorecard');
+                    
+                    showToast('Scorecard deleted!');
+                    loadScorecardsList();
+                } catch (error) {
+                    console.error('Error deleting scorecard:', error);
+                    showToast('Failed to delete scorecard', 'error');
+                }
+            }
+            
+            async function cloneCurrentScorecard() {
+                if (!selectedScorecardId) return;
+                
+                const name = prompt('Enter name for the cloned scorecard:', currentDeptScorecard?.name + ' (Copy)');
+                if (!name) return;
+                
+                const version = prompt('Enter version:', 'v1.0');
+                
+                try {
+                    const response = await fetch(`/api/admin/scorecards/${selectedScorecardId}/clone`, {
+                        method: 'POST',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify({ name, version })
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to clone scorecard');
+                    
+                    showToast('Scorecard cloned successfully!');
+                    loadScorecardsList();
+                } catch (error) {
+                    console.error('Error cloning scorecard:', error);
+                    showToast('Failed to clone scorecard', 'error');
+                }
+            }
+            
+            function showCreateScorecardModal() {
+                document.getElementById('create-scorecard-modal').classList.remove('hidden');
+                document.getElementById('new-scorecard-crm-module').value = document.getElementById('scorecard-crm-module').value;
+                document.getElementById('new-scorecard-team').value = document.getElementById('scorecard-team').value;
+            }
+            
+            function closeCreateScorecardModal() {
+                document.getElementById('create-scorecard-modal').classList.add('hidden');
+            }
+            
+            async function createNewScorecard(event) {
+                event.preventDefault();
+                
+                const data = {
+                    name: document.getElementById('new-scorecard-name').value,
+                    description: document.getElementById('new-scorecard-description').value,
+                    crm_module: document.getElementById('new-scorecard-crm-module').value,
+                    team_name: document.getElementById('new-scorecard-team').value,
+                    version: document.getElementById('new-scorecard-version').value || 'v1.0',
+                    dimensions: { dimensions: { people: { weight: 0.25, attributes: [] }, process: { weight: 0.35, attributes: [] }, governance: { weight: 0.4, attributes: [] } } }
+                };
+                
+                try {
+                    const response = await fetch('/api/admin/scorecards', {
+                        method: 'POST',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify(data)
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to create scorecard');
+                    
+                    showToast('Scorecard created successfully!');
+                    closeCreateScorecardModal();
+                    loadScorecardsList();
+                } catch (error) {
+                    console.error('Error creating scorecard:', error);
+                    showToast('Failed to create scorecard', 'error');
+                }
+            }
+            
+            function editAttribute(attr) {
+                document.getElementById('attribute-modal-title').textContent = 'Edit Attribute';
+                document.getElementById('attr-id').value = attr.id;
+                document.getElementById('attr-name').value = attr.attribute_name || attr.name || '';
+                document.getElementById('attr-description').value = attr.description || '';
+                document.getElementById('attr-dimension').value = attr.dimension?.toLowerCase() || 'process';
+                document.getElementById('attr-weight').value = attr.weight || 0;
+                document.getElementById('attr-target').value = attr.target || 90;
+                
+                if (document.getElementById('attr-severity')) {
+                    document.getElementById('attr-severity').value = attr.severity || 'Minor';
+                }
+                if (document.getElementById('attr-evaluation-logic')) {
+                    document.getElementById('attr-evaluation-logic').value = attr.evaluation_logic || '';
+                }
+                if (document.getElementById('attr-evidence-fields')) {
+                    document.getElementById('attr-evidence-fields').value = attr.evidence_fields || '';
+                }
+                if (document.getElementById('attr-is-active')) {
+                    document.getElementById('attr-is-active').checked = attr.is_active !== false;
+                }
+                
+                document.getElementById('attribute-modal').classList.remove('hidden');
+            }
+            
+            async function deleteAttribute(id) {
+                if (!confirm('Are you sure you want to delete this attribute?')) return;
+                
+                try {
+                    const response = await fetch(`/api/admin/attributes/${id}`, {
+                        method: 'DELETE',
+                        headers: getAdminHeaders()
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to delete attribute');
+                    
+                    showToast('Attribute deleted!');
+                    if (selectedScorecardId) loadScorecardAttributes(selectedScorecardId);
+                } catch (error) {
+                    console.error('Error deleting attribute:', error);
+                    showToast('Failed to delete attribute', 'error');
+                }
+            }
+            
+            async function moveAttribute(id, direction) {
+                if (!selectedScorecardId) return;
+                showToast('Reordering...', 'info');
+            }
+            
+            async function loadGovDocsForScorecard() {
+                try {
+                    const response = await fetch('/api/admin/documents', { headers: getAdminHeaders() });
+                    if (!response.ok) return;
+                    
+                    const docs = await response.json();
+                    const select = document.getElementById('scorecard-gov-doc');
+                    
+                    select.innerHTML = '<option value="">Select governance document...</option>';
+                    docs.forEach(doc => {
+                        const opt = document.createElement('option');
+                        opt.value = doc.id;
+                        opt.textContent = `${doc.name} (v${doc.version})${doc.is_active ? ' - Active' : ''}`;
+                        select.appendChild(opt);
+                    });
+                } catch (error) {
+                    console.error('Error loading governance docs:', error);
+                }
+            }
+            
+            async function linkGovernanceDoc() {
+                const docId = document.getElementById('scorecard-gov-doc').value;
+                const crmModule = document.getElementById('scorecard-crm-module').value;
+                const team = document.getElementById('scorecard-team').value;
+                
+                if (!docId) return;
+                
+                try {
+                    const response = await fetch('/api/admin/scorecard/link-doc', {
+                        method: 'PUT',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify({ governance_doc_id: parseInt(docId), crm_module: crmModule, team_name: team })
+                    });
+                    
+                    if (handleUnauthorized(response)) return;
+                    if (!response.ok) throw new Error('Failed to link document');
+                    
+                    showToast('Governance document linked!');
+                } catch (error) {
+                    console.error('Error linking document:', error);
+                    showToast('Failed to link document', 'error');
+                }
+            }
+
+            document.addEventListener("DOMContentLoaded", () => {
+                loadDocuments();
+                loadScorecardsList();
+                loadGovDocsForScorecard();
+                checkIntegrationStatus();
+            });
+        </script>
+    </body>
+</html>

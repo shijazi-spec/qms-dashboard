@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Feedback - WalaPlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --qms-blue: #1E3A8A;
+            --qms-green: #047857;
+            --qms-amber: #D97706;
+            --qms-red: #B91C1C;
+            --qms-purple: #6D28D9;
+            --qms-teal: #0D9488;
+        }
+        html, body { font-family: 'Inter', sans-serif; }
+        .star-rating { display: flex; gap: 4px; }
+        .star { cursor: pointer; transition: all 0.2s; }
+        .star:hover, .star.active { color: #F59E0B; transform: scale(1.1); }
+        .feedback-card { transition: all 0.3s; }
+        .feedback-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .modal { display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
+        .modal.open { display: flex; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('feedback');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Team Feedback Center</h1>
+            <p class="text-gray-600 mt-2">View and analyze feedback from Sara, Maram, and your team members across all dashboards</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Total Feedback</p>
+                        <p id="totalFeedback" class="text-3xl font-bold text-gray-900">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Avg. Rating</p>
+                        <p id="avgRating" class="text-3xl font-bold text-amber-500">0.0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Ease of Use</p>
+                        <p id="avgEase" class="text-3xl font-bold text-green-600">0.0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Dashboards Rated</p>
+                        <p id="dashboardCount" class="text-3xl font-bold text-blue-600">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Feedback by Dashboard</h2>
+                <div class="h-64">
+                    <canvas id="dashboardChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Rating Distribution</h2>
+                <div class="h-64">
+                    <canvas id="ratingChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div class="p-6 border-b border-gray-100">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <h2 class="text-lg font-semibold text-gray-900">All Feedback</h2>
+                    <div class="flex items-center space-x-4">
+                        <select id="dashboardFilter" onchange="loadFeedback()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="">All Dashboards</option>
+                            <option value="Quality Dashboard">Quality Dashboard</option>
+                            <option value="GRC Control Tower">GRC Control Tower</option>
+                            <option value="Risk Register">Risk Register</option>
+                            <option value="Policy Governance">Policy Governance</option>
+                            <option value="Compliance Tracker">Compliance Tracker</option>
+                            <option value="Audit Readiness">Audit Readiness</option>
+                            <option value="Vendor Risk">Vendor Risk</option>
+                            <option value="Data Migration">Data Migration</option>
+                            <option value="QMS">QMS</option>
+                            <option value="Table F">Table F</option>
+                            <option value="ROI Engine">ROI Engine</option>
+                            <option value="Team Performance">Team Performance</option>
+                            <option value="Projects">Projects</option>
+                            <option value="Call Intelligence">Call Intelligence</option>
+                            <option value="User Guide">User Guide</option>
+                        </select>
+                        <button onclick="loadFeedback()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition text-sm">
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="feedbackList" class="divide-y divide-gray-100">
+                <div class="p-12 text-center text-gray-500">
+                    <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                    </svg>
+                    <p>No feedback yet. Ask your team to share their thoughts!</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="feedbackModal" class="modal">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+            <div class="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-semibold text-white">Share Your Feedback</h3>
+                    <button onclick="closeFeedbackModal()" class="text-teal-200 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <form id="feedbackForm" onsubmit="submitFeedback(event)" class="p-6 space-y-5">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Your Name *</label>
+                        <input type="text" id="submitterName" required placeholder="e.g., Sara" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Your Role</label>
+                        <select id="submitterRole" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                            <option value="">Select role...</option>
+                            <option value="Quality Manager">Quality Manager</option>
+                            <option value="GRC Manager">GRC Manager</option>
+                            <option value="Compliance Officer">Compliance Officer</option>
+                            <option value="Risk Analyst">Risk Analyst</option>
+                            <option value="Auditor">Auditor</option>
+                            <option value="Team Lead">Team Lead</option>
+                            <option value="Administrator">Administrator</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Dashboard *</label>
+                    <select id="feedbackDashboard" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                        <option value="">Select dashboard...</option>
+                        <option value="Quality Dashboard">Quality Dashboard (/)</option>
+                        <option value="GRC Control Tower">GRC Control Tower (/grc)</option>
+                        <option value="Risk Register">Risk Register (/risks)</option>
+                        <option value="Policy Governance">Policy Governance (/policies)</option>
+                        <option value="Compliance Tracker">Compliance Tracker (/compliance)</option>
+                        <option value="Audit Readiness">Audit Readiness (/audits)</option>
+                        <option value="Vendor Risk">Vendor Risk (/vendors)</option>
+                        <option value="Data Migration">Data Migration (/migration)</option>
+                        <option value="QMS">QMS (/qms)</option>
+                        <option value="Table F">Table F (/tablef)</option>
+                        <option value="ROI Engine">ROI Engine (/roi)</option>
+                        <option value="Team Performance">Team Performance (/team)</option>
+                        <option value="Projects">Projects (/projects)</option>
+                        <option value="Call Intelligence">Call Intelligence (/calls)</option>
+                        <option value="User Guide">User Guide (/guide)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Overall Rating *</label>
+                    <div class="star-rating" id="ratingStars">
+                        <span class="star text-3xl text-gray-300" data-rating="1" onclick="setRating(1)">★</span>
+                        <span class="star text-3xl text-gray-300" data-rating="2" onclick="setRating(2)">★</span>
+                        <span class="star text-3xl text-gray-300" data-rating="3" onclick="setRating(3)">★</span>
+                        <span class="star text-3xl text-gray-300" data-rating="4" onclick="setRating(4)">★</span>
+                        <span class="star text-3xl text-gray-300" data-rating="5" onclick="setRating(5)">★</span>
+                    </div>
+                    <input type="hidden" id="ratingValue" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Ease of Use</label>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-500">Difficult</span>
+                        <div class="flex space-x-2">
+                            <button type="button" onclick="setEase(1)" class="ease-btn w-8 h-8 rounded-full border-2 border-gray-300 text-sm font-medium hover:border-teal-500">1</button>
+                            <button type="button" onclick="setEase(2)" class="ease-btn w-8 h-8 rounded-full border-2 border-gray-300 text-sm font-medium hover:border-teal-500">2</button>
+                            <button type="button" onclick="setEase(3)" class="ease-btn w-8 h-8 rounded-full border-2 border-gray-300 text-sm font-medium hover:border-teal-500">3</button>
+                            <button type="button" onclick="setEase(4)" class="ease-btn w-8 h-8 rounded-full border-2 border-gray-300 text-sm font-medium hover:border-teal-500">4</button>
+                            <button type="button" onclick="setEase(5)" class="ease-btn w-8 h-8 rounded-full border-2 border-gray-300 text-sm font-medium hover:border-teal-500">5</button>
+                        </div>
+                        <span class="text-sm text-gray-500">Easy</span>
+                    </div>
+                    <input type="hidden" id="easeValue">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                    <textarea id="comments" rows="3" placeholder="What did you like? What could be improved?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Suggestions</label>
+                    <textarea id="suggestions" rows="2" placeholder="Any features you'd like to see?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" onclick="closeFeedbackModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium">Submit Feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300">
+        <div class="flex items-center space-x-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span id="toastMessage">Feedback submitted successfully!</span>
+        </div>
+    </div>
+
+    <script>
+        let currentRating = 0;
+        let currentEase = 0;
+        let dashboardChart = null;
+        let ratingChart = null;
+
+        function setRating(rating) {
+            currentRating = rating;
+            document.getElementById('ratingValue').value = rating;
+            const stars = document.querySelectorAll('#ratingStars .star');
+            stars.forEach((star, index) => {
+                if (index < rating) {
+                    star.classList.add('active');
+                    star.classList.remove('text-gray-300');
+                } else {
+                    star.classList.remove('active');
+                    star.classList.add('text-gray-300');
+                }
+            });
+        }
+
+        function setEase(ease) {
+            currentEase = ease;
+            document.getElementById('easeValue').value = ease;
+            const buttons = document.querySelectorAll('.ease-btn');
+            buttons.forEach((btn, index) => {
+                if (index < ease) {
+                    btn.classList.add('bg-teal-500', 'text-white', 'border-teal-500');
+                    btn.classList.remove('border-gray-300');
+                } else {
+                    btn.classList.remove('bg-teal-500', 'text-white', 'border-teal-500');
+                    btn.classList.add('border-gray-300');
+                }
+            });
+        }
+
+        function openFeedbackModal() {
+            document.getElementById('feedbackModal').classList.add('open');
+        }
+
+        function closeFeedbackModal() {
+            document.getElementById('feedbackModal').classList.remove('open');
+            document.getElementById('feedbackForm').reset();
+            setRating(0);
+            setEase(0);
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0', 'bg-green-600', 'bg-red-600');
+            toast.classList.add(isError ? 'bg-red-600' : 'bg-green-600');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        async function submitFeedback(event) {
+            event.preventDefault();
+            
+            if (!currentRating) {
+                showToast('Please select a rating', true);
+                return;
+            }
+
+            const data = {
+                submitter_name: document.getElementById('submitterName').value,
+                submitter_role: document.getElementById('submitterRole').value,
+                dashboard: document.getElementById('feedbackDashboard').value,
+                rating: currentRating,
+                ease_of_use: currentEase || null,
+                comments: document.getElementById('comments').value,
+                suggestions: document.getElementById('suggestions').value
+            };
+
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    showToast('Thank you for your feedback!');
+                    closeFeedbackModal();
+                    loadStats();
+                    loadFeedback();
+                } else {
+                    showToast('Failed to submit feedback', true);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('Error submitting feedback', true);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/feedback/stats');
+                const stats = await response.json();
+
+                document.getElementById('totalFeedback').textContent = stats.totalFeedback || 0;
+                document.getElementById('avgRating').textContent = (stats.avgRating || 0).toFixed(1);
+                document.getElementById('avgEase').textContent = (stats.avgEaseOfUse || 0).toFixed(1);
+                document.getElementById('dashboardCount').textContent = stats.byDashboard?.length || 0;
+
+                updateDashboardChart(stats.byDashboard || []);
+                updateRatingChart(stats.recentFeedback || []);
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function updateDashboardChart(data) {
+            const ctx = document.getElementById('dashboardChart').getContext('2d');
+            
+            if (dashboardChart) {
+                dashboardChart.destroy();
+            }
+
+            const labels = data.map(d => d.dashboard);
+            const counts = data.map(d => d.count);
+            const ratings = data.map(d => d.avgRating);
+
+            dashboardChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels.length ? labels : ['No data yet'],
+                    datasets: [{
+                        label: 'Feedback Count',
+                        data: counts.length ? counts : [0],
+                        backgroundColor: 'rgba(13, 148, 136, 0.7)',
+                        borderColor: 'rgb(13, 148, 136)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+        }
+
+        function updateRatingChart(feedback) {
+            const ctx = document.getElementById('ratingChart').getContext('2d');
+            
+            if (ratingChart) {
+                ratingChart.destroy();
+            }
+
+            const distribution = [0, 0, 0, 0, 0];
+            feedback.forEach(f => {
+                if (f.rating >= 1 && f.rating <= 5) {
+                    distribution[f.rating - 1]++;
+                }
+            });
+
+            ratingChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['1 Star', '2 Stars', '3 Stars', '4 Stars', '5 Stars'],
+                    datasets: [{
+                        data: distribution.some(d => d > 0) ? distribution : [1, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#EF4444',
+                            '#F97316',
+                            '#EAB308',
+                            '#84CC16',
+                            '#22C55E'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 8 }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadFeedback() {
+            try {
+                const dashboard = document.getElementById('dashboardFilter').value;
+                const url = dashboard ? `/api/feedback?dashboard=${encodeURIComponent(dashboard)}` : '/api/feedback';
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const list = document.getElementById('feedbackList');
+                
+                if (!data.feedback || data.feedback.length === 0) {
+                    list.innerHTML = `
+                        <div class="p-12 text-center text-gray-500">
+                            <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            <p>No feedback yet. Ask your team to share their thoughts!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                list.innerHTML = data.feedback.map(f => `
+                    <div class="feedback-card p-6 hover:bg-gray-50">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start space-x-4">
+                                <div class="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold">
+                                    ${f.submitter_name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-semibold text-gray-900">${f.submitter_name}</span>
+                                        ${f.submitter_role ? `<span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${f.submitter_role}</span>` : ''}
+                                    </div>
+                                    <div class="flex items-center space-x-2 mt-1">
+                                        <span class="text-sm text-teal-600 font-medium">${f.dashboard}</span>
+                                        <span class="text-gray-300">•</span>
+                                        <span class="text-sm text-gray-500">${new Date(f.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    ${f.comments ? `<p class="mt-2 text-gray-700">${f.comments}</p>` : ''}
+                                    ${f.suggestions ? `<p class="mt-1 text-sm text-gray-500 italic">"${f.suggestions}"</p>` : ''}
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="flex items-center space-x-1">
+                                    ${Array(5).fill(0).map((_, i) => `
+                                        <span class="${i < f.rating ? 'text-amber-400' : 'text-gray-200'}">★</span>
+                                    `).join('')}
+                                </div>
+                                ${f.ease_of_use ? `
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        Ease: ${f.ease_of_use}/5
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading feedback:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadFeedback();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Table F - COPC Governance Engine | WalaPlus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* QMS Industry Standard Color Palette */
+        :root {
+            --qms-blue: #1E3A8A;        /* Quality/Governance */
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;       /* Compliance/Pass */
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;       /* Warning/At-Risk */
+            --qms-amber-light: #F59E0B;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;         /* Nonconformance/Fail */
+            --qms-red-light: #EF4444;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;      /* Continuous Improvement */
+            --qms-purple-light: #A855F7;
+            --qms-purple-bg: #EDE9FE;
+            --qms-gray: #374151;        /* Neutral/Typography */
+        }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; overflow-x: hidden; overflow-y: auto !important; }
+        .hidden { display: none !important; pointer-events: none !important; }
+        .tab-active { background-color: var(--qms-blue); color: white; }
+        .status-compliant { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .status-at-risk { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .status-non-compliant { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .trend-up { color: var(--qms-green); }
+        .trend-down { color: var(--qms-red); }
+        .trend-flat { color: var(--qms-gray); }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-backdrop { background: rgba(0, 0, 0, 0.5); }
+        .chart-container { position: relative; height: 280px; width: 100%; overflow: hidden; }
+        .chart-container canvas { max-height: 100% !important; max-width: 100% !important; }
+        /* QMS Status Colors */
+        .qms-compliant { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .qms-at-risk { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .qms-non-compliant { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .qms-improvement { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+        .qms-governance { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-50">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('tablef');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
+            <button onclick="showTab('overview')" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active">
+                Overview
+            </button>
+            <button onclick="showTab('department')" id="tab-department" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Department View
+            </button>
+            <button onclick="showTab('kpimanager')" id="tab-kpimanager" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                KPI Manager
+            </button>
+            <button onclick="showTab('insights')" id="tab-insights" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                AI Insights
+            </button>
+            <button onclick="showTab('access')" id="tab-access" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+                Access & Roles
+            </button>
+        </div>
+
+        <div id="loading" class="flex justify-center items-center py-20">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+                <p class="mt-4 text-gray-600">Loading Table F data...</p>
+            </div>
+        </div>
+
+        <div id="content-overview" class="tab-content hidden fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div class="text-sm text-gray-500 mb-1">Total KPIs</div>
+                    <div class="text-3xl font-bold text-gray-900" id="totalKpis">--</div>
+                    <div class="text-xs text-gray-400 mt-1">Across all departments</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div class="text-sm text-gray-500 mb-1">KPIs Met</div>
+                    <div class="text-3xl font-bold text-green-600" id="kpisMet">--</div>
+                    <div class="text-xs text-gray-400 mt-1" id="kpisMetPct">--% of total</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div class="text-sm text-gray-500 mb-1">Met + Improving</div>
+                    <div class="text-3xl font-bold text-blue-600" id="kpisMetImproving">--</div>
+                    <div class="text-xs text-gray-400 mt-1" id="kpisMetImprovingPct">--% of total</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div class="text-sm text-gray-500 mb-1">COPC 50/75 Status</div>
+                    <div class="text-2xl font-bold" id="copcStatus">--</div>
+                    <div class="text-xs text-gray-400 mt-1">Company-wide</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div class="text-sm text-gray-500 mb-1">At Risk Depts</div>
+                    <div class="text-3xl font-bold text-amber-600" id="atRiskDepts">--</div>
+                    <div class="text-xs text-gray-400 mt-1">Need attention</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                    <h3 class="text-lg font-semibold mb-4">COPC Compliance by Department</h3>
+                    <div class="chart-container">
+                        <canvas id="deptComplianceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                    <h3 class="text-lg font-semibold mb-4">KPI Status Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="kpiStatusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Department Summary</h3>
+                    <button onclick="exportTableF('csv')" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total KPIs</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Met</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Improving</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Not Met</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">% Met</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">% Met+Impr</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">COPC Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptSummaryTable" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-department" class="tab-content hidden fade-in">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div>
+                        <label class="text-sm text-gray-500 block mb-1">Select Department</label>
+                        <select id="deptSelect" onchange="loadDepartmentView()" class="border border-gray-200 rounded-lg px-4 py-2 min-w-[200px]">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div id="deptSummaryCards" class="flex-1 flex flex-wrap gap-4 ml-6"></div>
+                </div>
+            </div>
+
+            <div id="deptKpiGrid" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">KPI Performance Matrix</h3>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="exportDeptKpis('csv')" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KPI Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Unit</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Weight</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Target</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Achieved</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Variance</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Trend</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptKpiTable" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-kpimanager" class="tab-content hidden fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center space-x-4">
+                    <select id="kpiDeptFilter" onchange="loadKpiManager()" class="border border-gray-200 rounded-lg px-4 py-2">
+                        <option value="">All Departments</option>
+                    </select>
+                    <select id="kpiCatFilter" onchange="loadKpiManager()" class="border border-gray-200 rounded-lg px-4 py-2">
+                        <option value="">All Categories</option>
+                        <option value="Financial">Financial</option>
+                        <option value="Customer">Customer</option>
+                        <option value="Quality">Quality</option>
+                        <option value="Service">Service</option>
+                        <option value="Efficiency">Efficiency</option>
+                        <option value="People">People</option>
+                        <option value="Strategic">Strategic</option>
+                    </select>
+                </div>
+                <button onclick="showAddKpiModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <span>Add KPI</span>
+                </button>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">KPI ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Unit</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Annual Target</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Monthly Target</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Weight</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="kpiManagerTable" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-insights" class="tab-content hidden fade-in">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div class="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold">Critical Risks</h3>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div class="text-4xl font-bold" id="criticalRisks">0</div>
+                    <div class="text-sm text-red-100 mt-1">KPIs blocking compliance</div>
+                </div>
+                <div class="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold">Medium Risks</h3>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="text-4xl font-bold" id="mediumRisks">0</div>
+                    <div class="text-sm text-amber-100 mt-1">Need attention</div>
+                </div>
+                <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold">On Track</h3>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="text-4xl font-bold" id="onTrack">0</div>
+                    <div class="text-sm text-green-100 mt-1">Meeting targets</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                        <h3 class="font-semibold">Top KPIs at Risk</h3>
+                    </div>
+                    <div class="p-6 space-y-4" id="topRiskyKpis">
+                        <div class="text-center text-gray-500 py-8">Loading insights...</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                        <h3 class="font-semibold">AI Recommendations</h3>
+                    </div>
+                    <div class="p-6 space-y-4" id="aiRecommendations">
+                        <div class="text-center text-gray-500 py-8">Loading recommendations...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <h3 class="font-semibold">Department Risk Analysis</h3>
+                    <button onclick="generateAiInsights()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 transition">
+                        Generate AI Insights
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Risk Level</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Top Issue</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RCA Category</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommended Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptRiskTable" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-access" class="tab-content hidden fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold">Access & Role Management</h2>
+                <button onclick="showAddUserModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                    </svg>
+                    <span>Add User</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-purple-50 border border-purple-100 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-purple-600" id="adminCount">0</div>
+                    <div class="text-sm text-purple-600">Admins</div>
+                </div>
+                <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-blue-600" id="ownerCount">0</div>
+                    <div class="text-sm text-blue-600">Department Owners</div>
+                </div>
+                <div class="bg-green-50 border border-green-100 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-green-600" id="editorCount">0</div>
+                    <div class="text-sm text-green-600">Editors</div>
+                </div>
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-gray-600" id="viewerCount">0</div>
+                    <div class="text-sm text-gray-600">Viewers</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Departments</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-indigo-50 border border-indigo-100 rounded-xl p-6">
+                <h3 class="font-semibold text-indigo-900 mb-4">Role Permissions Matrix</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="text-indigo-700">
+                                <th class="px-4 py-2 text-left">Permission</th>
+                                <th class="px-4 py-2 text-center">Admin</th>
+                                <th class="px-4 py-2 text-center">Owner</th>
+                                <th class="px-4 py-2 text-center">Editor</th>
+                                <th class="px-4 py-2 text-center">Viewer</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-gray-700">
+                            <tr><td class="px-4 py-2">Create KPI</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Own Dept</td><td class="text-center text-red-400">No</td><td class="text-center text-red-400">No</td></tr>
+                            <tr class="bg-indigo-100/50"><td class="px-4 py-2">Edit KPI</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Own Dept</td><td class="text-center text-red-400">No</td><td class="text-center text-red-400">No</td></tr>
+                            <tr><td class="px-4 py-2">Enter Achievement</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Yes</td><td class="text-center text-red-400">No</td></tr>
+                            <tr class="bg-indigo-100/50"><td class="px-4 py-2">View Dashboard</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Yes</td><td class="text-center text-green-600">Yes</td></tr>
+                            <tr><td class="px-4 py-2">Configure COPC Rules</td><td class="text-center text-green-600">Yes</td><td class="text-center text-red-400">No</td><td class="text-center text-red-400">No</td><td class="text-center text-red-400">No</td></tr>
+                            <tr class="bg-indigo-100/50"><td class="px-4 py-2">Manage Users</td><td class="text-center text-green-600">Yes</td><td class="text-center text-red-400">No</td><td class="text-center text-red-400">No</td><td class="text-center text-red-400">No</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="kpiModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/50" onclick="closeKpiModal()"></div>
+        <div class="absolute inset-4 md:inset-10 lg:inset-x-1/4 lg:inset-y-10 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
+                <h2 class="text-lg font-bold" id="kpiModalTitle">Add New KPI</h2>
+                <button onclick="closeKpiModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-auto p-6">
+                <form id="kpiForm" class="space-y-4">
+                    <input type="hidden" id="kpiFormId">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                            <select id="kpiFormDept" class="w-full border border-gray-200 rounded-lg px-3 py-2" required></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select id="kpiFormCat" class="w-full border border-gray-200 rounded-lg px-3 py-2" required>
+                                <option value="Financial">Financial</option>
+                                <option value="Customer">Customer</option>
+                                <option value="Quality">Quality</option>
+                                <option value="Service">Service</option>
+                                <option value="Efficiency">Efficiency</option>
+                                <option value="People">People</option>
+                                <option value="Strategic">Strategic</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">KPI Name</label>
+                        <input type="text" id="kpiFormName" class="w-full border border-gray-200 rounded-lg px-3 py-2" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea id="kpiFormDesc" class="w-full border border-gray-200 rounded-lg px-3 py-2" rows="2"></textarea>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                            <select id="kpiFormUnit" class="w-full border border-gray-200 rounded-lg px-3 py-2" required>
+                                <option value="%">%</option>
+                                <option value="SAR">SAR</option>
+                                <option value="Count">Count</option>
+                                <option value="Days">Days</option>
+                                <option value="Minutes">Minutes</option>
+                                <option value="Score">Score</option>
+                                <option value="X">X (Ratio)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Annual Target</label>
+                            <input type="number" id="kpiFormAnnual" class="w-full border border-gray-200 rounded-lg px-3 py-2" step="0.01">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Monthly Target</label>
+                            <input type="number" id="kpiFormMonthly" class="w-full border border-gray-200 rounded-lg px-3 py-2" step="0.01" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Weight (%)</label>
+                            <input type="number" id="kpiFormWeight" class="w-full border border-gray-200 rounded-lg px-3 py-2" min="1" max="100" value="10" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Owner Email</label>
+                            <input type="email" id="kpiFormOwner" class="w-full border border-gray-200 rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Data Source</label>
+                        <input type="text" id="kpiFormSource" class="w-full border border-gray-200 rounded-lg px-3 py-2" placeholder="e.g., Zoho CRM, Finance System">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Calculation Definition</label>
+                        <textarea id="kpiFormCalc" class="w-full border border-gray-200 rounded-lg px-3 py-2" rows="2" placeholder="How is this KPI calculated?"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 border-t flex justify-end space-x-3">
+                <button onclick="closeKpiModal()" class="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Cancel</button>
+                <button onclick="saveKpi()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Save KPI</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="performanceModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/50" onclick="closePerformanceModal()"></div>
+        <div class="absolute inset-4 md:inset-10 lg:inset-x-1/4 lg:inset-y-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold" id="perfModalTitle">Update Performance</h2>
+                    <p class="text-sm text-gray-500" id="perfModalSubtitle"></p>
+                </div>
+                <button onclick="closePerformanceModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-auto p-6">
+                <form id="perfForm" class="space-y-4">
+                    <input type="hidden" id="perfFormKpiId">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Period</label>
+                            <select id="perfFormMonth" class="w-full border border-gray-200 rounded-lg px-3 py-2" required>
+                                <option value="2024-12">December 2024</option>
+                                <option value="2024-11">November 2024</option>
+                                <option value="2024-10">October 2024</option>
+                                <option value="2024-09">September 2024</option>
+                                <option value="2024-08">August 2024</option>
+                                <option value="2024-07">July 2024</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target</label>
+                            <input type="number" id="perfFormTarget" class="w-full border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" readonly>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Achieved Value</label>
+                        <input type="number" id="perfFormAchieved" class="w-full border border-gray-200 rounded-lg px-3 py-2" step="0.01" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Comments / Notes</label>
+                        <textarea id="perfFormComment" class="w-full border border-gray-200 rounded-lg px-3 py-2" rows="3" placeholder="Add context or explanation for this result..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Link (optional)</label>
+                        <input type="url" id="perfFormEvidence" class="w-full border border-gray-200 rounded-lg px-3 py-2" placeholder="https://...">
+                    </div>
+                </form>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 border-t flex justify-end space-x-3">
+                <button onclick="closePerformanceModal()" class="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Cancel</button>
+                <button onclick="savePerformance()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let departments = [];
+        let kpis = [];
+        let performance = [];
+        let snapshots = [];
+        let users = [];
+        let currentTab = 'overview';
+        let charts = {};
+
+        async function fetchAPI(endpoint) {
+            try {
+                const res = await fetch(endpoint);
+                return await res.json();
+            } catch (e) {
+                console.error('API Error:', e);
+                return null;
+            }
+        }
+
+        async function postAPI(endpoint, data) {
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                return await res.json();
+            } catch (e) {
+                console.error('API Error:', e);
+                return null;
+            }
+        }
+
+        function showTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('tab-active');
+                el.classList.add('text-gray-600', 'hover:bg-gray-200');
+            });
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            const tabBtn = document.getElementById('tab-' + tab);
+            tabBtn.classList.add('tab-active');
+            tabBtn.classList.remove('text-gray-600', 'hover:bg-gray-200');
+            
+            if (tab === 'department') loadDepartmentView();
+            if (tab === 'kpimanager') loadKpiManager();
+            if (tab === 'insights') loadInsights();
+            if (tab === 'access') loadAccessTab();
+        }
+
+        async function loadData() {
+            document.getElementById('loading').classList.remove('hidden');
+            
+            const [deptsData, kpisData, perfData, usersData] = await Promise.all([
+                fetchAPI('/api/tablef/departments'),
+                fetchAPI('/api/tablef/kpis'),
+                fetchAPI('/api/tablef/performance'),
+                fetchAPI('/api/tablef/users')
+            ]);
+            
+            departments = deptsData?.departments || [];
+            kpis = kpisData?.kpis || [];
+            performance = perfData?.performance || [];
+            users = usersData?.users || [];
+            
+            populateDeptSelects();
+            calculateSnapshots();
+            renderOverview();
+            
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content-overview').classList.remove('hidden');
+        }
+
+        function populateDeptSelects() {
+            const selects = ['deptSelect', 'kpiDeptFilter', 'kpiFormDept'];
+            selects.forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const hasAll = id === 'kpiDeptFilter';
+                sel.innerHTML = hasAll ? '<option value="">All Departments</option>' : '<option value="">-- Select --</option>';
+                departments.forEach(d => {
+                    sel.innerHTML += `<option value="${d.department_id}">${d.name}</option>`;
+                });
+            });
+        }
+
+        function calculateSnapshots() {
+            snapshots = departments.map(dept => {
+                const deptKpis = kpis.filter(k => k.department_id === dept.department_id && k.enabled);
+                const total = deptKpis.length;
+                
+                let met = 0, improving = 0, notMet = 0;
+                
+                deptKpis.forEach(kpi => {
+                    const latestPerf = performance
+                        .filter(p => p.kpi_id === kpi.kpi_id)
+                        .sort((a, b) => b.period_month.localeCompare(a.period_month))[0];
+                    
+                    if (latestPerf) {
+                        if (latestPerf.status === 'MET') met++;
+                        else if (latestPerf.status === 'IMPROVING' || latestPerf.trend === 'UP') improving++;
+                        else notMet++;
+                    } else {
+                        notMet++;
+                    }
+                });
+                
+                const pctMet = total > 0 ? (met / total * 100) : 0;
+                const pctMetImpr = total > 0 ? ((met + improving) / total * 100) : 0;
+                
+                let status = 'NON_COMPLIANT';
+                if (pctMet >= 50 && pctMetImpr >= 75) status = 'COMPLIANT';
+                else if (pctMetImpr >= 75) status = 'AT_RISK';
+                
+                return {
+                    department_id: dept.department_id,
+                    name: dept.name,
+                    total_kpis: total,
+                    kpis_met: met,
+                    kpis_improving: improving,
+                    kpis_not_met: notMet,
+                    percent_met: pctMet.toFixed(1),
+                    percent_met_or_improving: pctMetImpr.toFixed(1),
+                    copc_status: status
+                };
+            });
+        }
+
+        function renderOverview() {
+            const totalKpis = snapshots.reduce((sum, s) => sum + s.total_kpis, 0);
+            const totalMet = snapshots.reduce((sum, s) => sum + s.kpis_met, 0);
+            const totalImproving = snapshots.reduce((sum, s) => sum + s.kpis_improving, 0);
+            const atRisk = snapshots.filter(s => s.copc_status !== 'COMPLIANT').length;
+            
+            document.getElementById('totalKpis').textContent = totalKpis;
+            document.getElementById('kpisMet').textContent = totalMet;
+            document.getElementById('kpisMetPct').textContent = totalKpis > 0 ? (totalMet / totalKpis * 100).toFixed(1) + '% of total' : '--';
+            document.getElementById('kpisMetImproving').textContent = totalMet + totalImproving;
+            document.getElementById('kpisMetImprovingPct').textContent = totalKpis > 0 ? ((totalMet + totalImproving) / totalKpis * 100).toFixed(1) + '% of total' : '--';
+            document.getElementById('atRiskDepts').textContent = atRisk;
+            
+            const overallPctMet = totalKpis > 0 ? (totalMet / totalKpis * 100) : 0;
+            const overallPctMetImpr = totalKpis > 0 ? ((totalMet + totalImproving) / totalKpis * 100) : 0;
+            let overallStatus = 'NON-COMPLIANT';
+            let statusClass = 'status-non-compliant';
+            if (overallPctMet >= 50 && overallPctMetImpr >= 75) {
+                overallStatus = 'COMPLIANT';
+                statusClass = 'status-compliant';
+            } else if (overallPctMetImpr >= 75) {
+                overallStatus = 'AT RISK';
+                statusClass = 'status-at-risk';
+            }
+            const statusEl = document.getElementById('copcStatus');
+            statusEl.textContent = overallStatus;
+            statusEl.className = 'text-2xl font-bold px-3 py-1 rounded-lg inline-block ' + statusClass;
+            
+            renderDeptSummaryTable();
+            renderCharts();
+        }
+
+        function renderDeptSummaryTable() {
+            const tbody = document.getElementById('deptSummaryTable');
+            tbody.innerHTML = snapshots.map(s => {
+                const statusClass = s.copc_status === 'COMPLIANT' ? 'status-compliant' : 
+                                   s.copc_status === 'AT_RISK' ? 'status-at-risk' : 'status-non-compliant';
+                return `
+                    <tr class="hover:bg-gray-50 cursor-pointer" onclick="showDeptDetail('${s.department_id}')">
+                        <td class="px-6 py-4 font-medium text-gray-900">${s.name}</td>
+                        <td class="px-6 py-4 text-center">${s.total_kpis}</td>
+                        <td class="px-6 py-4 text-center text-green-600 font-medium">${s.kpis_met}</td>
+                        <td class="px-6 py-4 text-center text-blue-600">${s.kpis_improving}</td>
+                        <td class="px-6 py-4 text-center text-red-600">${s.kpis_not_met}</td>
+                        <td class="px-6 py-4 text-center">${s.percent_met}%</td>
+                        <td class="px-6 py-4 text-center">${s.percent_met_or_improving}%</td>
+                        <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${s.copc_status.replace('_', ' ')}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderCharts() {
+            try {
+                if (charts.deptCompliance) {
+                    charts.deptCompliance.destroy();
+                    charts.deptCompliance = null;
+                }
+                if (charts.kpiStatus) {
+                    charts.kpiStatus.destroy();
+                    charts.kpiStatus = null;
+                }
+                
+                const canvas1 = document.getElementById('deptComplianceChart');
+                const canvas2 = document.getElementById('kpiStatusChart');
+                
+                if (!canvas1 || !canvas2) {
+                    console.error('Chart canvas elements not found');
+                    return;
+                }
+                
+                if (!snapshots || snapshots.length === 0) {
+                    console.warn('No snapshot data for charts');
+                    return;
+                }
+                
+                const ctx1 = canvas1.getContext('2d');
+                charts.deptCompliance = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: snapshots.map(s => s.name.split(' ')[0].substring(0, 10)),
+                        datasets: [
+                            { label: 'Met', data: snapshots.map(s => s.kpis_met), backgroundColor: '#10b981' },
+                            { label: 'Improving', data: snapshots.map(s => s.kpis_improving), backgroundColor: '#3b82f6' },
+                            { label: 'Not Met', data: snapshots.map(s => s.kpis_not_met), backgroundColor: '#ef4444' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        scales: { 
+                            x: { stacked: true, ticks: { maxRotation: 45, minRotation: 0 } }, 
+                            y: { stacked: true, beginAtZero: true, max: Math.max(...snapshots.map(s => s.total_kpis)) + 2 } 
+                        },
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+                
+                const totalMet = snapshots.reduce((sum, s) => sum + s.kpis_met, 0);
+                const totalImproving = snapshots.reduce((sum, s) => sum + s.kpis_improving, 0);
+                const totalNotMet = snapshots.reduce((sum, s) => sum + s.kpis_not_met, 0);
+                
+                const ctx2 = canvas2.getContext('2d');
+                charts.kpiStatus = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Met', 'Improving', 'Not Met'],
+                        datasets: [{
+                            data: [totalMet, totalImproving, totalNotMet],
+                            backgroundColor: ['#10b981', '#3b82f6', '#ef4444']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+                
+                console.log('Charts rendered successfully');
+            } catch (err) {
+                console.error('Error rendering charts:', err);
+            }
+        }
+
+        function showDeptDetail(deptId) {
+            document.getElementById('deptSelect').value = deptId;
+            showTab('department');
+        }
+
+        function loadDepartmentView() {
+            const deptId = document.getElementById('deptSelect').value;
+            if (!deptId) {
+                document.getElementById('deptSummaryCards').innerHTML = '<p class="text-gray-500">Select a department to view KPIs</p>';
+                document.getElementById('deptKpiTable').innerHTML = '';
+                return;
+            }
+            
+            const snapshot = snapshots.find(s => s.department_id === deptId);
+            const deptKpis = kpis.filter(k => k.department_id === deptId && k.enabled);
+            
+            const statusClass = snapshot.copc_status === 'COMPLIANT' ? 'bg-green-100 text-green-800' : 
+                               snapshot.copc_status === 'AT_RISK' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+            
+            document.getElementById('deptSummaryCards').innerHTML = `
+                <div class="bg-gray-50 rounded-lg px-4 py-2 text-center">
+                    <div class="text-2xl font-bold text-gray-900">${snapshot.total_kpis}</div>
+                    <div class="text-xs text-gray-500">Total KPIs</div>
+                </div>
+                <div class="bg-green-50 rounded-lg px-4 py-2 text-center">
+                    <div class="text-2xl font-bold text-green-600">${snapshot.percent_met}%</div>
+                    <div class="text-xs text-gray-500">Met</div>
+                </div>
+                <div class="bg-blue-50 rounded-lg px-4 py-2 text-center">
+                    <div class="text-2xl font-bold text-blue-600">${snapshot.percent_met_or_improving}%</div>
+                    <div class="text-xs text-gray-500">Met + Improving</div>
+                </div>
+                <div class="${statusClass} rounded-lg px-4 py-2 text-center">
+                    <div class="text-lg font-bold">${snapshot.copc_status.replace('_', ' ')}</div>
+                    <div class="text-xs">COPC Status</div>
+                </div>
+            `;
+            
+            document.getElementById('deptKpiTable').innerHTML = deptKpis.map(kpi => {
+                const latestPerf = performance
+                    .filter(p => p.kpi_id === kpi.kpi_id)
+                    .sort((a, b) => b.period_month.localeCompare(a.period_month))[0];
+                
+                const achieved = latestPerf?.achieved ?? '--';
+                const variance = latestPerf?.variance_percent ?? '--';
+                const status = latestPerf?.status || 'NOT_MET';
+                const trend = latestPerf?.trend || 'FLAT';
+                
+                const statusClass = status === 'MET' ? 'bg-green-100 text-green-800' : 
+                                   status === 'IMPROVING' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800';
+                const trendIcon = trend === 'UP' ? '<svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>' :
+                                 trend === 'DOWN' ? '<svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>' :
+                                 '<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14"/></svg>';
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 font-medium text-gray-900">${kpi.name}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${kpi.category}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${kpi.owner_email?.split('@')[0] || '--'}</td>
+                        <td class="px-4 py-3 text-center text-sm">${kpi.unit}</td>
+                        <td class="px-4 py-3 text-center text-sm">${kpi.weight}%</td>
+                        <td class="px-4 py-3 text-center font-medium">${kpi.target_monthly?.toLocaleString() || '--'}</td>
+                        <td class="px-4 py-3 text-center font-medium">${typeof achieved === 'number' ? achieved.toLocaleString() : achieved}</td>
+                        <td class="px-4 py-3 text-center text-sm ${variance >= 0 ? 'text-green-600' : 'text-red-600'}">${typeof variance === 'number' ? (variance >= 0 ? '+' : '') + variance.toFixed(1) + '%' : variance}</td>
+                        <td class="px-4 py-3 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${status}</span></td>
+                        <td class="px-4 py-3 text-center">${trendIcon}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="showPerformanceModal('${kpi.kpi_id}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Update</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function loadKpiManager() {
+            const deptFilter = document.getElementById('kpiDeptFilter').value;
+            const catFilter = document.getElementById('kpiCatFilter').value;
+            
+            let filtered = kpis.filter(k => k.enabled);
+            if (deptFilter) filtered = filtered.filter(k => k.department_id === deptFilter);
+            if (catFilter) filtered = filtered.filter(k => k.category === catFilter);
+            
+            document.getElementById('kpiManagerTable').innerHTML = filtered.map(kpi => {
+                const dept = departments.find(d => d.department_id === kpi.department_id);
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-mono text-gray-500">${kpi.kpi_id}</td>
+                        <td class="px-4 py-3 font-medium text-gray-900">${kpi.name}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${dept?.name || kpi.department_id}</td>
+                        <td class="px-4 py-3 text-sm">${kpi.category}</td>
+                        <td class="px-4 py-3 text-center text-sm">${kpi.unit}</td>
+                        <td class="px-4 py-3 text-center">${kpi.target_annual?.toLocaleString() || '--'}</td>
+                        <td class="px-4 py-3 text-center font-medium">${kpi.target_monthly?.toLocaleString() || '--'}</td>
+                        <td class="px-4 py-3 text-center">${kpi.weight}%</td>
+                        <td class="px-4 py-3 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Active</span></td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="editKpi('${kpi.kpi_id}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium mr-2">Edit</button>
+                            <button onclick="archiveKpi('${kpi.kpi_id}')" class="text-red-600 hover:text-red-800 text-sm font-medium">Archive</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function loadInsights() {
+            const criticalKpis = [];
+            const mediumKpis = [];
+            const onTrackKpis = [];
+            
+            kpis.filter(k => k.enabled).forEach(kpi => {
+                const latestPerf = performance
+                    .filter(p => p.kpi_id === kpi.kpi_id)
+                    .sort((a, b) => b.period_month.localeCompare(a.period_month))[0];
+                
+                if (!latestPerf || latestPerf.status === 'NOT_MET') {
+                    if (latestPerf?.variance_percent < -20) criticalKpis.push({ kpi, perf: latestPerf });
+                    else mediumKpis.push({ kpi, perf: latestPerf });
+                } else {
+                    onTrackKpis.push({ kpi, perf: latestPerf });
+                }
+            });
+            
+            document.getElementById('criticalRisks').textContent = criticalKpis.length;
+            document.getElementById('mediumRisks').textContent = mediumKpis.length;
+            document.getElementById('onTrack').textContent = onTrackKpis.length;
+            
+            document.getElementById('topRiskyKpis').innerHTML = [...criticalKpis, ...mediumKpis].slice(0, 5).map(({ kpi, perf }) => {
+                const dept = departments.find(d => d.department_id === kpi.department_id);
+                const variance = perf?.variance_percent ?? 0;
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">${kpi.name}</div>
+                            <div class="text-sm text-gray-500">${dept?.name || kpi.department_id}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold ${variance < -20 ? 'text-red-600' : 'text-amber-600'}">${variance.toFixed(1)}%</div>
+                            <div class="text-xs text-gray-400">vs target</div>
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<div class="text-center text-gray-500 py-4">No critical risks found</div>';
+            
+            const rcaCategories = ['People', 'Process', 'Policy', 'Tools', 'Data', 'Client Dependency'];
+            const recommendations = criticalKpis.slice(0, 3).map(({ kpi }) => {
+                const rca = rcaCategories[Math.floor(Math.random() * rcaCategories.length)];
+                return `
+                    <div class="border-l-4 border-indigo-500 pl-4 py-2">
+                        <div class="font-medium text-gray-900">${kpi.name}</div>
+                        <div class="text-sm text-indigo-600 mt-1">RCA: ${rca}</div>
+                        <div class="text-sm text-gray-600 mt-1">Review ${rca.toLowerCase()} processes and implement corrective actions</div>
+                    </div>
+                `;
+            }).join('') || '<div class="text-center text-gray-500 py-4">No recommendations at this time</div>';
+            
+            document.getElementById('aiRecommendations').innerHTML = recommendations;
+            
+            document.getElementById('deptRiskTable').innerHTML = snapshots.map(s => {
+                const riskLevel = s.copc_status === 'COMPLIANT' ? 'Low' : s.copc_status === 'AT_RISK' ? 'Medium' : 'High';
+                const riskClass = riskLevel === 'Low' ? 'bg-green-100 text-green-800' : riskLevel === 'Medium' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+                const rca = rcaCategories[Math.floor(Math.random() * rcaCategories.length)];
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">${s.name}</td>
+                        <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${riskClass}">${riskLevel}</span></td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${s.kpis_not_met} KPIs not meeting target</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${rca}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">Review and update action plans for underperforming KPIs</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function loadAccessTab() {
+            const adminCount = users.filter(u => u.role === 'ADMIN').length;
+            const ownerCount = users.filter(u => u.role === 'OWNER').length;
+            const editorCount = users.filter(u => u.role === 'EDITOR').length;
+            const viewerCount = users.filter(u => u.role === 'VIEWER').length;
+            
+            document.getElementById('adminCount').textContent = adminCount;
+            document.getElementById('ownerCount').textContent = ownerCount;
+            document.getElementById('editorCount').textContent = editorCount;
+            document.getElementById('viewerCount').textContent = viewerCount;
+            
+            const roleColors = {
+                'ADMIN': 'bg-purple-100 text-purple-800',
+                'OWNER': 'bg-blue-100 text-blue-800',
+                'EDITOR': 'bg-green-100 text-green-800',
+                'VIEWER': 'bg-gray-100 text-gray-800'
+            };
+            
+            document.getElementById('usersTable').innerHTML = users.map(u => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-medium text-gray-900">${u.name}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${u.email}</td>
+                    <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${roleColors[u.role]}">${u.role}</span></td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${(u.departments || []).join(', ') || 'All'}</td>
+                    <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${u.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${u.active ? 'Active' : 'Inactive'}</span></td>
+                    <td class="px-6 py-4 text-center">
+                        <button class="text-indigo-600 hover:text-indigo-800 text-sm font-medium mr-2">Edit</button>
+                        <button class="text-red-600 hover:text-red-800 text-sm font-medium">Deactivate</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddKpiModal() {
+            document.getElementById('kpiModalTitle').textContent = 'Add New KPI';
+            document.getElementById('kpiFormId').value = '';
+            document.getElementById('kpiForm').reset();
+            document.getElementById('kpiModal').classList.remove('hidden');
+        }
+
+        function editKpi(kpiId) {
+            const kpi = kpis.find(k => k.kpi_id === kpiId);
+            if (!kpi) return;
+            
+            document.getElementById('kpiModalTitle').textContent = 'Edit KPI';
+            document.getElementById('kpiFormId').value = kpi.kpi_id;
+            document.getElementById('kpiFormDept').value = kpi.department_id;
+            document.getElementById('kpiFormCat').value = kpi.category;
+            document.getElementById('kpiFormName').value = kpi.name;
+            document.getElementById('kpiFormDesc').value = kpi.description || '';
+            document.getElementById('kpiFormUnit').value = kpi.unit;
+            document.getElementById('kpiFormAnnual').value = kpi.target_annual || '';
+            document.getElementById('kpiFormMonthly').value = kpi.target_monthly || '';
+            document.getElementById('kpiFormWeight').value = kpi.weight;
+            document.getElementById('kpiFormOwner').value = kpi.owner_email || '';
+            document.getElementById('kpiFormSource').value = kpi.data_source || '';
+            document.getElementById('kpiFormCalc').value = kpi.calculation_definition || '';
+            
+            document.getElementById('kpiModal').classList.remove('hidden');
+        }
+
+        function closeKpiModal() {
+            document.getElementById('kpiModal').classList.add('hidden');
+        }
+
+        async function saveKpi() {
+            const data = {
+                kpi_id: document.getElementById('kpiFormId').value || null,
+                department_id: document.getElementById('kpiFormDept').value,
+                name: document.getElementById('kpiFormName').value,
+                description: document.getElementById('kpiFormDesc').value,
+                category: document.getElementById('kpiFormCat').value,
+                unit: document.getElementById('kpiFormUnit').value,
+                target_annual: parseFloat(document.getElementById('kpiFormAnnual').value) || null,
+                target_monthly: parseFloat(document.getElementById('kpiFormMonthly').value),
+                weight: parseInt(document.getElementById('kpiFormWeight').value),
+                owner_email: document.getElementById('kpiFormOwner').value,
+                data_source: document.getElementById('kpiFormSource').value,
+                calculation_definition: document.getElementById('kpiFormCalc').value
+            };
+            
+            await postAPI('/api/tablef/kpis', data);
+            closeKpiModal();
+            await loadData();
+            showTab('kpimanager');
+        }
+
+        function showPerformanceModal(kpiId) {
+            const kpi = kpis.find(k => k.kpi_id === kpiId);
+            if (!kpi) return;
+            
+            document.getElementById('perfModalTitle').textContent = 'Update Performance';
+            document.getElementById('perfModalSubtitle').textContent = kpi.name;
+            document.getElementById('perfFormKpiId').value = kpi.kpi_id;
+            document.getElementById('perfFormTarget').value = kpi.target_monthly || '';
+            document.getElementById('perfFormAchieved').value = '';
+            document.getElementById('perfFormComment').value = '';
+            document.getElementById('perfFormEvidence').value = '';
+            
+            document.getElementById('performanceModal').classList.remove('hidden');
+        }
+
+        function closePerformanceModal() {
+            document.getElementById('performanceModal').classList.add('hidden');
+        }
+
+        async function savePerformance() {
+            const kpiId = document.getElementById('perfFormKpiId').value;
+            const kpi = kpis.find(k => k.kpi_id === kpiId);
+            
+            const data = {
+                kpi_id: kpiId,
+                department_id: kpi.department_id,
+                period_month: document.getElementById('perfFormMonth').value,
+                target: parseFloat(document.getElementById('perfFormTarget').value),
+                achieved: parseFloat(document.getElementById('perfFormAchieved').value),
+                comment: document.getElementById('perfFormComment').value,
+                evidence_link: document.getElementById('perfFormEvidence').value
+            };
+            
+            await postAPI('/api/tablef/performance', data);
+            closePerformanceModal();
+            await loadData();
+            showTab('department');
+        }
+
+        function exportTableF(format) {
+            const csv = ['Department,Total KPIs,Met,Improving,Not Met,% Met,% Met+Improving,COPC Status'];
+            snapshots.forEach(s => {
+                csv.push(`${s.name},${s.total_kpis},${s.kpis_met},${s.kpis_improving},${s.kpis_not_met},${s.percent_met}%,${s.percent_met_or_improving}%,${s.copc_status}`);
+            });
+            downloadFile(csv.join('\n'), 'tablef_summary.csv', 'text/csv');
+        }
+
+        function exportDeptKpis(format) {
+            const deptId = document.getElementById('deptSelect').value;
+            const deptKpis = kpis.filter(k => k.department_id === deptId);
+            const csv = ['KPI Name,Category,Unit,Target,Achieved,Variance,Status,Trend'];
+            deptKpis.forEach(kpi => {
+                const perf = performance.filter(p => p.kpi_id === kpi.kpi_id).sort((a, b) => b.period_month.localeCompare(a.period_month))[0];
+                csv.push(`"${kpi.name}",${kpi.category},${kpi.unit},${kpi.target_monthly || ''},${perf?.achieved || ''},${perf?.variance_percent || ''}%,${perf?.status || 'N/A'},${perf?.trend || 'N/A'}`);
+            });
+            downloadFile(csv.join('\n'), 'dept_kpis.csv', 'text/csv');
+        }
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function refreshData() {
+            await loadData();
+        }
+
+        async function generateAiInsights() {
+            alert('AI Insights generation triggered. This will analyze all KPIs and generate recommendations.');
+        }
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

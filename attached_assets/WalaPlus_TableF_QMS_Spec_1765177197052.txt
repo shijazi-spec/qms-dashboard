@@ -1,0 +1,364 @@
+WalaPlus QMS - Table F Governance Engine (COPC 50/75) - Full Business Specification
+
+1. PROJECT OVERVIEW
+Purpose:
+Build a COPC-compliant Table F module inside the existing WalaPlus Quality Management System (QMS) and Agentic AI project. This module will track KPIs, apply the COPC 50%/75% rule, and provide governance visibility across all commercial and support functions.
+
+Scope Departments (initial phase):
+- Sales
+- SDR / Presales
+- Customer Support / Contact Center
+- Marketplace
+- WalaOne / Customer Success
+- Operations & Quality
+- Marketing
+- Finance
+- HR
+- IT
+
+Important:
+- This MUST be built INSIDE the existing QMS / Agentic AI project (not a separate project).
+- Initial phase uses manual KPI achievement entry.
+- Later phases will integrate with Zoho, Five9, Calendar, Finance systems, HRIS, Marketing tools, IT monitoring, etc.
+
+2. BUSINESS OBJECTIVES
+- Centralize KPI tracking for all departments.
+- Enforce COPC 50/75 rule for governance and certification readiness.
+- Enable Agentic AI to monitor progress and recommend corrective actions.
+- Provide clear executive visibility via Table F dashboards.
+- Allow departments to define KPIs, targets, and manually input achievement until integrations are ready.
+
+3. COPC BACKGROUND (TABLE F & 50/75 RULE)
+COPC Requirement:
+- At least 50% of required KPIs must be fully achieved.
+- At least 75% of required KPIs must either be achieved OR show sustained improvement over the measurement timeline.
+- Evidence must be available via a performance summary table (Table F) with monthly data, trends, and corrective actions.
+
+WalaPlus Interpretation:
+- For a 12-month cycle, at ~75% of the timeline (month 9), at least 50% of KPIs are achieved.
+- Remaining KPIs must have non-zero progress and documented action plans.
+- This logic must be evaluated per department and at company level.
+
+4. HIGH-LEVEL FEATURES
+4.1 KPI Management
+- Create, edit, archive KPIs per department.
+- Define KPI type (Customer, Quality, Service, Efficiency, Financial, People, Strategic, etc.).
+- Set annual target, unit (%, count, SAR, index, etc.), weight, and owner.
+- Capability to attach definition, calculation formula, and data source description.
+
+4.2 KPI Performance Capture (Manual First, Integration Later)
+- For each KPI and month:
+  - Manually input achieved value (ACH).
+  - System auto-calculates variance vs target.
+  - System marks status (Met / Not Met / Improving / Deteriorating).
+- Later, achievement values will be auto-populated from integrated systems (Zoho, Finance, HRIS, Marketing tools, IT monitoring, etc.).
+
+4.3 Table F Engine
+- Summarize all KPIs by department and overall.
+- Evaluate COPC 50/75 rule:
+  - 50% of KPIs fully achieved.
+  - 75% of KPIs achieved or improving.
+- Show status: COMPLIANT / AT RISK / NON-COMPLIANT per department and for WalaPlus overall.
+
+4.4 Agentic AI Layer
+- Analyze trends in KPIs.
+- Identify which KPIs are blocking 50/75 compliance.
+- Propose RCA categories (People, Process, Policy, Tools, Data, Client Dependency).
+- Recommend actions and ownership.
+- Highlight dependencies on integrations (e.g., Zoho for Sales FCR, Finance for EBITDA, HR for Attrition).
+
+4.5 Access Control (Role-Based Access Matrix)
+User roles:
+- QMS Admin
+- Department Owner / Manager
+- Editor
+- Viewer
+- AI Agent (system role)
+
+Access Matrix (high-level):
+1) QMS Admin
+   - Full system-wide access.
+   - Create/modify/delete KPIs for any department.
+   - Configure weights, targets, scoring rules, and 50/75 thresholds.
+   - View and export all dashboards and reports.
+   - Manage user roles and access rights.
+
+2) Department Owner / Manager (e.g., Head of Sales, Head of Marketing, Head of IT)
+   - Manage KPIs only for their department.
+   - Create/edit/retire KPIs within their department.
+   - Approve or edit monthly achievements (ACH) for their department.
+   - View all Table F views for their department.
+   - View company-wide summary (read-only).
+   - Cannot modify other departments’ KPIs.
+
+3) Editor (Analyst / Specialist)
+   - Assigned per department.
+   - Can input monthly ACH values for assigned department’s KPIs.
+   - Can add comments, attach evidence, and draft RCA notes.
+   - Cannot create or delete KPIs.
+   - Cannot change targets, weights, or formulas.
+
+4) Viewer (Executive / Stakeholder)
+   - Read-only access.
+   - Can view dashboards, KPI matrices, trends, and AI insights.
+   - Cannot change data, targets, or configurations.
+
+5) AI Agent (System)
+   - Can read all KPI and Table F data.
+   - Can write AI-generated insights, risk flags, RCA suggestions, and recommendations.
+   - Cannot modify targets; any AI recommendations are suggestions only.
+
+Access Matrix by Action (simplified):
+- Create KPI: Admin, Department Owner
+- Edit KPI (definition, target, weight): Admin, Department Owner
+- Delete/Archive KPI: Admin, Department Owner
+- Enter/Update KPI Achievement (ACH): Admin, Department Owner, Editor
+- View Table F Dashboard: All roles
+- Configure COPC rules (50/75 thresholds): Admin only
+- Manage Users & Roles: Admin only
+
+5. ARCHITECTURE & BLUEPRINT
+Folder structure (example):
+/qms
+  /tablef
+    - tablef.html      (main UI page)
+    - tablef.css       (styles)
+    - tablef.js        (frontend logic)
+  /api
+    - kpi.js           (CRUD for KPIs)
+    - performance.js   (monthly ACH handling)
+    - tablef.js        (COPC 50/75 engine and summary)
+    - access.js        (role checks)
+  /services
+    - kpiService.ts        (server-side KPI business logic)
+    - tableFService.ts     (50/75 calculation, scoring)
+    - aiTableFService.ts   (AI insights / RCA)
+    - accessService.ts     (role validation)
+  /mockdata
+    - kpis.json            (sample KPIs)
+    - performance.json     (sample monthly data)
+
+All implemented inside the existing project (no new project).
+
+6. DATA MODELS
+
+6.1 Department Schema
+{
+  "department_id": "DEPT-SALES",
+  "name": "Sales",
+  "owner_email": "sales_hod@walaplus.com",
+  "active": true
+}
+
+Examples of departments:
+- DEPT-SALES
+- DEPT-SDR
+- DEPT-CS
+- DEPT-MARKETPLACE
+- DEPT-WALAONE
+- DEPT-OPS_QUALITY
+- DEPT-MARKETING
+- DEPT-FINANCE
+- DEPT-HR
+- DEPT-IT
+
+6.2 KPI Schema
+{
+  "kpi_id": "KPI-001",
+  "department_id": "DEPT-SALES",
+  "name": "Monthly New Revenue",
+  "description": "New revenue from WalaOffer & WalaOne deals closed in the month.",
+  "category": "Financial",
+  "unit": "SAR",
+  "target_annual": 25000000,
+  "target_monthly_type": "derived_or_manual",
+  "weight": 15,
+  "owner_email": "sales_hod@walaplus.com",
+  "data_source": "Zoho CRM + Finance",
+  "calculation_definition": "Sum of closed-won deals revenue for the month, validated by Finance.",
+  "enabled": true
+}
+
+6.3 Monthly Performance Schema
+{
+  "kpi_id": "KPI-001",
+  "department_id": "DEPT-SALES",
+  "month": "2025-02",
+  "target": 2000000,
+  "achieved": 1750000,
+  "variance": -250000,
+  "variance_percent": -12.5,
+  "met": false,
+  "trend_vs_prev": "down",
+  "comment": "Delay in two major deals; expected to close in March.",
+  "evidence_link": "https://... (optional)"
+}
+
+6.4 Table F Summary Schema (per department)
+{
+  "department_id": "DEPT-SALES",
+  "period": "2025-YTD",
+  "total_kpis": 12,
+  "kpi_met": 6,
+  "kpi_improving": 3,
+  "kpi_not_met": 3,
+  "percent_met": 50,
+  "percent_met_or_improving": 75,
+  "copc_50_75_status": "COMPLIANT",  // COMPLIANT, AT_RISK, NON_COMPLIANT
+  "ai_risk_level": "Medium",
+  "ai_summary": "Sales is COPC compliant but dependent on closing two high-value deals in Q3.",
+  "last_calculated_at": "2025-02-28T10:00:00Z"
+}
+
+6.5 User & Role Schema
+{
+  "user_id": "USR-001",
+  "name": "Ahmad Amashah",
+  "email": "ahmad@walaplus.com",
+  "role": "ADMIN",        // ADMIN, OWNER, EDITOR, VIEWER
+  "departments": ["DEPT-OPS_QUALITY", "DEPT-CS"],
+  "active": true
+}
+
+7. UI / UX DESIGN
+
+7.1 Navigation
+From the main QMS dashboard, add a menu item:
+- “Table F (COPC Governance)”
+
+Sub-tabs within Table F page:
+- Overview
+- Department View
+- KPI Manager
+- AI Insights
+- Access & Roles (Admin only)
+
+7.2 Overview Tab (Company-Level)
+Elements:
+- Filters: Year, Month, Department
+- Summary cards:
+  - Total KPIs
+  - % KPIs Met
+  - % KPIs Met or Improving
+  - COPC 50/75 Status (Overall)
+  - Number of Departments “At Risk” / “Non-Compliant”
+- Chart: Stacked bar per department showing:
+  - Met / Improving / Not Met
+- Table: Per department summary
+
+7.3 Department View Tab
+- Department selector (Sales, CS, Marketing, Finance, HR, IT, etc.).
+- Summary cards for selected department.
+- KPI Matrix table:
+  Columns:
+  - KPI Name
+  - Category
+  - Owner
+  - Unit
+  - Weight
+  - Target (current period)
+  - Achieved (manual entry field)
+  - Status (Met / Not Met)
+  - Trend (icon up/down/flat)
+  - COPC Contribution (Counts toward 50%/75%?)
+  - Comments (view/edit)
+
+- Ability to click KPI row → open detail modal:
+  - Definition
+  - Formula
+  - Historical monthly chart
+  - Attachments / Evidence
+  - AI comments
+
+7.4 KPI Manager Tab
+For Admin & Department Owners only.
+
+Features:
+- Add new KPI (form with department, name, category, unit, target, weight, owner, definition, data source).
+- Edit existing KPI (change target, description, weight).
+- Archive KPI (soft delete, keep history).
+
+7.5 AI Insights Tab
+- Show AI-generated observations:
+  - “Top 5 KPIs putting COPC 50/75 at risk.”
+  - “Departments most likely to fail COPC this quarter.”
+  - “Recommended corrective actions per KPI/department.”
+  - “Forecasted month when 50/75 compliance will be reached if current trend continues.”
+
+7.6 Access & Roles Tab (Admin Only)
+- List all users, their roles, and assigned departments.
+- Forms to:
+  - Invite/add user.
+  - Change role (Admin, Owner, Editor, Viewer).
+  - Assign / remove departments.
+
+8. BACKEND LOGIC & 50/75 IMPLEMENTATION
+
+8.1 Monthly Recalculation
+- At minimum, recalculate Table F whenever:
+  - ACH is updated.
+  - Targets change.
+  - New KPI is added.
+- Also support scheduled recalculation (e.g., daily/nightly job).
+
+8.2 COPC 50/75 Logic (per department)
+- total_kpis = count of enabled KPIs.
+- kpi_met = count where KPI is “Met” (YTD or within defined period).
+- kpi_improving = count where KPI is not yet met but:
+  - past 3 months show positive trend, OR
+  - variance is reducing consistently.
+
+- percent_met = kpi_met / total_kpis * 100
+- percent_met_or_improving = (kpi_met + kpi_improving) / total_kpis * 100
+
+Rules:
+- If percent_met >= 50 AND percent_met_or_improving >= 75 → COMPLIANT.
+- If percent_met < 50 but percent_met_or_improving >= 75 → AT_RISK.
+- If percent_met_or_improving < 75 → NON_COMPLIANT.
+
+8.3 AI Layer Behavior
+- Input: KPI definitions, monthly data, department summaries.
+- Output:
+  - Risk level (Low/Medium/High) per department.
+  - Top problem KPIs.
+  - Suggested RCA categories.
+  - Suggested actions (e.g., “Review sales training”, “Check Zoho data pipeline”, “Align Finance closing cycle”).
+
+9. INITIAL MOCK DATA & TESTING
+
+9.1 Create mock KPIs for each department:
+- Sales: Revenue, Conversion Rate, Pipeline Coverage, etc.
+- CS: FCR, CSAT, NPS, AHT, SLA, etc.
+- Marketplace: Active Merchants, Stock Accuracy, SLA response for merchants, etc.
+- WalaOne: Redemption Rate, Fraud Rate, Points Breakage, etc.
+- Ops & Quality: Audit Completion, Gap Closure %, Automation %, etc.
+- Marketing: Campaign ROI, Lead Cost, Engagement Rate, etc.
+- Finance: EBITDA, DSO, Revenue Accuracy, Refund Ratio, etc.
+- HR: Attrition, Time to Hire, Training Completion, etc.
+- IT: System Uptime, P1/P2 incidents, Resolution SLA, etc.
+
+9.2 For each KPI, generate 12 months of test data with mixed results:
+- Some fully met.
+- Some improving.
+- Some flat or deteriorating.
+
+Use this to validate:
+- 50/75 calculations.
+- Status labels.
+- AI risk detection.
+
+10. ACCEPTANCE CRITERIA
+
+The Table F module is considered successfully implemented when:
+
+- All roles (Admin, Owner, Editor, Viewer) behave exactly as specified.
+- Departments (Sales, SDR, CS, Marketplace, WalaOne, Ops & Quality, Marketing, Finance, HR, IT) are all supported.
+- KPIs can be created, maintained, and manually updated for ACH.
+- Table F dashboard shows correct summaries and COPC 50/75 status.
+- AI insights are generated and visible with at least:
+  - Key risks.
+  - Top problematic KPIs.
+  - Suggested actions.
+- System supports mock data and is ready to be integrated with live systems in later phases.
+
+End of Specification.

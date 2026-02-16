@@ -1,0 +1,35 @@
+FULL BUSINESS CASE — MOCK ZOHO ENVIRONMENT + TESTING SANDBOX (INSIDE THIS PROJECT)
+
+1. Project Overview
+I need you to build a complete Simulated Data Layer (Mock Zoho Environment) inside this same project (Quality Management System / Agentic AI). Do NOT create a separate project.
+This mock layer will allow full end-to-end testing of the Agentic AI Quality Specialist WITHOUT needing Zoho tokens or ERP access yet.
+I also need a Testing Sandbox UI inside the dashboard so I can visually test, add data, run audits, and view results.
+
+2. Goals
+A. Backend: Build a MOCK data environment simulating Zoho CRM (Leads, Deals, Activities, Users), Google Calendar (Events), Five9 (Call Logs) with a switch: DATA_MODE = MOCK or REAL.
+B. Frontend (Dashboard): Add a Testing Sandbox module inside the dashboard UI with Mock Data Viewer, Mock Data Editor, MOCK → REAL toggle, Run Full Audit button, Audit Output Panel (scores + violations).
+
+3. Architecture Requirements
+3.1 Mock Data Folder
+Add /mockdata containing JSON files: leads.json, deals.json, activities.json, users.json, calendarEvents.json, five9Calls.json.
+3.2 Mock API Endpoints
+Add GET endpoints similar to /mock/zoho/leads etc.
+3.3 Unified Data Access Layer
+Inside /src/data create functions like getLeads(), getDeals() etc. They should automatically choose MOCK or REAL.
+
+4. Testing Sandbox UI Requirements
+Add a new section inside the dashboard called “AI Testing Sandbox”.
+Includes: Mock Data Viewer, Mock Data Editor, Mode Switch, Run Full Audit Button, Output Panel.
+
+5. Fake Data Requirements
+Leads (50), Deals (30), Activities, Users, Calendar, Calls. Include hygiene issues, missing fields, mismatches, duplicates, etc.
+
+6. Expected AI Behavior
+The agent should fetch mock data, audit hygiene, validate governance, score People/Process/Governance, generate full weekly report, display results inside Testing Sandbox.
+
+7. Acceptance Criteria
+Backend: All mock APIs work, Data layer switches between MOCK and REAL.
+Frontend: Full Testing Sandbox visible, supports viewing/editing mock data, running full audit, viewing scores/violations.
+
+8. Critical Instruction
+Everything must be implemented inside this same Quality Management System / Agentic AI project. Do NOT create a separate project.

@@ -1,0 +1,183 @@
+PDPL COMPLIANCE FROM DAY ONE – QMS PLATFORM (PRIVACY-BY-DESIGN GATE)
+==================================================================
+
+Context:
+This platform is a Quality Management System (QMS). It will store and process personal data (data subjects)
+and will be accessed by multiple internal users. PDPL compliance must be ensured from the beginning,
+by design, before production use.
+
+This document defines what must be in place. If any item is missing, it must be built before go-live.
+
+--------------------------------------------------
+1) PERSONAL DATA INVENTORY (MANDATORY)
+--------------------------------------------------
+Requirement:
+Identify and document all personal data processed by the platform.
+
+Must include:
+- Data field name
+- Data category (Personal / Sensitive)
+- Purpose of processing
+- Storage location
+- Access roles
+- Retention period
+
+Deliverable:
+A maintained Data Inventory register inside the system or repository.
+
+--------------------------------------------------
+2) DATA MINIMIZATION & PRIVACY BY DEFAULT
+--------------------------------------------------
+Requirement:
+Store only what is required for quality evaluation.
+
+Controls:
+- Mask emails and phone numbers by default
+- Avoid storing national IDs, full DOB, or home addresses unless strictly required
+- Prefer record IDs and evaluation outputs over raw personal data
+
+Deliverable:
+Documented minimization rules applied per module.
+
+--------------------------------------------------
+3) ROLE-BASED ACCESS CONTROL (RBAC)
+--------------------------------------------------
+Requirement:
+Access must follow least-privilege principles.
+
+Controls:
+- Defined roles (Admin, Quality, GRC, Team Lead, Viewer, Auditor)
+- Default access = denied
+- Restrict viewing/exporting PDPL data by role
+- Separate access by team and module
+
+Deliverable:
+RBAC matrix + enforced backend permission checks.
+
+--------------------------------------------------
+4) AUDIT TRAIL & ACCOUNTABILITY
+--------------------------------------------------
+Requirement:
+All sensitive actions must be logged and immutable.
+
+Must log:
+- Login/logout attempts
+- Viewing PDPL data
+- Exports/downloads
+- File uploads
+- AI audit runs (who, when, date range, module)
+- Permission changes
+- Deletions and retention actions
+
+Deliverable:
+Non-editable audit trail with filters and timestamps.
+
+--------------------------------------------------
+5) ENCRYPTION & SECRETS MANAGEMENT
+--------------------------------------------------
+Requirement:
+Protect personal data technically.
+
+Controls:
+- TLS for all traffic
+- Encryption at rest for databases and files
+- Secure secret storage (no keys in code)
+- Key rotation plan documented
+
+Deliverable:
+Security design summary confirming encryption coverage.
+
+--------------------------------------------------
+6) DATA RETENTION & DELETION
+--------------------------------------------------
+Requirement:
+Each data type must have a defined lifecycle.
+
+Controls:
+- Retention period per data category
+- Automatic deletion or anonymization after expiry
+- Controlled deletion with approval and logging
+
+Deliverable:
+Retention policy + working cleanup jobs.
+
+--------------------------------------------------
+7) DATA SUBJECT RIGHTS (DSAR)
+--------------------------------------------------
+Requirement:
+Support data subject requests.
+
+Must support:
+- Access
+- Correction
+- Deletion
+- Restriction (where applicable)
+
+Deliverable:
+DSAR workflow inside QMS with SLA tracking and evidence.
+
+--------------------------------------------------
+8) THIRD-PARTY & INTEGRATION GOVERNANCE
+--------------------------------------------------
+Requirement:
+All integrations must be governed.
+
+Controls:
+- Vendor register (what data, why, where processed)
+- GRC approval toggle for integrations
+- Minimal data exchange only
+
+Deliverable:
+Vendor/TPRA register linked to integrations.
+
+--------------------------------------------------
+9) AI USAGE GOVERNANCE
+--------------------------------------------------
+Requirement:
+AI must not expose or retain unnecessary personal data.
+
+Controls:
+- Mask PII before sending to AI
+- Do not display full PII in AI outputs
+- Log AI prompts and responses (masked)
+
+Deliverable:
+AI guardrails configuration + AI audit logs.
+
+--------------------------------------------------
+10) DATA BREACH & INCIDENT MANAGEMENT
+--------------------------------------------------
+Requirement:
+Ability to manage personal data incidents.
+
+Controls:
+- Incident classification
+- Impact assessment
+- Containment actions
+- Notification tracking
+- RCA and closure evidence
+
+Deliverable:
+Incident management workflow inside QMS.
+
+--------------------------------------------------
+PDPL GO-LIVE GATE
+--------------------------------------------------
+Before production, confirm:
+- Data Inventory completed
+- RBAC enforced
+- Encryption enabled
+- Audit trail active
+- Retention & deletion working
+- DSAR workflow available
+- Vendor register approved
+- AI guardrails enabled
+- Incident workflow ready
+
+If any item is missing:
+1) Identify the gap
+2) Assess PDPL risk
+3) Propose build or mitigation
+4) Disable risky features temporarily if needed
+
+END OF DOCUMENT

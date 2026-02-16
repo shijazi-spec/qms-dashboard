@@ -1,0 +1,227 @@
+WALAPLUS – QMS & GRC KPI ENGINE EXTENSION
+BUSINESS CASE FOR REPLIT (DOWNLOADABLE NOTEPAD)
+
+1. PURPOSE
+This document defines the missing functional, governance, AI, and KPI capabilities required to fully support the merged Quality & GRC operating model at WalaPlus. It translates the 2026 Quality & GRC KPI framework into system-buildable requirements for Replit.
+
+2. CURRENT STATE (WHAT EXISTS)
+The current QMS system includes:
+- Basic project creation and assignment
+- Training placeholders
+- ROI initiative tracking
+- Table F governance logic
+- High-level dashboards
+- Manual KPI views
+
+However, the system does NOT include an enterprise KPI execution engine, risk lifecycle management, compliance tracking, or AI-enabled governance logic.
+
+3. IDENTIFIED GAPS (WHAT IS NOT COVERED)
+The following critical capabilities are missing:
+
+A. KPI ENGINE
+- Central KPI catalog with ownership
+- Automated KPI calculations
+- Threshold logic (Green/Amber/Red)
+- Historical KPI trends
+- Evidence linkage
+- KPI definitions and formulas
+- KPI frequency and review cycles
+
+B. ROLE-BASED OWNERSHIP
+- Separation of KPIs by role:
+  * Quality Manager (Sara)
+  * GRC Manager (Maram)
+  * Shared KPIs
+- No accountability mapping today
+
+C. RISK MANAGEMENT
+- No enterprise risk register
+- No risk lifecycle (identify, assess, treat, close)
+- No risk scoring or ownership
+- No linkage between risks, audits, controls, and CAPAs
+
+D. COMPLIANCE & REGULATORY
+- No PDPL / NCA / ECC / ISO 27001 compliance matrix
+- No control library
+- No evidence repository
+- No compliance coverage scoring
+
+E. AUDIT GOVERNANCE
+- No audit findings lifecycle
+- No SLA-based closure tracking
+- No repeat finding detection
+- No audit-readiness scoring
+
+F. VENDOR & THIRD-PARTY RISK
+- No vendor inventory
+- No vendor risk assessments
+- No remediation tracking
+- No evidence storage
+
+G. AI ENABLEMENT
+- No AI operational role
+- No AI validation or drift monitoring
+- No AI-based insights for risks, audits, or KPIs
+
+H. EXECUTIVE VISIBILITY
+- No CEO/Board-ready dashboards
+- No MBR/QBR/ABR summaries
+- No trend and exposure analysis
+
+4. REQUIRED SYSTEM MODULES TO BUILD
+
+A. KPI ENGINE MODULE
+- KPI Catalog:
+  * Name
+  * Owner (Quality / GRC / Shared)
+  * Description
+  * Formula
+  * Data source
+  * Frequency
+  * Thresholds
+- Automated calculation engine
+- Manual override with justification
+- Evidence attachment
+- Trend tracking
+- KPI-to-risk and KPI-to-audit linkage
+
+B. ROLE-BASED KPI OWNERSHIP
+Quality Manager KPIs:
+- Governance coverage
+- Document completion
+- Audit execution
+- Audit closure rate
+- Repeat findings reduction
+- Improvement index
+- Training coverage
+- Automation coverage
+
+GRC Manager KPIs:
+- Enterprise risk coverage
+- Risk treatment completion
+- High-risk aging
+- Compliance coverage
+- Audit readiness
+- Vendor risk posture
+- Regulatory response time
+
+Shared KPIs:
+- Governance loop closure
+- AI-enabled resolution index
+
+C. RISK MANAGEMENT MODULE
+- Enterprise risk register
+- Risk attributes:
+  * Category
+  * Impact
+  * Likelihood
+  * Risk score
+  * Owner
+- Risk lifecycle management
+- Risk-to-control mapping
+- Risk-to-audit and CAPA linkage
+- Residual risk tracking
+
+D. COMPLIANCE & CONTROL MODULE
+- Compliance matrix for:
+  * PDPL
+  * NCA / ECC
+  * ISO 27001
+- Control framework library
+- Evidence repository
+- Compliance coverage calculation
+- Audit readiness scoring
+
+E. AUDIT GOVERNANCE MODULE
+- Audit planning calendar
+- Findings register
+- SLA tracking
+- Repeat finding detection
+- Evidence validation
+- Audit-to-risk and audit-to-KPI linkage
+
+F. VENDOR RISK MODULE
+- Vendor inventory
+- Risk assessment questionnaires
+- Risk scoring
+- Remediation tracking
+- Evidence upload and review
+
+G. AI SPECIALIST ROLE & CAPABILITIES
+Role: AI Quality & GRC Specialist
+
+Responsibilities:
+- Maintain AI models
+- Validate AI outputs
+- Tune governance logic
+- Detect data drift
+- Support Quality & GRC managers
+- Own AI logs and confidence scoring
+
+AI Use Cases:
+- Auto-classify audit findings
+- Predict high-risk aging
+- Detect repeat issues
+- Suggest CAPAs
+- Validate compliance evidence
+- Power AI-enabled KPI scoring
+
+H. EXECUTIVE REPORTING
+- CEO / Board dashboards
+- MBR / QBR / ABR views
+- Top risks and trends
+- KPI health summaries
+- Compliance readiness
+- Exposure analysis
+
+5. UI / UX DIRECTION
+Principles:
+- Executive-first design
+- Clean, simple, and intuitive
+- Progressive disclosure (Show More)
+- No clutter, no Excel-like views
+
+Navigation:
+Dashboard | QMS | Table F | Risk | Compliance | Audits | ROI | Team | AI Insights | Admin
+
+KPI Views:
+- Summary cards (Green/Amber/Red)
+- Drill-down to:
+  * Definition
+  * Calculation
+  * Evidence
+  * History
+  * AI insights
+
+Risk Views:
+- Heat maps
+- BU drill-down
+- Aging timelines
+- AI risk prediction banners
+
+AI Banner Across System:
+“AI reviewed this data – Confidence: XX%”
+
+6. SOP & GOVERNANCE REQUIREMENTS
+- Every action must be logged:
+  * Create
+  * Update
+  * Delete
+  * Approve
+- Logs must capture:
+  * User
+  * Timestamp
+  * Before/after state
+- SOPs must be:
+  * Linked to workflows
+  * Auto-updated when processes change
+- No action without audit trail
+
+7. IMPLEMENTATION INSTRUCTION
+- Build all features inside the existing QMS (no separate system)
+- Extend Team, KPI, Audit, Risk, Compliance, and AI modules
+- Ensure role-based access control
+- Ensure audit-readiness at all times
+
+8. FINAL STATEMENT
+This extension transforms QMS into an Enterprise Governance, Risk, and Assurance Platform with AI at the core, supporting executive decision-making, regulatory readiness, and scalable growth.

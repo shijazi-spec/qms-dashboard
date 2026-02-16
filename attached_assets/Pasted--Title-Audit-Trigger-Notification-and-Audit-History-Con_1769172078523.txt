@@ -1,0 +1,217 @@
+📌 Title
+
+Audit Trigger, Notification, and Audit History Consistency Issues – QMS Platform
+
+1️⃣ Problem Statement – Missing Decision & Action Triggers
+
+Currently, the QMS platform does not trigger any notification or workflow when:
+
+An audit is completed
+
+Issues (NCs) are detected
+
+CAPA is suggested or required
+
+Management approval or decision is needed
+
+As a result:
+
+No user is alerted to review results
+
+No owner is prompted to approve, reject, or act
+
+Audit outcomes remain passive data, not actionable governance
+
+This creates a governance gap, especially for PDPL, ISO, and Quality accountability.
+
+2️⃣ Expected System Behavior – Decision & Action Triggers
+
+The system must implement event-based triggers after each audit run.
+
+Required Triggers:
+
+A. After Audit Completion
+
+Trigger status: Audit_Completed
+
+System action:
+
+Notify Quality Owner
+
+Notify Module Owner (Sales / SDR / Ops)
+
+Lock audit results from editing
+
+B. If Issues > 0
+
+Trigger status: Nonconformance_Detected
+
+System action:
+
+Create NC records automatically
+
+Assign severity (Minor / Major / Critical)
+
+Notify responsible manager
+
+Flag audit as “Action Required”
+
+C. If CAPA is Required
+
+Trigger status: CAPA_Required
+
+System action:
+
+Auto-suggest CAPA
+
+Assign CAPA owner
+
+Require approval (Approve / Reject / Modify)
+
+D. Management Decision Trigger
+
+Trigger status: Decision_Pending
+
+System action:
+
+Show pending approvals on dashboard
+
+Send notification reminder
+
+Prevent audit closure until decision is taken
+
+3️⃣ Problem Statement – Audit History Not Reflecting Actual Runs
+
+The Audit History page does not reflect all executed audits.
+
+Observed behavior:
+
+Multiple audits were run
+
+Audit execution logs confirm this
+
+Audit History table only shows a subset of runs
+
+Some dates show repeated entries with different record counts
+
+Some audits are completely missing
+
+This creates:
+
+Data inconsistency
+
+Loss of audit traceability
+
+Incorrect reporting to management
+
+Risk for PDPL / ISO audit evidence
+
+4️⃣ Expected System Behavior – Audit History Integrity
+
+The Audit History page must be the single source of truth.
+
+Mandatory Rules:
+
+Each audit run = one immutable record
+
+Audit History must log:
+
+Audit ID (unique)
+
+Date & time
+
+Audit scope (Leads / Deals / Accounts / Contacts)
+
+Date range used
+
+Number of records evaluated
+
+Issues found
+
+Final scores (Overall / People / Process / Governance)
+
+No audit run should overwrite or merge with another
+
+Duplicate entries on the same date must be distinguishable by Audit ID
+
+5️⃣ Required Technical Checks & Tests
+
+Replit team must verify the following:
+
+A. Audit Execution Logging
+
+Confirm every Run AI Audit action:
+
+Writes a new audit record to the database
+
+Generates a unique audit ID
+
+Persists results even after page refresh
+
+B. Audit History Rendering
+
+Confirm UI fetches all audit records
+
+Confirm no filters are unintentionally applied
+
+Confirm pagination does not hide records
+
+Confirm sorting logic does not collapse entries
+
+C. Trigger & Notification Testing
+
+Run audit with:
+
+0 issues → verify completion notification
+
+0 issues → verify NC + CAPA triggers
+
+Confirm notifications appear:
+
+In system
+
+On dashboard
+
+Via assigned user inbox (if applicable)
+
+6️⃣ Governance & PDPL Impact
+
+Without these fixes:
+
+No evidence of accountability
+
+No proof of decision-making
+
+No traceable audit-to-action chain
+
+High risk for:
+
+PDPL accountability breach
+
+ISO audit nonconformity
+
+Weak governance credibility
+
+With these fixes:
+
+Every audit becomes actionable
+
+Every issue has an owner
+
+Every decision is traceable
+
+The QMS becomes audit-ready by design
+
+7️⃣ Final Instruction to Replit
+
+Please investigate, fix, and test:
+
+Audit triggers
+
+Notification workflows
+
+Audit history persistence
+
+Data integrity across multiple audit runs
+
+Ensure the system treats audits as governance events, not just score calculations.

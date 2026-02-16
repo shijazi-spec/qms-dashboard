@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WalaPlus Quality Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* QMS Industry Standard Color Palette */
+        :root {
+            --qms-blue: #1E3A8A;        /* Quality/Governance */
+            --qms-blue-light: #2563EB;
+            --qms-blue-bg: #DBEAFE;
+            --qms-green: #047857;       /* Compliance/Pass */
+            --qms-green-light: #22C55E;
+            --qms-green-bg: #D1FAE5;
+            --qms-amber: #D97706;       /* Warning/At-Risk */
+            --qms-amber-light: #F59E0B;
+            --qms-amber-bg: #FEF3C7;
+            --qms-red: #B91C1C;         /* Nonconformance/Fail */
+            --qms-red-light: #EF4444;
+            --qms-red-bg: #FEE2E2;
+            --qms-purple: #6D28D9;      /* Continuous Improvement */
+            --qms-purple-light: #A855F7;
+            --qms-purple-bg: #EDE9FE;
+            --qms-gray: #374151;        /* Neutral/Typography */
+        }
+        html { 
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: scroll !important;
+            -webkit-overflow-scrolling: touch;
+        }
+        #app {
+            position: relative;
+        }
+        .hidden {
+            display: none !important;
+            pointer-events: none !important;
+        }
+        /* QMS Status Colors */
+        .qms-compliant { background-color: var(--qms-green-bg); color: var(--qms-green); }
+        .qms-at-risk { background-color: var(--qms-amber-bg); color: var(--qms-amber); }
+        .qms-non-compliant { background-color: var(--qms-red-bg); color: var(--qms-red); }
+        .qms-improvement { background-color: var(--qms-purple-bg); color: var(--qms-purple); }
+        .qms-governance { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
+        .score-ring { 
+            background: conic-gradient(var(--score-color) calc(var(--score) * 3.6deg), #e5e7eb calc(var(--score) * 3.6deg));
+        }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .widget { transition: all 0.3s ease; }
+        .widget.sortable-ghost { opacity: 0.4; background: #e0e7ff; }
+        .widget.sortable-drag { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .widget-handle { cursor: grab; }
+        .widget-handle:active { cursor: grabbing; }
+        .customize-mode .widget { border: 2px dashed #1E3A8A; }
+        .customize-mode .widget-handle { background: #DBEAFE; }
+        .widget-hidden { display: none !important; }
+        .settings-panel { 
+            transform: translateX(100%); 
+            transition: transform 0.3s ease;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            overflow: hidden;
+        }
+        .chart-container canvas {
+            max-height: 100% !important;
+            max-width: 100% !important;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #e5e7eb;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch.active { background: #1E3A8A; }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-switch.active::after { transform: translateX(20px); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app">
+        <div id="walaplus-nav"></div>
+        <script src="/js/navigation.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                WalaPlusNav.init('dashboard');
+            });
+        </script>
+
+        <!-- Settings Panel (Slide-out) -->
+        <div id="settingsPanel" class="settings-panel fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold text-gray-900">Customize Dashboard</h2>
+                    <button onclick="toggleSettingsPanel()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">Show/Hide Widgets</h3>
+                        <div class="space-y-3" id="widgetToggles">
+                            <!-- Widget toggles will be populated here -->
+                        </div>
+                    </div>
+
+                    <div class="border-t pt-6">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">Drag to Reorder</h3>
+                        <p class="text-sm text-gray-500 mb-4">Click "Customize" and drag widgets by their header to rearrange them.</p>
+                    </div>
+
+                    <div class="border-t pt-6">
+                        <button onclick="resetLayout()" class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span>Reset to Default Layout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay for settings panel -->
+        <div id="settingsOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleSettingsPanel()"></div>
+
+        <!-- Issues Drill-down Modal -->
+        <div id="issuesDrilldownModal" class="fixed inset-0 z-50 hidden">
+            <div class="absolute inset-0 bg-black bg-opacity-50" onclick="closeIssuesModal()"></div>
+            <div class="absolute inset-4 md:inset-10 lg:inset-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900" id="modalTitle">Issue Details</h2>
+                        <p class="text-sm text-gray-500" id="modalSubtitle">Click on any issue to view details</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <select id="modalSeverityFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
+                            <option value="all">All Severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                        <button onclick="exportIssues('csv')" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 flex items-center space-x-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            <span>CSV</span>
+                        </button>
+                        <button onclick="exportIssues('json')" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 flex items-center space-x-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            <span>JSON</span>
+                        </button>
+                        <button onclick="closeIssuesModal()" class="text-gray-400 hover:text-gray-600 p-1">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto p-6">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issuesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+                <div class="bg-gray-50 px-6 py-3 border-t text-sm text-gray-500" id="modalFooter">
+                    Showing 0 issues
+                </div>
+            </div>
+        </div>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div id="loading" class="flex justify-center items-center py-20">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p class="mt-4 text-gray-600">Loading quality data...</p>
+                </div>
+            </div>
+
+            <div id="noData" class="hidden text-center py-20">
+                <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-gray-900">No audit data yet</h3>
+                <p class="mt-2 text-gray-500">Run a quality audit to see your dashboard metrics.</p>
+                <button onclick="triggerAudit()" class="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+                    Run Quality Audit Now
+                </button>
+            </div>
+
+            <div id="dashboard" class="hidden">
+                <!-- Dashboard Header with Actions -->
+                <div class="flex flex-wrap items-center justify-between mb-6 gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Quality Dashboard</h1>
+                        <p class="text-sm text-gray-500 mt-1">AI-powered CRM quality monitoring and compliance tracking</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Created Date Filter -->
+                        <div class="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-2 shadow-sm">
+                            <div class="flex items-center gap-1">
+                                <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                </svg>
+                                <span class="text-xs font-medium text-blue-600">Created:</span>
+                            </div>
+                            <input type="date" id="createdStartDate" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <span class="text-gray-400 text-xs">to</span>
+                            <input type="date" id="createdEndDate" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                        </div>
+                        <!-- Modified Date Filter -->
+                        <div class="flex items-center gap-2 bg-white border border-green-200 rounded-lg px-3 py-2 shadow-sm">
+                            <div class="flex items-center gap-1">
+                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                                <span class="text-xs font-medium text-green-600">Modified:</span>
+                            </div>
+                            <input type="date" id="modifiedStartDate" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <span class="text-gray-400 text-xs">to</span>
+                            <input type="date" id="modifiedEndDate" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                        </div>
+                        <!-- Apply and Clear Filters Buttons -->
+                        <button onclick="applyDateFilters()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">Apply Filters</button>
+                        <button onclick="clearDateFilters()" class="text-xs text-gray-500 hover:text-red-500 underline">Clear</button>
+                        <button onclick="runManualAudit()" id="manualAuditBtn" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 font-medium flex items-center gap-2 shadow-lg transition-all">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                            Run AI Audit
+                        </button>
+                        <button onclick="exportAuditToPDF()" id="exportPdfBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2 shadow transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            Export PDF
+                        </button>
+                        <button onclick="toggleSettingsPanel()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Settings
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Customizable Widget Container -->
+                <div id="widgetContainer" class="space-y-6">
+                    
+                    <!-- Row 1: Score Overview -->
+                    <div class="widget-row grid grid-cols-1 lg:grid-cols-4 gap-6" data-row="1">
+                        <div class="widget lg:col-span-1 bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="overall-score" data-name="Overall Quality Score">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Overall Score</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6 text-center">
+                                <div class="relative inline-flex items-center justify-center w-40 h-40">
+                                    <div id="overallScoreRing" class="score-ring absolute inset-0 rounded-full" style="--score: 0; --score-color: #6366f1;"></div>
+                                    <div class="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+                                        <div>
+                                            <span id="overallScore" class="text-4xl font-bold text-gray-900">--</span>
+                                            <span class="text-xl text-gray-500">%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="overallRating" class="mt-4 inline-block px-4 py-2 rounded-full text-sm font-medium"></div>
+                            </div>
+                        </div>
+
+                        <div class="widget lg:col-span-3 bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="dimension-breakdown" data-name="Dimension Breakdown">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Dimension Breakdown</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div class="text-center p-4 bg-blue-50 rounded-xl">
+                                        <div class="text-3xl font-bold text-blue-600" id="peopleScore">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">People Score</div>
+                                        <div class="text-xs text-gray-500 mt-1">Weight: 25%</div>
+                                        <div class="mt-3 bg-gray-200 rounded-full h-2">
+                                            <div id="peopleBar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="text-center p-4 bg-purple-50 rounded-xl">
+                                        <div class="text-3xl font-bold text-purple-600" id="processScore">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Process Score</div>
+                                        <div class="text-xs text-gray-500 mt-1">Weight: 35%</div>
+                                        <div class="mt-3 bg-gray-200 rounded-full h-2">
+                                            <div id="processBar" class="bg-purple-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="text-center p-4 bg-green-50 rounded-xl">
+                                        <div class="text-3xl font-bold text-green-600" id="governanceScore">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Governance Score</div>
+                                        <div class="text-xs text-gray-500 mt-1">Weight: 40%</div>
+                                        <div class="mt-3 bg-gray-200 rounded-full h-2">
+                                            <div id="governanceBar" class="bg-green-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Summary & Charts -->
+                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="audit-summary" data-name="Audit Summary">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Audit Summary</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="bg-gray-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-gray-900" id="recordsAudited">--</div>
+                                        <div class="text-sm text-gray-500">Records Audited</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-red-600" id="issuesFound">--</div>
+                                        <div class="text-sm text-gray-500">Issues Found</div>
+                                    </div>
+                                    <div class="bg-blue-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-blue-600" id="calendarEvents">--</div>
+                                        <div class="text-sm text-gray-500">Calendar Events</div>
+                                    </div>
+                                    <div class="bg-green-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-green-600" id="complianceRate">--</div>
+                                        <div class="text-sm text-gray-500">Compliance Rate</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-chart" data-name="Issues by Category">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Issues by Category</span>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="openIssuesModal('all')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Issues</button>
+                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="issuesCategoryCards"></div>
+                                <div class="chart-container" style="height: 180px;">
+                                    <canvas id="issuesChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Trends & Opportunities -->
+                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="3">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="trend-chart" data-name="Score Trend">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Score Trend</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="chart-container" style="height: 220px;">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="opportunities" data-name="Areas of Opportunity">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Areas of Opportunity</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div id="opportunities" class="space-y-3 max-h-64 overflow-y-auto"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 4: Recommendations -->
+                    <div class="widget-row" data-row="4">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="recommendations" data-name="AI Recommendations">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">AI-Powered Recommendations</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div id="recommendations" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 5: History -->
+                    <div class="widget-row" data-row="5">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="history" data-name="Audit History">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Audit History</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="historyTable" class="bg-white divide-y divide-gray-200"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 6: Agent Performance -->
+                    <div class="widget-row" data-row="6">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="agent-performance" data-name="Agent Performance">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Agent Performance</span>
+                                <div class="flex items-center space-x-2">
+                                    <select id="teamFilter" onchange="filterAgentsByTeam()" class="text-xs border border-gray-200 rounded px-2 py-1">
+                                        <option value="all">All Teams</option>
+                                        <option value="SDR">SDR Team</option>
+                                        <option value="Sales">Sales Team</option>
+                                    </select>
+                                    <button onclick="exportAgentPerformance()" class="text-gray-400 hover:text-indigo-600 p-1" title="Export">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                        </svg>
+                                    </button>
+                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <!-- Filter impact hint -->
+                                <div class="mb-3 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                                    <div class="flex items-center space-x-1">
+                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <span>Two filters available: <strong>Created</strong> (when record was created) and <strong>Modified</strong> (when last updated). If both are set, records must match both.</span>
+                                    </div>
+                                </div>
+                                <!-- Coverage metrics display -->
+                                <div id="agentCoverageMetrics" class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm hidden">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-2">
+                                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                            </svg>
+                                            <span id="coverageText" class="text-blue-800 font-medium">Loading coverage...</span>
+                                        </div>
+                                        <span id="dateRangeText" class="text-blue-600 text-xs"></span>
+                                    </div>
+                                </div>
+                                <div id="agentPerformanceGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 7: Framework Info -->
+                    <div class="widget-row" data-row="7">
+                        <div class="widget bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg overflow-hidden text-white" data-widget="framework" data-name="Governance Framework">
+                            <div class="widget-handle bg-white/10 px-4 py-2 flex items-center justify-between border-b border-white/20">
+                                <span class="text-xs font-medium uppercase opacity-75">Active Framework</span>
+                                <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-lg font-semibold mb-2">Active Governance Framework</h3>
+                                        <p id="governanceDocName" class="text-indigo-100">--</p>
+                                        <p id="scorecardName" class="text-sm text-indigo-200 mt-1">--</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-sm text-indigo-200">Framework</div>
+                                        <div id="framework" class="font-medium">ISO 9001 + COPC</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let issuesChart = null;
+        let trendChart = null;
+        let customizeMode = false;
+        let sortableInstances = [];
+        let currentDateFilters = {
+            created: { start: null, end: null },
+            modified: { start: null, end: null }
+        };
+        let currentIssues = [];
+        let currentAgentData = [];
+        let allDashboardData = null;
+
+        // Date filter functions
+        function handleDateFilterChange() {
+            currentDateFilters.created.start = document.getElementById('createdStartDate').value || null;
+            currentDateFilters.created.end = document.getElementById('createdEndDate').value || null;
+            currentDateFilters.modified.start = document.getElementById('modifiedStartDate').value || null;
+            currentDateFilters.modified.end = document.getElementById('modifiedEndDate').value || null;
+            console.log('Date filters updated:', currentDateFilters);
+        }
+        
+        function clearDateFilters() {
+            document.getElementById('createdStartDate').value = '';
+            document.getElementById('createdEndDate').value = '';
+            document.getElementById('modifiedStartDate').value = '';
+            document.getElementById('modifiedEndDate').value = '';
+            currentDateFilters = {
+                created: { start: null, end: null },
+                modified: { start: null, end: null }
+            };
+            console.log('Date filters cleared');
+            refreshDashboard();
+        }
+        
+        function getDateFilterParams() {
+            const params = new URLSearchParams();
+            if (currentDateFilters.created.start) params.append('createdStart', currentDateFilters.created.start);
+            if (currentDateFilters.created.end) params.append('createdEnd', currentDateFilters.created.end);
+            if (currentDateFilters.modified.start) params.append('modifiedStart', currentDateFilters.modified.start);
+            if (currentDateFilters.modified.end) params.append('modifiedEnd', currentDateFilters.modified.end);
+            return params.toString();
+        }
+
+        // Apply date filters and refresh dashboard
+        function applyDateFilters() {
+            handleDateFilterChange();
+            refreshDashboard();
+        }
+        
+        // Helper function to get current filter description for display
+        function getFilterDescription() {
+            const parts = [];
+            if (currentDateFilters.created.start && currentDateFilters.created.end) {
+                parts.push(`Created: ${currentDateFilters.created.start} to ${currentDateFilters.created.end}`);
+            }
+            if (currentDateFilters.modified.start && currentDateFilters.modified.end) {
+                parts.push(`Modified: ${currentDateFilters.modified.start} to ${currentDateFilters.modified.end}`);
+            }
+            return parts.length > 0 ? parts.join(' | ') : 'All Time';
+        }
+
+        // Issues Modal functions
+        function openIssuesModal(category) {
+            document.getElementById('issuesDrilldownModal').classList.remove('hidden');
+            document.getElementById('modalTitle').textContent = category === 'all' ? 'All Issues' : `${category} Issues`;
+            document.getElementById('modalSubtitle').textContent = `Viewing issues for ${getFilterDescription()}`;
+            loadIssuesForModal(category);
+        }
+
+        function closeIssuesModal() {
+            document.getElementById('issuesDrilldownModal').classList.add('hidden');
+        }
+
+        function loadIssuesForModal(category) {
+            const issues = generateMockIssues(category);
+            currentIssues = issues;
+            renderIssuesTable(issues);
+        }
+
+        function generateMockIssues(category) {
+            const modules = category === 'all' ? ['Leads', 'Deals', 'Contacts', 'Tasks'] : [category];
+            const severities = ['critical', 'high', 'medium', 'low'];
+            const issueTypes = {
+                'Leads': ['Missing email', 'Missing phone', 'No lead source', 'Missing owner', 'Stale lead (no activity)'],
+                'Deals': ['Missing amount', 'No closing date', 'Missing stage', 'No contact linked', 'Stale deal'],
+                'Contacts': ['Missing email', 'Missing phone', 'Duplicate detected', 'Incomplete address'],
+                'Tasks': ['Overdue task', 'Missing due date', 'No owner assigned', 'Missing description']
+            };
+            const owners = ['Ahmed Al-Rashid', 'Sara Mohammed', 'Khalid Hassan', 'Fatima Al-Saud', 'Omar Nasser', 'Layla Ibrahim'];
+            
+            const issues = [];
+            const issueCount = allDashboardData?.latestAudit?.total_issues_found || 30;
+            
+            for (let i = 0; i < issueCount; i++) {
+                const module = modules[Math.floor(Math.random() * modules.length)];
+                const issueList = issueTypes[module] || issueTypes['Leads'];
+                issues.push({
+                    id: `${module.toLowerCase()}_${String(i + 1).padStart(3, '0')}`,
+                    module: module,
+                    owner: owners[Math.floor(Math.random() * owners.length)],
+                    issue: issueList[Math.floor(Math.random() * issueList.length)],
+                    severity: severities[Math.floor(Math.random() * severities.length)],
+                    recommendation: 'Update the record with missing information to ensure data quality compliance.'
+                });
+            }
+            return issues;
+        }
+
+        function renderIssuesTable(issues) {
+            const tbody = document.getElementById('issuesTableBody');
+            const severityColors = {
+                critical: 'bg-red-100 text-red-800',
+                high: 'bg-orange-100 text-orange-800',
+                medium: 'bg-yellow-100 text-yellow-800',
+                low: 'bg-green-100 text-green-800'
+            };
+            
+            tbody.innerHTML = issues.map(issue => `
+                <tr class="hover:bg-gray-50 cursor-pointer" onclick="highlightIssue('${issue.id}')">
+                    <td class="px-4 py-3 text-sm font-mono text-gray-900">${issue.id}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${issue.module}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${issue.owner}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${issue.issue}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${severityColors[issue.severity]}">${issue.severity}</span></td>
+                    <td class="px-4 py-3 text-sm text-gray-500">${issue.recommendation}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('modalFooter').textContent = `Showing ${issues.length} issues`;
+        }
+
+        function filterModalIssues() {
+            const severity = document.getElementById('modalSeverityFilter').value;
+            const filtered = severity === 'all' ? currentIssues : currentIssues.filter(i => i.severity === severity);
+            renderIssuesTable(filtered);
+        }
+
+        function highlightIssue(id) {
+            console.log('Issue selected:', id);
+        }
+
+        // Export functions
+        function exportIssues(format) {
+            const severity = document.getElementById('modalSeverityFilter').value;
+            const issues = severity === 'all' ? currentIssues : currentIssues.filter(i => i.severity === severity);
+            
+            if (format === 'csv') {
+                const headers = ['Record ID', 'Module', 'Owner', 'Issue', 'Severity', 'Recommendation'];
+                const csv = [headers.join(',')].concat(
+                    issues.map(i => [i.id, i.module, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
+                ).join('\n');
+                downloadFile(csv, 'quality_issues.csv', 'text/csv');
+            } else {
+                const json = JSON.stringify(issues, null, 2);
+                downloadFile(json, 'quality_issues.json', 'application/json');
+            }
+        }
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // PDF Export function
+        async function exportAuditToPDF() {
+            const btn = document.getElementById('exportPdfBtn');
+            const originalContent = btn.innerHTML;
+            
+            // Check if data is available
+            if (!allDashboardData || !allDashboardData.latestAudit) {
+                alert('No audit data available. Please run an AI Audit first before exporting.');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...';
+            
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const margin = 15;
+                let yPos = 20;
+                
+                // Header
+                doc.setFillColor(99, 102, 241);
+                doc.rect(0, 0, pageWidth, 35, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(22);
+                doc.setFont('helvetica', 'bold');
+                doc.text('WalaPlus Quality Audit Report', margin, 18);
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 28);
+                
+                // Date range info
+                // Build date filter string for PDF
+                const filterParts = [];
+                if (currentDateFilters.created.start && currentDateFilters.created.end) {
+                    filterParts.push(`Created: ${currentDateFilters.created.start} to ${currentDateFilters.created.end}`);
+                }
+                if (currentDateFilters.modified.start && currentDateFilters.modified.end) {
+                    filterParts.push(`Modified: ${currentDateFilters.modified.start} to ${currentDateFilters.modified.end}`);
+                }
+                const dateRangeStr = filterParts.length > 0 ? filterParts.join(' | ') : 'All Time';
+                doc.text(`Date Range: ${dateRangeStr}`, pageWidth - margin - 60, 28);
+                
+                yPos = 45;
+                doc.setTextColor(0, 0, 0);
+                
+                // Overall Score Section
+                if (allDashboardData && allDashboardData.latestAudit) {
+                    const audit = allDashboardData.latestAudit;
+                    
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Executive Summary', margin, yPos);
+                    yPos += 10;
+                    
+                    // Score box
+                    doc.setFillColor(236, 253, 245);
+                    doc.roundedRect(margin, yPos - 5, pageWidth - 2*margin, 25, 3, 3, 'F');
+                    doc.setFontSize(24);
+                    doc.setTextColor(5, 150, 105);
+                    doc.text(`${audit.overall_score.toFixed(1)}%`, margin + 10, yPos + 10);
+                    doc.setFontSize(10);
+                    doc.setTextColor(0, 0, 0);
+                    doc.text('Overall Quality Score', margin + 45, yPos + 5);
+                    doc.text(`People: ${audit.people_score.toFixed(1)}% | Process: ${audit.process_score.toFixed(1)}% | Governance: ${audit.governance_score.toFixed(1)}%`, margin + 45, yPos + 12);
+                    yPos += 30;
+                    
+                    // Audit Stats
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Audit Statistics', margin, yPos);
+                    yPos += 7;
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(10);
+                    doc.text(`Records Audited: ${audit.records_audited}`, margin, yPos);
+                    doc.text(`Issues Found: ${audit.issues_found}`, margin + 60, yPos);
+                    doc.text(`Compliance Rate: ${(100 - (audit.issues_found / Math.max(audit.records_audited, 1)) * 100).toFixed(1)}%`, margin + 120, yPos);
+                    yPos += 15;
+                }
+                
+                // Issues Table
+                if (currentIssues && currentIssues.length > 0) {
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Quality Issues', margin, yPos);
+                    yPos += 5;
+                    
+                    const issueRows = currentIssues.slice(0, 30).map(issue => [
+                        issue.id || '-',
+                        issue.module || '-',
+                        issue.owner || '-',
+                        (issue.issue || '').substring(0, 50),
+                        issue.severity || '-'
+                    ]);
+                    
+                    doc.autoTable({
+                        startY: yPos,
+                        head: [['Record ID', 'Module', 'Owner', 'Issue', 'Severity']],
+                        body: issueRows,
+                        theme: 'striped',
+                        headStyles: { fillColor: [99, 102, 241], fontSize: 9 },
+                        bodyStyles: { fontSize: 8 },
+                        columnStyles: {
+                            0: { cellWidth: 25 },
+                            1: { cellWidth: 25 },
+                            2: { cellWidth: 30 },
+                            3: { cellWidth: 70 },
+                            4: { cellWidth: 20 }
+                        },
+                        margin: { left: margin, right: margin }
+                    });
+                    
+                    yPos = doc.lastAutoTable.finalY + 10;
+                }
+                
+                // Agent Performance Section
+                if (currentAgentData && currentAgentData.length > 0 && currentAgentData[0].id !== 'no_data') {
+                    if (yPos > 240) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Agent Performance', margin, yPos);
+                    yPos += 5;
+                    
+                    const agentRows = currentAgentData.map(agent => [
+                        agent.name,
+                        agent.team,
+                        `${agent.score}%`,
+                        agent.recordsAudited.toString(),
+                        `C:${agent.issues.critical} H:${agent.issues.high} M:${agent.issues.medium} L:${agent.issues.low}`
+                    ]);
+                    
+                    doc.autoTable({
+                        startY: yPos,
+                        head: [['Agent Name', 'Team', 'Score', 'Records', 'Issues (C/H/M/L)']],
+                        body: agentRows,
+                        theme: 'striped',
+                        headStyles: { fillColor: [16, 185, 129], fontSize: 9 },
+                        bodyStyles: { fontSize: 8 },
+                        margin: { left: margin, right: margin }
+                    });
+                }
+                
+                // Footer on all pages
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`WalaPlus Quality Management System - Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: 'center' });
+                }
+                
+                // Download the PDF
+                const filename = `WalaPlus_Audit_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+                doc.save(filename);
+                
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert('Error generating PDF. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            }
+        }
+
+        // Agent Performance functions
+        async function updateAgentPerformance(data) {
+            try {
+                // Build URL with separate date filter params
+                let url = '/api/agents/performance';
+                const filterParams = getDateFilterParams();
+                if (filterParams) {
+                    url += `?${filterParams}`;
+                }
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success && result.agents && result.agents.length > 0) {
+                    currentAgentData = result.agents;
+                    console.log(`Loaded ${result.agents.length} agents from CRM (${result.mode} mode)`);
+                    
+                    // Display coverage metrics
+                    displayCoverageMetrics(result.coverage);
+                } else {
+                    console.log('No agents found from CRM, using placeholder');
+                    currentAgentData = [{
+                        id: 'no_data',
+                        name: 'No Lead Owners Found',
+                        team: 'SDR',
+                        role: 'Configure Zoho CRM',
+                        score: 0,
+                        recordsAudited: 0,
+                        issues: { critical: 0, high: 0, medium: 0, low: 0 }
+                    }];
+                    hideCoverageMetrics();
+                }
+            } catch (error) {
+                console.error('Error fetching agent performance:', error);
+                currentAgentData = [{
+                    id: 'error',
+                    name: 'Error Loading Agents',
+                    team: 'SDR',
+                    role: 'Check CRM Connection',
+                    score: 0,
+                    recordsAudited: 0,
+                    issues: { critical: 0, high: 0, medium: 0, low: 0 }
+                }];
+                hideCoverageMetrics();
+            }
+            
+            renderAgentPerformance(currentAgentData);
+        }
+        
+        function displayCoverageMetrics(coverage) {
+            const container = document.getElementById('agentCoverageMetrics');
+            const coverageText = document.getElementById('coverageText');
+            const dateRangeText = document.getElementById('dateRangeText');
+            
+            if (!coverage || !coverage.combined) {
+                container.classList.add('hidden');
+                return;
+            }
+            
+            const { totalRecordsInCRM, recordsAudited, recordsExcluded, separateFiltersApplied } = coverage.combined;
+            
+            // Show the container
+            container.classList.remove('hidden');
+            
+            // Build coverage text
+            if (recordsExcluded > 0) {
+                coverageText.textContent = `Audited ${recordsAudited} of ${totalRecordsInCRM} records (${recordsExcluded} excluded due to date filters)`;
+                container.classList.remove('bg-blue-50', 'border-blue-200');
+                container.classList.add('bg-amber-50', 'border-amber-200');
+                coverageText.classList.remove('text-blue-800');
+                coverageText.classList.add('text-amber-800');
+            } else {
+                coverageText.textContent = `Audited ${recordsAudited} of ${totalRecordsInCRM} records (all records included)`;
+                container.classList.remove('bg-amber-50', 'border-amber-200');
+                container.classList.add('bg-blue-50', 'border-blue-200');
+                coverageText.classList.remove('text-amber-800');
+                coverageText.classList.add('text-blue-800');
+            }
+            
+            // Display applied filters
+            const filterParts = [];
+            if (separateFiltersApplied) {
+                if (separateFiltersApplied.created && separateFiltersApplied.created.start && separateFiltersApplied.created.end) {
+                    filterParts.push(`Created: ${separateFiltersApplied.created.start} to ${separateFiltersApplied.created.end}`);
+                }
+                if (separateFiltersApplied.modified && separateFiltersApplied.modified.start && separateFiltersApplied.modified.end) {
+                    filterParts.push(`Modified: ${separateFiltersApplied.modified.start} to ${separateFiltersApplied.modified.end}`);
+                }
+            }
+            dateRangeText.textContent = filterParts.length > 0 ? filterParts.join(' | ') : 'No date filter';
+        }
+        
+        function hideCoverageMetrics() {
+            const container = document.getElementById('agentCoverageMetrics');
+            container.classList.add('hidden');
+        }
+
+        function renderAgentPerformance(agents) {
+            const container = document.getElementById('agentPerformanceGrid');
+            
+            container.innerHTML = agents.map(agent => {
+                const totalIssues = agent.issues.critical + agent.issues.high + agent.issues.medium + agent.issues.low;
+                const scoreColor = getScoreColor(agent.score);
+                const teamBadge = agent.team === 'SDR' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700';
+                
+                return `
+                    <div class="bg-gray-50 rounded-xl p-4 hover:shadow-md transition cursor-pointer" onclick="showAgentDetails('${agent.id}')">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                                    ${agent.name.split(' ').map(n => n[0]).join('')}
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900 text-sm">${agent.name}</div>
+                                    <span class="text-xs px-2 py-0.5 rounded-full ${teamBadge}">${agent.team}</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold" style="color: ${scoreColor}">${agent.score}%</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-gray-500">
+                            <span>${agent.recordsAudited} records</span>
+                            <span class="flex items-center space-x-1">
+                                <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                                <span>${agent.issues.critical}</span>
+                                <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+                                <span>${agent.issues.high}</span>
+                                <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                                <span>${agent.issues.medium}</span>
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterAgentsByTeam() {
+            const team = document.getElementById('teamFilter').value;
+            const filtered = team === 'all' ? currentAgentData : currentAgentData.filter(a => a.team === team);
+            renderAgentPerformance(filtered);
+        }
+
+        function showAgentDetails(agentId) {
+            const agent = currentAgentData.find(a => a.id === agentId);
+            if (agent) {
+                openIssuesModal(agent.team === 'SDR' ? 'Leads' : 'Deals');
+            }
+        }
+
+        function exportAgentPerformance() {
+            const team = document.getElementById('teamFilter').value;
+            const agents = team === 'all' ? currentAgentData : currentAgentData.filter(a => a.team === team);
+            
+            const headers = ['Name', 'Team', 'Role', 'Score', 'Records Audited', 'Critical', 'High', 'Medium', 'Low'];
+            const csv = [headers.join(',')].concat(
+                agents.map(a => [a.name, a.team, a.role, a.score, a.recordsAudited, a.issues.critical, a.issues.high, a.issues.medium, a.issues.low].join(','))
+            ).join('\n');
+            downloadFile(csv, 'agent_performance.csv', 'text/csv');
+        }
+
+        function updateIssuesCategoryCards(issuesByCategory) {
+            const container = document.getElementById('issuesCategoryCards');
+            const categories = issuesByCategory ? Object.entries(issuesByCategory) : [];
+            const colors = {
+                'Leads': { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
+                'Deals': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
+                'Contacts': { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200' },
+                'Tasks': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' }
+            };
+            
+            container.innerHTML = categories.map(([cat, count]) => {
+                const color = colors[cat] || { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200' };
+                return `
+                    <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
+                        <div class="text-2xl font-bold ${color.text}">${count}</div>
+                        <div class="text-xs text-gray-600">${cat} Issues</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Widget configuration
+        const defaultWidgetConfig = {
+            'overall-score': { visible: true, order: 1 },
+            'dimension-breakdown': { visible: true, order: 2 },
+            'audit-summary': { visible: true, order: 3 },
+            'issues-chart': { visible: true, order: 4 },
+            'trend-chart': { visible: true, order: 5 },
+            'opportunities': { visible: true, order: 6 },
+            'recommendations': { visible: true, order: 7 },
+            'history': { visible: true, order: 8 },
+            'agent-performance': { visible: true, order: 9 },
+            'framework': { visible: true, order: 10 }
+        };
+
+        function getWidgetConfig() {
+            const saved = localStorage.getItem('dashboardWidgetConfig');
+            return saved ? JSON.parse(saved) : { ...defaultWidgetConfig };
+        }
+
+        function saveWidgetConfig(config) {
+            localStorage.setItem('dashboardWidgetConfig', JSON.stringify(config));
+        }
+
+        function applyWidgetConfig() {
+            const config = getWidgetConfig();
+            document.querySelectorAll('.widget').forEach(widget => {
+                const widgetId = widget.dataset.widget;
+                if (config[widgetId]) {
+                    widget.classList.toggle('widget-hidden', !config[widgetId].visible);
+                }
+            });
+            updateWidgetToggles();
+        }
+
+        function updateWidgetToggles() {
+            const config = getWidgetConfig();
+            const container = document.getElementById('widgetToggles');
+            container.innerHTML = '';
+
+            document.querySelectorAll('.widget').forEach(widget => {
+                const widgetId = widget.dataset.widget;
+                const widgetName = widget.dataset.name;
+                const isVisible = config[widgetId]?.visible !== false;
+
+                const toggleHtml = `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span class="text-sm text-gray-700">${widgetName}</span>
+                        <div class="toggle-switch ${isVisible ? 'active' : ''}" onclick="toggleWidget('${widgetId}')"></div>
+                    </div>
+                `;
+                container.innerHTML += toggleHtml;
+            });
+        }
+
+        function toggleWidget(widgetId) {
+            const config = getWidgetConfig();
+            if (!config[widgetId]) config[widgetId] = { visible: true, order: 99 };
+            config[widgetId].visible = !config[widgetId].visible;
+            saveWidgetConfig(config);
+            applyWidgetConfig();
+        }
+
+        function toggleCustomizeMode() {
+            customizeMode = !customizeMode;
+            const dashboard = document.getElementById('dashboard');
+            const btn = document.getElementById('customizeBtn');
+            
+            if (customizeMode) {
+                dashboard.classList.add('customize-mode');
+                btn.classList.add('bg-indigo-100', 'text-indigo-700', 'border-indigo-300');
+                btn.querySelector('span').textContent = 'Done';
+                initSortable();
+                toggleSettingsPanel();
+            } else {
+                dashboard.classList.remove('customize-mode');
+                btn.classList.remove('bg-indigo-100', 'text-indigo-700', 'border-indigo-300');
+                btn.querySelector('span').textContent = 'Customize';
+                destroySortable();
+            }
+        }
+
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settingsPanel');
+            const overlay = document.getElementById('settingsOverlay');
+            panel.classList.toggle('open');
+            overlay.classList.toggle('hidden');
+        }
+
+        function initSortable() {
+            document.querySelectorAll('.widget-row').forEach(row => {
+                const sortable = new Sortable(row, {
+                    animation: 150,
+                    handle: '.widget-handle',
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    onEnd: function(evt) {
+                        saveWidgetOrder();
+                    }
+                });
+                sortableInstances.push(sortable);
+            });
+        }
+
+        function destroySortable() {
+            sortableInstances.forEach(instance => instance.destroy());
+            sortableInstances = [];
+        }
+
+        function saveWidgetOrder() {
+            const config = getWidgetConfig();
+            let order = 1;
+            document.querySelectorAll('.widget').forEach(widget => {
+                const widgetId = widget.dataset.widget;
+                if (!config[widgetId]) config[widgetId] = { visible: true };
+                config[widgetId].order = order++;
+            });
+            saveWidgetConfig(config);
+        }
+
+        function resetLayout() {
+            localStorage.removeItem('dashboardWidgetConfig');
+            location.reload();
+        }
+
+        async function fetchDashboardData() {
+            try {
+                let url = `${API_BASE}/dashboard`;
+                // Use separate date filters
+                const filterParams = getDateFilterParams();
+                if (filterParams) {
+                    url += `?${filterParams}`;
+                }
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to fetch dashboard data');
+                const data = await response.json();
+                allDashboardData = data;
+                return data;
+            } catch (error) {
+                console.error('Error fetching dashboard data:', error);
+                return null;
+            }
+        }
+
+        function getScoreColor(score) {
+            if (score >= 90) return '#22c55e';
+            if (score >= 80) return '#84cc16';
+            if (score >= 70) return '#eab308';
+            if (score >= 60) return '#f97316';
+            return '#ef4444';
+        }
+
+        function getScoreRating(score) {
+            if (score >= 90) return { text: 'Excellent', class: 'bg-green-100 text-green-800' };
+            if (score >= 80) return { text: 'Good', class: 'bg-lime-100 text-lime-800' };
+            if (score >= 70) return { text: 'Needs Improvement', class: 'bg-yellow-100 text-yellow-800' };
+            if (score >= 60) return { text: 'Below Standard', class: 'bg-orange-100 text-orange-800' };
+            return { text: 'Critical', class: 'bg-red-100 text-red-800' };
+        }
+
+        function updateDashboard(data) {
+            document.getElementById('loading').classList.add('hidden');
+            
+            if (!data.latestAudit) {
+                document.getElementById('noData').classList.remove('hidden');
+                document.getElementById('dashboard').classList.add('hidden');
+                return;
+            }
+
+            document.getElementById('noData').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+
+            const audit = data.latestAudit;
+            const overallScore = parseFloat(audit.overall_score) || 0;
+            const peopleScore = parseFloat(audit.people_score) || 0;
+            const processScore = parseFloat(audit.process_score) || 0;
+            const governanceScore = parseFloat(audit.governance_score) || 0;
+
+            document.getElementById('overallScore').textContent = overallScore.toFixed(1);
+            const scoreRing = document.getElementById('overallScoreRing');
+            scoreRing.style.setProperty('--score', overallScore);
+            scoreRing.style.setProperty('--score-color', getScoreColor(overallScore));
+
+            const rating = getScoreRating(overallScore);
+            const ratingEl = document.getElementById('overallRating');
+            ratingEl.textContent = rating.text;
+            ratingEl.className = `mt-4 inline-block px-4 py-2 rounded-full text-sm font-medium ${rating.class}`;
+
+            document.getElementById('peopleScore').textContent = peopleScore.toFixed(1) + '%';
+            document.getElementById('processScore').textContent = processScore.toFixed(1) + '%';
+            document.getElementById('governanceScore').textContent = governanceScore.toFixed(1) + '%';
+
+            document.getElementById('peopleBar').style.width = peopleScore + '%';
+            document.getElementById('processBar').style.width = processScore + '%';
+            document.getElementById('governanceBar').style.width = governanceScore + '%';
+
+            document.getElementById('recordsAudited').textContent = audit.total_records_audited || 0;
+            document.getElementById('issuesFound').textContent = audit.total_issues_found || 0;
+            document.getElementById('calendarEvents').textContent = audit.calendar_events_count || 0;
+            
+            const complianceRate = audit.total_records_audited > 0 
+                ? (((audit.total_records_audited - audit.total_issues_found) / audit.total_records_audited) * 100).toFixed(1) 
+                : 0;
+            document.getElementById('complianceRate').textContent = complianceRate + '%';
+
+            updateIssuesChart(audit.issues_by_category);
+            updateIssuesCategoryCards(audit.issues_by_category);
+            updateTrendChart(data.auditHistory);
+            updateOpportunities(audit);
+            updateRecommendations(audit.recommendations);
+            updateHistory(data.auditHistory);
+            updateAgentPerformance(data);
+
+            if (data.governance) {
+                document.getElementById('governanceDocName').textContent = data.governance.name + ' v' + data.governance.version;
+            }
+            if (data.scorecard) {
+                document.getElementById('scorecardName').textContent = data.scorecard.name;
+            }
+
+            document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date(audit.audit_date).toLocaleString();
+            
+            applyWidgetConfig();
+        }
+
+        function updateIssuesChart(issuesByCategory) {
+            try {
+                const canvas = document.getElementById('issuesChart');
+                if (!canvas) {
+                    console.error('Issues chart canvas not found');
+                    return;
+                }
+                
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    console.error('Could not get 2d context for issues chart');
+                    return;
+                }
+                
+                if (issuesChart) {
+                    issuesChart.destroy();
+                    issuesChart = null;
+                }
+
+                const categories = issuesByCategory ? Object.keys(issuesByCategory) : ['Leads', 'Deals', 'Contacts', 'Tasks'];
+                const values = issuesByCategory ? Object.values(issuesByCategory) : [0, 0, 0, 0];
+                issuesChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: categories,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        plugins: {
+                            legend: {
+                                position: 'right'
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Error rendering issues chart:', err);
+            }
+        }
+
+        function updateTrendChart(history) {
+            try {
+                const canvas = document.getElementById('trendChart');
+                if (!canvas) {
+                    console.error('Trend chart canvas not found');
+                    return;
+                }
+                
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    console.error('Could not get 2d context for trend chart');
+                    return;
+                }
+                
+                if (trendChart) {
+                    trendChart.destroy();
+                    trendChart = null;
+                }
+
+                const sortedHistory = (history || []).slice(0, 10).reverse();
+                const labels = sortedHistory.map(h => new Date(h.audit_date).toLocaleDateString());
+                trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Overall',
+                                data: sortedHistory.map(h => parseFloat(h.overall_score) || 0),
+                                borderColor: '#6366f1',
+                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'People',
+                                data: sortedHistory.map(h => parseFloat(h.people_score) || 0),
+                                borderColor: '#3b82f6',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Process',
+                                data: sortedHistory.map(h => parseFloat(h.process_score) || 0),
+                                borderColor: '#8b5cf6',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Governance',
+                                data: sortedHistory.map(h => parseFloat(h.governance_score) || 0),
+                                borderColor: '#22c55e',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Error rendering trend chart:', err);
+            }
+        }
+
+        function updateOpportunities(audit) {
+            const container = document.getElementById('opportunities');
+            const opportunities = [];
+
+            const scores = [
+                { name: 'People', score: parseFloat(audit.people_score) || 0, icon: '👥' },
+                { name: 'Process', score: parseFloat(audit.process_score) || 0, icon: '⚙️' },
+                { name: 'Governance', score: parseFloat(audit.governance_score) || 0, icon: '📋' }
+            ];
+
+            scores.sort((a, b) => a.score - b.score);
+
+            scores.forEach(s => {
+                let priority = 'Low';
+                let priorityClass = 'bg-green-100 text-green-800';
+                if (s.score < 70) {
+                    priority = 'High';
+                    priorityClass = 'bg-red-100 text-red-800';
+                } else if (s.score < 85) {
+                    priority = 'Medium';
+                    priorityClass = 'bg-yellow-100 text-yellow-800';
+                }
+
+                opportunities.push(`
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">${s.icon}</span>
+                            <div>
+                                <div class="font-medium text-gray-900">${s.name}</div>
+                                <div class="text-sm text-gray-500">${s.score.toFixed(1)}% - ${priority} priority</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium ${priorityClass}">${priority}</span>
+                    </div>
+                `);
+            });
+
+            container.innerHTML = opportunities.join('');
+        }
+
+        function updateRecommendations(recommendations) {
+            const container = document.getElementById('recommendations');
+            let recs = recommendations || [];
+
+            if (!Array.isArray(recs) || recs.length === 0) {
+                recs = [
+                    { title: 'Improve Data Entry', description: 'Ensure all mandatory CRM fields are completed on same day', priority: 'high' },
+                    { title: 'Document Compliance', description: 'Attach required documents before CS handover', priority: 'medium' },
+                    { title: 'Stage Tracking', description: 'Monitor deal stage progression timing', priority: 'low' }
+                ];
+            }
+
+            const priorityColors = {
+                high: 'border-red-400 bg-red-50',
+                medium: 'border-yellow-400 bg-yellow-50',
+                low: 'border-green-400 bg-green-50'
+            };
+
+            container.innerHTML = recs.map(rec => `
+                <div class="p-4 border-l-4 rounded-lg ${priorityColors[rec.priority] || priorityColors.medium}">
+                    <h4 class="font-medium text-gray-900">${rec.title}</h4>
+                    <p class="text-sm text-gray-600 mt-1">${rec.description}</p>
+                </div>
+            `).join('');
+        }
+
+        function updateHistory(history) {
+            const tbody = document.getElementById('historyTable');
+            
+            if (!history || history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No audit history available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = history.slice(0, 10).map(audit => `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(audit.audit_date).toLocaleDateString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 rounded text-sm font-medium" style="background-color: ${getScoreColor(audit.overall_score)}20; color: ${getScoreColor(audit.overall_score)}">
+                            ${parseFloat(audit.overall_score).toFixed(1)}%
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${parseFloat(audit.people_score).toFixed(1)}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${parseFloat(audit.process_score).toFixed(1)}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${parseFloat(audit.governance_score).toFixed(1)}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${audit.total_records_audited}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">${audit.total_issues_found}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function refreshDashboard() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('noData').classList.add('hidden');
+            
+            const data = await fetchDashboardData();
+            if (data) {
+                updateDashboard(data);
+            } else {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('noData').classList.remove('hidden');
+            }
+        }
+
+        async function triggerAudit() {
+            const button = event.target;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Triggering...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/audit/trigger`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    button.textContent = 'Audit Running...';
+                    button.classList.add('bg-green-600');
+                    
+                    const checkInterval = setInterval(async () => {
+                        const data = await fetchDashboardData();
+                        if (data && data.latestAudit) {
+                            const currentTime = new Date(data.latestAudit.audit_date).getTime();
+                            const triggerTime = Date.now() - 120000;
+                            if (currentTime > triggerTime) {
+                                clearInterval(checkInterval);
+                                button.textContent = originalText;
+                                button.disabled = false;
+                                button.classList.remove('bg-green-600');
+                                refreshDashboard();
+                            }
+                        }
+                    }, 5000);
+                    
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                        button.textContent = originalText;
+                        button.disabled = false;
+                        button.classList.remove('bg-green-600');
+                        refreshDashboard();
+                    }, 60000);
+                } else {
+                    alert(result.error || 'Failed to trigger audit. Please try again.');
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error triggering audit:', error);
+                alert('Failed to trigger audit. Please check your connection and try again.');
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function runManualAudit() {
+            const btn = document.getElementById('manualAuditBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="31.4 31.4"></circle></svg> Running AI Audit...';
+            
+            try {
+                // Pass date filters to the audit trigger
+                const response = await fetch(`${API_BASE}/audit/trigger`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        manualTrigger: true,
+                        dateFilters: currentDateFilters
+                    })
+                });
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Audit Started!';
+                    btn.classList.remove('from-purple-600', 'to-indigo-600');
+                    btn.classList.add('from-green-600', 'to-green-700');
+                    
+                    const checkInterval = setInterval(async () => {
+                        const data = await fetchDashboardData();
+                        if (data && data.latestAudit) {
+                            const currentTime = new Date(data.latestAudit.audit_date).getTime();
+                            const triggerTime = Date.now() - 120000;
+                            if (currentTime > triggerTime) {
+                                clearInterval(checkInterval);
+                                resetAuditButton();
+                                refreshDashboard();
+                            }
+                        }
+                    }, 5000);
+                    
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                        resetAuditButton();
+                        refreshDashboard();
+                    }, 90000);
+                } else {
+                    alert(result.error || 'Failed to trigger AI audit. Please try again.');
+                    resetAuditButton();
+                }
+            } catch (error) {
+                console.error('Error triggering AI audit:', error);
+                alert('Failed to trigger AI audit. Please check your connection and try again.');
+                resetAuditButton();
+            }
+        }
+
+        function resetAuditButton() {
+            const btn = document.getElementById('manualAuditBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Run AI Audit';
+            btn.classList.remove('from-green-600', 'to-green-700');
+            btn.classList.add('from-purple-600', 'to-indigo-600');
+        }
+
+        // Initialize - load dashboard without filters on startup
+        refreshDashboard();
+        setInterval(refreshDashboard, 600000); // Auto-refresh every 10 minutes
+    </script>
+
+    <!-- Floating Feedback Button -->
+    <div id="floatingFeedback" class="fixed bottom-6 right-6 z-50">
+        <a href="/feedback" class="flex items-center space-x-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-3 rounded-full shadow-lg transition-all hover:shadow-xl group">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+            <span class="font-medium">Give Feedback</span>
+        </a>
+    </div>
+</body>
+</html>

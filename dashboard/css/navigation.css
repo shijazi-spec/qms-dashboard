@@ -1,0 +1,101 @@
+/**
+ * WalaPlus Unified Navigation Styles
+ * Enterprise dropdown navigation with responsive design
+ */
+
+.walaplus-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown .dropdown-menu {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+}
+
+.nav-dropdown .dropdown-menu:not(.hidden) {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.nav-dropdown .dropdown-arrow {
+  transition: transform 0.2s ease;
+}
+
+.nav-dropdown .dropdown-arrow.rotate-180 {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu a:hover {
+  background-color: #f9fafb;
+}
+
+.mobile-arrow {
+  transition: transform 0.2s ease;
+}
+
+.mobile-arrow.rotate-180 {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 639px) {
+  .nav-dropdown .dropdown-menu {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .nav-dropdown:hover .dropdown-menu {
+    display: block !important;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+  
+  .nav-dropdown:hover .dropdown-arrow {
+    transform: rotate(180deg);
+  }
+}
+
+.mobile-nav-group .mobile-submenu {
+  border-left: 2px solid #e5e7eb;
+  margin-left: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+  .walaplus-nav .max-w-7xl {
+    max-width: 100%;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (max-width: 1280px) {
+  .nav-dropdown button span {
+    font-size: 0.8125rem;
+  }
+  
+  .nav-dropdown button {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .walaplus-nav .flex.items-center.space-x-1 {
+    gap: 0.125rem;
+  }
+}
