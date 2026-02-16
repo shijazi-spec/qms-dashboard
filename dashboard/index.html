@@ -1484,12 +1484,31 @@
                 low: 'border-green-400 bg-green-50'
             };
 
-            container.innerHTML = recs.map(rec => `
-                <div class="p-4 border-l-4 rounded-lg ${priorityColors[rec.priority] || priorityColors.medium}">
-                    <h4 class="font-medium text-gray-900">${rec.title}</h4>
-                    <p class="text-sm text-gray-600 mt-1">${rec.description}</p>
-                </div>
-            `).join('');
+            const priorities = ['high', 'medium', 'low'];
+
+            container.innerHTML = recs.map((rec, idx) => {
+                let title, description, priority;
+                if (typeof rec === 'string') {
+                    const parts = rec.split(' - ');
+                    if (parts.length > 1) {
+                        title = parts[0];
+                        description = parts.slice(1).join(' - ');
+                    } else {
+                        title = rec.length > 60 ? rec.substring(0, 60) + '...' : rec;
+                        description = rec;
+                    }
+                    priority = priorities[Math.min(idx, priorities.length - 1)];
+                } else {
+                    title = rec.title || 'Recommendation';
+                    description = rec.description || '';
+                    priority = rec.priority || priorities[Math.min(idx, priorities.length - 1)];
+                }
+                return `
+                <div class="p-4 border-l-4 rounded-lg ${priorityColors[priority] || priorityColors.medium}">
+                    <h4 class="font-medium text-gray-900">${title}</h4>
+                    <p class="text-sm text-gray-600 mt-1">${description}</p>
+                </div>`;
+            }).join('');
         }
 
         function updateHistory(history) {

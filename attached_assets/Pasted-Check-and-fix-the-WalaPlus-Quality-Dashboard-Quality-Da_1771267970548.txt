@@ -1,0 +1,81 @@
+Check and fix the WalaPlus Quality Dashboard (Quality Dashboard screen at / or root URL) from A to Z. The screen is at qms-dashboard.replit.app (or the app’s root URL). Fix every issue so the dashboard works correctly and shows no "undefined", empty data where it shouldn’t, or broken charts.
+
+---
+
+**A. Data source and API**
+- The dashboard loads data from GET /api/dashboard (optionally with query params for date filters: createdStart, createdEnd, modifiedStart, modifiedEnd).
+- Response must include: latestAudit (object with overall_score, people_score, process_score, governance_score, total_records_audited, total_issues_found, calendar_events_count, audit_date, issues_by_category, recommendations), auditHistory (array of past audits with same score/date fields), governance (optional), scorecard (optional).
+- If the API returns 4xx/5xx or wrong shape, show a clear “No data” or error state; do not render "undefined" anywhere.
+
+**B. Overall Score and Dimension Breakdown**
+- Overall Score: display latestAudit.overall_score as a number (e.g. 72.0%) and a label (e.g. "Needs Improvement") based on score bands (e.g. ≥90 Excellent, ≥80 Good, ≥70 Needs Improvement, ≥60 Below Standard, <60 Critical).
+- Dimension Breakdown: show People, Process, Governance scores and progress bars from latestAudit (people_score, process_score, governance_score). Weights can be fixed (e.g. 25%, 35%, 40%) or from config. Ensure all values are numbers or "0" / "0%", never "undefined".
+
+**C. Audit Summary**
+- Four metrics: Records Audited, Issues Found, Calendar Events, Compliance Rate. Use latestAudit.total_records_audited, total_issues_found, calendar_events_count; compliance rate = (records - issues) / records * 100 when records > 0, else 0. Display 0 when data is missing, not blank or "undefined".
+
+**D. Issues by Category**
+- Data comes from latestAudit.issues_by_category (object: category name → count, e.g. { Leads: 5, Deals: 3 }).
+- If missing or empty, show empty state (e.g. "No issues by category") or placeholder categories with 0. Do not leave the section blank without explanation; never show "undefined".
+
+**E. Score Trend chart**
+- Use auditHistory (array of { audit_date, overall_score, people_score, process_score, governance_score }). Sort by audit_date; show last N points (e.g. 10). X-axis: dates (formatted); Y-axis: 0–100. Lines for Overall, People, Process, Governance. If history is empty, show one point (e.g. today) with current scores or a clear “No trend data yet” message; do not show a single future date with no context.
+
+**F. Areas of Opportunity**
+- Derive from dimension scores (lowest scores = higher priority). Show dimension name, score, and priority (e.g. High / Medium / Low). Use safe fallbacks for missing scores (e.g. 0 or "—"); no "undefined".
+
+**G. AI-Powered Recommendations**
+- Data: latestAudit.recommendations. It can be (1) array of strings, or (2) array of objects with { title, description } or { name, text } or similar. Normalize in the frontend: each item must render as a title and a description. If an item is a string, use it as description and "Recommendation" as title. If title or description is missing, use fallback text (e.g. "Recommendation", "No description") so the UI never shows "undefined". If recommendations is missing or empty, show 3 default placeholder recommendations (e.g. Improve Data Entry, Document Compliance, Stage Tracking).
+
+**H. Audit History table**
+- Data: auditHistory. Columns: Audit Date, Overall Score, People, Process, Governance, Records Audited, Issues Found. Format dates and numbers safely; show "No audit history available" when array is empty. No "undefined" in cells.
+
+**I. Filters and actions**
+- Created/Modified date filters: send correct query params to GET /api/dashboard; Apply Filters and Clear must update the request and refresh the dashboard.
+- "Run AI Audit" button: must call POST /api/audit/trigger (or the correct trigger endpoint); show loading and success/error feedback.
+- Export PDF / Settings: if present, ensure they do not throw and work or show “Coming soon”.
+
+**J. Loading and error states**
+- While fetching: show a loading indicator; hide main dashboard content.
+- On fetch failure or no latestAudit: show a clear “No data” or error message and optional retry; do not render the dashboard with undefined data.
+- After load: hide loading, show dashboard with all sections populated or with explicit empty/placeholder text (no raw "undefined").
+
+**K. Console and network**
+- Open browser DevTools → Console. Fix any JavaScript errors (e.g. reading property of undefined).
+- In Network tab, confirm GET /api/dashboard returns 200 and JSON with latestAudit and auditHistory. If the backend returns recommendations as a JSON string, parse it before use in the UI.
+
+**L. Backend (if you have access)**
+- GET /api/dashboard (or equivalent) must return recommendations in a frontend-friendly shape: either string[] or { title: string, description: string }[]. If the DB stores only string[], the API or frontend should normalize to objects with title/description so the cards never show "undefined".
+- Ensure quality_audit_results.recommendations is read as JSON (not double-encoded string). If it is a string, JSON.parse it before sending to the client.
+
+---
+
+Deliverable: a working Quality Dashboard with no "undefined", correct data in every section, safe empty states, and working filters and Run AI Audit. List any remaining limitations (e.g. no data yet) clearly in the UI.
+```
+
+---
+
+## Short checklist (for manual testing)
+
+| # | Area | Check |
+|---|------|--------|
+| 1 | API | GET /api/dashboard returns 200 and JSON with latestAudit, auditHistory. |
+| 2 | Overall Score | Shows number and label (e.g. 72.0%, Needs Improvement). |
+| 3 | Dimension Breakdown | People, Process, Governance scores and bars; no undefined. |
+| 4 | Audit Summary | Records, Issues, Calendar Events, Compliance %; 0 when no data. |
+| 5 | Issues by Category | Chart and cards from issues_by_category; empty state if none. |
+| 6 | Score Trend | Line chart from auditHistory; sensible dates and values. |
+| 7 | Areas of Opportunity | List from dimension scores; no undefined. |
+| 8 | AI-Powered Recommendations | Cards show title + description; fallbacks so never "undefined". |
+| 9 | Audit History | Table with dates and numbers; "No audit history" when empty. |
+| 10 | Filters & Run AI Audit | Filters apply; trigger calls POST /api/audit/trigger. |
+| 11 | Loading / No data | Loading state; clear message when no data or error. |
+
+---
+
+## Code fix already applied
+
+In `dashboard/index.html`, **updateRecommendations** was updated to:
+
+- Support recommendations as array of **strings** or array of **objects** (with title/name/heading and description/text/content).
+- Normalize each item to `{ title, description, priority }` with string fallbacks so the UI never displays "undefined".
