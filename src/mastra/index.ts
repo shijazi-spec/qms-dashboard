@@ -386,18 +386,12 @@ export const mastra = new Mastra({
               logger?.info("🚀 [API] Manual audit trigger requested");
               lastTriggerTime.value = now;
               
-              const { inngest } = await import("./inngest");
-              
-              await inngest.send({
-                name: "replit/cron.trigger",
-                data: {
-                  workflowId: "quality-audit-workflow",
-                  manualTrigger: true,
-                  triggeredAt: new Date().toISOString()
-                }
+              const { runDirectAudit } = await import("../utils/directAuditRunner");
+              runDirectAudit(logger).catch((err: any) => {
+                console.error("Direct audit execution error:", err);
               });
               
-              logger?.info("✅ [API] Audit trigger event sent successfully");
+              logger?.info("✅ [API] Direct audit started in background");
               return c.json({ 
                 success: true, 
                 message: "Quality audit triggered successfully. Results will be available shortly." 
