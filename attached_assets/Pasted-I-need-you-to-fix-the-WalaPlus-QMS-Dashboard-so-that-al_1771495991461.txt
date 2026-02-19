@@ -1,0 +1,100 @@
+I need you to fix the WalaPlus QMS Dashboard so that all of these API endpoints work correctly. Our QC suite runs against this app and currently all 52 checks fail. Each endpoint should return HTTP 200 (or 401 for admin routes when X-Admin-Key is missing).
+
+Please ensure each of these endpoints exists, is registered in the Mastra/Hono app (src/mastra/index.ts or the relevant route file), and returns valid JSON with the expected status:
+
+**Quality Dashboard (route /)**
+- GET /api/dashboard — Load dashboard data
+- GET /api/audit/latest — Load latest audit result (200 or 404)
+- GET /api/audit/history — Load audit history
+- GET /api/agents/performance — Agent Performance widget (200 or 404)
+- GET /api/integrations/status — Integrations status
+
+**Admin Panel (route /admin)**
+- GET /api/admin/documents — Governance Document Manager (with X-Admin-Key, or 401 without)
+- GET /api/admin/scorecards — Scorecard list
+- GET /api/admin/activities — Activity logging
+- GET /api/workflow/runs — Workflow runs
+- GET /api/triggers — Triggers list
+
+**QMS Dashboard (route /qms)**
+- GET /api/qms/dashboard — QMS dashboard data
+- GET /api/qms/capa — CAPA list
+- GET /api/qms/nc — Nonconformance list
+- GET /api/qms/evaluations — Deal evaluations
+
+**GRC Control Tower (route /grc)**
+- GET /api/risks/summary — Risk summary
+- GET /api/compliance/summary — Compliance overview
+- GET /api/policies/summary — Policy summary
+- GET /api/audits/summary — Audit summary
+- GET /api/vendors/summary — Vendor summary
+
+**Risk Register (route /risks)**
+- GET /api/risks — List risks
+- GET /api/risks/heatmap — Risk heat map
+- GET /api/risks/categories — Risk categories
+
+**Policy Governance (route /policies)**
+- GET /api/policies — List policies
+- GET /api/policies/summary — Policy summary
+
+**Compliance Tracker (route /compliance)**
+- GET /api/compliance/regulations — List regulations
+- GET /api/compliance/obligations — List obligations
+- GET /api/compliance/summary — Compliance summary
+
+**Audit Readiness (route /audits)**
+- GET /api/audits — List audits
+- GET /api/audits/findings — Audit findings
+
+**Vendor Risk (route /vendors)**
+- GET /api/vendors — List vendors
+- GET /api/vendors/summary — Vendor summary
+
+**Data Migration (route /migration)**
+- GET /api/migration/templates — Migration templates
+- GET /api/migration/jobs — Migration jobs list
+- GET /api/migration/dedup-rules — Deduplication rules
+
+**Call Intelligence (route /calls)**
+- GET /api/calls — Call records list
+- GET /api/calls/analytics — Call analytics
+
+**ROI (route /roi)**
+- GET /api/roi — ROI initiatives
+- GET /api/roi/analytics — ROI analytics
+
+**Team Performance (route /team)**
+- GET /api/team/members — Team members list
+- GET /api/team/performance — Team performance data
+
+**Project Portfolio (route /projects)**
+- GET /api/pmp/projects — Projects list
+
+**System Event Logs (route /logs)**
+- GET /api/logs — Event logs list
+- GET /api/logs/stats — Logs stats
+
+**PDPL (route /pdpl)**
+- GET /api/pdpl/status — PDPL status
+- GET /api/pdpl/inventory — Data inventory
+
+**Users & Access (route /users)**
+- GET /api/users/stats — User stats
+
+**Scorecard (route /scorecard)**
+- GET /api/scorecard/snapshot — Scorecard snapshot
+
+**Duplicate Radar (route /duplicates)**
+- GET /api/duplicates/summary — Duplicates summary
+
+**Quality–GRC Handoffs**
+- GET /api/handoff/rules — Handoff rules list
+- GET /api/handoff/summary — Handoff summary
+
+**KPI Tracking (route /kpis)**
+- GET /api/kpis — KPI list
+- GET /api/kpis/summary — KPI summary
+
+For each endpoint: confirm the route is registered and the handler returns appropriate JSON. Fix any 500 errors, missing routes, or CORS/network issues so that a GET to the base URL + path returns 200 (or 401 for admin routes when no X-Admin-Key is sent). After your changes, I will re-run the QC suite to verify.
+```

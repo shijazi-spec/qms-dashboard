@@ -6,7 +6,7 @@ const pool = new Pool({
 });
 
 export interface Audit {
-  id?: number;
+  id?: string;
   audit_code: string;
   title: string;
   description?: string;
@@ -95,37 +95,51 @@ export async function initAuditTables(): Promise<void> {
   
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audits (
-      id SERIAL PRIMARY KEY,
-      audit_code VARCHAR(50) UNIQUE NOT NULL,
-      title VARCHAR(500) NOT NULL,
+      id VARCHAR PRIMARY KEY,
+      title TEXT NOT NULL,
+      audit_number TEXT,
+      type TEXT,
+      status TEXT DEFAULT 'planned',
+      auditor TEXT,
+      department TEXT,
+      scheduled_date TIMESTAMP,
+      completed_date TIMESTAMP,
+      findings INTEGER DEFAULT 0,
       description TEXT,
-      audit_type VARCHAR(30) NOT NULL,
-      scope TEXT,
-      audit_standard VARCHAR(255),
-      lead_auditor VARCHAR(255),
-      audit_team TEXT[],
-      auditee_department VARCHAR(100),
-      auditee_contact VARCHAR(255),
-      planned_start_date TIMESTAMP,
-      planned_end_date TIMESTAMP,
-      actual_start_date TIMESTAMP,
-      actual_end_date TIMESTAMP,
-      status VARCHAR(30) DEFAULT 'planned',
-      findings_count INTEGER DEFAULT 0,
-      critical_findings INTEGER DEFAULT 0,
-      report_path TEXT,
-      linked_regulation_ids INTEGER[],
-      linked_control_ids INTEGER[],
-      created_by VARCHAR(255),
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
+      created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  const addColumnIfNotExists = async (table: string, column: string, type: string) => {
+    try {
+      await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`);
+    } catch {}
+  };
+
+  await addColumnIfNotExists('audits', 'audit_code', 'VARCHAR(50)');
+  await addColumnIfNotExists('audits', 'audit_type', 'VARCHAR(30)');
+  await addColumnIfNotExists('audits', 'scope', 'TEXT');
+  await addColumnIfNotExists('audits', 'audit_standard', 'VARCHAR(255)');
+  await addColumnIfNotExists('audits', 'lead_auditor', 'VARCHAR(255)');
+  await addColumnIfNotExists('audits', 'audit_team', 'TEXT[]');
+  await addColumnIfNotExists('audits', 'auditee_department', 'VARCHAR(100)');
+  await addColumnIfNotExists('audits', 'auditee_contact', 'VARCHAR(255)');
+  await addColumnIfNotExists('audits', 'planned_start_date', 'TIMESTAMP');
+  await addColumnIfNotExists('audits', 'planned_end_date', 'TIMESTAMP');
+  await addColumnIfNotExists('audits', 'actual_start_date', 'TIMESTAMP');
+  await addColumnIfNotExists('audits', 'actual_end_date', 'TIMESTAMP');
+  await addColumnIfNotExists('audits', 'findings_count', 'INTEGER DEFAULT 0');
+  await addColumnIfNotExists('audits', 'critical_findings', 'INTEGER DEFAULT 0');
+  await addColumnIfNotExists('audits', 'report_path', 'TEXT');
+  await addColumnIfNotExists('audits', 'linked_regulation_ids', 'INTEGER[]');
+  await addColumnIfNotExists('audits', 'linked_control_ids', 'INTEGER[]');
+  await addColumnIfNotExists('audits', 'created_by', 'VARCHAR(255)');
+  await addColumnIfNotExists('audits', 'updated_at', 'TIMESTAMP DEFAULT NOW()');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grc_audit_findings (
       id SERIAL PRIMARY KEY,
-      audit_id INTEGER REFERENCES audits(id) ON DELETE CASCADE,
+      audit_id VARCHAR REFERENCES audits(id) ON DELETE CASCADE,
       finding_code VARCHAR(50) UNIQUE NOT NULL,
       title VARCHAR(500) NOT NULL,
       description TEXT NOT NULL,
@@ -155,7 +169,7 @@ export async function initAuditTables(): Promise<void> {
       id SERIAL PRIMARY KEY,
       pack_name VARCHAR(255) NOT NULL,
       description TEXT,
-      audit_id INTEGER REFERENCES audits(id) ON DELETE SET NULL,
+      audit_id VARCHAR REFERENCES audits(id) ON DELETE SET NULL,
       regulation_id INTEGER,
       control_ids INTEGER[],
       evidence_items JSONB DEFAULT '[]',
@@ -172,7 +186,7 @@ export async function initAuditTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_checklists (
       id SERIAL PRIMARY KEY,
-      audit_id INTEGER REFERENCES audits(id) ON DELETE CASCADE,
+      audit_id VARCHAR REFERENCES audits(id) ON DELETE CASCADE,
       category VARCHAR(100) NOT NULL,
       question TEXT NOT NULL,
       expected_evidence TEXT,
@@ -192,16 +206,17 @@ export async function initAuditTables(): Promise<void> {
 export async function createAudit(audit: Audit): Promise<Audit> {
   console.log('📝 [AuditDB] Creating audit:', audit.title);
   
+  const id = audit.id || `AUD-${Date.now()}`;
   const result = await pool.query(`
     INSERT INTO audits (
-      audit_code, title, description, audit_type, scope, audit_standard,
+      id, audit_code, title, description, audit_type, scope, audit_standard,
       lead_auditor, audit_team, auditee_department, auditee_contact,
       planned_start_date, planned_end_date, status,
       linked_regulation_ids, linked_control_ids, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
   `, [
-    audit.audit_code, audit.title, audit.description, audit.audit_type,
+    id, audit.audit_code, audit.title, audit.description, audit.audit_type,
     audit.scope, audit.audit_standard, audit.lead_auditor, audit.audit_team,
     audit.auditee_department, audit.auditee_contact,
     audit.planned_start_date, audit.planned_end_date, audit.status || 'planned',
@@ -211,7 +226,7 @@ export async function createAudit(audit: Audit): Promise<Audit> {
   return result.rows[0];
 }
 
-export async function updateAudit(id: number, updates: Partial<Audit>): Promise<Audit> {
+export async function updateAudit(id: string | number, updates: Partial<Audit>): Promise<Audit> {
   const setClause: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
@@ -233,7 +248,7 @@ export async function updateAudit(id: number, updates: Partial<Audit>): Promise<
   return result.rows[0];
 }
 
-export async function getAuditById(id: number): Promise<Audit | null> {
+export async function getAuditById(id: string | number): Promise<Audit | null> {
   const result = await pool.query('SELECT * FROM audits WHERE id = $1', [id]);
   return result.rows[0] || null;
 }
@@ -249,19 +264,19 @@ export async function getAllAudits(filters?: { status?: string; type?: string; y
     paramCount++;
   }
   if (filters?.type) {
-    query += ` AND audit_type = $${paramCount}`;
+    query += ` AND COALESCE(audit_type, type) = $${paramCount}`;
     values.push(filters.type);
     paramCount++;
   }
   if (filters?.year) {
-    query += ` AND EXTRACT(YEAR FROM planned_start_date) = $${paramCount}`;
+    query += ` AND EXTRACT(YEAR FROM COALESCE(planned_start_date, scheduled_date, created_at)) = $${paramCount}`;
     values.push(filters.year);
     paramCount++;
   }
 
   const countResult = await pool.query(`SELECT COUNT(*) FROM audits WHERE 1=1` + query.replace('SELECT * FROM audits WHERE 1=1', ''), values);
   
-  query += ' ORDER BY planned_start_date DESC';
+  query += ' ORDER BY COALESCE(planned_start_date, scheduled_date, created_at) DESC NULLS LAST';
   const result = await pool.query(query, values);
   
   return { audits: result.rows, total: parseInt(countResult.rows[0].count) };
@@ -317,7 +332,7 @@ export async function updateFinding(id: number, updates: Partial<AuditFinding>):
   return result.rows[0];
 }
 
-async function updateAuditFindingsCount(auditId: number): Promise<void> {
+async function updateAuditFindingsCount(auditId: string | number): Promise<void> {
   await pool.query(`
     UPDATE audits SET 
       findings_count = (SELECT COUNT(*) FROM grc_audit_findings WHERE audit_id = $1),
@@ -411,56 +426,71 @@ export async function getAuditSummary(): Promise<any> {
       COUNT(*) as total_audits,
       COUNT(*) FILTER (WHERE status = 'planned') as planned,
       COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
-      COUNT(*) FILTER (WHERE status IN ('fieldwork_complete', 'report_draft', 'report_final')) as completing,
+      COUNT(*) FILTER (WHERE status IN ('fieldwork_complete', 'report_draft', 'report_final', 'completed')) as completing,
       COUNT(*) FILTER (WHERE status = 'closed') as closed,
-      COUNT(*) FILTER (WHERE planned_start_date <= NOW() AND status = 'planned') as overdue_start
+      COUNT(*) FILTER (WHERE COALESCE(planned_start_date, scheduled_date) <= NOW() AND status = 'planned') as overdue_start
     FROM audits
   `);
 
-  const findingsStats = await pool.query(`
-    SELECT 
-      COUNT(*) as total_findings,
-      COUNT(*) FILTER (WHERE status = 'open') as open,
-      COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
-      COUNT(*) FILTER (WHERE status IN ('pending_verification', 'verified_closed', 'closed')) as resolved,
-      COUNT(*) FILTER (WHERE severity = 'critical') as critical,
-      COUNT(*) FILTER (WHERE severity = 'major') as major,
-      COUNT(*) FILTER (WHERE due_date < NOW() AND status NOT IN ('verified_closed', 'closed')) as overdue
-    FROM grc_audit_findings
-  `);
+  let findingsStats;
+  try {
+    findingsStats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_findings,
+        COUNT(*) FILTER (WHERE status = 'open') as open,
+        COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+        COUNT(*) FILTER (WHERE status IN ('pending_verification', 'verified_closed', 'closed')) as resolved,
+        COUNT(*) FILTER (WHERE severity = 'critical') as critical,
+        COUNT(*) FILTER (WHERE severity = 'major') as major,
+        COUNT(*) FILTER (WHERE due_date < NOW() AND status NOT IN ('verified_closed', 'closed')) as overdue
+      FROM grc_audit_findings
+    `);
+  } catch {
+    findingsStats = { rows: [{ total_findings: 0, open: 0, in_progress: 0, resolved: 0, critical: 0, major: 0, overdue: 0 }] };
+  }
 
-  const bySeverity = await pool.query(`
-    SELECT severity, COUNT(*) as count
-    FROM grc_audit_findings
-    WHERE status NOT IN ('verified_closed', 'closed')
-    GROUP BY severity
-    ORDER BY 
-      CASE severity 
-        WHEN 'critical' THEN 1 
-        WHEN 'major' THEN 2 
-        WHEN 'minor' THEN 3 
-        ELSE 4 
-      END
-  `);
+  let bySeverity;
+  try {
+    bySeverity = await pool.query(`
+      SELECT severity, COUNT(*) as count
+      FROM grc_audit_findings
+      WHERE status NOT IN ('verified_closed', 'closed')
+      GROUP BY severity
+      ORDER BY 
+        CASE severity 
+          WHEN 'critical' THEN 1 
+          WHEN 'major' THEN 2 
+          WHEN 'minor' THEN 3 
+          ELSE 4 
+        END
+    `);
+  } catch {
+    bySeverity = { rows: [] };
+  }
 
   const upcomingAudits = await pool.query(`
-    SELECT id, audit_code, title, audit_type, planned_start_date, lead_auditor
+    SELECT id, audit_code, title, COALESCE(audit_type, type) as audit_type, COALESCE(planned_start_date, scheduled_date) as planned_start_date, COALESCE(lead_auditor, auditor) as lead_auditor
     FROM audits
     WHERE status IN ('planned', 'in_progress')
-    AND (planned_start_date >= NOW() OR planned_start_date IS NULL)
-    ORDER BY planned_start_date ASC NULLS LAST
+    AND (COALESCE(planned_start_date, scheduled_date) >= NOW() OR (planned_start_date IS NULL AND scheduled_date IS NULL))
+    ORDER BY COALESCE(planned_start_date, scheduled_date) ASC NULLS LAST
     LIMIT 5
   `);
 
-  const openFindingsByAudit = await pool.query(`
-    SELECT a.audit_code, a.title, COUNT(f.id) as open_findings
-    FROM audits a
-    LEFT JOIN grc_audit_findings f ON a.id = f.audit_id AND f.status NOT IN ('verified_closed', 'closed')
-    GROUP BY a.id, a.audit_code, a.title
-    HAVING COUNT(f.id) > 0
-    ORDER BY open_findings DESC
-    LIMIT 5
-  `);
+  let openFindingsByAudit;
+  try {
+    openFindingsByAudit = await pool.query(`
+      SELECT a.audit_code, a.title, COUNT(f.id) as open_findings
+      FROM audits a
+      LEFT JOIN grc_audit_findings f ON a.id = f.audit_id AND f.status NOT IN ('verified_closed', 'closed')
+      GROUP BY a.id, a.audit_code, a.title
+      HAVING COUNT(f.id) > 0
+      ORDER BY open_findings DESC
+      LIMIT 5
+    `);
+  } catch {
+    openFindingsByAudit = { rows: [] };
+  }
 
   return {
     audits: auditsStats.rows[0],

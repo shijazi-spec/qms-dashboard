@@ -46,6 +46,32 @@ export const auditRoutes = [
     }
   },
   {
+    path: "/api/audits/findings",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { getAllFindings, initAuditTables } = await import('../../utils/auditDatabase');
+          await initAuditTables();
+          
+          const url = new URL(c.req.url);
+          const status = url.searchParams.get('status') || undefined;
+          const severity = url.searchParams.get('severity') || undefined;
+          const audit_id = url.searchParams.get('audit_id') ? parseInt(url.searchParams.get('audit_id')!) : undefined;
+
+          logger?.info('📋 [AuditAPI] GET /api/audits/findings');
+
+          const result = await getAllFindings({ status, severity, audit_id });
+          return c.json(result);
+        } catch (error) {
+          console.error('❌ [AuditAPI] Error fetching findings:', error);
+          return c.json({ error: 'Failed to fetch findings' }, 500);
+        }
+      };
+    }
+  },
+  {
     path: "/api/audits/:id",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
@@ -55,7 +81,7 @@ export const auditRoutes = [
           const { getAuditById, getFindingsByAudit, getChecklist, initAuditTables } = await import('../../utils/auditDatabase');
           await initAuditTables();
           
-          const id = parseInt(c.req.param('id'));
+          const id = c.req.param('id');
           logger?.info('📋 [AuditAPI] GET /api/audits/:id', { id });
 
           const audit = await getAuditById(id);
@@ -64,8 +90,8 @@ export const auditRoutes = [
           }
 
           const [findings, checklist] = await Promise.all([
-            getFindingsByAudit(id),
-            getChecklist(id)
+            getFindingsByAudit(id as any),
+            getChecklist(id as any)
           ]);
 
           return c.json({ audit, findings, checklist });
@@ -156,32 +182,6 @@ export const auditRoutes = [
         } catch (error) {
           console.error('❌ [AuditAPI] Error updating audit:', error);
           return c.json({ error: 'Failed to update audit' }, 500);
-        }
-      };
-    }
-  },
-  {
-    path: "/api/audits/findings",
-    method: "GET" as const,
-    createHandler: async ({ mastra }: any) => {
-      return async (c: any) => {
-        try {
-          const logger = mastra?.getLogger();
-          const { getAllFindings, initAuditTables } = await import('../../utils/auditDatabase');
-          await initAuditTables();
-          
-          const url = new URL(c.req.url);
-          const status = url.searchParams.get('status') || undefined;
-          const severity = url.searchParams.get('severity') || undefined;
-          const audit_id = url.searchParams.get('audit_id') ? parseInt(url.searchParams.get('audit_id')!) : undefined;
-
-          logger?.info('📋 [AuditAPI] GET /api/audits/findings');
-
-          const result = await getAllFindings({ status, severity, audit_id });
-          return c.json(result);
-        } catch (error) {
-          console.error('❌ [AuditAPI] Error fetching findings:', error);
-          return c.json({ error: 'Failed to fetch findings' }, 500);
         }
       };
     }
