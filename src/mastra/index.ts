@@ -817,7 +817,9 @@ export const mastra = new Mastra({
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
               
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -842,7 +844,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -887,7 +891,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -923,7 +929,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -964,7 +972,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1005,7 +1015,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1045,7 +1057,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1070,7 +1084,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1105,7 +1121,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1143,7 +1161,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1179,7 +1199,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1217,7 +1239,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1255,7 +1279,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1279,7 +1305,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1316,7 +1344,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1354,7 +1384,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1390,7 +1422,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1424,7 +1458,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1482,7 +1518,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1520,7 +1558,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1555,7 +1595,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1591,7 +1633,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1631,7 +1675,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1664,7 +1710,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1695,7 +1743,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1726,7 +1776,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1760,7 +1812,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1791,7 +1845,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1825,7 +1881,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1859,7 +1917,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1904,7 +1964,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1937,7 +1999,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -1981,7 +2045,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -2014,7 +2080,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               
@@ -2052,7 +2120,9 @@ export const mastra = new Mastra({
             try {
               const adminKey = c.req.header("X-Admin-Key");
               const expectedKey = process.env.ADMIN_API_KEY;
-              if (!expectedKey || adminKey !== expectedKey) {
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
+              if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Unauthorized - Admin API key required" }, 401);
               }
               

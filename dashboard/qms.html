@@ -709,8 +709,18 @@
 
         <script>
             let adminKey = localStorage.getItem("adminKey") || "";
+            let useSessionAuth = false;
 
-            function checkAuth() {
+            async function checkAuth() {
+                try {
+                    const res = await fetch('/api/auth/me');
+                    const data = await res.json();
+                    if (data.authenticated) {
+                        useSessionAuth = true;
+                        return true;
+                    }
+                } catch(e) {}
+
                 if (!adminKey) {
                     const key = prompt(
                         "Enter Admin API Key to access QMS Dashboard:",
@@ -741,16 +751,25 @@
             }
 
             async function apiCall(endpoint) {
+                const headers = {};
+                if (adminKey && !useSessionAuth) {
+                    headers["X-Admin-Key"] = adminKey;
+                }
                 const res = await fetch(endpoint, {
-                    headers: { "X-Admin-Key": adminKey },
+                    headers,
+                    credentials: 'same-origin',
                 });
-                if (res.status === 401) {
+                if (res.status === 401 && !useSessionAuth) {
                     localStorage.removeItem("adminKey");
                     adminKey = "";
                     alert(
                         "Authentication failed. Please reload and enter a valid admin key.",
                     );
                     location.reload();
+                    return null;
+                }
+                if (res.status === 401 && useSessionAuth) {
+                    window.location.href = '/login';
                     return null;
                 }
                 return res.json();
@@ -1040,11 +1059,11 @@
             }
 
             function showCapaModal() {
-                if (!adminKey) {
+                if (!adminKey && !useSessionAuth) {
                     adminKey = prompt("Enter Admin API Key:");
                     if (adminKey) localStorage.setItem("adminKey", adminKey);
                 }
-                if (adminKey) {
+                if (adminKey || useSessionAuth) {
                     document
                         .getElementById("capa-modal")
                         .classList.remove("hidden");
@@ -1291,10 +1310,12 @@
                 }
             }
 
-            if (checkAuth()) {
-                loadDashboard();
-                loadTriggerBadge();
-            }
+            checkAuth().then(ok => {
+                if (ok) {
+                    loadDashboard();
+                    loadTriggerBadge();
+                }
+            });
         </script>
     </body>
 </html>

@@ -957,15 +957,34 @@
             let currentScorecard = null;
             let currentDocuments = [];
             let adminKey = localStorage.getItem("adminKey") || "";
+            let useSessionAuth = false;
+
+            (async function initAuth() {
+                try {
+                    const res = await fetch('/api/auth/me');
+                    const data = await res.json();
+                    if (data.authenticated) {
+                        useSessionAuth = true;
+                    }
+                } catch(e) {}
+                if (!useSessionAuth && !adminKey) {
+                    promptForAdminKey();
+                } else {
+                    loadDocuments();
+                    loadScorecard();
+                }
+            })();
 
             function getAdminHeaders() {
-                return {
-                    "Content-Type": "application/json",
-                    "X-Admin-Key": adminKey,
-                };
+                const headers = { "Content-Type": "application/json" };
+                if (adminKey && !useSessionAuth) {
+                    headers["X-Admin-Key"] = adminKey;
+                }
+                return headers;
             }
 
             function promptForAdminKey() {
+                if (useSessionAuth) return;
                 const key = prompt("Enter your Admin API Key:");
                 if (key) {
                     adminKey = key;
@@ -977,6 +996,10 @@
 
             function handleUnauthorized(response) {
                 if (response.status === 401) {
+                    if (useSessionAuth) {
+                        window.location.href = '/login';
+                        return true;
+                    }
                     localStorage.removeItem("adminKey");
                     adminKey = "";
                     showToast(
@@ -2017,7 +2040,6 @@
             }
 
             document.addEventListener("DOMContentLoaded", () => {
-                loadDocuments();
                 loadScorecardsList();
                 loadGovDocsForScorecard();
                 checkIntegrationStatus();
