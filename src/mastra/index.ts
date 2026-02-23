@@ -693,7 +693,8 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = process.env.ADMIN_API_KEY;
-              if (!adminKey) {
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              if (!adminKey && !session) {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>
@@ -2086,7 +2087,8 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = process.env.ADMIN_API_KEY;
-              if (!adminKey) {
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              if (!adminKey && !session) {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>QMS Setup Required</title>
