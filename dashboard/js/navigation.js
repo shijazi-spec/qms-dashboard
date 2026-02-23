@@ -117,6 +117,39 @@ const WalaPlusNav = {
     this.currentPage = currentPageId;
     this.render();
     this.bindEvents();
+    this.loadUserInfo();
+  },
+
+  loadUserInfo() {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(data => {
+        const container = document.getElementById('nav-user-info');
+        if (!container) return;
+        if (data.authenticated && data.user) {
+          const u = data.user;
+          container.innerHTML = `
+            <div class="relative nav-dropdown" data-group="user-menu">
+              <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" data-testid="button-user-menu">
+                ${u.picture
+                  ? `<img src="${u.picture}" alt="" class="w-7 h-7 rounded-full border border-gray-200" referrerpolicy="no-referrer">`
+                  : `<div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">${(u.name || u.email || '?')[0].toUpperCase()}</div>`}
+                <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                <div class="px-4 py-2 border-b border-gray-100">
+                  <p class="text-sm font-medium text-gray-900" data-testid="text-user-name">${u.name || 'User'}</p>
+                  <p class="text-xs text-gray-500" data-testid="text-user-email">${u.email}</p>
+                </div>
+                <a href="/api/auth/logout" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                  Sign out
+                </a>
+              </div>
+            </div>`;
+        }
+      })
+      .catch(() => {});
   },
 
   isInGroup(groupId) {
@@ -154,6 +187,7 @@ const WalaPlusNav = {
                   </svg>
                   <span>Refresh</span>
                 </button>
+                <div id="nav-user-info" class="flex items-center space-x-2 border-l border-gray-200 pl-3 ml-1"></div>
               </div>
             </div>
             

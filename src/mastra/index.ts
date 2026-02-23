@@ -38,6 +38,7 @@ import { scorecardRoutes } from "./routes/scorecardRoutes";
 import { pdplRoutes } from "./routes/pdplRoutes";
 import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
+import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
@@ -118,6 +119,20 @@ export const mastra = new Mastra({
         const mastra = c.get("mastra");
         const logger = mastra?.getLogger();
         logger?.debug("[Request]", { method: c.req.method, url: c.req.url });
+
+        const urlPath = new URL(c.req.url).pathname;
+
+        const publicPaths = ['/login', '/api/auth/', '/api/inngest', '/guide', '/accept-invite', '/css/', '/js/'];
+        const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
+        const isApi = urlPath.startsWith('/api/');
+
+        if (!isPublic && !isApi) {
+          const session = getSessionFromCookie(c.req.header('Cookie'));
+          if (!session) {
+            return c.redirect('/login');
+          }
+        }
+
         try {
           await next();
         } catch (error) {
@@ -128,12 +143,9 @@ export const mastra = new Mastra({
           });
           if (error instanceof MastraError) {
             if (error.id === "AGENT_MEMORY_MISSING_RESOURCE_ID") {
-              // This is typically a non-retirable error. It means that the request was not
-              // setup correctly to pass in the necessary parameters.
               throw new NonRetriableError(error.message, { cause: error });
             }
           } else if (error instanceof z.ZodError) {
-            // Validation errors are never retriable.
             throw new NonRetriableError(error.message, { cause: error });
           }
 
@@ -582,6 +594,35 @@ export const mastra = new Mastra({
                 error: error.message,
                 agents: [] 
               }, 500);
+            }
+          };
+        },
+      },
+      // ======================================================================
+      // Auth Routes
+      // ======================================================================
+      ...authRoutes,
+      {
+        path: "/login",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "login.html"),
+                join(process.cwd(), "..", "dashboard", "login.html"),
+                "/home/runner/workspace/dashboard/login.html",
+              ];
+              for (const loginPath of possiblePaths) {
+                if (existsSync(loginPath)) {
+                  const html = readFileSync(loginPath, "utf-8");
+                  return c.html(html);
+                }
+              }
+              return c.text("Login page not found", 404);
+            } catch (error) {
+              console.error("Error serving login page:", error);
+              return c.text("Error loading login page", 500);
             }
           };
         },

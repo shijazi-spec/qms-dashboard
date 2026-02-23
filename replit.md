@@ -10,20 +10,22 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **Database**: PostgreSQL (39+ tables) via `pg` module
 - **AI**: GPT-4o via Replit AI Integrations / OpenAI
 - **Workflows**: Inngest for event-driven workflow orchestration
+- **Auth**: Google OAuth 2.0 with signed session cookies (SESSION_SECRET)
 - **Email**: Resend for outgoing emails
 
 ## Project Structure
-- `src/mastra/index.ts` - Main Mastra configuration (agents, tools, routes, server config)
+- `src/mastra/index.ts` - Main Mastra configuration (agents, tools, routes, server config, auth middleware)
 - `src/mastra/agents/` - AI agent definitions
 - `src/mastra/tools/` - AI tool definitions (callAnalysis, capaManagement, crmCompliance, etc.)
 - `src/mastra/workflows/` - Mastra workflow definitions
+- `src/mastra/routes/authRoutes.ts` - Google OAuth 2.0 routes and session management
 - `src/mastra/data/` - Data layer and mock data
 - `src/mastra/storage/` - Storage configuration
 - `src/utils/` - Database utilities (audit, compliance, KPI, risk, policy, vendor, etc.)
 - `src/triggers/` - Cron, Slack, Telegram triggers
-- `dashboard/` - Static HTML dashboards (index.html, audits.html, compliance.html, etc.)
+- `dashboard/` - Static HTML dashboards (index.html, audits.html, login.html, etc.)
 - `dashboard/css/` - Shared navigation CSS
-- `dashboard/js/` - Shared navigation JS
+- `dashboard/js/` - Shared navigation JS (includes user avatar/logout in nav bar)
 - `scripts/` - Build and inngest scripts
 - `docs/mastra/` - Mastra documentation
 - `tests/` - Test files
@@ -59,13 +61,24 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `npm run dev` runs `mastra dev` which starts the Hono server on port 5000
 - Inngest dev server runs on port 3000
 
+## Authentication
+- **Google OAuth 2.0**: Primary login method via "Sign in with Google" on `/login`
+- **Session**: HMAC-signed cookies using `SESSION_SECRET`, 7-day expiry
+- **Routes**: `GET /api/auth/google` (initiate), `GET /api/auth/google/callback` (callback), `GET /api/auth/me` (session check), `POST|GET /api/auth/logout`
+- **Protection**: All dashboard pages redirect to `/login` if no session. Public pages: `/login`, `/guide`, `/accept-invite`
+- **API endpoints**: Remain accessible without session (admin endpoints still require X-Admin-Key)
+- **User storage**: Google users upserted into `platform_users` table with google_id, picture, auth_provider columns
+- **Admin key**: Still works for `/admin` and `/qms` as alternative auth; available on login page
+
 ## Key Secrets
 - `DATABASE_URL` - PostgreSQL connection string
+- `GOOGLE_CLIENT_ID` - Google OAuth 2.0 client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
+- `SESSION_SECRET` - Session cookie signing
 - `ADMIN_API_KEY` - Admin panel access
 - `RESEND_API_KEY` - Email sending via Resend
 - `RESEND_FROM_EMAIL` - From address for emails
 - `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` - Zoho CRM integration
-- `SESSION_SECRET` - Session encryption
 
 ## Database Setup
 - Tables are auto-initialized by utility modules on first use (auditDatabase.ts, complianceDatabase.ts, kpiDatabase.ts, riskDatabase.ts, policyDatabase.ts, vendorDatabase.ts)
@@ -74,9 +87,8 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## Recent Changes
+- Added Google OAuth 2.0 login with login page, session cookies, and route protection (Feb 2026)
+- Fixed audit API schema (VARCHAR foreign keys) and route ordering issues
+- All 49 API endpoints verified passing
 - Migrated from template scaffold to full WalaPlus QMS codebase (Feb 2026)
 - Mastra + Hono + Inngest stack replacing Express + React + Vite
-- Fixed inngest client.ts: removed non-existent realtimeMiddleware import
-- Created missing database tables: quality_scorecards, quality_audit_results, quality_trends, governance_documents
-- All 16+ dashboard routes verified accessible (200 OK)
-- API endpoint /api/dashboard returns valid JSON
