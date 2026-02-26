@@ -1,10 +1,13 @@
 import * as userDb from '../../utils/userAccessDatabase';
 import { sendResendEmail } from '../../utils/resendMail';
+import { getSessionFromCookie } from './authRoutes';
 
 function verifyAdminKey(c: any): boolean {
   const adminKey = c.req.header("X-Admin-Key");
   const expectedKey = process.env.ADMIN_API_KEY;
-  return Boolean(expectedKey && adminKey === expectedKey);
+  if (expectedKey && adminKey === expectedKey) return true;
+  const session = getSessionFromCookie(c.req.header('Cookie'));
+  return Boolean(session);
 }
 
 export const userAccessRoutes = [

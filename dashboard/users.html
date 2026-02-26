@@ -318,12 +318,34 @@
 
     <script>
         let adminKey = localStorage.getItem('adminKey') || '';
-        const headers = { 'X-Admin-Key': adminKey, 'Content-Type': 'application/json' };
+        let useSessionAuth = false;
+        const headers = { 'Content-Type': 'application/json' };
 
-        if (!adminKey) {
-            adminKey = prompt('Enter Admin API Key:') || '';
-            if (adminKey) localStorage.setItem('adminKey', adminKey);
+        async function initAuth() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'include' });
+                if (res.ok) {
+                    useSessionAuth = true;
+                } else {
+                    if (!adminKey) {
+                        adminKey = prompt('Enter Admin API Key:') || '';
+                        if (adminKey) localStorage.setItem('adminKey', adminKey);
+                    }
+                }
+            } catch (e) {
+                if (!adminKey) {
+                    adminKey = prompt('Enter Admin API Key:') || '';
+                    if (adminKey) localStorage.setItem('adminKey', adminKey);
+                }
+            }
+            if (adminKey && !useSessionAuth) {
+                headers['X-Admin-Key'] = adminKey;
+            }
+            loadStats();
+            switchTab('pending');
         }
+
+        initAuth();
 
         function switchTab(tab) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
