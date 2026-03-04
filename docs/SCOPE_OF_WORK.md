@@ -17,6 +17,7 @@
 9. [UI/UX Specifications](#9-uiux-specifications)
 10. [Deployment & Infrastructure](#10-deployment--infrastructure)
 11. [GRC Module Specifications](#11-grc-module-specifications)
+12. [Hosting, Data Classification & Migration Plan](#12-hosting-data-classification--migration-plan)
 
 ---
 
@@ -1354,14 +1355,19 @@ Set via `DATA_MODE` environment variable.
 
 ### 8.1 Authentication
 
-- Admin endpoints require ADMIN_API_KEY header
-- API key validation middleware
+- **Google OAuth 2.0**: Primary login method via "Sign in with Google" on `/login`
+- **Session Management**: HMAC-signed cookies using `SESSION_SECRET`, 7-day expiry
+- **Admin Endpoints**: Accept Google session cookies OR `X-Admin-Key` header for authorization
+- **Route Protection**: All dashboard pages redirect to `/login` if no valid session; public pages: `/login`, `/guide`, `/accept-invite`
+- **User Storage**: Google-authenticated users are upserted into `platform_users` table with `google_id`, `picture`, and `auth_provider` columns
 
 ### 8.2 Data Protection
 
 - SHA-256 checksums on event logs
 - Immutable audit trail
 - JSONB encryption for sensitive fields
+- HTTPS/TLS encryption in transit (enforced by Replit deployment)
+- Secrets managed via Replit environment secrets (never exposed in code)
 
 ### 8.3 Compliance Standards
 
@@ -1370,6 +1376,9 @@ Set via `DATA_MODE` environment variable.
 | ISO 9001 | QMS, CAPA, NC, Training |
 | COPC | Table F 50/75, KPI tracking |
 | Six Sigma | Quality scores, trends |
+| NCA-ECC | Essential Cybersecurity Controls alignment |
+| NCA-DCC | Data Cybersecurity Controls alignment |
+| PDPL | Saudi Personal Data Protection Law compliance module |
 
 ### 8.4 Audit Trail
 
@@ -1466,9 +1475,14 @@ Event logs capture:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection |
-| `ADMIN_API_KEY` | Admin authentication |
+| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret |
+| `SESSION_SECRET` | Session cookie signing key |
+| `ADMIN_API_KEY` | Admin authentication (fallback) |
 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | OpenAI endpoint |
 | `AI_INTEGRATIONS_OPENAI_API_KEY` | OpenAI key |
+| `RESEND_API_KEY` | Email sending via Resend |
+| `RESEND_FROM_EMAIL` | From address for emails |
 | `ZOHO_CLIENT_ID` | Zoho OAuth |
 | `ZOHO_CLIENT_SECRET` | Zoho OAuth |
 | `ZOHO_REFRESH_TOKEN` | Zoho OAuth |
@@ -1840,6 +1854,203 @@ The Testing Sandbox (`/sandbox`) includes a Duplicate Detection Testing section:
 
 ---
 
+## 12. Hosting, Data Classification & Migration Plan
+
+### 12.1 Current Hosting Infrastructure
+
+| Component | Details |
+|-----------|---------|
+| **Platform** | Replit (Autoscale Deployment) |
+| **Cloud Provider** | Google Cloud Platform (GCP) |
+| **Server Region** | United States |
+| **Database** | PostgreSQL (hosted on Replit infrastructure) |
+| **Domain** | `qms-dashboard.replit.app` |
+| **TLS/SSL** | Enforced by default on all deployed applications |
+| **Scaling** | Autoscale — scales up under load, scales down when idle |
+
+### 12.2 Platform Justification
+
+WalaPlus is hosted on Replit for the following strategic reasons:
+
+**Rapid Development & Iteration**
+- Replit provides an integrated development, testing, and deployment environment that enables rapid prototyping and iteration of the GRC & QMS platform
+- Changes can be deployed to production within minutes, supporting agile governance requirements
+- Built-in version control with checkpoint/rollback capabilities protects against deployment failures
+
+**Cost Efficiency**
+- Autoscale deployment eliminates the need for dedicated server provisioning and maintenance
+- No infrastructure team required during the development and pilot phase
+- Pay-for-usage model reduces overhead compared to maintaining dedicated servers
+
+**Security Controls**
+- All secrets and API keys are managed through Replit's encrypted secrets management (never exposed in code or logs)
+- HTTPS/TLS encryption enforced on all traffic by default
+- Google OAuth 2.0 authentication with HMAC-signed session cookies
+- Immutable audit trail with SHA-256 checksums on all event logs
+
+**This platform is intended as a development and operational pilot environment.** The application architecture is designed to be fully portable and can be migrated to on-premises or private cloud infrastructure at any time (see Section 12.4).
+
+### 12.3 Data Classification
+
+The WalaPlus platform has been designed with a clear data classification policy. The following outlines what data resides on the platform and its sensitivity level.
+
+#### Data Present on the Platform
+
+| Data Category | Examples | Classification | Sensitivity |
+|---------------|----------|---------------|-------------|
+| Employee Profiles | Name, email, role, team, Google profile picture | Internal | Medium |
+| Quality Records | Audit results, scorecards, CAPA actions, quality trends | Internal | Low-Medium |
+| Governance Documents | Policies, procedures, governance document metadata | Internal | Low-Medium |
+| Risk Register | Risk entries, assessments, treatment plans | Internal | Medium |
+| Compliance Records | Compliance obligation status, evidence tracking | Internal | Medium |
+| KPIs & Scorecards | Performance metrics, scoring data | Internal | Low |
+| Vendor Assessments | Vendor risk scores, evaluation records | Internal | Low-Medium |
+| Call Evaluations | Call quality scores, evaluation criteria | Internal | Low-Medium |
+| System Logs | Event logs, user activity audit trail | Internal | Low |
+| Project Data | PMP project portfolio entries | Internal | Low |
+
+#### Data NOT Present on the Platform
+
+| Data Category | Status |
+|---------------|--------|
+| Customer personal data (PII) | NOT stored |
+| Financial records or banking data | NOT stored |
+| Payment card or transaction data | NOT stored |
+| National ID numbers or government IDs | NOT stored |
+| Medical or health records | NOT stored |
+| Customer contact information | NOT stored |
+| Proprietary trade secrets | NOT stored |
+| Classified or restricted government data | NOT stored |
+
+#### Summary
+
+The platform contains **operational and employee-related data only** — primarily employee names, emails, roles, and internal quality/governance records. No customer-facing sensitive data, financial data, or personally identifiable information (PII) of external parties is stored on this platform. The employee data present is limited to what is necessary for access control, role-based permissions, and audit trail accountability.
+
+### 12.4 Migration Plan — Moving to On-Premises or Private Cloud
+
+The WalaPlus platform is built on standard, open-source technologies (Node.js, PostgreSQL, TypeScript) with no vendor lock-in to Replit. The organization retains full capability to migrate the application to its own servers or data center at any time.
+
+#### 12.4.1 Architecture Portability
+
+| Component | Current (Replit) | Target (On-Premises / Private DC) |
+|-----------|-----------------|-----------------------------------|
+| Runtime | Node.js 20+ on Replit | Node.js 20+ on any Linux server |
+| Database | PostgreSQL on Replit | PostgreSQL on any server or managed service (e.g., AWS RDS, Azure Database, self-hosted) |
+| Web Server | Hono (built-in HTTP) on port 5000 | Same — Hono serves on any port, behind Nginx/Apache reverse proxy |
+| AI/LLM | OpenAI GPT-4o API | Same — API key based, works from any server |
+| Email | Resend API | Same — API key based, works from any server |
+| CRM | Zoho CRM API | Same — OAuth token based, works from any server |
+| Auth | Google OAuth 2.0 | Same — update redirect URI to new domain |
+
+#### 12.4.2 Migration Steps
+
+**Phase 1: Prepare Target Environment (1-2 days)**
+
+1. Provision a Linux server (Ubuntu 22.04+ recommended) or VM in your data center
+2. Install Node.js 20+ and PostgreSQL 15+
+3. Install Nginx as a reverse proxy (for TLS termination and domain routing)
+4. Configure firewall rules (allow ports 80, 443 inbound; restrict database to localhost)
+
+**Phase 2: Export & Transfer Code (1 day)**
+
+1. Clone the full repository from Replit (or GitHub if synced):
+   ```bash
+   git clone <repository-url> /opt/walaplus
+   cd /opt/walaplus
+   npm install
+   ```
+2. Copy all environment secrets to the new server's environment (`.env` file or system environment):
+   ```
+   DATABASE_URL=postgresql://user:password@localhost:5432/walaplus
+   GOOGLE_CLIENT_ID=<your-google-client-id>
+   GOOGLE_CLIENT_SECRET=<your-google-client-secret>
+   SESSION_SECRET=<your-session-secret>
+   ADMIN_API_KEY=<your-admin-key>
+   RESEND_API_KEY=<your-resend-key>
+   RESEND_FROM_EMAIL=<your-from-email>
+   ZOHO_CLIENT_ID=<your-zoho-client-id>
+   ZOHO_CLIENT_SECRET=<your-zoho-client-secret>
+   ZOHO_REFRESH_TOKEN=<your-zoho-refresh-token>
+   ```
+
+**Phase 3: Database Migration (1 day)**
+
+1. Export the database from Replit PostgreSQL:
+   ```bash
+   pg_dump $DATABASE_URL --no-owner --no-acl > walaplus_backup.sql
+   ```
+2. Create the target database:
+   ```bash
+   createdb walaplus
+   ```
+3. Import the data:
+   ```bash
+   psql -d walaplus < walaplus_backup.sql
+   ```
+4. Verify table counts and data integrity
+
+**Phase 4: Configure & Launch (1 day)**
+
+1. Update the `DATABASE_URL` to point to the local/private PostgreSQL instance
+2. Update Google OAuth redirect URI in Google Cloud Console to the new domain
+3. Configure Nginx reverse proxy:
+   ```nginx
+   server {
+       listen 443 ssl;
+       server_name qms.yourdomain.com;
+       ssl_certificate /path/to/cert.pem;
+       ssl_certificate_key /path/to/key.pem;
+       location / {
+           proxy_pass http://127.0.0.1:5000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+4. Start the application:
+   ```bash
+   cd /opt/walaplus
+   npm run build
+   node dist/index.js
+   ```
+5. (Recommended) Use PM2 or systemd for process management:
+   ```bash
+   pm2 start dist/index.js --name walaplus
+   pm2 save
+   pm2 startup
+   ```
+
+**Phase 5: Validation & Cutover (1 day)**
+
+1. Verify all 18+ dashboards load correctly
+2. Verify Google OAuth login works with new redirect URI
+3. Verify all API endpoints return correct data
+4. Verify audit trail and event logging
+5. Update DNS to point the domain to the new server
+6. Monitor for 48 hours before decommissioning the Replit deployment
+
+#### 12.4.3 Estimated Migration Timeline
+
+| Phase | Duration | Description |
+|-------|----------|-------------|
+| Phase 1 | 1-2 days | Server provisioning and software installation |
+| Phase 2 | 1 day | Code transfer and environment setup |
+| Phase 3 | 1 day | Database export, transfer, and import |
+| Phase 4 | 1 day | Configuration, proxy setup, and launch |
+| Phase 5 | 1 day | Testing, validation, and DNS cutover |
+| **Total** | **5-6 working days** | Full migration with validation |
+
+#### 12.4.4 Post-Migration Considerations
+
+- **Backups**: Set up automated PostgreSQL backups (daily `pg_dump` or streaming replication)
+- **Monitoring**: Install monitoring tools (e.g., Uptime Kuma, Prometheus + Grafana)
+- **SSL Certificates**: Use Let's Encrypt for free, auto-renewing TLS certificates
+- **Updates**: Establish a process for applying Node.js and PostgreSQL security updates
+- **Inngest**: If using Inngest for workflow orchestration, either self-host Inngest or replace with a cron-based alternative
+
+---
+
 ## Document Maintenance
 
 This Scope of Work document should be updated whenever:
@@ -1847,6 +2058,7 @@ This Scope of Work document should be updated whenever:
 - APIs are modified
 - Database schema changes
 - Integration points are added/removed
+- Hosting or infrastructure changes occur
 
-**Last Updated:** December 2024
-**Version:** 2.0
+**Last Updated:** March 2026
+**Version:** 2.2
