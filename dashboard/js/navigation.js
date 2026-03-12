@@ -241,7 +241,7 @@ const WalaPlusNav = {
     const isActive = this.isInGroup(group.id);
     
     return `
-      <div class="relative nav-dropdown" data-group="${group.id}">
+      <div class="relative nav-dropdown" data-group="${this.escapeHtml(group.id)}">
         <button class="flex items-center space-x-1 px-3 py-2 rounded-lg transition text-sm font-medium
           ${isActive ? `${colors.bg} text-white` : `text-gray-600 hover:bg-gray-100`}">
           ${group.icon}
