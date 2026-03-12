@@ -159,6 +159,16 @@ export const mastra = new Mastra({
         const isApi = urlPath.startsWith('/api/');
         const isMastraInternal = urlPath.startsWith('/api/agents/') || urlPath.startsWith('/api/workflows/') || urlPath.startsWith('/api/memory/');
 
+        if (isApi) {
+          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+          const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+          const rateCheck = checkRateLimit(ip, isWrite);
+          if (!rateCheck.allowed) {
+            c.header('Retry-After', String(rateCheck.retryAfter || 60));
+            return c.json({ error: 'Too many requests' }, 429);
+          }
+        }
+
         if (!isPublic && !isApi) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
           if (!session) {
@@ -174,16 +184,6 @@ export const mastra = new Mastra({
 
           if (!session && !hasAdminKey) {
             return c.json({ error: 'Authentication required' }, 401);
-          }
-        }
-
-        if (isApi) {
-          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
-          const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-          const rateCheck = checkRateLimit(ip, isWrite);
-          if (!rateCheck.allowed) {
-            c.header('Retry-After', String(rateCheck.retryAfter || 60));
-            return c.json({ error: 'Too many requests' }, 429);
           }
         }
 
