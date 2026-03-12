@@ -128,18 +128,18 @@ const WalaPlusNav = {
         if (!container) return;
         if (data.authenticated && data.user) {
           const u = data.user;
+
+          // Static skeleton only — no user data interpolated here
           container.innerHTML = `
             <div class="relative nav-dropdown" data-group="user-menu">
               <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" data-testid="button-user-menu">
-                ${u.picture
-                  ? `<img src="${u.picture}" alt="" class="w-7 h-7 rounded-full border border-gray-200" referrerpolicy="no-referrer">`
-                  : `<div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">${(u.name || u.email || '?')[0].toUpperCase()}</div>`}
+                <span data-slot="avatar"></span>
                 <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
               </button>
               <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
                 <div class="px-4 py-2 border-b border-gray-100">
-                  <p class="text-sm font-medium text-gray-900" data-testid="text-user-name">${u.name || 'User'}</p>
-                  <p class="text-xs text-gray-500" data-testid="text-user-email">${u.email}</p>
+                  <p class="text-sm font-medium text-gray-900" data-testid="text-user-name"></p>
+                  <p class="text-xs text-gray-500" data-testid="text-user-email"></p>
                 </div>
                 <a href="/api/auth/logout" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
@@ -147,6 +147,25 @@ const WalaPlusNav = {
                 </a>
               </div>
             </div>`;
+
+          // Safely inject user-controlled values — never via innerHTML
+          container.querySelector('[data-testid="text-user-name"]').textContent = u.name || 'User';
+          container.querySelector('[data-testid="text-user-email"]').textContent = u.email;
+
+          const avatarSlot = container.querySelector('[data-slot="avatar"]');
+          if (u.picture) {
+            const img = document.createElement('img');
+            img.src = u.picture;  // property assignment — browser treats value as a plain URL, not HTML
+            img.alt = '';
+            img.className = 'w-7 h-7 rounded-full border border-gray-200';
+            img.referrerPolicy = 'no-referrer';
+            avatarSlot.replaceWith(img);
+          } else {
+            const initials = document.createElement('div');
+            initials.className = 'w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold';
+            initials.textContent = (u.name || u.email || '?')[0].toUpperCase();
+            avatarSlot.replaceWith(initials);
+          }
         }
       })
       .catch(() => {});

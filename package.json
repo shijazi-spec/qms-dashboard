@@ -37,6 +37,7 @@
     "pino": "^10.3.1",
     "prettier": "^3.8.1",
     "resend": "^6.9.2",
+    "rollup": "^4.59.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
