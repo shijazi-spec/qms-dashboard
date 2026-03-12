@@ -122,7 +122,7 @@ const WalaPlusNav = {
 
   loadUserInfo() {
     fetch('/api/auth/me')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) return { authenticated: false }; return r.json(); })
       .then(data => {
         const container = document.getElementById('nav-user-info');
         if (!container) return;

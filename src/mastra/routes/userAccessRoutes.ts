@@ -18,7 +18,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
@@ -39,7 +39,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
@@ -71,7 +71,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -100,7 +100,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
@@ -121,7 +121,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
@@ -281,7 +281,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -336,7 +336,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -387,7 +387,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -415,7 +415,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -443,7 +443,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -475,7 +475,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
@@ -504,7 +504,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
@@ -530,7 +530,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           logger?.info('📺 [UserAccess] GET /api/screens');
@@ -549,7 +549,7 @@ export const userAccessRoutes = [
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
           logger?.info('🔐 [UserAccess] GET /api/roles/defaults');

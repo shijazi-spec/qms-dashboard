@@ -224,7 +224,7 @@ const auditCRMWithAgentStep = createStep({
           moduleBreakdown: [],
           topIssues: [],
           skipped: true,
-          skipReason: "Zoho CRM credentials not configured. Please set ZOHO_ACCESS_TOKEN environment variable.",
+          skipReason: "CRM integration not configured.",
         },
         qualityScores: {
           peopleScore: 0,

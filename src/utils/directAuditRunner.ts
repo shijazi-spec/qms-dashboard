@@ -30,7 +30,7 @@ export async function runDirectAudit(logger?: any) {
 
   if (!hasZohoCredentials) {
     logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
-    skipReason = "Zoho CRM credentials not configured. Set ZOHO_ACCESS_TOKEN to enable live CRM audits.";
+    skipReason = "CRM integration not configured.";
 
     qualityScores = {
       peopleScore: 75,

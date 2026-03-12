@@ -60,9 +60,7 @@ async function refreshAccessToken(): Promise<string> {
   const oauthConfig = getZohoOAuthConfig();
   
   if (!oauthConfig) {
-    throw new Error(
-      'Zoho OAuth credentials not configured. Please set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, and ZOHO_REFRESH_TOKEN secrets.'
-    );
+    throw new Error('CRM integration not configured. Please contact your administrator.');
   }
   
   console.log('🔄 [ZohoCRM] Refreshing access token...');
@@ -127,11 +125,7 @@ async function getValidAccessToken(): Promise<string> {
     return staticToken;
   }
   
-  throw new Error(
-    'Zoho CRM not configured. Please set either:\n' +
-    '1. ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, and ZOHO_REFRESH_TOKEN for automatic token refresh, or\n' +
-    '2. ZOHO_ACCESS_TOKEN for a static token (will expire and need manual renewal)'
-  );
+  throw new Error('CRM integration not configured. Please contact your administrator.');
 }
 
 async function getZohoAccessToken(): Promise<ZohoAPIConfig> {
@@ -164,7 +158,7 @@ async function makeZohoRequest<T>(
         throw new Error('Zoho API authentication failed after token refresh. Please verify your OAuth credentials.');
       }
     } else {
-      throw new Error('Zoho access token expired. Please update ZOHO_ACCESS_TOKEN or configure OAuth with ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, and ZOHO_REFRESH_TOKEN.');
+      throw new Error('CRM authentication failed. Please contact your administrator.');
     }
   }
   
@@ -206,7 +200,7 @@ export function getZohoConnectionStatus(): {
     autoRefresh: false,
     tokenCached: false,
     tokenExpired: false,
-    message: 'Zoho CRM not configured. Set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN for auto-refresh.',
+    message: 'CRM integration not configured. Please contact your administrator.',
   };
 }
 

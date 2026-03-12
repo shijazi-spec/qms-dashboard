@@ -1099,7 +1099,7 @@ ${transcriptText}
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           
           const logger = mastra?.getLogger();
@@ -1153,7 +1153,7 @@ ${transcriptText}
       return async (c: any) => {
         try {
           if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Unauthorized - Admin API key required' }, 401);
+            return c.json({ error: 'Authentication required' }, 401);
           }
           
           const logger = mastra?.getLogger();

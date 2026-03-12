@@ -61,14 +61,20 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `npm run dev` runs `mastra dev` which starts the Hono server on port 5000
 - Inngest dev server runs on port 3000
 
-## Authentication
+## Authentication & Security
 - **Google OAuth 2.0**: Primary login method via "Sign in with Google" on `/login`
-- **Session**: HMAC-signed cookies using `SESSION_SECRET`, 7-day expiry
+- **Session**: HMAC-signed cookies using `SESSION_SECRET`, 7-day expiry, HttpOnly/Secure/SameSite=Lax flags
 - **Routes**: `GET /api/auth/google` (initiate), `GET /api/auth/google/callback` (callback), `GET /api/auth/me` (session check), `POST|GET /api/auth/logout`
-- **Protection**: All dashboard pages redirect to `/login` if no session. Public pages: `/login`, `/guide`, `/accept-invite`
-- **API endpoints**: Remain accessible without session (admin endpoints still require X-Admin-Key)
+- **Protection**: All dashboard pages AND API endpoints require valid session. Public pages: `/login`, `/guide`, `/accept-invite`
+- **API auth**: All API endpoints require Google session cookie or X-Admin-Key header (401 if neither present)
+- **CORS**: Restricted to app domain only (no wildcard), derived from REPLIT_DOMAINS
+- **Security headers**: CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, X-XSS-Protection, Permissions-Policy
+- **Input sanitization**: HTML/script tag stripping, prototype pollution protection (__proto__/constructor keys stripped)
+- **Rate limiting**: 100 req/min read, 20 req/min write per IP
+- **OAuth CSRF**: State parameter validated against oauth_state cookie in callback
 - **User storage**: Google users upserted into `platform_users` table with google_id, picture, auth_provider columns
-- **Admin key**: Still works for `/admin` and `/qms` as alternative auth; available on login page
+- **Admin key**: Still works as alternative auth for API endpoints
+- **Security utilities**: `src/utils/inputSanitizer.ts`, `src/utils/rateLimiter.ts`
 
 ## Key Secrets
 - `DATABASE_URL` - PostgreSQL connection string
@@ -87,8 +93,13 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## Recent Changes
+- Security hardening: Fixed all 19 VAPT findings — API auth, CORS, CSP, input sanitization, rate limiting, OAuth state validation (Mar 2026)
 - Added Google OAuth 2.0 login with login page, session cookies, and route protection (Feb 2026)
 - Fixed audit API schema (VARCHAR foreign keys) and route ordering issues
 - All 49 API endpoints verified passing
 - Migrated from template scaffold to full WalaPlus QMS codebase (Feb 2026)
 - Mastra + Hono + Inngest stack replacing Express + React + Vite
+
+## Security Documentation
+- `docs/VAPT_Remediation_Report.md` - VAPT remediation report (19 findings, all resolved)
+- `docs/SCOPE_OF_WORK.md` - Full technical scope including Section 8 (Security) and Section 12 (Hosting/Migration)

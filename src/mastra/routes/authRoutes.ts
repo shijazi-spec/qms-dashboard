@@ -132,7 +132,8 @@ export const authRoutes = [
 
         const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
-        c.header('Set-Cookie', `oauth_state=${state}; HttpOnly; Path=/; Max-Age=600; SameSite=Lax`);
+        const isSecure = !getRedirectUri().startsWith('http://localhost');
+        c.header('Set-Cookie', `oauth_state=${state}; HttpOnly; Path=/; Max-Age=600; SameSite=Lax${isSecure ? '; Secure' : ''}`);
         return c.redirect(url);
       };
     },
@@ -145,6 +146,7 @@ export const authRoutes = [
         try {
           const url = new URL(c.req.url);
           const code = url.searchParams.get('code');
+          const returnedState = url.searchParams.get('state');
           const error = url.searchParams.get('error');
 
           if (error) {
@@ -154,6 +156,14 @@ export const authRoutes = [
 
           if (!code) {
             return c.redirect('/login?error=no_code');
+          }
+
+          const cookies = c.req.header('Cookie') || '';
+          const stateMatch = cookies.match(/oauth_state=([^;]+)/);
+          const storedState = stateMatch ? stateMatch[1] : null;
+          if (!storedState || storedState !== returnedState) {
+            console.error('[Auth] OAuth state mismatch');
+            return c.redirect('/login?error=invalid_state');
           }
 
           const clientId = process.env.GOOGLE_CLIENT_ID;
