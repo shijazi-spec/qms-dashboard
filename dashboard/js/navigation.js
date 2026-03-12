@@ -5,7 +5,16 @@
 
 const WalaPlusNav = {
   currentPage: '',
-  
+
+  escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
   navigationGroups: [
     {
       id: 'quality',
@@ -236,7 +245,7 @@ const WalaPlusNav = {
         <button class="flex items-center space-x-1 px-3 py-2 rounded-lg transition text-sm font-medium
           ${isActive ? `${colors.bg} text-white` : `text-gray-600 hover:bg-gray-100`}">
           ${group.icon}
-          <span>${group.label}</span>
+          <span>${this.escapeHtml(group.label)}</span>
           <svg class="w-3 h-3 transition-transform dropdown-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
@@ -253,10 +262,10 @@ const WalaPlusNav = {
     const target = item.external ? 'target="_blank"' : '';
     
     return `
-      <a href="${item.href}" ${target} class="flex items-center space-x-2 px-4 py-2 text-sm transition
+      <a href="${this.escapeHtml(item.href)}" ${target} class="flex items-center space-x-2 px-4 py-2 text-sm transition
         ${isActive ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-700 hover:bg-gray-50'}">
         ${this.getItemIcon(item.icon)}
-        <span>${item.label}</span>
+        <span>${this.escapeHtml(item.label)}</span>
         ${item.external ? '<svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
       </a>
     `;
@@ -273,7 +282,7 @@ const WalaPlusNav = {
           onclick="WalaPlusNav.toggleMobileGroup(this)">
           <div class="flex items-center space-x-2">
             ${group.icon}
-            <span>${group.label}</span>
+            <span>${this.escapeHtml(group.label)}</span>
           </div>
           <svg class="w-4 h-4 transition-transform mobile-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -281,11 +290,11 @@ const WalaPlusNav = {
         </button>
         <div class="mobile-submenu hidden pl-4 mt-1 space-y-1">
           ${group.items.map(item => `
-            <a href="${item.href}" ${item.external ? 'target="_blank"' : ''} 
+            <a href="${this.escapeHtml(item.href)}" ${item.external ? 'target="_blank"' : ''} 
               class="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm
                 ${item.id === this.currentPage ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-600 hover:bg-gray-50'}">
               ${this.getItemIcon(item.icon)}
-              <span>${item.label}</span>
+              <span>${this.escapeHtml(item.label)}</span>
             </a>
           `).join('')}
         </div>
