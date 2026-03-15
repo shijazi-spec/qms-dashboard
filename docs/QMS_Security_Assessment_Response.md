@@ -28,9 +28,9 @@
 ### 1.1 Where are Replit's data centers physically located?
 
 **Response:**
-Replit's production infrastructure runs on **Google Cloud Platform (GCP)**, primarily in **US-based data centers** (us-central1 region). The PostgreSQL database is hosted on **Neon**, which also operates on GCP infrastructure. Replit's deployment platform (Autoscale) provisions containers on GCP for serving the application.
+Replit's production infrastructure runs on **Google Cloud Platform (GCP)**, primarily in **US-based data centers**. The PostgreSQL database is hosted on **Neon**, which also operates on GCP infrastructure. Replit's deployment platform (Autoscale) provisions containers on GCP for serving the application.
 
-> **Note:** Replit does not currently offer customer-selectable data residency regions. If specific data residency requirements apply (e.g., GCC/Middle East data sovereignty), this should be discussed with Replit's enterprise sales team regarding regional hosting options.
+> **Note:** Specific data center locations and availability zones should be confirmed with Replit and Neon vendor documentation. Replit does not currently offer customer-selectable data residency regions. If specific data residency requirements apply (e.g., GCC/Middle East data sovereignty), this should be discussed with Replit's enterprise sales team regarding regional hosting options.
 
 **Evidence:**
 - Platform deployed via Replit Autoscale: `https://qms-dashboard.replit.app`
@@ -70,7 +70,7 @@ Additionally, the QMS application itself integrates with the following third-par
 | **Google OAuth** | User authentication | Email, name, profile picture |
 | **Resend** | Outbound email notifications | Email addresses, report content |
 
-Replit publishes a sub-processor list on their website which should be reviewed periodically.
+Replit publishes a sub-processor list on their website which should be reviewed periodically. *(Note: The sub-processor details above are based on publicly available information and should be confirmed against Replit's official sub-processor list.)*
 
 **Evidence:**
 - Integration configurations: `src/utils/zohoCRM.ts`, `src/utils/resendMail.ts`, `src/utils/googleCalendar.ts`
@@ -85,7 +85,7 @@ Backups are handled at multiple levels:
 
 1. **Database (Neon PostgreSQL):** Neon provides **continuous automated backups** with point-in-time recovery (PITR). Data is replicated across GCP storage with automated snapshots. Recovery to any point within the retention window is supported.
 
-2. **Application Code (Replit):** Replit provides automatic **checkpoint versioning** that captures the codebase, chat sessions, and database state — enabling rollback to any prior checkpoint via the Replit interface.
+2. **Application Code (Replit):** Replit provides automatic **checkpoint versioning** that captures the codebase and chat sessions — enabling rollback to any prior checkpoint via the Replit interface. *(Note: Checkpoint scope for Neon-hosted databases should be confirmed with Replit — database backups are primarily managed by Neon's own PITR system.)*
 
 3. **Event Log Durability:** The event logging system uses **monthly table partitioning** (`event_logs_y2026m03`, etc.) for data durability and efficient archival.
 
@@ -146,7 +146,7 @@ Encryption keys are managed at multiple layers:
 | Key Type | Management | Details |
 |----------|-----------|---------|
 | **TLS certificates** | Managed by Replit/Cloudflare | Automatic certificate provisioning and renewal |
-| **Database encryption keys** | Managed by GCP/Neon | AES-256 keys managed by Google Cloud KMS |
+| **Database encryption keys** | Managed by GCP/Neon | AES-256 keys managed by cloud provider KMS *(confirm specifics with Neon vendor documentation)* |
 | **Session signing key** (`SESSION_SECRET`) | Replit Secrets vault | HMAC-SHA256 signing key, stored encrypted, never in source code |
 | **API keys** (OpenAI, Zoho, Resend, Admin) | Replit Secrets vault | Injected as environment variables at runtime |
 
@@ -731,7 +731,10 @@ The platform includes dedicated modules for ongoing compliance management:
 
 | # | Question | Action Required |
 |---|----------|----------------|
+| 1.1 | Data center locations | Confirm exact data center regions with Replit and Neon vendor documentation |
 | 1.2 | DPA with Replit | Verify if a Data Processing Agreement is signed with Replit |
+| 1.3 | Sub-processors | Confirm sub-processor list against Replit's official published list |
+| 2.3 | Encryption key management | Confirm database encryption key management details with Neon |
 | 9.2 | Vendor contract clauses | Verify that vendor contracts with Replit, OpenAI, Neon, Zoho, Resend include security requirements |
 
 ## Summary of Recommended Enhancements
