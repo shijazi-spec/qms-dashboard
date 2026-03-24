@@ -145,7 +145,7 @@ export const userAccessRoutes = [
           logger?.info('📧 [UserAccess] POST /api/invitations', { email: body.email, invitedBy: sessionUser.email });
 
           if (!body.email || !body.team || !body.role) {
-            return c.json({ error: 'email, team, and role are required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const existingUser = await userDb.getUserByEmail(body.email);
@@ -489,7 +489,7 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           if (!body.role) {
-            return c.json({ error: 'role is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
           
           logger?.info('🔄 [UserAccess] Updating user role', { id, role: body.role });
@@ -522,7 +522,7 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           if (!body.permissions || !Array.isArray(body.permissions)) {
-            return c.json({ error: 'permissions array is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
           
           logger?.info('🔐 [UserAccess] Updating user permissions', { id });

@@ -920,7 +920,7 @@ export const duplicateRadarRoutes = [
           const { domain, phone, company_name, contract_number, email, record_name, owner_email } = params;
 
           if (!domain && !phone && !company_name && !contract_number && !email && !record_name && !owner_email) {
-            return c.json({ error: 'At least one search criteria is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const results = await searchDuplicates({
