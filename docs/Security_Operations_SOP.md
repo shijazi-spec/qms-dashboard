@@ -70,8 +70,8 @@ This document serves as:
 | Audit Integrity | 2 | QMS-005, 017 |
 | Input Validation | 4 | QMS-014, 015, 023, 028 |
 | Error Handling & Information Disclosure | 5 | QMS-020, 022/SQL, 029, 030, 035 |
-| Infrastructure & Configuration | 6 | QMS-004, 024, 025, 026, 027, 033 |
-| Low-Risk & Informational | 7 | QMS-031, 032, 034, 036, 037, 038 |
+| Infrastructure & Configuration | 6 | QMS-004, 021, 024, 025, 026, 027 |
+| Low-Risk & Informational | 7 | QMS-031, 032, 033, 034, 036, 037, 038 |
 
 ---
 
@@ -115,7 +115,7 @@ This document serves as:
 - **Control:** Per-module role restrictions defined in ROUTE_PERMISSION_MAP.
 
 #### QMS-009 — Full User PII Exposure via /api/users
-- **Severity:** CRITICAL (CVSS 8.6)
+- **Severity:** HIGH (CVSS 8.6)
 - **Issue:** GET /api/users returned all user fields including `password_hash`, `mfa_secret`, `google_id`.
 - **Remediation:** Response fields filtered by role. Admin sees operational fields (no password_hash/mfa_secret). Non-admin users see only `id`, `email`, `full_name`, `role`, `status`. Sensitive fields (`password_hash`, `mfa_secret`, `google_id`) never returned.
 - **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
@@ -164,7 +164,7 @@ This document serves as:
 - **Control:** Dual admin key validation (header + HttpOnly cookie).
 
 #### QMS-022/ROI — ROI Financial Data Injection by Viewer
-- **Severity:** HIGH (CVSS 7.1)
+- **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** Any authenticated user (including `department_viewer`) could create/modify ROI initiatives with arbitrary financial values.
 - **Remediation:** ROI write operations restricted to `admin`, `grc_manager`, `quality_manager`, `executive` roles. Financial values validated for non-negative values with upper bounds. Nested financial objects (manpower, errorCosts, revenueImpact, implementation, riskInputs, platformCosts) validated on both create and update.
 - **Files Modified:** `src/mastra/routes/roiRoutes.ts`, `src/utils/rbacMiddleware.ts`, `src/utils/inputSanitizer.ts`
@@ -175,14 +175,14 @@ This document serves as:
 ### 4.2 Authentication & Password Policy (2 Findings)
 
 #### QMS-006 — Zero Password Policy on Account Creation
-- **Severity:** CRITICAL (CVSS 8.6)
+- **Severity:** HIGH (CVSS 8.6)
 - **Issue:** Invitation acceptance accepted any password (including empty/weak) and allowed direct `password_hash` injection.
 - **Remediation:** Mandatory password policy enforced: minimum 12 characters, requires uppercase, lowercase, number, and special character. `password_hash` field bypass removed from API. Passwords hashed server-side with bcrypt (cost factor 12). accept-invite.html updated with password fields and client-side validation.
 - **Files Modified:** `src/utils/inputSanitizer.ts`, `src/mastra/routes/userAccessRoutes.ts`, `dashboard/accept-invite.html`
 - **Control:** Server-side password policy + bcrypt hashing + client-side validation.
 
 #### QMS-019 — Client-Side Admin Key in localStorage
-- **Severity:** HIGH (CVSS 6.5)
+- **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** Admin API key stored in browser localStorage, accessible to XSS attacks.
 - **Remediation:** Admin key migrated from localStorage to HttpOnly cookie. New POST /api/admin/auth endpoint sets `admin_key` cookie with HttpOnly, SameSite=Lax, 8-hour expiry. POST /api/admin/auth/logout clears the cookie. All dashboard files updated to cookie-based auth. `getAdminKey()` helper reads from both header and cookie.
 - **Files Modified:** `src/mastra/index.ts`, `src/utils/rbacMiddleware.ts`, `dashboard/admin.html`, `dashboard/users.html`, `dashboard/login.html`, `dashboard/calls.html`, `dashboard/qms.html`
@@ -193,7 +193,7 @@ This document serves as:
 ### 4.3 Audit Integrity (2 Findings)
 
 #### QMS-005 — Audit Log Injection — Admin Activity Spoofing
-- **Severity:** CRITICAL (CVSS 8.7)
+- **Severity:** HIGH (CVSS 8.7)
 - **Issue:** POST /api/logs was publicly accessible, allowing arbitrary log entries with spoofed user identities.
 - **Remediation:** POST /api/logs endpoint completely removed. Audit logs are only created server-side as side-effects of real operations, deriving user identity from the authenticated session.
 - **Files Modified:** `src/mastra/routes/eventLogsRoutes.ts`
@@ -243,7 +243,7 @@ This document serves as:
 ### 4.5 Error Handling & Information Disclosure (5 Findings)
 
 #### QMS-020 — Email Service Configuration Disclosure
-- **Severity:** HIGH (CVSS 6.5)
+- **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** Failed email operations exposed provider configuration details (e.g., `email_error` field in invitation response).
 - **Remediation:** `email_error` field removed from all invitation API responses. Email failures logged server-side only. Generic error messages returned to clients.
 - **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
@@ -257,14 +257,14 @@ This document serves as:
 - **Control:** Centralized error sanitization; generic responses on all error paths.
 
 #### QMS-029 — Verbose Error Messages Disclose Field Names
-- **Severity:** MEDIUM (CVSS 5.3)
+- **Severity:** LOW (CVSS 3.7)
 - **Issue:** Validation errors exposed internal field names (e.g., "Missing required fields: project_name, owner, department").
 - **Remediation:** All validation error messages replaced with generic "Missing required fields" (no field names). Password policy errors return "Password does not meet the required policy" (no specific rule details). Admin key errors return "Authentication required".
 - **Files Modified:** All route files in `src/mastra/routes/`, `src/utils/inputSanitizer.ts`, `src/mastra/index.ts`
 - **Control:** Fully generic error responses across all endpoints.
 
 #### QMS-030 — PostgreSQL Type Disclosure via Error Messages
-- **Severity:** MEDIUM (CVSS 5.3)
+- **Severity:** LOW (CVSS 3.7)
 - **Issue:** Database type casting errors exposed PostgreSQL-specific error details.
 - **Remediation:** All catch blocks sanitize error output. `sanitizeErrorMessage()` utility available for centralized error handling. No raw PostgreSQL error messages reach clients.
 - **Files Modified:** `src/utils/inputSanitizer.ts`, all route files
@@ -287,6 +287,13 @@ This document serves as:
 - **Remediation:** Inngest endpoint protection handled by Mastra framework's built-in signing key validation (`INNGEST_SIGNING_KEY`). Stack traces suppressed in production error responses.
 - **Files Modified:** `src/mastra/index.ts`
 - **Control:** Framework-level endpoint protection + error sanitization.
+
+#### QMS-021 — Admin Authentication Endpoint Not Rate Limited
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** POST /api/admin/auth endpoint was not included in the authentication rate limiting path list, allowing unlimited brute-force attempts against the admin key.
+- **Remediation:** `/api/admin/auth` added to `AUTH_PATHS` array in `rateLimiter.ts`, applying the strict 5 requests/minute authentication rate limit. The admin auth endpoint is now subject to the same brute-force protection as all other authentication endpoints.
+- **Files Modified:** `src/utils/rateLimiter.ts`
+- **Control:** Auth-tier rate limiting (5 req/min) applied to admin authentication endpoint.
 
 #### QMS-024 — CSP Allows unsafe-inline and unsafe-eval
 - **Severity:** MEDIUM (CVSS 5.3)
@@ -316,21 +323,14 @@ This document serves as:
 - **Files Modified:** `src/mastra/routes/authRoutes.ts`, `dashboard/js/navigation.js`
 - **Control:** POST-only logout; no GET-based session invalidation.
 
-#### QMS-033 — Google OAuth Client ID Exposed
-- **Severity:** LOW (CVSS 3.7)
-- **Issue:** Google OAuth Client ID visible in browser URL during OAuth flow (Not Fixed VULN-17 from v1.0).
-- **Remediation:** Accepted risk — OAuth Client IDs are semi-public by design per RFC 6749. The Client ID alone cannot be used to impersonate the application without the Client Secret. Google Cloud Console restricts authorized redirect URIs and JavaScript origins.
-- **Files Modified:** N/A (accepted risk)
-- **Control:** OAuth specification compliance; Client Secret protected.
-
 ---
 
-### 4.7 Low-Risk & Informational (6 Findings)
+### 4.7 Low-Risk & Informational (7 Findings)
 
 #### QMS-031 — Endpoint Enumeration via Response Code Differentiation
 - **Severity:** LOW (CVSS 3.7)
 - **Issue:** Different HTTP status codes (401 vs 404) allowed enumeration of valid vs invalid endpoints.
-- **Remediation:** Accepted low risk. Authentication middleware returns consistent 401 for unauthenticated requests regardless of endpoint existence. Valid endpoints behind auth return appropriate codes.
+- **Remediation:** Authentication middleware returns consistent 401 for unauthenticated requests regardless of endpoint existence. Valid endpoints behind auth return appropriate codes.
 - **Control:** Consistent 401 for unauthenticated requests.
 
 #### QMS-032 — Sequential Resource IDs Enable Enumeration
@@ -338,6 +338,13 @@ This document serves as:
 - **Issue:** Auto-increment integer IDs allow prediction of resource identifiers.
 - **Remediation:** Accepted low risk. All endpoints require authentication and role-based authorization. Resource access is controlled by RBAC, not by ID secrecy (defense in depth, not security through obscurity).
 - **Control:** RBAC-based access control independent of ID predictability.
+
+#### QMS-033 — Google OAuth Client ID Exposed
+- **Severity:** LOW (CVSS 3.7)
+- **Issue:** Google OAuth Client ID visible in browser URL during OAuth flow (Not Fixed VULN-17 from v1.0).
+- **Remediation:** Accepted risk — OAuth Client IDs are semi-public by design per RFC 6749. The Client ID alone cannot be used to impersonate the application without the Client Secret. Google Cloud Console restricts authorized redirect URIs and JavaScript origins.
+- **Files Modified:** N/A (accepted risk)
+- **Control:** OAuth specification compliance; Client Secret protected.
 
 #### QMS-034 — Mastra Framework Disclosure in CORS Headers
 - **Severity:** LOW (CVSS 3.7)
@@ -579,13 +586,13 @@ This document serves as:
 | 2 | QMS-002 | Invitation Token Exposure to All Authenticated Users | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
 | 3 | QMS-003 | Cross-User Privilege Manipulation | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
 | 4 | QMS-004 | Unauthenticated Inngest Scheduler Endpoint with Stack Trace | Critical | 9.3 | Infrastructure | Fixed | index.ts |
-| 5 | QMS-005 | Audit Log Injection — Admin Activity Spoofing | Critical | 8.7 | Audit Integrity | Fixed | eventLogsRoutes.ts |
-| 6 | QMS-006 | Zero Password Policy on Account Creation | Critical | 8.6 | Authentication | Fixed | inputSanitizer.ts, userAccessRoutes.ts, accept-invite.html |
-| 7 | QMS-007 | BFLA — Viewer Can Modify Any Resource | Critical | 9.1 | Access Control | Fixed | rbacMiddleware.ts, index.ts |
-| 8 | QMS-008 | BFLA — Viewer Can Create Resources in All Modules | Critical | 9.1 | Access Control | Fixed | rbacMiddleware.ts, index.ts |
-| 9 | QMS-009 | Full User PII Exposure via /api/users | Critical | 8.6 | Access Control | Fixed | userAccessRoutes.ts |
-| 10 | QMS-010 | Self Privilege Escalation via Role Change | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts |
-| 11 | QMS-011 | Unauthorized User Approval by Viewer | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
+| 5 | QMS-007 | BFLA — Viewer Can Modify Any Resource | Critical | 9.1 | Access Control | Fixed | rbacMiddleware.ts, index.ts |
+| 6 | QMS-008 | BFLA — Viewer Can Create Resources in All Modules | Critical | 9.1 | Access Control | Fixed | rbacMiddleware.ts, index.ts |
+| 7 | QMS-010 | Self Privilege Escalation via Role Change | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts |
+| 8 | QMS-011 | Unauthorized User Approval by Viewer | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
+| 9 | QMS-005 | Audit Log Injection — Admin Activity Spoofing | High | 8.7 | Audit Integrity | Fixed | eventLogsRoutes.ts |
+| 10 | QMS-006 | Zero Password Policy on Account Creation | High | 8.6 | Authentication | Fixed | inputSanitizer.ts, userAccessRoutes.ts, accept-invite.html |
+| 11 | QMS-009 | Full User PII Exposure via /api/users | High | 8.6 | Access Control | Fixed | userAccessRoutes.ts |
 | 12 | QMS-012 | Policy Approval Workflow Bypass | High | 8.1 | Access Control | Fixed | policyRoutes.ts, rbacMiddleware.ts |
 | 13 | QMS-013 | Risk Treatment Workflow Bypass | High | 7.5 | Access Control | Fixed | riskRoutes.ts, rbacMiddleware.ts |
 | 14 | QMS-014 | Negative Financial Values Accepted in ROI Module | High | 7.5 | Input Validation | Fixed | inputSanitizer.ts, roiRoutes.ts |
@@ -593,28 +600,31 @@ This document serves as:
 | 16 | QMS-016 | Viewer Can Trigger Quality Audits (Admin Function) | High | 7.5 | Access Control | Fixed | auditRoutes.ts, rbacMiddleware.ts |
 | 17 | QMS-017 | Spoofed Audit Trail on User Management Actions | High | 7.5 | Audit Integrity | Fixed | userAccessRoutes.ts |
 | 18 | QMS-018 | Admin Panel Accessible Without X-Admin-Key | High | 7.5 | Access Control | Fixed | index.ts, rbacMiddleware.ts, dashboard files |
-| 19 | QMS-019 | Client-Side Admin Key in localStorage | High | 6.5 | Authentication | Fixed | index.ts, rbacMiddleware.ts, dashboard files |
-| 20 | QMS-020 | Email Service Configuration Disclosure | High | 6.5 | Error Handling | Fixed | userAccessRoutes.ts |
-| 21 | QMS-022/ROI | ROI Financial Data Injection by Viewer | High | 7.1 | Access Control | Fixed | roiRoutes.ts, rbacMiddleware.ts |
-| 22 | QMS-022/SQL | SQL Error Disclosure in Export Endpoint | Medium | 5.3 | Error Handling | Fixed | Multiple route files |
-| 23 | QMS-023 | Duplicate Invitation Creation — No Deduplication | Medium | 5.3 | Input Validation | Fixed | userAccessRoutes.ts |
-| 24 | QMS-024 | CSP Allows unsafe-inline and unsafe-eval | Medium | 5.3 | Infrastructure | Fixed | index.ts |
-| 25 | QMS-025 | CORS Wildcard on OPTIONS Preflight and Error Responses | Medium | 5.3 | Infrastructure | Fixed | index.ts |
-| 26 | QMS-026 | Rate Limiting Too Permissive (~18 Requests) | Medium | 5.3 | Infrastructure | Fixed | rateLimiter.ts |
-| 27 | QMS-027 | CSRF Logout via GET Request | Medium | 5.3 | Infrastructure | Fixed | authRoutes.ts, navigation.js |
-| 28 | QMS-028 | CSV Injection — Formula Payloads Stored Without Sanitization | Medium | 5.3 | Input Validation | Fixed | inputSanitizer.ts |
-| 29 | QMS-029 | Verbose Error Messages Disclose Field Names | Medium | 5.3 | Error Handling | Fixed | All route files, inputSanitizer.ts |
-| 30 | QMS-030 | PostgreSQL Type Disclosure via Error Messages | Medium | 5.3 | Error Handling | Fixed | All route files, inputSanitizer.ts |
-| 31 | QMS-031 | Endpoint Enumeration via Response Code Differentiation | Low | 3.7 | Infrastructure | Fixed | index.ts |
-| 32 | QMS-032 | Sequential Resource IDs Enable Enumeration | Low | 3.7 | Access Control | Accepted | N/A (mitigated by RBAC) |
-| 33 | QMS-033 | Google OAuth Client ID Exposed | Low | 3.7 | Infrastructure | Accepted | N/A (by design per RFC 6749) |
-| 34 | QMS-034 | Mastra Framework Disclosure in CORS Headers | Low | 3.7 | Infrastructure | Fixed | index.ts |
-| 35 | QMS-035 | Mode:MOCK Disclosure via Agent Performance API | Low | 3.7 | Error Handling | Fixed | index.ts |
-| 36 | QMS-036 | Broken Export Endpoints (500 Errors) | Low | 3.5 | Error Handling | Fixed | Various route files |
-| 37 | QMS-037 | DELETE Operations Not Implemented | Info | — | Feature Gap | Acknowledged | N/A |
-| 38 | QMS-038 | 22 PRD-Documented Endpoints Not Implemented | Info | — | Feature Gap | Acknowledged | N/A |
+| 19 | QMS-019 | Client-Side Admin Key in localStorage | Medium | 5.3 | Authentication | Fixed | index.ts, rbacMiddleware.ts, dashboard files |
+| 20 | QMS-020 | Email Service Configuration Disclosure | Medium | 5.3 | Error Handling | Fixed | userAccessRoutes.ts |
+| 21 | QMS-021 | Admin Authentication Endpoint Not Rate Limited | Medium | 5.3 | Infrastructure | Fixed | rateLimiter.ts |
+| 22 | QMS-022/ROI | ROI Financial Data Injection by Viewer | Medium | 5.3 | Access Control | Fixed | roiRoutes.ts, rbacMiddleware.ts, inputSanitizer.ts |
+| 23 | QMS-022/SQL | SQL Error Disclosure in Export Endpoint | Medium | 5.3 | Error Handling | Fixed | Multiple route files |
+| 24 | QMS-023 | Duplicate Invitation Creation — No Deduplication | Medium | 5.3 | Input Validation | Fixed | userAccessRoutes.ts |
+| 25 | QMS-024 | CSP Allows unsafe-inline and unsafe-eval | Medium | 5.3 | Infrastructure | Fixed | index.ts |
+| 26 | QMS-025 | CORS Wildcard on OPTIONS Preflight and Error Responses | Medium | 5.3 | Infrastructure | Fixed | index.ts |
+| 27 | QMS-026 | Rate Limiting Too Permissive (~18 Requests) | Medium | 5.3 | Infrastructure | Fixed | rateLimiter.ts |
+| 28 | QMS-027 | CSRF Logout via GET Request | Medium | 5.3 | Infrastructure | Fixed | authRoutes.ts, navigation.js |
+| 29 | QMS-028 | CSV Injection — Formula Payloads Stored Without Sanitization | Medium | 5.3 | Input Validation | Fixed | inputSanitizer.ts |
+| 30 | QMS-029 | Verbose Error Messages Disclose Field Names | Low | 3.7 | Error Handling | Fixed | All route files, inputSanitizer.ts |
+| 31 | QMS-030 | PostgreSQL Type Disclosure via Error Messages | Low | 3.7 | Error Handling | Fixed | All route files, inputSanitizer.ts |
+| 32 | QMS-031 | Endpoint Enumeration via Response Code Differentiation | Low | 3.7 | Low-Risk | Fixed | index.ts |
+| 33 | QMS-032 | Sequential Resource IDs Enable Enumeration | Low | 3.7 | Low-Risk | Accepted | N/A (mitigated by RBAC) |
+| 34 | QMS-033 | Google OAuth Client ID Exposed | Low | 3.7 | Low-Risk | Accepted | N/A (by design per RFC 6749) |
+| 35 | QMS-034 | Mastra Framework Disclosure in CORS Headers | Low | 3.7 | Low-Risk | Fixed | index.ts |
+| 36 | QMS-035 | Mode:MOCK Disclosure via Agent Performance API | Low | 3.7 | Error Handling | Fixed | index.ts |
+| 37 | QMS-036 | Broken Export Endpoints (500 Errors) | Low | 3.5 | Low-Risk | Fixed | Various route files |
+| 38 | QMS-037 | DELETE Operations Not Implemented | Info | — | Low-Risk | Acknowledged | N/A |
+| 39 | QMS-038 | 22 PRD-Documented Endpoints Not Implemented | Info | — | Low-Risk | Acknowledged | N/A |
 
-**Note:** QMS-021 was not assigned in the pentest report. QMS-022 was split into two sub-findings (QMS-022/ROI and QMS-022/SQL) addressing different aspects of the same finding category.
+**Severity Distribution Verification:** Critical=8 (rows 1–8), High=10 (rows 9–18), Medium=11 (rows 19–29), Low=8 (rows 30–37), Info=2 (rows 38–39). **Total: 39 findings.**
+
+**Note:** QMS-022 was reported as two distinct sub-findings (QMS-022/ROI covering unauthorized financial data injection, and QMS-022/SQL covering SQL error disclosure), counted as two separate findings in this table.
 
 ---
 
