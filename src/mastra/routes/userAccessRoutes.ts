@@ -282,8 +282,8 @@ export const userAccessRoutes = [
             return c.json({ error: passwordError }, 400);
           }
 
-          const crypto = await import('crypto');
-          const passwordHash = crypto.createHash('sha256').update(body.password).digest('hex');
+          const bcrypt = await import('bcryptjs');
+          const passwordHash = await bcrypt.hash(body.password, 12);
 
           logger?.info('✅ [UserAccess] Accepting invitation');
           
