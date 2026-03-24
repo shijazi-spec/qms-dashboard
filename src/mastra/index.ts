@@ -198,19 +198,17 @@ export const mastra = new Mastra({
             return c.json({ error: 'Authentication required' }, 401);
           }
 
-          if (session && session.role === 'department_viewer' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-            return c.json({ error: 'Read-only access: write operations not permitted for department_viewer role' }, 403);
-          }
-
           if (urlPath.startsWith('/api/admin/') || urlPath === '/api/admin') {
             if (!hasAdminKey) {
               return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
             }
           }
 
-          if (urlPath.startsWith('/api/rbac/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-            if (!hasAdminKey && (!session || session.role !== 'admin')) {
-              return c.json({ error: 'Admin access required for RBAC management' }, 403);
+          if (!hasAdminKey && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            const { enforceRoutePermission } = await import('../utils/rbacMiddleware');
+            const result = await enforceRoutePermission(c, urlPath, method);
+            if (!result.allowed) {
+              return c.json({ error: result.error || 'Insufficient permissions' }, 403);
             }
           }
         }
