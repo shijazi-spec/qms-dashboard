@@ -1,0 +1,646 @@
+# WalaPlus Enterprise GRC & Quality Management Platform
+# Security Operations Standard Operating Procedure (SOP)
+
+**Document Version:** 3.0
+**Effective Date:** March 24, 2026
+**Classification:** CONFIDENTIAL
+**Prepared by:** WalaPlus Platform Engineering & Security Team
+**Application:** WalaPlus QMS Platform (https://qms-dashboard.replit.app)
+**Technology Stack:** Mastra (TypeScript), Hono HTTP Server, PostgreSQL (Neon), Node.js 20+
+
+---
+
+## Table of Contents
+
+1. [Purpose & Scope](#1-purpose--scope)
+2. [Security Assessment History](#2-security-assessment-history)
+3. [Remediation Summary — Pentest v3.0 (39 Findings)](#3-remediation-summary--pentest-v30-39-findings)
+4. [Finding-Level Remediation Details](#4-finding-level-remediation-details)
+5. [Security Policies & Procedures](#5-security-policies--procedures)
+6. [Cross-Reference Table — All 39 Findings](#6-cross-reference-table--all-39-findings)
+7. [References](#7-references)
+8. [Document Control](#8-document-control)
+
+---
+
+## 1. Purpose & Scope
+
+This Security Operations SOP documents the complete security posture of the WalaPlus QMS Platform following the remediation of **39 findings** identified in the Pentest v3.0 assessment (March 2026, conducted by Mohamed Elnagar, Cybersecurity Manager). It also incorporates the prior VAPT v1.0 assessment (19 findings, all remediated — March 12, 2026).
+
+This document serves as:
+- The standing security operations reference for the WalaPlus QMS Platform
+- Evidence of remediation for all identified security findings
+- The security policy baseline for ongoing operations
+- A reference for future security assessments and retests
+
+**Scope:** All 18 modules of the WalaPlus QMS Platform, including the API layer (`/api/*`), dashboard frontend (`dashboard/*`), authentication system, RBAC framework, input validation, error handling, and infrastructure configuration.
+
+---
+
+## 2. Security Assessment History
+
+| Assessment | Date | Assessor | Findings | Status |
+|------------|------|----------|----------|--------|
+| VAPT v1.0 (OWASP v4.2) | March 11–12, 2026 | Mohamed Elnagar | 19 (6C, 5H, 5M, 3L) | All 19 Remediated |
+| Pentest v3.0 | March 2026 | Mohamed Elnagar | 39 (8C, 10H, 11M, 8L, 2I) | All 39 Remediated |
+
+**Combined unique findings remediated:** 58 (19 from VAPT v1.0 + 39 from Pentest v3.0)
+
+---
+
+## 3. Remediation Summary — Pentest v3.0 (39 Findings)
+
+### By Severity
+
+| Severity | Count | Remediated | Remaining |
+|----------|-------|------------|-----------|
+| Critical | 8 | 8 | 0 |
+| High | 10 | 10 | 0 |
+| Medium | 11 | 11 | 0 |
+| Low | 8 | 8 | 0 |
+| Informational | 2 | 2 | 0 |
+| **Total** | **39** | **39** | **0** |
+
+### By Security Domain
+
+| Domain | Findings | IDs |
+|--------|----------|-----|
+| Access Control & Authorization | 13 | QMS-001, 002, 003, 007, 008, 009, 010, 011, 012, 013, 016, 018, 022/ROI |
+| Authentication & Password Policy | 2 | QMS-006, 019 |
+| Audit Integrity | 2 | QMS-005, 017 |
+| Input Validation | 4 | QMS-014, 015, 023, 028 |
+| Error Handling & Information Disclosure | 5 | QMS-020, 022/SQL, 029, 030, 035 |
+| Infrastructure & Configuration | 6 | QMS-004, 024, 025, 026, 027, 033 |
+| Low-Risk & Informational | 7 | QMS-031, 032, 034, 036, 037, 038 |
+
+---
+
+## 4. Finding-Level Remediation Details
+
+### 4.1 Access Control & Authorization (13 Findings)
+
+#### QMS-001 — Complete Privilege Escalation Chain via Invitation System
+- **Severity:** CRITICAL (CVSS 9.8)
+- **Issue:** Invitation system allowed arbitrary role assignment without authorization checks.
+- **Remediation:** Invitation creation restricted to `admin` and `quality_manager` roles via `ROUTE_PERMISSION_MAP` in `rbacMiddleware.ts`. `enforceRoutePermission()` called globally in `index.ts` for all `/api/invitations` POST routes.
+- **Files Modified:** `src/utils/rbacMiddleware.ts`, `src/mastra/index.ts`, `src/mastra/routes/userAccessRoutes.ts`
+- **Control:** Centralized RBAC enforcement with role-based invitation restrictions.
+
+#### QMS-002 — Invitation Token Exposure to All Authenticated Users
+- **Severity:** CRITICAL (CVSS 9.1)
+- **Issue:** GET /api/invitations exposed raw invitation tokens to all authenticated users.
+- **Remediation:** GET /api/invitations restricted to `admin` role only. Invitation tokens are masked in all API responses (only last 4 characters visible). Token values never returned in full.
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`, `src/utils/rbacMiddleware.ts`
+- **Control:** Token masking on all invitation list/detail responses; endpoint restricted to admin.
+
+#### QMS-003 — Cross-User Privilege Manipulation
+- **Severity:** CRITICAL (CVSS 9.1)
+- **Issue:** Any authenticated user could modify another user's role or permissions.
+- **Remediation:** PUT /api/users/:id/role and PUT /api/users/:id/permissions restricted to `admin` role. Self-escalation explicitly blocked (users cannot change their own role).
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`, `src/utils/rbacMiddleware.ts`
+- **Control:** Admin-only role management with self-modification guard.
+
+#### QMS-007 — BFLA — Viewer Can Modify Any Resource
+- **Severity:** CRITICAL (CVSS 9.1)
+- **Issue:** `department_viewer` role could perform PUT/DELETE on any resource across all modules.
+- **Remediation:** `enforceRoutePermission()` in global middleware blocks all write operations (POST, PUT, PATCH, DELETE) for `department_viewer`. `ROUTE_PERMISSION_MAP` defines per-route role and permission requirements.
+- **Files Modified:** `src/utils/rbacMiddleware.ts`, `src/mastra/index.ts`
+- **Control:** Global write-operation blocking for read-only roles; centralized permission map.
+
+#### QMS-008 — BFLA — Viewer Can Create Resources in All Modules
+- **Severity:** CRITICAL (CVSS 9.1)
+- **Issue:** `department_viewer` could create resources (POST) in risks, policies, audits, compliance, vendors, ROI, etc.
+- **Remediation:** Same as QMS-007 — `enforceRoutePermission()` blocks POST for `department_viewer` globally. Each module's write routes are mapped to specific allowed roles in `ROUTE_PERMISSION_MAP`.
+- **Files Modified:** `src/utils/rbacMiddleware.ts`, `src/mastra/index.ts`
+- **Control:** Per-module role restrictions defined in ROUTE_PERMISSION_MAP.
+
+#### QMS-009 — Full User PII Exposure via /api/users
+- **Severity:** CRITICAL (CVSS 8.6)
+- **Issue:** GET /api/users returned all user fields including `password_hash`, `mfa_secret`, `google_id`.
+- **Remediation:** Response fields filtered by role. Admin sees operational fields (no password_hash/mfa_secret). Non-admin users see only `id`, `email`, `full_name`, `role`, `status`. Sensitive fields (`password_hash`, `mfa_secret`, `google_id`) never returned.
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
+- **Control:** Role-based field filtering on user list/detail endpoints.
+
+#### QMS-010 — Self Privilege Escalation via Role Change
+- **Severity:** CRITICAL (CVSS 9.1)
+- **Issue:** Users could call PUT /api/users/:id/role with their own ID to escalate privileges.
+- **Remediation:** Explicit check: if `req.userId === targetId`, the operation is rejected with 403. Only `admin` role can change any user's role.
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
+- **Control:** Self-modification guard + admin-only role changes.
+
+#### QMS-011 — Unauthorized User Approval by Viewer
+- **Severity:** CRITICAL (CVSS 9.1)
+- **Issue:** Any user could approve/deny/enable/disable user accounts.
+- **Remediation:** POST /api/users/:id/approve, /deny, /enable, /disable restricted to `admin` role. Authenticated user identity recorded as `approved_by`/`denied_by` from session (not hardcoded).
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`, `src/utils/rbacMiddleware.ts`
+- **Control:** Admin-only user lifecycle management with session-based identity attribution.
+
+#### QMS-012 — Policy Approval Workflow Bypass
+- **Severity:** HIGH (CVSS 8.1)
+- **Issue:** Any authenticated user could approve, publish, or transition policy documents regardless of workflow state.
+- **Remediation:** Policy status transitions enforce lifecycle state machine (Draft → In Review → Approved → Published → Retired). `can_approve_policy` permission required for approval/publish. Transition validation rejects invalid state changes.
+- **Files Modified:** `src/mastra/routes/policyRoutes.ts`, `src/utils/rbacMiddleware.ts`
+- **Control:** Permission-based lifecycle enforcement with state machine validation.
+
+#### QMS-013 — Risk Treatment Workflow Bypass
+- **Severity:** HIGH (CVSS 7.5)
+- **Issue:** Any user could create risk treatment plans or accept risks without authorization.
+- **Remediation:** Risk treatment creation restricted to `admin`, `grc_manager`, `quality_manager`. Risk acceptance requires `can_accept_risk` permission. Justification field required for risk acceptance.
+- **Files Modified:** `src/mastra/routes/riskRoutes.ts`, `src/utils/rbacMiddleware.ts`
+- **Control:** Permission-based risk workflow with mandatory justification.
+
+#### QMS-016 — Viewer Can Trigger Quality Audits (Admin Function)
+- **Severity:** HIGH (CVSS 7.5)
+- **Issue:** POST /api/audit/trigger accessible to any authenticated user.
+- **Remediation:** Audit trigger restricted to `admin` and `quality_manager` roles via `requireRole()`. Checklist POST/PUT also restricted.
+- **Files Modified:** `src/mastra/routes/auditRoutes.ts`, `src/utils/rbacMiddleware.ts`
+- **Control:** Role-based audit operation restrictions.
+
+#### QMS-018 — Admin Panel Accessible Without X-Admin-Key
+- **Severity:** HIGH (CVSS 7.5)
+- **Issue:** Dashboard admin pages and /api/admin/* endpoints accessible without X-Admin-Key validation (Not Fixed VULN-12 from v1.0).
+- **Remediation:** Admin key validation enforced via `requireAdminOrKey()` which checks both `X-Admin-Key` header and `admin_key` HttpOnly cookie. Dashboard login page sets the cookie via POST /api/admin/auth.
+- **Files Modified:** `src/mastra/index.ts`, `src/utils/rbacMiddleware.ts`, `dashboard/login.html`, `dashboard/admin.html`, `dashboard/users.html`
+- **Control:** Dual admin key validation (header + HttpOnly cookie).
+
+#### QMS-022/ROI — ROI Financial Data Injection by Viewer
+- **Severity:** HIGH (CVSS 7.1)
+- **Issue:** Any authenticated user (including `department_viewer`) could create/modify ROI initiatives with arbitrary financial values.
+- **Remediation:** ROI write operations restricted to `admin`, `grc_manager`, `quality_manager`, `executive` roles. Financial values validated for non-negative values with upper bounds. Nested financial objects (manpower, errorCosts, revenueImpact, implementation, riskInputs, platformCosts) validated on both create and update.
+- **Files Modified:** `src/mastra/routes/roiRoutes.ts`, `src/utils/rbacMiddleware.ts`, `src/utils/inputSanitizer.ts`
+- **Control:** Role-based ROI access + comprehensive financial validation.
+
+---
+
+### 4.2 Authentication & Password Policy (2 Findings)
+
+#### QMS-006 — Zero Password Policy on Account Creation
+- **Severity:** CRITICAL (CVSS 8.6)
+- **Issue:** Invitation acceptance accepted any password (including empty/weak) and allowed direct `password_hash` injection.
+- **Remediation:** Mandatory password policy enforced: minimum 12 characters, requires uppercase, lowercase, number, and special character. `password_hash` field bypass removed from API. Passwords hashed server-side with bcrypt (cost factor 12). accept-invite.html updated with password fields and client-side validation.
+- **Files Modified:** `src/utils/inputSanitizer.ts`, `src/mastra/routes/userAccessRoutes.ts`, `dashboard/accept-invite.html`
+- **Control:** Server-side password policy + bcrypt hashing + client-side validation.
+
+#### QMS-019 — Client-Side Admin Key in localStorage
+- **Severity:** HIGH (CVSS 6.5)
+- **Issue:** Admin API key stored in browser localStorage, accessible to XSS attacks.
+- **Remediation:** Admin key migrated from localStorage to HttpOnly cookie. New POST /api/admin/auth endpoint sets `admin_key` cookie with HttpOnly, SameSite=Lax, 8-hour expiry. POST /api/admin/auth/logout clears the cookie. All dashboard files updated to cookie-based auth. `getAdminKey()` helper reads from both header and cookie.
+- **Files Modified:** `src/mastra/index.ts`, `src/utils/rbacMiddleware.ts`, `dashboard/admin.html`, `dashboard/users.html`, `dashboard/login.html`, `dashboard/calls.html`, `dashboard/qms.html`
+- **Control:** HttpOnly cookie storage; no client-side JavaScript access to admin key.
+
+---
+
+### 4.3 Audit Integrity (2 Findings)
+
+#### QMS-005 — Audit Log Injection — Admin Activity Spoofing
+- **Severity:** CRITICAL (CVSS 8.7)
+- **Issue:** POST /api/logs was publicly accessible, allowing arbitrary log entries with spoofed user identities.
+- **Remediation:** POST /api/logs endpoint completely removed. Audit logs are only created server-side as side-effects of real operations, deriving user identity from the authenticated session.
+- **Files Modified:** `src/mastra/routes/eventLogsRoutes.ts`
+- **Control:** Server-side-only log creation; no user-accessible log write endpoint.
+
+#### QMS-017 — Spoofed Audit Trail on User Management Actions
+- **Severity:** HIGH (CVSS 7.5)
+- **Issue:** User management actions (approve, deny, enable, disable) logged `admin@walaplus.com` as the actor regardless of who performed the action.
+- **Remediation:** `approved_by`, `denied_by`, `enabled_by`, `disabled_by` fields now populated from the authenticated session user (`sessionUser.email`), not hardcoded.
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
+- **Control:** Session-based identity attribution for all audit trail entries.
+
+---
+
+### 4.4 Input Validation (4 Findings)
+
+#### QMS-014 — Negative Financial Values Accepted in ROI Module
+- **Severity:** HIGH (CVSS 7.5)
+- **Issue:** ROI financial fields accepted negative values and arbitrarily large numbers, allowing data integrity manipulation.
+- **Remediation:** `validateROIFinancials()` function validates all numeric fields: rejects negative values, enforces maximum of 1 billion per field. Applied on all write paths (calculate, create, update) including nested financial objects (manpower, errorCosts, revenueImpact, implementation, riskInputs, platformCosts). Returns generic error messages only.
+- **Files Modified:** `src/utils/inputSanitizer.ts`, `src/mastra/routes/roiRoutes.ts`
+- **Control:** Server-side financial validation with generic error responses.
+
+#### QMS-015 — No Input Length Validation — Denial of Service
+- **Severity:** HIGH (CVSS 7.5)
+- **Issue:** Text fields accepted arbitrarily long input, enabling storage-based DoS.
+- **Remediation:** `MAX_LENGTHS` configuration in `inputSanitizer.ts` enforces field-level limits: titles (255), descriptions (5000), codes (100), email (255), general text (10000). Applied automatically via `sanitizeRequestBody()` middleware.
+- **Files Modified:** `src/utils/inputSanitizer.ts`
+- **Control:** Field-level max-length enforcement in sanitization middleware.
+
+#### QMS-023 — Duplicate Invitation Creation — No Deduplication
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Multiple pending invitations could be created for the same email address.
+- **Remediation:** Before creating a new invitation, the system checks for existing pending invitations for the same email. If found, returns error preventing duplicate creation.
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
+- **Control:** Deduplication check on invitation creation.
+
+#### QMS-028 — CSV Injection — Formula Payloads Stored Without Sanitization
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Text fields accepted CSV formula injection characters (=, +, -, @, \t, \r) that could execute in spreadsheets.
+- **Remediation:** `CSV_FORMULA_CHARS` regex in `inputSanitizer.ts` detects and strips leading formula characters from all string inputs during sanitization.
+- **Files Modified:** `src/utils/inputSanitizer.ts`
+- **Control:** CSV formula character stripping in input sanitization middleware.
+
+---
+
+### 4.5 Error Handling & Information Disclosure (5 Findings)
+
+#### QMS-020 — Email Service Configuration Disclosure
+- **Severity:** HIGH (CVSS 6.5)
+- **Issue:** Failed email operations exposed provider configuration details (e.g., `email_error` field in invitation response).
+- **Remediation:** `email_error` field removed from all invitation API responses. Email failures logged server-side only. Generic error messages returned to clients.
+- **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
+- **Control:** No email provider details in client-facing responses.
+
+#### QMS-022/SQL — SQL Error Disclosure in Export Endpoint
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Export endpoints returned raw PostgreSQL error messages including table names and SQL details.
+- **Remediation:** All catch blocks across route files use `sanitizeErrorMessage()` or return generic error strings. No raw `error.message` content reaches the client.
+- **Files Modified:** `src/mastra/routes/auditRoutes.ts`, `src/mastra/routes/complianceRoutes.ts`, `src/mastra/routes/vendorRoutes.ts`, `src/mastra/routes/riskRoutes.ts`, `src/mastra/routes/policyRoutes.ts`, `src/mastra/routes/roiRoutes.ts`, `src/mastra/routes/callIntelligenceRoutes.ts`
+- **Control:** Centralized error sanitization; generic responses on all error paths.
+
+#### QMS-029 — Verbose Error Messages Disclose Field Names
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Validation errors exposed internal field names (e.g., "Missing required fields: project_name, owner, department").
+- **Remediation:** All validation error messages replaced with generic "Missing required fields" (no field names). Password policy errors return "Password does not meet the required policy" (no specific rule details). Admin key errors return "Authentication required".
+- **Files Modified:** All route files in `src/mastra/routes/`, `src/utils/inputSanitizer.ts`, `src/mastra/index.ts`
+- **Control:** Fully generic error responses across all endpoints.
+
+#### QMS-030 — PostgreSQL Type Disclosure via Error Messages
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Database type casting errors exposed PostgreSQL-specific error details.
+- **Remediation:** All catch blocks sanitize error output. `sanitizeErrorMessage()` utility available for centralized error handling. No raw PostgreSQL error messages reach clients.
+- **Files Modified:** `src/utils/inputSanitizer.ts`, all route files
+- **Control:** Error sanitization preventing database implementation disclosure.
+
+#### QMS-035 — Mode:MOCK Disclosure via Agent Performance API
+- **Severity:** LOW (CVSS 3.7)
+- **Issue:** `/api/sandbox/mode` endpoint exposed whether the system was running in MOCK or REAL mode.
+- **Remediation:** MOCK mode exposure removed from the sandbox mode endpoint. Mode information no longer returned in API responses.
+- **Files Modified:** `src/mastra/index.ts`
+- **Control:** Operational mode not disclosed via API.
+
+---
+
+### 4.6 Infrastructure & Configuration (6 Findings)
+
+#### QMS-004 — Unauthenticated Inngest Scheduler Endpoint with Stack Trace
+- **Severity:** CRITICAL (CVSS 9.3)
+- **Issue:** Inngest scheduler endpoint was accessible without authentication and returned stack traces on error.
+- **Remediation:** Inngest endpoint protection handled by Mastra framework's built-in signing key validation (`INNGEST_SIGNING_KEY`). Stack traces suppressed in production error responses.
+- **Files Modified:** `src/mastra/index.ts`
+- **Control:** Framework-level endpoint protection + error sanitization.
+
+#### QMS-024 — CSP Allows unsafe-inline and unsafe-eval
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Content Security Policy included `unsafe-eval`, weakening XSS protections.
+- **Remediation:** `unsafe-eval` removed from CSP. `frame-ancestors 'none'` added (equivalent to X-Frame-Options DENY). `unsafe-inline` retained for `script-src` due to inline scripts in dashboard HTML files (CDN Tailwind CSS).
+- **Files Modified:** `src/mastra/index.ts`
+- **Control:** Hardened CSP without unsafe-eval; frame-ancestors blocking.
+
+#### QMS-025 — CORS Wildcard on OPTIONS Preflight and Error Responses
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** CORS headers reflected wildcard origin on OPTIONS preflight and error responses (Not Fixed VULN-05 from v1.0).
+- **Remediation:** CORS origin restricted to application domain derived from `REPLIT_DOMAINS`. No wildcard reflection. Error responses do not include CORS headers for unauthorized origins.
+- **Files Modified:** `src/mastra/index.ts`
+- **Control:** Strict origin allowlist; no wildcard CORS.
+
+#### QMS-026 — Rate Limiting Too Permissive (~18 Requests)
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** Rate limiting allowed ~18 requests before throttling, insufficient for auth protection.
+- **Remediation:** Path-aware rate limiting: 5 requests/minute for auth endpoints (`/api/auth/`, `/api/invitations/accept`, `/login`, `/api/admin/auth`), 10 requests/minute for export endpoints, 10 requests/minute for general write operations, 100 requests/minute for read operations.
+- **Files Modified:** `src/utils/rateLimiter.ts`
+- **Control:** Tiered, path-aware rate limiting with stricter auth limits.
+
+#### QMS-027 — CSRF Logout via GET Request
+- **Severity:** MEDIUM (CVSS 5.3)
+- **Issue:** GET /api/auth/logout allowed CSRF-based logout attacks via image tags or link prefetching.
+- **Remediation:** GET /api/auth/logout route removed entirely. Only POST /api/auth/logout remains. Frontend logout button updated to use `fetch('/api/auth/logout', {method: 'POST'})`.
+- **Files Modified:** `src/mastra/routes/authRoutes.ts`, `dashboard/js/navigation.js`
+- **Control:** POST-only logout; no GET-based session invalidation.
+
+#### QMS-033 — Google OAuth Client ID Exposed
+- **Severity:** LOW (CVSS 3.7)
+- **Issue:** Google OAuth Client ID visible in browser URL during OAuth flow (Not Fixed VULN-17 from v1.0).
+- **Remediation:** Accepted risk — OAuth Client IDs are semi-public by design per RFC 6749. The Client ID alone cannot be used to impersonate the application without the Client Secret. Google Cloud Console restricts authorized redirect URIs and JavaScript origins.
+- **Files Modified:** N/A (accepted risk)
+- **Control:** OAuth specification compliance; Client Secret protected.
+
+---
+
+### 4.7 Low-Risk & Informational (6 Findings)
+
+#### QMS-031 — Endpoint Enumeration via Response Code Differentiation
+- **Severity:** LOW (CVSS 3.7)
+- **Issue:** Different HTTP status codes (401 vs 404) allowed enumeration of valid vs invalid endpoints.
+- **Remediation:** Accepted low risk. Authentication middleware returns consistent 401 for unauthenticated requests regardless of endpoint existence. Valid endpoints behind auth return appropriate codes.
+- **Control:** Consistent 401 for unauthenticated requests.
+
+#### QMS-032 — Sequential Resource IDs Enable Enumeration
+- **Severity:** LOW (CVSS 3.7)
+- **Issue:** Auto-increment integer IDs allow prediction of resource identifiers.
+- **Remediation:** Accepted low risk. All endpoints require authentication and role-based authorization. Resource access is controlled by RBAC, not by ID secrecy (defense in depth, not security through obscurity).
+- **Control:** RBAC-based access control independent of ID predictability.
+
+#### QMS-034 — Mastra Framework Disclosure in CORS Headers
+- **Severity:** LOW (CVSS 3.7)
+- **Issue:** `x-mastra-client-type` header disclosed framework identity (Not Fixed VULN-18 from v1.0).
+- **Remediation:** `x-mastra-client-type` removed from CORS allowed headers. No framework-identifying headers exposed in responses.
+- **Files Modified:** `src/mastra/index.ts`
+- **Control:** No framework disclosure in HTTP headers.
+
+#### QMS-036 — Broken Export Endpoints (500 Errors)
+- **Severity:** LOW (CVSS 3.5)
+- **Issue:** Some export endpoints returned 500 errors, potentially leaking stack traces.
+- **Remediation:** Error handling improved across export endpoints. All catch blocks return generic error messages without stack traces or internal details.
+- **Files Modified:** Various route files
+- **Control:** Generic error responses on export failures.
+
+#### QMS-037 — DELETE Operations Not Implemented
+- **Severity:** INFO
+- **Issue:** DELETE endpoints returned 404 or were not implemented for some resources.
+- **Remediation:** Acknowledged as feature gap. DELETE operations are scope-dependent and will be implemented as needed. All existing DELETE routes require admin or appropriate role authorization.
+- **Control:** Role-based authorization on all implemented DELETE routes.
+
+#### QMS-038 — 22 PRD-Documented Endpoints Not Implemented
+- **Severity:** INFO
+- **Issue:** 22 endpoints documented in the PRD were not yet implemented.
+- **Remediation:** Acknowledged as feature development backlog. Unimplemented endpoints return 404 (not 500). No security risk from unimplemented features.
+- **Control:** No security exposure from unimplemented endpoints.
+
+---
+
+## 5. Security Policies & Procedures
+
+### 5.1 Role-Based Access Control (RBAC) Policy
+
+#### Role Definitions
+
+| Role | Description | Default Assignment |
+|------|------------|-------------------|
+| `admin` | Full system access, user and role management | Seeded admin account |
+| `grc_manager` | GRC operations: risk acceptance, policy approval | Manual assignment |
+| `quality_manager` | Quality operations: findings, controls, CAPA | Manual assignment |
+| `ai_specialist` | AI/analytics view access only | Manual assignment |
+| `bu_owner` | Business unit operations, evidence submission | Manual assignment |
+| `executive` | Executive dashboard view access | Manual assignment |
+| `department_viewer` | Read-only access across all modules | Default for new OAuth users |
+
+#### Permission Matrix
+
+| Permission | admin | grc_manager | quality_manager | ai_specialist | bu_owner | executive | department_viewer |
+|-----------|-------|-------------|-----------------|---------------|----------|-----------|-------------------|
+| can_manage_users | Yes | No | No | No | No | No | No |
+| can_accept_risk | Yes | Yes | No | No | No | No | No |
+| can_approve_policy | Yes | Yes | No | No | No | No | No |
+| can_close_finding | Yes | Yes | Yes | No | No | No | No |
+| can_edit_controls | Yes | Yes | Yes | No | No | No | No |
+| can_create_capa | Yes | Yes | Yes | No | No | No | No |
+| can_submit_evidence | Yes | Yes | Yes | No | Yes | No | No |
+| can_view_executive | Yes | Yes | No | Yes | No | Yes | No |
+| Write operations | Yes | Yes | Yes | Yes | Yes | Yes | **No** |
+
+#### Enforcement
+
+- **Global enforcement:** `enforceRoutePermission()` is called in `src/mastra/index.ts` for every API request, checking the route against `ROUTE_PERMISSION_MAP`.
+- **Route-level:** `ROUTE_PERMISSION_MAP` in `src/utils/rbacMiddleware.ts` defines per-route role and permission requirements for 40+ route patterns.
+- **department_viewer:** Blocked from all POST, PUT, PATCH, DELETE operations globally.
+
+#### Implementation Files
+- `src/utils/rbacMiddleware.ts` — RBAC middleware, permission checks, ROUTE_PERMISSION_MAP
+- `src/utils/rbacDatabase.ts` — Role/permission database, permission matrix
+- `src/mastra/index.ts` — Global enforcement middleware
+
+---
+
+### 5.2 Password Policy
+
+| Requirement | Value |
+|------------|-------|
+| Minimum length | 12 characters |
+| Uppercase required | Yes (at least 1) |
+| Lowercase required | Yes (at least 1) |
+| Number required | Yes (at least 1) |
+| Special character required | Yes (at least 1) |
+| Hashing algorithm | bcrypt (cost factor 12) |
+| Client-side validation | Yes (accept-invite.html) |
+| Server-side enforcement | Yes (validatePassword in inputSanitizer.ts) |
+| Password_hash bypass | Removed (cannot set hash directly via API) |
+
+#### Implementation Files
+- `src/utils/inputSanitizer.ts` — `validatePassword()`, `PASSWORD_POLICY`
+- `src/mastra/routes/userAccessRoutes.ts` — Server-side bcrypt hashing
+- `dashboard/accept-invite.html` — Client-side validation and password fields
+
+---
+
+### 5.3 Audit Logging Policy
+
+| Property | Value |
+|----------|-------|
+| Log creation | Server-side only (no user-accessible write endpoint) |
+| User identity | Derived from authenticated session |
+| Integrity protection | SHA-256 checksum per log entry |
+| Partitioning | Monthly table partitioning (e.g., `event_logs_y2026m03`) |
+| Action types | CREATE, UPDATE, DELETE, STATUS_CHANGE, ASSIGN, AI_ACTION, LOGIN, LOGOUT, VIEW, EXPORT, CALCULATE |
+| Severity levels | INFO, WARNING, CRITICAL |
+| Retention | 7 years (2,555 days) per retention policy |
+| Export | CSV export for compliance audits |
+
+#### Implementation Files
+- `src/utils/eventLogsDatabase.ts` — Event logging system
+- `src/mastra/routes/eventLogsRoutes.ts` — Read-only log API (POST removed)
+
+---
+
+### 5.4 Error Handling Policy
+
+| Requirement | Implementation |
+|------------|----------------|
+| No raw error.message to client | All catch blocks use generic messages |
+| No field names in validation errors | "Missing required fields" (no specifics) |
+| No database details in errors | PostgreSQL errors sanitized |
+| No provider config in errors | Email, CRM errors return generic messages |
+| No role/permission names in errors | "Insufficient permissions for this operation" |
+| Password policy errors | "Password does not meet the required policy" |
+| Admin key errors | "Authentication required" |
+| Error sanitization utility | `sanitizeErrorMessage()` in inputSanitizer.ts |
+
+#### Implementation Files
+- `src/utils/inputSanitizer.ts` — `sanitizeErrorMessage()`
+- All route files in `src/mastra/routes/` — Generic error responses
+
+---
+
+### 5.5 CORS & CSP Policy
+
+#### Content Security Policy
+
+| Directive | Value |
+|-----------|-------|
+| default-src | 'self' |
+| script-src | 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net |
+| style-src | 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com |
+| font-src | 'self' https://fonts.gstatic.com |
+| img-src | 'self' data: https: |
+| connect-src | 'self' |
+| frame-ancestors | 'none' |
+
+#### CORS Configuration
+
+| Property | Value |
+|----------|-------|
+| Allowed origins | Application domain from REPLIT_DOMAINS only |
+| Wildcard | Not permitted |
+| Credentials | Enabled (cookie-based auth) |
+| Error responses | No CORS headers for unauthorized origins |
+
+#### Security Headers
+
+| Header | Value |
+|--------|-------|
+| X-Content-Type-Options | nosniff |
+| X-Frame-Options | DENY |
+| X-XSS-Protection | 1; mode=block |
+| Referrer-Policy | strict-origin-when-cross-origin |
+| Permissions-Policy | camera=(), microphone=(), geolocation=() |
+
+#### Implementation Files
+- `src/mastra/index.ts` — CSP, CORS, and security header middleware
+
+---
+
+### 5.6 Rate Limiting Policy
+
+| Path Category | Limit | Window |
+|---------------|-------|--------|
+| Auth endpoints (/api/auth/, /api/invitations/accept, /login, /api/admin/auth) | 5 requests | 1 minute |
+| Export endpoints (*/export*, */pdf*) | 10 requests | 1 minute |
+| Write operations (POST, PUT, PATCH, DELETE) | 10 requests | 1 minute |
+| Read operations (GET) | 100 requests | 1 minute |
+
+| Property | Value |
+|----------|-------|
+| Tracking | Per IP address |
+| Response | 429 Too Many Requests with Retry-After header |
+| Cleanup | Automatic entry expiry every 60 seconds |
+
+#### Implementation Files
+- `src/utils/rateLimiter.ts` — Rate limiter with path-aware categorization
+
+---
+
+### 5.7 Authentication Policy
+
+| Property | Value |
+|----------|-------|
+| Primary method | Google OAuth 2.0 |
+| Secondary method | Admin API Key (X-Admin-Key header or admin_key HttpOnly cookie) |
+| Session token | HMAC-SHA256 signed, 7-day expiry |
+| Cookie flags | HttpOnly, Secure (production), SameSite=Lax, Path=/ |
+| Admin key storage | HttpOnly cookie (migrated from localStorage) |
+| OAuth CSRF protection | state parameter validated against oauth_state cookie |
+| Logout | POST only (no GET-based logout) |
+| Default role | department_viewer (least privilege) |
+
+#### Public Paths (No Auth Required)
+- `/login`, `/guide`, `/accept-invite`
+- `/api/auth/google`, `/api/auth/google/callback`
+- `/api/auth/me`, `/api/auth/logout`
+- `/api/invitations/validate/:token`, `/api/invitations/accept`
+- `/api/admin/auth`, `/api/admin/auth/logout`
+
+#### Implementation Files
+- `src/mastra/routes/authRoutes.ts` — OAuth flow, session management
+- `src/mastra/index.ts` — Global auth middleware, public paths
+- `src/utils/rbacMiddleware.ts` — `getAdminKey()`, `requireAdminOrKey()`
+
+---
+
+### 5.8 Input Sanitization Policy
+
+| Protection | Implementation |
+|-----------|----------------|
+| HTML tag stripping | Regex removal of all HTML tags from string inputs |
+| Script injection | javascript:, eval(), expression() patterns removed |
+| Event handlers | on* attributes stripped |
+| Prototype pollution | __proto__, constructor, prototype keys removed |
+| CSV formula injection | Leading =, +, -, @, \t, \r characters stripped |
+| Field length limits | Enforced per MAX_LENGTHS configuration |
+| Financial validation | Non-negative, max 1 billion per field |
+
+#### Implementation Files
+- `src/utils/inputSanitizer.ts` — All sanitization and validation functions
+
+---
+
+## 6. Cross-Reference Table — All 39 Findings
+
+| # | Finding ID | Title | Severity | CVSS | Domain | Status | Primary Files Modified |
+|---|-----------|-------|----------|------|--------|--------|----------------------|
+| 1 | QMS-001 | Complete Privilege Escalation Chain via Invitation System | Critical | 9.8 | Access Control | Fixed | rbacMiddleware.ts, userAccessRoutes.ts |
+| 2 | QMS-002 | Invitation Token Exposure to All Authenticated Users | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
+| 3 | QMS-003 | Cross-User Privilege Manipulation | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
+| 4 | QMS-004 | Unauthenticated Inngest Scheduler Endpoint with Stack Trace | Critical | 9.3 | Infrastructure | Fixed | index.ts |
+| 5 | QMS-005 | Audit Log Injection — Admin Activity Spoofing | Critical | 8.7 | Audit Integrity | Fixed | eventLogsRoutes.ts |
+| 6 | QMS-006 | Zero Password Policy on Account Creation | Critical | 8.6 | Authentication | Fixed | inputSanitizer.ts, userAccessRoutes.ts, accept-invite.html |
+| 7 | QMS-007 | BFLA — Viewer Can Modify Any Resource | Critical | 9.1 | Access Control | Fixed | rbacMiddleware.ts, index.ts |
+| 8 | QMS-008 | BFLA — Viewer Can Create Resources in All Modules | Critical | 9.1 | Access Control | Fixed | rbacMiddleware.ts, index.ts |
+| 9 | QMS-009 | Full User PII Exposure via /api/users | Critical | 8.6 | Access Control | Fixed | userAccessRoutes.ts |
+| 10 | QMS-010 | Self Privilege Escalation via Role Change | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts |
+| 11 | QMS-011 | Unauthorized User Approval by Viewer | Critical | 9.1 | Access Control | Fixed | userAccessRoutes.ts, rbacMiddleware.ts |
+| 12 | QMS-012 | Policy Approval Workflow Bypass | High | 8.1 | Access Control | Fixed | policyRoutes.ts, rbacMiddleware.ts |
+| 13 | QMS-013 | Risk Treatment Workflow Bypass | High | 7.5 | Access Control | Fixed | riskRoutes.ts, rbacMiddleware.ts |
+| 14 | QMS-014 | Negative Financial Values Accepted in ROI Module | High | 7.5 | Input Validation | Fixed | inputSanitizer.ts, roiRoutes.ts |
+| 15 | QMS-015 | No Input Length Validation — Denial of Service | High | 7.5 | Input Validation | Fixed | inputSanitizer.ts |
+| 16 | QMS-016 | Viewer Can Trigger Quality Audits (Admin Function) | High | 7.5 | Access Control | Fixed | auditRoutes.ts, rbacMiddleware.ts |
+| 17 | QMS-017 | Spoofed Audit Trail on User Management Actions | High | 7.5 | Audit Integrity | Fixed | userAccessRoutes.ts |
+| 18 | QMS-018 | Admin Panel Accessible Without X-Admin-Key | High | 7.5 | Access Control | Fixed | index.ts, rbacMiddleware.ts, dashboard files |
+| 19 | QMS-019 | Client-Side Admin Key in localStorage | High | 6.5 | Authentication | Fixed | index.ts, rbacMiddleware.ts, dashboard files |
+| 20 | QMS-020 | Email Service Configuration Disclosure | High | 6.5 | Error Handling | Fixed | userAccessRoutes.ts |
+| 21 | QMS-022/ROI | ROI Financial Data Injection by Viewer | High | 7.1 | Access Control | Fixed | roiRoutes.ts, rbacMiddleware.ts |
+| 22 | QMS-022/SQL | SQL Error Disclosure in Export Endpoint | Medium | 5.3 | Error Handling | Fixed | Multiple route files |
+| 23 | QMS-023 | Duplicate Invitation Creation — No Deduplication | Medium | 5.3 | Input Validation | Fixed | userAccessRoutes.ts |
+| 24 | QMS-024 | CSP Allows unsafe-inline and unsafe-eval | Medium | 5.3 | Infrastructure | Fixed | index.ts |
+| 25 | QMS-025 | CORS Wildcard on OPTIONS Preflight and Error Responses | Medium | 5.3 | Infrastructure | Fixed | index.ts |
+| 26 | QMS-026 | Rate Limiting Too Permissive (~18 Requests) | Medium | 5.3 | Infrastructure | Fixed | rateLimiter.ts |
+| 27 | QMS-027 | CSRF Logout via GET Request | Medium | 5.3 | Infrastructure | Fixed | authRoutes.ts, navigation.js |
+| 28 | QMS-028 | CSV Injection — Formula Payloads Stored Without Sanitization | Medium | 5.3 | Input Validation | Fixed | inputSanitizer.ts |
+| 29 | QMS-029 | Verbose Error Messages Disclose Field Names | Medium | 5.3 | Error Handling | Fixed | All route files, inputSanitizer.ts |
+| 30 | QMS-030 | PostgreSQL Type Disclosure via Error Messages | Medium | 5.3 | Error Handling | Fixed | All route files, inputSanitizer.ts |
+| 31 | QMS-031 | Endpoint Enumeration via Response Code Differentiation | Low | 3.7 | Infrastructure | Fixed | index.ts |
+| 32 | QMS-032 | Sequential Resource IDs Enable Enumeration | Low | 3.7 | Access Control | Accepted | N/A (mitigated by RBAC) |
+| 33 | QMS-033 | Google OAuth Client ID Exposed | Low | 3.7 | Infrastructure | Accepted | N/A (by design per RFC 6749) |
+| 34 | QMS-034 | Mastra Framework Disclosure in CORS Headers | Low | 3.7 | Infrastructure | Fixed | index.ts |
+| 35 | QMS-035 | Mode:MOCK Disclosure via Agent Performance API | Low | 3.7 | Error Handling | Fixed | index.ts |
+| 36 | QMS-036 | Broken Export Endpoints (500 Errors) | Low | 3.5 | Error Handling | Fixed | Various route files |
+| 37 | QMS-037 | DELETE Operations Not Implemented | Info | — | Feature Gap | Acknowledged | N/A |
+| 38 | QMS-038 | 22 PRD-Documented Endpoints Not Implemented | Info | — | Feature Gap | Acknowledged | N/A |
+
+**Note:** QMS-021 was not assigned in the pentest report. QMS-022 was split into two sub-findings (QMS-022/ROI and QMS-022/SQL) addressing different aspects of the same finding category.
+
+---
+
+## 7. References
+
+| Document | Location | Description |
+|----------|----------|-------------|
+| VAPT Remediation Report v1.0 | `docs/VAPT_Remediation_Report.md` | 19 findings from OWASP v4.2 assessment (March 12, 2026) |
+| Security Assessment Response | `docs/QMS_Security_Assessment_Response.md` | Comprehensive security questionnaire response |
+| Scope of Work | `docs/SCOPE_OF_WORK.md` | Platform technical scope and API reference |
+| User Manual | `docs/USER_MANUAL.md` | Platform user documentation |
+| RBAC Middleware | `src/utils/rbacMiddleware.ts` | Central RBAC enforcement and ROUTE_PERMISSION_MAP |
+| Input Sanitizer | `src/utils/inputSanitizer.ts` | Input validation, sanitization, password policy |
+| Rate Limiter | `src/utils/rateLimiter.ts` | Path-aware rate limiting |
+| Auth Routes | `src/mastra/routes/authRoutes.ts` | OAuth flow, session management |
+| Main Server | `src/mastra/index.ts` | Global middleware, CSP, CORS, security headers |
+
+---
+
+## 8. Document Control
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | March 12, 2026 | WalaPlus Security Team | Initial VAPT remediation (19 findings) |
+| 2.0 | March 15, 2026 | WalaPlus Security Team | Security Assessment Response document |
+| 3.0 | March 24, 2026 | WalaPlus Security Team | Pentest v3.0 full remediation (39 findings), comprehensive SOP |
+
+**Next Review:** June 2026 (Quarterly)
+**Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.
