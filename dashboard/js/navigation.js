@@ -150,10 +150,10 @@ const WalaPlusNav = {
                   <p class="text-sm font-medium text-gray-900" data-testid="text-user-name"></p>
                   <p class="text-xs text-gray-500" data-testid="text-user-email"></p>
                 </div>
-                <a href="/api/auth/logout" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
+                <button onclick="(async()=>{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});window.location.href='/login';})()" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                   Sign out
-                </a>
+                </button>
               </div>
             </div>`;
 

@@ -262,16 +262,4 @@ export const authRoutes = [
       };
     },
   },
-  {
-    path: "/api/auth/logout",
-    method: "GET" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        const isSecure = !getRedirectUri().startsWith('http://localhost');
-        const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${isSecure ? '; Secure' : ''}`;
-        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`);
-        return c.redirect('/login');
-      };
-    },
-  },
 ];
