@@ -161,8 +161,8 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -179,7 +179,12 @@ export const policyRoutes = [
             return c.json({ error: 'Policy not found' }, 404);
           }
 
-          const updatedPolicy = await updatePolicy(id, body, sessionUser.email);
+          if (body.status && body.status !== existingPolicy.status) {
+            return c.json({ error: 'Status changes are not allowed via generic update. Use the dedicated /transition endpoint for policy lifecycle changes.' }, 400);
+          }
+          const { status, ...safeBody } = body;
+
+          const updatedPolicy = await updatePolicy(id, safeBody, sessionUser.email);
 
           await logEvent({
             entityType: 'DOCUMENT',

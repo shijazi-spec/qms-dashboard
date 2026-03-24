@@ -793,8 +793,10 @@ export const mastra = new Mastra({
         createHandler: async () => {
           return async (c: any) => {
             try {
+              const adminKey = process.env.ADMIN_API_KEY;
+              const providedKey = c.req.header('X-Admin-Key') || new URL(c.req.url).searchParams.get('admin_key');
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              if (!session || session.role !== 'admin') {
+              if (!adminKey || !providedKey || providedKey !== adminKey || !session || session.role !== 'admin') {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>

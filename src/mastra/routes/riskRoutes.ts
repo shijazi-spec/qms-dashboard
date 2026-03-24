@@ -246,7 +246,12 @@ export const riskRoutes = [
             return c.json({ error: 'Risk not found' }, 404);
           }
 
-          const updatedRisk = await updateRisk(id, body, sessionUser.email);
+          if (body.status && body.status !== existingRisk.status) {
+            return c.json({ error: 'Status changes are not allowed via generic update. Use the dedicated /close, /accept, or /escalate endpoints.' }, 400);
+          }
+          const { status, ...safeBody } = body;
+
+          const updatedRisk = await updateRisk(id, safeBody, sessionUser.email);
 
           await logEvent({
             entityType: 'SYSTEM',
