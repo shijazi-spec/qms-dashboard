@@ -1487,7 +1487,7 @@ ${transcriptText}
           // Validate required fields
           if (!body.call_record_id || !body.feedback_type) {
             logger?.warn("⚠️ [API] Missing required fields for AI feedback");
-            return c.json({ success: false, error: "Missing required fields: call_record_id, feedback_type" }, 400);
+            return c.json({ success: false, error: "Missing required fields" }, 400);
           }
 
           const validTypes = ['accurate', 'partially_accurate', 'inaccurate'];

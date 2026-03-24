@@ -71,7 +71,7 @@ export const complianceRoutes = [
           logger?.info('📝 [ComplianceAPI] POST /api/compliance/regulations', { name: body.name, by: sessionUser.email });
 
           if (!body.regulation_code || !body.name || !body.jurisdiction || !body.category) {
-            return c.json({ error: 'Missing required fields: regulation_code, name, jurisdiction, category' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const regulation = await createRegulation({ ...body, created_by: sessionUser.email });
@@ -171,7 +171,7 @@ export const complianceRoutes = [
           logger?.info('📝 [ComplianceAPI] POST /api/compliance/obligations', { title: body.title, by: sessionUser.email });
 
           if (!body.obligation_code || !body.regulation_id || !body.title || !body.description) {
-            return c.json({ error: 'Missing required fields: obligation_code, regulation_id, title, description' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const obligation = await createObligation({ ...body, created_by: sessionUser.email });
@@ -263,7 +263,7 @@ export const complianceRoutes = [
           logger?.info('📝 [ComplianceAPI] POST /api/compliance/assessments', { by: sessionUser.email });
 
           if (!body.obligation_id || !body.compliance_status) {
-            return c.json({ error: 'Missing required fields: obligation_id, compliance_status' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const obligation = await getObligationById(body.obligation_id);
@@ -355,7 +355,7 @@ export const complianceRoutes = [
           logger?.info('📝 [ComplianceAPI] POST /api/compliance/calendar');
 
           if (!body.obligation_id || !body.event_type || !body.scheduled_date) {
-            return c.json({ error: 'Missing required fields: obligation_id, event_type, scheduled_date' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const event = await createCalendarEvent(body);

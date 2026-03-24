@@ -121,7 +121,7 @@ export const auditRoutes = [
           logger?.info('📝 [AuditAPI] POST /api/audits', { title: body.title, by: sessionUser.email });
 
           if (!body.audit_code || !body.title || !body.audit_type) {
-            return c.json({ error: 'Missing required fields: audit_code, title, audit_type' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const audit = await createAudit({ ...body, created_by: sessionUser.email });
@@ -213,7 +213,7 @@ export const auditRoutes = [
           logger?.info('📝 [AuditAPI] POST /api/audits/findings', { title: body.title, by: sessionUser.email });
 
           if (!body.audit_id || !body.finding_code || !body.title || !body.description || !body.category || !body.severity) {
-            return c.json({ error: 'Missing required fields: audit_id, finding_code, title, description, category, severity' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const audit = await getAuditById(body.audit_id);

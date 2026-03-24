@@ -69,8 +69,17 @@ export function isDepartmentViewer(c: any): boolean {
   return user?.role === 'department_viewer';
 }
 
+function getAdminKey(c: any): string | null {
+  const headerKey = c.req.header('X-Admin-Key');
+  if (headerKey) return headerKey;
+  const cookies = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim());
+  const adminCookie = cookies.find((s: string) => s.startsWith('admin_key='));
+  if (adminCookie) return adminCookie.split('=')[1] || null;
+  return null;
+}
+
 export function requireAdminOrKey(c: any): SessionUser | null {
-  const adminKey = c.req.header('X-Admin-Key');
+  const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
   if (expectedKey && adminKey === expectedKey) {
     return { userId: 0, email: 'api-key@system', name: 'API Key Access', role: 'admin' };
@@ -82,7 +91,7 @@ export function requireAdminOrKey(c: any): SessionUser | null {
 }
 
 export function requireAuthOrKey(c: any): SessionUser | null {
-  const adminKey = c.req.header('X-Admin-Key');
+  const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
   if (expectedKey && adminKey === expectedKey) {
     return { userId: 0, email: 'api-key@system', name: 'API Key Access', role: 'admin' };
@@ -155,13 +164,13 @@ export async function enforceRoutePermission(c: any, path: string, method: strin
       if (user.role === 'admin') return { allowed: true };
 
       if (rule.roles && !rule.roles.includes(user.role as UserRole)) {
-        return { allowed: false, error: `Role '${user.role}' is not authorized for this operation` };
+        return { allowed: false, error: 'Insufficient permissions for this operation' };
       }
 
       if (rule.permission) {
         const hasPermission = await checkPermission(user.email, rule.permission);
         if (!hasPermission) {
-          return { allowed: false, error: `Permission '${rule.permission}' required` };
+          return { allowed: false, error: 'Insufficient permissions for this operation' };
         }
       }
 

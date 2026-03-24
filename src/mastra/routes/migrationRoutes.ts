@@ -108,7 +108,7 @@ export const migrationRoutes = [
           logger?.info('📝 [MigrationAPI] POST /api/migration/jobs', { name: body.name, by: sessionUser.email });
 
           if (!body.name || !body.source_type || !body.target_module) {
-            return c.json({ error: 'Missing required fields: name, source_type, target_module' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const jobCode = 'MIG-' + Date.now().toString(36).toUpperCase();

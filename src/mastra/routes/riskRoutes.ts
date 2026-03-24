@@ -196,7 +196,7 @@ export const riskRoutes = [
           logger?.info('📝 [RiskAPI] POST /api/risks', { title: body.risk_title, by: sessionUser.email });
 
           if (!body.risk_title || !body.risk_category || !body.impact_score || !body.likelihood_score) {
-            return c.json({ error: 'Missing required fields: risk_title, risk_category, impact_score, likelihood_score' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const risk = await createRisk({ ...body, identified_by: sessionUser.email });
@@ -299,7 +299,7 @@ export const riskRoutes = [
           }
 
           if (!body.action_title || !body.action_type || !body.assigned_to || !body.due_date) {
-            return c.json({ error: 'Missing required fields: action_title, action_type, assigned_to, due_date' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const action = await createTreatmentAction({

@@ -11,7 +11,7 @@ const WRITE_LIMIT = 20;
 const AUTH_LIMIT = 5;
 const EXPORT_LIMIT = 10;
 
-const AUTH_PATHS = ['/api/auth/', '/api/invitations/accept', '/login'];
+const AUTH_PATHS = ['/api/auth/', '/api/invitations/accept', '/login', '/api/admin/auth'];
 const EXPORT_PATHS = ['/export', '/pdf'];
 
 setInterval(() => {

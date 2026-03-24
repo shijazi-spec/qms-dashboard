@@ -127,7 +127,7 @@ export const policyRoutes = [
           logger?.info('📝 [PolicyAPI] POST /api/policies', { title: body.title, by: sessionUser.email });
 
           if (!body.policy_number || !body.title || !body.category) {
-            return c.json({ error: 'Missing required fields: policy_number, title, category' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const policy = await createPolicy({ ...body, created_by: sessionUser.email });

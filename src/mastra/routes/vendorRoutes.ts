@@ -95,7 +95,7 @@ export const vendorRoutes = [
           logger?.info('📝 [VendorAPI] POST /api/vendors', { name: body.name, by: sessionUser.email });
 
           if (!body.vendor_code || !body.name || !body.category) {
-            return c.json({ error: 'Missing required fields: vendor_code, name, category' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const vendor = await createVendor({ ...body, created_by: sessionUser.email });
@@ -187,7 +187,7 @@ export const vendorRoutes = [
           logger?.info('📝 [VendorAPI] POST /api/vendors/assessments', { by: sessionUser.email });
 
           if (!body.vendor_id || !body.assessment_type) {
-            return c.json({ error: 'Missing required fields: vendor_id, assessment_type' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const vendor = await getVendorById(body.vendor_id);
@@ -259,7 +259,7 @@ export const vendorRoutes = [
           logger?.info('📝 [VendorAPI] POST /api/vendors/remediations', { by: sessionUser.email });
 
           if (!body.vendor_id || !body.title || !body.description || !body.priority || !body.category) {
-            return c.json({ error: 'Missing required fields: vendor_id, title, description, priority, category' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const vendor = await getVendorById(body.vendor_id);

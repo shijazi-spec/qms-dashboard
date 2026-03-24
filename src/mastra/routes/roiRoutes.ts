@@ -127,7 +127,7 @@ export const roiRoutes = [
           await initROITables();
 
           if (!data.project_name || !data.owner || !data.department) {
-            return c.json({ error: "Missing required fields: project_name, owner, department" }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const { validateROIFinancials } = await import('../../utils/inputSanitizer');
