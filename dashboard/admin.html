@@ -956,7 +956,7 @@
         <script>
             let currentScorecard = null;
             let currentDocuments = [];
-            let adminKey = localStorage.getItem("adminKey") || "";
+            let adminAuthenticated = false;
             let useSessionAuth = false;
 
             (async function initAuth() {
@@ -967,30 +967,39 @@
                         useSessionAuth = true;
                     }
                 } catch(e) {}
-                if (!useSessionAuth && !adminKey) {
-                    promptForAdminKey();
-                } else {
-                    loadDocuments();
-                    loadScorecard();
+                if (!useSessionAuth) {
+                    const testRes = await fetch('/api/admin/documents');
+                    if (testRes.ok) {
+                        adminAuthenticated = true;
+                    } else {
+                        promptForAdminKey();
+                        return;
+                    }
                 }
+                loadDocuments();
+                loadScorecard();
             })();
 
             function getAdminHeaders() {
-                const headers = { "Content-Type": "application/json" };
-                if (adminKey && !useSessionAuth) {
-                    headers["X-Admin-Key"] = adminKey;
-                }
-                return headers;
+                return { "Content-Type": "application/json" };
             }
 
-            function promptForAdminKey() {
+            async function promptForAdminKey() {
                 if (useSessionAuth) return;
                 const key = prompt("Enter your Admin API Key:");
                 if (key) {
-                    adminKey = key;
-                    localStorage.setItem("adminKey", key);
-                    loadDocuments();
-                    loadScorecard();
+                    try {
+                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                        if (res.ok) {
+                            adminAuthenticated = true;
+                            loadDocuments();
+                            loadScorecard();
+                        } else {
+                            showToast('Invalid admin key', 'error');
+                        }
+                    } catch(e) {
+                        showToast('Authentication failed', 'error');
+                    }
                 }
             }
 
@@ -1000,8 +1009,7 @@
                         window.location.href = '/login';
                         return true;
                     }
-                    localStorage.removeItem("adminKey");
-                    adminKey = "";
+                    adminAuthenticated = false;
                     showToast(
                         "Authentication required. Please enter your admin key.",
                         "error",

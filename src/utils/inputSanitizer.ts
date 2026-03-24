@@ -106,13 +106,13 @@ export function validateROIFinancials(body: any): string | null {
       const val = body[key];
       if (val !== undefined && val !== null) {
         if (typeof val !== 'number' || isNaN(val)) {
-          return `Field '${key}' must be a valid number`;
+          return 'Invalid financial values provided';
         }
         if (val < 0) {
-          return `Field '${key}' must not be negative`;
+          return 'Financial values must not be negative';
         }
         if (val > 999999999999) {
-          return `Field '${key}' exceeds maximum allowed value`;
+          return 'Financial values exceed maximum allowed range';
         }
       }
     }

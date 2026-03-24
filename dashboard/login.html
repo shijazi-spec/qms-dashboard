@@ -98,11 +98,19 @@
             msg.textContent = messages[error] || 'An error occurred during sign-in. Please try again.';
         }
 
-        function loginWithAdminKey() {
+        async function loginWithAdminKey() {
             const key = document.getElementById('admin-key-input').value.trim();
             if (!key) return;
-            localStorage.setItem('adminApiKey', key);
-            window.location.href = '/admin';
+            try {
+                const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                if (res.ok) {
+                    window.location.href = '/admin';
+                } else {
+                    alert('Invalid admin key');
+                }
+            } catch(e) {
+                alert('Authentication failed');
+            }
         }
 
         document.getElementById('admin-key-input').addEventListener('keydown', function(e) {

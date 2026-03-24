@@ -317,7 +317,7 @@
     </div>
 
     <script>
-        let adminKey = localStorage.getItem('adminKey') || '';
+        let adminAuthenticated = false;
         let useSessionAuth = false;
         const headers = { 'Content-Type': 'application/json' };
 
@@ -326,20 +326,16 @@
                 const res = await fetch('/api/auth/me', { credentials: 'include' });
                 if (res.ok) {
                     useSessionAuth = true;
-                } else {
-                    if (!adminKey) {
-                        adminKey = prompt('Enter Admin API Key:') || '';
-                        if (adminKey) localStorage.setItem('adminKey', adminKey);
-                    }
                 }
-            } catch (e) {
-                if (!adminKey) {
-                    adminKey = prompt('Enter Admin API Key:') || '';
-                    if (adminKey) localStorage.setItem('adminKey', adminKey);
+            } catch (e) {}
+            if (!useSessionAuth) {
+                const key = prompt('Enter Admin API Key:') || '';
+                if (key) {
+                    try {
+                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                        if (res.ok) adminAuthenticated = true;
+                    } catch(e) {}
                 }
-            }
-            if (adminKey && !useSessionAuth) {
-                headers['X-Admin-Key'] = adminKey;
             }
             loadStats();
             switchTab('pending');

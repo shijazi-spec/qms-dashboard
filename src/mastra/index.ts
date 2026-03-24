@@ -154,7 +154,7 @@ export const mastra = new Mastra({
         c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'");
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
-        const publicPaths = ['/login', '/api/auth/', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept'];
+        const publicPaths = ['/login', '/api/auth/', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
@@ -190,7 +190,9 @@ export const mastra = new Mastra({
 
         if (isApi && !isPublic && !isMastraInternal) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
-          const adminKey = c.req.header('X-Admin-Key');
+          const adminKeyHeader = c.req.header('X-Admin-Key');
+          const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
+          const adminKey = adminKeyHeader || adminKeyCookie;
           const expectedAdminKey = process.env.ADMIN_API_KEY;
           const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
 
@@ -906,6 +908,37 @@ export const mastra = new Mastra({
               console.error("Error serving accept invite page:", error);
               return c.text("Error loading accept invite page", 500);
             }
+          };
+        },
+      },
+      {
+        path: "/api/admin/auth",
+        method: "POST",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const body = await c.req.json();
+              const key = body?.key;
+              const expectedKey = process.env.ADMIN_API_KEY;
+              if (!expectedKey || !key || key !== expectedKey) {
+                return c.json({ error: 'Invalid admin key' }, 401);
+              }
+              const isSecure = c.req.url.startsWith('https');
+              c.header('Set-Cookie', `admin_key=${key}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${isSecure ? '; Secure' : ''}`);
+              return c.json({ success: true });
+            } catch (error) {
+              return c.json({ error: 'Authentication failed' }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/admin/auth/logout",
+        method: "POST",
+        createHandler: async () => {
+          return async (c: any) => {
+            c.header('Set-Cookie', 'admin_key=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+            return c.json({ success: true });
           };
         },
       },

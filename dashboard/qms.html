@@ -708,7 +708,7 @@
         </div>
 
         <script>
-            let adminKey = localStorage.getItem("adminKey") || "";
+            let adminAuthenticated = false;
             let useSessionAuth = false;
 
             async function checkAuth() {
@@ -721,14 +721,18 @@
                     }
                 } catch(e) {}
 
-                if (!adminKey) {
+                if (!adminAuthenticated) {
                     const key = prompt(
                         "Enter Admin API Key to access QMS Dashboard:",
                     );
                     if (key) {
-                        adminKey = key;
-                        localStorage.setItem("adminKey", adminKey);
-                        return true;
+                        try {
+                            const authRes = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                            if (authRes.ok) {
+                                adminAuthenticated = true;
+                                return true;
+                            }
+                        } catch(e) {}
                     }
                     document.body.innerHTML = `
                     <div class="min-h-screen flex items-center justify-center bg-gray-50">
@@ -751,17 +755,11 @@
             }
 
             async function apiCall(endpoint) {
-                const headers = {};
-                if (adminKey && !useSessionAuth) {
-                    headers["X-Admin-Key"] = adminKey;
-                }
                 const res = await fetch(endpoint, {
-                    headers,
                     credentials: 'same-origin',
                 });
                 if (res.status === 401 && !useSessionAuth) {
-                    localStorage.removeItem("adminKey");
-                    adminKey = "";
+                    adminAuthenticated = false;
                     alert(
                         "Authentication failed. Please reload and enter a valid admin key.",
                     );
@@ -1058,12 +1056,17 @@
                 }
             }
 
-            function showCapaModal() {
-                if (!adminKey && !useSessionAuth) {
-                    adminKey = prompt("Enter Admin API Key:");
-                    if (adminKey) localStorage.setItem("adminKey", adminKey);
+            async function showCapaModal() {
+                if (!adminAuthenticated && !useSessionAuth) {
+                    const key = prompt("Enter Admin API Key:");
+                    if (key) {
+                        try {
+                            const authRes = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                            if (authRes.ok) adminAuthenticated = true;
+                        } catch(e) {}
+                    }
                 }
-                if (adminKey || useSessionAuth) {
+                if (adminAuthenticated || useSessionAuth) {
                     document
                         .getElementById("capa-modal")
                         .classList.remove("hidden");
@@ -1093,8 +1096,7 @@
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            "X-Admin-Key": adminKey,
-                        },
+                                                    },
                         body: JSON.stringify(data),
                     });
 
@@ -1122,7 +1124,7 @@
 
             async function loadTriggers() {
                 try {
-                    const headers = { 'X-Admin-Key': adminKey };
+                    const headers = {};
                     const [statsRes, triggersRes, notificationsRes] = await Promise.all([
                         fetch('/api/triggers/stats', { headers }),
                         fetch('/api/triggers', { headers }),
@@ -1225,7 +1227,7 @@
                 try {
                     const res = await fetch(`/api/triggers/${triggerId}/action`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+                        headers: { 'Content-Type': 'application/json',  },
                         body: JSON.stringify({ action: 'acknowledge' })
                     });
                     if (res.ok) {
@@ -1243,7 +1245,7 @@
                 try {
                     const res = await fetch(`/api/triggers/${triggerId}/action`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+                        headers: { 'Content-Type': 'application/json',  },
                         body: JSON.stringify({ action: 'dismiss' })
                     });
                     if (res.ok) {
@@ -1266,7 +1268,7 @@
                 try {
                     const res = await fetch(`/api/triggers/${triggerId}/action`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+                        headers: { 'Content-Type': 'application/json',  },
                         body: JSON.stringify({ action: 'decide', decision, decidedBy, notes })
                     });
                     if (res.ok) {
@@ -1284,7 +1286,7 @@
                 try {
                     const res = await fetch(`/api/notifications/${notificationId}/read`, {
                         method: 'POST',
-                        headers: { 'X-Admin-Key': adminKey }
+                        headers: {  }
                     });
                     if (res.ok) {
                         loadTriggers();
@@ -1297,7 +1299,7 @@
             async function loadTriggerBadge() {
                 try {
                     const res = await fetch('/api/triggers/stats', {
-                        headers: { 'X-Admin-Key': adminKey }
+                        headers: {  }
                     });
                     const stats = await res.json();
                     if (stats.success && stats.pendingCount > 0) {

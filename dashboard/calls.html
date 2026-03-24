@@ -1174,14 +1174,19 @@
         let selectedUploadFile = null;
         let selectedEvalCall = null;
         let callsForEval = [];
-        let adminKey = localStorage.getItem('adminKey') || '';
+        let adminAuthenticated = false;
         
-        function getAdminHeaders() {
-            if (!adminKey) {
-                adminKey = prompt('Enter Admin API Key for this operation:') || '';
-                if (adminKey) localStorage.setItem('adminKey', adminKey);
+        async function getAdminHeaders() {
+            if (!adminAuthenticated) {
+                const key = prompt('Enter Admin API Key for this operation:') || '';
+                if (key) {
+                    try {
+                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                        if (res.ok) adminAuthenticated = true;
+                    } catch(e) {}
+                }
             }
-            return { 'X-Admin-Key': adminKey, 'Content-Type': 'application/json' };
+            return { 'Content-Type': 'application/json' };
         }
 
         function handleFileSelect(event) {
@@ -2201,7 +2206,8 @@
             try {
                 const res = await fetch('/api/quality-scorecards', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': localStorage.getItem('adminKey') || '' },
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({
                         name: document.getElementById('sc-name').value,
                         description: document.getElementById('sc-description').value,
@@ -2228,7 +2234,8 @@
             try {
                 const res = await fetch(`/api/quality-scorecards/${id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': localStorage.getItem('adminKey') || '' },
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ is_active: active })
                 });
                 const data = await res.json();
