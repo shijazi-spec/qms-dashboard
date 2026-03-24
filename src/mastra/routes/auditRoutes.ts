@@ -108,8 +108,8 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
+          const { requireWriteRole, forbiddenResponse, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -154,8 +154,8 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
+          const { requireWriteRole, forbiddenResponse, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -200,8 +200,8 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
+          const { requireWriteRole, forbiddenResponse, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -277,8 +277,8 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
+          const { requireWriteRole, forbiddenResponse, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -348,8 +348,8 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
+          const { requireWriteRole, forbiddenResponse, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();

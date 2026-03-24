@@ -1,9 +1,16 @@
 import * as userDb from '../../utils/userAccessDatabase';
 import { sendResendEmail } from '../../utils/resendMail';
-import { requireAdminOrKey, requireAuthOrKey, getSessionUser, unauthorizedResponse, forbiddenResponse, type SessionUser } from '../../utils/rbacMiddleware';
+import { requireAdminOrKey, requireAuthOrKey, getSessionUser, requireRole, unauthorizedResponse, forbiddenResponse, type SessionUser } from '../../utils/rbacMiddleware';
+import type { UserRole } from '../../utils/rbacDatabase';
 
 function verifyAdminKey(c: any): SessionUser | null {
   return requireAdminOrKey(c);
+}
+
+function verifyAdminOrQualityManager(c: any): SessionUser | null {
+  const byKey = requireAdminOrKey(c);
+  if (byKey) return byKey;
+  return requireRole(c, ['admin', 'quality_manager'] as UserRole[]);
 }
 
 export const userAccessRoutes = [
@@ -102,7 +109,11 @@ export const userAccessRoutes = [
           await userDb.initUserAccessTables();
           logger?.info('📧 [UserAccess] GET /api/invitations');
           const invitations = await userDb.getInvitations();
-          return c.json({ success: true, invitations, count: invitations.length });
+          const masked = invitations.map((inv: any) => ({
+            ...inv,
+            token: inv.token ? `${inv.token.substring(0, 8)}...` : undefined
+          }));
+          return c.json({ success: true, invitations: masked, count: masked.length });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
           return c.json({ error: error.message }, 500);
@@ -116,9 +127,9 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const sessionUser = verifyAdminKey(c);
+          const sessionUser = verifyAdminOrQualityManager(c);
           if (!sessionUser) {
-            return c.json({ error: 'Admin access required' }, 403);
+            return c.json({ error: 'Admin or Quality Manager access required' }, 403);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();

@@ -164,6 +164,7 @@ export const mastra = new Mastra({
             const expectedKey = process.env.ADMIN_API_KEY;
             const hasAdminKey = expectedKey && adminKey === expectedKey;
             if (!hasAdminKey) {
+              return c.json({ error: 'Admin access required for Inngest endpoint' }, 403);
             }
           }
         }
@@ -195,6 +196,16 @@ export const mastra = new Mastra({
 
           if (!session && !hasAdminKey) {
             return c.json({ error: 'Authentication required' }, 401);
+          }
+
+          if (session && session.role === 'department_viewer' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            return c.json({ error: 'Read-only access: write operations not permitted for department_viewer role' }, 403);
+          }
+
+          if (urlPath.startsWith('/api/admin/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            if (!hasAdminKey && (!session || session.role !== 'admin')) {
+              return c.json({ error: 'Admin access required' }, 403);
+            }
           }
         }
 
@@ -778,7 +789,7 @@ export const mastra = new Mastra({
             try {
               const adminKey = process.env.ADMIN_API_KEY;
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              if (!adminKey && !session) {
+              if (!session || (session.role !== 'admin' && !adminKey)) {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>
@@ -927,12 +938,10 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const adminKey = c.req.header("X-Admin-Key");
-              const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const { requireAdminOrKey: rak } = await import("../utils/rbacMiddleware");
+              const adminUser = rak(c);
+              if (!adminUser) {
+                return c.json({ error: "Admin access required" }, 403);
               }
               
               const logger = mastra?.getLogger();
