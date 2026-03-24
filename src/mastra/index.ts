@@ -792,7 +792,7 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = process.env.ADMIN_API_KEY;
-              const providedKey = c.req.header('X-Admin-Key') || new URL(c.req.url).searchParams.get('admin_key');
+              const providedKey = c.req.header('X-Admin-Key');
               const session = getSessionFromCookie(c.req.header('Cookie'));
               if (!adminKey || !providedKey || providedKey !== adminKey || !session || session.role !== 'admin') {
                 return c.html(`

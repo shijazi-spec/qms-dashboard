@@ -104,13 +104,20 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/risks\/\d+\/accept$/, methods: ['POST'], permission: 'can_accept_risk' },
   { pattern: /^\/api\/risks\/\d+\/escalate$/, methods: ['POST'], permission: 'can_accept_risk' },
   { pattern: /^\/api\/risks\/\d+\/treatment$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/risks\/treatment\/\d+$/, methods: ['PUT'], roles: ['admin', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/risks(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 
   { pattern: /^\/api\/policies\/\d+\/transition$/, methods: ['POST'], permission: 'can_approve_policy' },
+  { pattern: /^\/api\/policies\/\d+\/grc-approval$/, methods: ['POST'], permission: 'can_approve_policy' },
+  { pattern: /^\/api\/policies\/\d+\/publish$/, methods: ['POST'], permission: 'can_approve_policy' },
+  { pattern: /^\/api\/policies\/\d+\/set-owners$/, methods: ['POST'], roles: ['admin', 'grc_manager'] },
+  { pattern: /^\/api\/policies\/\d+\/acknowledge$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager', 'bu_owner'] },
   { pattern: /^\/api\/policies(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 
-  { pattern: /^\/api\/audits\/\d+\/findings/, methods: ['POST', 'PUT'], permission: 'can_close_finding' },
-  { pattern: /^\/api\/audits\/\d+\/evidence/, methods: ['POST'], permission: 'can_submit_evidence' },
+  { pattern: /^\/api\/audits\/findings(\/\d+)?$/, methods: ['POST', 'PUT'], permission: 'can_close_finding' },
+  { pattern: /^\/api\/audits\/evidence-packs$/, methods: ['POST'], permission: 'can_submit_evidence' },
+  { pattern: /^\/api\/audits\/\d+\/checklist$/, methods: ['PUT'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/audits\/checklist\/\d+$/, methods: ['PUT'], roles: ['admin', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/audits(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 
   { pattern: /^\/api\/compliance\/controls/, methods: ['POST', 'PUT', 'DELETE'], permission: 'can_edit_controls' },
@@ -119,7 +126,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   { pattern: /^\/api\/vendors/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 
-  { pattern: /^\/api\/handoffs/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/handoff\//, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 
   { pattern: /^\/api\/roi/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager', 'executive'] },
 
