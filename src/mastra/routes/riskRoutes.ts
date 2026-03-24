@@ -502,7 +502,7 @@ export const riskRoutes = [
           logger?.info('🔐 [RiskAPI] POST /api/risks/:id/accept (RBAC enforcement)', { id, userEmail });
 
           if (!body.justification) {
-            return c.json({ error: 'justification is required for risk acceptance' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const user = await getUserByEmail(userEmail);

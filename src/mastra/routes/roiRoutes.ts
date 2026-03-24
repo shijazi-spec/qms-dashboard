@@ -139,7 +139,7 @@ export const roiRoutes = [
             if (data[sub] && typeof data[sub] === 'object') {
               const subError = validateROIFinancials(data[sub]);
               if (subError) {
-                return c.json({ error: `${sub}: ${subError}` }, 400);
+                return c.json({ error: subError }, 400);
               }
             }
           }
@@ -147,7 +147,7 @@ export const roiRoutes = [
             for (const cost of data.platformCosts) {
               const costError = validateROIFinancials(cost);
               if (costError) {
-                return c.json({ error: `platformCosts: ${costError}` }, 400);
+                return c.json({ error: costError }, 400);
               }
             }
           }

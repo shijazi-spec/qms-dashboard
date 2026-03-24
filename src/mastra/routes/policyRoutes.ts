@@ -227,7 +227,7 @@ export const policyRoutes = [
           logger?.info('📝 [PolicyAPI] POST /api/policies/:id/transition', { id, newStatus: body.new_status, by: sessionUser.email });
 
           if (!body.new_status) {
-            return c.json({ error: 'new_status is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           if (['published', 'approved'].includes(body.new_status)) {

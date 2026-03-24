@@ -63,7 +63,7 @@ export const triggerRoutes = [
           logger?.info('📝 [TriggerAPI] POST /api/triggers/:id/action', { id, action });
 
           if (!action) {
-            return c.json({ error: 'action is required (acknowledge, dismiss, decide)' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           let status: 'acknowledged' | 'actioned' | 'dismissed' = 'acknowledged';

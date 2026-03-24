@@ -727,7 +727,7 @@ Respond with JSON only:
           const callDate = formData.get('call_date') || new Date().toISOString();
 
           if (!agentEmail) {
-            return c.json({ success: false, error: 'Agent email is required' }, 400);
+            return c.json({ success: false, error: 'Missing required fields' }, 400);
           }
 
           const { createCallRecord, initCallIntelligenceTables } = await import("../../utils/callIntelligenceDb");
@@ -806,11 +806,11 @@ Respond with JSON only:
           const autoAnalyze = formData.get('auto_analyze') === 'true';
 
           if (!agentEmail) {
-            return c.json({ success: false, error: 'Agent email is required' }, 400);
+            return c.json({ success: false, error: 'Missing required fields' }, 400);
           }
 
           if (!file || file.size === 0) {
-            return c.json({ success: false, error: 'Audio file is required' }, 400);
+            return c.json({ success: false, error: 'Missing required fields' }, 400);
           }
 
           const { createCallRecord, initCallIntelligenceTables, saveTranscript, saveCallAnalysis, updateCallRecord } = await import("../../utils/callIntelligenceDb");
@@ -1014,7 +1014,7 @@ ${transcriptText}
             const call = calls[i];
             try {
               if (!call.agent_email) {
-                errors.push({ row: i + 1, error: 'Agent email is required' });
+                errors.push({ row: i + 1, error: 'Missing required fields' });
                 continue;
               }
 
@@ -1493,7 +1493,7 @@ ${transcriptText}
           const validTypes = ['accurate', 'partially_accurate', 'inaccurate'];
           if (!validTypes.includes(body.feedback_type)) {
             logger?.warn("⚠️ [API] Invalid feedback_type", { feedback_type: body.feedback_type });
-            return c.json({ success: false, error: "Invalid feedback_type. Must be: accurate, partially_accurate, or inaccurate" }, 400);
+            return c.json({ success: false, error: "Invalid input provided" }, 400);
           }
 
           const { submitAIFeedback, initCallIntelligenceTables } = await import("../../utils/callIntelligenceDb");
@@ -1584,7 +1584,7 @@ ${transcriptText}
           logger?.info("📝 [API] Creating quality scorecard", { name: data.name, team: data.team_name });
 
           if (!data.name) {
-            return c.json({ success: false, error: "Scorecard name is required" }, 400);
+            return c.json({ success: false, error: "Missing required fields" }, 400);
           }
 
           const { createScorecard, updateScorecard } = await import("../../utils/database");

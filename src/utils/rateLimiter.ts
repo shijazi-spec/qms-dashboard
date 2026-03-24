@@ -7,7 +7,7 @@ const store = new Map<string, RateLimitEntry>();
 
 const WINDOW_MS = 60 * 1000;
 const READ_LIMIT = 100;
-const WRITE_LIMIT = 20;
+const WRITE_LIMIT = 10;
 const AUTH_LIMIT = 5;
 const EXPORT_LIMIT = 10;
 

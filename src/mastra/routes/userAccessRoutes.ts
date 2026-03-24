@@ -269,11 +269,11 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           if (!body.token) {
-            return c.json({ error: 'token is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           if (!body.password || typeof body.password !== 'string') {
-            return c.json({ error: 'password is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const { validatePassword } = await import('../../utils/inputSanitizer');

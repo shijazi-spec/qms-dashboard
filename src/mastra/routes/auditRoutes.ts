@@ -361,7 +361,7 @@ export const auditRoutes = [
           logger?.info('📝 [AuditAPI] POST /api/audits/evidence-packs', { by: sessionUser.email });
 
           if (!body.pack_name) {
-            return c.json({ error: 'pack_name is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const pack = await createEvidencePack({ ...body, generated_by: sessionUser.email });
@@ -431,7 +431,7 @@ export const auditRoutes = [
           }
 
           if (!body.items || !Array.isArray(body.items)) {
-            return c.json({ error: 'items array is required' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const items = body.items.map((item: any, index: number) => ({

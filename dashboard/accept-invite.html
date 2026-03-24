@@ -69,17 +69,32 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                     <input type="text" id="full_name" name="full_name" required
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="Enter your full name">
+                           placeholder="Enter your full name" data-testid="input-full-name">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" id="password" name="password" required minlength="12"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="Create a strong password" data-testid="input-password">
+                    <p class="text-xs text-gray-500 mt-1">Minimum 12 characters with uppercase, lowercase, number, and special character.</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" required minlength="12"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="Confirm your password" data-testid="input-confirm-password">
                 </div>
                 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Why do you need access? (Optional)</label>
                     <textarea id="access_reason" name="access_reason" rows="2"
                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="Brief description of your role or access needs"></textarea>
+                              placeholder="Brief description of your role or access needs" data-testid="input-access-reason"></textarea>
                 </div>
                 
-                <button type="submit" id="submit-btn"
+                <button type="submit" id="submit-btn" data-testid="button-submit"
                         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                     <span>Request Access</span>
                 </button>
@@ -159,6 +174,19 @@
         document.getElementById('accept-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            
+            if (password !== confirmPassword) {
+                alert('Passwords do not match.');
+                return;
+            }
+            
+            if (password.length < 12) {
+                alert('Password must be at least 12 characters long.');
+                return;
+            }
+            
             const submitBtn = document.getElementById('submit-btn');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<div class="loading-spinner"></div><span>Processing...</span>';
@@ -170,6 +198,7 @@
                     body: JSON.stringify({
                         token: token,
                         full_name: document.getElementById('full_name').value,
+                        password: password,
                         access_reason: document.getElementById('access_reason').value
                     })
                 });

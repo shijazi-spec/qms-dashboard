@@ -856,7 +856,7 @@ export const duplicateRadarRoutes = [
           const { record_type, email, first_name, last_name, deal_name, company, amount, owner_email } = data;
 
           if (!email) {
-            return c.json({ error: 'Email is required for duplicate detection' }, 400);
+            return c.json({ error: 'Missing required fields' }, 400);
           }
 
           const emailDomain = email.split('@')[1]?.toLowerCase();
