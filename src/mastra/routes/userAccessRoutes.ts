@@ -41,7 +41,8 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          const caller = getSessionUser(c);
+          if (!caller) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -49,7 +50,7 @@ export const userAccessRoutes = [
           const url = new URL(c.req.url);
           const status = url.searchParams.get('status');
           
-          logger?.info('👤 [UserAccess] GET /api/users', { status });
+          logger?.info('👤 [UserAccess] GET /api/users', { status, by: caller.email });
           
           let users;
           if (status === 'pending') {
@@ -59,7 +60,13 @@ export const userAccessRoutes = [
           } else {
             users = await userDb.getAllUsers();
           }
-          return c.json({ success: true, users, count: users.length });
+
+          const isAdmin = caller.role === 'admin';
+          const filtered = users.map((u: any) => {
+            if (isAdmin) return u;
+            return { id: u.id, full_name: u.full_name, email: u.email, role: u.role, team: u.team, status: u.status };
+          });
+          return c.json({ success: true, users: filtered, count: filtered.length });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
           return c.json({ error: error.message }, 500);

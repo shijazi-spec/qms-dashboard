@@ -420,7 +420,7 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const { requireWriteRole, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
           const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
@@ -475,7 +475,7 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const { requireWriteRole, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
           const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
