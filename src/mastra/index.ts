@@ -202,9 +202,15 @@ export const mastra = new Mastra({
             return c.json({ error: 'Read-only access: write operations not permitted for department_viewer role' }, 403);
           }
 
-          if (urlPath.startsWith('/api/admin/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+          if (urlPath.startsWith('/api/admin/') || urlPath === '/api/admin') {
             if (!hasAdminKey && (!session || session.role !== 'admin')) {
               return c.json({ error: 'Admin access required' }, 403);
+            }
+          }
+
+          if (urlPath.startsWith('/api/rbac/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            if (!hasAdminKey && (!session || session.role !== 'admin')) {
+              return c.json({ error: 'Admin access required for RBAC management' }, 403);
             }
           }
         }

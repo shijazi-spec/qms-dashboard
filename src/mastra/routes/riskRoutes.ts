@@ -425,7 +425,7 @@ export const riskRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
+          const { updateRisk, getRiskById, getTreatmentActions, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           const { checkPermission } = await import('../../utils/rbacDatabase');
           await initRiskTables();
@@ -442,6 +442,11 @@ export const riskRoutes = [
           const risk = await getRiskById(id);
           if (!risk) {
             return c.json({ error: 'Risk not found' }, 404);
+          }
+
+          const treatments = await getTreatmentActions(id);
+          if (!treatments || treatments.length === 0) {
+            return c.json({ error: 'Cannot close risk: at least one treatment action must exist before closure' }, 400);
           }
 
           const updatedRisk = await updateRisk(id, {
