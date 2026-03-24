@@ -150,7 +150,7 @@ export const userAccessRoutes = [
 
           const existingUser = await userDb.getUserByEmail(body.email);
           if (existingUser) {
-            return c.json({ error: 'User with this email already exists' }, 400);
+            return c.json({ error: 'Unable to process this request' }, 400);
           }
 
           const existingInvitations = await userDb.getInvitations();

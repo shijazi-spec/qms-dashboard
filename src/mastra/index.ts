@@ -921,7 +921,7 @@ export const mastra = new Mastra({
               const key = body?.key;
               const expectedKey = process.env.ADMIN_API_KEY;
               if (!expectedKey || !key || key !== expectedKey) {
-                return c.json({ error: 'Invalid admin key' }, 401);
+                return c.json({ error: 'Authentication required' }, 401);
               }
               const isSecure = c.req.url.startsWith('https');
               c.header('Set-Cookie', `admin_key=${key}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${isSecure ? '; Secure' : ''}`);

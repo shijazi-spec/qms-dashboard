@@ -130,22 +130,14 @@ const PASSWORD_POLICY = {
 
 export function validatePassword(password: string): string | null {
   if (!password || typeof password !== 'string') {
-    return 'Password is required';
+    return 'Password does not meet the required policy';
   }
-  if (password.length < PASSWORD_POLICY.minLength) {
-    return `Password must be at least ${PASSWORD_POLICY.minLength} characters`;
-  }
-  if (!PASSWORD_POLICY.requireUppercase.test(password)) {
-    return 'Password must contain at least one uppercase letter';
-  }
-  if (!PASSWORD_POLICY.requireLowercase.test(password)) {
-    return 'Password must contain at least one lowercase letter';
-  }
-  if (!PASSWORD_POLICY.requireNumber.test(password)) {
-    return 'Password must contain at least one number';
-  }
-  if (!PASSWORD_POLICY.requireSpecial.test(password)) {
-    return 'Password must contain at least one special character';
+  if (password.length < PASSWORD_POLICY.minLength ||
+      !PASSWORD_POLICY.requireUppercase.test(password) ||
+      !PASSWORD_POLICY.requireLowercase.test(password) ||
+      !PASSWORD_POLICY.requireNumber.test(password) ||
+      !PASSWORD_POLICY.requireSpecial.test(password)) {
+    return 'Password does not meet the required policy';
   }
   return null;
 }

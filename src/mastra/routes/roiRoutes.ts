@@ -816,6 +816,22 @@ export const roiRoutes = [
           if (financialError) {
             return c.json({ error: financialError }, 400);
           }
+          for (const sub of ['manpower', 'errorCosts', 'revenueImpact', 'implementation', 'riskInputs']) {
+            if (data[sub] && typeof data[sub] === 'object') {
+              const subError = validateROIFinancials(data[sub]);
+              if (subError) {
+                return c.json({ error: subError }, 400);
+              }
+            }
+          }
+          if (data.platformCosts && Array.isArray(data.platformCosts)) {
+            for (const cost of data.platformCosts) {
+              const costError = validateROIFinancials(cost);
+              if (costError) {
+                return c.json({ error: costError }, 400);
+              }
+            }
+          }
 
           logger?.info("📝 [ROI API] Updating initiative", { id });
 
