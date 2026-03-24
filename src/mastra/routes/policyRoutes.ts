@@ -114,19 +114,23 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createPolicy, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initPolicyTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [PolicyAPI] POST /api/policies', { title: body.title });
+          logger?.info('📝 [PolicyAPI] POST /api/policies', { title: body.title, by: sessionUser.email });
 
           if (!body.policy_number || !body.title || !body.category) {
             return c.json({ error: 'Missing required fields: policy_number, title, category' }, 400);
           }
 
-          const policy = await createPolicy(body);
+          const policy = await createPolicy({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'DOCUMENT',
@@ -134,7 +138,7 @@ export const policyRoutes = [
             actionType: 'CREATE',
             description: `New policy created: ${policy.title} (${policy.policy_number})`,
             newValue: JSON.stringify(policy),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'policy_governance'
           });
@@ -157,6 +161,10 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updatePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -164,14 +172,14 @@ export const policyRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [PolicyAPI] PUT /api/policies/:id', { id });
+          logger?.info('📝 [PolicyAPI] PUT /api/policies/:id', { id, by: sessionUser.email });
 
           const existingPolicy = await getPolicyById(id);
           if (!existingPolicy) {
             return c.json({ error: 'Policy not found' }, 404);
           }
 
-          const updatedPolicy = await updatePolicy(id, body, body.updated_by || 'system');
+          const updatedPolicy = await updatePolicy(id, body, sessionUser.email);
 
           await logEvent({
             entityType: 'DOCUMENT',
@@ -180,7 +188,7 @@ export const policyRoutes = [
             description: `Policy updated: ${updatedPolicy.title}`,
             oldValue: JSON.stringify(existingPolicy),
             newValue: JSON.stringify(updatedPolicy),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'policy_governance'
           });
@@ -200,6 +208,10 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { transitionPolicyStatus, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -207,10 +219,18 @@ export const policyRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/transition', { id, newStatus: body.new_status });
+          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/transition', { id, newStatus: body.new_status, by: sessionUser.email });
 
           if (!body.new_status) {
             return c.json({ error: 'new_status is required' }, 400);
+          }
+
+          if (['published', 'approved'].includes(body.new_status)) {
+            const { checkPermission } = await import('../../utils/rbacDatabase');
+            const canApprove = await checkPermission(sessionUser.email, 'can_approve_policy');
+            if (!canApprove) {
+              return forbiddenResponse(c, 'Permission denied: only authorized roles can approve/publish policies');
+            }
           }
 
           const existingPolicy = await getPolicyById(id);
@@ -218,7 +238,7 @@ export const policyRoutes = [
             return c.json({ error: 'Policy not found' }, 404);
           }
 
-          const updatedPolicy = await transitionPolicyStatus(id, body.new_status, body.transitioned_by || 'system');
+          const updatedPolicy = await transitionPolicyStatus(id, body.new_status, sessionUser.email);
 
           await logEvent({
             entityType: 'DOCUMENT',
@@ -227,7 +247,7 @@ export const policyRoutes = [
             description: `Policy status changed: ${existingPolicy.status} → ${body.new_status}`,
             oldValue: JSON.stringify({ status: existingPolicy.status }),
             newValue: JSON.stringify({ status: body.new_status }),
-            userName: body.transitioned_by || 'system',
+            userName: sessionUser.email,
             severity: body.new_status === 'published' ? 'INFO' : 'INFO',
             module: 'policy_governance'
           });
@@ -247,6 +267,10 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { acknowledgePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -254,29 +278,23 @@ export const policyRoutes = [
           
           const policyId = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/acknowledge', { policyId });
+          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/acknowledge', { policyId, by: sessionUser.email });
 
           const policy = await getPolicyById(policyId);
           if (!policy) {
             return c.json({ error: 'Policy not found' }, 404);
           }
 
-          if (!body.user_name || !body.user_email) {
-            return c.json({ error: 'user_name and user_email are required' }, 400);
-          }
-
-          const ack = await acknowledgePolicy({
-            policy_id: policyId,
-            ...body
-          });
+          const ackData = { ...body, policy_id: policyId, user_name: sessionUser.name, user_email: sessionUser.email };
+          const ack = await acknowledgePolicy(ackData);
 
           await logEvent({
             entityType: 'DOCUMENT',
             entityId: policyId.toString(),
             actionType: 'UPDATE',
-            description: `Policy acknowledged by ${body.user_name} (${body.user_email})`,
+            description: `Policy acknowledged by ${sessionUser.name} (${sessionUser.email})`,
             newValue: JSON.stringify(ack),
-            userName: body.user_name,
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'policy_governance'
           });
@@ -319,6 +337,10 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updatePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -328,55 +350,47 @@ export const policyRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('🔐 [PolicyAPI] POST /api/policies/:id/grc-approval (RBAC enforcement)', { id, userEmail: body.approver_email });
+          const userEmail = sessionUser.email;
+          logger?.info('🔐 [PolicyAPI] POST /api/policies/:id/grc-approval (RBAC enforcement)', { id, userEmail });
 
-          if (!body.approver_email) {
-            return c.json({ error: 'approver_email is required for GRC approval' }, 400);
-          }
-
-          const user = await getUserByEmail(body.approver_email);
+          const user = await getUserByEmail(userEmail);
           if (!user) {
-            logger?.warn('🚫 [PolicyAPI] Policy approval blocked - user not registered in system', { userEmail: body.approver_email });
+            logger?.warn('🚫 [PolicyAPI] Policy approval blocked - user not registered in system', { userEmail });
             await logEvent({
               entityType: 'DOCUMENT',
               entityId: id.toString(),
               actionType: 'UPDATE',
-              description: `Policy GRC approval BLOCKED: User ${body.approver_email} not found in system_users`,
-              userName: body.approver_email,
+              description: `Policy GRC approval BLOCKED: User ${userEmail} not found in system_users`,
+              userName: userEmail,
               severity: 'WARNING',
               module: 'policy_governance'
             });
             return c.json({ 
-              error: 'User not found: You must be a registered system user to perform this action',
-              user_email: body.approver_email
-            }, 401);
-          }
-
-          if (!user.is_active) {
-            logger?.warn('🚫 [PolicyAPI] Policy approval blocked - user account inactive', { userEmail: body.approver_email });
-            return c.json({ 
-              error: 'Account inactive: Your user account has been deactivated',
-              user_email: body.approver_email
+              error: 'User not found: You must be a registered system user to perform this action'
             }, 403);
           }
 
-          const hasPermission = await checkPermission(body.approver_email, 'can_approve_policy');
+          if (!user.is_active) {
+            logger?.warn('🚫 [PolicyAPI] Policy approval blocked - user account inactive', { userEmail });
+            return c.json({ 
+              error: 'Account inactive: Your user account has been deactivated'
+            }, 403);
+          }
+
+          const hasPermission = await checkPermission(userEmail, 'can_approve_policy');
           if (!hasPermission) {
-            logger?.warn('🚫 [PolicyAPI] Policy approval blocked - user lacks GRC permission', { userEmail: body.approver_email, userRole: user.role });
+            logger?.warn('🚫 [PolicyAPI] Policy approval blocked - user lacks GRC permission', { userEmail, userRole: user.role });
             await logEvent({
               entityType: 'DOCUMENT',
               entityId: id.toString(),
               actionType: 'UPDATE',
-              description: `Policy GRC approval BLOCKED: User ${body.approver_email} (role: ${user.role}) lacks GRC Manager permission`,
-              userName: body.approver_email,
+              description: `Policy GRC approval BLOCKED: User ${userEmail} (role: ${user.role}) lacks GRC Manager permission`,
+              userName: userEmail,
               severity: 'WARNING',
               module: 'policy_governance'
             });
             return c.json({ 
-              error: `Permission denied: Only GRC Manager or Admin role can approve policies. Your role (${user.role}) does not have this permission.`,
-              required_role: 'grc_manager',
-              current_role: user.role,
-              user_email: body.approver_email
+              error: `Permission denied: Only GRC Manager or Admin role can approve policies. Your role (${user.role}) does not have this permission.`
             }, 403);
           }
 
@@ -398,7 +412,7 @@ export const policyRoutes = [
             compliance_approved_by: user.name,
             compliance_approved_at: new Date(),
             approval_blocked_reason: undefined
-          }, body.approver_email);
+          }, userEmail);
 
           await logEvent({
             entityType: 'DOCUMENT',
@@ -407,7 +421,7 @@ export const policyRoutes = [
             description: `Policy GRC APPROVED by Compliance Owner: ${policy.title}`,
             oldValue: JSON.stringify({ compliance_approved: false }),
             newValue: JSON.stringify({ compliance_approved: true, compliance_approved_by: user.name }),
-            userName: body.approver_email,
+            userName: userEmail,
             severity: 'INFO',
             module: 'policy_governance'
           });
@@ -433,6 +447,16 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { checkPermission } = await import('../../utils/rbacDatabase');
+          const canApprove = await checkPermission(sessionUser.email, 'can_approve_policy');
+          if (!canApprove) {
+            return forbiddenResponse(c, 'Permission denied: only authorized roles can set policy owners');
+          }
+
           const logger = mastra?.getLogger();
           const { updatePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -440,7 +464,7 @@ export const policyRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/set-owners', { id });
+          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/set-owners', { id, by: sessionUser.email });
 
           if (!body.operational_owner || !body.compliance_owner) {
             return c.json({ error: 'Both operational_owner and compliance_owner are required (dual ownership)' }, 400);
@@ -456,7 +480,7 @@ export const policyRoutes = [
             operational_owner_email: body.operational_owner_email,
             compliance_owner: body.compliance_owner,
             compliance_owner_email: body.compliance_owner_email
-          }, body.updated_by || 'system');
+          }, sessionUser.email);
 
           await logEvent({
             entityType: 'DOCUMENT',
@@ -464,7 +488,7 @@ export const policyRoutes = [
             actionType: 'UPDATE',
             description: `Policy dual ownership set: Operational=${body.operational_owner}, Compliance=${body.compliance_owner}`,
             newValue: JSON.stringify({ operational_owner: body.operational_owner, compliance_owner: body.compliance_owner }),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'policy_governance'
           });
@@ -484,6 +508,16 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { checkPermission } = await import('../../utils/rbacDatabase');
+          const canApprove = await checkPermission(sessionUser.email, 'can_approve_policy');
+          if (!canApprove) {
+            return forbiddenResponse(c, 'Permission denied: only authorized roles can publish policies');
+          }
+
           const logger = mastra?.getLogger();
           const { transitionPolicyStatus, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -491,7 +525,7 @@ export const policyRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/publish (with GRC check)', { id });
+          logger?.info('📝 [PolicyAPI] POST /api/policies/:id/publish (with GRC check)', { id, by: sessionUser.email });
 
           const policy = await getPolicyById(id);
           if (!policy) {
@@ -505,7 +539,7 @@ export const policyRoutes = [
               entityId: id.toString(),
               actionType: 'UPDATE',
               description: `Policy publish BLOCKED: Missing GRC/Compliance Owner approval for "${policy.title}"`,
-              userName: body.published_by || 'system',
+              userName: sessionUser.email,
               severity: 'WARNING',
               module: 'policy_governance'
             });
@@ -516,7 +550,7 @@ export const policyRoutes = [
             }, 400);
           }
 
-          const updatedPolicy = await transitionPolicyStatus(id, 'published', body.published_by || 'system');
+          const updatedPolicy = await transitionPolicyStatus(id, 'published', sessionUser.email);
 
           await logEvent({
             entityType: 'DOCUMENT',
@@ -525,7 +559,7 @@ export const policyRoutes = [
             description: `Policy PUBLISHED (after GRC approval): ${policy.title}`,
             oldValue: JSON.stringify({ status: policy.status }),
             newValue: JSON.stringify({ status: 'published' }),
-            userName: body.published_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'policy_governance'
           });

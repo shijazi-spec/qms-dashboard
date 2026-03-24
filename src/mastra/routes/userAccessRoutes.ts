@@ -1,13 +1,9 @@
 import * as userDb from '../../utils/userAccessDatabase';
 import { sendResendEmail } from '../../utils/resendMail';
-import { getSessionFromCookie } from './authRoutes';
+import { requireAdminOrKey, requireAuthOrKey, getSessionUser, unauthorizedResponse, forbiddenResponse, type SessionUser } from '../../utils/rbacMiddleware';
 
-function verifyAdminKey(c: any): boolean {
-  const adminKey = c.req.header("X-Admin-Key");
-  const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKey === expectedKey) return true;
-  const session = getSessionFromCookie(c.req.header('Cookie'));
-  return Boolean(session);
+function verifyAdminKey(c: any): SessionUser | null {
+  return requireAdminOrKey(c);
 }
 
 export const userAccessRoutes = [
@@ -120,14 +116,15 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
-            return c.json({ error: 'Authentication required' }, 401);
+          const sessionUser = verifyAdminKey(c);
+          if (!sessionUser) {
+            return c.json({ error: 'Admin access required' }, 403);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
           const body = await c.req.json();
           
-          logger?.info('📧 [UserAccess] POST /api/invitations', { email: body.email });
+          logger?.info('📧 [UserAccess] POST /api/invitations', { email: body.email, invitedBy: sessionUser.email });
 
           if (!body.email || !body.team || !body.role) {
             return c.json({ error: 'email, team, and role are required' }, 400);
@@ -149,7 +146,7 @@ export const userAccessRoutes = [
             role: body.role,
             token_expires_at: expiresAt,
             require_mfa: body.require_mfa || false,
-            invited_by: body.invited_by || 'admin@walaplus.com',
+            invited_by: sessionUser.email,
             used: false
           });
 
@@ -289,7 +286,8 @@ export const userAccessRoutes = [
           
           logger?.info('✅ [UserAccess] Approving user', { id });
 
-          const user = await userDb.approveAccessRequest(id, body.approved_by || 'admin@walaplus.com', body.permission_overrides);
+          const approver = verifyAdminKey(c);
+          const user = await userDb.approveAccessRequest(id, approver?.email || 'unknown', body.permission_overrides);
           
           if (!user) {
             return c.json({ error: 'User not found or not pending approval' }, 404);
@@ -454,7 +452,8 @@ export const userAccessRoutes = [
           }
           
           logger?.info('🔄 [UserAccess] Updating user role', { id, role: body.role });
-          const user = await userDb.updateUserRole(id, body.role, body.updated_by || 'admin@walaplus.com');
+          const adminUser = verifyAdminKey(c);
+          const user = await userDb.updateUserRole(id, body.role, adminUser?.email || 'unknown');
           
           if (!user) {
             return c.json({ error: 'User not found' }, 404);
@@ -486,7 +485,8 @@ export const userAccessRoutes = [
           }
           
           logger?.info('🔐 [UserAccess] Updating user permissions', { id });
-          await userDb.updateUserPermissions(id, body.permissions, body.updated_by || 'admin@walaplus.com');
+          const permAdmin = verifyAdminKey(c);
+          await userDb.updateUserPermissions(id, body.permissions, permAdmin?.email || 'unknown');
           
           const permissions = await userDb.getUserPermissions(id);
           return c.json({ success: true, permissions });

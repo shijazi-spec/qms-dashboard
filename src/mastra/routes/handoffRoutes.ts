@@ -76,13 +76,17 @@ export const handoffRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createHandoffRule, initHandoffTables } = await import('../../utils/handoffDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initHandoffTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [HandoffAPI] POST /api/handoff/rules', { name: body.name });
+          logger?.info('📝 [HandoffAPI] POST /api/handoff/rules', { name: body.name, by: sessionUser.email });
 
           if (!body.name || !body.source_module || !body.target_module || !body.trigger_type || !body.action_type) {
             return c.json({ error: 'Missing required fields' }, 400);
@@ -92,6 +96,7 @@ export const handoffRoutes = [
           const rule = await createHandoffRule({
             ...body,
             rule_code: ruleCode,
+            created_by: sessionUser.email,
             trigger_condition: JSON.stringify(body.trigger_condition || {})
           });
 
@@ -101,7 +106,7 @@ export const handoffRoutes = [
             actionType: 'CREATE',
             description: `Handoff rule created: ${rule.name}`,
             newValue: JSON.stringify(rule),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'handoff'
           });
@@ -123,6 +128,10 @@ export const handoffRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateHandoffRule, initHandoffTables } = await import('../../utils/handoffDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -130,7 +139,7 @@ export const handoffRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [HandoffAPI] PUT /api/handoff/rules/:id', { id });
+          logger?.info('📝 [HandoffAPI] PUT /api/handoff/rules/:id', { id, by: sessionUser.email });
 
           const rule = await updateHandoffRule(id, body);
 
@@ -140,7 +149,7 @@ export const handoffRoutes = [
             actionType: 'UPDATE',
             description: `Handoff rule updated: ${rule.name}`,
             newValue: JSON.stringify(rule),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'handoff'
           });
@@ -159,19 +168,23 @@ export const handoffRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createHandoffEvent, initHandoffTables } = await import('../../utils/handoffDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initHandoffTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [HandoffAPI] POST /api/handoff/events');
+          logger?.info('📝 [HandoffAPI] POST /api/handoff/events', { by: sessionUser.email });
 
           if (!body.rule_id || !body.source_record_id || !body.source_module || !body.target_module || !body.action_type) {
             return c.json({ error: 'Missing required fields' }, 400);
           }
 
-          const event = await createHandoffEvent(body);
+          const event = await createHandoffEvent({ ...body, triggered_by: sessionUser.email });
 
           await logEvent({
             entityType: 'HANDOFF_EVENT',
@@ -179,7 +192,7 @@ export const handoffRoutes = [
             actionType: 'TRIGGER',
             description: `Handoff triggered: ${body.source_module} → ${body.target_module}`,
             newValue: JSON.stringify(event),
-            userName: body.triggered_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'handoff'
           });
@@ -218,6 +231,10 @@ export const handoffRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateControlMapping, initHandoffTables } = await import('../../utils/handoffDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -225,7 +242,7 @@ export const handoffRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [HandoffAPI] PUT /api/handoff/controls/:id', { id });
+          logger?.info('📝 [HandoffAPI] PUT /api/handoff/controls/:id', { id, by: sessionUser.email });
 
           const control = await updateControlMapping(id, body);
 
@@ -235,7 +252,7 @@ export const handoffRoutes = [
             actionType: 'UPDATE',
             description: `Control mapping updated: ${control.control_name}`,
             newValue: JSON.stringify(control),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'handoff'
           });

@@ -82,19 +82,23 @@ export const vendorRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createVendor, initVendorTables } = await import('../../utils/vendorDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initVendorTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [VendorAPI] POST /api/vendors', { name: body.name });
+          logger?.info('📝 [VendorAPI] POST /api/vendors', { name: body.name, by: sessionUser.email });
 
           if (!body.vendor_code || !body.name || !body.category) {
             return c.json({ error: 'Missing required fields: vendor_code, name, category' }, 400);
           }
 
-          const vendor = await createVendor(body);
+          const vendor = await createVendor({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'VENDOR',
@@ -102,7 +106,7 @@ export const vendorRoutes = [
             actionType: 'CREATE',
             description: `New vendor registered: ${vendor.name}`,
             newValue: JSON.stringify(vendor),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'vendor_risk'
           });
@@ -124,6 +128,10 @@ export const vendorRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateVendor, getVendorById, initVendorTables } = await import('../../utils/vendorDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -131,7 +139,7 @@ export const vendorRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [VendorAPI] PUT /api/vendors/:id', { id });
+          logger?.info('📝 [VendorAPI] PUT /api/vendors/:id', { id, by: sessionUser.email });
 
           const existing = await getVendorById(id);
           if (!existing) {
@@ -147,7 +155,7 @@ export const vendorRoutes = [
             description: `Vendor updated: ${vendor.name}`,
             oldValue: JSON.stringify(existing),
             newValue: JSON.stringify(vendor),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'vendor_risk'
           });
@@ -166,16 +174,20 @@ export const vendorRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createAssessment, getVendorById, initVendorTables } = await import('../../utils/vendorDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initVendorTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [VendorAPI] POST /api/vendors/assessments');
+          logger?.info('📝 [VendorAPI] POST /api/vendors/assessments', { by: sessionUser.email });
 
-          if (!body.vendor_id || !body.assessment_type || !body.assessed_by) {
-            return c.json({ error: 'Missing required fields: vendor_id, assessment_type, assessed_by' }, 400);
+          if (!body.vendor_id || !body.assessment_type) {
+            return c.json({ error: 'Missing required fields: vendor_id, assessment_type' }, 400);
           }
 
           const vendor = await getVendorById(body.vendor_id);
@@ -183,7 +195,7 @@ export const vendorRoutes = [
             return c.json({ error: 'Vendor not found' }, 404);
           }
 
-          const assessment = await createAssessment(body);
+          const assessment = await createAssessment({ ...body, assessed_by: sessionUser.email });
 
           await logEvent({
             entityType: 'ASSESSMENT',
@@ -191,7 +203,7 @@ export const vendorRoutes = [
             actionType: 'CREATE',
             description: `Vendor assessment completed for ${vendor.name}: ${assessment.risk_level} risk`,
             newValue: JSON.stringify(assessment),
-            userName: body.assessed_by,
+            userName: sessionUser.email,
             severity: assessment.risk_level === 'critical' ? 'CRITICAL' : 'INFO',
             module: 'vendor_risk'
           });
@@ -234,13 +246,17 @@ export const vendorRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createRemediation, getVendorById, initVendorTables } = await import('../../utils/vendorDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initVendorTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [VendorAPI] POST /api/vendors/remediations');
+          logger?.info('📝 [VendorAPI] POST /api/vendors/remediations', { by: sessionUser.email });
 
           if (!body.vendor_id || !body.title || !body.description || !body.priority || !body.category) {
             return c.json({ error: 'Missing required fields: vendor_id, title, description, priority, category' }, 400);
@@ -251,7 +267,7 @@ export const vendorRoutes = [
             return c.json({ error: 'Vendor not found' }, 404);
           }
 
-          const remediation = await createRemediation(body);
+          const remediation = await createRemediation({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'REMEDIATION',
@@ -259,7 +275,7 @@ export const vendorRoutes = [
             actionType: 'CREATE',
             description: `Vendor remediation created for ${vendor.name}: ${remediation.title}`,
             newValue: JSON.stringify(remediation),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: remediation.priority === 'critical' ? 'CRITICAL' : 'INFO',
             module: 'vendor_risk'
           });
@@ -278,6 +294,10 @@ export const vendorRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateRemediation, initVendorTables } = await import('../../utils/vendorDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -285,7 +305,7 @@ export const vendorRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [VendorAPI] PUT /api/vendors/remediations/:id', { id });
+          logger?.info('📝 [VendorAPI] PUT /api/vendors/remediations/:id', { id, by: sessionUser.email });
 
           const remediation = await updateRemediation(id, body);
 
@@ -295,7 +315,7 @@ export const vendorRoutes = [
             actionType: 'UPDATE',
             description: `Vendor remediation updated: ${remediation.title}`,
             newValue: JSON.stringify(remediation),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'vendor_risk'
           });

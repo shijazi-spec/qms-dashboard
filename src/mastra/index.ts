@@ -154,8 +154,19 @@ export const mastra = new Mastra({
         c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com");
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
-        const publicPaths = ['/login', '/api/auth/', '/api/inngest', '/guide', '/accept-invite', '/css/', '/js/'];
+        const publicPaths = ['/login', '/api/auth/', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
+
+        if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
+          const inngestSigningKey = process.env.INNGEST_SIGNING_KEY;
+          if (inngestSigningKey) {
+            const adminKey = c.req.header('X-Admin-Key');
+            const expectedKey = process.env.ADMIN_API_KEY;
+            const hasAdminKey = expectedKey && adminKey === expectedKey;
+            if (!hasAdminKey) {
+            }
+          }
+        }
         const isApi = urlPath.startsWith('/api/');
         const isMastraInternal = urlPath.startsWith('/api/agents/') || urlPath.startsWith('/api/workflows/') || urlPath.startsWith('/api/memory/');
 

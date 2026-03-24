@@ -183,19 +183,23 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createRisk, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initRiskTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks', { title: body.risk_title });
+          logger?.info('📝 [RiskAPI] POST /api/risks', { title: body.risk_title, by: sessionUser.email });
 
           if (!body.risk_title || !body.risk_category || !body.impact_score || !body.likelihood_score) {
             return c.json({ error: 'Missing required fields: risk_title, risk_category, impact_score, likelihood_score' }, 400);
           }
 
-          const risk = await createRisk(body);
+          const risk = await createRisk({ ...body, identified_by: sessionUser.email });
 
           await logEvent({
             entityType: 'SYSTEM',
@@ -203,7 +207,7 @@ export const riskRoutes = [
             actionType: 'CREATE',
             description: `New risk created: ${risk.risk_title}`,
             newValue: JSON.stringify(risk),
-            userName: body.identified_by || 'system',
+            userName: sessionUser.email,
             severity: risk.risk_level === 'critical' || risk.risk_level === 'high' ? 'WARNING' : 'INFO',
             module: 'risk_management',
             aiInvolved: body.ai_detected || false
@@ -224,6 +228,10 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -231,14 +239,14 @@ export const riskRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] PUT /api/risks/:id', { id });
+          logger?.info('📝 [RiskAPI] PUT /api/risks/:id', { id, by: sessionUser.email });
 
           const existingRisk = await getRiskById(id);
           if (!existingRisk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
 
-          const updatedRisk = await updateRisk(id, body, body.updated_by);
+          const updatedRisk = await updateRisk(id, body, sessionUser.email);
 
           await logEvent({
             entityType: 'SYSTEM',
@@ -247,7 +255,7 @@ export const riskRoutes = [
             description: `Risk updated: ${updatedRisk.risk_title}`,
             oldValue: JSON.stringify(existingRisk),
             newValue: JSON.stringify(updatedRisk),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'risk_management'
           });
@@ -267,6 +275,10 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createTreatmentAction, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -274,7 +286,7 @@ export const riskRoutes = [
           
           const riskId = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks/:id/treatment', { riskId });
+          logger?.info('📝 [RiskAPI] POST /api/risks/:id/treatment', { riskId, by: sessionUser.email });
 
           const risk = await getRiskById(riskId);
           if (!risk) {
@@ -287,7 +299,8 @@ export const riskRoutes = [
 
           const action = await createTreatmentAction({
             risk_id: riskId,
-            ...body
+            ...body,
+            created_by: sessionUser.email
           });
 
           await logEvent({
@@ -296,7 +309,7 @@ export const riskRoutes = [
             actionType: 'CREATE',
             description: `Treatment action created for risk: ${risk.risk_title}`,
             newValue: JSON.stringify(action),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'risk_management'
           });
@@ -316,6 +329,10 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateTreatmentAction, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -323,7 +340,7 @@ export const riskRoutes = [
           
           const actionId = parseInt(c.req.param('actionId'));
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] PUT /api/risks/treatment/:actionId', { actionId });
+          logger?.info('📝 [RiskAPI] PUT /api/risks/treatment/:actionId', { actionId, by: sessionUser.email });
 
           const updatedAction = await updateTreatmentAction(actionId, body);
 
@@ -333,7 +350,7 @@ export const riskRoutes = [
             actionType: 'UPDATE',
             description: `Treatment action updated: ${updatedAction.action_title}`,
             newValue: JSON.stringify(updatedAction),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'risk_management'
           });
@@ -358,9 +375,13 @@ export const riskRoutes = [
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initRiskTables();
           
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks/:id/escalate', { id });
+          logger?.info('📝 [RiskAPI] POST /api/risks/:id/escalate', { id, by: sessionUser.email });
 
           const risk = await getRiskById(id);
           if (!risk) {
@@ -379,7 +400,7 @@ export const riskRoutes = [
             description: `Risk escalated: ${risk.risk_title}. Reason: ${body.reason}`,
             oldValue: JSON.stringify({ status: risk.status }),
             newValue: JSON.stringify({ status: 'escalated', escalation_reason: body.reason }),
-            userName: body.escalated_by || 'system',
+            userName: sessionUser.email,
             severity: 'CRITICAL',
             module: 'risk_management'
           });
@@ -399,14 +420,24 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
+          const { checkPermission } = await import('../../utils/rbacDatabase');
           await initRiskTables();
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks/:id/close', { id });
+          logger?.info('📝 [RiskAPI] POST /api/risks/:id/close', { id, by: sessionUser.email });
+
+          const hasPermission = await checkPermission(sessionUser.email, 'can_close_finding');
+          if (!hasPermission) {
+            return forbiddenResponse(c, 'Permission denied: cannot close risks');
+          }
 
           const risk = await getRiskById(id);
           if (!risk) {
@@ -424,7 +455,7 @@ export const riskRoutes = [
             description: `Risk closed: ${risk.risk_title}. Closure notes: ${body.closure_notes || 'N/A'}`,
             oldValue: JSON.stringify({ status: risk.status }),
             newValue: JSON.stringify({ status: 'closed' }),
-            userName: body.closed_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'risk_management'
           });
@@ -444,6 +475,10 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -453,59 +488,51 @@ export const riskRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('🔐 [RiskAPI] POST /api/risks/:id/accept (RBAC enforcement)', { id, userEmail: body.accepted_by_email });
-
-          if (!body.accepted_by_email) {
-            return c.json({ error: 'accepted_by_email is required for risk acceptance' }, 400);
-          }
+          const userEmail = sessionUser.email;
+          logger?.info('🔐 [RiskAPI] POST /api/risks/:id/accept (RBAC enforcement)', { id, userEmail });
 
           if (!body.justification) {
             return c.json({ error: 'justification is required for risk acceptance' }, 400);
           }
 
-          const user = await getUserByEmail(body.accepted_by_email);
+          const user = await getUserByEmail(userEmail);
           if (!user) {
-            logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user not registered in system', { userEmail: body.accepted_by_email });
+            logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user not registered in system', { userEmail });
             await logEvent({
               entityType: 'SYSTEM',
               entityId: id.toString(),
               actionType: 'UPDATE',
-              description: `Risk acceptance BLOCKED: User ${body.accepted_by_email} not found in system_users`,
-              userName: body.accepted_by_email,
+              description: `Risk acceptance BLOCKED: User ${userEmail} not found in system_users`,
+              userName: userEmail,
               severity: 'WARNING',
               module: 'risk_management'
             });
             return c.json({ 
-              error: 'User not found: You must be a registered system user to perform this action',
-              user_email: body.accepted_by_email
-            }, 401);
-          }
-
-          if (!user.is_active) {
-            logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user account inactive', { userEmail: body.accepted_by_email });
-            return c.json({ 
-              error: 'Account inactive: Your user account has been deactivated',
-              user_email: body.accepted_by_email
+              error: 'User not found: You must be a registered system user to perform this action'
             }, 403);
           }
 
-          const hasPermission = await checkPermission(body.accepted_by_email, 'can_accept_risk');
+          if (!user.is_active) {
+            logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user account inactive', { userEmail });
+            return c.json({ 
+              error: 'Account inactive: Your user account has been deactivated'
+            }, 403);
+          }
+
+          const hasPermission = await checkPermission(userEmail, 'can_accept_risk');
           if (!hasPermission) {
-            logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user lacks GRC permission', { userEmail: body.accepted_by_email, userRole: user.role });
+            logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user lacks GRC permission', { userEmail, userRole: user.role });
             await logEvent({
               entityType: 'SYSTEM',
               entityId: id.toString(),
               actionType: 'UPDATE',
-              description: `Risk acceptance BLOCKED: User ${body.accepted_by_email} (role: ${user.role}) lacks GRC Manager permission`,
-              userName: body.accepted_by_email,
+              description: `Risk acceptance BLOCKED: User ${userEmail} (role: ${user.role}) lacks GRC Manager permission`,
+              userName: userEmail,
               severity: 'WARNING',
               module: 'risk_management'
             });
             return c.json({ 
-              error: `Permission denied: Only GRC Manager or Admin role can accept risks. Your role (${user.role}) does not have this permission.`,
-              required_role: 'grc_manager',
-              current_role: user.role,
-              user_email: body.accepted_by_email
+              error: `Permission denied: Only GRC Manager or Admin role can accept risks. Your role (${user.role}) does not have this permission.`
             }, 403);
           }
 
@@ -542,7 +569,7 @@ export const riskRoutes = [
             description: `Risk ACCEPTED by GRC Manager: ${risk.risk_title}. Justification: ${body.justification}`,
             oldValue: JSON.stringify({ status: risk.status, treatment_strategy: risk.treatment_strategy }),
             newValue: JSON.stringify({ status: 'monitoring', treatment_strategy: 'accept', accepted_by: user.name }),
-            userName: body.accepted_by_email,
+            userName: userEmail,
             severity: 'CRITICAL',
             module: 'risk_management'
           });

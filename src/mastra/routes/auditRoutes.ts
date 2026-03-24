@@ -108,19 +108,23 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createAudit, initAuditTables } = await import('../../utils/auditDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initAuditTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [AuditAPI] POST /api/audits', { title: body.title });
+          logger?.info('📝 [AuditAPI] POST /api/audits', { title: body.title, by: sessionUser.email });
 
           if (!body.audit_code || !body.title || !body.audit_type) {
             return c.json({ error: 'Missing required fields: audit_code, title, audit_type' }, 400);
           }
 
-          const audit = await createAudit(body);
+          const audit = await createAudit({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'AUDIT',
@@ -128,7 +132,7 @@ export const auditRoutes = [
             actionType: 'CREATE',
             description: `New audit created: ${audit.title}`,
             newValue: JSON.stringify(audit),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'audit_readiness'
           });
@@ -150,6 +154,10 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateAudit, getAuditById, initAuditTables } = await import('../../utils/auditDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -157,7 +165,7 @@ export const auditRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [AuditAPI] PUT /api/audits/:id', { id });
+          logger?.info('📝 [AuditAPI] PUT /api/audits/:id', { id, by: sessionUser.email });
 
           const existing = await getAuditById(id);
           if (!existing) {
@@ -173,7 +181,7 @@ export const auditRoutes = [
             description: `Audit updated: ${audit.title}`,
             oldValue: JSON.stringify(existing),
             newValue: JSON.stringify(audit),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'audit_readiness'
           });
@@ -192,13 +200,17 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createFinding, getAuditById, initAuditTables } = await import('../../utils/auditDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initAuditTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [AuditAPI] POST /api/audits/findings', { title: body.title });
+          logger?.info('📝 [AuditAPI] POST /api/audits/findings', { title: body.title, by: sessionUser.email });
 
           if (!body.audit_id || !body.finding_code || !body.title || !body.description || !body.category || !body.severity) {
             return c.json({ error: 'Missing required fields: audit_id, finding_code, title, description, category, severity' }, 400);
@@ -209,7 +221,7 @@ export const auditRoutes = [
             return c.json({ error: 'Audit not found' }, 404);
           }
 
-          const finding = await createFinding(body);
+          const finding = await createFinding({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'FINDING',
@@ -217,7 +229,7 @@ export const auditRoutes = [
             actionType: 'CREATE',
             description: `New audit finding: ${finding.title} (${finding.severity})`,
             newValue: JSON.stringify(finding),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: finding.severity === 'critical' ? 'CRITICAL' : finding.severity === 'major' ? 'WARNING' : 'INFO',
             module: 'audit_readiness'
           });
@@ -265,6 +277,10 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateFinding, getFindingById, initAuditTables } = await import('../../utils/auditDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -272,7 +288,7 @@ export const auditRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [AuditAPI] PUT /api/audits/findings/:id', { id });
+          logger?.info('📝 [AuditAPI] PUT /api/audits/findings/:id', { id, by: sessionUser.email });
 
           const existing = await getFindingById(id);
           if (!existing) {
@@ -288,7 +304,7 @@ export const auditRoutes = [
             description: `Audit finding updated: ${finding.title}`,
             oldValue: JSON.stringify(existing),
             newValue: JSON.stringify(finding),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'audit_readiness'
           });
@@ -332,19 +348,23 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createEvidencePack, initAuditTables } = await import('../../utils/auditDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initAuditTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [AuditAPI] POST /api/audits/evidence-packs');
+          logger?.info('📝 [AuditAPI] POST /api/audits/evidence-packs', { by: sessionUser.email });
 
           if (!body.pack_name) {
             return c.json({ error: 'pack_name is required' }, 400);
           }
 
-          const pack = await createEvidencePack(body);
+          const pack = await createEvidencePack({ ...body, generated_by: sessionUser.email });
 
           await logEvent({
             entityType: 'EVIDENCE_PACK',
@@ -352,7 +372,7 @@ export const auditRoutes = [
             actionType: 'CREATE',
             description: `Evidence pack created: ${pack.pack_name}`,
             newValue: JSON.stringify(pack),
-            userName: body.generated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'audit_readiness'
           });

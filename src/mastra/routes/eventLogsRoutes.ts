@@ -229,11 +229,18 @@ export const eventLogsRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) {
+            return unauthorizedResponse(c);
+          }
+
           const logger = mastra?.getLogger();
           const data = await c.req.json();
           logger?.info("📋 [EventLogs API] Creating new log entry", { 
             actionType: data.actionType,
-            entityType: data.entityType 
+            entityType: data.entityType,
+            by: sessionUser.email
           });
 
           const { logEvent, initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
@@ -245,11 +252,13 @@ export const eventLogsRoutes = [
             }, 400);
           }
 
+          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+
           const eventLog = await logEvent({
-            userId: data.userId,
-            userName: data.userName,
-            userEmail: data.userEmail,
-            userRole: data.userRole,
+            userId: sessionUser.userId,
+            userName: sessionUser.name,
+            userEmail: sessionUser.email,
+            userRole: sessionUser.role,
             actionType: data.actionType,
             entityType: data.entityType,
             entityId: data.entityId,
@@ -260,8 +269,8 @@ export const eventLogsRoutes = [
             aiInvolved: data.aiInvolved,
             severity: data.severity,
             correlationId: data.correlationId,
-            ipAddress: data.ipAddress,
-            userAgent: data.userAgent,
+            ipAddress: ip,
+            userAgent: c.req.header('User-Agent') || 'unknown',
             module: data.module
           });
 

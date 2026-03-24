@@ -58,19 +58,23 @@ export const complianceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createRegulation, initComplianceTables } = await import('../../utils/complianceDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initComplianceTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [ComplianceAPI] POST /api/compliance/regulations', { name: body.name });
+          logger?.info('📝 [ComplianceAPI] POST /api/compliance/regulations', { name: body.name, by: sessionUser.email });
 
           if (!body.regulation_code || !body.name || !body.jurisdiction || !body.category) {
             return c.json({ error: 'Missing required fields: regulation_code, name, jurisdiction, category' }, 400);
           }
 
-          const regulation = await createRegulation(body);
+          const regulation = await createRegulation({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'REGULATION',
@@ -78,7 +82,7 @@ export const complianceRoutes = [
             actionType: 'CREATE',
             description: `New regulation added: ${regulation.name}`,
             newValue: JSON.stringify(regulation),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'compliance_tracker'
           });
@@ -154,19 +158,23 @@ export const complianceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createObligation, initComplianceTables } = await import('../../utils/complianceDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initComplianceTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [ComplianceAPI] POST /api/compliance/obligations', { title: body.title });
+          logger?.info('📝 [ComplianceAPI] POST /api/compliance/obligations', { title: body.title, by: sessionUser.email });
 
           if (!body.obligation_code || !body.regulation_id || !body.title || !body.description) {
             return c.json({ error: 'Missing required fields: obligation_code, regulation_id, title, description' }, 400);
           }
 
-          const obligation = await createObligation(body);
+          const obligation = await createObligation({ ...body, created_by: sessionUser.email });
 
           await logEvent({
             entityType: 'OBLIGATION',
@@ -174,7 +182,7 @@ export const complianceRoutes = [
             actionType: 'CREATE',
             description: `New compliance obligation created: ${obligation.title}`,
             newValue: JSON.stringify(obligation),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'compliance_tracker'
           });
@@ -196,6 +204,10 @@ export const complianceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateObligation, getObligationById, initComplianceTables } = await import('../../utils/complianceDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -203,7 +215,7 @@ export const complianceRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [ComplianceAPI] PUT /api/compliance/obligations/:id', { id });
+          logger?.info('📝 [ComplianceAPI] PUT /api/compliance/obligations/:id', { id, by: sessionUser.email });
 
           const existing = await getObligationById(id);
           if (!existing) {
@@ -219,7 +231,7 @@ export const complianceRoutes = [
             description: `Compliance obligation updated: ${obligation.title}`,
             oldValue: JSON.stringify(existing),
             newValue: JSON.stringify(obligation),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'compliance_tracker'
           });
@@ -238,16 +250,20 @@ export const complianceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createAssessment, getObligationById, initComplianceTables } = await import('../../utils/complianceDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initComplianceTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [ComplianceAPI] POST /api/compliance/assessments');
+          logger?.info('📝 [ComplianceAPI] POST /api/compliance/assessments', { by: sessionUser.email });
 
-          if (!body.obligation_id || !body.assessed_by || !body.compliance_status) {
-            return c.json({ error: 'Missing required fields: obligation_id, assessed_by, compliance_status' }, 400);
+          if (!body.obligation_id || !body.compliance_status) {
+            return c.json({ error: 'Missing required fields: obligation_id, compliance_status' }, 400);
           }
 
           const obligation = await getObligationById(body.obligation_id);
@@ -255,7 +271,7 @@ export const complianceRoutes = [
             return c.json({ error: 'Obligation not found' }, 404);
           }
 
-          const assessment = await createAssessment(body);
+          const assessment = await createAssessment({ ...body, assessed_by: sessionUser.email });
 
           await logEvent({
             entityType: 'ASSESSMENT',
@@ -263,7 +279,7 @@ export const complianceRoutes = [
             actionType: 'CREATE',
             description: `Compliance assessment recorded for ${obligation.title}: ${body.compliance_status}`,
             newValue: JSON.stringify(assessment),
-            userName: body.assessed_by,
+            userName: sessionUser.email,
             severity: body.compliance_status === 'non_compliant' ? 'CRITICAL' : 'INFO',
             module: 'compliance_tracker'
           });

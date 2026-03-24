@@ -95,13 +95,17 @@ export const migrationRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createMigrationJob, initMigrationTables } = await import('../../utils/migrationDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initMigrationTables();
           
           const body = await c.req.json();
-          logger?.info('📝 [MigrationAPI] POST /api/migration/jobs', { name: body.name });
+          logger?.info('📝 [MigrationAPI] POST /api/migration/jobs', { name: body.name, by: sessionUser.email });
 
           if (!body.name || !body.source_type || !body.target_module) {
             return c.json({ error: 'Missing required fields: name, source_type, target_module' }, 400);
@@ -110,7 +114,8 @@ export const migrationRoutes = [
           const jobCode = 'MIG-' + Date.now().toString(36).toUpperCase();
           const job = await createMigrationJob({
             ...body,
-            job_code: jobCode
+            job_code: jobCode,
+            created_by: sessionUser.email
           });
 
           await logEvent({
@@ -119,7 +124,7 @@ export const migrationRoutes = [
             actionType: 'CREATE',
             description: `Migration job created: ${job.name} (${job.target_module})`,
             newValue: JSON.stringify(job),
-            userName: body.created_by || 'system',
+            userName: sessionUser.email,
             severity: 'INFO',
             module: 'migration'
           });
@@ -164,6 +169,10 @@ export const migrationRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateMigrationJob, getMigrationJobById, initMigrationTables } = await import('../../utils/migrationDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
@@ -171,7 +180,7 @@ export const migrationRoutes = [
           
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
-          logger?.info('📝 [MigrationAPI] PUT /api/migration/jobs/:id', { id });
+          logger?.info('📝 [MigrationAPI] PUT /api/migration/jobs/:id', { id, by: sessionUser.email });
 
           const existing = await getMigrationJobById(id);
           if (!existing) {
@@ -187,7 +196,7 @@ export const migrationRoutes = [
             description: `Migration job updated: ${job.name} (Status: ${job.status})`,
             oldValue: JSON.stringify(existing),
             newValue: JSON.stringify(job),
-            userName: body.updated_by || 'system',
+            userName: sessionUser.email,
             severity: job.status === 'failed' ? 'WARNING' : 'INFO',
             module: 'migration'
           });

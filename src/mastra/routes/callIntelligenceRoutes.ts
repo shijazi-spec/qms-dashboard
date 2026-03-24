@@ -1,7 +1,7 @@
-function verifyAdminKey(c: any): boolean {
-  const adminKey = c.req.header("X-Admin-Key");
-  const expectedKey = process.env.ADMIN_API_KEY;
-  return Boolean(expectedKey && adminKey === expectedKey);
+import { requireAdminOrKey, getSessionUser, unauthorizedResponse, type SessionUser } from '../../utils/rbacMiddleware';
+
+function verifyAdminKey(c: any): SessionUser | null {
+  return requireAdminOrKey(c);
 }
 
 export const callIntelligenceRoutes = [
