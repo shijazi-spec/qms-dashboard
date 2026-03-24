@@ -66,15 +66,20 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **Session**: HMAC-signed cookies using `SESSION_SECRET`, 7-day expiry, HttpOnly/Secure/SameSite=Lax flags
 - **Routes**: `GET /api/auth/google` (initiate), `GET /api/auth/google/callback` (callback), `GET /api/auth/me` (session check), `POST|GET /api/auth/logout`
 - **Protection**: All dashboard pages AND API endpoints require valid session. Public pages: `/login`, `/guide`, `/accept-invite`
+- **RBAC**: Centralized ROUTE_PERMISSION_MAP in rbacMiddleware.ts enforces per-endpoint role/permission checks globally; roles: admin, grc_manager, quality_manager, ai_specialist, bu_owner, executive, department_viewer
 - **API auth**: All API endpoints require Google session cookie or X-Admin-Key header (401 if neither present)
 - **CORS**: Restricted to app domain only (no wildcard), derived from REPLIT_DOMAINS
-- **Security headers**: CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, X-XSS-Protection, Permissions-Policy
-- **Input sanitization**: HTML/script tag stripping, prototype pollution protection (__proto__/constructor keys stripped)
-- **Rate limiting**: 100 req/min read, 20 req/min write per IP
+- **Security headers**: CSP (no unsafe-eval, frame-ancestors 'none'), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, X-XSS-Protection, Permissions-Policy
+- **Input sanitization**: HTML/script tag stripping, CSV formula injection prevention, prototype pollution protection, field-level max-length enforcement
+- **Rate limiting**: 100 req/min read, 20 req/min write, 5 req/min auth, 10 req/min export per IP
+- **Password policy**: 12+ chars, uppercase, lowercase, number, special character (enforced on invitation acceptance)
+- **Error handling**: All error responses return generic messages; no raw error.message exposure
+- **ROI validation**: Financial field validation (non-negative, max value, type checking)
+- **Invitation deduplication**: Prevents duplicate pending invitations for same email
 - **OAuth CSRF**: State parameter validated against oauth_state cookie in callback
 - **User storage**: Google users upserted into `platform_users` table with google_id, picture, auth_provider columns
-- **Admin key**: Still works as alternative auth for API endpoints
-- **Security utilities**: `src/utils/inputSanitizer.ts`, `src/utils/rateLimiter.ts`
+- **Admin key**: Works as alternative auth for API endpoints and admin-only routes
+- **Security utilities**: `src/utils/inputSanitizer.ts` (sanitization, validation, CSV escaping, password policy), `src/utils/rateLimiter.ts` (path-aware rate limiting), `src/utils/rbacMiddleware.ts` (RBAC enforcement)
 
 ## Key Secrets
 - `DATABASE_URL` - PostgreSQL connection string
@@ -93,6 +98,8 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## Recent Changes
+- Pentest v3.0 remediation (Task #3): Error message sanitization, password policy, invitation dedup, CSV formula prevention, ROI validation, rate limit tightening, CSP hardening, auth added to checklist/calendar POST endpoints (Mar 2026)
+- Pentest v3.0 remediation (Task #2): Centralized RBAC middleware with ROUTE_PERMISSION_MAP, enforceRoutePermission globally applied, status change blocking, invitation token masking (Mar 2026)
 - Security hardening: Fixed all 19 VAPT findings — API auth, CORS, CSP, input sanitization, rate limiting, OAuth state validation (Mar 2026)
 - Added Google OAuth 2.0 login with login page, session cookies, and route protection (Feb 2026)
 - Fixed audit API schema (VARCHAR foreign keys) and route ordering issues

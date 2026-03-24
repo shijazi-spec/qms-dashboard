@@ -343,6 +343,10 @@ export const complianceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createCalendarEvent, initComplianceTables } = await import('../../utils/complianceDatabase');
           await initComplianceTables();

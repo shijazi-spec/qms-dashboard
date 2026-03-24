@@ -34,7 +34,7 @@ export const roiRoutes = [
         } catch (error) {
           console.error("Error fetching ROI initiatives:", error);
           return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to fetch initiatives" 
+            error: "Failed to fetch initiatives" 
           }, 500);
         }
       };
@@ -78,7 +78,14 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const data = await c.req.json();
-          logger?.info("🧮 [ROI API] Calculating ROI", data);
+
+          const { validateROIFinancials } = await import('../../utils/inputSanitizer');
+          const financialError = validateROIFinancials(data);
+          if (financialError) {
+            return c.json({ error: financialError }, 400);
+          }
+
+          logger?.info("🧮 [ROI API] Calculating ROI");
 
           const { calculateROI, generateAIRecommendation } = await import("../../utils/roiDatabase");
           
@@ -188,7 +195,7 @@ export const roiRoutes = [
         } catch (error) {
           console.error("Error creating ROI initiative:", error);
           return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to create initiative" 
+            error: "Failed to create initiative" 
           }, 500);
         }
       };

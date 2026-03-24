@@ -30,7 +30,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, ...stats });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -69,7 +69,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, users: filtered, count: filtered.length });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -98,7 +98,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, user, permissions, dataScope });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -123,7 +123,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, invitations: masked, count: masked.length });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -151,6 +151,14 @@ export const userAccessRoutes = [
           const existingUser = await userDb.getUserByEmail(body.email);
           if (existingUser) {
             return c.json({ error: 'User with this email already exists' }, 400);
+          }
+
+          const existingInvitations = await userDb.getInvitations();
+          const pendingInvite = existingInvitations.find((inv: any) => 
+            inv.email === body.email && !inv.used && new Date(inv.token_expires_at) > new Date()
+          );
+          if (pendingInvite) {
+            return c.json({ error: 'A pending invitation already exists for this email address' }, 409);
           }
 
           const expiryDays = body.expiry_days || 7;
@@ -224,7 +232,7 @@ export const userAccessRoutes = [
           }, 201);
         } catch (error: any) {
           console.error('❌ [UserAccess] Error creating invitation:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -247,7 +255,7 @@ export const userAccessRoutes = [
           return c.json({ valid: true, invitation: { email: invitation.email, full_name: invitation.full_name, team: invitation.team, role: invitation.role } });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -265,11 +273,19 @@ export const userAccessRoutes = [
             return c.json({ error: 'token is required' }, 400);
           }
 
+          if (body.password) {
+            const { validatePassword } = await import('../../utils/inputSanitizer');
+            const passwordError = validatePassword(body.password);
+            if (passwordError) {
+              return c.json({ error: passwordError }, 400);
+            }
+          }
+
           logger?.info('✅ [UserAccess] Accepting invitation');
           
           const user = await userDb.acceptInvitation(body.token, {
             full_name: body.full_name,
-            password_hash: body.password_hash,
+            password_hash: body.password_hash || body.password,
             access_reason: body.access_reason
           });
 
@@ -284,7 +300,7 @@ export const userAccessRoutes = [
           });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error accepting invitation:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -340,7 +356,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, user });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error approving user:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -360,7 +376,8 @@ export const userAccessRoutes = [
           
           logger?.info('❌ [UserAccess] Denying user', { id });
 
-          const user = await userDb.denyAccessRequest(id, body.denied_by || 'admin@walaplus.com', body.reason);
+          const denier = verifyAdminKey(c);
+          const user = await userDb.denyAccessRequest(id, denier?.email || 'unknown', body.reason);
           
           if (!user) {
             return c.json({ error: 'User not found or not pending approval' }, 404);
@@ -391,7 +408,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, user });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error denying user:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -410,7 +427,8 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           logger?.info('🚫 [UserAccess] Disabling user', { id });
-          const user = await userDb.disableUser(id, body.disabled_by || 'admin@walaplus.com');
+          const disabler = verifyAdminKey(c);
+          const user = await userDb.disableUser(id, disabler?.email || 'unknown');
           
           if (!user) {
             return c.json({ error: 'User not found' }, 404);
@@ -419,7 +437,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, user });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -438,7 +456,8 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           logger?.info('✅ [UserAccess] Enabling user', { id });
-          const user = await userDb.enableUser(id, body.enabled_by || 'admin@walaplus.com');
+          const enabler = verifyAdminKey(c);
+          const user = await userDb.enableUser(id, enabler?.email || 'unknown');
           
           if (!user) {
             return c.json({ error: 'User not found or not disabled' }, 404);
@@ -447,7 +466,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, user });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -480,7 +499,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, user });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -510,7 +529,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, permissions });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -536,7 +555,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, logs, count: logs.length });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -555,7 +574,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, screens: userDb.SCREEN_LIST });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -574,7 +593,7 @@ export const userAccessRoutes = [
           return c.json({ success: true, roles: userDb.DEFAULT_ROLE_PERMISSIONS });
         } catch (error: any) {
           console.error('❌ [UserAccess] Error:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }

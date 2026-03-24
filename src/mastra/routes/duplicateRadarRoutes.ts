@@ -258,7 +258,7 @@ async function scanZohoCRMForDuplicates(): Promise<{
       duplicatesDetected: 0,
       moduleBreakdown: [],
       durationMs: Date.now() - startTime,
-      error: error.message
+      error: 'An internal error occurred'
     };
   }
 }
@@ -302,7 +302,7 @@ export const duplicateRadarRoutes = [
           return c.json({ ...summary, kpis });
         } catch (error: any) {
           console.error('Error fetching summary:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -332,7 +332,7 @@ export const duplicateRadarRoutes = [
           return c.json({ clusters, total, limit, offset });
         } catch (error: any) {
           console.error('Error fetching clusters:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -352,7 +352,7 @@ export const duplicateRadarRoutes = [
           return c.json({ cluster, records });
         } catch (error: any) {
           console.error('Error fetching cluster:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -378,7 +378,7 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, cluster });
         } catch (error: any) {
           console.error('Error updating cluster status:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -393,7 +393,7 @@ export const duplicateRadarRoutes = [
           return c.json({ owners: data });
         } catch (error: any) {
           console.error('Error fetching by owner:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -408,7 +408,7 @@ export const duplicateRadarRoutes = [
           return c.json({ sources: data });
         } catch (error: any) {
           console.error('Error fetching by source:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -423,7 +423,7 @@ export const duplicateRadarRoutes = [
           return c.json(kpis);
         } catch (error: any) {
           console.error('Error fetching KPIs:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -440,7 +440,7 @@ export const duplicateRadarRoutes = [
           return c.json({ logs });
         } catch (error: any) {
           console.error('Error fetching logs:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -479,7 +479,7 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error searching duplicates:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -511,7 +511,7 @@ export const duplicateRadarRoutes = [
           }
         } catch (error: any) {
           console.error('Error scanning Zoho CRM:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -655,7 +655,7 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error generating mock data:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -670,7 +670,7 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, message: 'Mock data cleared' });
         } catch (error: any) {
           console.error('Error clearing mock data:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -727,7 +727,7 @@ export const duplicateRadarRoutes = [
           return c.text(csvHeader + csvRows);
         } catch (error: any) {
           console.error('Error exporting data:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -759,7 +759,7 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error fetching lead duplicates:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -792,7 +792,7 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error fetching deal duplicates:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -841,7 +841,7 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error generating AI recommendations:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -903,7 +903,7 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, cluster_id: cluster.id, domain: emailDomain });
         } catch (error: any) {
           console.error('Error adding test record:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -938,7 +938,7 @@ export const duplicateRadarRoutes = [
           return c.json(results);
         } catch (error: any) {
           console.error('Error searching duplicates:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     },

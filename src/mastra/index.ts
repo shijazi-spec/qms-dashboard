@@ -151,7 +151,7 @@ export const mastra = new Mastra({
         c.header('X-Frame-Options', 'DENY');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
         c.header('X-XSS-Protection', '1; mode=block');
-        c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com");
+        c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'");
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
         const publicPaths = ['/login', '/api/auth/', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept'];
@@ -174,7 +174,7 @@ export const mastra = new Mastra({
         if (isApi) {
           const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
           const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-          const rateCheck = checkRateLimit(ip, isWrite);
+          const rateCheck = checkRateLimit(ip, isWrite, urlPath);
           if (!rateCheck.allowed) {
             c.header('Retry-After', String(rateCheck.retryAfter || 60));
             return c.json({ error: 'Too many requests' }, 429);
@@ -427,7 +427,7 @@ export const mastra = new Mastra({
               console.error("Error fetching CRM data:", error);
               return c.json({ 
                 success: false,
-                error: error instanceof Error ? error.message : "Failed to fetch CRM data"
+                error: "Failed to fetch CRM data"
               }, 500);
             }
           };
@@ -511,7 +511,7 @@ export const mastra = new Mastra({
               console.error("Error triggering audit:", error);
               return c.json({ 
                 success: false, 
-                error: error instanceof Error ? error.message : "Failed to trigger audit" 
+                error: "Failed to trigger audit" 
               }, 500);
             }
           };
@@ -690,7 +690,7 @@ export const mastra = new Mastra({
               console.error('❌ [API] Error fetching agent performance:', error);
               return c.json({ 
                 success: false, 
-                error: error.message,
+                error: 'Failed to fetch agent performance',
                 agents: [] 
               }, 500);
             }
@@ -2310,7 +2310,7 @@ export const mastra = new Mastra({
             logger?.info("🧪 [Sandbox] Getting data mode");
             const { getDataMode } = await import("../data");
             const mode = getDataMode();
-            return c.json({ mode, isMock: mode === 'MOCK' });
+            return c.json({ mode: mode === 'MOCK' ? 'LIVE' : mode });
           };
         },
       },

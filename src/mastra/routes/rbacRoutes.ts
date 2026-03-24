@@ -21,7 +21,7 @@ export const rbacRoutes = [
           return c.json({ users, total: users.length });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error fetching users:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -43,7 +43,7 @@ export const rbacRoutes = [
           return c.json(user);
         } catch (error: any) {
           console.error('❌ [RBAC API] Error fetching user:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -62,7 +62,7 @@ export const rbacRoutes = [
           return c.json(user, 201);
         } catch (error: any) {
           console.error('❌ [RBAC API] Error creating user:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -82,7 +82,7 @@ export const rbacRoutes = [
           return c.json(user);
         } catch (error: any) {
           console.error('❌ [RBAC API] Error updating user:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -104,7 +104,7 @@ export const rbacRoutes = [
           return c.json(permissions);
         } catch (error: any) {
           console.error('❌ [RBAC API] Error fetching permissions:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -126,7 +126,7 @@ export const rbacRoutes = [
           return c.json({ email, permission, hasPermission });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error checking permission:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -147,7 +147,7 @@ export const rbacRoutes = [
           return c.json({ processes, total: processes.length });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error fetching BU processes:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -166,7 +166,7 @@ export const rbacRoutes = [
           return c.json(process, 201);
         } catch (error: any) {
           console.error('❌ [RBAC API] Error creating BU process:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -186,7 +186,7 @@ export const rbacRoutes = [
           return c.json(process);
         } catch (error: any) {
           console.error('❌ [RBAC API] Error updating BU process:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -204,7 +204,7 @@ export const rbacRoutes = [
           return c.json({ success: true, ...stats });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error calculating control readiness:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -222,7 +222,7 @@ export const rbacRoutes = [
           return c.json({ success: true, ...result });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error escalating overdue actions:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -243,7 +243,7 @@ export const rbacRoutes = [
           return c.json({ escalations, total: escalations.length });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error fetching escalations:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -263,7 +263,7 @@ export const rbacRoutes = [
           return c.json({ success: true });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error resolving escalation:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }
@@ -288,7 +288,7 @@ export const rbacRoutes = [
           return c.json({ roles });
         } catch (error: any) {
           console.error('❌ [RBAC API] Error fetching roles:', error);
-          return c.json({ error: error.message }, 500);
+          return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
     }

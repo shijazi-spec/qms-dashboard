@@ -52,7 +52,7 @@ export const eventLogsRoutes = [
         } catch (error) {
           console.error("Error fetching event logs:", error);
           return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to fetch event logs" 
+            error: "Failed to fetch event logs" 
           }, 500);
         }
       };
@@ -80,7 +80,7 @@ export const eventLogsRoutes = [
         } catch (error) {
           console.error("Error fetching event log stats:", error);
           return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to fetch stats" 
+            error: "Failed to fetch stats" 
           }, 500);
         }
       };
@@ -183,7 +183,7 @@ export const eventLogsRoutes = [
         } catch (error) {
           console.error("Error exporting event logs:", error);
           return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to export logs" 
+            error: "Failed to export logs" 
           }, 500);
         }
       };
@@ -217,74 +217,13 @@ export const eventLogsRoutes = [
         } catch (error) {
           console.error("Error fetching event log:", error);
           return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to fetch event log" 
+            error: "Failed to fetch event log" 
           }, 500);
         }
       };
     }
   },
-  {
-    path: "/api/logs",
-    method: "POST" as const,
-    createHandler: async ({ mastra }: any) => {
-      return async (c: any) => {
-        try {
-          const { getSessionUser, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
-          const sessionUser = getSessionUser(c);
-          if (!sessionUser) {
-            return unauthorizedResponse(c);
-          }
-
-          const logger = mastra?.getLogger();
-          const data = await c.req.json();
-          logger?.info("📋 [EventLogs API] Creating new log entry", { 
-            actionType: data.actionType,
-            entityType: data.entityType,
-            by: sessionUser.email
-          });
-
-          const { logEvent, initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
-          await initializeEventLogsTable();
-
-          if (!data.actionType || !data.entityType) {
-            return c.json({ 
-              error: "Missing required fields: actionType, entityType" 
-            }, 400);
-          }
-
-          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
-
-          const eventLog = await logEvent({
-            userId: sessionUser.userId,
-            userName: sessionUser.name,
-            userEmail: sessionUser.email,
-            userRole: sessionUser.role,
-            actionType: data.actionType,
-            entityType: data.entityType,
-            entityId: data.entityId,
-            entityName: data.entityName,
-            description: data.description,
-            oldValue: data.oldValue,
-            newValue: data.newValue,
-            aiInvolved: data.aiInvolved,
-            severity: data.severity,
-            correlationId: data.correlationId,
-            ipAddress: ip,
-            userAgent: c.req.header('User-Agent') || 'unknown',
-            module: data.module
-          });
-
-          logger?.info("📋 [EventLogs API] Log entry created successfully", { id: eventLog.id });
-          return c.json(eventLog, 201);
-        } catch (error) {
-          console.error("Error creating event log:", error);
-          return c.json({ 
-            error: error instanceof Error ? error.message : "Failed to create event log" 
-          }, 500);
-        }
-      };
-    }
-  },
+  
   {
     path: "/logs",
     method: "GET" as const,

@@ -413,6 +413,10 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { createChecklist, getAuditById, initAuditTables } = await import('../../utils/auditDatabase');
           await initAuditTables();
@@ -451,6 +455,10 @@ export const auditRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { updateChecklistItem, initAuditTables } = await import('../../utils/auditDatabase');
           await initAuditTables();

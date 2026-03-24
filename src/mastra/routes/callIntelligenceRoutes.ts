@@ -51,7 +51,7 @@ export const callIntelligenceRoutes = [
           console.error("Error ingesting call:", error);
           return c.json({ 
             success: false, 
-            error: error instanceof Error ? error.message : "Failed to ingest call" 
+            error: "Failed to ingest call" 
           }, 500);
         }
       };
@@ -321,7 +321,7 @@ Respond with JSON only:
           console.error("Error analyzing call:", error);
           return c.json({ 
             success: false, 
-            error: error instanceof Error ? error.message : "Failed to analyze call" 
+            error: "Failed to analyze call" 
           }, 500);
         }
       };
@@ -418,7 +418,7 @@ Respond with JSON only:
           console.error("Error checking compliance:", error);
           return c.json({ 
             success: false, 
-            error: error instanceof Error ? error.message : "Failed to check compliance" 
+            error: "Failed to check compliance" 
           }, 500);
         }
       };
@@ -629,7 +629,7 @@ Respond with JSON only:
           console.error("Error generating MoM:", error);
           return c.json({ 
             success: false, 
-            error: error instanceof Error ? error.message : "Failed to generate MoM" 
+            error: "Failed to generate MoM" 
           }, 500);
         }
       };
@@ -785,7 +785,7 @@ Respond with JSON only:
           });
         } catch (error) {
           console.error("Error uploading call:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to upload call" }, 500);
+          return c.json({ success: false, error: "Failed to upload call" }, 500);
         }
       };
     }
@@ -979,7 +979,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error uploading audio call:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to upload call" }, 500);
+          return c.json({ success: false, error: "Failed to upload call" }, 500);
         }
       };
     }
@@ -1060,7 +1060,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error in bulk upload:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to process bulk upload" }, 500);
+          return c.json({ success: false, error: "Failed to process bulk upload" }, 500);
         }
       };
     }
@@ -1087,7 +1087,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error testing Five9 connection:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Connection test failed" }, 500);
+          return c.json({ success: false, error: "Connection test failed" }, 500);
         }
       };
     }
@@ -1141,7 +1141,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error configuring Five9:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Configuration failed" }, 500);
+          return c.json({ success: false, error: "Configuration failed" }, 500);
         }
       };
     }
@@ -1183,7 +1183,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error syncing Five9 calls:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Sync failed" }, 500);
+          return c.json({ success: false, error: "Sync failed" }, 500);
         }
       };
     }
@@ -1227,7 +1227,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error saving evaluation:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to save evaluation" }, 500);
+          return c.json({ success: false, error: "Failed to save evaluation" }, 500);
         }
       };
     }
@@ -1402,7 +1402,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error in SDR evaluation:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to evaluate call" }, 500);
+          return c.json({ success: false, error: "Failed to evaluate call" }, 500);
         }
       };
     }
@@ -1433,7 +1433,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error fetching SDR evaluation:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to fetch evaluation" }, 500);
+          return c.json({ success: false, error: "Failed to fetch evaluation" }, 500);
         }
       };
     }
@@ -1464,7 +1464,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error fetching scorecard:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to fetch scorecard" }, 500);
+          return c.json({ success: false, error: "Failed to fetch scorecard" }, 500);
         }
       };
     }
@@ -1515,7 +1515,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error submitting AI feedback:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to submit feedback" }, 500);
+          return c.json({ success: false, error: "Failed to submit feedback" }, 500);
         }
       };
     }
@@ -1542,7 +1542,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error fetching AI training stats:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to fetch stats" }, 500);
+          return c.json({ success: false, error: "Failed to fetch stats" }, 500);
         }
       };
     }
@@ -1567,7 +1567,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error fetching quality scorecards:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to fetch scorecards" }, 500);
+          return c.json({ success: false, error: "Failed to fetch scorecards" }, 500);
         }
       };
     }
@@ -1610,7 +1610,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error creating quality scorecard:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to create scorecard" }, 500);
+          return c.json({ success: false, error: "Failed to create scorecard" }, 500);
         }
       };
     }
@@ -1642,7 +1642,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error updating quality scorecard:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to update scorecard" }, 500);
+          return c.json({ success: false, error: "Failed to update scorecard" }, 500);
         }
       };
     }
@@ -1702,7 +1702,7 @@ ${transcriptText}
           });
         } catch (error) {
           console.error("Error syncing to Zoho:", error);
-          return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to sync to Zoho" }, 500);
+          return c.json({ success: false, error: "Failed to sync to Zoho" }, 500);
         }
       };
     }

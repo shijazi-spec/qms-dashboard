@@ -17,7 +17,7 @@ export const pdplRoutes = [
           return c.json({ success: true, ...status });
         } catch (error: any) {
           console.error("Error fetching PDPL status:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -41,7 +41,7 @@ export const pdplRoutes = [
           return c.json({ success: true, inventory, count: inventory.length });
         } catch (error: any) {
           console.error("Error fetching data inventory:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -64,7 +64,7 @@ export const pdplRoutes = [
           return c.json({ success: true, item });
         } catch (error: any) {
           console.error("Error adding data inventory item:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -92,7 +92,7 @@ export const pdplRoutes = [
           return c.json({ success: true, item });
         } catch (error: any) {
           console.error("Error updating data inventory item:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -116,7 +116,7 @@ export const pdplRoutes = [
           return c.json({ success: true, requests, count: requests.length });
         } catch (error: any) {
           console.error("Error fetching DSAR requests:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -139,7 +139,7 @@ export const pdplRoutes = [
           return c.json({ success: true, request });
         } catch (error: any) {
           console.error("Error creating DSAR request:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -167,7 +167,7 @@ export const pdplRoutes = [
           return c.json({ success: true, request });
         } catch (error: any) {
           console.error("Error updating DSAR request:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -188,7 +188,7 @@ export const pdplRoutes = [
           return c.json({ success: true, policies, count: policies.length });
         } catch (error: any) {
           console.error("Error fetching retention policies:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -216,7 +216,7 @@ export const pdplRoutes = [
           return c.json({ success: true, policy });
         } catch (error: any) {
           console.error("Error updating retention policy:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -240,7 +240,7 @@ export const pdplRoutes = [
           return c.json({ success: true, incidents, count: incidents.length });
         } catch (error: any) {
           console.error("Error fetching data incidents:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -263,7 +263,7 @@ export const pdplRoutes = [
           return c.json({ success: true, incident });
         } catch (error: any) {
           console.error("Error creating data incident:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -291,7 +291,7 @@ export const pdplRoutes = [
           return c.json({ success: true, incident });
         } catch (error: any) {
           console.error("Error updating data incident:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -312,7 +312,7 @@ export const pdplRoutes = [
           return c.json({ success: true, guardrails, count: guardrails.length });
         } catch (error: any) {
           console.error("Error fetching AI guardrails:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -335,7 +335,7 @@ export const pdplRoutes = [
           return c.json({ success: true, guardrail });
         } catch (error: any) {
           console.error("Error adding AI guardrail:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -360,7 +360,7 @@ export const pdplRoutes = [
           return c.json({ success: true, ...result });
         } catch (error: any) {
           console.error("Error masking PII:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
@@ -382,7 +382,7 @@ export const pdplRoutes = [
           return c.json({ success: true, logs, count: logs.length });
         } catch (error: any) {
           console.error("Error fetching PDPL audit log:", error);
-          return c.json({ success: false, error: error.message }, 500);
+          return c.json({ success: false, error: 'An internal error occurred' }, 500);
         }
       };
     },
