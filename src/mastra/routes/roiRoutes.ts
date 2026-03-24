@@ -130,6 +130,28 @@ export const roiRoutes = [
             return c.json({ error: "Missing required fields: project_name, owner, department" }, 400);
           }
 
+          const { validateROIFinancials } = await import('../../utils/inputSanitizer');
+          const topLevelError = validateROIFinancials(data);
+          if (topLevelError) {
+            return c.json({ error: topLevelError }, 400);
+          }
+          for (const sub of ['manpower', 'errorCosts', 'revenueImpact', 'implementation', 'riskInputs']) {
+            if (data[sub] && typeof data[sub] === 'object') {
+              const subError = validateROIFinancials(data[sub]);
+              if (subError) {
+                return c.json({ error: `${sub}: ${subError}` }, 400);
+              }
+            }
+          }
+          if (data.platformCosts && Array.isArray(data.platformCosts)) {
+            for (const cost of data.platformCosts) {
+              const costError = validateROIFinancials(cost);
+              if (costError) {
+                return c.json({ error: `platformCosts: ${costError}` }, 400);
+              }
+            }
+          }
+
           const initiative = await createROIInitiative(data);
           logger?.info("✅ [ROI API] Initiative created", { id: initiative.id });
 
@@ -788,6 +810,13 @@ export const roiRoutes = [
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
+
+          const { validateROIFinancials } = await import('../../utils/inputSanitizer');
+          const financialError = validateROIFinancials(data);
+          if (financialError) {
+            return c.json({ error: financialError }, 400);
+          }
+
           logger?.info("📝 [ROI API] Updating initiative", { id });
 
           const { updateROIInitiative, initROITables } = await import("../../utils/roiDatabase");

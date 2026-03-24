@@ -225,7 +225,6 @@ export const userAccessRoutes = [
             success: true, 
             invitation: maskedInvitation, 
             email_sent: emailStatus.sent,
-            email_error: emailStatus.error || undefined,
             message: emailStatus.sent 
               ? `Invitation created and email sent to ${body.email}`
               : `Invitation created but email could not be sent. The invite link has been generated for manual sharing.`
@@ -273,19 +272,24 @@ export const userAccessRoutes = [
             return c.json({ error: 'token is required' }, 400);
           }
 
-          if (body.password) {
-            const { validatePassword } = await import('../../utils/inputSanitizer');
-            const passwordError = validatePassword(body.password);
-            if (passwordError) {
-              return c.json({ error: passwordError }, 400);
-            }
+          if (!body.password || typeof body.password !== 'string') {
+            return c.json({ error: 'password is required' }, 400);
           }
+
+          const { validatePassword } = await import('../../utils/inputSanitizer');
+          const passwordError = validatePassword(body.password);
+          if (passwordError) {
+            return c.json({ error: passwordError }, 400);
+          }
+
+          const crypto = await import('crypto');
+          const passwordHash = crypto.createHash('sha256').update(body.password).digest('hex');
 
           logger?.info('✅ [UserAccess] Accepting invitation');
           
           const user = await userDb.acceptInvitation(body.token, {
             full_name: body.full_name,
-            password_hash: body.password_hash || body.password,
+            password_hash: passwordHash,
             access_reason: body.access_reason
           });
 
