@@ -5,6 +5,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("💰 [ROI API] Fetching initiatives");
 
@@ -42,6 +46,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("📊 [ROI API] Fetching analytics");
 
@@ -64,6 +72,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const data = await c.req.json();
           logger?.info("🧮 [ROI API] Calculating ROI", data);
@@ -92,6 +104,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const data = await c.req.json();
           logger?.info("💰 [ROI API] Creating initiative", { name: data.project_name });
@@ -184,6 +200,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("📊 [ROI API] Fetching full initiative details", { id });
@@ -211,6 +231,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -256,6 +280,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -292,6 +320,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("📊 [ROI API] Listing platform costs", { initiativeId: id });
@@ -316,6 +348,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const costId = parseInt(c.req.param("costId"));
           logger?.info("🗑️ [ROI API] Deleting platform cost", { costId });
@@ -343,6 +379,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -388,6 +428,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -433,6 +477,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -478,6 +526,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -523,6 +575,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("📊 [ROI API] Fetching AI validation logs", { initiativeId: id });
@@ -547,6 +603,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("🔍 [ROI API] Running AI validation on initiative", { initiativeId: id });
@@ -683,6 +743,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("🔍 [ROI API] Fetching initiative", { id });
@@ -710,6 +774,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const data = await c.req.json();
@@ -738,6 +806,10 @@ export const roiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("🗑️ [ROI API] Deleting initiative", { id });

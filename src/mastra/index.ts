@@ -203,8 +203,8 @@ export const mastra = new Mastra({
           }
 
           if (urlPath.startsWith('/api/admin/') || urlPath === '/api/admin') {
-            if (!hasAdminKey && (!session || session.role !== 'admin')) {
-              return c.json({ error: 'Admin access required' }, 403);
+            if (!hasAdminKey) {
+              return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
             }
           }
 
@@ -793,9 +793,8 @@ export const mastra = new Mastra({
         createHandler: async () => {
           return async (c: any) => {
             try {
-              const adminKey = process.env.ADMIN_API_KEY;
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              if (!session || (session.role !== 'admin' && !adminKey)) {
+              if (!session || session.role !== 'admin') {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>

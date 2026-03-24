@@ -212,15 +212,15 @@ export const userAccessRoutes = [
             logger?.warn('⚠️ [UserAccess] Could not send invitation email:', emailError);
           }
 
+          const maskedInvitation = { ...invitation, token: invitation.token ? `${invitation.token.substring(0, 8)}...` : undefined };
           return c.json({ 
             success: true, 
-            invitation, 
-            invite_link: inviteLink,
+            invitation: maskedInvitation, 
             email_sent: emailStatus.sent,
             email_error: emailStatus.error || undefined,
             message: emailStatus.sent 
               ? `Invitation created and email sent to ${body.email}`
-              : `Invitation created but email could not be sent. Please share the invite link manually: ${inviteLink}`
+              : `Invitation created but email could not be sent. The invite link has been generated for manual sharing.`
           }, 201);
         } catch (error: any) {
           console.error('❌ [UserAccess] Error creating invitation:', error);
