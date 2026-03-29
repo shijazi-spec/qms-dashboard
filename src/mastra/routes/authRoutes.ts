@@ -210,32 +210,48 @@ export const authRoutes = [
             return c.redirect('/login?error=invalid_state');
           }
 
-          const tokenRes = await client.authorizationCodeGrant(
-            config,
-            new URL(c.req.url),
-            {
-              pkceCodeVerifier: oauthData.verifier,
-              expectedState: oauthData.state,
-              expectedNonce: oauthData.nonce,
-              idTokenExpected: true,
-            }
-          );
+          const callbackUrl = getCallbackUrl();
+          const tokenEndpoint = config.serverMetadata().token_endpoint!;
 
-          const claims = tokenRes.claims();
+          const tokenRes = await fetch(tokenEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type: 'authorization_code',
+              code,
+              redirect_uri: callbackUrl,
+              client_id: process.env.REPL_ID!,
+              code_verifier: oauthData.verifier,
+            }),
+          });
 
-          if (!claims || !claims.email) {
-            console.error('[Auth] No email in claims:', claims);
+          const tokenData = await tokenRes.json() as any;
+
+          if (tokenData.error) {
+            console.error('[Auth] Token exchange error:', tokenData);
+            return c.redirect('/login?error=callback_failed');
+          }
+
+          const userInfoEndpoint = config.serverMetadata().userinfo_endpoint!;
+          const userInfoRes = await fetch(userInfoEndpoint, {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+          });
+
+          const profile = await userInfoRes.json() as any;
+
+          if (!profile.email) {
+            console.error('[Auth] No email in profile:', profile);
             return c.redirect('/login?error=no_email');
           }
 
-          const firstName = (claims as any).first_name || '';
-          const lastName = (claims as any).last_name || '';
-          const fullName = [firstName, lastName].filter(Boolean).join(' ') || (claims.email as string);
-          const picture = (claims as any).profile_image_url || '';
+          const firstName = profile.first_name || '';
+          const lastName = profile.last_name || '';
+          const fullName = [firstName, lastName].filter(Boolean).join(' ') || profile.email;
+          const picture = profile.profile_image_url || '';
 
           const user = await upsertOidcUser({
-            sub: claims.sub,
-            email: claims.email as string,
+            sub: profile.sub,
+            email: profile.email as string,
             name: fullName,
             picture,
           });
