@@ -213,6 +213,8 @@ export const authRoutes = [
           const callbackUrl = getCallbackUrl();
           const tokenEndpoint = config.serverMetadata().token_endpoint!;
 
+          console.log('[Auth] Exchanging code for token, redirect_uri:', callbackUrl);
+
           const tokenRes = await fetch(tokenEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -228,9 +230,11 @@ export const authRoutes = [
           const tokenData = await tokenRes.json() as any;
 
           if (tokenData.error) {
-            console.error('[Auth] Token exchange error:', tokenData);
+            console.error('[Auth] Token exchange error:', JSON.stringify(tokenData));
             return c.redirect('/login?error=callback_failed');
           }
+
+          console.log('[Auth] Token exchange successful');
 
           const userInfoEndpoint = config.serverMetadata().userinfo_endpoint!;
           const userInfoRes = await fetch(userInfoEndpoint, {
@@ -267,10 +271,17 @@ export const authRoutes = [
 
           const secure = isSecureDomain();
           const cookieFlags = `HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax${secure ? '; Secure' : ''}`;
-          const clearFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
 
-          c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; ${cookieFlags}, oauth_data=; ${clearFlags}`);
-          return c.redirect('/');
+          console.log('[Auth] Login successful for:', user.email, 'role:', user.role);
+
+          return new Response(null, {
+            status: 302,
+            headers: [
+              ['Location', '/'],
+              ['Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; ${cookieFlags}`],
+              ['Set-Cookie', `oauth_data=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`],
+            ],
+          });
         } catch (err) {
           console.error('[Auth] Callback error:', err);
           return c.redirect('/login?error=callback_failed');
