@@ -168,6 +168,8 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/call-intelligence/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'ai_specialist'] },
 
   { pattern: /^\/api\/event-logs/, methods: ['DELETE'], roles: ['admin'] },
+
+  { pattern: /^\/api\/audit\/trigger$/, methods: ['POST'], roles: ['admin', 'quality_manager'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {
