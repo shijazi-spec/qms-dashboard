@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import * as client from 'openid-client';
 import pg from 'pg';
 const { Pool } = pg;
 
@@ -7,16 +8,36 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const SESSION_COOKIE_NAME = 'walaplus_session';
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
 
-function getRedirectUri(): string {
-  const domain = process.env.REPLIT_DOMAINS?.split(',')[0]
+let oidcConfig: client.Configuration | null = null;
+
+async function getOidcConfig(): Promise<client.Configuration> {
+  if (!oidcConfig) {
+    oidcConfig = await client.discovery(
+      new URL(process.env.ISSUER_URL ?? 'https://replit.com/oidc'),
+      process.env.REPL_ID!
+    );
+  }
+  return oidcConfig;
+}
+
+function getDomain(): string {
+  return process.env.REPLIT_DOMAINS?.split(',')[0]
     || process.env.REPLIT_DEV_DOMAIN
-    || `localhost:5000`;
+    || 'localhost:5000';
+}
+
+function getCallbackUrl(): string {
+  const domain = getDomain();
   const protocol = domain.includes('localhost') ? 'http' : 'https';
-  return `${protocol}://${domain}/api/auth/google/callback`;
+  return `${protocol}://${domain}/api/callback`;
+}
+
+function isSecureDomain(): boolean {
+  return !getDomain().includes('localhost');
 }
 
 function signSession(payload: Record<string, any>): string {
-  const secret = process.env.SESSION_SECRET || 'fallback-dev-secret';
+  const secret = process.env.SESSION_SECRET!;
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(data).digest('base64url');
   return `${data}.${sig}`;
@@ -24,7 +45,7 @@ function signSession(payload: Record<string, any>): string {
 
 function verifySession(token: string): Record<string, any> | null {
   try {
-    const secret = process.env.SESSION_SECRET || 'fallback-dev-secret';
+    const secret = process.env.SESSION_SECRET!;
     const [data, sig] = token.split('.');
     if (!data || !sig) return null;
     const expectedSig = crypto.createHmac('sha256', secret).update(data).digest('base64url');
@@ -80,7 +101,7 @@ async function initAuthTables(): Promise<void> {
   });
 }
 
-async function upsertGoogleUser(profile: { sub: string; email: string; name: string; picture: string }) {
+async function upsertOidcUser(profile: { sub: string; email: string; name: string; picture: string }) {
   await initAuthTables();
 
   const existing = await pool.query('SELECT * FROM platform_users WHERE email = $1', [profile.email]);
@@ -88,7 +109,7 @@ async function upsertGoogleUser(profile: { sub: string; email: string; name: str
   if (existing.rows.length > 0) {
     const result = await pool.query(
       `UPDATE platform_users
-       SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'google',
+       SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
            last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
        WHERE email = $4
        RETURNING *`,
@@ -98,7 +119,7 @@ async function upsertGoogleUser(profile: { sub: string; email: string; name: str
   } else {
     const result = await pool.query(
       `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
-       VALUES ($1, $2, $3, $4, 'google', 'Other', 'department_viewer', 'active', false, 1, NOW())
+       VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'active', false, 1, NOW())
        RETURNING *`,
       [profile.email, profile.name, profile.sub, profile.picture]
     );
@@ -108,50 +129,61 @@ async function upsertGoogleUser(profile: { sub: string; email: string; name: str
 
 export const authRoutes = [
   {
-    path: "/api/auth/google",
-    method: "GET" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        const clientId = process.env.GOOGLE_CLIENT_ID;
-        if (!clientId) {
-          return c.json({ error: 'Google OAuth not configured' }, 500);
-        }
-
-        const state = crypto.randomBytes(16).toString('hex');
-        const redirectUri = getRedirectUri();
-
-        const params = new URLSearchParams({
-          client_id: clientId,
-          redirect_uri: redirectUri,
-          response_type: 'code',
-          scope: 'openid email profile',
-          access_type: 'offline',
-          state,
-          prompt: 'select_account',
-        });
-
-        const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-
-        const isSecure = !getRedirectUri().startsWith('http://localhost');
-        c.header('Set-Cookie', `oauth_state=${state}; HttpOnly; Path=/; Max-Age=600; SameSite=Lax${isSecure ? '; Secure' : ''}`);
-        return c.redirect(url);
-      };
-    },
-  },
-  {
-    path: "/api/auth/google/callback",
+    path: "/api/login",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const config = await getOidcConfig();
+          const state = crypto.randomBytes(16).toString('hex');
+          const nonce = crypto.randomBytes(16).toString('hex');
+          const codeVerifier = client.randomPKCECodeVerifier();
+          const codeChallenge = await client.calculatePKCECodeChallenge(codeVerifier);
+
+          const callbackUrl = getCallbackUrl();
+
+          const params = new URLSearchParams({
+            client_id: process.env.REPL_ID!,
+            redirect_uri: callbackUrl,
+            response_type: 'code',
+            scope: 'openid email profile offline_access',
+            state,
+            nonce,
+            code_challenge: codeChallenge,
+            code_challenge_method: 'S256',
+            prompt: 'login consent',
+          });
+
+          const authUrl = `${config.serverMetadata().authorization_endpoint}?${params.toString()}`;
+
+          const secure = isSecureDomain();
+          const cookieBase = `HttpOnly; Path=/; Max-Age=600; SameSite=Lax${secure ? '; Secure' : ''}`;
+          c.header('Set-Cookie', `oauth_state=${state}; ${cookieBase}`);
+          c.header('Append-Set-Cookie', `oauth_nonce=${nonce}; ${cookieBase}`);
+          c.header('Set-Cookie', `oauth_state=${state}; ${cookieBase}, oauth_nonce=${nonce}; ${cookieBase}, oauth_verifier=${codeVerifier}; ${cookieBase}`);
+
+          return c.redirect(authUrl);
+        } catch (err) {
+          console.error('[Auth] Login redirect error:', err);
+          return c.json({ error: 'Authentication service unavailable' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/callback",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const config = await getOidcConfig();
           const url = new URL(c.req.url);
           const code = url.searchParams.get('code');
-          const returnedState = url.searchParams.get('state');
           const error = url.searchParams.get('error');
 
           if (error) {
-            console.error('[Auth] Google OAuth error:', error);
-            return c.redirect('/login?error=google_denied');
+            console.error('[Auth] OIDC error:', error);
+            return c.redirect('/login?error=auth_denied');
           }
 
           if (!code) {
@@ -160,51 +192,48 @@ export const authRoutes = [
 
           const cookies = c.req.header('Cookie') || '';
           const stateMatch = cookies.match(/oauth_state=([^;]+)/);
+          const nonceMatch = cookies.match(/oauth_nonce=([^;]+)/);
+          const verifierMatch = cookies.match(/oauth_verifier=([^;]+)/);
           const storedState = stateMatch ? stateMatch[1] : null;
+          const storedNonce = nonceMatch ? nonceMatch[1] : null;
+          const storedVerifier = verifierMatch ? verifierMatch[1] : null;
+
+          const returnedState = url.searchParams.get('state');
           if (!storedState || storedState !== returnedState) {
-            console.error('[Auth] OAuth state mismatch');
+            console.error('[Auth] State mismatch');
             return c.redirect('/login?error=invalid_state');
           }
 
-          const clientId = process.env.GOOGLE_CLIENT_ID;
-          const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-          const redirectUri = getRedirectUri();
+          const callbackUrl = getCallbackUrl();
 
-          const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              code,
-              client_id: clientId!,
-              client_secret: clientSecret!,
-              redirect_uri: redirectUri,
-              grant_type: 'authorization_code',
-            }),
-          });
+          const tokenRes = await client.authorizationCodeGrant(
+            config,
+            new URL(c.req.url),
+            {
+              pkceCodeVerifier: storedVerifier || undefined,
+              expectedState: storedState,
+              expectedNonce: storedNonce || undefined,
+              idTokenExpected: true,
+            }
+          );
 
-          const tokenData = await tokenRes.json() as any;
+          const claims = tokenRes.claims();
 
-          if (tokenData.error) {
-            console.error('[Auth] Token exchange error:', tokenData);
-            return c.redirect('/login?error=token_exchange');
-          }
-
-          const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-          });
-
-          const profile = await userInfoRes.json() as any;
-
-          if (!profile.email) {
-            console.error('[Auth] No email in profile:', profile);
+          if (!claims || !claims.email) {
+            console.error('[Auth] No email in claims:', claims);
             return c.redirect('/login?error=no_email');
           }
 
-          const user = await upsertGoogleUser({
-            sub: profile.sub,
-            email: profile.email,
-            name: profile.name || profile.email,
-            picture: profile.picture || '',
+          const firstName = (claims as any).first_name || '';
+          const lastName = (claims as any).last_name || '';
+          const fullName = [firstName, lastName].filter(Boolean).join(' ') || (claims.email as string);
+          const picture = (claims as any).profile_image_url || '';
+
+          const user = await upsertOidcUser({
+            sub: claims.sub,
+            email: claims.email as string,
+            name: fullName,
+            picture,
           });
 
           const sessionToken = signSession({
@@ -216,10 +245,11 @@ export const authRoutes = [
             exp: Date.now() + SESSION_MAX_AGE * 1000,
           });
 
-          const isSecure = !getRedirectUri().startsWith('http://localhost');
-          const cookieFlags = `HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+          const secure = isSecureDomain();
+          const cookieFlags = `HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax${secure ? '; Secure' : ''}`;
+          const clearFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
 
-          c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; ${cookieFlags}`);
+          c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; ${cookieFlags}, oauth_state=; ${clearFlags}, oauth_nonce=; ${clearFlags}, oauth_verifier=; ${clearFlags}`);
           return c.redirect('/');
         } catch (err) {
           console.error('[Auth] Callback error:', err);
@@ -255,10 +285,34 @@ export const authRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const isSecure = !getRedirectUri().startsWith('http://localhost');
-        const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+        const secure = isSecureDomain();
+        const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
         c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`);
         return c.json({ success: true });
+      };
+    },
+  },
+  {
+    path: "/api/logout",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const secure = isSecureDomain();
+        const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
+        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`);
+
+        try {
+          const config = await getOidcConfig();
+          const domain = getDomain();
+          const protocol = domain.includes('localhost') ? 'http' : 'https';
+          const endSessionUrl = client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: `${protocol}://${domain}`,
+          });
+          return c.redirect(endSessionUrl.href);
+        } catch {
+          return c.redirect('/login');
+        }
       };
     },
   },
