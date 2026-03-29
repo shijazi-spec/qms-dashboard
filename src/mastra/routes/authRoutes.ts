@@ -158,9 +158,8 @@ export const authRoutes = [
 
           const secure = isSecureDomain();
           const cookieBase = `HttpOnly; Path=/; Max-Age=600; SameSite=Lax${secure ? '; Secure' : ''}`;
-          c.header('Set-Cookie', `oauth_state=${state}; ${cookieBase}`);
-          c.header('Append-Set-Cookie', `oauth_nonce=${nonce}; ${cookieBase}`);
-          c.header('Set-Cookie', `oauth_state=${state}; ${cookieBase}, oauth_nonce=${nonce}; ${cookieBase}, oauth_verifier=${codeVerifier}; ${cookieBase}`);
+          const oauthData = Buffer.from(JSON.stringify({ state, nonce, verifier: codeVerifier })).toString('base64url');
+          c.header('Set-Cookie', `oauth_data=${oauthData}; ${cookieBase}`);
 
           return c.redirect(authUrl);
         } catch (err) {
@@ -191,28 +190,33 @@ export const authRoutes = [
           }
 
           const cookies = c.req.header('Cookie') || '';
-          const stateMatch = cookies.match(/oauth_state=([^;]+)/);
-          const nonceMatch = cookies.match(/oauth_nonce=([^;]+)/);
-          const verifierMatch = cookies.match(/oauth_verifier=([^;]+)/);
-          const storedState = stateMatch ? stateMatch[1] : null;
-          const storedNonce = nonceMatch ? nonceMatch[1] : null;
-          const storedVerifier = verifierMatch ? verifierMatch[1] : null;
-
-          const returnedState = url.searchParams.get('state');
-          if (!storedState || storedState !== returnedState) {
-            console.error('[Auth] State mismatch');
+          const oauthDataMatch = cookies.match(/oauth_data=([^;]+)/);
+          if (!oauthDataMatch) {
+            console.error('[Auth] No oauth_data cookie');
             return c.redirect('/login?error=invalid_state');
           }
 
-          const callbackUrl = getCallbackUrl();
+          let oauthData: { state: string; nonce: string; verifier: string };
+          try {
+            oauthData = JSON.parse(Buffer.from(oauthDataMatch[1], 'base64url').toString());
+          } catch {
+            console.error('[Auth] Invalid oauth_data cookie');
+            return c.redirect('/login?error=invalid_state');
+          }
+
+          const returnedState = url.searchParams.get('state');
+          if (!oauthData.state || oauthData.state !== returnedState) {
+            console.error('[Auth] State mismatch');
+            return c.redirect('/login?error=invalid_state');
+          }
 
           const tokenRes = await client.authorizationCodeGrant(
             config,
             new URL(c.req.url),
             {
-              pkceCodeVerifier: storedVerifier || undefined,
-              expectedState: storedState,
-              expectedNonce: storedNonce || undefined,
+              pkceCodeVerifier: oauthData.verifier,
+              expectedState: oauthData.state,
+              expectedNonce: oauthData.nonce,
               idTokenExpected: true,
             }
           );
@@ -249,7 +253,7 @@ export const authRoutes = [
           const cookieFlags = `HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE}; SameSite=Lax${secure ? '; Secure' : ''}`;
           const clearFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
 
-          c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; ${cookieFlags}, oauth_state=; ${clearFlags}, oauth_nonce=; ${clearFlags}, oauth_verifier=; ${clearFlags}`);
+          c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; ${cookieFlags}, oauth_data=; ${clearFlags}`);
           return c.redirect('/');
         } catch (err) {
           console.error('[Auth] Callback error:', err);
