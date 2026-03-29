@@ -41,9 +41,9 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const caller = getSessionUser(c);
+          const caller = verifyAdminOrQualityManager(c);
           if (!caller) {
-            return c.json({ error: 'Authentication required' }, 401);
+            return c.json({ error: 'Insufficient permissions' }, 403);
           }
           const logger = mastra?.getLogger();
           await userDb.initUserAccessTables();
@@ -62,9 +62,16 @@ export const userAccessRoutes = [
           }
 
           const isAdmin = caller.role === 'admin';
+          const PII_FIELDS = ['password_hash', 'mfa_secret', 'google_id', 'invitation_id', 'access_reason', 'denied_by', 'denial_reason'];
           const filtered = users.map((u: any) => {
-            if (isAdmin) return u;
-            return { id: u.id, full_name: u.full_name, email: u.email, role: u.role, team: u.team, status: u.status };
+            const copy = { ...u };
+            if (!isAdmin) {
+              for (const f of PII_FIELDS) delete copy[f];
+            } else {
+              delete copy.password_hash;
+              delete copy.mfa_secret;
+            }
+            return copy;
           });
           return c.json({ success: true, users: filtered, count: filtered.length });
         } catch (error: any) {
@@ -491,9 +498,18 @@ export const userAccessRoutes = [
           if (!body.role) {
             return c.json({ error: 'Missing required fields' }, 400);
           }
-          
-          logger?.info('🔄 [UserAccess] Updating user role', { id, role: body.role });
+
+          const VALID_ROLES = ['admin', 'quality_manager', 'grc_manager', 'team_lead', 'auditor', 'quality_specialist', 'department_viewer', 'ai_specialist', 'bu_owner', 'executive'];
+          if (!VALID_ROLES.includes(body.role)) {
+            return c.json({ error: 'Invalid role specified' }, 400);
+          }
+
           const adminUser = verifyAdminKey(c);
+          if (adminUser && adminUser.userId === id) {
+            return c.json({ error: 'Cannot change your own role' }, 403);
+          }
+          
+          logger?.info('🔄 [UserAccess] Updating user role', { id, role: body.role, changedBy: adminUser?.email });
           const user = await userDb.updateUserRole(id, body.role, adminUser?.email || 'unknown');
           
           if (!user) {

@@ -140,11 +140,9 @@ export const mastra = new Mastra({
         }
 
         const origin = c.req.header('Origin') || '';
-        if (origin && allowedOrigins.includes(origin)) {
-          c.header('Access-Control-Allow-Origin', origin);
-          c.header('Access-Control-Allow-Credentials', 'true');
-        } else if (origin) {
-          c.header('Access-Control-Allow-Origin', allowedOrigins[0] || '');
+        const resolvedOrigin = (origin && allowedOrigins.includes(origin)) ? origin : (allowedOrigins[0] || '');
+        if (resolvedOrigin) {
+          c.header('Access-Control-Allow-Origin', resolvedOrigin);
           c.header('Access-Control-Allow-Credentials', 'true');
         }
 
@@ -152,21 +150,18 @@ export const mastra = new Mastra({
         c.header('X-Frame-Options', 'DENY');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
         c.header('X-XSS-Protection', '1; mode=block');
-        c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'");
+        c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'");
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
         const publicPaths = ['/login', '/api/auth/', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
-          const inngestSigningKey = process.env.INNGEST_SIGNING_KEY;
-          if (inngestSigningKey) {
-            const adminKey = c.req.header('X-Admin-Key');
-            const expectedKey = process.env.ADMIN_API_KEY;
-            const hasAdminKey = expectedKey && adminKey === expectedKey;
-            if (!hasAdminKey) {
-              return c.json({ error: 'Admin access required for Inngest endpoint' }, 403);
-            }
+          const adminKey = c.req.header('X-Admin-Key');
+          const expectedKey = process.env.ADMIN_API_KEY;
+          const hasAdminKey = expectedKey && adminKey === expectedKey;
+          if (!hasAdminKey) {
+            return c.json({ error: 'Access denied' }, 403);
           }
         }
         const isApi = urlPath.startsWith('/api/');
@@ -485,6 +480,11 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const logger = mastra?.getLogger();
+
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              if (!session || !['admin', 'quality_manager'].includes(session.role)) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
+              }
               
               const now = Date.now();
               if (now - lastTriggerTime.value < MIN_INTERVAL_MS) {
@@ -496,7 +496,7 @@ export const mastra = new Mastra({
                 }, 429);
               }
               
-              logger?.info("🚀 [API] Manual audit trigger requested");
+              logger?.info("🚀 [API] Manual audit trigger requested", { by: session.email });
               lastTriggerTime.value = now;
               
               const { runDirectAudit } = await import("../utils/directAuditRunner");
@@ -1021,11 +1021,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1059,11 +1061,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1102,11 +1106,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1145,11 +1151,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1187,11 +1195,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const crmModule = c.req.query('crm_module') || null;
@@ -1214,11 +1224,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1251,11 +1263,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const id = parseInt(c.req.param("id"));
@@ -1291,11 +1305,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const id = parseInt(c.req.param("id"));
@@ -1329,11 +1345,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const id = parseInt(c.req.param("id"));
@@ -1369,11 +1387,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const id = parseInt(c.req.param("id"));
@@ -1409,11 +1429,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const scorecardId = parseInt(c.req.param("id"));
@@ -1435,11 +1457,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const scorecardId = parseInt(c.req.param("id"));
@@ -1474,11 +1498,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const id = parseInt(c.req.param("id"));
@@ -1514,11 +1540,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const id = parseInt(c.req.param("id"));
@@ -1552,11 +1580,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const scorecardId = parseInt(c.req.param("id"));
@@ -1588,11 +1618,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1648,11 +1680,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1688,11 +1722,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1725,11 +1761,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1763,11 +1801,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1805,11 +1845,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1840,11 +1882,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1873,11 +1917,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1906,11 +1952,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1942,11 +1990,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -1975,11 +2025,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2011,11 +2063,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2047,11 +2101,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2094,11 +2150,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2129,11 +2187,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2175,11 +2235,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2210,11 +2272,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();
@@ -2250,11 +2314,13 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
-              const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-              if (!hasValidAdminKey && !hasSession) {
-                return c.json({ error: "Authentication required" }, 401);
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const isAdminRole = session?.role === 'admin';
+              if (!hasValidAdminKey && !isAdminRole) {
+                return c.json({ error: 'Insufficient permissions' }, 403);
               }
               
               const logger = mastra?.getLogger();

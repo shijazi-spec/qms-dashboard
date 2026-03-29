@@ -133,14 +133,8 @@ export const eventLogsRoutes = [
             'IP Address', 'User Agent', 'Module', 'Checksum', 'Created At'
           ];
 
-          const escapeCSV = (value: any): string => {
-            if (value === null || value === undefined) return '';
-            const str = typeof value === 'object' ? JSON.stringify(value) : String(value);
-            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-              return `"${str.replace(/"/g, '""')}"`;
-            }
-            return str;
-          };
+          const { escapeCSVValue } = await import("../../utils/inputSanitizer");
+          const escapeCSV = escapeCSVValue;
 
           const csvRows = [headers.join(',')];
           for (const log of logs) {

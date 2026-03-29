@@ -33,7 +33,7 @@ function getCategory(path?: string): string {
 
 export function checkRateLimit(ip: string, isWrite: boolean, path?: string): { allowed: boolean; retryAfter?: number } {
   const category = getCategory(path);
-  const key = `${ip}:${category}:${isWrite ? 'w' : 'r'}`;
+  const key = category === 'auth' ? `${ip}:auth` : `${ip}:${category}:${isWrite ? 'w' : 'r'}`;
   const now = Date.now();
 
   let limit: number;

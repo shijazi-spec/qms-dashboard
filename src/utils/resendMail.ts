@@ -33,11 +33,10 @@ export async function sendResendEmail(options: ResendEmailOptions): Promise<{
   const currentApiKey = process.env.RESEND_API_KEY;
   
   if (!resend) {
-    const keyLen = currentApiKey?.length || 0;
-    console.warn(`⚠️ [ResendMail] RESEND_API_KEY not configured or invalid (length: ${keyLen}) - email will not be sent`);
+    console.warn(`⚠️ [ResendMail] Email service not configured - email will not be sent`);
     return {
       success: false,
-      error: `RESEND_API_KEY not configured or invalid (current length: ${keyLen}). A valid key should be ~36 characters starting with 're_'.`
+      error: 'Email service is not configured. Please contact your administrator.'
     };
   }
 

@@ -717,9 +717,10 @@ export const duplicateRadarRoutes = [
             exported_by: 'User'
           });
 
+          const { escapeCSVValue } = await import("../../utils/inputSanitizer");
           const csvHeader = 'Record ID,Type,Name,Company,Domain,Owner,Status/Stage,Value,Source,Created Date,Confidence,Recommendation\n';
           const csvRows = records.map(r => 
-            `"${r.zoho_record_id || r.id}","${r.record_type}","${r.record_name}","${r.company_name}","${r.domain}","${r.owner_name}","${r.status || r.stage}","${r.deal_value || ''}","${r.source}","${r.created_date}","${r.confidence_score}%","${r.ai_recommendation || 'Review manually'}"`
+            [r.zoho_record_id || r.id, r.record_type, r.record_name, r.company_name, r.domain, r.owner_name, r.status || r.stage, r.deal_value || '', r.source, r.created_date, `${r.confidence_score}%`, r.ai_recommendation || 'Review manually'].map(escapeCSVValue).join(',')
           ).join('\n');
 
           c.header('Content-Type', 'text/csv');

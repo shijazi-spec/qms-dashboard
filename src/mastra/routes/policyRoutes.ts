@@ -261,7 +261,9 @@ export const policyRoutes = [
           return c.json({ success: true, policy: updatedPolicy });
         } catch (error: any) {
           console.error('❌ [PolicyAPI] Error transitioning policy:', error);
-          return c.json({ error: error.message || 'Failed to transition policy' }, 400);
+          const safeMsg = (error.message && (error.message.includes('Invalid transition') || error.message.includes('Cannot transition')))
+            ? error.message : 'Failed to transition policy';
+          return c.json({ error: safeMsg }, 400);
         }
       };
     }
@@ -573,7 +575,7 @@ export const policyRoutes = [
           return c.json({ success: true, policy: updatedPolicy, message: 'Policy published successfully (GRC approval verified)' });
         } catch (error: any) {
           console.error('❌ [PolicyAPI] Error publishing policy:', error);
-          return c.json({ error: error.message || 'Failed to publish policy' }, 500);
+          return c.json({ error: 'Failed to publish policy' }, 500);
         }
       };
     }
