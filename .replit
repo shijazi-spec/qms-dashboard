@@ -42,3 +42,5 @@ waitForPort = 5000
 
 [userenv.shared]
 NODE_OPTIONS = "--max-old-space-size=4096"
+GOOGLE_CLIENT_ID = "73897591604-aprs8jpoas72vv86rdb2l3iebhdajc6l.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET = "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"
