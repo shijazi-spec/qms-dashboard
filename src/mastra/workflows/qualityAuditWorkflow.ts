@@ -35,7 +35,7 @@ const validateEnvironmentStep = createStep({
     const warnings: string[] = [];
 
     if (!process.env.ZOHO_ACCESS_TOKEN) {
-      warnings.push("ZOHO_ACCESS_TOKEN is not set - CRM audit will be skipped");
+      warnings.push("CRM integration not configured - CRM audit will be skipped");
     }
 
     if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
@@ -692,7 +692,7 @@ const generateInsightsStep = createStep({
       return {
         ...inputData,
         recommendations: [
-          "Configure Zoho CRM credentials (ZOHO_ACCESS_TOKEN) to enable full CRM auditing",
+          "Configure CRM integration credentials to enable full CRM auditing",
           "Once configured, the system will audit Leads, Deals, Contacts, and Tasks",
           "Review calendar activities to ensure meetings are being logged properly",
           "Set up regular quality audits to maintain data hygiene standards",

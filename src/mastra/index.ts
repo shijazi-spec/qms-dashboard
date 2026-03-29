@@ -116,6 +116,7 @@ export const mastra = new Mastra({
   server: {
     host: "0.0.0.0",
     port: 5000,
+    cors: false,
     middleware: [
       async (c, next) => {
         const mastra = c.get("mastra");
@@ -169,7 +170,9 @@ export const mastra = new Mastra({
           }
         }
         const isApi = urlPath.startsWith('/api/');
-        const isMastraInternal = urlPath.startsWith('/api/agents/') || urlPath.startsWith('/api/workflows/') || urlPath.startsWith('/api/memory/');
+        const mastraInternalPrefixes = ['/api/workflows/', '/api/memory/'];
+        const isMastraInternal = mastraInternalPrefixes.some(p => urlPath.startsWith(p)) ||
+          (urlPath.startsWith('/api/agents/') && !urlPath.startsWith('/api/agents/performance'));
 
         if (isApi) {
           const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
@@ -220,7 +223,7 @@ export const mastra = new Mastra({
             const contentType = c.req.header('Content-Type') || '';
             if (contentType.includes('application/json')) {
               const rawBody = await c.req.json();
-              const sanitized = sanitizeRequestBody(rawBody);
+              const sanitized = sanitizeRequestBody(rawBody, urlPath);
               const sanitizedJson = JSON.stringify(sanitized);
               const newRequest = new Request(c.req.url, {
                 method: c.req.method,
@@ -362,10 +365,7 @@ export const mastra = new Mastra({
               return c.json({
                 zoho: {
                   connected: hasOAuthConfig || hasStaticToken,
-                  mode: hasOAuthConfig ? 'oauth' : (hasStaticToken ? 'static' : 'none'),
-                  message: hasOAuthConfig 
-                    ? 'Connected via OAuth (auto-refresh enabled)' 
-                    : (hasStaticToken ? 'Connected via static token (manual refresh required)' : 'Not configured')
+                  message: (hasOAuthConfig || hasStaticToken) ? 'Connected' : 'Not configured'
                 },
                 googleCalendar: {
                   connected: hasGoogleCalendar,
@@ -673,7 +673,6 @@ export const mastra = new Mastra({
               
               return c.json({
                 success: true,
-                mode,
                 agents,
                 totalLeads: leads.length,
                 totalDeals: deals.length,
@@ -2343,7 +2342,7 @@ export const mastra = new Mastra({
             logger?.info("🧪 [Sandbox] Getting data mode");
             const { getDataMode } = await import("../data");
             const mode = getDataMode();
-            return c.json({ mode: mode === 'MOCK' ? 'LIVE' : mode });
+            return c.json({ status: 'active' });
           };
         },
       },

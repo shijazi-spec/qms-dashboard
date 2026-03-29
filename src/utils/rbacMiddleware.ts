@@ -9,6 +9,25 @@ export interface SessionUser {
   picture?: string;
 }
 
+const dbRoleCache = new Map<string, { role: string; fetchedAt: number }>();
+const DB_ROLE_CACHE_TTL = 60_000;
+
+export async function getVerifiedRole(email: string, tokenRole: string): Promise<string> {
+  const cached = dbRoleCache.get(email);
+  if (cached && (Date.now() - cached.fetchedAt) < DB_ROLE_CACHE_TTL) {
+    return cached.role;
+  }
+  try {
+    const dbUser = await getUserByEmail(email);
+    if (dbUser) {
+      dbRoleCache.set(email, { role: dbUser.role, fetchedAt: Date.now() });
+      return dbUser.role;
+    }
+  } catch {
+  }
+  return tokenRole;
+}
+
 export function getSessionUser(c: any): SessionUser | null {
   const session = getSessionFromCookie(c.req.header('Cookie'));
   if (!session) return null;
@@ -154,6 +173,9 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {
   const user = getSessionUser(c);
   if (!user) return { allowed: false, error: 'Authentication required' };
+
+  const verifiedRole = await getVerifiedRole(user.email, user.role);
+  user.role = verifiedRole;
 
   if (user.role === 'department_viewer' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     return { allowed: false, error: 'Read-only access: write operations not permitted' };

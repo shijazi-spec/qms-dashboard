@@ -85,9 +85,105 @@ export function sanitizeObject(obj: any): any {
   return cleaned;
 }
 
-export function sanitizeRequestBody(body: any): any {
+const ALLOWED_FIELDS: Record<string, Set<string>> = {
+  risks: new Set([
+    'risk_title', 'risk_description', 'risk_category', 'risk_owner', 'department',
+    'status', 'likelihood_score', 'impact_score', 'risk_score', 'mitigation_strategy',
+    'residual_risk', 'review_date', 'source', 'regulation', 'control_ids', 'tags',
+    'ai_detected', 'ai_confidence', 'ai_suggestions', 'ai_recommended_controls',
+    'treatment_plan', 'treatment_status', 'treatment_due_date', 'treatment_owner',
+    'escalation_reason', 'closure_notes', 'justification', 'reason',
+    'action_title', 'action_type', 'assigned_to', 'due_date', 'priority', 'notes',
+  ]),
+  vendors: new Set([
+    'vendor_code', 'name', 'category', 'status', 'risk_level', 'contact_name',
+    'contact_email', 'contact_phone', 'contract_start', 'contract_end',
+    'contract_value', 'services', 'certifications', 'compliance_status',
+    'last_assessment_date', 'next_assessment_date', 'notes', 'sla_details',
+    'description', 'department', 'location', 'tags',
+  ]),
+  policies: new Set([
+    'title', 'description', 'category', 'status', 'version', 'effective_date',
+    'review_date', 'owner', 'approver', 'department', 'regulation', 'tags',
+    'content', 'scope', 'objectives', 'references', 'revision_notes',
+    'grc_comments', 'owners', 'acknowledgment_required',
+    'transition_to', 'comments',
+  ]),
+  audits: new Set([
+    'audit_code', 'title', 'audit_type', 'status', 'auditor', 'department',
+    'scheduled_date', 'completion_date', 'scope', 'methodology', 'findings_summary',
+    'overall_score', 'people_score', 'process_score', 'technology_score',
+    'recommendations', 'notes', 'description', 'checklist',
+    'finding_code', 'finding_title', 'finding_description', 'severity', 'remediation',
+    'pack_name', 'evidence_type', 'evidence_url', 'evidence_description',
+  ]),
+  roi: new Set([
+    'project_name', 'department', 'owner', 'description', 'status',
+    'implementation_cost', 'license_cost', 'training_cost', 'maintenance_cost',
+    'fully_loaded_salary', 'annual_cost', 'monthly_cost', 'total_cost',
+    'cost_per_error', 'error_rate', 'errors_per_month', 'calculated_error_savings',
+    'revenue_increase', 'cost_savings', 'calculated_revenue_impact',
+    'total_investment', 'net_benefit', 'roi_percentage', 'payback_months',
+    'npv', 'irr', 'risk_adjusted_roi', 'tags', 'notes',
+    'manpower', 'errorCosts', 'revenueImpact', 'implementation', 'riskInputs', 'platformCosts',
+  ]),
+  compliance: new Set([
+    'regulation_code', 'title', 'description', 'category', 'status',
+    'effective_date', 'review_date', 'authority', 'scope', 'requirements',
+    'control_id', 'control_code', 'control_name', 'control_description',
+    'control_type', 'implementation_status', 'owner', 'evidence_url',
+    'obligation_code', 'obligation_text', 'compliance_status', 'due_date',
+    'responsible_party', 'notes', 'tags', 'department',
+    'capa_type', 'root_cause', 'corrective_action', 'preventive_action',
+    'assigned_to', 'priority', 'target_date',
+  ]),
+  users: new Set([
+    'email', 'full_name', 'role', 'team', 'department', 'status',
+    'password', 'access_reason', 'permission_overrides', 'reason',
+  ]),
+  invitations: new Set([
+    'email', 'role', 'department', 'team', 'invited_by', 'message',
+    'token', 'password', 'full_name', 'access_reason',
+  ]),
+  calls: new Set([
+    'call_id', 'source', 'recording_url', 'lead_id', 'deal_id',
+    'contact_name', 'agent_email', 'agent_name', 'direction',
+    'duration_seconds', 'call_date', 'metadata', 'status',
+    'domain', 'username', 'password',
+  ]),
+};
+
+function getModuleFromPath(path: string): string | null {
+  const match = path.match(/^\/api\/([a-z\-]+)/);
+  if (!match) return null;
+  const segment = match[1];
+  if (segment === 'call-intelligence' || segment === 'calls') return 'calls';
+  if (ALLOWED_FIELDS[segment]) return segment;
+  return null;
+}
+
+export function filterAllowedFields(body: any, apiPath: string): any {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+  const moduleName = getModuleFromPath(apiPath);
+  if (!moduleName) return body;
+  const allowed = ALLOWED_FIELDS[moduleName];
+  if (!allowed) return body;
+  const filtered: Record<string, any> = {};
+  for (const key of Object.keys(body)) {
+    if (allowed.has(key)) {
+      filtered[key] = body[key];
+    }
+  }
+  return filtered;
+}
+
+export function sanitizeRequestBody(body: any, apiPath?: string): any {
   if (!body || typeof body !== 'object') return body;
-  return sanitizeObject(body);
+  let sanitized = sanitizeObject(body);
+  if (apiPath) {
+    sanitized = filterAllowedFields(sanitized, apiPath);
+  }
+  return sanitized;
 }
 
 const ROI_FINANCIAL_FIELDS = new Set([
