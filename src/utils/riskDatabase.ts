@@ -330,6 +330,19 @@ export async function getRiskById(id: number): Promise<EnterpriseRisk | null> {
   return result.rows[0] || null;
 }
 
+export async function getRiskByPublicId(publicId: string): Promise<EnterpriseRisk | null> {
+  const result = await pool.query('SELECT * FROM enterprise_risks WHERE public_id = $1', [publicId]);
+  return result.rows[0] || null;
+}
+
+export function resolveRiskId(idParam: string): { isUUID: boolean; intId?: number; uuid?: string } {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(idParam)) {
+    return { isUUID: true, uuid: idParam };
+  }
+  return { isUUID: false, intId: parseInt(idParam) };
+}
+
 export async function getAllRisks(filters?: {
   status?: string;
   category?: string;

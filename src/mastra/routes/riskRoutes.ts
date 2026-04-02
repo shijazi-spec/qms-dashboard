@@ -172,17 +172,21 @@ export const riskRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          const { getRiskById, getTreatmentActions, getRiskAssessmentHistory, initRiskTables } = await import('../../utils/riskDatabase');
+          const { getRiskById, getRiskByPublicId, resolveRiskId, getTreatmentActions, getRiskAssessmentHistory, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
           
-          const id = parseInt(c.req.param('id'));
-          logger?.info('📊 [RiskAPI] GET /api/risks/:id', { id });
+          const idParam = c.req.param('id');
+          const resolved = resolveRiskId(idParam);
+          logger?.info('📊 [RiskAPI] GET /api/risks/:id', { idParam });
 
-          const risk = await getRiskById(id);
+          const risk = resolved.isUUID
+            ? await getRiskByPublicId(resolved.uuid!)
+            : await getRiskById(resolved.intId!);
           if (!risk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
 
+          const id = risk.id!;
           const [treatments, history] = await Promise.all([
             getTreatmentActions(id),
             getRiskAssessmentHistory(id)
