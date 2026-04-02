@@ -168,6 +168,16 @@ export async function initComplianceTables(): Promise<void> {
     )
   `);
 
+  await pool.query(`ALTER TABLE regulations ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`ALTER TABLE compliance_assessments ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`UPDATE regulations SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`UPDATE obligations SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`UPDATE compliance_assessments SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_regulations_public_id ON regulations(public_id)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_obligations_public_id ON obligations(public_id)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_assessments_public_id ON compliance_assessments(public_id)`);
+
   await seedDefaultRegulations();
   console.log('✅ [ComplianceDB] Compliance tables initialized');
 }

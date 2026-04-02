@@ -1104,7 +1104,27 @@ export interface TeamFeedback {
   created_at?: Date;
 }
 
+async function ensureFeedbackTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS team_feedback (
+      id SERIAL PRIMARY KEY,
+      submitter_name VARCHAR(255) NOT NULL,
+      submitter_role VARCHAR(100),
+      dashboard VARCHAR(100) NOT NULL,
+      rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+      ease_of_use INTEGER CHECK (ease_of_use >= 1 AND ease_of_use <= 5),
+      comments TEXT,
+      suggestions TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`ALTER TABLE team_feedback ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`UPDATE team_feedback SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_team_feedback_public_id ON team_feedback(public_id)`);
+}
+
 export async function submitFeedback(feedback: TeamFeedback): Promise<TeamFeedback> {
+  await ensureFeedbackTable();
   const result = await pool.query(
     `INSERT INTO team_feedback (submitter_name, submitter_role, dashboard, rating, ease_of_use, comments, suggestions)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -1115,6 +1135,7 @@ export async function submitFeedback(feedback: TeamFeedback): Promise<TeamFeedba
 }
 
 export async function getAllFeedback(filters?: { dashboard?: string; startDate?: string; endDate?: string }): Promise<TeamFeedback[]> {
+  await ensureFeedbackTable();
   let query = 'SELECT * FROM team_feedback WHERE 1=1';
   const params: any[] = [];
   let paramIndex = 1;
@@ -1145,6 +1166,7 @@ export async function getFeedbackStats(): Promise<{
   byDashboard: { dashboard: string; count: number; avgRating: number }[];
   recentFeedback: TeamFeedback[];
 }> {
+  await ensureFeedbackTable();
   const [totals, byDashboard, recent] = await Promise.all([
     pool.query(`
       SELECT 

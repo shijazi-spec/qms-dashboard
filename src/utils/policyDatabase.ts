@@ -154,6 +154,10 @@ export async function initPolicyTables(): Promise<void> {
     )
   `);
 
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`UPDATE policies SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_policies_public_id ON policies(public_id)`);
+
   console.log('✅ [PolicyDB] Policy governance tables initialized');
 }
 

@@ -1,5 +1,28 @@
 export const riskRoutes = [
   {
+    path: "/api/risks/export",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { exportRisksCSV, initRiskTables } = await import('../../utils/riskDatabase');
+          await initRiskTables();
+
+          logger?.info('📊 [RiskAPI] GET /api/risks/export');
+          const csv = await exportRisksCSV();
+          return c.text(csv, 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': 'attachment; filename="risks_export.csv"'
+          });
+        } catch (error) {
+          console.error('❌ [RiskAPI] Error exporting risks:', error);
+          return c.json({ error: 'Failed to export risks' }, 500);
+        }
+      };
+    }
+  },
+  {
     path: "/api/risks",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {

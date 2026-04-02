@@ -10,6 +10,8 @@ const READ_LIMIT = 100;
 const WRITE_LIMIT = 10;
 const AUTH_LIMIT = 5;
 const EXPORT_LIMIT = 10;
+const UNAUTH_READ_LIMIT = 10;
+const UNAUTH_WRITE_LIMIT = 3;
 
 const AUTH_PATHS = ['/api/auth/', '/api/invitations/accept', '/login', '/api/admin/auth'];
 const EXPORT_PATHS = ['/export', '/pdf'];
@@ -31,9 +33,10 @@ function getCategory(path?: string): string {
   return 'general';
 }
 
-export function checkRateLimit(ip: string, isWrite: boolean, path?: string): { allowed: boolean; retryAfter?: number } {
+export function checkRateLimit(ip: string, isWrite: boolean, path?: string, isAuthenticated: boolean = true): { allowed: boolean; retryAfter?: number } {
   const category = getCategory(path);
-  const key = category === 'auth' ? `${ip}:auth` : `${ip}:${category}:${isWrite ? 'w' : 'r'}`;
+  const authPrefix = isAuthenticated ? 'auth' : 'unauth';
+  const key = category === 'auth' ? `${ip}:authflow` : `${ip}:${authPrefix}:${category}:${isWrite ? 'w' : 'r'}`;
   const now = Date.now();
 
   let limit: number;
@@ -41,6 +44,8 @@ export function checkRateLimit(ip: string, isWrite: boolean, path?: string): { a
     limit = AUTH_LIMIT;
   } else if (category === 'export') {
     limit = EXPORT_LIMIT;
+  } else if (!isAuthenticated) {
+    limit = isWrite ? UNAUTH_WRITE_LIMIT : UNAUTH_READ_LIMIT;
   } else {
     limit = isWrite ? WRITE_LIMIT : READ_LIMIT;
   }

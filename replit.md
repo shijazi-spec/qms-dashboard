@@ -69,9 +69,11 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **RBAC**: Centralized ROUTE_PERMISSION_MAP in rbacMiddleware.ts enforces per-endpoint role/permission checks globally; roles: admin, grc_manager, quality_manager, ai_specialist, bu_owner, executive, department_viewer
 - **API auth**: All API endpoints require session cookie or X-Admin-Key header (401 if neither present)
 - **CORS**: Restricted to app domain only (no wildcard), derived from REPLIT_DOMAINS
-- **Security headers**: CSP (no unsafe-eval, frame-ancestors 'none'), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, X-XSS-Protection, Permissions-Policy
+- **Security headers**: CSP with per-request nonce (no unsafe-inline/unsafe-eval for scripts, frame-ancestors 'none'), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, X-XSS-Protection, Permissions-Policy
 - **Input sanitization**: HTML/script tag stripping, CSV formula injection prevention, prototype pollution protection, field-level max-length enforcement
-- **Rate limiting**: 100 req/min read, 20 req/min write, 5 req/min auth, 10 req/min export per IP
+- **Rate limiting**: Authenticated: 100 req/min read, 10 req/min write; Unauthenticated: 15 req/min read, 5 req/min write; Auth paths: 5 req/min; Export: 10 req/min (all per IP)
+- **Endpoint enumeration prevention**: Non-existing protected API routes return generic 403 instead of 404
+- **Resource ID obfuscation**: UUID `public_id` columns on enterprise_risks, risk_treatment_actions, vendors, policies, audits tables (auto-generated, backfilled)
 - **Password policy**: 12+ chars, uppercase, lowercase, number, special character (enforced on invitation acceptance)
 - **Error handling**: All error responses return generic messages; no raw error.message exposure
 - **ROI validation**: Financial field validation (non-negative, max value, type checking)
@@ -97,6 +99,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## Recent Changes
+- Pentest retest remediation: CSP nonce-based script-src (removed unsafe-inline), unauthenticated rate limiting (15 req/min), endpoint enumeration prevention (404→403 for protected APIs), UUID public_id columns on 5 tables, /api/risks/export CSV endpoint, team_feedback table auto-init (Apr 2026)
 - Pentest v3.0 remediation (Task #3): Error message sanitization, password policy, invitation dedup, CSV formula prevention, ROI validation, rate limit tightening, CSP hardening, auth added to checklist/calendar POST endpoints (Mar 2026)
 - Pentest v3.0 remediation (Task #2): Centralized RBAC middleware with ROUTE_PERMISSION_MAP, enforceRoutePermission globally applied, status change blocking, invitation token masking (Mar 2026)
 - Security hardening: Fixed all 19 VAPT findings — API auth, CORS, CSP, input sanitization, rate limiting, OAuth state validation (Mar 2026)

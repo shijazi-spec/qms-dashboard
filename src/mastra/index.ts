@@ -41,6 +41,7 @@ import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
 import { checkRateLimit } from "../utils/rateLimiter";
+import { randomBytes } from "crypto";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
@@ -146,12 +147,16 @@ export const mastra = new Mastra({
           c.header('Access-Control-Allow-Credentials', 'true');
         }
 
+        const cspNonce = randomBytes(16).toString('base64');
+
         c.header('X-Content-Type-Options', 'nosniff');
         c.header('X-Frame-Options', 'DENY');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
         c.header('X-XSS-Protection', '1; mode=block');
-        c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'");
+        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+        (c as any)._cspNonce = cspNonce;
 
         const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
@@ -169,21 +174,14 @@ export const mastra = new Mastra({
         const isMastraInternal = mastraInternalPrefixes.some(p => urlPath.startsWith(p)) ||
           (urlPath.startsWith('/api/agents/') && !urlPath.startsWith('/api/agents/performance'));
 
-        if (isApi) {
-          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
-          const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-          const rateCheck = checkRateLimit(ip, isWrite, urlPath);
-          if (!rateCheck.allowed) {
-            c.header('Retry-After', String(rateCheck.retryAfter || 60));
-            return c.json({ error: 'Too many requests' }, 429);
-          }
-        }
+        let isAuthenticated = false;
 
         if (!isPublic && !isApi) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
           if (!session) {
             return c.redirect('/login');
           }
+          isAuthenticated = true;
         }
 
         if (isApi && !isPublic && !isMastraInternal) {
@@ -193,6 +191,16 @@ export const mastra = new Mastra({
           const adminKey = adminKeyHeader || adminKeyCookie;
           const expectedAdminKey = process.env.ADMIN_API_KEY;
           const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
+
+          isAuthenticated = !!(session || hasAdminKey);
+
+          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+          const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+          const rateCheck = checkRateLimit(ip, isWrite, urlPath, isAuthenticated);
+          if (!rateCheck.allowed) {
+            c.header('Retry-After', String(rateCheck.retryAfter || 60));
+            return c.json({ error: 'Too many requests' }, 429);
+          }
 
           if (!session && !hasAdminKey) {
             return c.json({ error: 'Authentication required' }, 401);
@@ -210,6 +218,14 @@ export const mastra = new Mastra({
             if (!result.allowed) {
               return c.json({ error: result.error || 'Insufficient permissions' }, 403);
             }
+          }
+        } else if (isApi) {
+          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+          const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+          const rateCheck = checkRateLimit(ip, isWrite, urlPath, isPublic ? false : true);
+          if (!rateCheck.allowed) {
+            c.header('Retry-After', String(rateCheck.retryAfter || 60));
+            return c.json({ error: 'Too many requests' }, 429);
           }
         }
 
@@ -249,6 +265,23 @@ export const mastra = new Mastra({
           }
 
           throw error;
+        }
+
+        if (isApi && !isPublic && !isMastraInternal && c.res.status === 404) {
+          return c.json({ error: 'Insufficient permissions' }, 403);
+        }
+
+        const contentType = c.res.headers.get('Content-Type') || '';
+        if (contentType.includes('text/html') && c.res.body) {
+          try {
+            const originalBody = await c.res.text();
+            const nonceInjected = originalBody.replace(/<script(?!\s+nonce=)/gi, `<script nonce="${cspNonce}"`);
+            c.res = new Response(nonceInjected, {
+              status: c.res.status,
+              headers: c.res.headers,
+            });
+          } catch (_e) {
+          }
         }
       },
     ],

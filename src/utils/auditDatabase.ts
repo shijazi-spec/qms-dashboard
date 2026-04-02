@@ -200,6 +200,10 @@ export async function initAuditTables(): Promise<void> {
     )
   `);
 
+  await pool.query(`ALTER TABLE audits ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`UPDATE audits SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_audits_public_id ON audits(public_id)`);
+
   console.log('✅ [AuditDB] Audit readiness tables initialized');
 }
 

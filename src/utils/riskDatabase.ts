@@ -200,7 +200,34 @@ export async function initRiskTables(): Promise<void> {
     ON CONFLICT (category_code) DO NOTHING
   `);
 
+  await pool.query(`ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`ALTER TABLE risk_treatment_actions ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`UPDATE enterprise_risks SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`UPDATE risk_treatment_actions SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_risks_public_id ON enterprise_risks(public_id)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_risk_treatment_public_id ON risk_treatment_actions(public_id)`);
+
   console.log('✅ [RiskDB] Enterprise risk management tables initialized');
+}
+
+export async function exportRisksCSV(): Promise<string> {
+  const result = await pool.query(`
+    SELECT public_id, risk_title, risk_category, risk_source, identified_date, identified_by,
+           risk_owner, owner_department, impact_score, likelihood_score, risk_score, risk_level,
+           treatment_strategy, status, created_at, updated_at
+    FROM enterprise_risks ORDER BY created_at DESC
+  `);
+  const header = 'Public ID,Title,Category,Source,Identified Date,Identified By,Owner,Department,Impact,Likelihood,Score,Level,Treatment,Status,Created,Updated';
+  const rows = result.rows.map(r => {
+    const escape = (v: any) => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    return [r.public_id, r.risk_title, r.risk_category, r.risk_source, r.identified_date, r.identified_by,
+            r.risk_owner, r.owner_department, r.impact_score, r.likelihood_score, r.risk_score, r.risk_level,
+            r.treatment_strategy, r.status, r.created_at, r.updated_at].map(escape).join(',');
+  });
+  return [header, ...rows].join('\n');
 }
 
 export async function createRisk(risk: EnterpriseRisk): Promise<EnterpriseRisk> {

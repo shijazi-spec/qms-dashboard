@@ -158,6 +158,10 @@ export async function initVendorTables(): Promise<void> {
     )
   `);
 
+  await pool.query(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
+  await pool.query(`UPDATE vendors SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_public_id ON vendors(public_id)`);
+
   console.log('✅ [VendorDB] Vendor risk tables initialized');
 }
 
