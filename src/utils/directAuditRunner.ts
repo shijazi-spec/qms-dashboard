@@ -9,7 +9,7 @@ import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
 export async function runDirectAudit(logger?: any) {
   logger?.info("🔍 [DirectAudit] Starting direct quality audit...");
 
-  const hasZohoCredentials = !!process.env.ZOHO_ACCESS_TOKEN;
+  const hasZohoCredentials = !!(process.env.ZOHO_ACCESS_TOKEN || (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN));
 
   let qualityScores = {
     peopleScore: 0,

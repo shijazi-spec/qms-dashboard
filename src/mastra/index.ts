@@ -515,8 +515,12 @@ export const mastra = new Mastra({
               const logger = mastra?.getLogger();
 
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              if (!session || !['admin', 'quality_manager', 'grc_manager', 'team_lead', 'auditor', 'quality_specialist', 'department_viewer', 'ai_specialist', 'bu_owner', 'executive'].includes(session.role)) {
-                return c.json({ error: 'Insufficient permissions' }, 403);
+              const adminKeyHeader = c.req.header('X-Admin-Key');
+              const expectedAdminKey = process.env.ADMIN_API_KEY;
+              const hasAdminKey = expectedAdminKey && adminKeyHeader === expectedAdminKey;
+              
+              if (!session && !hasAdminKey) {
+                return c.json({ error: 'Authentication required' }, 401);
               }
               
               const now = Date.now();
@@ -529,7 +533,8 @@ export const mastra = new Mastra({
                 }, 429);
               }
               
-              logger?.info("🚀 [API] Manual audit trigger requested", { by: session.email });
+              const userEmail = session?.email || 'admin-key';
+              logger?.info("🚀 [API] Manual audit trigger requested", { by: userEmail });
               lastTriggerTime.value = now;
               
               const { runDirectAudit } = await import("../utils/directAuditRunner");

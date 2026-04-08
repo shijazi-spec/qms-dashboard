@@ -169,7 +169,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   { pattern: /^\/api\/event-logs/, methods: ['DELETE'], roles: ['admin'] },
 
-  { pattern: /^\/api\/audit\/trigger$/, methods: ['POST'], roles: ['admin', 'quality_manager'] },
+  { pattern: /^\/api\/audit\/trigger$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'team_lead', 'auditor', 'quality_specialist', 'department_viewer', 'ai_specialist', 'bu_owner', 'executive'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {
@@ -178,6 +178,15 @@ export async function enforceRoutePermission(c: any, path: string, method: strin
 
   const verifiedRole = await getVerifiedRole(user.email, user.role);
   user.role = verifiedRole;
+
+  for (const rule of ROUTE_PERMISSION_MAP) {
+    if (rule.pattern.test(path) && rule.methods.includes(method)) {
+      if (user.role === 'admin') return { allowed: true };
+      if (rule.roles && rule.roles.includes(user.role as UserRole)) {
+        return { allowed: true };
+      }
+    }
+  }
 
   if (user.role === 'department_viewer' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     return { allowed: false, error: 'Read-only access: write operations not permitted' };
