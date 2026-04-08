@@ -90,7 +90,9 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `ADMIN_API_KEY` - Admin panel access
 - `RESEND_API_KEY` - Email sending via Resend
 - `RESEND_FROM_EMAIL` - From address for emails
-- `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` - Zoho CRM integration
+- `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` - Zoho CRM OAuth (read-only production access)
+- `ZOHO_ACCOUNTS_URL` - Zoho OAuth endpoint (default: https://accounts.zoho.com)
+- `ZOHO_API_DOMAIN` - Zoho API domain (default: https://www.zohoapis.com)
 
 ## Database Setup
 - Tables are auto-initialized by utility modules on first use (auditDatabase.ts, complianceDatabase.ts, kpiDatabase.ts, riskDatabase.ts, policyDatabase.ts, vendorDatabase.ts)
