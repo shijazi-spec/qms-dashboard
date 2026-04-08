@@ -1,7 +1,7 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 3.0
+**Version:** 3.1
 **Last Updated:** April 8, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
@@ -15,7 +15,7 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 3.0 |
+| **Version** | 3.1 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
@@ -31,6 +31,7 @@
 | 2.0 | Mar 2026 | Engineering | Added security architecture, RBAC, pentest remediation |
 | 2.1 | Apr 8, 2026 | Engineering | OAuth credential detection, GRC audit readiness, QMS NC modal, team Add Member, policies fix |
 | 3.0 | Apr 8, 2026 | Engineering | Added Quality Policy, Document Control, Management Review, Internal Audit Program, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs |
+| 3.1 | Apr 8, 2026 | Engineering | Corrected 10 inaccuracies: GRC audit readiness description, policy button name, QMS KPI cards, NC types, PKCE claim, rate limiting claims, audit process steps, link text, first-steps references |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -147,7 +148,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 - **Risk Heat Map:** Interactive likelihood x impact matrix showing risk distribution
 - **GRC Module Status:** Chart showing item counts across all GRC modules
 - **Compliance by Framework:** Per-regulation compliance breakdown
-- **Audit Readiness Section:** Readiness Score, Completed Audits, Upcoming Audits, Overdue Findings with contextual guidance
+- **Audit Readiness Section:** List of audits showing code, type, status, lead auditor, and findings count with link to `/audits`
 - **Handoff Rules:** Quality-to-GRC integration rules with source/target/trigger details
 - **Control Effectiveness:** Control mapping with type, coverage, and effectiveness ratings
 - **Recent Handoff Events:** Latest cross-module events with timestamps
@@ -156,9 +157,9 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 1. Navigate to `/grc`
 2. Use the period filter (Month to Date / Quarter to Date / Year to Date) to adjust the view
 3. Click "Refresh" to reload all data
-4. Review the Audit Readiness section for readiness score and recommendations
+4. Review the Audit Readiness table for scheduled and completed audits
 5. Click on heat map cells to see risk details
-6. Use "View Full Audit Dashboard" link to go to the detailed audits page
+6. Use "View All Audits" link (`/audits`) to go to the detailed audits page
 
 ### 4.3 Audit Readiness (`/audits`)
 **Purpose:** Track and manage audit preparation and findings.
@@ -210,8 +211,8 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 
 **How to Create a Policy:**
 1. Navigate to `/policies`
-2. Click "Add Policy"
-3. Fill in: title, category, department, content, review date
+2. Click "New Policy"
+3. Fill in: policy_number, title, category, department, content, review date
 4. Policy starts in Draft status
 5. Use lifecycle buttons to advance: Submit for Review → Request Approval → Publish
 6. GRC Manager must approve before publication (click "Request GRC Approval")
@@ -267,7 +268,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Purpose:** Comprehensive Quality Management System dashboard with evaluations, CAPA, nonconformances, and training.
 
 **Tabs:**
-- **Overview:** Summary cards (Evaluations, Open CAPA, Open NC, Training Completion) + **Audit KPI cards** (Audit KPI Score, First Pass Yield, CAPA Effectiveness) + Recent Evaluations & CAPA
+- **Overview:** Summary cards (Evaluations, Open CAPA, Open NC, Training Completion) + **Audit Runs card** showing total audits completed and open findings count + Recent Evaluations & CAPA
 - **Deal Evaluations:** Run and review deal quality evaluations
 - **CAPA:** Corrective and Preventive Action management
 - **Nonconformances:** NC records with **"New NC" button** to create nonconformances
@@ -282,7 +283,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 4. Fill in the following fields:
    - **Title:** Descriptive name of the nonconformance
    - **Description:** Detailed explanation
-   - **Type:** process, product, system, supplier, or customer
+   - **Type:** process, product, system, documentation, or data_quality
    - **Severity:** minor, major, critical, or observation
    - **Source:** internal_audit, external_audit, customer_complaint, process_monitoring, management_review, or other
    - **Assigned To:** Person responsible for resolution
@@ -414,7 +415,9 @@ When "Run AI Audit" is triggered (via button or weekly schedule):
    - **Governance Score:** Field completeness, naming conventions, data standards
 6. Computes overall quality score (weighted average)
 7. Saves results to database for trend tracking
-8. Dashboard refreshes with updated scores
+8. Fires automated triggers for critical findings (e.g., critical NC detected, CAPA thresholds breached)
+9. Sends email report to configured recipients via Resend (with fallback to Replit mail)
+10. Dashboard refreshes with updated scores
 
 ### 5.5 Regional Configuration
 If your Zoho account is in the Saudi Arabia (.sa) region:
@@ -496,7 +499,6 @@ Default (global) endpoints work for most other regions:
 - **Session management:** HMAC-signed cookies (7-day expiry)
 - **Cookie flags:** HttpOnly, Secure, SameSite=Lax
 - **OAuth CSRF protection:** State parameter validated in OIDC callback
-- **PKCE:** Proof Key for Code Exchange — code verifier generated per login request, code challenge sent to authorization server, code verifier validated during token exchange (implemented in `src/mastra/routes/authRoutes.ts`)
 
 ### 9.2 Authorization
 - **RBAC:** Centralized role-based access control enforced globally via route permission map
@@ -507,15 +509,7 @@ Default (global) endpoints work for most other regions:
 ### 9.3 Data Protection
 - **CSP:** Content Security Policy with per-request nonces (no unsafe-inline for scripts)
 - **Input sanitization:** HTML/script tag stripping, CSV formula injection prevention, prototype pollution protection
-- **Rate limiting** (all per IP, 60-second sliding window):
-
-| Category | Authenticated | Unauthenticated |
-|----------|--------------|-----------------|
-| Read requests | 100 / min | 10 / min |
-| Write requests | 10 / min | 3 / min |
-| Auth paths (`/api/auth/`, `/login`, `/api/invitations/accept`, `/api/admin/auth`) | 5 / min | 5 / min |
-| Export paths (URLs containing `/export` or `/pdf`) | 10 / min | 10 / min |
-
+- **Rate limiting:** Audit trigger has a 60-second cooldown to prevent duplicate runs. Global request-level rate limiting is not yet implemented and is planned for a future release.
 - **Endpoint enumeration prevention:** Protected routes return 403 (not 404)
 - **Resource ID obfuscation:** UUID public_id columns on 9+ tables (enterprise_risks, risk_treatment_actions, vendors, policies, audits, regulations, obligations, compliance_assessments, team_feedback)
 - **Password policy:** 12+ characters, uppercase, lowercase, number, special character
@@ -592,10 +586,10 @@ A `.env.example` file is included in the project root with all variables documen
 3. **Log in** using any supported provider (Google, GitHub, Apple, or email)
 4. **Go to `/admin`** and enter your ADMIN_API_KEY to access admin features
 5. **Run your first AI Audit:** Go to `/` (Quality Dashboard) and click "Run AI Audit" — this pulls live data from Zoho CRM
-6. **Check `/grc`** — verify the Audit Readiness section loads with scores
-7. **Check `/policies`** — create a test policy to verify the workflow
+6. **Check `/grc`** — verify the Audit Readiness table loads with audit records
+7. **Check `/policies`** — click "New Policy" and create a test policy to verify the workflow
 8. **Check `/team`** — use the "Add Member" button to register team members
-9. **Check `/qms`** — verify the Audit KPI cards display and try creating a test NC
+9. **Check `/qms`** — verify the Audit Runs card displays and try creating a test NC via "New NC"
 
 ---
 
@@ -999,6 +993,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Apr 8, 2026 | SOP v3.1: Corrected 10 inaccuracies — GRC audit readiness, policy button, QMS KPI cards, NC types, PKCE, rate limiting, audit steps, link text, first-steps | SOP now accurately reflects platform behavior |
 | Apr 8, 2026 | SOP v3.0: Added Quality Policy, Document Control, Management Review, Internal Audit, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs | Comprehensive QMS documentation |
 | Apr 8, 2026 | Fixed CRM credential detection in audit workflow (OAuth support) | AI audits now work with OAuth credentials |
 | Apr 8, 2026 | Fixed policies.html JavaScript SyntaxError | Policy viewing, transitions, and approvals work correctly |
