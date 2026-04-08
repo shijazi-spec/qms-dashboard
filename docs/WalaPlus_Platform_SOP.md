@@ -32,7 +32,8 @@
 | 2.1 | Apr 8, 2026 | Engineering | OAuth credential detection, GRC audit readiness, QMS NC modal, team Add Member, policies fix |
 | 3.0 | Apr 8, 2026 | Engineering | Added Quality Policy, Document Control, Management Review, Internal Audit Program, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs |
 | 3.1 | Apr 8, 2026 | Engineering | Corrected 10 inaccuracies: GRC audit readiness description, policy button name, QMS KPI cards, NC types, PKCE claim, rate limiting claims, audit process steps, link text, first-steps references |
-| 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (73+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, Zoho write capability (record updates, evaluation notes), Google Calendar integration, Slack/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
+| 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (97+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, Zoho write capability (record updates, evaluation notes), Google Calendar integration, Slack/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
+| 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, removed false auth claims (HMAC-SHA256/cookie/OIDC callback), fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -81,7 +82,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Platform URL:** https://qms-dashboard.replit.app
 **Tech Stack:** Mastra AI Framework, Hono HTTP Server, PostgreSQL, Inngest Workflows
 **Hosting:** Replit Autoscale with automatic health checks
-**Database:** PostgreSQL with 73+ auto-initialized tables
+**Database:** PostgreSQL with 97+ auto-initialized tables
 **AI Engine:** GPT-4o via OpenAI (configurable)
 
 ---
@@ -159,7 +160,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 - **Risk Heat Map:** Interactive likelihood x impact matrix showing risk distribution
 - **GRC Module Status:** Chart showing item counts across all GRC modules
 - **Compliance by Framework:** Per-regulation compliance breakdown
-- **Audit Readiness Section:** List of audits showing code, type, status, lead auditor, and findings count with link to `/audits`
+- **Audit Readiness Table:** List of audits showing code, type, status, lead auditor, and findings count with link to `/audits`
 - **Handoff Rules:** Quality-to-GRC integration rules with source/target/trigger details
 - **Control Effectiveness:** Control mapping with type, coverage, and effectiveness ratings
 - **Recent Handoff Events:** Latest cross-module events with timestamps
@@ -226,7 +227,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **How to Create a Policy:**
 1. Navigate to `/policies`
 2. Click "New Policy"
-3. Fill in: policy_number, title, category, department, content, review date
+3. Fill in: policy number, category, title, description, owner name, owner department, policy content, acknowledgment tracking
 4. Policy starts in Draft status
 5. Use lifecycle buttons to advance: Submit for Review → Request Approval → Publish
 6. GRC Manager must approve before publication (click "Request GRC Approval")
@@ -316,8 +317,8 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
    - **Title:** Descriptive name of the nonconformance
    - **Description:** Detailed explanation
    - **Type:** process, product, system, documentation, or data_quality
-   - **Severity:** minor, major, critical, or observation
-   - **Source:** internal_audit, external_audit, customer_complaint, process_monitoring, management_review, or other
+   - **Severity:** minor, major, or critical
+   - **Source:** audit, customer_complaint, internal_review, or data_analysis
    - **Assigned To:** Person responsible for resolution
 5. Click "Create NC" to save
 
@@ -610,10 +611,8 @@ Default (global) endpoints work for most other regions:
 ### 9.1 Authentication
 - **Replit Auth (OIDC):** Primary login via Replit's OpenID Connect provider
 - **Supported providers:** Google, GitHub, Apple, and email
-- **Session management:** HMAC-SHA256 signed session payloads using `SESSION_SECRET` (7-day expiry)
-- **Cookie flags:** HttpOnly, Secure (auto-enabled in production), SameSite=Lax
-- **Cookie name:** `walaplus_session`
-- **OAuth CSRF protection:** State and nonce parameters validated in OIDC callback
+- **Session management:** Handled entirely by Replit Auth externally; no application-level session code
+- **Application auth:** `X-Admin-Key` header validation for admin/system-level API access
 - **MFA:** Database schema supports `mfa_enabled` and `mfa_secret` fields (available for future activation)
 
 ### 9.2 Authorization
@@ -689,7 +688,7 @@ A `.env.example` file is included in the project root with all variables documen
 ## 11. Database
 
 - **Engine:** PostgreSQL
-- **Tables:** 73+ auto-initialized tables (created on first use, no manual migration needed)
+- **Tables:** 97+ auto-initialized tables (created on first use, no manual migration needed)
 - **Key Table Groups:**
 
 | Group | Count | Tables | Purpose |
@@ -698,19 +697,21 @@ A `.env.example` file is included in the project root with all variables documen
 | Quality Core | 4 | quality_scorecards, quality_audit_results, quality_trends, governance_documents | Audit results and quality tracking |
 | Risk | 4 | enterprise_risks, risk_treatment_actions, risk_assessment_history, risk_categories | Risk registry and treatment plans |
 | Compliance | 4 | regulations, obligations, compliance_assessments, compliance_calendar | Regulatory compliance tracking |
-| Audit | 4 | audits, grc_audit_findings, evidence_packs, audit_checklists | Audit readiness and evidence |
+| Audit | 7 | audits, grc_audit_findings, evidence_packs, audit_checklists, audit_triggers, audit_notifications, audit_trail | Audit readiness, evidence, and trail |
 | Policy | 4 | policies, policy_versions, policy_acknowledgments, policy_review_cycles | Policy governance lifecycle |
 | Users & RBAC | 9 | system_users, platform_users, user_invitations, bu_processes, role_permissions, screen_permissions, data_scopes, access_audit_log, escalation_log | User management and access control |
-| Call Intelligence | 6 | call_records, call_transcripts, call_analysis, call_qa_scores, call_compliance, meeting_mom | Call analysis and compliance |
+| Call Intelligence | 8 | call_records, call_transcripts, call_analysis, call_qa_scores, call_compliance, meeting_mom, ai_training_feedback, sdr_call_evaluations | Call analysis, compliance, and AI training |
 | PDPL Privacy | 6 | data_inventory, dsar_requests, retention_policies, data_incidents, ai_guardrails, pdpl_audit_log | Data protection and privacy |
-| ROI Engine | 5 | roi_initiatives, roi_manpower_breakdown, roi_platform_costs, roi_error_costs, roi_ai_validation_logs | Financial analysis |
+| ROI Engine | 8 | roi_initiatives, roi_manpower_breakdown, roi_platform_costs, roi_error_costs, roi_ai_validation_logs, roi_revenue_impact, roi_implementation_breakdown, roi_risk_inputs | Financial analysis and risk inputs |
 | Vendor | 3 | vendors, vendor_assessments, vendor_remediations | Vendor risk management |
 | Handoff & Controls | 3 | handoff_rules, handoff_events, control_mappings | Cross-module automation |
-| Team & Projects | 5 | team_members, team_performance_metrics, pmp_projects, project_risks, project_milestones | Team and project management |
-| Scorecard | 1 | employee_scorecards | Performance scorecards |
-| Duplicate Radar | 1 | duplicate_clusters | CRM deduplication |
+| Team & Projects | 11 | team_members, team_performance_metrics, team_project_assignments, pmp_projects, project_risks, project_milestones, project_stakeholders, project_team_assignments, project_procurement, project_change_requests, training_courses | Team, project, and training management |
+| Scorecard | 2 | employee_scorecards, course_assignments | Performance scorecards and course tracking |
+| Duplicate Radar | 4 | duplicate_clusters, duplicate_records, duplicate_detection_logs, duplicate_export_logs | CRM deduplication and audit |
 | Onboarding | 2 | user_onboarding_status, onboarding_tour_steps | User onboarding |
 | Event Logs | 1 | event_logs | System audit trail |
+| KPI & Reporting | 3 | kpi_definitions, kpi_values, executive_reports | KPI tracking and executive reporting |
+| Migration | 4 | demo_links, tooltip_definitions, integration_config, team_feedback | Migration support, UI config, and feedback |
 
 ---
 
@@ -999,7 +1000,7 @@ All changes are tracked in:
 - Git version control (commit history)
 - Replit checkpoints (code + database snapshots)
 - Event Logs (`/logs`) for runtime configuration changes
-- Section 28 (Recent Changes Log) of this SOP for procedural changes
+- Section 24 (Recent Changes Log) of this SOP for procedural changes
 
 ---
 
@@ -1200,11 +1201,12 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 ---
 
-## 28. Recent Changes Log
+## 24. Recent Changes Log
 
 | Date | Change | Impact |
 |------|--------|--------|
-| Apr 8, 2026 | SOP v3.2: Comprehensive codebase audit — expanded database to 73+ tables, added PDPL backend (data inventory, DSAR, AI guardrails, SHA-256 audit log), ROI engine (5 cost tables + AI validation), Call Intelligence (6 tables incl. transcripts, QA scores, MOM), handoff/control system, escalation system, vendor assessments, policy versions/acknowledgments, risk history, compliance calendar, evidence packs, onboarding system, sandbox/mock endpoints, admin governance/scorecard management, API architecture section, Zoho write capabilities, Google Calendar integration, Slack/Telegram triggers, MFA schema, access audit log, data scopes, screen permissions | SOP now reflects complete implemented codebase |
+| Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, removed false auth claims, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
+| Apr 8, 2026 | SOP v3.2: Comprehensive codebase audit — expanded database to 97+ tables, added PDPL backend (data inventory, DSAR, AI guardrails, SHA-256 audit log), ROI engine (8 cost tables + AI validation), Call Intelligence (8 tables incl. transcripts, QA scores, MOM), handoff/control system, escalation system, vendor assessments, policy versions/acknowledgments, risk history, compliance calendar, evidence packs, onboarding system, sandbox/mock endpoints, admin governance/scorecard management, API architecture section, Zoho write capabilities, Google Calendar integration, Slack/Telegram triggers, MFA schema, access audit log, data scopes, screen permissions | SOP now reflects complete implemented codebase |
 | Apr 8, 2026 | SOP v3.1: Corrected 10 inaccuracies — GRC audit readiness, policy button, QMS KPI cards, NC types, PKCE, rate limiting, audit steps, link text, first-steps | SOP accuracy verified |
 | Apr 8, 2026 | SOP v3.0: Added Quality Policy, Document Control, Management Review, Internal Audit, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs | Comprehensive QMS documentation |
 | Apr 8, 2026 | Fixed CRM credential detection in audit workflow (OAuth support) | AI audits now work with OAuth credentials |
