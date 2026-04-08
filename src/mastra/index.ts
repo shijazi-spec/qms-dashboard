@@ -515,7 +515,7 @@ export const mastra = new Mastra({
               const logger = mastra?.getLogger();
 
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              if (!session || !['admin', 'quality_manager'].includes(session.role)) {
+              if (!session || !['admin', 'quality_manager', 'grc_manager', 'team_lead', 'auditor', 'quality_specialist', 'department_viewer', 'ai_specialist', 'bu_owner', 'executive'].includes(session.role)) {
                 return c.json({ error: 'Insufficient permissions' }, 403);
               }
               

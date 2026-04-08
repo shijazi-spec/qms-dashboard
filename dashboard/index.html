@@ -915,7 +915,7 @@
                     url += `?${filterParams}`;
                 }
                 
-                const response = await fetch(url);
+                const response = await fetch(url, { credentials: 'include' });
                 const result = await response.json();
                 
                 if (result.success && result.agents && result.agents.length > 0) {
@@ -1241,7 +1241,7 @@
                 if (filterParams) {
                     url += `?${filterParams}`;
                 }
-                const response = await fetch(url);
+                const response = await fetch(url, { credentials: 'include' });
                 if (!response.ok) throw new Error('Failed to fetch dashboard data');
                 const data = await response.json();
                 allDashboardData = data;
@@ -1630,7 +1630,8 @@
             try {
                 const response = await fetch(`${API_BASE}/audit/trigger`, { 
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
                 });
                 const result = await response.json();
                 
@@ -1683,6 +1684,7 @@
                 const response = await fetch(`${API_BASE}/audit/trigger`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ 
                         manualTrigger: true,
                         dateFilters: currentDateFilters
