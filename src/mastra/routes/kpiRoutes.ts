@@ -112,6 +112,9 @@ export const kpiRoutes = [
       return async (c: any) => {
         try {
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) {
+            return c.json({ error: "Invalid KPI ID" }, 400);
+          }
           const kpi = await getKPIById(id);
           if (!kpi) {
             return c.json({ error: "KPI not found" }, 404);

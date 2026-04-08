@@ -175,6 +175,10 @@ export const callIntelligenceRoutes = [
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           
+          if (isNaN(callId)) {
+            return c.json({ error: "Invalid call ID" }, 400);
+          }
+
           logger?.info("📞 [API] Fetching call with full analysis", { callId });
 
           const { getCallWithFullAnalysis } = await import("../../utils/callIntelligenceDb");

@@ -30,14 +30,26 @@ export async function getVerifiedRole(email: string, tokenRole: string): Promise
 
 export function getSessionUser(c: any): SessionUser | null {
   const session = getSessionFromCookie(c.req.header('Cookie'));
-  if (!session) return null;
-  return {
-    userId: session.userId,
-    email: session.email,
-    name: session.name,
-    role: session.role,
-    picture: session.picture,
-  };
+  if (session) {
+    return {
+      userId: session.userId,
+      email: session.email,
+      name: session.name,
+      role: session.role,
+      picture: session.picture,
+    };
+  }
+  const adminKeyHeader = c.req.header('X-Admin-Key');
+  const expectedKey = process.env.ADMIN_API_KEY;
+  if (expectedKey && adminKeyHeader === expectedKey) {
+    return {
+      userId: 0,
+      email: 'admin-key@system',
+      name: 'Admin API',
+      role: 'admin',
+    };
+  }
+  return null;
 }
 
 export function requireAuth(c: any): SessionUser | null {
