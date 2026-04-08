@@ -34,7 +34,11 @@ const validateEnvironmentStep = createStep({
     const missingVariables: string[] = [];
     const warnings: string[] = [];
 
-    if (!process.env.ZOHO_ACCESS_TOKEN) {
+    const hasZohoCredentials = !!(
+      process.env.ZOHO_ACCESS_TOKEN ||
+      (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN)
+    );
+    if (!hasZohoCredentials) {
       warnings.push("CRM integration not configured - CRM audit will be skipped");
     }
 
@@ -205,7 +209,10 @@ const auditCRMWithAgentStep = createStep({
       dateRange: inputData.dateRange,
     };
 
-    const hasZohoCredentials = !!process.env.ZOHO_ACCESS_TOKEN;
+    const hasZohoCredentials = !!(
+      process.env.ZOHO_ACCESS_TOKEN ||
+      (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN)
+    );
     const hasOpenAIKey = !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
 
     if (!hasZohoCredentials) {

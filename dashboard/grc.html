@@ -480,6 +480,36 @@
                 </div>
             </div>
 
+            <div class="bg-white rounded-lg shadow mb-6">
+                <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-900">Audit Readiness</h2>
+                    <a href="/audits" class="text-sm text-blue-600 hover:text-blue-800">View Full Audit Dashboard</a>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div class="text-center p-4 bg-purple-50 rounded-lg">
+                            <p class="text-sm text-gray-500">Readiness Score</p>
+                            <p class="text-2xl font-bold text-purple-700" id="auditReadinessScore">-%</p>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <p class="text-sm text-gray-500">Completed Audits</p>
+                            <p class="text-2xl font-bold text-green-700" id="completedAudits">-</p>
+                        </div>
+                        <div class="text-center p-4 bg-amber-50 rounded-lg">
+                            <p class="text-sm text-gray-500">Upcoming Audits</p>
+                            <p class="text-2xl font-bold text-amber-700" id="upcomingAudits">-</p>
+                        </div>
+                        <div class="text-center p-4 bg-red-50 rounded-lg">
+                            <p class="text-sm text-gray-500">Overdue Findings</p>
+                            <p class="text-2xl font-bold text-red-700" id="overdueFindings">-</p>
+                        </div>
+                    </div>
+                    <div id="auditReadinessDetails" class="space-y-2">
+                        <p class="text-gray-400 text-center py-2 text-sm">Loading audit readiness data...</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-white rounded-lg shadow">
                 <div
                     class="p-4 border-b border-gray-200 flex justify-between items-center"
@@ -562,6 +592,27 @@
                         data.findings?.open || 0;
                     document.getElementById("criticalFindings").textContent =
                         (data.findings?.critical || 0) + " critical";
+
+                    const completed = data.audits?.completed || 0;
+                    const upcoming = data.audits?.scheduled || 0;
+                    const overdue = data.findings?.overdue || 0;
+                    const total = data.findings?.total || 1;
+                    const resolved = data.findings?.resolved || 0;
+                    const readiness = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+                    document.getElementById("auditReadinessScore").textContent = readiness + "%";
+                    document.getElementById("completedAudits").textContent = completed;
+                    document.getElementById("upcomingAudits").textContent = upcoming;
+                    document.getElementById("overdueFindings").textContent = overdue;
+
+                    const detailsEl = document.getElementById("auditReadinessDetails");
+                    if (readiness >= 80) {
+                        detailsEl.innerHTML = '<p class="text-sm text-green-700 bg-green-50 p-3 rounded-lg">Audit readiness is strong. Continue maintaining documentation and evidence collection.</p>';
+                    } else if (readiness >= 50) {
+                        detailsEl.innerHTML = '<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Audit readiness needs improvement. Review open findings and ensure corrective actions are on track.</p>';
+                    } else {
+                        detailsEl.innerHTML = '<p class="text-sm text-red-700 bg-red-50 p-3 rounded-lg">Audit readiness is low. Prioritize closing critical findings and preparing evidence packages.</p>';
+                    }
                 } catch (error) {
                     console.error("Error loading audit summary:", error);
                 }
