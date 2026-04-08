@@ -1,0 +1,34 @@
+Recommended Enhancements (Priority Order)
+High Priority (Compliance Critical)
+Add Section: Quality Policy & Objectives -- A formal quality policy statement signed by management, with measurable quality objectives and review dates. This is required by ISO 9001 clause 5.2.
+
+Add Section: Document Control -- How this SOP itself is controlled: approval authority, revision tracking, distribution list, obsolete copy handling. Currently the SOP has a version number but no formal control.
+
+Add Section: Management Review -- Monthly or quarterly management review process covering: audit results, customer feedback, process performance, CAPA status, risk changes, improvement opportunities.
+
+Add Section: Internal Audit Program -- Schedule for auditing the QMS platform itself (not just CRM data). Who audits, how often, what criteria, how findings are tracked.
+
+Add Section: Data Protection & PDPL Compliance -- DPO designation, data processing register requirements, breach notification procedure (72-hour timeline), cross-border transfer controls, data retention schedule.
+
+Medium Priority (Best Practice)
+Add Section: Incident Response -- Steps for handling system outages, data breaches, or security incidents. Include escalation matrix, communication plan, and post-incident review.
+
+Add Section: Backup & Disaster Recovery -- Database backup schedule, recovery procedures, RTO/RPO targets, restoration testing frequency.
+
+Add Section: Change Management -- How platform changes are requested, reviewed, tested, approved, and deployed. Important for maintaining system integrity.
+
+Add Section: User Training Requirements -- Mandatory training for each role before accessing the platform. Training records should be maintained.
+
+Add Section: Continual Improvement -- Formal process for identifying improvement opportunities, prioritizing them, implementing changes, and measuring effectiveness.
+
+Low Priority (Enhancements)
+Add appendix: Glossary -- Define terms like CAPA, NC, GRC, PDPL, RBAC for non-specialist readers.
+
+Add appendix: RACI Matrix -- Responsibility assignment for each module/process.
+
+Add: SLA definitions -- Response times for DSAR requests, CAPA closure targets, NC resolution timelines.
+
+Fix the NC type mismatch between SOP and code (align to one consistent list).
+
+Verify or remove the PKCE and rate limiting claims (Section 8.1 and 8.3).
+
