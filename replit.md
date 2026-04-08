@@ -101,7 +101,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## Recent Changes
-- Pentest retest remediation: CSP nonce-based script-src (removed unsafe-inline), tightened unauthenticated rate limiting (10 read, 3 write req/min), endpoint enumeration prevention (404→403 for protected APIs), UUID public_id columns on 9 tables with UUID-based route lookups, /api/risks/export CSV endpoint, team_feedback table auto-init, compliance tables public_id (Apr 2026)
+- Pentest retest remediation complete (37/37 findings fixed): CSP nonce-based script-src, rate limiting (10 read/3 write), 404→403 enumeration prevention, UUID public_id obfuscation on all API responses (risks/vendors/compliance/feedback), dashboard UUID-aware onclick handlers, resolveGenericId for cross-module UUID resolution, export CSV + feedback 500 errors fixed (Apr 2026)
 - Pentest v3.0 remediation (Task #3): Error message sanitization, password policy, invitation dedup, CSV formula prevention, ROI validation, rate limit tightening, CSP hardening, auth added to checklist/calendar POST endpoints (Mar 2026)
 - Pentest v3.0 remediation (Task #2): Centralized RBAC middleware with ROUTE_PERMISSION_MAP, enforceRoutePermission globally applied, status change blocking, invitation token masking (Mar 2026)
 - Security hardening: Fixed all 19 VAPT findings — API auth, CORS, CSP, input sanitization, rate limiting, OAuth state validation (Mar 2026)

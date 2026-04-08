@@ -1,0 +1,13 @@
+SOP v3.2 -> v3.3: 9 inaccuracies corrected
+
+#	Location	What was wrong	Correction
+1	Section 2, 11	Database count stated "73+ tables"	Corrected to 97+ tables (verified via all CREATE TABLE statements across 21 source files)
+2	Section 9.1	Claimed HMAC-SHA256 signed sessions, cookie name walaplus_session, OIDC callback handling with state/nonce validation	Corrected: No auth code exists in the codebase. Authentication is entirely handled by Replit Auth externally. Only X-Admin-Key header validation exists in application code.
+3	Section numbering	Jumped from Section 22 to Section 28 (Recent Changes Log)	Renumbered to Section 24
+4	Section 20.3	Referenced "Section 28"	Updated to Section 24
+5	Section 4.6	Policy form fields listed as "policy_number, title, category, department, content, review date"	Corrected to actual form: policy number, category, title, description, owner name, owner department, policy content, acknowledgment tracking (no "review date" field exists)
+6	Section 4.11	NC severity options included "observation"	Corrected: actual form only has minor, major, critical
+7	Section 4.11	NC source options listed as "internal_audit, external_audit, customer_complaint, process_monitoring, management_review, other"	Corrected to actual: audit, customer_complaint, internal_review, data_analysis
+8	Section 4.2	Feature listed as "Audit Readiness Section" (inconsistent with "Table" used elsewhere)	Corrected to "Audit Readiness Table" for consistency
+9	Section 11 table inventory	Listed only 69 tables across 17 groups, missing 24 tables and 2 entire groups	Corrected to 97 tables across 19 groups -- added: audit_triggers, audit_notifications, ai_training_feedback, sdr_call_evaluations, roi_revenue_impact, roi_implementation_breakdown, roi_risk_inputs, team_project_assignments, training_courses, course_assignments, audit_trail, project_stakeholders, project_team_assignments, project_procurement, project_change_requests, duplicate_records, duplicate_detection_logs, duplicate_export_logs, demo_links, tooltip_definitions, kpi_definitions, kpi_values, executive_reports, integration_config + new groups: Migration (4 tables), Integration (1 table)
+Items verified as accurate (no change needed): Zoho write operations, Slack/Telegram triggers, 10K pagination limit, Inngest port 3000, sandbox endpoints, MFA schema fields, all other module descriptions.

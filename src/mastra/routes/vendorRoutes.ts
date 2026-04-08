@@ -17,7 +17,8 @@ export const vendorRoutes = [
 
           logger?.info('📋 [VendorAPI] GET /api/vendors');
           const result = await getAllVendors({ status, criticality, category, search });
-          return c.json(result);
+          const { obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
+          return c.json({ ...result, vendors: obfuscateResourceIdsList(result.vendors || []) });
         } catch (error) {
           console.error('❌ [VendorAPI] Error fetching vendors:', error);
           return c.json({ error: 'Failed to fetch vendors' }, 500);
@@ -55,7 +56,9 @@ export const vendorRoutes = [
           const { getVendorById, getAssessmentsByVendor, getRemediationsByVendor, initVendorTables } = await import('../../utils/vendorDatabase');
           await initVendorTables();
           
-          const id = parseInt(c.req.param('id'));
+          const { resolveGenericId, obfuscateResourceIds, obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
+          const id = await resolveGenericId(c.req.param('id'), 'vendors');
+          if (!id) return c.json({ error: 'Vendor not found' }, 404);
           logger?.info('📋 [VendorAPI] GET /api/vendors/:id', { id });
 
           const vendor = await getVendorById(id);
@@ -68,7 +71,7 @@ export const vendorRoutes = [
             getRemediationsByVendor(id)
           ]);
 
-          return c.json({ vendor, assessments, remediations });
+          return c.json({ vendor: obfuscateResourceIds(vendor), assessments: obfuscateResourceIdsList(assessments), remediations: obfuscateResourceIdsList(remediations) });
         } catch (error) {
           console.error('❌ [VendorAPI] Error fetching vendor:', error);
           return c.json({ error: 'Failed to fetch vendor' }, 500);

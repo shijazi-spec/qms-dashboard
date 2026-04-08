@@ -343,6 +343,34 @@ export function resolveRiskId(idParam: string): { isUUID: boolean; intId?: numbe
   return { isUUID: false, intId: parseInt(idParam) };
 }
 
+export function obfuscateResourceIds<T extends Record<string, any>>(row: T): Omit<T, 'id'> & { id: string } {
+  const { id, public_id, ...rest } = row;
+  return { ...rest, id: public_id || id } as any;
+}
+
+export function obfuscateResourceIdsList<T extends Record<string, any>>(rows: T[]): (Omit<T, 'id'> & { id: string })[] {
+  return rows.map(obfuscateResourceIds);
+}
+
+export async function resolveRiskParam(idParam: string): Promise<EnterpriseRisk | null> {
+  const resolved = resolveRiskId(idParam);
+  if (resolved.isUUID) {
+    return getRiskByPublicId(resolved.uuid!);
+  }
+  return getRiskById(resolved.intId!);
+}
+
+export async function resolveGenericId(idParam: string, tableName: string): Promise<number | null> {
+  const resolved = resolveRiskId(idParam);
+  if (resolved.isUUID) {
+    const allowedTables = ['vendors', 'regulations', 'obligations', 'compliance_assessments', 'team_feedback'];
+    if (!allowedTables.includes(tableName)) return null;
+    const result = await pool.query(`SELECT id FROM ${tableName} WHERE public_id = $1`, [resolved.uuid]);
+    return result.rows.length > 0 ? result.rows[0].id : null;
+  }
+  return resolved.intId || null;
+}
+
 export async function getAllRisks(filters?: {
   status?: string;
   category?: string;

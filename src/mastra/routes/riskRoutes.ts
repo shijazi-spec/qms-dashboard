@@ -46,7 +46,8 @@ export const riskRoutes = [
             status, category, risk_level, owner_department, limit, offset
           });
 
-          return c.json(result);
+          const { obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
+          return c.json({ risks: obfuscateResourceIdsList(result.risks), total: result.total });
         } catch (error) {
           console.error('❌ [RiskAPI] Error fetching risks:', error);
           return c.json({ error: 'Failed to fetch risks' }, 500);
@@ -134,9 +135,10 @@ export const riskRoutes = [
             getOverdueTreatmentActions()
           ]);
           
+          const { obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
           return c.json({ 
-            overdue_risks: overdueRisks,
-            overdue_actions: overdueActions
+            overdue_risks: obfuscateResourceIdsList(overdueRisks),
+            overdue_actions: obfuscateResourceIdsList(overdueActions)
           });
         } catch (error) {
           console.error('❌ [RiskAPI] Error fetching overdue items:', error);
@@ -192,9 +194,10 @@ export const riskRoutes = [
             getRiskAssessmentHistory(id)
           ]);
 
+          const { obfuscateResourceIds, obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
           return c.json({ 
-            risk, 
-            treatments,
+            risk: obfuscateResourceIds(risk), 
+            treatments: obfuscateResourceIdsList(treatments),
             assessment_history: history
           });
         } catch (error) {
@@ -230,7 +233,7 @@ export const riskRoutes = [
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: risk.id!.toString(),
+            entityId: (risk.public_id || risk.id!).toString(),
             actionType: 'CREATE',
             description: `New risk created: ${risk.risk_title}`,
             newValue: JSON.stringify(risk),
@@ -240,8 +243,9 @@ export const riskRoutes = [
             aiInvolved: body.ai_detected || false
           });
 
-          logger?.info('✅ [RiskAPI] Risk created', { id: risk.id, level: risk.risk_level });
-          return c.json({ success: true, risk });
+          const { obfuscateResourceIds } = await import('../../utils/riskDatabase');
+          logger?.info('✅ [RiskAPI] Risk created', { id: risk.public_id, level: risk.risk_level });
+          return c.json({ success: true, risk: obfuscateResourceIds(risk) });
         } catch (error) {
           console.error('❌ [RiskAPI] Error creating risk:', error);
           return c.json({ error: 'Failed to create risk' }, 500);
@@ -260,18 +264,23 @@ export const riskRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
+          const { updateRisk, getRiskById, getRiskByPublicId, resolveRiskId, obfuscateResourceIds, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initRiskTables();
           
-          const id = parseInt(c.req.param('id'));
+          const idParam = c.req.param('id');
+          const resolved = resolveRiskId(idParam);
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] PUT /api/risks/:id', { id, by: sessionUser.email });
+          logger?.info('📝 [RiskAPI] PUT /api/risks/:id', { idParam, by: sessionUser.email });
 
-          const existingRisk = await getRiskById(id);
+          const existingRisk = resolved.isUUID
+            ? await getRiskByPublicId(resolved.uuid!)
+            : await getRiskById(resolved.intId!);
           if (!existingRisk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
+
+          const id = existingRisk.id!;
 
           if (body.status && body.status !== existingRisk.status) {
             return c.json({ error: 'Status changes are not allowed via generic update. Use the dedicated /close, /accept, or /escalate endpoints.' }, 400);
@@ -282,7 +291,7 @@ export const riskRoutes = [
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: id.toString(),
+            entityId: (existingRisk.public_id || id).toString(),
             actionType: 'UPDATE',
             description: `Risk updated: ${updatedRisk.risk_title}`,
             oldValue: JSON.stringify(existingRisk),
@@ -292,8 +301,8 @@ export const riskRoutes = [
             module: 'risk_management'
           });
 
-          logger?.info('✅ [RiskAPI] Risk updated', { id });
-          return c.json({ success: true, risk: updatedRisk });
+          logger?.info('✅ [RiskAPI] Risk updated', { id: existingRisk.public_id });
+          return c.json({ success: true, risk: obfuscateResourceIds(updatedRisk) });
         } catch (error) {
           console.error('❌ [RiskAPI] Error updating risk:', error);
           return c.json({ error: 'Failed to update risk' }, 500);
@@ -312,18 +321,23 @@ export const riskRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const { createTreatmentAction, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
+          const { createTreatmentAction, getRiskById, getRiskByPublicId, resolveRiskId, obfuscateResourceIds, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initRiskTables();
           
-          const riskId = parseInt(c.req.param('id'));
+          const idParam = c.req.param('id');
+          const resolved = resolveRiskId(idParam);
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks/:id/treatment', { riskId, by: sessionUser.email });
+          logger?.info('📝 [RiskAPI] POST /api/risks/:id/treatment', { idParam, by: sessionUser.email });
 
-          const risk = await getRiskById(riskId);
+          const risk = resolved.isUUID
+            ? await getRiskByPublicId(resolved.uuid!)
+            : await getRiskById(resolved.intId!);
           if (!risk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
+
+          const riskId = risk.id!;
 
           if (!body.action_title || !body.action_type || !body.assigned_to || !body.due_date) {
             return c.json({ error: 'Missing required fields' }, 400);
@@ -337,7 +351,7 @@ export const riskRoutes = [
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: action.id!.toString(),
+            entityId: (action.public_id || action.id!).toString(),
             actionType: 'CREATE',
             description: `Treatment action created for risk: ${risk.risk_title}`,
             newValue: JSON.stringify(action),
@@ -346,8 +360,8 @@ export const riskRoutes = [
             module: 'risk_management'
           });
 
-          logger?.info('✅ [RiskAPI] Treatment action created', { actionId: action.id });
-          return c.json({ success: true, action });
+          logger?.info('✅ [RiskAPI] Treatment action created', { actionId: action.public_id });
+          return c.json({ success: true, action: obfuscateResourceIds(action) });
         } catch (error) {
           console.error('❌ [RiskAPI] Error creating treatment action:', error);
           return c.json({ error: 'Failed to create treatment action' }, 500);
@@ -366,19 +380,21 @@ export const riskRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const { updateTreatmentAction, initRiskTables } = await import('../../utils/riskDatabase');
+          const { updateTreatmentAction, resolveRiskId, obfuscateResourceIds, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initRiskTables();
           
-          const actionId = parseInt(c.req.param('actionId'));
+          const actionIdParam = c.req.param('actionId');
+          const resolved = resolveRiskId(actionIdParam);
+          const actionId = resolved.isUUID ? 0 : resolved.intId!;
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] PUT /api/risks/treatment/:actionId', { actionId, by: sessionUser.email });
+          logger?.info('📝 [RiskAPI] PUT /api/risks/treatment/:actionId', { actionIdParam, by: sessionUser.email });
 
           const updatedAction = await updateTreatmentAction(actionId, body);
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: actionId.toString(),
+            entityId: (updatedAction.public_id || actionId).toString(),
             actionType: 'UPDATE',
             description: `Treatment action updated: ${updatedAction.action_title}`,
             newValue: JSON.stringify(updatedAction),
@@ -387,8 +403,8 @@ export const riskRoutes = [
             module: 'risk_management'
           });
 
-          logger?.info('✅ [RiskAPI] Treatment action updated', { actionId });
-          return c.json({ success: true, action: updatedAction });
+          logger?.info('✅ [RiskAPI] Treatment action updated', { actionId: updatedAction.public_id });
+          return c.json({ success: true, action: obfuscateResourceIds(updatedAction) });
         } catch (error) {
           console.error('❌ [RiskAPI] Error updating treatment action:', error);
           return c.json({ error: 'Failed to update treatment action' }, 500);
@@ -403,7 +419,7 @@ export const riskRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
+          const { updateRisk, getRiskById, getRiskByPublicId, resolveRiskId, obfuscateResourceIds, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           await initRiskTables();
           
@@ -411,15 +427,19 @@ export const riskRoutes = [
           const sessionUser = requireWriteRole(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
-          const id = parseInt(c.req.param('id'));
+          const idParam = c.req.param('id');
+          const resolved = resolveRiskId(idParam);
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks/:id/escalate', { id, by: sessionUser.email });
+          logger?.info('📝 [RiskAPI] POST /api/risks/:id/escalate', { idParam, by: sessionUser.email });
 
-          const risk = await getRiskById(id);
+          const risk = resolved.isUUID
+            ? await getRiskByPublicId(resolved.uuid!)
+            : await getRiskById(resolved.intId!);
           if (!risk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
 
+          const id = risk.id!;
           const updatedRisk = await updateRisk(id, {
             status: 'escalated',
             escalation_reason: body.reason
@@ -427,7 +447,7 @@ export const riskRoutes = [
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: id.toString(),
+            entityId: (risk.public_id || id).toString(),
             actionType: 'STATUS_CHANGE',
             description: `Risk escalated: ${risk.risk_title}. Reason: ${body.reason}`,
             oldValue: JSON.stringify({ status: risk.status }),
@@ -437,8 +457,8 @@ export const riskRoutes = [
             module: 'risk_management'
           });
 
-          logger?.info('⚠️ [RiskAPI] Risk escalated', { id });
-          return c.json({ success: true, risk: updatedRisk });
+          logger?.info('⚠️ [RiskAPI] Risk escalated', { id: risk.public_id });
+          return c.json({ success: true, risk: obfuscateResourceIds(updatedRisk) });
         } catch (error) {
           console.error('❌ [RiskAPI] Error escalating risk:', error);
           return c.json({ error: 'Failed to escalate risk' }, 500);
@@ -457,25 +477,29 @@ export const riskRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const { updateRisk, getRiskById, getTreatmentActions, initRiskTables } = await import('../../utils/riskDatabase');
+          const { updateRisk, getRiskById, getRiskByPublicId, resolveRiskId, obfuscateResourceIds, getTreatmentActions, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           const { checkPermission } = await import('../../utils/rbacDatabase');
           await initRiskTables();
           
-          const id = parseInt(c.req.param('id'));
+          const idParam = c.req.param('id');
+          const resolved = resolveRiskId(idParam);
           const body = await c.req.json();
-          logger?.info('📝 [RiskAPI] POST /api/risks/:id/close', { id, by: sessionUser.email });
+          logger?.info('📝 [RiskAPI] POST /api/risks/:id/close', { idParam, by: sessionUser.email });
 
           const hasPermission = await checkPermission(sessionUser.email, 'can_close_finding');
           if (!hasPermission) {
             return forbiddenResponse(c, 'Permission denied: cannot close risks');
           }
 
-          const risk = await getRiskById(id);
+          const risk = resolved.isUUID
+            ? await getRiskByPublicId(resolved.uuid!)
+            : await getRiskById(resolved.intId!);
           if (!risk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
 
+          const id = risk.id!;
           const treatments = await getTreatmentActions(id);
           if (!treatments || treatments.length === 0) {
             return c.json({ error: 'Cannot close risk: at least one treatment action must exist before closure' }, 400);
@@ -487,7 +511,7 @@ export const riskRoutes = [
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: id.toString(),
+            entityId: (risk.public_id || id).toString(),
             actionType: 'STATUS_CHANGE',
             description: `Risk closed: ${risk.risk_title}. Closure notes: ${body.closure_notes || 'N/A'}`,
             oldValue: JSON.stringify({ status: risk.status }),
@@ -497,8 +521,8 @@ export const riskRoutes = [
             module: 'risk_management'
           });
 
-          logger?.info('✅ [RiskAPI] Risk closed', { id });
-          return c.json({ success: true, risk: updatedRisk });
+          logger?.info('✅ [RiskAPI] Risk closed', { id: risk.public_id });
+          return c.json({ success: true, risk: obfuscateResourceIds(updatedRisk) });
         } catch (error) {
           console.error('❌ [RiskAPI] Error closing risk:', error);
           return c.json({ error: 'Failed to close risk' }, 500);
@@ -517,16 +541,17 @@ export const riskRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const { updateRisk, getRiskById, initRiskTables } = await import('../../utils/riskDatabase');
+          const { updateRisk, getRiskById, getRiskByPublicId, resolveRiskId, obfuscateResourceIds, initRiskTables } = await import('../../utils/riskDatabase');
           const { logEvent } = await import('../../utils/eventLogsDatabase');
           const { checkPermission, getUserByEmail, initRbacTables } = await import('../../utils/rbacDatabase');
           await initRiskTables();
           await initRbacTables();
           
-          const id = parseInt(c.req.param('id'));
+          const idParam = c.req.param('id');
+          const resolved = resolveRiskId(idParam);
           const body = await c.req.json();
           const userEmail = sessionUser.email;
-          logger?.info('🔐 [RiskAPI] POST /api/risks/:id/accept (RBAC enforcement)', { id, userEmail });
+          logger?.info('🔐 [RiskAPI] POST /api/risks/:id/accept (RBAC enforcement)', { idParam, userEmail });
 
           if (!body.justification) {
             return c.json({ error: 'Missing required fields' }, 400);
@@ -537,7 +562,7 @@ export const riskRoutes = [
             logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user not registered in system', { userEmail });
             await logEvent({
               entityType: 'SYSTEM',
-              entityId: id.toString(),
+              entityId: idParam,
               actionType: 'UPDATE',
               description: `Risk acceptance BLOCKED: User ${userEmail} not found in system_users`,
               userName: userEmail,
@@ -561,7 +586,7 @@ export const riskRoutes = [
             logger?.warn('🚫 [RiskAPI] Risk acceptance blocked - user lacks GRC permission', { userEmail, userRole: user.role });
             await logEvent({
               entityType: 'SYSTEM',
-              entityId: id.toString(),
+              entityId: idParam,
               actionType: 'UPDATE',
               description: `Risk acceptance BLOCKED: User ${userEmail} (role: ${user.role}) lacks GRC Manager permission`,
               userName: userEmail,
@@ -573,10 +598,14 @@ export const riskRoutes = [
             }, 403);
           }
 
-          const risk = await getRiskById(id);
+          const risk = resolved.isUUID
+            ? await getRiskByPublicId(resolved.uuid!)
+            : await getRiskById(resolved.intId!);
           if (!risk) {
             return c.json({ error: 'Risk not found' }, 404);
           }
+
+          const id = risk.id!;
 
           if (risk.status === 'closed') {
             return c.json({ error: 'Cannot accept a closed risk. Reopen it first.' }, 400);
@@ -601,7 +630,7 @@ export const riskRoutes = [
 
           await logEvent({
             entityType: 'SYSTEM',
-            entityId: id.toString(),
+            entityId: (risk.public_id || id).toString(),
             actionType: 'STATUS_CHANGE',
             description: `Risk ACCEPTED by GRC Manager: ${risk.risk_title}. Justification: ${body.justification}`,
             oldValue: JSON.stringify({ status: risk.status, treatment_strategy: risk.treatment_strategy }),
@@ -611,10 +640,10 @@ export const riskRoutes = [
             module: 'risk_management'
           });
 
-          logger?.info('✅ [RiskAPI] Risk accepted by GRC Manager', { id, acceptedBy: user.name, role: user.role });
+          logger?.info('✅ [RiskAPI] Risk accepted by GRC Manager', { id: risk.public_id, acceptedBy: user.name, role: user.role });
           return c.json({ 
             success: true, 
-            risk: updatedRisk, 
+            risk: obfuscateResourceIds(updatedRisk), 
             message: `Risk accepted successfully by ${user.name} (${user.role})`,
             accepted_by: user.name,
             accepted_by_role: user.role

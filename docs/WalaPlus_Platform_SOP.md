@@ -649,6 +649,12 @@ Default (global) endpoints work for most other regions:
 ### 9.4 Penetration Testing
 - **37 out of 37 findings remediated** across VAPT v1, v2, v3, and retest rounds
 - All critical, high, medium, and low severity issues resolved
+- Final 5 findings closed (April 2026):
+  - QMS-024: CSP nonce-based `script-src` replaces `unsafe-inline`
+  - QMS-026: Rate limiting enforced on all unauthenticated endpoints (10 read / 3 write req/min)
+  - QMS-031: API endpoint enumeration prevented (404→403 for protected routes)
+  - QMS-032: Sequential IDs replaced with UUID `public_id` across all API responses (risks, vendors, compliance, feedback)
+  - QMS-036: Export CSV and feedback endpoints stabilised; error handling hardened
 - Detailed documentation: `docs/VAPT_Remediation_Report.md`
 
 ---

@@ -17,7 +17,8 @@ export const complianceRoutes = [
           logger?.info('📋 [ComplianceAPI] GET /api/compliance/regulations');
 
           const regulations = await getAllRegulations({ status, jurisdiction, category });
-          return c.json({ regulations });
+          const { obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
+          return c.json({ regulations: obfuscateResourceIdsList(regulations) });
         } catch (error) {
           console.error('❌ [ComplianceAPI] Error fetching regulations:', error);
           return c.json({ error: 'Failed to fetch regulations' }, 500);
@@ -35,7 +36,9 @@ export const complianceRoutes = [
           const { getRegulationById, getObligationsByRegulation, initComplianceTables } = await import('../../utils/complianceDatabase');
           await initComplianceTables();
           
-          const id = parseInt(c.req.param('id'));
+          const { resolveGenericId, obfuscateResourceIds, obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
+          const id = await resolveGenericId(c.req.param('id'), 'regulations');
+          if (!id) return c.json({ error: 'Regulation not found' }, 404);
           logger?.info('📋 [ComplianceAPI] GET /api/compliance/regulations/:id', { id });
 
           const regulation = await getRegulationById(id);
@@ -44,7 +47,7 @@ export const complianceRoutes = [
           }
 
           const obligations = await getObligationsByRegulation(id);
-          return c.json({ regulation, obligations });
+          return c.json({ regulation: obfuscateResourceIds(regulation), obligations: obfuscateResourceIdsList(obligations) });
         } catch (error) {
           console.error('❌ [ComplianceAPI] Error fetching regulation:', error);
           return c.json({ error: 'Failed to fetch regulation' }, 500);
