@@ -7,10 +7,11 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **Framework**: Mastra (AI agent framework) with Hono HTTP server
 - **Frontend**: Static HTML dashboards served from `dashboard/` directory
 - **Backend**: Mastra API routes with Hono handlers
-- **Database**: PostgreSQL (39+ tables) via `pg` module
+- **Database**: PostgreSQL (97+ tables across 19 module groups) via `pg` module
 - **AI**: GPT-4o via Replit AI Integrations / OpenAI
 - **Workflows**: Inngest for event-driven workflow orchestration
-- **Auth**: Replit Auth (OIDC) with signed session cookies (SESSION_SECRET). Supports Google, GitHub, Apple, and email login.
+- **Auth**: Replit OIDC (`authRoutes.ts`) with HMAC-SHA256 signed session cookie (`walaplus_session`, 7-day expiry). Supports Google, GitHub, Apple, email login. Admin API key via `X-Admin-Key` header.
+- **Security**: Nonce-based CSP, tiered rate limiting (100/10/5/10 per min), input sanitization, RBAC with 11 unified roles, UUID resource ID obfuscation
 - **Email**: Resend for outgoing emails
 
 ## Project Structure
@@ -21,7 +22,13 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `src/mastra/routes/authRoutes.ts` - Replit Auth (OIDC) routes and session management
 - `src/mastra/data/` - Data layer and mock data
 - `src/mastra/storage/` - Storage configuration
-- `src/utils/` - Database utilities (audit, compliance, KPI, risk, policy, vendor, etc.)
+- `src/utils/` - Database utilities (audit, compliance, KPI, risk, policy, vendor, etc.) and security utilities:
+  - `rbacMiddleware.ts` - RBAC enforcement, route permission map, `getSessionUser()`
+  - `rbacDatabase.ts` - Role definitions (11 unified roles), permission CRUD
+  - `userAccessDatabase.ts` - User invitations, platform users, screen permissions
+  - `rateLimiter.ts` - Tiered rate limiting (100/10/5/10 + unauth 10/3)
+  - `inputSanitizer.ts` - XSS/injection prevention, field whitelisting, password policy
+  - `riskDatabase.ts` - Risk management + UUID obfuscation helpers
 - `src/triggers/` - Cron, Slack, Telegram triggers
 - `dashboard/` - Static HTML dashboards (index.html, audits.html, login.html, etc.)
 - `dashboard/css/` - Shared navigation CSS

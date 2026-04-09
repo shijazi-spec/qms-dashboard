@@ -1,0 +1,114 @@
+CRITICAL FINDING: Local Codebase is Out of Sync with Deployed Replit
+The most important discovery is that your local QMS-Share codebase is MISSING critical security files that exist on the deployed Replit version. The Pentest v3 Remediation Report and Pentest v4 Retest both reference and confirm the existence of these files on Replit, but they are absent from the local copy you shared:
+
+File (exists on Replit, MISSING locally)	Purpose
+src/mastra/routes/authRoutes.ts	HMAC-SHA256 session signing, Replit OIDC callback, POST-only logout
+src/utils/rbacMiddleware.ts	ROUTE_PERMISSION_MAP, enforceRoutePermission(), global RBAC middleware
+src/utils/rateLimiter.ts	Tiered rate limiting (100 GET/10 write/5 auth/10 export per min)
+src/utils/inputSanitizer.ts	Input sanitization, password policy, CSV escape, error message scrubbing, ROI financial validation
+dashboard/accept-invite.html	Invitation acceptance with password policy UI
+dashboard/js/navigation.js	POST-only logout button
+This means all the SOP corrections we made in our previous session (especially Section 9.1 saying "no auth code exists") were based on an incomplete codebase. The deployed Replit has these files; the local copy doesn't.
+
+Inconsistency Report: All Documents vs. SOP v3.3
+A. SOP v3.3 is WRONG (must fix in Replit + SOP)
+1. Section 9.1 Authentication — SOP is factually incorrect
+SOP says: "Replit Auth: Primary login handled entirely by Replit's hosting platform (external to this codebase)... The application codebase does not contain custom OIDC callback handling, session signing, or cookie management code."
+Reality (Pentest v3 Remediation + v4 Retest confirm): authRoutes.ts EXISTS on Replit with HMAC-SHA256 session signing, walaplus_session cookie (HttpOnly, Secure, SameSite=Lax, 7-day expiry), POST-only logout. Auth migrated from Google OAuth to Replit OIDC between the SAQ (March 15) and Pentest v4 (April 2).
+Action in Replit: Rewrite Section 9.1 to describe the actual auth implementation: Replit OIDC for identity, HMAC-SHA256 signed session cookie in authRoutes.ts, POST-only logout.
+2. Section 9.3 CSP — SOP claims false nonce implementation
+SOP says: "CSP with per-request randomly generated nonces (no unsafe-inline/unsafe-eval for scripts)" and "CSP nonce injection: Server automatically injects nonce into <script> tags in HTML responses"
+Reality (Pentest v4, QMS-024): unsafe-eval was removed but unsafe-inline is STILL PRESENT in script-src. No nonce system exists. The Remediation Report explicitly states: "unsafe-inline retained — required for inline scripts in dashboard HTML files using CDN Tailwind CSS."
+Action in Replit: (a) Fix SOP to say CSP uses unsafe-inline (not nonces), (b) To fully fix QMS-024, migrate inline scripts to external .js files and implement actual nonce-based CSP.
+3. Section 9.3 Rate Limiting — SOP says not implemented, but it IS
+SOP says: "Audit trigger has a 60-second cooldown. Global request-level rate limiting is not yet implemented."
+Reality (rateLimiter.ts on Replit, Pentest v3 Remediation): READ_LIMIT=100, WRITE_LIMIT=10, AUTH_LIMIT=5, EXPORT_LIMIT=10 per minute per IP. Path-aware tiered system.
+Pentest v4 (QMS-026): "Partially Fixed — rate limiting active on authenticated sessions. Unauthenticated requests lack rate limiting but return 401."
+Action in Replit: Fix SOP to reflect the actual tiered rate limiting. Also fix the unauthenticated gap (QMS-026).
+4. Section 9.4 VAPT Status — SOP overclaims
+SOP says: "37 out of 37 findings remediated" and Changes Log says "Pentest retest — all 37 findings resolved / Full security compliance achieved"
+Reality (Pentest v4 Retest, April 2, 2026): 31 of 37 fixed (83%). 5 findings REMAIN OPEN:
+QMS-024 (MEDIUM): CSP unsafe-inline still present
+QMS-026 (MEDIUM): Rate limiting incomplete for unauthenticated requests
+QMS-031 (LOW): Endpoint enumeration via response code differentiation
+QMS-032 (LOW): Sequential resource IDs still in use
+QMS-036 (LOW): Export endpoints still return 500
+Action in Replit: Fix SOP to say "31/37 fixed, 5 remaining." Also fix the 5 open findings.
+5. Section 9.3 Endpoint Enumeration — SOP claims incorrect behavior
+SOP says: "Protected routes return 403 (not 404)"
+Reality (QMS-031, Not Fixed): Authenticated requests to existing endpoints return 200, non-existing return 404. Enumeration is still possible.
+Action in Replit: Either fix the response codes OR correct the SOP claim.
+B. Role System Inconsistency (across ALL documents)
+Document	Roles Listed	Count
+SOP v3.3	admin, quality_manager, grc_manager, team_lead, auditor, quality_specialist, ai_specialist, bu_owner, executive, department_viewer	10
+SAQ	admin, quality_manager, grc_manager, ai_specialist, bu_owner, executive, department_viewer	7
+Pentest v3 Remediation	admin, quality_manager, grc_manager, ai_specialist, bu_owner, executive, department_viewer	7
+rbacDatabase.ts (local code)	quality_manager, grc_manager, ai_specialist, bu_owner, executive, admin	6
+userAccessDatabase.ts (local code)	admin, quality_manager, quality_specialist, grc_manager, team_lead, department_viewer, auditor, custom	8
+Problems:
+
+Two separate role type definitions in two different files
+ai_specialist, bu_owner, executive only exist in rbacDatabase.ts (not in userAccessDatabase.ts)
+quality_specialist, team_lead, department_viewer, auditor, custom only exist in userAccessDatabase.ts
+The RBAC middleware on Replit uses a 7-role system (matches SAQ/pentest docs)
+The SOP claims 10 roles but no single system has all 10
+Action in Replit: Unify the role systems. Either merge both files into one consistent definition, or create a superset type that all systems use.
+
+C. Security Assessment Questionnaire (SAQ) — Outdated
+#	SAQ Claim	Current Truth	Action
+1	"Google OAuth 2.0 as primary login"	Replit OIDC (confirmed by Pentest v4)	Update SAQ Section 3.1
+2	"39+ tables"	97+ tables	Update SAQ Section 1.3
+3	"19 findings, 19 remediated, 0 remaining"	v3 had 39 findings, v4 retest shows 31/37 fixed, 5 open	Update SAQ Assessment Metadata
+4	"7 roles" (no team_lead, auditor, quality_specialist)	SOP says 10; code has split 6+8	Align with unified role system
+5	"100 reads/min, 20 writes/min per IP"	Code: WRITE_LIMIT=10	Fix SAQ to say 10 writes/min
+6	"Google OAuth... HMAC-SHA256 session"	Auth migrated to Replit OIDC	Rewrite auth section
+7	"session signing: authRoutes.ts lines 18-23"	File exists on Replit, not locally	Verify line numbers after sync
+D. User Guide (v2.0, Dec 2024) — OBSOLETE, Needs Complete Rewrite
+#	User Guide Says	Current Truth	Severity
+1	"Sign in with Google"	Replit OIDC (Google, GitHub, Apple, email)	HIGH
+2	"AI only reads your CRM data - it never changes or deletes anything"	Code has updateZohoRecord() and updateZohoRecordNotes()	HIGH
+3	NC button: "Record Nonconformance"	Button is "New NC"	MEDIUM
+4	NC areas: "Process, Product, Service"	Types: process, product, system, documentation, data_quality	MEDIUM
+5	Missing modules: PDPL, KPI, Scorecard, Duplicate Radar, Users & Access, Feedback, Onboarding, Sandbox, Executive Dashboard, Event Logs	All implemented in current platform	HIGH
+6	Missing UI: Audit Runs card, Add Member button, Audit Readiness table	All added in recent fixes	MEDIUM
+7	Email hardcoded to "amashah@outlook.com"	Should reference configurable RESEND settings	LOW
+8	URL shows old dev URL	Production URL: qms-dashboard.replit.app	LOW
+9	Version 2.0, December 2024	Platform has changed significantly since	HIGH
+E. Pentest v3 Remediation Report vs. v4 Retest — Internal Conflicts
+Finding	Remediation Claim	v4 Retest Result
+QMS-031	"Returns consistent 401 for all unauthenticated requests... prevents enumeration"	Not Fixed — existing=200, non-existing=404 when authenticated
+QMS-036	"Error handling improved, generic messages"	Partially Fixed — endpoints still return 500
+QMS-024	"unsafe-eval removed, unsafe-inline retained"	Partially Fixed — correct, but SOP claims neither exists
+Finding count	"All 39 findings addressed"	Retest scope: 37 QMS findings + 19 VULN = different counting
+F. Cybersecurity Meeting Decisions (Transcript) Not Reflected
+Decision from Meeting	Current Status	Action
+Make platform private (workspace-only, not public)	Still public at qms-dashboard.replit.app	Change Replit publish settings to "Workspace Only"
+Plan data migration to company's own data center	Not started, not in SOP	Add migration plan to SOP roadmap
+CRM access is read-only for audits	Code has write capability (updateZohoRecord)	Clarify: write is for evaluation notes, not data modification. Document this distinction.
+Prioritized Actions for Replit
+P0 — Critical (Do First)
+#	Action	Why
+1	Pull latest code from Replit to sync local QMS-Share with the deployed version (get authRoutes.ts, rbacMiddleware.ts, rateLimiter.ts, inputSanitizer.ts)	Local codebase is missing all security hardening
+2	Fix SOP Section 9.1 — Remove "no auth code exists" claim. Document actual auth flow: Replit OIDC + HMAC-SHA256 session cookie in authRoutes.ts	SOP is factually wrong
+3	Fix SOP Section 9.3 CSP — Remove nonce claims, state unsafe-inline is present	SOP is factually wrong
+4	Fix SOP Section 9.3 Rate Limiting — Document the actual tiered system (100/10/5/10)	SOP is factually wrong
+5	Fix SOP Section 9.4 + Changes Log — Change "37/37 remediated" to "31/37 fixed, 5 open"	SOP overclaims; contradicts pentest retest
+P1 — High (Fix the 5 Open Pentest Findings)
+#	Finding	Fix
+6	QMS-024: CSP unsafe-inline	Migrate inline <script> blocks in all dashboard HTML files to external .js files; implement nonce-based CSP
+7	QMS-026: Unauthenticated rate limiting gap	Add rate limiting for unauthenticated requests in rateLimiter.ts
+8	QMS-031: Endpoint enumeration	Return consistent response codes (401 for unauth, 403 for unauthorized regardless of endpoint existence)
+9	QMS-032: Sequential IDs	Use UUID public_id as the external-facing identifier in API responses instead of integer IDs
+10	QMS-036: Broken exports	Fix /api/risks/export and /api/feedback (both return 500)
+P2 — Medium (Unify & Update)
+#	Action
+11	Unify role systems — Merge rbacDatabase.ts (6 roles) and userAccessDatabase.ts (8 roles) into one consistent definition
+12	Set platform to private — Change Replit publish to "Workspace Only" per cybersecurity meeting decision
+13	Update SAQ — Correct auth method, table count, VAPT status, write limit, role count
+14	Rewrite User Guide — Current v2.0 (Dec 2024) is completely obsolete
+P3 — Low (Documentation Cleanup)
+#	Action
+15	Fix SOP revision history ordering (v3.2 before v3.3)
+16	Add data center migration roadmap to SOP (per cybersecurity meeting)
+17	Document CRM write capability distinction (evaluation notes vs data modification) in User Guide
+Bottom line: The biggest gap is that your local QMS-Share is a pre-security-hardening snapshot. The SOP was written against this incomplete copy, which caused us to make several incorrect claims (no auth code, no rate limiting, nonce-based CSP). Once you pull the latest from Replit, we can correct the SOP accurately and address the 5 remaining pentest findings.

@@ -5,7 +5,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export type UserRole = 'quality_manager' | 'grc_manager' | 'ai_specialist' | 'bu_owner' | 'executive' | 'admin' | 'department_viewer';
+export type UserRole = 'admin' | 'quality_manager' | 'quality_specialist' | 'grc_manager' | 'team_lead' | 'department_viewer' | 'auditor' | 'ai_specialist' | 'bu_owner' | 'executive' | 'custom';
 
 export interface SystemUser {
   id?: number;

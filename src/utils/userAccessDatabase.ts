@@ -7,7 +7,7 @@ const pool = new Pool({
 });
 
 export type UserStatus = 'invited' | 'pending_approval' | 'active' | 'denied' | 'disabled';
-export type UserRole = 'admin' | 'quality_manager' | 'quality_specialist' | 'grc_manager' | 'team_lead' | 'department_viewer' | 'auditor' | 'custom';
+export type UserRole = 'admin' | 'quality_manager' | 'quality_specialist' | 'grc_manager' | 'team_lead' | 'department_viewer' | 'auditor' | 'ai_specialist' | 'bu_owner' | 'executive' | 'custom';
 export type TeamScope = 'SDR' | 'Sales' | 'Quality' | 'GRC' | 'Viewer' | 'Other';
 export type ModuleScope = 'Leads' | 'Deals' | 'Accounts' | 'Contacts' | 'All';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'assign' | 'run_audit' | 'export' | 'upload' | 'manage_settings' | 'manage_users';

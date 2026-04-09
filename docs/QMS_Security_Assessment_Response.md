@@ -18,8 +18,8 @@
 | Application Owner | WalaPlus |
 | Contact Email | *(To be completed by business)* |
 | Phone | *(To be completed by business)* |
-| Last VAPT Assessment | March 12, 2026 (OWASP v4.2 methodology) |
-| VAPT Findings | 19 identified, 19 remediated, 0 remaining |
+| Last VAPT Assessment | April 2, 2026 (Pentest v4 retest, OWASP v4.2 methodology) |
+| VAPT Findings | 37 identified (across v1–v3), 37 remediated (post-retest), 0 remaining |
 
 ---
 
@@ -58,7 +58,7 @@ Yes. The following sub-processors are involved in hosting and operating the QMS 
 | Sub-Processor | Role | Data Handled |
 |---------------|------|-------------|
 | **Google Cloud Platform (GCP)** | Compute, networking, container orchestration | Application code, runtime data |
-| **Neon** | Managed PostgreSQL database hosting | All application data (39+ tables) |
+| **Neon** | Managed PostgreSQL database hosting | All application data (97+ tables across 19 module groups) |
 | **Cloudflare** | CDN, edge routing, DDoS mitigation | HTTP traffic (proxied) |
 
 Additionally, the QMS application itself integrates with the following third-party services:
@@ -67,7 +67,7 @@ Additionally, the QMS application itself integrates with the following third-par
 |---------|---------|---------------|
 | **OpenAI (GPT-4o)** | AI-powered quality analysis, call scoring, audit recommendations | Business data (quality metrics, call transcripts, CRM records) |
 | **Zoho CRM** | CRM data synchronization (Leads, Deals, Contacts) | Lead/deal records, contact information |
-| **Google OAuth** | User authentication | Email, name, profile picture |
+| **Replit OIDC** | User authentication (OpenID Connect) | Email, name, profile picture |
 | **Resend** | Outbound email notifications | Email addresses, report content |
 
 Replit publishes a sub-processor list on their website which should be reviewed periodically. *(Note: The sub-processor details above are based on publicly available information and should be confirmed against Replit's official sub-processor list.)*
@@ -127,7 +127,7 @@ All data in transit is encrypted via **TLS/HTTPS**:
 | Application ↔ Database | SSL/TLS | Neon connection string enforces `sslmode=require` |
 | Application ↔ OpenAI API | HTTPS/TLS | API calls over encrypted channel |
 | Application ↔ Zoho CRM | HTTPS/TLS | OAuth 2.0 token exchange and API calls over encrypted channel |
-| Application ↔ Google OAuth | HTTPS/TLS | Authorization code flow over encrypted channel |
+| Application ↔ Replit OIDC | HTTPS/TLS | OIDC authorization code flow over encrypted channel |
 
 CORS is restricted to the application's own domain only (no wildcard `*`). Cross-origin requests from unauthorized domains are rejected.
 
@@ -168,16 +168,16 @@ The QMS platform uses a **dual-layer authentication** approach:
 
 | Method | Type | Usage |
 |--------|------|-------|
-| **Google OAuth 2.0** | Primary | Interactive user login via "Sign in with Google" |
+| **Replit OIDC** | Primary | Interactive user login via "Log in with Replit" (supports Google, GitHub, Apple, email) |
 | **Admin API Key** | Secondary | Programmatic/administrative API access via `X-Admin-Key` header |
 
-**OAuth Flow Details:**
-1. User clicks "Sign in with Google" on `/login`
-2. Redirected to Google's authorization server with `openid email profile` scopes
-3. OAuth callback validates the `state` parameter against a stored cookie (CSRF protection)
-4. Access token exchanged for user profile via Google's userinfo endpoint
-5. User upserted into `platform_users` table with Google ID, email, name, and picture
-6. HMAC-SHA256 signed session cookie issued with 7-day expiry
+**OIDC Flow Details:**
+1. User clicks "Log in with Replit" on `/login`
+2. Redirected to Replit's OIDC authorization server (discovery URL: `https://replit.com/oidc`)
+3. OIDC callback at `/api/callback` handles token exchange
+4. User profile synced via `upsertOidcUser()` into `platform_users` table
+5. HMAC-SHA256 signed session cookie (`walaplus_session`) issued with 7-day expiry
+6. POST-only `/api/logout` clears session cookie (CSRF-safe)
 
 **Session Token Security:**
 - Signed with `SESSION_SECRET` using HMAC-SHA256
@@ -208,7 +208,11 @@ Yes. A comprehensive **Role-Based Access Control (RBAC)** system is implemented:
 | `ai_specialist` | AI/analytics view access |
 | `bu_owner` | Business unit operations, evidence submission |
 | `executive` | Executive dashboard view access |
-| `department_viewer` | Default role assigned to new Google OAuth users |
+| `quality_specialist` | Quality dashboards, call analysis, CRM hygiene |
+| `team_lead` | Team performance, call intelligence, audits |
+| `auditor` | Audit readiness, compliance tracking, findings management |
+| `department_viewer` | Default role assigned to new users (least privilege) |
+| `custom` | Per-screen permissions assigned by admin |
 
 **Permission Matrix:**
 
@@ -259,7 +263,7 @@ Administrative accounts are protected through multiple mechanisms:
 
 5. **Default Admin Seeding:**
    - A single admin account (`admin@walaplus.com`) is seeded on first initialization
-   - New users authenticated via Google OAuth receive the `department_viewer` role by default (least privilege)
+   - New users authenticated via Replit OIDC receive the `department_viewer` role by default (least privilege)
 
 **Evidence:**
 - Admin role permission: `src/utils/rbacDatabase.ts` (line 54)
@@ -287,7 +291,7 @@ Sessions are managed using **cryptographically signed, stateless tokens** stored
 | **Path** | `/` (application-wide) |
 
 **Session Lifecycle:**
-1. **Creation:** On successful Google OAuth callback, a signed token is issued containing `userId`, `email`, `name`, `picture`, `role`, and `exp` (expiry timestamp)
+1. **Creation:** On successful Replit OIDC callback, a signed token is issued containing `userId`, `email`, `name`, `picture`, `role`, and `exp` (expiry timestamp)
 2. **Verification:** On every request, the middleware extracts the cookie, splits the payload and signature, recomputes the HMAC, and compares. If the signature doesn't match or the token is expired, the request is rejected (401 or redirect to `/login`)
 3. **Revocation:** Logout sets the cookie's `Max-Age` to 0, immediately invalidating it
 4. **CSRF Protection:** OAuth flow uses a `state` parameter validated against an `oauth_state` cookie (HttpOnly, SameSite=Lax)
@@ -350,7 +354,7 @@ The following monitoring capabilities are in place:
 
 1. **Application Logging:** A **Pino-based structured logger** (`ProductionPinoLogger`) provides real-time JSON logging of all API requests, errors, and AI operations with severity levels.
 
-2. **Rate Limit Monitoring:** The rate limiter generates `429 Too Many Requests` responses when limits are exceeded (100 reads/min, 20 writes/min per IP), providing a signal for abuse detection.
+2. **Rate Limit Monitoring:** The rate limiter generates `429 Too Many Requests` responses when limits are exceeded. Tiered limits: authenticated (100 reads/10 writes per min per IP), unauthenticated (10 reads/3 writes per min per IP), auth endpoints (5/min), export endpoints (10/min).
 
 3. **Authentication Monitoring:** Failed authentication attempts result in `401` responses that are logged. OAuth errors (invalid state, denied access) are logged with specific error codes.
 
@@ -524,8 +528,8 @@ All credentials and API keys are managed through **Replit's encrypted Secrets va
 | `DATABASE_URL` | PostgreSQL connection string | `process.env.DATABASE_URL` |
 | `SESSION_SECRET` | Session cookie HMAC signing | `process.env.SESSION_SECRET` |
 | `ADMIN_API_KEY` | Administrative API access | `process.env.ADMIN_API_KEY` |
-| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID | `process.env.GOOGLE_CLIENT_ID` |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret | `process.env.GOOGLE_CLIENT_SECRET` |
+| `REPL_ID` | Replit OIDC client identifier (auto-provided by Replit) | `process.env.REPL_ID` |
+| `ISSUER_URL` | Replit OIDC issuer URL (defaults to https://replit.com/oidc) | `process.env.ISSUER_URL` |
 | `ZOHO_CLIENT_ID` | Zoho CRM OAuth client ID | `process.env.ZOHO_CLIENT_ID` |
 | `ZOHO_CLIENT_SECRET` | Zoho CRM OAuth client secret | `process.env.ZOHO_CLIENT_SECRET` |
 | `ZOHO_REFRESH_TOKEN` | Zoho CRM OAuth refresh token | `process.env.ZOHO_REFRESH_TOKEN` |
@@ -554,7 +558,7 @@ Yes. All external API keys are secured as follows:
 2. **Error Handling:** Generic error messages returned for integration failures (e.g., "CRM integration not configured. Please contact your administrator." instead of exposing key names)
 3. **Transport:** All API calls to external services use HTTPS/TLS
 4. **Access Scope:**
-   - Google OAuth: Redirect URIs restricted to production domain in Google Cloud Console
+   - Replit OIDC: Callback URI restricted to production domain; client ID is the REPL_ID (auto-managed by Replit)
    - Zoho CRM: OAuth 2.0 with auto-refreshing tokens (refresh token rotated automatically)
    - OpenAI: API key scope limited to the specific organization
 

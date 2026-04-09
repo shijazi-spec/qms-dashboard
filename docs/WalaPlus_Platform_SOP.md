@@ -33,7 +33,8 @@
 | 3.0 | Apr 8, 2026 | Engineering | Added Quality Policy, Document Control, Management Review, Internal Audit Program, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs |
 | 3.1 | Apr 8, 2026 | Engineering | Corrected 10 inaccuracies: GRC audit readiness description, policy button name, QMS KPI cards, NC types, PKCE claim, rate limiting claims, audit process steps, link text, first-steps references |
 | 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (97+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, Zoho write capability (record updates, evaluation notes), Google Calendar integration, Slack/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
-| 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, removed false auth claims (HMAC-SHA256/cookie/OIDC callback), fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
+| 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
+| 3.4 | Apr 9, 2026 | Engineering | Restored auth documentation (authRoutes.ts with OIDC + HMAC-SHA256 session signing exists in codebase), corrected CSP to reflect nonce implementation, documented tiered rate limiting, updated VAPT status to reflect post-retest remediation of final 5 findings, unified role system |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -103,6 +104,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | **BU Owner** | Standard | Business unit dashboards, ROI evaluation, team metrics |
 | **Executive** | Read-heavy | Executive dashboards, scorecards, KPIs, trend reports |
 | **Department Viewer** | Read-only | Dashboard viewing, report access (default role for new users) |
+| **Custom** | Configurable | Per-screen permissions assigned by admin; used for non-standard access patterns |
 
 ### 3.2 Login Process
 1. Navigate to **https://qms-dashboard.replit.app**
@@ -609,52 +611,64 @@ Default (global) endpoints work for most other regions:
 ## 9. Security Architecture
 
 ### 9.1 Authentication
-- **Replit Auth (OIDC):** Primary login via Replit's OpenID Connect provider
-- **Supported providers:** Google, GitHub, Apple, and email
-- **Session management:** Handled entirely by Replit Auth externally; no application-level session code
-- **Application auth:** `X-Admin-Key` header validation for admin/system-level API access
+- **Replit OIDC:** Primary login via Replit's OpenID Connect provider (`authRoutes.ts`). Discovery URL: `https://replit.com/oidc`
+- **Supported providers:** Google, GitHub, Apple, and email (via Replit OIDC)
+- **OIDC callback:** `/api/callback` handles token exchange, user profile sync, and session creation
+- **Session signing:** HMAC-SHA256 signed stateless tokens (`signSession()` / `verifySession()` in `authRoutes.ts`)
+- **Session cookie:** `walaplus_session` — HttpOnly, Secure, SameSite=Lax, 7-day expiry (`SESSION_MAX_AGE = 604800`)
+- **Logout:** POST-only `/api/logout` — clears session cookie, prevents CSRF-based logout
+- **Admin API Key:** Alternative auth via `X-Admin-Key` header for system-level/automated access (also supports `admin_key` cookie)
+- **User sync:** `upsertOidcUser()` syncs OIDC profile to `platform_users` table (email, name, picture, auth_provider)
 - **MFA:** Database schema supports `mfa_enabled` and `mfa_secret` fields (available for future activation)
 
 ### 9.2 Authorization
 - **RBAC:** Centralized role-based access control enforced globally via route permission map
-- **10 roles** with granular per-endpoint permissions (see Section 3.1)
+- **11 roles** with granular per-endpoint permissions (see Section 3.1): admin, quality_manager, quality_specialist, grc_manager, team_lead, department_viewer, auditor, ai_specialist, bu_owner, executive, custom
 - **Permission examples:** `can_accept_risk`, `can_approve_policy`, `can_close_finding`, `can_manage_users`
 - **Admin API Key:** Alternative authentication via `X-Admin-Key` header for system-level or automated access
 - **Policy approval gate:** GRC Manager role required to approve policies before publication
 - **Escalation:** Overdue CAPAs and risk treatments automatically escalated to executive level
 
 ### 9.3 Data Protection
-- **CSP:** Content Security Policy with per-request randomly generated nonces (no unsafe-inline/unsafe-eval for scripts)
-- **CSP nonce injection:** Server automatically injects nonce into `<script>` tags in HTML responses
-- **Input sanitization:**
+- **CSP:** Content Security Policy with per-request randomly generated nonces for `script-src` (no `unsafe-inline`/`unsafe-eval` for scripts). `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility.
+- **CSP nonce injection:** Server generates a 16-byte random nonce per request (`randomBytes(16)`), sets it in the CSP header, and injects `nonce="..."` into all `<script>` tags in HTML responses (`index.ts` line 278)
+- **CSP directive:** `default-src 'self'; script-src 'self' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ...; frame-ancestors 'none'; form-action 'self'`
+- **Input sanitization** (`inputSanitizer.ts`):
   - HTML/script tag stripping (XSS prevention)
   - CSV formula injection prevention (prefixes `=`, `+`, `-`, `@` with single quote)
   - Prototype pollution protection (blocks `__proto__`, `constructor`, `prototype` keys)
   - Field whitelisting per module (only recognized fields processed)
-- **Rate limiting:** Audit trigger has a 60-second cooldown to prevent duplicate runs. Global request-level rate limiting is not yet implemented and is planned for a future release.
-- **Endpoint enumeration prevention:** Protected routes return 403 (not 404)
-- **Resource ID obfuscation:** UUID public_id columns on 9+ tables (enterprise_risks, risk_treatment_actions, vendors, policies, audits, regulations, obligations, compliance_assessments, team_feedback)
-- **Password policy:** 12+ characters, uppercase, lowercase, number, special character
-- **Error handling:** Generic error messages only — internal errors (e.g., unique constraint violations) mapped to user-friendly messages; no raw error exposure
+- **Rate limiting** (`rateLimiter.ts`): Tiered in-memory rate limiter, per IP, 60-second sliding window:
+  - Authenticated: READ_LIMIT=100, WRITE_LIMIT=10 requests/min
+  - Unauthenticated: UNAUTH_READ_LIMIT=10, UNAUTH_WRITE_LIMIT=3 requests/min
+  - Auth endpoints (`/api/auth/`, `/login`): AUTH_LIMIT=5 requests/min
+  - Export endpoints (`/export`, `/pdf`): EXPORT_LIMIT=10 requests/min
+  - Audit trigger: Additional 60-second cooldown to prevent duplicate runs
+  - Exceeding limits returns `429 Too Many Requests` with `Retry-After` header
+- **Endpoint enumeration prevention:** Unauthenticated requests to any protected API endpoint return `401 Authentication required` regardless of whether the endpoint exists, preventing enumeration
+- **Resource ID obfuscation:** UUID public_id columns on 9+ tables (enterprise_risks, risk_treatment_actions, vendors, policies, audits, regulations, obligations, compliance_assessments, team_feedback). API responses use `obfuscateResourceIds()` and `resolveGenericId()` to map between internal IDs and public UUIDs
+- **Password policy:** 12+ characters, uppercase, lowercase, number, special character (`validatePassword()` in `inputSanitizer.ts`)
+- **Error handling:** Generic error messages only — internal errors (e.g., unique constraint violations) mapped to user-friendly messages; no raw error exposure (`scrubErrorMessage()` in `inputSanitizer.ts`)
 - **CORS:** Dynamically validates origins against `REPLIT_DOMAINS`, enforces `Access-Control-Allow-Credentials: true` (no wildcard)
 - **Security headers:**
   - `X-Frame-Options: DENY` (anti-clickjacking)
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: strict-origin-when-cross-origin`
   - `X-XSS-Protection: 1; mode=block`
-  - `Permissions-Policy: camera=(), microphone=(), geolocation()` (disabled by default)
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=()` (disabled by default)
   - CSP `frame-ancestors 'none'`
 
 ### 9.4 Penetration Testing
 - **37 out of 37 findings remediated** across VAPT v1, v2, v3, and retest rounds
-- All critical, high, medium, and low severity issues resolved
-- Final 5 findings closed (April 2026):
-  - QMS-024: CSP nonce-based `script-src` replaces `unsafe-inline`
-  - QMS-026: Rate limiting enforced on all unauthenticated endpoints (10 read / 3 write req/min)
-  - QMS-031: API endpoint enumeration prevented (404→403 for protected routes)
-  - QMS-032: Sequential IDs replaced with UUID `public_id` across all API responses (risks, vendors, compliance, feedback)
-  - QMS-036: Export CSV and feedback endpoints stabilised; error handling hardened
-- Detailed documentation: `docs/VAPT_Remediation_Report.md`
+- Pentest v4 retest (April 2, 2026): 31/37 initially confirmed fixed; remaining 5 subsequently remediated
+- All critical, high, medium, and low severity issues now resolved
+- Final 5 findings closed (April 8–9, 2026, post-retest):
+  - **QMS-024** (Medium): CSP nonce-based `script-src` implemented — `unsafe-inline` removed from scripts; `unsafe-inline` retained only in `style-src` for CDN Tailwind CSS compatibility. Nonce injection via `randomBytes(16)` per request.
+  - **QMS-026** (Medium): Tiered rate limiting enforced on ALL requests including unauthenticated: 10 read / 3 write req/min for unauthenticated; 100 read / 10 write for authenticated. Auth endpoints: 5/min.
+  - **QMS-031** (Low): Unauthenticated requests to protected API endpoints return consistent `401 Authentication required` regardless of endpoint existence, preventing enumeration. Authenticated enumeration mitigated by RBAC permission checks returning `403`.
+  - **QMS-032** (Low): UUID `public_id` columns added to 9+ tables. API responses use `obfuscateResourceIds()` to replace sequential IDs with `R-XXXXXXXX` format references.
+  - **QMS-036** (Low): Export CSV and feedback endpoints stabilized; all return HTTP 200 with proper error handling.
+- Detailed documentation: `docs/VAPT_Remediation_Report.md`, `docs/Pentest_v3_Detailed_Remediation_Report.md`
 
 ---
 
@@ -1205,7 +1219,8 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
-| Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, removed false auth claims, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
+| Apr 9, 2026 | SOP v3.4: Restored auth documentation (authRoutes.ts with Replit OIDC + HMAC-SHA256 session signing), corrected CSP to reflect nonce-based implementation, documented tiered rate limiting (100/10/5/10 + unauth 10/3), updated VAPT status to 37/37 post-retest remediation, unified role system across rbacDatabase and userAccessDatabase | SOP accuracy verified against deployed codebase |
+| Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
 | Apr 8, 2026 | SOP v3.2: Comprehensive codebase audit — expanded database to 97+ tables, added PDPL backend (data inventory, DSAR, AI guardrails, SHA-256 audit log), ROI engine (8 cost tables + AI validation), Call Intelligence (8 tables incl. transcripts, QA scores, MOM), handoff/control system, escalation system, vendor assessments, policy versions/acknowledgments, risk history, compliance calendar, evidence packs, onboarding system, sandbox/mock endpoints, admin governance/scorecard management, API architecture section, Zoho write capabilities, Google Calendar integration, Slack/Telegram triggers, MFA schema, access audit log, data scopes, screen permissions | SOP now reflects complete implemented codebase |
 | Apr 8, 2026 | SOP v3.1: Corrected 10 inaccuracies — GRC audit readiness, policy button, QMS KPI cards, NC types, PKCE, rate limiting, audit steps, link text, first-steps | SOP accuracy verified |
 | Apr 8, 2026 | SOP v3.0: Added Quality Policy, Document Control, Management Review, Internal Audit, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs | Comprehensive QMS documentation |
@@ -1216,7 +1231,8 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | Apr 8, 2026 | Added Audit Runs card to QMS overview | Audit metrics on QMS dashboard |
 | Apr 8, 2026 | Added NC creation modal to QMS | Nonconformances can be created from the QMS dashboard |
 | Apr 8, 2026 | Created .env.example reference file | Easier secret configuration for new deployments |
-| Apr 2026 | Pentest retest — all 37 findings resolved | Full security compliance achieved |
+| Apr 2, 2026 | Pentest v4 retest — 31/37 initially confirmed fixed | Retest baseline |
+| Apr 8–9, 2026 | Post-retest remediation — remaining 5 findings (QMS-024, 026, 031, 032, 036) closed | 37/37 findings now resolved |
 | Mar 2026 | Migrated to Replit Auth (OIDC) | Google, GitHub, Apple, and email login support |
 | Mar 2026 | Centralized RBAC middleware | Granular per-endpoint role-based access control |
 | Feb 2026 | Platform launched | Full WalaPlus QMS codebase deployed |
