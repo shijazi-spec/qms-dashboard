@@ -630,7 +630,7 @@ Default (global) endpoints work for most other regions:
 - **Escalation:** Overdue CAPAs and risk treatments automatically escalated to executive level
 
 ### 9.3 Data Protection
-- **CSP:** Content Security Policy with per-request randomly generated nonces for `script-src` (no `unsafe-inline`/`unsafe-eval` for scripts). `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility.
+- **CSP:** Content Security Policy with per-request randomly generated nonces for `script-src`. `unsafe-inline` retained alongside nonces for inline event handler compatibility (dashboard HTML uses `onclick` attributes). `unsafe-eval` removed. `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility.
 - **CSP nonce injection:** Server generates a 16-byte random nonce per request (`randomBytes(16)`), sets it in the CSP header, and injects `nonce="..."` into all `<script>` tags in HTML responses (`index.ts` line 278)
 - **CSP directive:** `default-src 'self'; script-src 'self' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ...; frame-ancestors 'none'; form-action 'self'`
 - **Input sanitization** (`inputSanitizer.ts`):

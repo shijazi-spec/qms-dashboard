@@ -231,7 +231,7 @@
                 </svg>
                 <h3 class="mt-4 text-lg font-medium text-gray-900">No audit data yet</h3>
                 <p class="mt-2 text-gray-500">Run a quality audit to see your dashboard metrics.</p>
-                <button onclick="triggerAudit()" class="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+                <button id="emptyStateAuditBtn" onclick="triggerAudit()" data-testid="button-trigger-audit" class="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
                     Run Quality Audit Now
                 </button>
             </div>
@@ -1622,7 +1622,8 @@
         }
 
         async function triggerAudit() {
-            const button = event.target;
+            const button = document.querySelector('[onclick="triggerAudit()"]') || document.getElementById('emptyStateAuditBtn');
+            if (!button) return;
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'Triggering...';
