@@ -1622,19 +1622,23 @@
         }
 
         async function triggerAudit() {
-            const button = document.querySelector('[onclick="triggerAudit()"]') || document.getElementById('emptyStateAuditBtn');
-            if (!button) return;
+            console.log('[TriggerAudit] Called');
+            const button = document.getElementById('emptyStateAuditBtn');
+            if (!button) { console.error('[TriggerAudit] Button not found'); return; }
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'Triggering...';
             
             try {
+                console.log('[TriggerAudit] Sending POST to /api/audit/trigger');
                 const response = await fetch(`${API_BASE}/audit/trigger`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include'
                 });
+                console.log('[TriggerAudit] Response status:', response.status);
                 const result = await response.json();
+                console.log('[TriggerAudit] Response body:', JSON.stringify(result));
                 
                 if (response.ok && result.success) {
                     button.textContent = 'Audit Running...';
@@ -1663,12 +1667,13 @@
                         refreshDashboard();
                     }, 60000);
                 } else {
+                    console.error('[TriggerAudit] Failed:', result.error);
                     alert(result.error || 'Failed to trigger audit. Please try again.');
                     button.textContent = originalText;
                     button.disabled = false;
                 }
             } catch (error) {
-                console.error('Error triggering audit:', error);
+                console.error('[TriggerAudit] Error:', error);
                 alert('Failed to trigger audit. Please check your connection and try again.');
                 button.textContent = originalText;
                 button.disabled = false;

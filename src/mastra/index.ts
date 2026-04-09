@@ -153,7 +153,7 @@ export const mastra = new Mastra({
         c.header('X-Frame-Options', 'DENY');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
         c.header('X-XSS-Protection', '1; mode=block');
-        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
+        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
         (c as any)._cspNonce = cspNonce;
@@ -178,7 +178,10 @@ export const mastra = new Mastra({
 
         if (!isPublic && !isApi) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
-          if (!session) {
+          const adminKeyCookieVal = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
+          const expectedKey = process.env.ADMIN_API_KEY;
+          const hasAdminCookie = expectedKey && adminKeyCookieVal === expectedKey;
+          if (!session && !hasAdminCookie) {
             return c.redirect('/login');
           }
           isAuthenticated = true;
@@ -516,8 +519,10 @@ export const mastra = new Mastra({
 
               const session = getSessionFromCookie(c.req.header('Cookie'));
               const adminKeyHeader = c.req.header('X-Admin-Key');
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
+              const adminKey = adminKeyHeader || adminKeyCookie;
               const expectedAdminKey = process.env.ADMIN_API_KEY;
-              const hasAdminKey = expectedAdminKey && adminKeyHeader === expectedAdminKey;
+              const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
               
               if (!session && !hasAdminKey) {
                 return c.json({ error: 'Authentication required' }, 401);
@@ -537,22 +542,11 @@ export const mastra = new Mastra({
               logger?.info("🚀 [API] Manual audit trigger requested", { by: userEmail });
               lastTriggerTime.value = now;
               
-              let dispatched = false;
-              try {
-                await inngest.send({ name: "quality/audit.requested", data: { triggeredBy: userEmail } });
-                logger?.info("✅ [API] Audit dispatched via Inngest");
-                dispatched = true;
-              } catch (inngestErr) {
-                logger?.warn("⚠️ [API] Inngest dispatch failed, falling back to direct execution", { error: String(inngestErr) });
-              }
-
-              if (!dispatched) {
-                const { runDirectAudit } = await import("../utils/directAuditRunner");
-                runDirectAudit(logger).catch((err: any) => {
-                  console.error("Direct audit execution error:", err);
-                });
-                logger?.info("✅ [API] Direct audit started in background (fallback)");
-              }
+              const { runDirectAudit } = await import("../utils/directAuditRunner");
+              runDirectAudit(logger).catch((err: any) => {
+                console.error("Direct audit execution error:", err);
+              });
+              logger?.info("✅ [API] Direct audit started in background");
 
               return c.json({ 
                 success: true, 
