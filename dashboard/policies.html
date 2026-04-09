@@ -629,7 +629,7 @@
             if (!email) return;
 
             try {
-                const res = await fetch(\`/api/policies/\${id}/grc-approval\`, {
+                const res = await fetch(`/api/policies/${id}/grc-approval`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ approver_email: email })

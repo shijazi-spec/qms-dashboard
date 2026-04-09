@@ -363,6 +363,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param('id'));
           const { status } = await c.req.json();
           
@@ -490,6 +494,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           console.log('🚀 [DuplicateRadar] Zoho CRM scan triggered via API');
           const result = await scanZohoCRMForDuplicates();
           
@@ -522,6 +530,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const startTime = Date.now();
           await clearMockData();
 
@@ -666,6 +678,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           await clearMockData();
           return c.json({ success: true, message: 'Mock data cleared' });
         } catch (error: any) {
@@ -804,6 +820,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const clusterId = parseInt(c.req.param('clusterId'));
           const cluster = await getClusterById(clusterId);
           if (!cluster) {
@@ -853,6 +873,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const data = await c.req.json();
           const { record_type, email, first_name, last_name, deal_name, company, amount, owner_email } = data;
 

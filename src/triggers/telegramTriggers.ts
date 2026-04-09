@@ -63,6 +63,16 @@ export function registerTelegramTrigger({
         const mastra = c.get("mastra");
         const logger = mastra.getLogger();
         try {
+          const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+          if (webhookSecret) {
+            const url = new URL(c.req.url);
+            const token = url.searchParams.get('secret');
+            if (token !== webhookSecret) {
+              logger?.warn("🚫 [Telegram] Invalid webhook secret");
+              return c.text("Unauthorized", 403);
+            }
+          }
+
           const payload = await c.req.json();
 
           logger?.info("📝 [Telegram] payload", payload);

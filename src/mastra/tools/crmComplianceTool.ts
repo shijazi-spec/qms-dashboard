@@ -70,7 +70,8 @@ export const crmComplianceTool = createTool({
         logger?.info("📡 [CRMCompliance] Checking Zoho CRM for updates");
 
         try {
-          const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+          const zohoAccountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
+          const tokenResponse = await fetch(`${zohoAccountsUrl}/oauth/v2/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -163,24 +164,16 @@ export const crmComplianceTool = createTool({
             }
           }
         } catch (zohoError) {
-          logger?.warn("⚠️ [CRMCompliance] Zoho API error, using simulation", { 
+          logger?.error("❌ [CRMCompliance] Zoho API error", { 
             error: zohoError instanceof Error ? zohoError.message : String(zohoError) 
           });
-          notesUpdated = Math.random() > 0.3;
-          callLogged = Math.random() > 0.2;
-          taskCreated = Math.random() > 0.4;
-          stageUpdated = Math.random() > 0.5;
-          meetingOutcomeLogged = Math.random() > 0.6;
-          complianceDetails.mode = "simulated";
+          complianceDetails.mode = "zoho_error";
+          complianceDetails.error = zohoError instanceof Error ? zohoError.message : String(zohoError);
         }
       } else {
-        logger?.info("📝 [CRMCompliance] Zoho credentials not configured, using simulation");
-        notesUpdated = Math.random() > 0.3;
-        callLogged = Math.random() > 0.2;
-        taskCreated = Math.random() > 0.4;
-        stageUpdated = Math.random() > 0.5;
-        meetingOutcomeLogged = Math.random() > 0.6;
-        complianceDetails.mode = "simulated";
+        logger?.warn("⚠️ [CRMCompliance] Zoho credentials not configured, cannot check CRM compliance");
+        complianceDetails.mode = "not_configured";
+        complianceDetails.error = "Zoho CRM credentials not configured";
       }
 
       const missingActions: string[] = [];

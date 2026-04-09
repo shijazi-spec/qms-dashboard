@@ -1,3 +1,5 @@
+import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+
 export const pdplRoutes = [
   {
     path: "/api/pdpl/status",
@@ -5,6 +7,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching compliance status");
 
@@ -28,6 +33,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching data inventory");
 
@@ -52,6 +60,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Adding data inventory item:", body.field_name);
@@ -75,6 +86,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
@@ -103,6 +117,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching DSAR requests");
 
@@ -127,6 +144,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Creating DSAR request:", body.request_type);
@@ -150,6 +170,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
@@ -178,6 +201,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching retention policies");
 
@@ -199,6 +225,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
@@ -227,6 +256,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching data incidents");
 
@@ -251,6 +283,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Creating data incident:", body.title);
@@ -274,6 +309,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
@@ -302,6 +340,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching AI guardrails");
 
@@ -323,6 +364,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Adding AI guardrail:", body.field_name);
@@ -346,6 +390,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Masking PII for AI");
@@ -371,6 +418,9 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching PDPL audit log");
 

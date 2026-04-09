@@ -343,12 +343,13 @@
                 const res = await fetch('/api/risks?status=open&limit=5');
                 const risks = await res.json();
                 
-                if (!risks.length) {
+                const riskList = risks.risks || risks || [];
+                if (!riskList.length) {
                     document.getElementById('topRisks').innerHTML = '<p class="text-gray-500 text-sm">No open risks</p>';
                     return;
                 }
                 
-                document.getElementById('topRisks').innerHTML = risks.slice(0, 5).map(r => `
+                document.getElementById('topRisks').innerHTML = riskList.slice(0, 5).map(r => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                             <div class="font-medium text-gray-900">${r.risk_title}</div>
@@ -456,11 +457,11 @@
                 
                 if (charts.riskCategory) charts.riskCategory.destroy();
                 
-                const byCategory = data.byCategory || [];
+                const byCategory = data.by_category || data.byCategory || [];
                 charts.riskCategory = new Chart(document.getElementById('riskCategoryChart'), {
                     type: 'bar',
                     data: {
-                        labels: byCategory.map(c => c.category),
+                        labels: byCategory.map(c => c.risk_category || c.category),
                         datasets: [{
                             label: 'Risks',
                             data: byCategory.map(c => c.count),
@@ -476,11 +477,12 @@
 
         async function loadComplianceDetails() {
             try {
-                const res = await fetch('/api/compliance/frameworks');
-                const frameworks = await res.json();
+                const res = await fetch('/api/compliance/summary');
+                const data = await res.json();
+                const frameworks = data.regulations || data.frameworks || (Array.isArray(data) ? data : []);
                 
                 document.getElementById('complianceList').innerHTML = frameworks.map(f => {
-                    const score = f.compliance_score || 0;
+                    const score = f.compliance_score || f.score || 0;
                     const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500';
                     return `
                         <div class="flex items-center justify-between p-4 border rounded-lg">

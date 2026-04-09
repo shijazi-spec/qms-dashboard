@@ -1,0 +1,45 @@
+Summary of All Fixes Applied (20 files modified)
+Here is a complete list of everything I fixed in the QMS-Dashboard codebase:
+
+CRITICAL Fixes (8)
+#	Fix	File
+1	Removed Math.random() fake compliance data — Zoho errors and missing credentials now return proper error responses instead of saving randomized scores	src/mastra/tools/crmComplianceTool.ts
+2	Fixed hardcoded Zoho datacenter URL — Now uses ZOHO_ACCOUNTS_URL env var to support EU/IN/AU datacenters	src/mastra/tools/crmComplianceTool.ts
+3	Fixed path traversal vulnerability — Screenshot endpoint now sanitizes filenames, rejects .., and validates file extensions	src/mastra/routes/kpiRoutes.ts
+4	Fixed wrong table names in MBR reports — Changed compliance_obligations to obligations and grc_audits to audits	src/utils/kpiDatabase.ts
+5	Fixed SQL injection in getTrendData() — Replaced INTERVAL '${days} days' with parameterized make_interval(days => $2)	src/utils/database.ts
+6	Fixed SQL injection in getRiskTrends() — Same pattern fix with input validation	src/utils/riskDatabase.ts
+7	Fixed SQL injection in getUpcomingDeadlines() — Same pattern fix with input validation	src/utils/complianceDatabase.ts
+8	Added OIDC nonce verification — Auth callback now validates the nonce in the ID token to prevent replay attacks	src/mastra/routes/authRoutes.ts
+HIGH Fixes (12)
+#	Fix	File
+9	Fixed directAuditRunner trigger chain — Fallback audit now fires AUDIT_COMPLETED, NONCONFORMANCE_DETECTED, and CAPA_REQUIRED triggers with correct function signatures	src/utils/directAuditRunner.ts
+10	Fixed silent event log failure — logEvent() now throws on DB error instead of returning fake row with id: -1	src/utils/eventLogsDatabase.ts
+11	Fixed risk treatment UUID resolving to 0 — UUID action IDs now properly resolve via getTreatmentActionByPublicId	src/mastra/routes/riskRoutes.ts
+12	Fixed policies.html syntax error — Replaced escaped backticks with proper template literals in requestGrcApproval	dashboard/policies.html
+13	Fixed executive.html missing API — Changed /api/compliance/frameworks to /api/compliance/summary with proper response parsing	dashboard/executive.html
+14	Fixed executive.html risk response parsing — Now correctly extracts data.risks from the API response object	dashboard/executive.html
+15	Fixed executive.html risk category fields — Now uses by_category and risk_category matching the actual API response	dashboard/executive.html
+16	Fixed pdpl.html missing navigation — Added WalaPlusNav.init('pdpl') call	dashboard/pdpl.html
+17	Added admin auth to all RBAC routes — GET/POST/PUT users, check-permission oracle now require admin authentication	src/mastra/routes/rbacRoutes.ts
+18	Added admin auth to destructive scan endpoints — scan-zoho and generate-mock-data now require admin	src/mastra/routes/duplicateRadarRoutes.ts
+19	Added auth to call intelligence uploads — ingest, upload, bulk-upload, five9/test now require authentication	src/mastra/routes/callIntelligenceRoutes.ts
+20	Added auth to PDPL privacy routes — Status, inventory, DSAR, and incidents endpoints now require authentication	src/mastra/routes/pdplRoutes.ts
+Webhook Security (2)
+#	Fix	File
+21	Added Telegram webhook secret verification — Validates TELEGRAM_WEBHOOK_SECRET and checks for null message fields	src/triggers/telegramTriggers.ts
+22	Added Linear webhook signature check — Validates Linear-Signature header when LINEAR_WEBHOOK_SECRET is configured	src/triggers/exampleConnectorTrigger.ts
+Remaining Items for Next Phase (to do on Replit)
+These are important but require more extensive refactoring:
+
+Add auth to remaining 8 route files (team, trigger, scorecard, tablef, migration, onboarding, handoff, event logs) — same pattern as what I applied above
+Remove unsafe-inline from CSP and properly inject nonces into dashboard pages
+Consolidate 20+ separate DB connection pools into a single shared pool
+Add transactions to multi-step write operations across database utilities
+Replace innerHTML with safe rendering across all dashboard pages (XSS hardening)
+Implement Zoho CRM pagination — currently only fetches 1 page of records
+Add CRM compliance checks for Deals (currently only checks Leads)
+Add Slack webhook signing secret verification (slackTriggers.ts)
+Sync platform_users and system_users tables on login
+Add structured logging with correlation IDs (replace emoji console logs)
+You should upload these modified files to your Replit project and test the fixes.

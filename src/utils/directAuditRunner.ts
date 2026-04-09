@@ -145,8 +145,51 @@ export async function runDirectAudit(logger?: any) {
       },
     };
 
-    await saveAuditResult(auditData);
+    const savedResult = await saveAuditResult(auditData);
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
+
+    try {
+      const { createAuditCompletedTrigger, createNonconformanceTrigger, createCapaRequiredTrigger } = await import("./auditTriggerDatabase");
+
+      await createAuditCompletedTrigger(savedResult.id!, {
+        totalRecords: totalRecordsAudited,
+        totalIssues: totalIssuesFound,
+        overallScore: qualityScores.overallScore,
+        peopleScore: qualityScores.peopleScore,
+        processScore: qualityScores.processScore,
+        governanceScore: qualityScores.governanceScore,
+        auditDate: new Date(),
+      });
+
+      if (criticalIssues > 0 || highIssues > 0) {
+        await createNonconformanceTrigger(savedResult.id!, {
+          totalNCs: criticalIssues + highIssues,
+          criticalCount: criticalIssues,
+          majorCount: highIssues,
+          minorCount: mediumIssues,
+          categories: topIssues.map(i => i.issueType),
+          auditDate: new Date(),
+        });
+      }
+
+      if (criticalIssues > 0) {
+        for (const issue of topIssues.filter(i => i.severity === 'critical').slice(0, 3)) {
+          await createCapaRequiredTrigger(savedResult.id!, {
+            ncTitle: issue.issueType,
+            ncId: `NC-${savedResult.id}-${issue.module}`,
+            severity: 'critical',
+            suggestedAction: `Address critical ${issue.issueType} issues in ${issue.module} (${issue.count} occurrences)`,
+            auditDate: new Date(),
+          });
+        }
+      }
+
+      logger?.info("✅ [DirectAudit] Audit triggers created successfully");
+    } catch (triggerError) {
+      logger?.warn("⚠️ [DirectAudit] Failed to create audit triggers", {
+        error: triggerError instanceof Error ? triggerError.message : String(triggerError)
+      });
+    }
   } catch (error) {
     logger?.error("❌ [DirectAudit] Failed to save audit results", { error: error instanceof Error ? error.message : String(error) });
   }

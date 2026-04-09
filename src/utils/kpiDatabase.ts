@@ -564,11 +564,11 @@ export async function generateMBRData(): Promise<any> {
   `);
   
   const complianceResult = await pool.query(`
-    SELECT status, COUNT(*) as count FROM compliance_obligations GROUP BY status
+    SELECT status, COUNT(*) as count FROM obligations GROUP BY status
   `);
   
   const auditResult = await pool.query(`
-    SELECT status, COUNT(*) as count FROM grc_audits WHERE audit_date >= $1 GROUP BY status
+    SELECT status, COUNT(*) as count FROM quality_audit_results WHERE audit_date >= $1 GROUP BY status
   `, [monthStart]);
   
   return {

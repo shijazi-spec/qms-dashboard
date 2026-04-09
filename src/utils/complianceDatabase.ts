@@ -566,16 +566,17 @@ export async function createCalendarEvent(event: ComplianceCalendar): Promise<Co
 }
 
 export async function getUpcomingDeadlines(days: number = 30): Promise<any[]> {
+  const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
   const result = await pool.query(`
     SELECT cc.*, o.title as obligation_title, o.obligation_code, r.name as regulation_name
     FROM compliance_calendar cc
     JOIN obligations o ON cc.obligation_id = o.id
     JOIN regulations r ON o.regulation_id = r.id
     WHERE cc.status IN ('scheduled', 'in_progress')
-    AND cc.scheduled_date BETWEEN NOW() AND NOW() + INTERVAL '${days} days'
+    AND cc.scheduled_date BETWEEN NOW() AND NOW() + make_interval(days => $1)
     ORDER BY cc.scheduled_date ASC
     LIMIT 20
-  `);
+  `, [safeDays]);
   return result.rows;
 }
 

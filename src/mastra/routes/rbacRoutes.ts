@@ -1,4 +1,5 @@
 import * as rbacDb from '../../utils/rbacDatabase';
+import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
 
 export const rbacRoutes = [
   {
@@ -7,6 +8,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { initRbacTables } = await import('../../utils/rbacDatabase');
           await initRbacTables();
@@ -32,6 +36,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const email = c.req.param('email');
           logger?.info('👤 [RBAC API] GET /api/rbac/users/:email', { email });
@@ -54,6 +61,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info('👤 [RBAC API] POST /api/rbac/users', { email: body.email });
@@ -73,6 +83,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
@@ -93,6 +106,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const role = c.req.param('role') as rbacDb.UserRole;
           logger?.info('🔐 [RBAC API] GET /api/rbac/permissions/:role', { role });
@@ -115,6 +131,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { email, permission } = await c.req.json();
           logger?.info('🔐 [RBAC API] POST /api/rbac/check-permission', { email, permission });
@@ -137,6 +156,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const url = new URL(c.req.url);
           const department = url.searchParams.get('department') || undefined;
@@ -158,6 +180,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           logger?.info('📋 [RBAC API] POST /api/rbac/bu-processes', { code: body.process_code });
@@ -177,6 +202,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
           const body = await c.req.json();
@@ -197,6 +225,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info('📊 [RBAC API] POST /api/rbac/calculate-control-readiness');
           
@@ -215,6 +246,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info('⚠️ [RBAC API] POST /api/rbac/escalate-overdue');
           
@@ -233,6 +267,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const url = new URL(c.req.url);
           const status = url.searchParams.get('status') || undefined;
@@ -254,6 +291,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param('id'));
           const { resolved_by, notes } = await c.req.json();
@@ -274,6 +314,9 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info('🔐 [RBAC API] GET /api/rbac/roles');
           

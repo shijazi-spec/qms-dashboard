@@ -386,9 +386,20 @@ export const riskRoutes = [
           
           const actionIdParam = c.req.param('actionId');
           const resolved = resolveRiskId(actionIdParam);
-          const actionId = resolved.isUUID ? 0 : resolved.intId!;
           const body = await c.req.json();
           logger?.info('📝 [RiskAPI] PUT /api/risks/treatment/:actionId', { actionIdParam, by: sessionUser.email });
+
+          let actionId: number;
+          if (resolved.isUUID) {
+            const { getTreatmentActionByPublicId } = await import('../../utils/riskDatabase');
+            const action = await getTreatmentActionByPublicId(resolved.uuid!);
+            if (!action) {
+              return c.json({ error: 'Treatment action not found' }, 404);
+            }
+            actionId = action.id!;
+          } else {
+            actionId = resolved.intId!;
+          }
 
           const updatedAction = await updateTreatmentAction(actionId, body);
 

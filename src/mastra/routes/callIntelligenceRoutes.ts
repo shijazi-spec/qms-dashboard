@@ -11,6 +11,9 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const data = await c.req.json();
           
@@ -63,6 +66,9 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("📞 [API] Fetching call records");
 
@@ -205,6 +211,9 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           
@@ -718,6 +727,9 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("📤 [API] Manual call upload request");
 
@@ -800,6 +812,9 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("🎤 [API] Audio call upload with transcription request");
 
@@ -994,6 +1009,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           logger?.info("📤 [API] Bulk call upload request");
 
@@ -1075,6 +1093,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const body = await c.req.json();
           
@@ -1198,6 +1219,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param('id'));
           const body = await c.req.json();
@@ -1242,6 +1266,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param('id'));
           const body = await c.req.json().catch(() => ({}));
@@ -1582,6 +1609,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const data = await c.req.json();
           
@@ -1657,6 +1687,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           

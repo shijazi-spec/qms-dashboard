@@ -351,16 +351,8 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
     console.log('📋 [EventLogs] Event logged successfully with ID:', eventLog.id);
     return eventLog;
   } catch (error) {
-    console.error('📋 [EventLogs] Error logging event (non-throwing):', error);
-    return {
-      id: -1,
-      timestamp: new Date(),
-      action_type: input.actionType,
-      entity_type: input.entityType,
-      ai_involved: input.aiInvolved || false,
-      severity: input.severity || 'INFO',
-      created_at: new Date()
-    } as EventLog;
+    console.error('📋 [EventLogs] Error logging event:', error);
+    throw error;
   }
 }
 

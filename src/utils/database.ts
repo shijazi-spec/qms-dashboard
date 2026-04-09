@@ -202,14 +202,15 @@ export async function getAuditHistory(limit: number = 10): Promise<QualityAuditR
 }
 
 export async function getTrendData(metricName: string, days: number = 30): Promise<any[]> {
+  const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
   const result = await pool.query(
     `SELECT qt.metric_value, qt.recorded_at, qar.audit_date
      FROM quality_trends qt
      JOIN quality_audit_results qar ON qt.audit_id = qar.id
      WHERE qt.metric_name = $1 
-     AND qt.recorded_at >= NOW() - INTERVAL '${days} days'
+     AND qt.recorded_at >= NOW() - make_interval(days => $2)
      ORDER BY qt.recorded_at ASC`,
-    [metricName]
+    [metricName, safeDays]
   );
   return result.rows;
 }

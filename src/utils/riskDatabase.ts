@@ -558,6 +558,14 @@ export async function getTreatmentActions(riskId: number): Promise<RiskTreatment
   return result.rows;
 }
 
+export async function getTreatmentActionByPublicId(publicId: string): Promise<RiskTreatmentAction | null> {
+  const result = await pool.query(
+    'SELECT * FROM risk_treatment_actions WHERE public_id = $1',
+    [publicId]
+  );
+  return result.rows[0] || null;
+}
+
 export async function updateTreatmentAction(id: number, action: Partial<RiskTreatmentAction>): Promise<RiskTreatmentAction> {
   console.log('📝 [RiskDB] Updating treatment action:', id);
   
@@ -646,7 +654,8 @@ export async function getOverdueTreatmentActions(): Promise<any[]> {
 }
 
 export async function getRiskTrends(days: number = 90): Promise<any[]> {
-  console.log('📊 [RiskDB] Generating risk trends for last', days, 'days...');
+  const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 90)));
+  console.log('📊 [RiskDB] Generating risk trends for last', safeDays, 'days...');
   
   const result = await pool.query(`
     SELECT 
@@ -657,10 +666,10 @@ export async function getRiskTrends(days: number = 90): Promise<any[]> {
       COUNT(*) FILTER (WHERE risk_level = 'medium') as medium,
       COUNT(*) FILTER (WHERE risk_level = 'low') as low
     FROM enterprise_risks
-    WHERE created_at >= NOW() - INTERVAL '${days} days'
+    WHERE created_at >= NOW() - make_interval(days => $1)
     GROUP BY DATE(created_at)
     ORDER BY date ASC
-  `);
+  `, [safeDays]);
 
   console.log('✅ [RiskDB] Trend data generated');
   return result.rows;

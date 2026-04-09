@@ -243,6 +243,19 @@ export const authRoutes = [
 
           const profile = await userInfoRes.json() as any;
 
+          if (tokenData.id_token) {
+            try {
+              const [, payloadB64] = tokenData.id_token.split('.');
+              const idTokenPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+              if (idTokenPayload.nonce && idTokenPayload.nonce !== oauthData.nonce) {
+                console.error('[Auth] Nonce mismatch - possible replay attack');
+                return c.redirect('/login?error=nonce_mismatch');
+              }
+            } catch (nonceErr) {
+              console.warn('[Auth] Could not verify nonce in id_token:', nonceErr);
+            }
+          }
+
           if (!profile.email) {
             console.error('[Auth] No email in profile:', profile);
             return c.redirect('/login?error=no_email');

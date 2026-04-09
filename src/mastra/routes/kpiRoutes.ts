@@ -395,6 +395,16 @@ export const kpiRoutes = [
         const logger = mastra?.getLogger();
         try {
           const filename = c.req.param("filename");
+          
+          if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return c.text("Invalid filename", 400);
+          }
+          const allowedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+          const ext = filename.split('.').pop()?.toLowerCase();
+          if (!ext || !allowedExtensions.includes(ext)) {
+            return c.text("Invalid file type", 400);
+          }
+          
           logger?.info(`📸 [Screenshots] Serving: ${filename}`);
           const possiblePaths = [
             join(process.cwd(), "docs", "screenshots", filename),
