@@ -1622,23 +1622,19 @@
         }
 
         async function triggerAudit() {
-            console.log('[TriggerAudit] Called');
             const button = document.getElementById('emptyStateAuditBtn');
-            if (!button) { console.error('[TriggerAudit] Button not found'); return; }
+            if (!button) return;
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'Triggering...';
             
             try {
-                console.log('[TriggerAudit] Sending POST to /api/audit/trigger');
                 const response = await fetch(`${API_BASE}/audit/trigger`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include'
                 });
-                console.log('[TriggerAudit] Response status:', response.status);
                 const result = await response.json();
-                console.log('[TriggerAudit] Response body:', JSON.stringify(result));
                 
                 if (response.ok && result.success) {
                     button.textContent = 'Audit Running...';
@@ -1667,13 +1663,11 @@
                         refreshDashboard();
                     }, 60000);
                 } else {
-                    console.error('[TriggerAudit] Failed:', result.error);
                     alert(result.error || 'Failed to trigger audit. Please try again.');
                     button.textContent = originalText;
                     button.disabled = false;
                 }
             } catch (error) {
-                console.error('[TriggerAudit] Error:', error);
                 alert('Failed to trigger audit. Please check your connection and try again.');
                 button.textContent = originalText;
                 button.disabled = false;
@@ -1681,14 +1675,12 @@
         }
 
         async function runManualAudit() {
-            console.log('[AuditBtn] runManualAudit called');
             const btn = document.getElementById('manualAuditBtn');
-            if (!btn) { console.error('[AuditBtn] Button not found'); return; }
+            if (!btn) return;
             btn.disabled = true;
             btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="31.4 31.4"></circle></svg> Running AI Audit...';
             
             try {
-                console.log('[AuditBtn] Sending POST to /api/audit/trigger');
                 const response = await fetch('/api/audit/trigger', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1698,9 +1690,7 @@
                         dateFilters: currentDateFilters
                     })
                 });
-                console.log('[AuditBtn] Response status:', response.status);
                 const result = await response.json();
-                console.log('[AuditBtn] Response body:', JSON.stringify(result));
                 
                 if (response.ok && result.success) {
                     btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Audit Started!';
