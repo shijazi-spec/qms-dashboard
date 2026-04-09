@@ -38,6 +38,7 @@ import { scorecardRoutes } from "./routes/scorecardRoutes";
 import { pdplRoutes } from "./routes/pdplRoutes";
 import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
+import { smokeTestRoutes } from "./routes/smokeTestRoutes";
 import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
 import { checkRateLimit } from "../utils/rateLimiter";
@@ -158,7 +159,7 @@ export const mastra = new Mastra({
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
@@ -542,11 +543,37 @@ export const mastra = new Mastra({
               logger?.info("🚀 [API] Manual audit trigger requested", { by: userEmail });
               lastTriggerTime.value = now;
               
-              const { runDirectAudit } = await import("../utils/directAuditRunner");
-              runDirectAudit(logger).catch((err: any) => {
-                console.error("Direct audit execution error:", err);
-              });
-              logger?.info("✅ [API] Direct audit started in background");
+              try {
+                await inngest.send({
+                  name: "replit/cron.trigger",
+                  data: {
+                    workflowId: "quality-audit-workflow",
+                    manualTrigger: true,
+                    triggeredBy: userEmail,
+                    triggeredAt: new Date().toISOString()
+                  }
+                });
+                logger?.info("✅ [API] Audit trigger event sent via Inngest");
+                return c.json({ 
+                  success: true, 
+                  message: "Quality audit triggered successfully. Results will be available shortly." 
+                });
+              } catch (inngestError) {
+                logger?.warn("⚠️ [API] Inngest dispatch failed, falling back to direct execution", {
+                  error: inngestError instanceof Error ? inngestError.message : String(inngestError)
+                });
+              }
+
+              (async () => {
+                try {
+                  const { runDirectAudit } = await import("../utils/directAuditRunner");
+                  await runDirectAudit(logger);
+                  logger?.info("✅ [API] Direct audit completed");
+                } catch (err) {
+                  console.error("Direct audit execution error:", err);
+                }
+              })();
+              logger?.info("✅ [API] Audit triggered via direct execution (fallback)");
 
               return c.json({ 
                 success: true, 
@@ -3491,6 +3518,7 @@ export const mastra = new Mastra({
       ...pdplRoutes,
       ...triggerRoutes,
       ...userAccessRoutes,
+      ...smokeTestRoutes,
     ],
   },
   logger:

@@ -35,7 +35,7 @@
 | 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (97+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, Zoho write capability (record updates, evaluation notes), Google Calendar integration, Slack/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
 | 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
 | 3.4 | Apr 9, 2026 | Engineering | Restored auth documentation (authRoutes.ts with OIDC + HMAC-SHA256 session signing exists in codebase), corrected CSP to reflect nonce implementation, documented tiered rate limiting, updated VAPT status to reflect post-retest remediation of final 5 findings, unified role system |
-| 3.5 | Apr 9, 2026 | Engineering | CSP nonce removed (CSP Level 3 conflict with inline handlers), page-level auth now accepts admin_key cookie alongside session cookie, audit trigger uses direct execution (Inngest fallback removed), admin key login redirects to dashboard, inngest.sh DATABASE_URL check fixed |
+| 3.5 | Apr 9, 2026 | Engineering | CSP nonce removed (CSP Level 3 conflict with inline handlers), page-level auth now accepts admin_key cookie alongside session cookie, audit trigger uses Inngest-first with direct execution fallback, admin key login redirects to dashboard, inngest.sh DATABASE_URL check fixed, smoke test routes added (/api/health, /api/smoke) |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -586,7 +586,7 @@ Default (global) endpoints work for most other regions:
 ### 8.1 Quality Audit Workflow
 - **Trigger:** Manual (via Run AI Audit button or API call) or Cron schedule
 - **Schedule:** Every Monday at 8:00 AM (configurable via `SCHEDULE_CRON_EXPRESSION`)
-- **Engine:** Direct execution via `runDirectAudit()` (`src/utils/directAuditRunner.ts`). The audit trigger endpoint (`/api/audit/trigger`) invokes the audit directly in-process (fire-and-forget, non-blocking HTTP response). Inngest workflow definitions remain in the codebase for future use but are not the active execution path.
+- **Engine:** Inngest-first with direct execution fallback. The audit trigger endpoint (`/api/audit/trigger`) first attempts to send an Inngest event (`replit/cron.trigger`). If Inngest dispatch fails (e.g., no Inngest Cloud configured), it falls back to `runDirectAudit()` (`src/utils/directAuditRunner.ts`) which executes in-process (fire-and-forget, non-blocking HTTP response).
 - **Steps:**
   1. `validate-environment` — Checks Zoho credentials and OpenAI API keys
   2. `fetch-calendar-events` — Retrieves Google Calendar events for the last 7 days
@@ -767,7 +767,7 @@ A `.env.example` file is included in the project root with all variables documen
 - **Domain:** https://qms-dashboard.replit.app
 - **Process:** Publish via Replit dashboard (automatic build, TLS, health checks)
 - **Server:** Mastra dev server on port 5000 serving both API and HTML dashboards
-- **Inngest:** Dev server on port 3000 available for workflow orchestration (not required — audit runs via direct execution)
+- **Inngest:** Dev server on port 3000 available for workflow orchestration (preferred path for audit triggers when Inngest Cloud is configured; direct execution fallback when unavailable)
 - **Auto-restart:** Health checks ensure uptime
 
 ---
@@ -1220,7 +1220,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
-| Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses direct execution, admin key login redirects to dashboard, inngest.sh fixed, QMS-024 pentest finding description corrected | CSP, auth, and audit trigger accuracy verified |
+| Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses Inngest-first with direct fallback, admin key login redirects to dashboard, inngest.sh fixed, smoke test routes added, QMS-024 pentest finding description corrected | CSP, auth, and audit trigger accuracy verified |
 | Apr 9, 2026 | SOP v3.4: Restored auth documentation (authRoutes.ts with Replit OIDC + HMAC-SHA256 session signing), corrected CSP to reflect nonce-based implementation, documented tiered rate limiting (100/10/5/10 + unauth 10/3), updated VAPT status to 37/37 post-retest remediation, unified role system across rbacDatabase and userAccessDatabase | SOP accuracy verified against deployed codebase |
 | Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
 | Apr 8, 2026 | SOP v3.2: Comprehensive codebase audit — expanded database to 97+ tables, added PDPL backend (data inventory, DSAR, AI guardrails, SHA-256 audit log), ROI engine (8 cost tables + AI validation), Call Intelligence (8 tables incl. transcripts, QA scores, MOM), handoff/control system, escalation system, vendor assessments, policy versions/acknowledgments, risk history, compliance calendar, evidence packs, onboarding system, sandbox/mock endpoints, admin governance/scorecard management, API architecture section, Zoho write capabilities, Google Calendar integration, Slack/Telegram triggers, MFA schema, access audit log, data scopes, screen permissions | SOP now reflects complete implemented codebase |
