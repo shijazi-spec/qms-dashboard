@@ -537,12 +537,23 @@ export const mastra = new Mastra({
               logger?.info("🚀 [API] Manual audit trigger requested", { by: userEmail });
               lastTriggerTime.value = now;
               
-              const { runDirectAudit } = await import("../utils/directAuditRunner");
-              runDirectAudit(logger).catch((err: any) => {
-                console.error("Direct audit execution error:", err);
-              });
-              
-              logger?.info("✅ [API] Direct audit started in background");
+              let dispatched = false;
+              try {
+                await inngest.send({ name: "quality/audit.requested", data: { triggeredBy: userEmail } });
+                logger?.info("✅ [API] Audit dispatched via Inngest");
+                dispatched = true;
+              } catch (inngestErr) {
+                logger?.warn("⚠️ [API] Inngest dispatch failed, falling back to direct execution", { error: String(inngestErr) });
+              }
+
+              if (!dispatched) {
+                const { runDirectAudit } = await import("../utils/directAuditRunner");
+                runDirectAudit(logger).catch((err: any) => {
+                  console.error("Direct audit execution error:", err);
+                });
+                logger?.info("✅ [API] Direct audit started in background (fallback)");
+              }
+
               return c.json({ 
                 success: true, 
                 message: "Quality audit triggered successfully. Results will be available shortly." 

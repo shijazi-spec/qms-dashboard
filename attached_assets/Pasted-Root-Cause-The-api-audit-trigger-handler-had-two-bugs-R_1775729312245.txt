@@ -1,0 +1,25 @@
+Root Cause
+The /api/audit/trigger handler had two bugs:
+
+Redundant dynamic import (line 387 before fix): const { inngest } = await import("./inngest") — This dynamic import can fail in the Mastra-bundled output (.mastra/output/), even though inngest is already statically imported at the top of the file. The bundler resolves static imports at build time but may not handle the same dynamic import correctly at runtime.
+
+No fallback when Inngest is unavailable: In production deployment (NODE_ENV=production), only node index.mjs runs — the Inngest dev server is NOT started (see .replit deployment config). The Inngest client in production mode tries to reach Inngest Cloud at api.inngest.com, which requires INNGEST_EVENT_KEY that isn't configured. So inngest.send() fails and the entire handler throws a 500 error.
+
+Fixes Applied
+1. src/mastra/index.ts — /api/audit/trigger handler
+Removed the broken dynamic import (await import("./inngest"))
+Uses the already-imported inngest client (static import, line 13)
+Added try/catch around the Inngest send — if Inngest dispatch succeeds (dev mode), returns immediately
+Added fallback — if Inngest fails (production), executes the workflow directly via qualityAuditWorkflow.createRunAsync() (fire-and-forget, doesn't block the HTTP response)
+2. scripts/inngest.sh — Inverted DATABASE_URL check
+The bash condition was if [[ -z "${DATABASE_URL}" ]] (-z = "is empty"), which meant:
+
+If DATABASE_URL is empty → tries to use PostgreSQL with an empty connection string (broken)
+If DATABASE_URL is set → uses SQLite (wrong)
+Fixed to if [[ -n "${DATABASE_URL}" ]] (-n = "is NOT empty"), so PostgreSQL is used when the URL is available.
+
+To deploy this fix on Replit: Copy these two files to Replit:
+
+src/mastra/index.ts
+scripts/inngest.sh
+Then restart the application. Both the "Run AI Audit" button on the main dashboard and the "Run Quality Audit Now" button in the no-data state will work, because they both call the same /api/audit/trigger endpoint.

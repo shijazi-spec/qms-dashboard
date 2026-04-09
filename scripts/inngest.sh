@@ -7,7 +7,7 @@ INNGEST_CONFIG=".config/inngest/inngest.yaml"
 # Try to store Inngest data in Postgres if it's available. Otherwise, put it in SQLite.
 if [[ ! -f  "${INNGEST_CONFIG}" ]]; then
     mkdir -p "$(dirname "${INNGEST_CONFIG}")"
-    if [[ -z "${DATABASE_URL}" ]]; then
+    if [[ -n "${DATABASE_URL}" ]]; then
         printf 'postgres-uri: "%s"' "${DATABASE_URL}" > "${INNGEST_CONFIG}"
     else
         printf 'sqlite-dir: "/home/runner/workspace/.local/share/inngest"' > "${INNGEST_CONFIG}"
