@@ -1,8 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 3.2
-**Last Updated:** April 8, 2026
+**Version:** 3.5
+**Last Updated:** April 9, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
@@ -15,7 +15,7 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 3.2 |
+| **Version** | 3.5 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
@@ -35,6 +35,7 @@
 | 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (97+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, Zoho write capability (record updates, evaluation notes), Google Calendar integration, Slack/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
 | 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
 | 3.4 | Apr 9, 2026 | Engineering | Restored auth documentation (authRoutes.ts with OIDC + HMAC-SHA256 session signing exists in codebase), corrected CSP to reflect nonce implementation, documented tiered rate limiting, updated VAPT status to reflect post-retest remediation of final 5 findings, unified role system |
+| 3.5 | Apr 9, 2026 | Engineering | CSP nonce removed (CSP Level 3 conflict with inline handlers), page-level auth now accepts admin_key cookie alongside session cookie, audit trigger uses direct execution (Inngest fallback removed), admin key login redirects to dashboard, inngest.sh DATABASE_URL check fixed |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -582,10 +583,10 @@ Default (global) endpoints work for most other regions:
 
 ## 8. Automated Workflows
 
-### 8.1 Quality Audit Workflow (Inngest)
+### 8.1 Quality Audit Workflow
 - **Trigger:** Manual (via Run AI Audit button or API call) or Cron schedule
 - **Schedule:** Every Monday at 8:00 AM (configurable via `SCHEDULE_CRON_EXPRESSION`)
-- **Engine:** Inngest event-driven workflow with multi-step execution
+- **Engine:** Direct execution via `runDirectAudit()` (`src/utils/directAuditRunner.ts`). The audit trigger endpoint (`/api/audit/trigger`) invokes the audit directly in-process (fire-and-forget, non-blocking HTTP response). Inngest workflow definitions remain in the codebase for future use but are not the active execution path.
 - **Steps:**
   1. `validate-environment` — Checks Zoho credentials and OpenAI API keys
   2. `fetch-calendar-events` — Retrieves Google Calendar events for the last 7 days
@@ -617,7 +618,8 @@ Default (global) endpoints work for most other regions:
 - **Session signing:** HMAC-SHA256 signed stateless tokens (`signSession()` / `verifySession()` in `authRoutes.ts`)
 - **Session cookie:** `walaplus_session` — HttpOnly, Secure, SameSite=Lax, 7-day expiry (`SESSION_MAX_AGE = 604800`)
 - **Logout:** POST-only `/api/logout` — clears session cookie, prevents CSRF-based logout
-- **Admin API Key:** Alternative auth via `X-Admin-Key` header for system-level/automated access (also supports `admin_key` cookie)
+- **Admin API Key:** Alternative auth via `X-Admin-Key` header or `admin_key` cookie for system-level/automated access. Admin key login (via `/api/admin/auth`) sets an HttpOnly `admin_key` cookie (8-hour expiry, SameSite=Lax). Both page-level middleware and API-level middleware accept the `admin_key` cookie for authentication, allowing admin key users full dashboard and API access.
+- **Admin key login flow:** Login page (`/login`) offers admin key entry → POST `/api/admin/auth` validates key → sets `admin_key` cookie → redirects to `/` (dashboard)
 - **User sync:** `upsertOidcUser()` syncs OIDC profile to `platform_users` table (email, name, picture, auth_provider)
 - **MFA:** Database schema supports `mfa_enabled` and `mfa_secret` fields (available for future activation)
 
@@ -630,9 +632,8 @@ Default (global) endpoints work for most other regions:
 - **Escalation:** Overdue CAPAs and risk treatments automatically escalated to executive level
 
 ### 9.3 Data Protection
-- **CSP:** Content Security Policy with per-request randomly generated nonces for `script-src`. `unsafe-inline` retained alongside nonces for inline event handler compatibility (dashboard HTML uses `onclick` attributes). `unsafe-eval` removed. `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility.
-- **CSP nonce injection:** Server generates a 16-byte random nonce per request (`randomBytes(16)`), sets it in the CSP header, and injects `nonce="..."` into all `<script>` tags in HTML responses (`index.ts` line 278)
-- **CSP directive:** `default-src 'self'; script-src 'self' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ...; frame-ancestors 'none'; form-action 'self'`
+- **CSP:** Content Security Policy with `'unsafe-inline'` for `script-src` to support inline event handlers (`onclick` attributes used throughout dashboard HTML). `unsafe-eval` removed. `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility. Nonce-based CSP was previously implemented but removed in v3.5 because CSP Level 3 browsers ignore `'unsafe-inline'` when a nonce is present — this silently blocked all `onclick` handlers across the dashboard (login button, audit triggers, filter buttons).
+- **CSP directive:** `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`
 - **Input sanitization** (`inputSanitizer.ts`):
   - HTML/script tag stripping (XSS prevention)
   - CSV formula injection prevention (prefixes `=`, `+`, `-`, `@` with single quote)
@@ -663,7 +664,7 @@ Default (global) endpoints work for most other regions:
 - Pentest v4 retest (April 2, 2026): 31/37 initially confirmed fixed; remaining 5 subsequently remediated
 - All critical, high, medium, and low severity issues now resolved
 - Final 5 findings closed (April 8–9, 2026, post-retest):
-  - **QMS-024** (Medium): CSP nonce-based `script-src` implemented — `unsafe-inline` removed from scripts; `unsafe-inline` retained only in `style-src` for CDN Tailwind CSS compatibility. Nonce injection via `randomBytes(16)` per request.
+  - **QMS-024** (Medium): CSP `script-src` hardened — `unsafe-eval` removed. `'unsafe-inline'` retained for `script-src` because dashboard HTML uses `onclick` inline handlers throughout; nonce-based CSP was attempted but removed after discovering CSP Level 3 browsers ignore `'unsafe-inline'` when a nonce is present, silently blocking all inline event handlers. XSS risk mitigated by input sanitization (`inputSanitizer.ts`), HTML tag stripping, and strict `connect-src`/`frame-ancestors` directives.
   - **QMS-026** (Medium): Tiered rate limiting enforced on ALL requests including unauthenticated: 10 read / 3 write req/min for unauthenticated; 100 read / 10 write for authenticated. Auth endpoints: 5/min.
   - **QMS-031** (Low): Unauthenticated requests to protected API endpoints return consistent `401 Authentication required` regardless of endpoint existence, preventing enumeration. Authenticated enumeration mitigated by RBAC permission checks returning `403`.
   - **QMS-032** (Low): UUID `public_id` columns added to 9+ tables. API responses use `obfuscateResourceIds()` to replace sequential IDs with `R-XXXXXXXX` format references.
@@ -766,7 +767,7 @@ A `.env.example` file is included in the project root with all variables documen
 - **Domain:** https://qms-dashboard.replit.app
 - **Process:** Publish via Replit dashboard (automatic build, TLS, health checks)
 - **Server:** Mastra dev server on port 5000 serving both API and HTML dashboards
-- **Inngest:** Dev server on port 3000 for workflow orchestration
+- **Inngest:** Dev server on port 3000 available for workflow orchestration (not required — audit runs via direct execution)
 - **Auto-restart:** Health checks ensure uptime
 
 ---
@@ -1219,6 +1220,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses direct execution, admin key login redirects to dashboard, inngest.sh fixed, QMS-024 pentest finding description corrected | CSP, auth, and audit trigger accuracy verified |
 | Apr 9, 2026 | SOP v3.4: Restored auth documentation (authRoutes.ts with Replit OIDC + HMAC-SHA256 session signing), corrected CSP to reflect nonce-based implementation, documented tiered rate limiting (100/10/5/10 + unauth 10/3), updated VAPT status to 37/37 post-retest remediation, unified role system across rbacDatabase and userAccessDatabase | SOP accuracy verified against deployed codebase |
 | Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
 | Apr 8, 2026 | SOP v3.2: Comprehensive codebase audit — expanded database to 97+ tables, added PDPL backend (data inventory, DSAR, AI guardrails, SHA-256 audit log), ROI engine (8 cost tables + AI validation), Call Intelligence (8 tables incl. transcripts, QA scores, MOM), handoff/control system, escalation system, vendor assessments, policy versions/acknowledgments, risk history, compliance calendar, evidence packs, onboarding system, sandbox/mock endpoints, admin governance/scorecard management, API architecture section, Zoho write capabilities, Google Calendar integration, Slack/Telegram triggers, MFA schema, access audit log, data scopes, screen permissions | SOP now reflects complete implemented codebase |
