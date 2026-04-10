@@ -1,7 +1,7 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 3.5
+**Version:** 3.6
 **Last Updated:** April 9, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
@@ -15,7 +15,7 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 3.5 |
+| **Version** | 3.6 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
@@ -36,6 +36,7 @@
 | 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
 | 3.4 | Apr 9, 2026 | Engineering | Restored auth documentation (authRoutes.ts with OIDC + HMAC-SHA256 session signing exists in codebase), corrected CSP to reflect nonce implementation, documented tiered rate limiting, updated VAPT status to reflect post-retest remediation of final 5 findings, unified role system |
 | 3.5 | Apr 9, 2026 | Engineering | CSP nonce removed (CSP Level 3 conflict with inline handlers), page-level auth now accepts admin_key cookie alongside session cookie, audit trigger uses Inngest-first with direct execution fallback, admin key login redirects to dashboard, inngest.sh DATABASE_URL check fixed, smoke test routes added (/api/health, /api/smoke) |
+| 3.6 | Apr 9, 2026 | Engineering | 22-fix security hardening: SQL injection fixes (parameterized make_interval in getTrendData, getRiskTrends, getUpcomingDeadlines), path traversal fix in screenshot endpoint, kpiDatabase table name corrections, crmComplianceTool fake data removal + Zoho datacenter URL fix, OIDC nonce verification, directAuditRunner trigger chain, eventLogsDatabase error propagation, UUID treatment action resolution, dashboard HTML fixes (policies.html, executive.html, pdpl.html), comprehensive auth guards on rbacRoutes/duplicateRadarRoutes/callIntelligenceRoutes/pdplRoutes (all endpoints require admin/session auth), Telegram webhook secret validation, Linear webhook HMAC-SHA256 signature verification |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -605,7 +606,8 @@ Default (global) endpoints work for most other regions:
 ### 8.3 External Notification Triggers
 - **Cron Triggers:** Configurable scheduled triggers for weekly/monthly audits (`src/triggers/cronTriggers.ts`)
 - **Slack Integration:** Automated notifications to Slack channels (`src/triggers/slackTrigger.ts`)
-- **Telegram Integration:** Automated notifications to Telegram chats (`src/triggers/telegramTrigger.ts`)
+- **Telegram Integration:** Automated notifications to Telegram chats (`src/triggers/telegramTrigger.ts`). Webhook endpoint protected by `TELEGRAM_WEBHOOK_SECRET` query parameter validation when the secret is configured.
+- **Linear Webhook Integration:** Issue-created webhook handler (`src/triggers/exampleConnectorTrigger.ts`) with HMAC-SHA256 signature verification when `LINEAR_WEBHOOK_SECRET` is configured. Uses `timingSafeEqual` for constant-time signature comparison to prevent timing attacks.
 
 ---
 
@@ -614,7 +616,8 @@ Default (global) endpoints work for most other regions:
 ### 9.1 Authentication
 - **Replit OIDC:** Primary login via Replit's OpenID Connect provider (`authRoutes.ts`). Discovery URL: `https://replit.com/oidc`
 - **Supported providers:** Google, GitHub, Apple, and email (via Replit OIDC)
-- **OIDC callback:** `/api/callback` handles token exchange, user profile sync, and session creation
+- **OIDC callback:** `/api/callback` handles token exchange, nonce verification (v3.6), user profile sync, and session creation
+- **OIDC nonce verification (v3.6):** The authorization flow generates a cryptographic nonce stored in an HttpOnly cookie (`oidc_nonce`). On callback, the `id_token` nonce claim is verified against the stored nonce to prevent replay attacks. Mismatches are rejected with a 403 error.
 - **Session signing:** HMAC-SHA256 signed stateless tokens (`signSession()` / `verifySession()` in `authRoutes.ts`)
 - **Session cookie:** `walaplus_session` — HttpOnly, Secure, SameSite=Lax, 7-day expiry (`SESSION_MAX_AGE = 604800`)
 - **Logout:** POST-only `/api/logout` — clears session cookie, prevents CSRF-based logout
@@ -627,13 +630,16 @@ Default (global) endpoints work for most other regions:
 - **RBAC:** Centralized role-based access control enforced globally via route permission map
 - **11 roles** with granular per-endpoint permissions (see Section 3.1): admin, quality_manager, quality_specialist, grc_manager, team_lead, department_viewer, auditor, ai_specialist, bu_owner, executive, custom
 - **Permission examples:** `can_accept_risk`, `can_approve_policy`, `can_close_finding`, `can_manage_users`
-- **Admin API Key:** Alternative authentication via `X-Admin-Key` header for system-level or automated access
+- **Admin API Key:** Alternative authentication via `X-Admin-Key` header or `admin_key` cookie for system-level or automated access
+- **Route-level auth enforcement (v3.6):** All API endpoints across RBAC, PDPL, Call Intelligence, and Duplicate Radar modules require `requireAdminOrKey` authentication — unauthenticated requests return `401 Authentication required` regardless of HTTP method (GET/POST/PUT/PATCH/DELETE)
 - **Policy approval gate:** GRC Manager role required to approve policies before publication
 - **Escalation:** Overdue CAPAs and risk treatments automatically escalated to executive level
 
 ### 9.3 Data Protection
 - **CSP:** Content Security Policy with `'unsafe-inline'` for `script-src` to support inline event handlers (`onclick` attributes used throughout dashboard HTML). `unsafe-eval` removed. `style-src` retains `unsafe-inline` for CDN Tailwind CSS compatibility. Nonce-based CSP was previously implemented but removed in v3.5 because CSP Level 3 browsers ignore `'unsafe-inline'` when a nonce is present — this silently blocked all `onclick` handlers across the dashboard (login button, audit triggers, filter buttons).
 - **CSP directive:** `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`
+- **SQL injection prevention (v3.6):** All dynamic SQL interval expressions use parameterized `make_interval(days => $N)` with integer clamping (1–365 days) instead of string interpolation. Affected functions: `getTrendData()`, `getRiskTrends()`, `getUpcomingDeadlines()`.
+- **Path traversal prevention (v3.6):** Screenshot endpoint (`/docs/screenshots/:filename`) validates filenames against `..`, `/`, `\\` traversal characters and enforces image extension allowlist (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`).
 - **Input sanitization** (`inputSanitizer.ts`):
   - HTML/script tag stripping (XSS prevention)
   - CSV formula injection prevention (prefixes `=`, `+`, `-`, `@` with single quote)
@@ -694,6 +700,8 @@ Default (global) endpoints work for most other regions:
 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | https://api.openai.com/v1 | OpenAI endpoint |
 | `RESEND_API_KEY` | — | Email delivery via Resend |
 | `RESEND_FROM_EMAIL` | — | Sender address for quality report emails |
+| `TELEGRAM_WEBHOOK_SECRET` | — | Telegram webhook secret for validating incoming webhook requests |
+| `LINEAR_WEBHOOK_SECRET` | — | Linear webhook HMAC signing secret for signature verification |
 
 ### 10.3 Reference File
 A `.env.example` file is included in the project root with all variables documented. Do not deploy this file.
@@ -1220,6 +1228,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Apr 9, 2026 | SOP v3.6: 22-fix security hardening — SQL injection (parameterized intervals), path traversal, fake data removal, OIDC nonce, auth guards on all RBAC/PDPL/CallIntel/DuplicateRadar endpoints, webhook secret validation (Telegram + Linear HMAC), audit trigger chain, error propagation, UUID resolution, dashboard HTML fixes | All API endpoints require authentication; webhook endpoints secured; SQL injection vectors eliminated |
 | Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses Inngest-first with direct fallback, admin key login redirects to dashboard, inngest.sh fixed, smoke test routes added, QMS-024 pentest finding description corrected | CSP, auth, and audit trigger accuracy verified |
 | Apr 9, 2026 | SOP v3.4: Restored auth documentation (authRoutes.ts with Replit OIDC + HMAC-SHA256 session signing), corrected CSP to reflect nonce-based implementation, documented tiered rate limiting (100/10/5/10 + unauth 10/3), updated VAPT status to 37/37 post-retest remediation, unified role system across rbacDatabase and userAccessDatabase | SOP accuracy verified against deployed codebase |
 | Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
