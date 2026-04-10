@@ -989,7 +989,6 @@ export const mastra = new Mastra({
               const body = await c.req.json();
               const key = body?.key;
               const expectedKey = process.env.ADMIN_API_KEY;
-              console.log(`[AdminAuth] key length: ${key?.length}, expected length: ${expectedKey?.length}, match: ${key === expectedKey}`);
               if (!expectedKey || !key || key !== expectedKey) {
                 return c.json({ error: 'Authentication required' }, 401);
               }
