@@ -1012,6 +1012,22 @@ export const mastra = new Mastra({
         },
       },
       {
+        path: "/api/admin/auth/verify",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            const cookie = c.req.header('cookie') || '';
+            const match = cookie.match(/admin_key=([^;]+)/);
+            const key = match ? match[1] : null;
+            const expectedKey = process.env.ADMIN_API_KEY;
+            if (expectedKey && key && key === expectedKey) {
+              return c.json({ authenticated: true });
+            }
+            return c.json({ authenticated: false }, 401);
+          };
+        },
+      },
+      {
         path: "/api/admin/documents",
         method: "GET",
         createHandler: async ({ mastra }) => {

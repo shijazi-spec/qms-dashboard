@@ -739,11 +739,31 @@
             let useSessionAuth = false;
 
             async function checkAuth() {
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const res = await fetch('/api/auth/me');
+                        if (res.status === 429) {
+                            await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+                            continue;
+                        }
+                        const data = await res.json();
+                        if (data.authenticated) {
+                            useSessionAuth = true;
+                            return true;
+                        }
+                        break;
+                    } catch(e) {
+                        if (attempt < 2) {
+                            await new Promise(r => setTimeout(r, 2000));
+                            continue;
+                        }
+                    }
+                }
+
                 try {
-                    const res = await fetch('/api/auth/me');
-                    const data = await res.json();
-                    if (data.authenticated) {
-                        useSessionAuth = true;
+                    const adminCheck = await fetch('/api/admin/auth/verify', { method: 'GET', credentials: 'same-origin' });
+                    if (adminCheck.ok) {
+                        adminAuthenticated = true;
                         return true;
                     }
                 } catch(e) {}
@@ -772,7 +792,7 @@
                             <h1 class="text-xl font-bold text-gray-900 mb-2">Authentication Required</h1>
                             <p class="text-gray-600 mb-4">Admin API key is required to access the QMS Dashboard.</p>
                             <button onclick="location.reload()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Try Again</button>
-                            <p class="mt-4"><a href="/dashboard" class="text-blue-600 hover:underline">Return to Main Dashboard</a></p>
+                            <p class="mt-4"><a href="/" class="text-blue-600 hover:underline">Return to Main Dashboard</a></p>
                         </div>
                     </div>
                 `;

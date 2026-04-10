@@ -108,6 +108,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## Recent Changes
+- Testing tracker v4.0 bug fixes (Apr 2026): Admin key login inline error feedback (was alert() → now banner), QMS checkAuth 429 retry with backoff + server-side admin key verify endpoint, GRC Array.isArray guards for rules/controls tables, Scorecard CDN switched from unpkg.com to jsdelivr, PDPL GET routes changed from requireAdminOrKey to requireAuthOrKey for read access, added /api/admin/auth/verify endpoint for HttpOnly cookie verification
 - Pentest retest remediation complete (37/37 findings fixed): CSP nonce-based script-src, rate limiting (10 read/3 write), 404→403 enumeration prevention, UUID public_id obfuscation on all API responses (risks/vendors/compliance/feedback), dashboard UUID-aware onclick handlers, resolveGenericId for cross-module UUID resolution, export CSV + feedback 500 errors fixed (Apr 2026)
 - Pentest v3.0 remediation (Task #3): Error message sanitization, password policy, invitation dedup, CSV formula prevention, ROI validation, rate limit tightening, CSP hardening, auth added to checklist/calendar POST endpoints (Mar 2026)
 - Pentest v3.0 remediation (Task #2): Centralized RBAC middleware with ROUTE_PERMISSION_MAP, enforceRoutePermission globally applied, status change blocking, invitation token masking (Mar 2026)

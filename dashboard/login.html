@@ -101,15 +101,20 @@
         async function loginWithAdminKey() {
             const key = document.getElementById('admin-key-input').value.trim();
             if (!key) return;
+            const banner = document.getElementById('error-banner');
+            const msg = document.getElementById('error-message');
+            banner.classList.add('hidden');
             try {
                 const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
                 if (res.ok) {
                     window.location.href = '/';
                 } else {
-                    alert('Invalid admin key');
+                    banner.classList.remove('hidden');
+                    msg.textContent = 'Invalid admin key. Please check and try again.';
                 }
             } catch(e) {
-                alert('Authentication failed');
+                banner.classList.remove('hidden');
+                msg.textContent = 'Authentication failed. Please try again.';
             }
         }
 
