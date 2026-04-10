@@ -617,7 +617,7 @@ Default (global) endpoints work for most other regions:
 - **Replit OIDC:** Primary login via Replit's OpenID Connect provider (`authRoutes.ts`). Discovery URL: `https://replit.com/oidc`
 - **Supported providers:** Google, GitHub, Apple, and email (via Replit OIDC)
 - **OIDC callback:** `/api/callback` handles token exchange, nonce verification (v3.6), user profile sync, and session creation
-- **OIDC nonce verification (v3.6):** The authorization flow generates a cryptographic nonce stored in an HttpOnly cookie (`oidc_nonce`). On callback, the `id_token` nonce claim is verified against the stored nonce to prevent replay attacks. Mismatches are rejected with a 403 error.
+- **OIDC nonce verification (v3.6):** The authorization flow generates a cryptographic nonce stored inside the `oauth_data` HttpOnly cookie as part of a base64url-encoded JSON object (`{state, nonce, verifier}`). On callback, the `id_token` nonce claim is verified against the stored nonce to prevent replay attacks. Mismatches redirect to `/login?error=nonce_mismatch`.
 - **Session signing:** HMAC-SHA256 signed stateless tokens (`signSession()` / `verifySession()` in `authRoutes.ts`)
 - **Session cookie:** `walaplus_session` — HttpOnly, Secure, SameSite=Lax, 7-day expiry (`SESSION_MAX_AGE = 604800`)
 - **Logout:** POST-only `/api/logout` — clears session cookie, prevents CSRF-based logout
