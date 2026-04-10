@@ -1,4 +1,4 @@
-import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+import { requireAdminOrKey, requireAuthOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
 
 export const pdplRoutes = [
   {
@@ -7,7 +7,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -33,7 +33,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -117,7 +117,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -201,7 +201,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -256,7 +256,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -340,7 +340,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -418,7 +418,7 @@ export const pdplRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = requireAuthOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
