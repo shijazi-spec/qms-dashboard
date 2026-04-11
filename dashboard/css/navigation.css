@@ -16,8 +16,20 @@
 .nav-dropdown .dropdown-menu {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px);
-  transition: all 0.2s ease;
+  transform: translateY(-4px);
+  transition: all 0.15s ease;
+  top: 100%;
+  padding-top: 4px;
+  margin-top: 0;
+}
+
+.nav-dropdown .dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 12px;
 }
 
 .nav-dropdown .dropdown-menu:not(.hidden) {

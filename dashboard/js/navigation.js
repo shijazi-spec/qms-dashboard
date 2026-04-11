@@ -250,7 +250,7 @@ const WalaPlusNav = {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
         </button>
-        <div class="dropdown-menu absolute left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 hidden">
+        <div class="dropdown-menu absolute left-0 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 hidden">
           ${group.items.map(item => this.renderDropdownItem(item, colors)).join('')}
         </div>
       </div>
@@ -307,28 +307,51 @@ const WalaPlusNav = {
       const btn = dropdown.querySelector('button');
       const menu = dropdown.querySelector('.dropdown-menu');
       const arrow = dropdown.querySelector('.dropdown-arrow');
+      let hideTimeout = null;
       
+      const showMenu = () => {
+        if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+        this.closeAllDropdowns();
+        menu.classList.remove('hidden');
+        arrow.classList.add('rotate-180');
+      };
+
+      const hideMenu = () => {
+        hideTimeout = setTimeout(() => {
+          menu.classList.add('hidden');
+          arrow.classList.remove('rotate-180');
+          hideTimeout = null;
+        }, 150);
+      };
+
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
         this.closeAllDropdowns();
         if (!isOpen) {
-          menu.classList.remove('hidden');
-          arrow.classList.add('rotate-180');
+          showMenu();
         }
       });
       
       dropdown.addEventListener('mouseenter', () => {
         if (window.innerWidth >= 640) {
-          menu.classList.remove('hidden');
-          arrow.classList.add('rotate-180');
+          showMenu();
         }
       });
       
       dropdown.addEventListener('mouseleave', () => {
         if (window.innerWidth >= 640) {
-          menu.classList.add('hidden');
-          arrow.classList.remove('rotate-180');
+          hideMenu();
+        }
+      });
+
+      menu.addEventListener('mouseenter', () => {
+        if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+      });
+
+      menu.addEventListener('mouseleave', () => {
+        if (window.innerWidth >= 640) {
+          hideMenu();
         }
       });
     });
