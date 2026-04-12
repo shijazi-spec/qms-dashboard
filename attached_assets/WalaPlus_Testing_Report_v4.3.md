@@ -30,7 +30,9 @@
 | ROI | 14 `parseInt()` guards added — invalid IDs return 400 instead of crashing with 500 |
 | Security | Admin key comparison uses independent header/cookie check — no false negatives |
 | Slack App API | Slack integration switched to direct Slack App API (`@slack/web-api`). Live `auth.test` confirms bot `walaplus_qms` on WalaPlus workspace. Scopes: `chat:write`, `chat:write.public`. Missing: `channels:read`, `groups:read`, `im:read`, `mpim:read` (to be added in Slack App settings at api.slack.com) |
+| Slack Notifications | New `slackNotifications.ts` module sends rich Block Kit messages to `SLACK_QMS_CHANNEL` on: Audit Completed, Nonconformance Detected, CAPA Required. Integrated into trigger functions with try/catch (non-blocking). Verified: 2 messages delivered to channel on audit run |
 | Integrations API | `/api/integrations/status` now includes Slack with live auth test, workspace, bot name, current scopes, and missing scopes |
+| Admin Panel | `/admin` page now accessible via `admin_key` cookie (was requiring both header + OIDC session). Slack App API card added to integrations section with live status badge |
 | Platform Metrics | Updated to reflect 25/25 pages, 29/30 APIs confirmed |
 
 ---

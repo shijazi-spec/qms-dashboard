@@ -203,6 +203,13 @@ export async function fireAuditCompletedTrigger(
     is_read: false
   });
 
+  try {
+    const { sendAuditCompletedNotification } = await import('./slackNotifications');
+    await sendAuditCompletedNotification(null, auditResult);
+  } catch (slackErr) {
+    console.error('[Slack] Audit notification failed (non-blocking):', slackErr);
+  }
+
   return trigger;
 }
 
@@ -255,6 +262,13 @@ export async function fireNonconformanceDetectedTrigger(
     });
   }
 
+  try {
+    const { sendNonconformanceNotification } = await import('./slackNotifications');
+    await sendNonconformanceNotification(null, ncDetails);
+  } catch (slackErr) {
+    console.error('[Slack] NC notification failed (non-blocking):', slackErr);
+  }
+
   return trigger;
 }
 
@@ -292,6 +306,13 @@ export async function fireCAPARequiredTrigger(
     message: trigger.description!,
     is_read: false
   });
+
+  try {
+    const { sendCAPARequiredNotification } = await import('./slackNotifications');
+    await sendCAPARequiredNotification(null, capaDetails);
+  } catch (slackErr) {
+    console.error('[Slack] CAPA notification failed (non-blocking):', slackErr);
+  }
 
   return trigger;
 }
