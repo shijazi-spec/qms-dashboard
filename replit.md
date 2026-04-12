@@ -54,6 +54,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/logs` - System Event Logs
 - `/pdpl` - PDPL Privacy Compliance
 - `/users` - Users & Access Control
+- `/consultant` - AI Consultant & Assistant (chat interface with 8 AI tools)
 - `/sandbox` - Testing Sandbox
 - `/kpis` - KPI Tracking
 - `/scorecard` - Scorecard
@@ -106,6 +107,15 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Additional QMS tables created via `npx tsx scripts/createQMSTables.ts`
 - Core tables: quality_scorecards, quality_audit_results, quality_trends, governance_documents + 30+ others
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
+
+## AI Consultant Feature
+- **Agent**: `qmsConsultantAgent.ts` - GPT-4o-mini powered QMS consultant with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents)
+- **Tools**: `queryPlatformDataTool.ts`, `analyzeNonconformitiesTool.ts`, `suggestImprovementsTool.ts`, `checkRegulationComplianceTool.ts`, `monitorKPIsTool.ts`, `monitorRisksTool.ts`, `createAlertTool.ts`, `reviewDocumentTool.ts`
+- **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks (NCs without CAPA, high risks, overdue treatments, missed KPIs, expiring policies, PDPL gaps, audit score decline, training gaps) running every 6 hours via Inngest
+- **Alerts Database**: `aiAlertsDatabase.ts` - ai_alerts table with CRUD, dedup, severity-ordered queries
+- **Routes**: `consultantRoutes.ts` - `/api/consultant/chat`, `/api/consultant/chat/stream` (SSE), `/api/consultant/alerts`, `/api/consultant/alerts/count`, `/api/consultant/scan`
+- **Frontend**: `dashboard/consultant.html` - Full chat interface with sidebar quick actions, markdown rendering, streaming responses, alert bell integration
+- **Navigation**: Alert bell in nav bar polls `/api/consultant/alerts/count` every 60s, links to `/consultant`
 
 ## Recent Changes
 - Slack webhook dual-path (Apr 2026): Webhook now accessible at both /webhooks/slack/action AND /api/webhooks/slack/action. Both paths are public (no auth required) and rate-limited. Challenge verification works on both paths for Slack Event Subscriptions URL verification.

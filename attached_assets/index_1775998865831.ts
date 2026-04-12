@@ -13,7 +13,6 @@ import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
 import { registerCronTrigger } from "../triggers/cronTriggers";
-import { registerSlackTrigger } from "../triggers/slackTriggers";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "./agents/sdrQualityAgent";
 import { salesQualityAgent } from "./agents/salesQualityAgent";
@@ -40,8 +39,9 @@ import { pdplRoutes } from "./routes/pdplRoutes";
 import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
-import { consultantRoutes } from "./routes/consultantRoutes";
 import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
+import { consultantRoutes } from "./routes/consultantRoutes";
+import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
 import { checkRateLimit } from "../utils/rateLimiter";
 import { randomBytes } from "crypto";
@@ -95,7 +95,7 @@ class ProductionPinoLogger extends MastraLogger {
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
   workflows: { qualityAuditWorkflow },
-  agents: { qualitySpecialistAgent },
+  agents: { qualitySpecialistAgent, qmsConsultantAgent },
   mcpServers: {
     allTools: new MCPServer({
       name: "allTools",
@@ -156,22 +156,13 @@ export const mastra = new Mastra({
         c.header('X-Frame-Options', 'DENY');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
         c.header('X-XSS-Protection', '1; mode=block');
-        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'`);
+        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/api/webhooks/slack', '/test/slack'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
-
-        if (urlPath.startsWith('/webhooks/') || urlPath.startsWith('/api/webhooks/') || urlPath.startsWith('/test/slack')) {
-          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
-          const rateCheck = checkRateLimit(ip, false, urlPath, true);
-          if (!rateCheck.allowed) {
-            c.header('Retry-After', String(rateCheck.retryAfter || 60));
-            return c.json({ error: 'Too many requests' }, 429);
-          }
-        }
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
           const adminKey = c.req.header('X-Admin-Key');
@@ -199,7 +190,7 @@ export const mastra = new Mastra({
           isAuthenticated = true;
         }
 
-        if (isApi && !isPublic) {
+        if (isApi && !isPublic && !isMastraInternal) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
           const adminKeyHeader = c.req.header('X-Admin-Key');
           const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
@@ -208,10 +199,6 @@ export const mastra = new Mastra({
           const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
 
           isAuthenticated = !!(session || hasAdminKey);
-
-          if (isMastraInternal && !isAuthenticated) {
-            return c.json({ error: 'Access denied' }, 403);
-          }
 
           const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
           const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -409,41 +396,11 @@ export const mastra = new Mastra({
                 process.env.GOOGLE_CLIENT_EMAIL
               );
               
-              const hasSlackToken = !!(process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN);
-              let slackStatus: { connected: boolean; message: string; workspace?: string; bot?: string; scopes?: string[]; missingScopes?: string[] } = {
-                connected: false,
-                message: 'Not configured'
-              };
-
-              if (hasSlackToken) {
-                try {
-                  const { WebClient } = await import('@slack/web-api');
-                  const slackClient = new WebClient(process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN);
-                  const authResult = await slackClient.auth.test();
-                  if (authResult.ok) {
-                    const currentScopes = (authResult as any).response_metadata?.scopes || [];
-                    const requiredScopes = ['chat:write', 'channels:read', 'groups:read', 'im:read', 'mpim:read'];
-                    const missing = requiredScopes.filter(s => !currentScopes.includes(s));
-                    slackStatus = {
-                      connected: true,
-                      message: missing.length > 0 ? `Connected (${missing.length} scopes pending)` : 'Fully connected',
-                      workspace: (authResult as any).team,
-                      bot: (authResult as any).user,
-                      scopes: currentScopes,
-                      missingScopes: missing.length > 0 ? missing : undefined
-                    };
-                  }
-                } catch (slackErr: any) {
-                  slackStatus = { connected: false, message: `Auth failed: ${slackErr?.message || 'unknown error'}` };
-                }
-              }
-
               return c.json({
                 zoho: {
                   connected: hasOAuthConfig || hasStaticToken,
                   message: (hasOAuthConfig || hasStaticToken) ? 'Connected' : 'Not configured'
                 },
-                slack: slackStatus,
                 googleCalendar: {
                   connected: hasGoogleCalendar,
                   message: hasGoogleCalendar ? 'Connected' : 'Not configured'
@@ -909,11 +866,8 @@ export const mastra = new Mastra({
             try {
               const adminKey = process.env.ADMIN_API_KEY;
               const providedKey = c.req.header('X-Admin-Key');
-              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              const hasValidAdmin = adminKey && (providedKey === adminKey || adminKeyCookie === adminKey);
-              const hasAdminSession = session && session.role === 'admin';
-              if (!hasValidAdmin && !hasAdminSession) {
+              if (!adminKey || !providedKey || providedKey !== adminKey || !session || session.role !== 'admin') {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>
@@ -1060,32 +1014,15 @@ export const mastra = new Mastra({
         },
       },
       {
-        path: "/api/admin/auth/verify",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            const cookie = c.req.header('cookie') || '';
-            const match = cookie.match(/admin_key=([^;]+)/);
-            const key = match ? match[1] : null;
-            const expectedKey = process.env.ADMIN_API_KEY;
-            if (expectedKey && key && key === expectedKey) {
-              return c.json({ authenticated: true });
-            }
-            return c.json({ authenticated: false }, 401);
-          };
-        },
-      },
-      {
         path: "/api/admin/documents",
         method: "GET",
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
-              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
               
-              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
               const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
               if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Authentication required" }, 401);
@@ -2531,6 +2468,328 @@ export const mastra = new Mastra({
           };
         },
       },
+      // ======================================================================
+      // Mock Data & Testing Sandbox API Endpoints
+      // ======================================================================
+      {
+        path: "/api/sandbox/mode",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            const logger = mastra?.getLogger();
+            logger?.info("🧪 [Sandbox] Getting data mode");
+            const { getDataMode } = await import("../data");
+            const mode = getDataMode();
+            return c.json({ status: 'active' });
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/stats",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Getting mock data stats");
+              const { getMockDataStats } = await import("../data");
+              const stats = getMockDataStats();
+              return c.json(stats);
+            } catch (error) {
+              console.error("Error getting mock data stats:", error);
+              return c.json({ error: "Failed to get mock data stats" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/leads",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching leads");
+              const { getLeads } = await import("../data");
+              const leads = await getLeads();
+              return c.json({ leads, count: leads.length });
+            } catch (error) {
+              console.error("Error fetching leads:", error);
+              return c.json({ error: "Failed to fetch leads" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/deals",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching deals");
+              const { getDeals } = await import("../data");
+              const deals = await getDeals();
+              return c.json({ deals, count: deals.length });
+            } catch (error) {
+              console.error("Error fetching deals:", error);
+              return c.json({ error: "Failed to fetch deals" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/activities",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching activities");
+              const { getActivities } = await import("../data");
+              const activities = await getActivities();
+              return c.json({ activities, count: activities.length });
+            } catch (error) {
+              console.error("Error fetching activities:", error);
+              return c.json({ error: "Failed to fetch activities" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/users",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching users");
+              const { getUsers } = await import("../data");
+              const users = await getUsers();
+              return c.json({ users, count: users.length });
+            } catch (error) {
+              console.error("Error fetching users:", error);
+              return c.json({ error: "Failed to fetch users" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/calendar",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching calendar events");
+              const { getCalendarEvents } = await import("../data");
+              const events = await getCalendarEvents();
+              return c.json({ events, count: events.length });
+            } catch (error) {
+              console.error("Error fetching calendar events:", error);
+              return c.json({ error: "Failed to fetch calendar events" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/calls",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching Five9 calls");
+              const { getFive9Calls } = await import("../data");
+              const calls = await getFive9Calls();
+              return c.json({ calls, count: calls.length });
+            } catch (error) {
+              console.error("Error fetching calls:", error);
+              return c.json({ error: "Failed to fetch calls" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/leads",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              const body = await c.req.json();
+              logger?.info("🧪 [Sandbox] Adding lead", body);
+              const { addLead } = await import("../data");
+              const lead = await addLead(body);
+              return c.json({ success: true, lead });
+            } catch (error) {
+              console.error("Error adding lead:", error);
+              return c.json({ error: "Failed to add lead" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/deals",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              const body = await c.req.json();
+              logger?.info("🧪 [Sandbox] Adding deal", body);
+              const { addDeal } = await import("../data");
+              const deal = await addDeal(body);
+              return c.json({ success: true, deal });
+            } catch (error) {
+              console.error("Error adding deal:", error);
+              return c.json({ error: "Failed to add deal" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/audit",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Running audit on mock data");
+              
+              const { getLeads, getDeals, getActivities, getCalendarEvents, getFive9Calls, getDataMode } = await import("../data");
+              
+              const mode = getDataMode();
+              const leads = await getLeads();
+              const deals = await getDeals();
+              const activities = await getActivities();
+              const calendarEvents = await getCalendarEvents();
+              const calls = await getFive9Calls();
+              
+              const leadIssues: any[] = [];
+              leads.forEach(lead => {
+                if (!lead.Email) leadIssues.push({ id: lead.id, issue: 'Missing email', field: 'Email', severity: 'high' });
+                else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.Email)) leadIssues.push({ id: lead.id, issue: 'Invalid email format', field: 'Email', severity: 'medium' });
+                if (!lead.Lead_Source) leadIssues.push({ id: lead.id, issue: 'Missing lead source', field: 'Lead_Source', severity: 'medium' });
+                if (!lead.Lead_Status) leadIssues.push({ id: lead.id, issue: 'Missing lead status', field: 'Lead_Status', severity: 'high' });
+                if (!lead.Owner) leadIssues.push({ id: lead.id, issue: 'Missing owner', field: 'Owner', severity: 'high' });
+                if (lead.Phone && !/^[+]?[\d\s\-()]+$/.test(lead.Phone)) leadIssues.push({ id: lead.id, issue: 'Invalid phone format', field: 'Phone', severity: 'low' });
+              });
+              
+              const dealIssues: any[] = [];
+              deals.forEach(deal => {
+                if (!deal.Deal_Name) dealIssues.push({ id: deal.id, issue: 'Missing deal name', field: 'Deal_Name', severity: 'critical' });
+                if (!deal.Stage) dealIssues.push({ id: deal.id, issue: 'Missing stage', field: 'Stage', severity: 'critical' });
+                if (!deal.Amount) dealIssues.push({ id: deal.id, issue: 'Missing amount', field: 'Amount', severity: 'high' });
+                if (!deal.Closing_Date) dealIssues.push({ id: deal.id, issue: 'Missing closing date', field: 'Closing_Date', severity: 'high' });
+                if (!deal.Owner) dealIssues.push({ id: deal.id, issue: 'Missing owner', field: 'Owner', severity: 'high' });
+              });
+              
+              const activityIssues: any[] = [];
+              activities.forEach(activity => {
+                if (!activity.Subject) activityIssues.push({ id: activity.id, issue: 'Missing subject', field: 'Subject', severity: 'high' });
+                if (!activity.Due_Date) activityIssues.push({ id: activity.id, issue: 'Missing due date', field: 'Due_Date', severity: 'medium' });
+                if (!activity.Owner) activityIssues.push({ id: activity.id, issue: 'Missing owner', field: 'Owner', severity: 'high' });
+              });
+              
+              const calendarIssues: any[] = [];
+              calendarEvents.forEach(event => {
+                if (!event.related_crm_record && event.attendees.some(a => !a.includes('@walaplus.com'))) {
+                  calendarIssues.push({ id: event.id, issue: 'External meeting not logged in CRM', field: 'related_crm_record', severity: 'medium' });
+                }
+              });
+              
+              const callIssues: any[] = [];
+              calls.forEach(call => {
+                if (!call.related_crm_record && call.duration_seconds > 60) {
+                  callIssues.push({ id: call.id, issue: 'Call not linked to CRM record', field: 'related_crm_record', severity: 'medium' });
+                }
+                if (!call.agent_id) callIssues.push({ id: call.id, issue: 'Missing agent information', field: 'agent_id', severity: 'high' });
+              });
+              
+              const totalIssues = leadIssues.length + dealIssues.length + activityIssues.length + calendarIssues.length + callIssues.length;
+              const totalRecords = leads.length + deals.length + activities.length + calendarEvents.length + calls.length;
+              
+              const criticalCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'critical').length;
+              const highCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'high').length;
+              const mediumCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'medium').length;
+              const lowCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'low').length;
+              
+              const peopleScore = Math.max(0, 100 - (highCount * 3) - (mediumCount * 1.5));
+              const processScore = Math.max(0, 100 - (criticalCount * 5) - (highCount * 2));
+              const governanceScore = Math.max(0, 100 - (totalIssues * 1.2));
+              const overallScore = Math.round((peopleScore * 0.25) + (processScore * 0.35) + (governanceScore * 0.40));
+              
+              const result = {
+                mode,
+                timestamp: new Date().toISOString(),
+                summary: {
+                  totalRecords,
+                  totalIssues,
+                  criticalCount,
+                  highCount,
+                  mediumCount,
+                  lowCount,
+                },
+                scores: {
+                  overall: overallScore,
+                  people: Math.round(peopleScore),
+                  process: Math.round(processScore),
+                  governance: Math.round(governanceScore),
+                },
+                moduleBreakdown: {
+                  leads: { records: leads.length, issues: leadIssues.length, details: leadIssues.slice(0, 10) },
+                  deals: { records: deals.length, issues: dealIssues.length, details: dealIssues.slice(0, 10) },
+                  activities: { records: activities.length, issues: activityIssues.length, details: activityIssues.slice(0, 10) },
+                  calendar: { records: calendarEvents.length, issues: calendarIssues.length, details: calendarIssues.slice(0, 10) },
+                  calls: { records: calls.length, issues: callIssues.length, details: callIssues.slice(0, 10) },
+                },
+                recommendations: [
+                  criticalCount > 0 ? `Fix ${criticalCount} critical issues immediately (missing deal names/stages)` : null,
+                  highCount > 0 ? `Address ${highCount} high-priority issues (missing owners, emails, amounts)` : null,
+                  leadIssues.length > 5 ? `SDR Team: Improve lead data quality - ${leadIssues.length} issues found` : null,
+                  dealIssues.length > 5 ? `Sales Team: Improve deal data quality - ${dealIssues.length} issues found` : null,
+                  calendarIssues.length > 0 ? `Log all external meetings in CRM for better tracking` : null,
+                ].filter(Boolean),
+              };
+              
+              logger?.info("✅ [Sandbox] Audit completed", { totalIssues, overallScore });
+              return c.json(result);
+            } catch (error) {
+              console.error("Error running sandbox audit:", error);
+              return c.json({ error: "Failed to run audit" }, 500);
+            }
+          };
+        },
+      },
+      // Testing Sandbox Page
+      {
+        path: "/sandbox",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "sandbox.html"),
+                join(process.cwd(), "..", "dashboard", "sandbox.html"),
+                "/home/runner/workspace/dashboard/sandbox.html",
+              ];
+              
+              for (const sandboxPath of possiblePaths) {
+                if (existsSync(sandboxPath)) {
+                  const html = readFileSync(sandboxPath, "utf-8");
+                  return c.html(html);
+                }
+              }
+              
+              return c.text("Testing Sandbox not found", 404);
+            } catch (error) {
+              console.error("Error serving sandbox:", error);
+              return c.text("Error loading Testing Sandbox", 500);
+            }
+          };
+        },
+      },
       // CRM Data Viewer Page
       {
         path: "/crm",
@@ -2863,36 +3122,6 @@ export const mastra = new Mastra({
             } catch (error) {
               console.error("Error serving User Guide page:", error);
               return c.text("Error loading User Guide", 500);
-            }
-          };
-        },
-      },
-      // ======================================================================
-      // AI Consultant Page
-      // ======================================================================
-      {
-        path: "/consultant",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "dashboard", "consultant.html"),
-                join(process.cwd(), "..", "dashboard", "consultant.html"),
-                "/home/runner/workspace/dashboard/consultant.html",
-              ];
-              
-              for (const consultantPath of possiblePaths) {
-                if (existsSync(consultantPath)) {
-                  const html = readFileSync(consultantPath, "utf-8");
-                  return c.html(html);
-                }
-              }
-              
-              return c.text("AI Consultant page not found", 404);
-            } catch (error) {
-              console.error("Error serving AI Consultant page:", error);
-              return c.text("Error loading AI Consultant", 500);
             }
           };
         },
@@ -3293,42 +3522,6 @@ export const mastra = new Mastra({
       ...userAccessRoutes,
       ...smokeTestRoutes,
       ...consultantRoutes,
-      ...registerSlackTrigger({
-        triggerType: "slack/message.channels",
-        handler: async (mastra, triggerInfo) => {
-          const logger = mastra.getLogger();
-          logger?.info("📨 [Slack] Message received", {
-            channel: triggerInfo.params.channel,
-            channelName: triggerInfo.params.channelDisplayName,
-          });
-
-          const message = triggerInfo.payload?.event?.text || "";
-          const userId = triggerInfo.payload?.event?.user || "unknown";
-
-          try {
-            const response = await qualitySpecialistAgent.generate(
-              [{ role: "user", content: `Slack message from user ${userId} in #${triggerInfo.params.channelDisplayName}: ${message}` }],
-            );
-
-            const { getClient } = await import("../triggers/slackTriggers");
-            const { slack } = await getClient();
-
-            await slack.chat.postMessage({
-              channel: triggerInfo.params.channel,
-              text: response.text || "I received your message but couldn't generate a response.",
-              thread_ts: triggerInfo.payload?.event?.ts,
-            });
-
-            logger?.info("✅ [Slack] Response sent");
-          } catch (error) {
-            logger?.error("❌ [Slack] Error processing message", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-
-          return null;
-        },
-      }),
     ],
   },
   logger:

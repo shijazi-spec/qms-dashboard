@@ -247,28 +247,20 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
   );
 }
 
-const backgroundScannerFunction = inngest.createFunction(
-  { id: "ai-background-scanner", name: "AI Background Scanner" },
-  { cron: "0 */6 * * *" },
+const aiScannerFunction = inngest.createFunction(
+  { id: "ai-background-scanner" },
+  { cron: process.env.AI_SCANNER_CRON || "0 */6 * * *" },
   async ({ step }) => {
-    return await step.run("run-background-scan", async () => {
-      console.log("[Inngest] Running AI background scanner...");
-      try {
-        const { initAIAlertsTable } = await import("../../utils/aiAlertsDatabase");
-        await initAIAlertsTable();
-
-        const { runBackgroundScan } = await import("../../utils/aiBackgroundScanner");
-        const result = await runBackgroundScan();
-        console.log(`[Inngest] Background scan complete. Alerts created: ${result.alertsCreated}`);
-        return result;
-      } catch (error) {
-        console.error("[Inngest] Background scan failed:", error);
-        throw error;
-      }
+    return await step.run("run-ai-platform-scan", async () => {
+      console.log("[AI Scanner] Scheduled scan triggered");
+      const { runBackgroundScan } = await import("../../utils/aiBackgroundScanner");
+      const result = await runBackgroundScan();
+      console.log("[AI Scanner] Scan result:", result);
+      return result;
     });
-  }
+  },
 );
-inngestFunctions.push(backgroundScannerFunction);
+inngestFunctions.push(aiScannerFunction);
 
 export function inngestServe({
   mastra,
