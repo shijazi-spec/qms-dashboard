@@ -228,11 +228,11 @@ export function isRecordInDateRange(
 }
 
 // Filter leads with separate created/modified date filters
-export async function getLeadsWithSeparateFilters(filters: SeparateDateFilters): Promise<{
+export async function getLeadsWithSeparateFilters(filters: SeparateDateFilters, maxRecords?: number): Promise<{
   leads: Lead[];
   coverage: AuditCoverageMetrics;
 }> {
-  const allLeads = await getLeads();
+  const allLeads = await getLeads(maxRecords);
   const hasCreatedFilter = filters.created.start && filters.created.end;
   const hasModifiedFilter = filters.modified.start && filters.modified.end;
   
@@ -273,11 +273,11 @@ export async function getLeadsWithSeparateFilters(filters: SeparateDateFilters):
 }
 
 // Filter deals with separate created/modified date filters
-export async function getDealsWithSeparateFilters(filters: SeparateDateFilters): Promise<{
+export async function getDealsWithSeparateFilters(filters: SeparateDateFilters, maxRecords?: number): Promise<{
   deals: Deal[];
   coverage: AuditCoverageMetrics;
 }> {
-  const allDeals = await getDeals();
+  const allDeals = await getDeals(maxRecords);
   const hasCreatedFilter = filters.created.start && filters.created.end;
   const hasModifiedFilter = filters.modified.start && filters.modified.end;
   
@@ -422,7 +422,7 @@ export interface Five9Call {
   _hygiene_issue?: string;
 }
 
-export async function getLeads(): Promise<Lead[]> {
+export async function getLeads(maxRecords?: number): Promise<Lead[]> {
   const mode = getDataMode();
   
   if (mode === 'MOCK') {
@@ -431,7 +431,7 @@ export async function getLeads(): Promise<Lead[]> {
   }
   
   const { fetchAllZohoRecords } = await import('../utils/zohoCRM');
-  const records = await fetchAllZohoRecords('Leads');
+  const records = await fetchAllZohoRecords('Leads', { maxRecords, sortBy: 'Modified_Time', sortOrder: 'desc' });
   return records.map((r: any) => ({
     id: r.id,
     First_Name: r.data?.First_Name || '',
@@ -447,7 +447,7 @@ export async function getLeads(): Promise<Lead[]> {
   }));
 }
 
-export async function getDeals(): Promise<Deal[]> {
+export async function getDeals(maxRecords?: number): Promise<Deal[]> {
   const mode = getDataMode();
   
   if (mode === 'MOCK') {
@@ -456,7 +456,7 @@ export async function getDeals(): Promise<Deal[]> {
   }
   
   const { fetchAllZohoRecords } = await import('../utils/zohoCRM');
-  const records = await fetchAllZohoRecords('Deals');
+  const records = await fetchAllZohoRecords('Deals', { maxRecords, sortBy: 'Modified_Time', sortOrder: 'desc' });
   return records.map((r: any) => ({
     id: r.id,
     Deal_Name: r.data?.Deal_Name || '',

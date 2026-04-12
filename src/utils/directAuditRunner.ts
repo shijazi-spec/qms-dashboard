@@ -131,7 +131,7 @@ export async function runDirectAudit(logger?: any) {
   }
 
   try {
-    const recommendations = getDefaultRecommendations(qualityScores, totalIssuesFound, criticalIssues, highIssues);
+    const recommendations = getDefaultRecommendations(qualityScores, totalIssuesFound, criticalIssues, highIssues, moduleBreakdown, topIssues);
     const auditData = {
       total_records_audited: totalRecordsAudited,
       total_issues_found: totalIssuesFound,
@@ -219,7 +219,14 @@ export async function runDirectAudit(logger?: any) {
   return { success: auditSuccess, qualityScores, totalRecordsAudited, totalIssuesFound };
 }
 
-function getDefaultRecommendations(scores: any, totalIssues: number, critical: number, high: number): string[] {
+function getDefaultRecommendations(
+  scores: any,
+  totalIssues: number,
+  critical: number,
+  high: number,
+  moduleBreakdown?: Array<{ module: string; recordsAudited: number; issuesFound: number }>,
+  topIssues?: Array<{ module: string; issueType: string; count: number; severity: string }>
+): string[] {
   const recommendations: string[] = [];
 
   if (critical > 0) {
@@ -228,6 +235,26 @@ function getDefaultRecommendations(scores: any, totalIssues: number, critical: n
   if (high > 0) {
     recommendations.push(`Review and resolve ${high} high-priority issues within this week`);
   }
+
+  if (topIssues && topIssues.length > 0) {
+    const topByCount = [...topIssues].sort((a, b) => b.count - a.count);
+    for (const issue of topByCount.slice(0, 3)) {
+      const desc = issue.issueType.replace(/_/g, ' ');
+      recommendations.push(`Fix ${issue.count} "${desc}" issues in ${issue.module} module (${issue.severity} severity)`);
+    }
+  }
+
+  if (moduleBreakdown && moduleBreakdown.length > 0) {
+    const worstModules = [...moduleBreakdown]
+      .filter(m => m.recordsAudited > 0)
+      .sort((a, b) => (b.issuesFound / b.recordsAudited) - (a.issuesFound / a.recordsAudited));
+    if (worstModules.length > 0) {
+      const worst = worstModules[0];
+      const rate = ((worst.issuesFound / worst.recordsAudited) * 100).toFixed(1);
+      recommendations.push(`Focus on ${worst.module} module - ${rate}% issue rate (${worst.issuesFound} issues in ${worst.recordsAudited} records)`);
+    }
+  }
+
   if (scores.peopleScore < 80) {
     recommendations.push("Improve data entry discipline by providing team training on CRM best practices");
   }
@@ -237,11 +264,7 @@ function getDefaultRecommendations(scores: any, totalIssues: number, critical: n
   if (scores.governanceScore < 80) {
     recommendations.push("Implement stricter governance controls and automated validation rules");
   }
-  if (recommendations.length < 3) {
-    recommendations.push("Set up automated follow-up reminders for inactive leads and deals");
-    recommendations.push("Ensure all meetings are logged in CRM within 24 hours");
-    recommendations.push("Implement regular data validation checks for email and phone formats");
-  }
 
-  return recommendations.slice(0, 5);
+  const unique = [...new Set(recommendations)];
+  return unique.slice(0, 7);
 }

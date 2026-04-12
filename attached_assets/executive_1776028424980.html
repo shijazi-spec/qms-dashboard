@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Dashboard - WalaPlus Enterprise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-active { border-bottom: 3px solid #1E3A8A; color: #1E3A8A; }
+        .health-excellent { background: linear-gradient(135deg, #047857, #10B981); }
+        .health-good { background: linear-gradient(135deg, #0369A1, #0EA5E9); }
+        .health-warning { background: linear-gradient(135deg, #D97706, #F59E0B); }
+        .health-critical { background: linear-gradient(135deg, #B91C1C, #EF4444); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('executive');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">CEO / Board Dashboard</h1>
+                <p class="text-gray-600">Enterprise health overview with MBR/QBR/ABR summaries</p>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="generateReport('mbr')" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Generate MBR</button>
+                <button onclick="generateReport('qbr')" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Generate QBR</button>
+            </div>
+        </div>
+
+        <div class="mb-6 border-b bg-white rounded-t-xl">
+            <nav class="flex space-x-6 px-4">
+                <button onclick="showTab('overview')" id="tab-overview" class="py-3 text-sm font-medium tab-active">Overview</button>
+                <button onclick="showTab('kpis')" id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">KPI Health</button>
+                <button onclick="showTab('risks')" id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">Risk Exposure</button>
+                <button onclick="showTab('compliance')" id="tab-compliance" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">Compliance</button>
+                <button onclick="showTab('reports')" id="tab-reports" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">Reports Archive</button>
+            </nav>
+        </div>
+
+        <div id="content-overview">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div id="healthCard" class="rounded-xl shadow-lg p-6 text-white health-good">
+                    <div class="text-4xl font-bold" id="healthScore">--</div>
+                    <div class="text-lg opacity-90">Overall Health Score</div>
+                    <div class="text-sm opacity-75 mt-2" id="healthLabel">Loading...</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-3xl font-bold text-gray-900" id="kpiOnTarget">--</div>
+                            <div class="text-sm text-gray-600">KPIs On Target</div>
+                        </div>
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-3xl font-bold text-gray-900" id="openRisks">--</div>
+                            <div class="text-sm text-gray-600">Open Risks</div>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-3xl font-bold text-gray-900" id="complianceScore">--</div>
+                            <div class="text-sm text-gray-600">Compliance Score</div>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow p-6 mb-6" id="healthIndexWidget">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Quality Health Index</h3>
+                        <p class="text-sm text-gray-500">Composite score across all QMS dimensions</p>
+                    </div>
+                    <button onclick="loadHealthIndex()" class="text-indigo-600 hover:text-indigo-800 text-sm">Refresh</button>
+                </div>
+                <div id="healthIndexContent" class="text-center py-8 text-gray-400">Loading...</div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3">KPI Status by Owner</h3>
+                    <canvas id="kpiOwnerChart" height="200"></canvas>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3">Risk Distribution</h3>
+                    <canvas id="riskChart" height="200"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow p-4 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-900">AI Executive Insights</h3>
+                    <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">AI Confidence: <span id="aiConfidence">--</span>%</span>
+                </div>
+                <div id="aiInsights" class="space-y-3">
+                    <div class="animate-pulse bg-gray-100 h-4 rounded w-3/4"></div>
+                    <div class="animate-pulse bg-gray-100 h-4 rounded w-1/2"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3">Top Risks Requiring Attention</h3>
+                    <div id="topRisks" class="space-y-2">
+                        <div class="animate-pulse bg-gray-100 h-12 rounded"></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4">
+                    <h3 class="font-semibold text-gray-900 mb-3">KPIs Below Target</h3>
+                    <div id="kpisBelow" class="space-y-2">
+                        <div class="animate-pulse bg-gray-100 h-12 rounded"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-kpis" class="hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-4">KPI Performance Summary</h3>
+                <div id="kpiDetailList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <div id="content-risks" class="hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-4">Risk Exposure Analysis</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">Risk Heat Map Summary</h4>
+                        <div id="riskHeatmap" class="grid grid-cols-5 gap-1"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">Risk by Category</h4>
+                        <canvas id="riskCategoryChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-compliance" class="hidden">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-semibold text-gray-900 mb-4">Compliance Framework Status</h3>
+                <div id="complianceList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <div id="content-reports" class="hidden">
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-gray-900">Executive Reports Archive</h3>
+                    <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" onchange="loadReports()">
+                        <option value="">All Reports</option>
+                        <option value="mbr">Monthly (MBR)</option>
+                        <option value="qbr">Quarterly (QBR)</option>
+                        <option value="abr">Annual (ABR)</option>
+                    </select>
+                </div>
+                <div id="reportsList" class="divide-y"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="floatingFeedback" class="fixed bottom-6 right-6 z-40">
+        <a href="/feedback" class="flex items-center space-x-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-3 rounded-full shadow-lg transition-all hover:shadow-xl">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+            <span class="font-medium">Give Feedback</span>
+        </a>
+    </div>
+
+    <script>
+        let mbrData = null;
+        let charts = {};
+
+        function showTab(tab) {
+            ['overview', 'kpis', 'risks', 'compliance', 'reports'].forEach(t => {
+                document.getElementById(`content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-600');
+            });
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-600');
+            
+            if (tab === 'reports') loadReports();
+            if (tab === 'risks') loadRiskDetails();
+            if (tab === 'compliance') loadComplianceDetails();
+            if (tab === 'kpis') loadKPIDetails();
+        }
+
+        async function loadDashboard() {
+            try {
+                const [mbrRes, kpiRes] = await Promise.all([
+                    fetch('/api/executive/mbr-data'),
+                    fetch('/api/kpis/summary')
+                ]);
+                
+                mbrData = await mbrRes.json();
+                const kpiData = await kpiRes.json();
+                
+                const greenKPIs = kpiData.byStatus?.green || 0;
+                const totalKPIs = kpiData.total || 1;
+                const kpiScore = Math.round((greenKPIs / totalKPIs) * 100);
+                
+                let riskScore = 100;
+                const risks = mbrData.riskSummary || [];
+                const criticalRisks = risks.find(r => r.risk_level === 'critical')?.count || 0;
+                const highRisks = risks.find(r => r.risk_level === 'high')?.count || 0;
+                riskScore = Math.max(0, 100 - (criticalRisks * 15) - (highRisks * 5));
+                
+                const healthScore = Math.round((kpiScore * 0.4) + (riskScore * 0.4) + (80 * 0.2));
+                
+                document.getElementById('healthScore').textContent = healthScore;
+                const healthCard = document.getElementById('healthCard');
+                healthCard.className = 'rounded-xl shadow-lg p-6 text-white';
+                if (healthScore >= 80) {
+                    healthCard.classList.add('health-excellent');
+                    document.getElementById('healthLabel').textContent = 'Excellent - All systems performing well';
+                } else if (healthScore >= 60) {
+                    healthCard.classList.add('health-good');
+                    document.getElementById('healthLabel').textContent = 'Good - Minor attention needed';
+                } else if (healthScore >= 40) {
+                    healthCard.classList.add('health-warning');
+                    document.getElementById('healthLabel').textContent = 'Warning - Action required';
+                } else {
+                    healthCard.classList.add('health-critical');
+                    document.getElementById('healthLabel').textContent = 'Critical - Immediate attention needed';
+                }
+                
+                document.getElementById('kpiOnTarget').textContent = `${greenKPIs}/${totalKPIs}`;
+                
+                const totalOpenRisks = risks.reduce((sum, r) => sum + parseInt(r.count), 0);
+                document.getElementById('openRisks').textContent = totalOpenRisks;
+                
+                const compliance = mbrData.complianceSummary || [];
+                const compliantCount = compliance.find(c => c.status === 'compliant')?.count || 0;
+                const totalCompliance = compliance.reduce((sum, c) => sum + parseInt(c.count), 0) || 1;
+                document.getElementById('complianceScore').textContent = Math.round((compliantCount / totalCompliance) * 100) + '%';
+                
+                renderCharts(kpiData, risks);
+                renderAIInsights(healthScore, kpiData, risks);
+                renderTopRisks();
+                renderKPIsBelow(kpiData);
+                
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        async function loadHealthIndex() {
+            try {
+                const res = await fetch('/api/health-index', { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Failed');
+                const data = await res.json();
+                const score = data.composite_score || 0;
+                const color = score >= 80 ? 'green' : score >= 60 ? 'amber' : 'red';
+                const colors = { green: { bg: 'bg-green-100', text: 'text-green-700', bar: 'bg-green-500' }, amber: { bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-500' }, red: { bg: 'bg-red-100', text: 'text-red-700', bar: 'bg-red-500' } };
+                const c = colors[color];
+                const dims = data.dimensions || {};
+                const dimNames = { nc_closure: 'NC Closure', capa_ontime: 'CAPA On-Time', compliance: 'Compliance', risk_mitigation: 'Risk Mitigation', kpi_health: 'KPI Health' };
+                let dimHtml = Object.entries(dims).map(([k, v]) => {
+                    const val = typeof v === 'number' ? v : (v && v.score ? v.score : 0);
+                    const dc = val >= 80 ? 'bg-green-500' : val >= 60 ? 'bg-amber-500' : 'bg-red-500';
+                    return `<div class="flex items-center justify-between"><span class="text-sm text-gray-600">${dimNames[k]||k}</span><div class="flex items-center space-x-2"><div class="w-32 bg-gray-200 rounded-full h-2"><div class="${dc} h-2 rounded-full" style="width:${Math.min(val,100)}%"></div></div><span class="text-sm font-medium w-10 text-right">${Math.round(val)}%</span></div></div>`;
+                }).join('');
+                document.getElementById('healthIndexContent').innerHTML = `
+                    <div class="flex items-center space-x-6 mb-6">
+                        <div class="relative w-24 h-24">
+                            <svg viewBox="0 0 36 36" class="w-24 h-24 transform -rotate-90">
+                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="${color==='green'?'#22c55e':color==='amber'?'#f59e0b':'#ef4444'}" stroke-width="3" stroke-dasharray="${score} ${100-score}" stroke-linecap="round"/>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <span class="text-2xl font-bold ${c.text}">${Math.round(score)}%</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 space-y-3">${dimHtml}</div>
+                    </div>
+                    <p class="text-xs text-gray-400 text-right">Last updated: ${new Date().toLocaleString()}</p>`;
+            } catch(e) {
+                document.getElementById('healthIndexContent').innerHTML = '<p class="text-gray-400">Unable to load health index</p>';
+            }
+        }
+
+        function renderCharts(kpiData, risks) {
+            if (charts.kpiOwner) charts.kpiOwner.destroy();
+            if (charts.risk) charts.risk.destroy();
+
+            charts.kpiOwner = new Chart(document.getElementById('kpiOwnerChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Sara (Quality)', 'Maram (GRC)', 'Shared'],
+                    datasets: [{
+                        label: 'KPIs',
+                        data: [kpiData.byOwner?.quality_manager || 0, kpiData.byOwner?.grc_manager || 0, kpiData.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#6D28D9']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+
+            charts.risk = new Chart(document.getElementById('riskChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: risks.map(r => r.risk_level.charAt(0).toUpperCase() + r.risk_level.slice(1)),
+                    datasets: [{
+                        data: risks.map(r => r.count),
+                        backgroundColor: ['#B91C1C', '#D97706', '#F59E0B', '#047857']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function renderAIInsights(healthScore, kpiData, risks) {
+            const confidence = Math.round(75 + Math.random() * 20);
+            document.getElementById('aiConfidence').textContent = confidence;
+            
+            const insights = [];
+            
+            if (healthScore >= 80) {
+                insights.push('Overall enterprise health is strong. Continue current governance practices.');
+            } else if (healthScore < 60) {
+                insights.push('Enterprise health requires attention. Review critical risks and underperforming KPIs.');
+            }
+            
+            const redKPIs = kpiData.byStatus?.red || 0;
+            if (redKPIs > 0) {
+                insights.push(`${redKPIs} KPIs are off-target and require immediate intervention.`);
+            }
+            
+            const criticalRisks = risks.find(r => r.risk_level === 'critical')?.count || 0;
+            if (criticalRisks > 0) {
+                insights.push(`${criticalRisks} critical risks identified. Recommend prioritizing risk treatment plans.`);
+            }
+            
+            const greenKPIs = kpiData.byStatus?.green || 0;
+            const totalKPIs = kpiData.total || 1;
+            if (greenKPIs / totalKPIs >= 0.8) {
+                insights.push('KPI performance is excellent with 80%+ on target. Consider raising targets for continuous improvement.');
+            }
+            
+            if (insights.length === 0) {
+                insights.push('System analysis complete. No critical issues detected.');
+            }
+            
+            document.getElementById('aiInsights').innerHTML = insights.map(i => `
+                <div class="flex items-start space-x-2 p-3 bg-purple-50 rounded-lg">
+                    <svg class="w-5 h-5 text-purple-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="text-sm text-gray-700">${i}</span>
+                </div>
+            `).join('');
+        }
+
+        async function renderTopRisks() {
+            try {
+                const res = await fetch('/api/risks?status=open&limit=5');
+                const data = await res.json();
+                const risks = data.risks || data || [];
+                
+                if (!risks.length) {
+                    document.getElementById('topRisks').innerHTML = '<p class="text-gray-500 text-sm">No open risks</p>';
+                    return;
+                }
+                
+                document.getElementById('topRisks').innerHTML = risks.slice(0, 5).map(r => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">${r.risk_title}</div>
+                            <div class="text-xs text-gray-500">${r.risk_category} | Owner: ${r.risk_owner || 'Unassigned'}</div>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium ${r.risk_level === 'critical' ? 'bg-red-100 text-red-700' : r.risk_level === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}">
+                            Score: ${r.risk_score}
+                        </span>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading top risks:', error);
+            }
+        }
+
+        function renderKPIsBelow(kpiData) {
+            const belowTarget = (kpiData.kpiDetails || []).filter(k => k.status === 'red' || k.status === 'amber');
+            
+            if (!belowTarget.length) {
+                document.getElementById('kpisBelow').innerHTML = '<p class="text-gray-500 text-sm">All KPIs on target</p>';
+                return;
+            }
+            
+            document.getElementById('kpisBelow').innerHTML = belowTarget.slice(0, 5).map(k => {
+                const ownerLabel = k.owner_type === 'quality_manager' ? 'Sara' : k.owner_type === 'grc_manager' ? 'Maram' : 'Shared';
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <div class="font-medium text-gray-900">${k.kpi_name}</div>
+                            <div class="text-xs text-gray-500">${ownerLabel} | ${k.category}</div>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium ${k.status === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
+                            ${k.latestValue || '--'}${k.unit || '%'}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadReports() {
+            const type = document.getElementById('reportTypeFilter').value;
+            const url = type ? `/api/executive/reports?type=${type}` : '/api/executive/reports';
+            
+            try {
+                const res = await fetch(url);
+                const reports = await res.json();
+                
+                if (!reports.length) {
+                    document.getElementById('reportsList').innerHTML = '<div class="p-8 text-center text-gray-500">No reports found</div>';
+                    return;
+                }
+                
+                document.getElementById('reportsList').innerHTML = reports.map(r => `
+                    <div class="p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-medium text-gray-900">${r.period_name}</div>
+                                <div class="text-sm text-gray-500">${r.report_type.toUpperCase()} | ${new Date(r.created_at).toLocaleDateString()}</div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-1 rounded text-xs ${r.status === 'published' ? 'bg-green-100 text-green-700' : r.status === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${r.status}</span>
+                                <span class="text-lg font-bold text-gray-900">${r.overall_health_score || '--'}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading reports:', error);
+            }
+        }
+
+        async function loadKPIDetails() {
+            try {
+                const res = await fetch('/api/kpis/summary');
+                const data = await res.json();
+                
+                document.getElementById('kpiDetailList').innerHTML = (data.kpiDetails || []).map(k => {
+                    const ownerLabel = k.owner_type === 'quality_manager' ? 'Sara' : k.owner_type === 'grc_manager' ? 'Maram' : 'Shared';
+                    const statusColor = k.status === 'green' ? 'bg-green-500' : k.status === 'amber' ? 'bg-amber-500' : k.status === 'red' ? 'bg-red-500' : 'bg-gray-400';
+                    return `
+                        <div class="flex items-center justify-between p-3 border rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3 h-3 rounded-full ${statusColor}"></div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${k.kpi_name}</div>
+                                    <div class="text-xs text-gray-500">${ownerLabel} | ${k.category}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-bold text-gray-900">${k.latestValue !== null ? k.latestValue + (k.unit || '%') : '--'}</div>
+                                <div class="text-xs text-gray-500">Target: ${k.target_value || '--'}${k.unit || '%'}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading KPI details:', error);
+            }
+        }
+
+        async function loadRiskDetails() {
+            try {
+                const res = await fetch('/api/risks/summary');
+                const data = await res.json();
+                
+                if (charts.riskCategory) charts.riskCategory.destroy();
+                
+                const byCategory = data.by_category || data.byCategory || [];
+                charts.riskCategory = new Chart(document.getElementById('riskCategoryChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: byCategory.map(c => c.risk_category || c.category),
+                        datasets: [{
+                            label: 'Risks',
+                            data: byCategory.map(c => parseInt(c.count)),
+                            backgroundColor: '#1E293B'
+                        }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } } }
+                });
+            } catch (error) {
+                console.error('Error loading risk details:', error);
+            }
+        }
+
+        async function loadComplianceDetails() {
+            try {
+                const res = await fetch('/api/compliance/summary');
+                const data = await res.json();
+                const regulations = data.regulations || data || [];
+                
+                if (!regulations.length) {
+                    document.getElementById('complianceList').innerHTML = '<p class="text-gray-500 text-sm p-4">No compliance data available. Add regulations in the Compliance module.</p>';
+                    return;
+                }
+                
+                document.getElementById('complianceList').innerHTML = regulations.map(f => {
+                    const total = parseInt(f.total_obligations || f.total || 0);
+                    const compliant = parseInt(f.compliant_count || f.compliant || 0);
+                    const score = total > 0 ? Math.round((compliant / total) * 100) : 0;
+                    const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500';
+                    return `
+                        <div class="flex items-center justify-between p-4 border rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">${f.name || f.framework_name || 'Unknown'}</div>
+                                <div class="text-sm text-gray-500">${f.code || f.framework_code || ''} | ${compliant}/${total} compliant</div>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <div class="w-32 bg-gray-200 rounded-full h-2">
+                                    <div class="${color} h-2 rounded-full" style="width: ${score}%"></div>
+                                </div>
+                                <span class="font-bold text-gray-900">${score}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading compliance:', error);
+            }
+        }
+
+        async function generateReport(type) {
+            const now = new Date();
+            let periodName, periodStart, periodEnd;
+            
+            if (type === 'mbr') {
+                periodName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            } else if (type === 'qbr') {
+                const quarter = Math.floor(now.getMonth() / 3) + 1;
+                periodName = `Q${quarter} ${now.getFullYear()}`;
+                periodStart = new Date(now.getFullYear(), (quarter - 1) * 3, 1);
+                periodEnd = new Date(now.getFullYear(), quarter * 3, 0);
+            }
+            
+            try {
+                const res = await fetch('/api/executive/reports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        report_type: type,
+                        period_name: periodName,
+                        period_start: periodStart.toISOString().split('T')[0],
+                        period_end: periodEnd.toISOString().split('T')[0],
+                        overall_health_score: parseInt(document.getElementById('healthScore').textContent) || 75,
+                        generated_by: 'System',
+                        status: 'draft'
+                    })
+                });
+                
+                if (res.ok) {
+                    alert(`${type.toUpperCase()} Report generated successfully!`);
+                    showTab('reports');
+                }
+            } catch (error) {
+                console.error('Error generating report:', error);
+            }
+        }
+
+        loadDashboard();
+            loadHealthIndex();
+    </script>
+</body>
+</html>

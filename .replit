@@ -43,6 +43,7 @@ waitForPort = 5000
 [userenv.shared]
 ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
+DATA_MODE = "REAL"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0"]
