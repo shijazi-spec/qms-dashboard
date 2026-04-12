@@ -1,5 +1,6 @@
 import {
   fetchZohoRecords,
+  fetchAllZohoRecords,
   analyzeRecordHygiene,
   calculateQualityScores,
   DEFAULT_GOVERNANCE_RULES,
@@ -27,6 +28,7 @@ export async function runDirectAudit(logger?: any) {
   const topIssues: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
+  let allIssues: any[] = [];
 
   if (!hasZohoCredentials) {
     logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
@@ -42,13 +44,13 @@ export async function runDirectAudit(logger?: any) {
     auditSuccess = true;
   } else {
     try {
-      const modules = ["Leads", "Deals", "Contacts", "Tasks"];
-      const allIssues: any[] = [];
+      const modules = ["Leads", "Deals", "Contacts", "Tasks", "Accounts"];
+      allIssues = [];
 
       for (const moduleName of modules) {
         logger?.info(`📊 [DirectAudit] Auditing ${moduleName}...`);
         try {
-          const records = await fetchZohoRecords(moduleName, { perPage: 100 });
+          const records = await fetchAllZohoRecords(moduleName);
           totalRecordsAudited += records.length;
 
           const moduleGovDoc = await getGovernanceDocumentByModule(moduleName);
@@ -72,6 +74,10 @@ export async function runDirectAudit(logger?: any) {
           const moduleIssues: any[] = [];
           for (const record of records) {
             const issues = analyzeRecordHygiene(record, governanceRules);
+            const ownerName = record.data?.Owner?.name || record.owner || '';
+            for (const issue of issues) {
+              (issue as any).ownerName = ownerName;
+            }
             moduleIssues.push(...issues);
           }
           allIssues.push(...moduleIssues);
@@ -142,6 +148,16 @@ export async function runDirectAudit(logger?: any) {
         insights: skipReason 
           ? `Partial audit completed. ${skipReason}` 
           : `Quality audit completed with ${totalIssuesFound} issues found across ${totalRecordsAudited} records.`,
+        all_issues: allIssues.map(issue => ({
+          recordId: issue.recordId,
+          module: issue.module,
+          owner: issue.ownerName || '',
+          issueType: issue.issueType,
+          fieldName: issue.fieldName,
+          description: issue.description,
+          severity: issue.severity,
+          suggestedFix: issue.suggestedFix,
+        })),
       },
     };
 

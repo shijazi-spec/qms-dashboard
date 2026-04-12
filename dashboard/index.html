@@ -635,38 +635,30 @@
         }
 
         function loadIssuesForModal(category) {
-            const issues = generateMockIssues(category);
+            const rawData = allDashboardData?.latestAudit?.raw_audit_data;
+            let parsed = rawData;
+            if (typeof rawData === 'string') {
+                try { parsed = JSON.parse(rawData); } catch(e) { parsed = {}; }
+            }
+            const realIssues = parsed?.all_issues || [];
+
+            let issues;
+            if (realIssues.length > 0) {
+                const filtered = category === 'all' ? realIssues : realIssues.filter(i => i.module === category);
+                issues = filtered.map((issue, idx) => ({
+                    id: issue.recordId || `issue_${idx + 1}`,
+                    module: issue.module,
+                    owner: issue.owner || '-',
+                    issue: issue.description || issue.issueType,
+                    severity: issue.severity,
+                    recommendation: issue.suggestedFix || 'Update the record with missing information to ensure data quality compliance.'
+                }));
+            } else {
+                issues = [];
+            }
+
             currentIssues = issues;
             renderIssuesTable(issues);
-        }
-
-        function generateMockIssues(category) {
-            const modules = category === 'all' ? ['Leads', 'Deals', 'Contacts', 'Tasks'] : [category];
-            const severities = ['critical', 'high', 'medium', 'low'];
-            const issueTypes = {
-                'Leads': ['Missing email', 'Missing phone', 'No lead source', 'Missing owner', 'Stale lead (no activity)'],
-                'Deals': ['Missing amount', 'No closing date', 'Missing stage', 'No contact linked', 'Stale deal'],
-                'Contacts': ['Missing email', 'Missing phone', 'Duplicate detected', 'Incomplete address'],
-                'Tasks': ['Overdue task', 'Missing due date', 'No owner assigned', 'Missing description']
-            };
-            const owners = ['Ahmed Al-Rashid', 'Sara Mohammed', 'Khalid Hassan', 'Fatima Al-Saud', 'Omar Nasser', 'Layla Ibrahim'];
-            
-            const issues = [];
-            const issueCount = allDashboardData?.latestAudit?.total_issues_found || 30;
-            
-            for (let i = 0; i < issueCount; i++) {
-                const module = modules[Math.floor(Math.random() * modules.length)];
-                const issueList = issueTypes[module] || issueTypes['Leads'];
-                issues.push({
-                    id: `${module.toLowerCase()}_${String(i + 1).padStart(3, '0')}`,
-                    module: module,
-                    owner: owners[Math.floor(Math.random() * owners.length)],
-                    issue: issueList[Math.floor(Math.random() * issueList.length)],
-                    severity: severities[Math.floor(Math.random() * severities.length)],
-                    recommendation: 'Update the record with missing information to ensure data quality compliance.'
-                });
-            }
-            return issues;
         }
 
         function renderIssuesTable(issues) {
