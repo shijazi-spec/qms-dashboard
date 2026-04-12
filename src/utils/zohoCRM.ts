@@ -43,6 +43,9 @@ export interface CRMDataSummary {
 
 let cachedAccessToken: string | null = null;
 let tokenExpiresAt: number = 0;
+let pendingRefresh: Promise<string> | null = null;
+let lastRefreshAttempt: number = 0;
+const MIN_REFRESH_INTERVAL_MS = 5000;
 
 function getZohoOAuthConfig(): ZohoOAuthConfig | null {
   const clientId = process.env.ZOHO_CLIENT_ID;
@@ -116,7 +119,17 @@ async function getValidAccessToken(): Promise<string> {
     if (cachedAccessToken && !isTokenExpired()) {
       return cachedAccessToken;
     }
-    return await refreshAccessToken();
+    if (pendingRefresh) {
+      return await pendingRefresh;
+    }
+    const now = Date.now();
+    if (now - lastRefreshAttempt < MIN_REFRESH_INTERVAL_MS) {
+      if (cachedAccessToken) return cachedAccessToken;
+      await new Promise(r => setTimeout(r, MIN_REFRESH_INTERVAL_MS - (now - lastRefreshAttempt)));
+    }
+    lastRefreshAttempt = Date.now();
+    pendingRefresh = refreshAccessToken().finally(() => { pendingRefresh = null; });
+    return await pendingRefresh;
   }
   
   const staticToken = process.env.ZOHO_ACCESS_TOKEN;
