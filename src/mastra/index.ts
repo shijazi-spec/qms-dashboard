@@ -163,6 +163,15 @@ export const mastra = new Mastra({
         const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/test/slack'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
+        if (urlPath.startsWith('/webhooks/') || urlPath.startsWith('/test/slack')) {
+          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+          const rateCheck = checkRateLimit(ip, true, urlPath, false);
+          if (!rateCheck.allowed) {
+            c.header('Retry-After', String(rateCheck.retryAfter || 60));
+            return c.json({ error: 'Too many requests' }, 429);
+          }
+        }
+
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
           const adminKey = c.req.header('X-Admin-Key');
           const expectedKey = process.env.ADMIN_API_KEY;
@@ -189,7 +198,7 @@ export const mastra = new Mastra({
           isAuthenticated = true;
         }
 
-        if (isApi && !isPublic && !isMastraInternal) {
+        if (isApi && !isPublic) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
           const adminKeyHeader = c.req.header('X-Admin-Key');
           const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
@@ -198,6 +207,10 @@ export const mastra = new Mastra({
           const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
 
           isAuthenticated = !!(session || hasAdminKey);
+
+          if (isMastraInternal && !isAuthenticated) {
+            return c.json({ error: 'Access denied' }, 403);
+          }
 
           const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
           const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);

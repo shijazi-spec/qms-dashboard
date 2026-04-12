@@ -6,3 +6,9 @@ id = "Xp7utsecGu0LBFe7clFhy"
 uri = "file://docs/WalaPlus_Platform_SOP.md"
 type = "text"
 title = "WalaPlus Platform SOP v3.2 — Complete Codebase Audit"
+
+[[outputs]]
+id = "5WJFgCAUKjq5_A3bKaN8n"
+uri = "file://attached_assets/WalaPlus_Testing_Report_v4.2.md"
+type = "text"
+title = "WalaPlus Testing & Adoption Report v4.2"
