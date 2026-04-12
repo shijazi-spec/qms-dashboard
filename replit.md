@@ -58,7 +58,6 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/pdpl` - PDPL Privacy Compliance
 - `/users` - Users & Access Control
 - `/consultant` - AI Consultant & Assistant (chat interface with 8 AI tools)
-- `/sandbox` - Testing Sandbox
 - `/kpis` - KPI Tracking
 - `/scorecard` - Scorecard
 - `/duplicates` - Duplicate Radar
