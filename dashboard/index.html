@@ -400,7 +400,7 @@
                                 </div>
                             </div>
                             <div class="p-6">
-                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="issuesCategoryCards"></div>
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="issuesCategoryCards"></div>
                                 <div class="chart-container" style="height: 180px;">
                                     <canvas id="issuesChart"></canvas>
                                 </div>
@@ -1082,11 +1082,12 @@
                 'Leads': { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
                 'Deals': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
                 'Contacts': { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200' },
-                'Tasks': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' }
+                'Tasks': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
+                'Accounts': { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' }
             };
             
             if (categories.length === 0) {
-                container.innerHTML = '<div class="col-span-4 text-center text-sm text-gray-400 py-4">No issues by category found</div>';
+                container.innerHTML = '<div class="col-span-5 text-center text-sm text-gray-400 py-4">No issues by category found</div>';
                 return;
             }
 
@@ -1351,15 +1352,15 @@
 
                 const normalized = normalizeIssuesByCategory(issuesByCategory);
                 const hasData = Object.keys(normalized).length > 0 && Object.values(normalized).some(v => v > 0);
-                const categories = hasData ? Object.keys(normalized) : ['Leads', 'Deals', 'Contacts', 'Tasks'];
-                const values = hasData ? Object.values(normalized) : [0, 0, 0, 0];
+                const categories = hasData ? Object.keys(normalized) : ['Leads', 'Deals', 'Contacts', 'Tasks', 'Accounts'];
+                const values = hasData ? Object.values(normalized) : [0, 0, 0, 0, 0];
                 issuesChart = new Chart(ctx, {
                     type: 'doughnut',
                     data: {
                         labels: categories,
                         datasets: [{
                             data: values,
-                            backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'],
+                            backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#f43f5e'],
                             borderWidth: 0
                         }]
                     },
