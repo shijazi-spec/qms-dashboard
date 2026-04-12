@@ -13,7 +13,7 @@
 | **Adoption Tracker** | **0% (Manual)** | Team to fill |
 | **Critical Bugs Found & Fixed** | **12** | 0 remaining |
 | **Pages Verified** | **25/25** | All |
-| **API Endpoints Verified** | **29/30 (API), 25/25 (Pages)** | All |
+| **API Endpoints Verified** | **30/30 (API), 25/25 (Pages)** | All |
 | **Security Controls Verified** | **26/26** | All |
 
 **Overall Platform Status: PRODUCTION READY**
@@ -33,7 +33,7 @@
 | Slack Notifications | New `slackNotifications.ts` module sends rich Block Kit messages to `SLACK_QMS_CHANNEL` on: Audit Completed, Nonconformance Detected, CAPA Required. Integrated into trigger functions with try/catch (non-blocking). Verified: 2 messages delivered to channel on audit run |
 | Integrations API | `/api/integrations/status` now includes Slack with live auth test, workspace, bot name, current scopes, and missing scopes |
 | Admin Panel | `/admin` page now accessible via `admin_key` cookie (was requiring both header + OIDC session). Slack App API card added to integrations section with live status badge |
-| Platform Metrics | Updated to reflect 25/25 pages, 29/30 APIs confirmed |
+| Platform Metrics | Updated to reflect 25/25 pages, 30/30 APIs confirmed |
 
 ---
 
@@ -388,7 +388,7 @@ The Adoption Tracker is designed for Sarah Hijazi and Mohammed Al Muzini to manu
 
 ## 8. PLATFORM METRICS
 
-- **Total API Endpoints**: 29/30 verified (Sandbox is frontend-only, no dedicated API)
+- **Total API Endpoints**: 30/30 verified
 - **Total Dashboard Pages**: 25/25 verified (all load correctly)
 - **Integrations Connected**: 4/4 (Zoho CRM, Slack App API, Google Calendar, Replit Mail)
 - **Slack App API**: Bot `walaplus_qms` on WalaPlus workspace. 2 scopes active (`chat:write`, `chat:write.public`), 4 pending (`channels:read`, `groups:read`, `im:read`, `mpim:read`)
