@@ -264,6 +264,32 @@ async function checkTrainingGaps(result: ScanResult): Promise<void> {
   }
 }
 
+async function checkLowProgressTreatments(result: ScanResult): Promise<void> {
+  const rows = await safeQuery(`
+    SELECT rta.id, rta.action_description, rta.progress_percent, rta.due_date, rta.status, r.title as risk_title
+    FROM risk_treatment_actions rta
+    JOIN risks r ON r.id = rta.risk_id
+    WHERE rta.progress_percent < 30
+      AND rta.due_date < NOW() + INTERVAL '14 days'
+      AND rta.status NOT IN ('completed', 'cancelled')
+    ORDER BY rta.due_date ASC
+    LIMIT 20
+  `);
+  result.checksPerformed++;
+
+  for (const action of rows) {
+    const daysLeft = Math.floor((new Date(action.due_date).getTime() - Date.now()) / 86400000);
+    const created = await createAlertIfNew(
+      'risk_alert', daysLeft < 0 ? 'high' : 'medium',
+      `Low-progress treatment: ${action.action_description?.substring(0, 80)}`,
+      `Risk treatment for "${action.risk_title}" is at ${action.progress_percent || 0}% progress with ${daysLeft < 0 ? Math.abs(daysLeft) + ' days overdue' : daysLeft + ' days remaining'}. Due: ${new Date(action.due_date).toLocaleDateString()}.`,
+      `Escalate to risk owner. Review resource allocation and timeline feasibility. Consider splitting the action into smaller milestones.`,
+      'risk', String(action.id)
+    );
+    if (created) { result.alertsCreated++; result.findings.push(`Low progress treatment for: ${action.risk_title}`); }
+  }
+}
+
 export async function runBackgroundScan(): Promise<ScanResult> {
   const result: ScanResult = { alertsCreated: 0, checksPerformed: 0, findings: [] };
 
@@ -272,6 +298,7 @@ export async function runBackgroundScan(): Promise<ScanResult> {
   await checkOpenNCsWithoutCAPA(result);
   await checkHighRisks(result);
   await checkOverdueTreatments(result);
+  await checkLowProgressTreatments(result);
   await checkMissedKPIs(result);
   await checkExpiringPolicies(result);
   await checkPDPLGaps(result);

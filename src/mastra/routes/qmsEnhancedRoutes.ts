@@ -110,6 +110,34 @@ const evidenceRoutes = [
       };
     },
   },
+  {
+    path: "/api/qms/capa/:id",
+    method: "PATCH" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
+          const body = await c.req.json();
+          const { updateCapaRecord } = await import("../../utils/qmsDatabase");
+          const updates: any = {};
+          if (body.status) updates.status = body.status;
+          if (body.assigned_to) updates.assigned_to = body.assigned_to;
+          if (body.severity) updates.severity = body.severity;
+          if (body.priority) updates.priority = body.priority;
+          const result = await updateCapaRecord(id, updates);
+          if (!result) return c.json({ error: "CAPA not found" }, 404);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'UPDATE', entityType: 'CAPA', entityId: String(id), description: `CAPA updated: ${JSON.stringify(updates)}`, module: 'qms', severity: 'INFO', newValue: JSON.stringify(updates) });
+          } catch {}
+          return c.json({ success: true, capa: result });
+        } catch (error) {
+          return c.json({ error: "Failed to update CAPA" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export const qmsEnhancedRoutes = [
@@ -168,12 +196,15 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const result = await pool.query(`SELECT id, title, regulation_id, status, priority, due_date, requirement_type FROM obligations ORDER BY due_date ASC LIMIT 10000`);
+          const { initComplianceTables } = await import("../../utils/complianceDatabase");
+          await initComplianceTables();
+          const result = await pool.query(`SELECT id, obligation_code, title, regulation_id, status, requirement_type, responsible_department, compliance_frequency FROM obligations ORDER BY id ASC LIMIT 10000`);
           const csv = toCSV(result.rows);
           c.header('Content-Type', 'text/csv');
           c.header('Content-Disposition', 'attachment; filename="compliance_obligations.csv"');
           return c.body(csv);
         } catch (error) {
+          console.error('Compliance export error:', error);
           return c.json({ error: "Export failed" }, 500);
         } finally { await pool.end(); }
       };
@@ -187,12 +218,15 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const result = await pool.query(`SELECT * FROM pdpl_data_inventory ORDER BY created_at DESC LIMIT 10000`);
+          const { initPdplTables } = await import("../../utils/pdplDatabase");
+          await initPdplTables();
+          const result = await pool.query(`SELECT id, field_name, data_category, module, table_name, purpose, legal_basis, storage_location, retention_days, is_encrypted, is_masked, pii_type FROM data_inventory ORDER BY created_at DESC LIMIT 10000`);
           const csv = toCSV(result.rows);
           c.header('Content-Type', 'text/csv');
           c.header('Content-Disposition', 'attachment; filename="pdpl_inventory.csv"');
           return c.body(csv);
         } catch (error) {
+          console.error('PDPL export error:', error);
           return c.json({ error: "Export failed" }, 500);
         } finally { await pool.end(); }
       };
@@ -206,7 +240,7 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const result = await pool.query(`SELECT kd.name, kd.target, kv.value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.name, kv.period_end DESC LIMIT 10000`);
+          const result = await pool.query(`SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.kpi_name, kv.period_end DESC LIMIT 10000`);
           const csv = toCSV(result.rows);
           c.header('Content-Type', 'text/csv');
           c.header('Content-Disposition', 'attachment; filename="kpi_values.csv"');
@@ -225,7 +259,9 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const result = await pool.query(`SELECT v.name, v.category, v.risk_level, va.assessment_type, va.status, va.overall_score, va.assessment_date FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id ORDER BY v.name LIMIT 10000`);
+          const { initVendorTables } = await import("../../utils/vendorDatabase");
+          await initVendorTables();
+          const result = await pool.query(`SELECT v.name, v.category, v.overall_risk_level, va.assessment_type, va.status, va.overall_score, va.assessment_date FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id ORDER BY v.name LIMIT 10000`);
           const csv = toCSV(result.rows);
           c.header('Content-Type', 'text/csv');
           c.header('Content-Disposition', 'attachment; filename="vendor_assessments.csv"');
@@ -372,9 +408,10 @@ export const qmsEnhancedRoutes = [
           if (!body.result || !body.evidence || !body.reviewedBy) {
             return c.json({ error: "result, evidence, and reviewedBy are required" }, 400);
           }
-          const { recordCAPAEffectiveness } = await import("../../utils/qmsDatabase");
+          const { recordCAPAEffectiveness, createCapaRecord, getCapaById } = await import("../../utils/qmsDatabase");
           const capa = await recordCAPAEffectiveness(id, body.result, body.evidence, body.reviewedBy);
           if (!capa) return c.json({ error: "CAPA not found" }, 404);
+          let reCapaId: number | null = null;
           try {
             const { logCAPAChange, initChangeHistoryTables } = await import("../../utils/changeHistoryDatabase");
             await initChangeHistoryTables();
@@ -382,7 +419,33 @@ export const qmsEnhancedRoutes = [
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({ actionType: 'UPDATE', entityType: 'CAPA', entityId: String(id), description: `CAPA effectiveness recorded: ${body.result}`, module: 'qms', severity: 'INFO' });
           } catch {}
-          return c.json({ success: true, capa });
+          if (body.result === 'not_effective') {
+            try {
+              const original = await getCapaById(id);
+              if (original) {
+                const reCapa = await createCapaRecord({
+                  title: `Re-CAPA: ${original.title}`,
+                  description: `Auto-generated re-CAPA because CAPA ${original.capa_number} was found not effective. Evidence: ${body.evidence}`,
+                  capa_type: original.capa_type || 'corrective',
+                  source_type: 'capa',
+                  source_id: String(original.id),
+                  source_reference: original.capa_number,
+                  severity: original.severity || 'major',
+                  status: 'open',
+                  priority: 'high',
+                  assigned_to: original.assigned_to,
+                  target_date: new Date(Date.now() + 30 * 86400000),
+                  created_by: body.reviewedBy || 'System',
+                });
+                reCapaId = reCapa.id;
+                try {
+                  const { logEvent } = await import("../../utils/eventLogsDatabase");
+                  await logEvent({ actionType: 'CREATE', entityType: 'CAPA', entityId: String(reCapa.id), entityName: reCapa.capa_number, description: `Auto re-CAPA created from ineffective CAPA ${original.capa_number}`, module: 'qms', severity: 'WARNING' });
+                } catch {}
+              }
+            } catch {}
+          }
+          return c.json({ success: true, capa, reCapaId });
         } catch (error) {
           return c.json({ error: "Failed to record effectiveness" }, 500);
         }

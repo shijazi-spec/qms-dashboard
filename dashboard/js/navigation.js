@@ -132,6 +132,7 @@ const WalaPlusNav = {
   },
 
   pollAlertCount() {
+    const severityColors = { critical: 'bg-red-100 text-red-700', high: 'bg-orange-100 text-orange-700', medium: 'bg-yellow-100 text-yellow-700', low: 'bg-blue-100 text-blue-700' };
     const updateBadge = () => {
       fetch('/api/consultant/alerts/count', { credentials: 'same-origin' })
         .then(r => r.ok ? r.json() : { count: 0 })
@@ -146,9 +147,40 @@ const WalaPlusNav = {
           }
         })
         .catch(() => {});
+      fetch('/api/consultant/alerts?limit=5&status=new', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : { alerts: [] })
+        .then(data => {
+          const list = document.getElementById('nav-alert-list');
+          if (!list) return;
+          const alerts = data.alerts || [];
+          if (alerts.length === 0) {
+            list.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 text-center">No new alerts</div>';
+            return;
+          }
+          list.innerHTML = alerts.map(a => {
+            const sc = severityColors[a.severity] || severityColors.low;
+            const ago = WalaPlusNav.timeAgo(a.created_at);
+            return '<a href="/consultant" class="flex items-start gap-2 px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0" data-testid="alert-item-' + a.id + '">' +
+              '<span class="mt-0.5 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded ' + sc + '">' + (a.severity || 'info').toUpperCase() + '</span>' +
+              '<div class="flex-1 min-w-0"><p class="text-xs font-medium text-gray-800 truncate">' + WalaPlusNav.escapeHtml(a.title || '') + '</p>' +
+              '<p class="text-[10px] text-gray-400">' + ago + '</p></div></a>';
+          }).join('');
+        })
+        .catch(() => {});
     };
     updateBadge();
     setInterval(updateBadge, 60000);
+  },
+
+  timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
   },
 
   loadUserInfo() {
@@ -237,9 +269,20 @@ const WalaPlusNav = {
                   </svg>
                   <span>Refresh</span>
                 </button>
-                <div id="nav-alert-bell" class="relative cursor-pointer" onclick="window.location.href='/consultant'" title="AI Alerts">
-                  <svg class="w-5 h-5 text-gray-500 hover:text-indigo-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                  <span id="nav-alert-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold" style="font-size:10px"></span>
+                <div id="nav-alert-bell" class="relative nav-dropdown" data-group="alerts-dropdown">
+                  <button class="relative p-1 text-gray-500 hover:text-indigo-600 transition" data-testid="button-alert-bell" title="AI Alerts">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    <span id="nav-alert-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold" style="font-size:10px"></span>
+                  </button>
+                  <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50">
+                    <div class="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                      <span class="text-sm font-semibold text-gray-900">Notifications</span>
+                      <a href="/consultant" class="text-xs text-indigo-600 hover:underline" data-testid="link-view-all-alerts">View all</a>
+                    </div>
+                    <div id="nav-alert-list" class="max-h-64 overflow-y-auto">
+                      <div class="px-4 py-3 text-xs text-gray-400 text-center">Loading...</div>
+                    </div>
+                  </div>
                 </div>
                 <div id="nav-user-info" class="flex items-center space-x-2 border-l border-gray-200 pl-3 ml-1"></div>
               </div>

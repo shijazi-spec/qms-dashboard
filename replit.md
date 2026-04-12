@@ -44,30 +44,31 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `src/triggers/` - Cron, Slack, Telegram triggers
 - `dashboard/` - Static HTML dashboards (index.html, audits.html, login.html, etc.)
 - `dashboard/css/` - Shared navigation CSS
-- `dashboard/js/` - Shared navigation JS (includes user avatar/logout in nav bar, AI alert bell with badge polling)
+- `dashboard/js/` - Shared navigation JS (includes user avatar/logout in nav bar, AI alert dropdown inbox with severity badges and timeAgo)
 - `scripts/` - Build and inngest scripts
 - `docs/mastra/` - Mastra documentation
 - `tests/` - Test files
 
 ## Dashboards
 - `/` - Main Quality Dashboard
+- `/executive` - Executive Dashboard (Quality Health Index with 5 dimension progress bars, AI insights)
 - `/grc` - GRC Control Tower
 - `/admin` - Admin Panel (requires ADMIN_API_KEY)
-- `/qms` - QMS Dashboard (requires ADMIN_API_KEY)
+- `/qms` - QMS Dashboard (CAPA detail modals, bulk close, effectiveness checks, CSV export, approval flows)
 - `/audits` - Audit Readiness
-- `/compliance` - Compliance Tracking
-- `/risks` - Risk Register
+- `/compliance` - Compliance Tracking (status filter, CSV export)
+- `/risks` - Risk Register (date filters, treatment progress bars, milestones, CSV export)
 - `/policies` - Policy Governance
-- `/vendors` - Vendor Risk Management
+- `/vendors` - Vendor Risk Management (CSV export)
 - `/calls` - Call Intelligence
 - `/roi` - ROI & NPV Evaluation
 - `/team` - Team Performance
 - `/projects` - PMP Project Portfolio
 - `/logs` - System Event Logs
-- `/pdpl` - PDPL Privacy Compliance
+- `/pdpl` - PDPL Privacy Compliance (CSV export)
 - `/users` - Users & Access Control
 - `/consultant` - AI Consultant & Assistant (chat interface with 8 AI tools)
-- `/kpis` - KPI Tracking
+- `/kpis` - KPI Tracking (status filter, CSV export, auto-calc timestamp)
 - `/scorecard` - Scorecard
 - `/duplicates` - Duplicate Radar
 - `/migration` - Data Migration

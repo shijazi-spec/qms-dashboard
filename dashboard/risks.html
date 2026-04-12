@@ -48,12 +48,24 @@
                 <h1 class="text-2xl font-bold text-gray-900">Enterprise Risk Register</h1>
                 <p class="text-sm text-gray-500 mt-1">Centralized risk management with AI-powered detection</p>
             </div>
-            <button onclick="openAddRiskModal()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                </svg>
-                Add New Risk
-            </button>
+            <div class="flex gap-3 items-center">
+                <div class="flex items-center gap-2 text-sm">
+                    <label class="text-gray-500">From:</label>
+                    <input type="date" id="dateFrom" class="border rounded-lg px-2 py-1.5 text-sm" onchange="applyFilters()" data-testid="input-date-from" />
+                    <label class="text-gray-500">To:</label>
+                    <input type="date" id="dateTo" class="border rounded-lg px-2 py-1.5 text-sm" onchange="applyFilters()" data-testid="input-date-to" />
+                </div>
+                <button onclick="window.location.href='/api/risks/export'" class="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Export CSV
+                </button>
+                <button onclick="openAddRiskModal()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Add New Risk
+                </button>
+            </div>
         </div>
 
         <div id="summaryCards" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
@@ -434,10 +446,15 @@
             const category = document.getElementById('filterCategory').value;
             const level = document.getElementById('filterLevel').value;
 
+            const dateFrom = document.getElementById('dateFrom')?.value;
+            const dateTo = document.getElementById('dateTo')?.value;
+
             let url = `/api/risks?limit=${pageSize}&offset=${currentPage * pageSize}`;
             if (status) url += `&status=${status}`;
             if (category) url += `&category=${category}`;
             if (level) url += `&risk_level=${level}`;
+            if (dateFrom) url += `&date_from=${dateFrom}`;
+            if (dateTo) url += `&date_to=${dateTo}`;
 
             try {
                 const res = await fetch(url);
@@ -629,15 +646,30 @@
                     <div>
                         <h5 class="text-sm font-medium text-gray-700 mb-2">Treatment Actions</h5>
                         <div class="space-y-2">
-                            ${treatments.map(t => `
+                            ${treatments.map(t => {
+                                const prog = t.progress_percent || (t.status === 'completed' ? 100 : t.status === 'overdue' ? 30 : 50);
+                                const progColor = prog >= 80 ? 'bg-green-500' : prog >= 50 ? 'bg-amber-500' : 'bg-red-500';
+                                const dueDate = new Date(t.due_date);
+                                const now = new Date();
+                                const daysLeft = Math.ceil((dueDate - now) / (1000*60*60*24));
+                                const dueLabel = daysLeft < 0 ? `<span class="text-red-600 font-medium">${Math.abs(daysLeft)}d overdue</span>` : daysLeft <= 7 ? `<span class="text-amber-600 font-medium">${daysLeft}d left</span>` : `${daysLeft}d left`;
+                                return `
                                 <div class="border rounded p-3">
                                     <div class="flex justify-between items-start">
                                         <div class="font-medium text-sm">${t.action_title}</div>
                                         <span class="px-2 py-1 text-xs rounded ${t.status === 'completed' ? 'bg-green-100 text-green-800' : t.status === 'overdue' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${t.status}</span>
                                     </div>
-                                    <div class="text-xs text-gray-500 mt-1">Assigned to: ${t.assigned_to} | Due: ${new Date(t.due_date).toLocaleDateString()}</div>
+                                    <div class="mt-2">
+                                        <div class="flex justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>${prog}%</span></div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2"><div class="${progColor} h-2 rounded-full" style="width:${prog}%"></div></div>
+                                    </div>
+                                    <div class="flex justify-between text-xs text-gray-500 mt-2">
+                                        <span>Assigned: ${t.assigned_to}</span>
+                                        <span>Due: ${dueDate.toLocaleDateString()} (${dueLabel})</span>
+                                    </div>
+                                    ${t.milestones ? `<div class="mt-2 text-xs text-gray-400">Milestones: ${t.milestones}</div>` : ''}
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                         </div>
                     </div>
                     ` : ''}

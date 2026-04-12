@@ -395,12 +395,19 @@
                         <h3 class="text-lg font-semibold">
                             Corrective and Preventive Actions
                         </h3>
-                        <button
-                            onclick="showCapaModal()"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                        >
-                            New CAPA
-                        </button>
+                        <div class="flex gap-2">
+                            <button onclick="bulkUpdateCapa('closed')" class="px-3 py-2 border border-green-600 text-green-600 rounded-lg hover:bg-green-50 text-sm hidden" id="bulk-close-btn" data-testid="button-bulk-close">Bulk Close</button>
+                            <button onclick="window.location.href='/api/qms/capa/export'" class="px-3 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 text-sm flex items-center gap-1" data-testid="button-export-csv">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                CSV
+                            </button>
+                            <button
+                                onclick="showCapaModal()"
+                                class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                            >
+                                New CAPA
+                            </button>
+                        </div>
                     </div>
                     <div class="flex space-x-2 mb-4">
                         <select
@@ -434,6 +441,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
+                                    <th class="text-left py-2 px-3"><input type="checkbox" id="capa-select-all" onchange="toggleAllCapa(this)" data-testid="checkbox-select-all" /></th>
                                     <th class="text-left py-2 px-3">CAPA #</th>
                                     <th class="text-left py-2 px-3">Title</th>
                                     <th class="text-left py-2 px-3">Type</th>
@@ -447,12 +455,13 @@
                                     <th class="text-left py-2 px-3">
                                         Target Date
                                     </th>
+                                    <th class="text-left py-2 px-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="capa-table">
                                 <tr>
                                     <td
-                                        colspan="7"
+                                        colspan="9"
                                         class="text-center py-4 text-gray-500"
                                     >
                                         Loading...
@@ -461,6 +470,16 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <div id="capa-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center" onclick="if(event.target===this)closeCapaDetail()">
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto mx-4 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">CAPA Details</h3>
+                        <button onclick="closeCapaDetail()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                    </div>
+                    <div id="capa-detail-body">Loading...</div>
                 </div>
             </div>
 
@@ -957,6 +976,111 @@
                 }
             }
 
+            let selectedCapaIds = [];
+
+            function toggleAllCapa(cb) {
+                const boxes = document.querySelectorAll('.capa-checkbox');
+                boxes.forEach(b => b.checked = cb.checked);
+                updateBulkBtn();
+            }
+
+            function updateBulkBtn() {
+                selectedCapaIds = Array.from(document.querySelectorAll('.capa-checkbox:checked')).map(b => b.value);
+                const btn = document.getElementById('bulk-close-btn');
+                if (selectedCapaIds.length > 0) { btn.classList.remove('hidden'); btn.textContent = `Bulk Close (${selectedCapaIds.length})`; }
+                else btn.classList.add('hidden');
+            }
+
+            async function bulkUpdateCapa(status) {
+                if (!confirm(`Close ${selectedCapaIds.length} CAPA record(s)?`)) return;
+                for (const id of selectedCapaIds) {
+                    await fetch(`/api/qms/capa/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+                }
+                loadCapa();
+            }
+
+            async function viewCapaDetail(id) {
+                document.getElementById('capa-detail-modal').classList.remove('hidden');
+                document.getElementById('capa-detail-modal').classList.add('flex');
+                document.getElementById('capa-detail-body').innerHTML = '<div class="text-center py-4 text-gray-400">Loading...</div>';
+                try {
+                    const data = await apiCall(`/api/qms/capa/${id}`);
+                    if (!data) return;
+                    const c = data.capa || data;
+                    const statusClass = c.status === 'closed' ? 'status-closed' : c.status === 'open' ? 'status-open' : 'status-in-progress';
+                    document.getElementById('capa-detail-body').innerHTML = `
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-start">
+                                <div><h4 class="text-lg font-bold">${c.title}</h4><span class="text-xs text-gray-500">${c.capa_number}</span></div>
+                                <span class="px-3 py-1 rounded text-sm ${statusClass}">${(c.status||'').replace('_',' ')}</span>
+                            </div>
+                            ${c.description ? `<p class="text-sm text-gray-600">${c.description}</p>` : ''}
+                            <div class="grid grid-cols-2 gap-3 text-sm">
+                                <div class="bg-gray-50 p-3 rounded"><span class="text-gray-500">Type:</span> <span class="capitalize font-medium">${c.capa_type}</span></div>
+                                <div class="bg-gray-50 p-3 rounded"><span class="text-gray-500">Severity:</span> <span class="capitalize font-medium severity-${c.severity} px-2 py-0.5 rounded">${c.severity}</span></div>
+                                <div class="bg-gray-50 p-3 rounded"><span class="text-gray-500">Assigned:</span> <span class="font-medium">${c.assigned_to || '-'}</span></div>
+                                <div class="bg-gray-50 p-3 rounded"><span class="text-gray-500">Target:</span> <span class="font-medium">${c.target_date ? new Date(c.target_date).toLocaleDateString() : '-'}</span></div>
+                                ${c.root_cause ? `<div class="bg-gray-50 p-3 rounded col-span-2"><span class="text-gray-500">Root Cause:</span> <span class="font-medium">${c.root_cause}</span></div>` : ''}
+                            </div>
+                            ${c.effectiveness_check ? `<div class="p-3 rounded-lg ${c.effectiveness_check === 'effective' ? 'bg-green-50 border-l-4 border-green-500' : 'bg-red-50 border-l-4 border-red-500'}">
+                                <span class="text-sm font-medium">Effectiveness: ${c.effectiveness_check}</span>
+                                ${c.effectiveness_notes ? `<p class="text-xs text-gray-600 mt-1">${c.effectiveness_notes}</p>` : ''}
+                            </div>` : ''}
+                            ${c.evidence_files ? `<div class="p-3 bg-blue-50 rounded-lg"><span class="text-sm font-medium text-blue-800">Evidence:</span><p class="text-xs text-blue-700 mt-1">${c.evidence_files}</p></div>` : ''}
+                            <div class="flex gap-2 pt-3 border-t">
+                                ${c.status !== 'closed' ? `
+                                    <select id="detail-status-select" class="border rounded px-3 py-1.5 text-sm flex-1">
+                                        <option value="open">Open</option>
+                                        <option value="investigation">Investigation</option>
+                                        <option value="action_plan">Action Plan</option>
+                                        <option value="implementation">Implementation</option>
+                                        <option value="verification">Verification</option>
+                                        <option value="closed">Closed</option>
+                                    </select>
+                                    <button onclick="updateCapaStatus('${c.id}')" class="px-4 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700" data-testid="button-update-status">Update Status</button>
+                                ` : ''}
+                                ${c.status === 'verification' || c.status === 'closed' ? `
+                                    <select id="detail-effectiveness" class="border rounded px-3 py-1.5 text-sm">
+                                        <option value="">Check Effectiveness</option>
+                                        <option value="effective">Effective</option>
+                                        <option value="partially_effective">Partially Effective</option>
+                                        <option value="not_effective">Not Effective</option>
+                                    </select>
+                                    <button onclick="submitEffectiveness('${c.id}')" class="px-3 py-1.5 bg-purple-600 text-white rounded text-sm hover:bg-purple-700" data-testid="button-effectiveness">Submit</button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                    if (document.getElementById('detail-status-select')) {
+                        document.getElementById('detail-status-select').value = c.status || 'open';
+                    }
+                } catch (error) {
+                    document.getElementById('capa-detail-body').innerHTML = '<div class="text-red-500 text-center">Error loading details</div>';
+                }
+            }
+
+            function closeCapaDetail() {
+                document.getElementById('capa-detail-modal').classList.add('hidden');
+                document.getElementById('capa-detail-modal').classList.remove('flex');
+            }
+
+            async function updateCapaStatus(id) {
+                const status = document.getElementById('detail-status-select').value;
+                await fetch(`/api/qms/capa/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+                closeCapaDetail();
+                loadCapa();
+            }
+
+            async function submitEffectiveness(id) {
+                const eff = document.getElementById('detail-effectiveness').value;
+                if (!eff) return alert('Select an effectiveness rating');
+                const evidence = prompt('Provide evidence/notes for this effectiveness review:') || 'Dashboard review';
+                const reviewedBy = prompt('Reviewed by (name):') || 'Quality Manager';
+                await fetch(`/api/qms/capa/${id}/effectiveness`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: eff, evidence, reviewedBy }) });
+                closeCapaDetail();
+                loadCapa();
+            }
+
             async function loadCapa() {
                 try {
                     const status =
@@ -975,7 +1099,8 @@
                         (data.records || [])
                             .map(
                                 (c) => `
-                    <tr class="border-b hover:bg-gray-50">
+                    <tr class="border-b hover:bg-gray-50 cursor-pointer" onclick="viewCapaDetail('${c.id}')">
+                        <td class="py-2 px-3" onclick="event.stopPropagation()"><input type="checkbox" class="capa-checkbox" value="${c.id}" onchange="updateBulkBtn()" /></td>
                         <td class="py-2 px-3 font-mono text-xs">${c.capa_number}</td>
                         <td class="py-2 px-3">${c.title}</td>
                         <td class="py-2 px-3 capitalize">${c.capa_type}</td>
@@ -983,11 +1108,14 @@
                         <td class="py-2 px-3"><span class="px-2 py-1 rounded text-xs status-${c.status.includes("progress") || c.status === "investigation" ? "in-progress" : c.status}">${c.status.replace("_", " ")}</span></td>
                         <td class="py-2 px-3">${c.assigned_to || "-"}</td>
                         <td class="py-2 px-3">${c.target_date ? new Date(c.target_date).toLocaleDateString() : "-"}</td>
+                        <td class="py-2 px-3" onclick="event.stopPropagation()">
+                            <button onclick="viewCapaDetail('${c.id}')" class="text-blue-600 hover:text-blue-800 text-xs" data-testid="button-view-capa-${c.id}">View</button>
+                        </td>
                     </tr>
                 `,
                             )
                             .join("") ||
-                        '<tr><td colspan="7" class="text-center py-4 text-gray-500">No CAPA records found</td></tr>';
+                        '<tr><td colspan="9" class="text-center py-4 text-gray-500">No CAPA records found</td></tr>';
                     document.getElementById("capa-table").innerHTML = html;
                 } catch (error) {
                     console.error("Error loading CAPA:", error);

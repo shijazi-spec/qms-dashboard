@@ -44,6 +44,7 @@ import { consultantRoutes } from "./routes/consultantRoutes";
 import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { knowledgeRoutes } from "./routes/knowledgeRoutes";
+import { reportRoutes } from "./routes/reportRoutes";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
@@ -2285,13 +2286,31 @@ export const mastra = new Mastra({
         },
       },
       
-      // Enhanced QMS routes (must come before generic :id routes)
-      ...qmsEnhancedRoutes,
-      ...notificationRoutes,
-      ...knowledgeRoutes,
       // ======================================================================
       // QMS CAPA API Endpoints
       // ======================================================================
+      {
+        path: "/api/qms/capa/export",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const { toCSV } = await import("../utils/exportUtils");
+              const pg = await import("pg");
+              const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+              try {
+                const result = await pool.query(`SELECT capa_number, title, capa_type, severity, status, assigned_to, target_date, root_cause, effectiveness_result FROM capa_records ORDER BY created_at DESC LIMIT 10000`);
+                const csv = toCSV(result.rows);
+                c.header('Content-Type', 'text/csv');
+                c.header('Content-Disposition', 'attachment; filename="capa_export.csv"');
+                return c.body(csv);
+              } finally { await pool.end(); }
+            } catch (error) {
+              return c.json({ error: "Export failed" }, 500);
+            }
+          };
+        },
+      },
       {
         path: "/api/qms/capa",
         method: "GET",
@@ -2405,9 +2424,19 @@ export const mastra = new Mastra({
               });
               
               logger?.info("✅ [QMS] CAPA created", { capaNumber: capa.capa_number });
+
               try {
                 const { logEvent } = await import("../utils/eventLogsDatabase");
-                await logEvent({ actionType: 'CREATE', entityType: 'CAPA', entityId: String(capa.id), entityName: capa.capa_number, description: `CAPA created: ${capa.title}`, module: 'qms', severity: 'INFO' });
+                await logEvent({
+                  actionType: 'CREATE',
+                  entityType: 'CAPA',
+                  entityId: String(capa.id),
+                  entityName: capa.capa_number,
+                  description: `CAPA created: ${capa.title}`,
+                  newValue: JSON.stringify(capa),
+                  module: 'qms',
+                  severity: 'INFO',
+                });
               } catch {}
               return c.json(capa);
             } catch (error) {
@@ -2494,9 +2523,19 @@ export const mastra = new Mastra({
               });
               
               logger?.info("✅ [QMS] NC created", { ncNumber: nc.nc_number });
+
               try {
                 const { logEvent } = await import("../utils/eventLogsDatabase");
-                await logEvent({ actionType: 'CREATE', entityType: 'NC', entityId: String(nc.id), entityName: nc.nc_number, description: `Nonconformance created: ${nc.title}`, module: 'qms', severity: 'INFO' });
+                await logEvent({
+                  actionType: 'CREATE',
+                  entityType: 'CAPA',
+                  entityId: String(nc.id),
+                  entityName: nc.nc_number,
+                  description: `Nonconformance created: ${nc.title}`,
+                  newValue: JSON.stringify(nc),
+                  module: 'qms',
+                  severity: 'INFO',
+                });
               } catch {}
               return c.json(nc);
             } catch (error) {
@@ -3424,6 +3463,7 @@ export const mastra = new Mastra({
       ...pmpRoutes,
       ...eventLogsRoutes,
       ...onboardingRoutes,
+      ...qmsEnhancedRoutes,
       ...riskRoutes,
       ...policyRoutes,
       ...complianceRoutes,
@@ -3440,6 +3480,9 @@ export const mastra = new Mastra({
       ...userAccessRoutes,
       ...smokeTestRoutes,
       ...consultantRoutes,
+      ...notificationRoutes,
+      ...knowledgeRoutes,
+      ...reportRoutes,
       ...registerSlackTrigger({
         triggerType: "slack/message.channels",
         handler: async (mastra, triggerInfo) => {

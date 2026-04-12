@@ -378,6 +378,8 @@ export async function getAllRisks(filters?: {
   category?: string;
   risk_level?: string;
   owner_department?: string;
+  date_from?: string;
+  date_to?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ risks: EnterpriseRisk[]; total: number }> {
@@ -405,6 +407,16 @@ export async function getAllRisks(filters?: {
   if (filters?.owner_department) {
     whereConditions.push(`owner_department = $${paramCount}`);
     values.push(filters.owner_department);
+    paramCount++;
+  }
+  if (filters?.date_from) {
+    whereConditions.push(`created_at >= $${paramCount}`);
+    values.push(filters.date_from);
+    paramCount++;
+  }
+  if (filters?.date_to) {
+    whereConditions.push(`created_at <= $${paramCount}::date + interval '1 day'`);
+    values.push(filters.date_to);
     paramCount++;
   }
 

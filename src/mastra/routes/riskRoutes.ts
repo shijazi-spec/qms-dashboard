@@ -37,13 +37,15 @@ export const riskRoutes = [
           const category = url.searchParams.get('category') || undefined;
           const risk_level = url.searchParams.get('risk_level') || undefined;
           const owner_department = url.searchParams.get('owner_department') || undefined;
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const offset = parseInt(url.searchParams.get('offset') || '0');
 
           logger?.info('📊 [RiskAPI] GET /api/risks', { status, category, risk_level, owner_department });
 
           const result = await getAllRisks({
-            status, category, risk_level, owner_department, limit, offset
+            status, category, risk_level, owner_department, date_from, date_to, limit, offset
           });
 
           const { obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
