@@ -26,7 +26,7 @@ import {
   extractDomain,
 } from '../../utils/duplicateRadarDatabase';
 
-import { fetchZohoRecords } from '../../utils/zohoCRM';
+import { fetchZohoRecords, fetchAllZohoRecords } from '../../utils/zohoCRM';
 
 async function scanZohoCRMForDuplicates(): Promise<{
   success: boolean;
@@ -48,10 +48,10 @@ async function scanZohoCRMForDuplicates(): Promise<{
     let clustersUpdated = new Set<number>();
 
     const [leadsRecords, dealsRecords, contactsRecords, accountsRecords] = await Promise.all([
-      fetchZohoRecords('Leads', { page: 1, perPage: 200 }).catch(e => { console.error('Error fetching Leads:', e); return []; }),
-      fetchZohoRecords('Deals', { page: 1, perPage: 200 }).catch(e => { console.error('Error fetching Deals:', e); return []; }),
-      fetchZohoRecords('Contacts', { page: 1, perPage: 200 }).catch(e => { console.error('Error fetching Contacts:', e); return []; }),
-      fetchZohoRecords('Accounts', { page: 1, perPage: 200 }).catch(e => { console.error('Error fetching Accounts:', e); return []; })
+      fetchAllZohoRecords('Leads').catch(e => { console.error('Error fetching Leads:', e); return []; }),
+      fetchAllZohoRecords('Deals').catch(e => { console.error('Error fetching Deals:', e); return []; }),
+      fetchAllZohoRecords('Contacts').catch(e => { console.error('Error fetching Contacts:', e); return []; }),
+      fetchAllZohoRecords('Accounts').catch(e => { console.error('Error fetching Accounts:', e); return []; })
     ]);
 
     console.log(`📥 [DuplicateRadar] Fetched ${leadsRecords.length} Leads from Zoho`);
