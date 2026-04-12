@@ -118,7 +118,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 ## AI Consultant Feature
 - **Agent**: `qmsConsultantAgent.ts` - GPT-4o powered QMS consultant with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents)
 - **Tools**: `queryPlatformDataTool.ts`, `analyzeNonconformitiesTool.ts`, `suggestImprovementsTool.ts`, `checkRegulationComplianceTool.ts`, `monitorKPIsTool.ts`, `monitorRisksTool.ts`, `createAlertTool.ts`, `reviewDocumentTool.ts`
-- **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks (NCs without CAPA, high risks, overdue treatments, missed KPIs, expiring policies, PDPL gaps, audit score decline, training gaps) running every 6 hours via Inngest
+- **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks (NCs without CAPA, high risks ≥15, overdue treatments, missed KPIs, expiring policies, PDPL gaps (3 conditions), audit decline trend, training gaps) running every 6 hours via Inngest
 - **Alerts Database**: `aiAlertsDatabase.ts` - ai_alerts table with CRUD, dedup, severity-ordered queries
 - **Routes**: `consultantRoutes.ts` - `/api/consultant/chat`, `/api/consultant/chat/stream` (SSE), `/api/consultant/alerts`, `/api/consultant/alerts/count`, `/api/consultant/scan`
 - **Frontend**: `dashboard/consultant.html` - Full chat interface with sidebar quick actions, markdown rendering, streaming responses, alert bell integration

@@ -461,8 +461,9 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | `/api/consultant/chat/stream` | POST | Send a message with SSE streaming response |
 | `/api/consultant/alerts` | GET | List all AI alerts (severity-ordered) |
 | `/api/consultant/alerts/count` | GET | Get unread alert count |
-| `/api/consultant/alerts/:id/read` | PATCH | Mark an alert as read |
-| `/api/consultant/alerts/:id` | DELETE | Delete an alert |
+| `/api/consultant/alerts/:id/acknowledge` | POST | Acknowledge an alert |
+| `/api/consultant/alerts/:id/resolve` | POST | Mark alert as resolved |
+| `/api/consultant/alerts/:id/dismiss` | POST | Dismiss an alert |
 | `/api/consultant/scan` | POST | Trigger a manual background scan |
 
 **Backend Tables:** `ai_alerts`
@@ -589,7 +590,7 @@ Default (global) endpoints work for most other regions:
 - Supports both standard and streaming (SSE) chat responses
 - Responds in English or Arabic based on user's language
 - Does not expose internal tool mechanics or database queries to users
-- Uses `@ai-sdk/openai-v5` with Replit AI proxy fallback (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
+- Uses `@ai-sdk/openai` (v5 subpath export) with Replit AI proxy fallback (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
 
 ### 6.3 SDR Quality Agent
 - Evaluates SDR (Sales Development Representative) performance
@@ -651,24 +652,24 @@ Default (global) endpoints work for most other regions:
 - **Purpose:** Proactively scans platform data for quality and compliance issues, creating AI alerts
 - **Checks performed (8 total):**
   1. Nonconformances without linked CAPA records
-  2. High-severity risks (score ≥ 12) without treatment plans
+  2. High-severity risks (likelihood × impact ≥ 15) without treatment plans
   3. Overdue risk treatment actions
   4. KPIs missing their target values
-  5. Policies expiring within 30 days
-  6. PDPL compliance gaps (data incidents without resolution)
-  7. Audit score decline (latest score below 85%)
-  8. Training compliance gaps (overdue assignments)
+  5. Policies/governance documents expiring within 30 days or already expired
+  6. PDPL compliance gaps — checks 3 conditions: empty data inventory, no active AI guardrails, and open/unresolved data incidents
+  7. Audit score decline — detects declining trend across 3+ recent audits with >5% cumulative drop (not a fixed threshold)
+  8. Training compliance gaps (overdue training assignments past due date)
 - **Output:** Creates deduplicated AI alerts in the `ai_alerts` table with severity levels (critical, high, medium, low)
 - **Alert bell:** Navigation bar displays unread alert count badge, polls `/api/consultant/alerts/count` every 60 seconds
 
-### 8.3 Automated Triggers (renamed from 8.2)
+### 8.3 Automated Triggers
 - **AUDIT_COMPLETED:** Fires after every successful audit
 - **NONCONFORMANCE_DETECTED:** Fires when issues are found during an audit
 - **CAPA_REQUIRED:** Fires when critical or high-severity issues are detected
 - Triggers appear in the QMS Dashboard **Triggers** tab
 - Actions: Acknowledge, Dismiss, or Decide (approve/reject)
 
-### 8.3 External Notification Triggers
+### 8.4 External Notification Triggers
 - **Cron Triggers:** Configurable scheduled triggers for weekly/monthly audits (`src/triggers/cronTriggers.ts`)
 - **Slack Integration:** Automated notifications to Slack channels (`src/triggers/slackTrigger.ts`)
 - **Telegram Integration:** Automated notifications to Telegram chats (`src/triggers/telegramTrigger.ts`). Webhook endpoint protected by `TELEGRAM_WEBHOOK_SECRET` query parameter validation when the secret is configured.
