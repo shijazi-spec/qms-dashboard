@@ -233,7 +233,7 @@
 | 105 | CORS | PASS | Same-origin allowed |
 | 106 | OIDC nonce | PASS | Nonce verification working |
 | 107 | Telegram webhook auth | PASS | 401 without secret |
-| 108 | Linear webhook | N/A | Not in production (Slack + Telegram are active) |
+| 108 | Slack App API | PASS | Bot `walaplus_qms` on WalaPlus workspace (T3Z00BA0L). auth.test OK. Scopes: chat:write, chat:write.public. Notifications delivered to SLACK_QMS_CHANNEL. Admin dashboard shows live Slack status card |
 | 109 | UUID obfuscation | PASS | R-XXXXXXXX format |
 | 110 | Generic errors | PASS | No stack traces leaked |
 
