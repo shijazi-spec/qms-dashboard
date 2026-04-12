@@ -170,6 +170,14 @@
                         <p class="text-sm text-gray-500" id="modalSubtitle">Click on any issue to view details</p>
                     </div>
                     <div class="flex items-center space-x-3">
+                        <select id="modalModuleFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
+                            <option value="all">All Modules</option>
+                            <option value="Deals">Deals</option>
+                            <option value="Tasks">Tasks</option>
+                            <option value="Contacts">Contacts</option>
+                            <option value="Leads">Leads</option>
+                            <option value="Accounts">Accounts</option>
+                        </select>
                         <select id="modalSeverityFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
                             <option value="all">All Severities</option>
                             <option value="critical">Critical</option>
@@ -627,6 +635,8 @@
             document.getElementById('issuesDrilldownModal').classList.remove('hidden');
             document.getElementById('modalTitle').textContent = category === 'all' ? 'All Issues' : `${category} Issues`;
             document.getElementById('modalSubtitle').textContent = `Viewing issues for ${getFilterDescription()}`;
+            document.getElementById('modalModuleFilter').value = category === 'all' ? 'all' : category;
+            document.getElementById('modalSeverityFilter').value = 'all';
             loadIssuesForModal(category);
         }
 
@@ -685,8 +695,11 @@
         }
 
         function filterModalIssues() {
+            const module = document.getElementById('modalModuleFilter').value;
             const severity = document.getElementById('modalSeverityFilter').value;
-            const filtered = severity === 'all' ? currentIssues : currentIssues.filter(i => i.severity === severity);
+            let filtered = currentIssues;
+            if (module !== 'all') filtered = filtered.filter(i => i.module === module);
+            if (severity !== 'all') filtered = filtered.filter(i => i.severity === severity);
             renderIssuesTable(filtered);
         }
 
@@ -696,8 +709,11 @@
 
         // Export functions
         function exportIssues(format) {
+            const module = document.getElementById('modalModuleFilter').value;
             const severity = document.getElementById('modalSeverityFilter').value;
-            const issues = severity === 'all' ? currentIssues : currentIssues.filter(i => i.severity === severity);
+            let issues = currentIssues;
+            if (module !== 'all') issues = issues.filter(i => i.module === module);
+            if (severity !== 'all') issues = issues.filter(i => i.severity === severity);
             
             if (format === 'csv') {
                 const headers = ['Record ID', 'Module', 'Owner', 'Issue', 'Severity', 'Recommendation'];
@@ -1077,7 +1093,7 @@
         function updateIssuesCategoryCards(issuesByCategory) {
             const container = document.getElementById('issuesCategoryCards');
             const normalized = normalizeIssuesByCategory(issuesByCategory);
-            const categories = Object.entries(normalized);
+            const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
             const colors = {
                 'Leads': { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
                 'Deals': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
@@ -1085,14 +1101,10 @@
                 'Tasks': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
                 'Accounts': { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' }
             };
-            
-            if (categories.length === 0) {
-                container.innerHTML = '<div class="col-span-5 text-center text-sm text-gray-400 py-4">No issues by category found</div>';
-                return;
-            }
 
-            container.innerHTML = categories.map(([cat, count]) => {
-                const color = colors[cat] || { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200' };
+            container.innerHTML = allModules.map(cat => {
+                const count = normalized[cat] || 0;
+                const color = colors[cat];
                 return `
                     <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
                         <div class="text-2xl font-bold ${color.text}">${count}</div>
@@ -1351,9 +1363,9 @@
                 }
 
                 const normalized = normalizeIssuesByCategory(issuesByCategory);
-                const hasData = Object.keys(normalized).length > 0 && Object.values(normalized).some(v => v > 0);
-                const categories = hasData ? Object.keys(normalized) : ['Leads', 'Deals', 'Contacts', 'Tasks', 'Accounts'];
-                const values = hasData ? Object.values(normalized) : [0, 0, 0, 0, 0];
+                const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+                const categories = allModules;
+                const values = allModules.map(m => normalized[m] || 0);
                 issuesChart = new Chart(ctx, {
                     type: 'doughnut',
                     data: {
