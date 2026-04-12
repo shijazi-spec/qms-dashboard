@@ -1,0 +1,68 @@
+What's ALREADY on Replit (deployed and working)
+The original AI Consultant agent with 13 tools -- this was built and deployed in a previous session. It can:
+
+Query live platform data (NCs, CAPAs, risks, KPIs, etc.)
+Run compliance checks (hardcoded against PDPL, ISO 9001, ISO 27001, NCA)
+Analyze nonconformity patterns
+Monitor risks and KPIs
+Create alerts, NCs, and CAPAs
+Background scan every 6 hours
+What we just built (NEW code, NOT yet on Replit)
+Two sets of enhancements that are only in your local files right now:
+
+Set 1 -- Platform Enhancement Roadmap (13 items):
+
+Unified audit trail (logEvent everywhere)
+NC/CAPA change history tables
+AI tool table name fixes
+Approval workflows for NC/CAPA closure
+CAPA effectiveness verification
+Risk treatment progress tracking
+CSV exports for 6 modules
+Bulk operations
+KPI auto-calculation cron
+Notification hub (email + Slack)
+Quality Health Index endpoint
+Evidence management system
+Set 2 -- AI Consultant Enhancement (7 items):
+
+Checklist Engine (create/run structured compliance checklists)
+Knowledge Base (upload documents, full-text search)
+3 new AI tools (16 total now)
+Enhanced system prompt
+Updated consultant UI with upload + checklist sidebar
+To get it on Replit
+You need to send all the new/modified files to Replit. There are two ways:
+
+Option A (Recommended): Send this message to Replit Agent:
+
+I have code updates for the platform. Please apply the following new files and modifications. I'll paste each file's content.
+
+Then paste the content of each new file. The key files are:
+
+New files to create (10):
+
+src/utils/changeHistoryDatabase.ts
+src/utils/exportUtils.ts
+src/utils/notificationHub.ts
+src/utils/evidenceDatabase.ts
+src/utils/checklistDatabase.ts
+src/utils/knowledgeDatabase.ts
+src/mastra/routes/qmsEnhancedRoutes.ts
+src/mastra/routes/notificationRoutes.ts
+src/mastra/routes/knowledgeRoutes.ts
+src/mastra/tools/checklistTools.ts
+src/mastra/tools/searchKnowledgeTool.ts
+Files to update (8+):
+
+src/mastra/index.ts (new imports + route registration + logEvent calls)
+src/mastra/agents/qmsConsultantAgent.ts (3 new tools + enhanced prompt)
+src/mastra/inngest/index.ts (KPI auto-calc cron)
+src/utils/qmsDatabase.ts (approval workflow fields + functions)
+src/utils/riskDatabase.ts (percent_complete + milestones)
+scripts/createQMSTables.ts (ALTER TABLE statements)
+dashboard/consultant.html (checklist + knowledge base UI)
+AI tool files (table name fixes)
+Option B: Download all the files from your local QMS Platform\QMS-Dashboard\QMS-Dashboard folder and upload them to Replit, replacing the existing ones.
+
+The answer to your question: Yes, once deployed to Replit, the AI Consultant will be significantly enhanced beyond what's currently live. It will have everything the current simulation does PLUS the checklist engine, knowledge base, and all the platform maturity improvements. It's not a separate system -- it's an upgrade to the same agent.
