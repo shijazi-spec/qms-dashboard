@@ -12,3 +12,9 @@ id = "5WJFgCAUKjq5_A3bKaN8n"
 uri = "file://attached_assets/WalaPlus_Testing_Report_v4.2.md"
 type = "text"
 title = "WalaPlus Testing & Adoption Report v4.2"
+
+[[outputs]]
+id = "AiPb9-0c6x1bOADrFYUfJ"
+uri = "file://attached_assets/WalaPlus_Testing_Report_v4.3.md"
+type = "text"
+title = "WalaPlus Testing Report v4.3"
