@@ -122,6 +122,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     let totalRecords = 0;
     const clustersUpdated = new Set<number>();
 
+    // LEADS
     const leadsResult = await processModule('Leads', 'lead', clustersUpdated, (record) => {
       const d = record.data;
       return {
@@ -141,6 +142,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += leadsResult.count;
     moduleBreakdown.push({ module: 'Leads', count: leadsResult.count });
 
+    // DEALS
     const dealsResult = await processModule('Deals', 'deal', clustersUpdated, (record) => {
       const d = record.data;
       return {
@@ -162,6 +164,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += dealsResult.count;
     moduleBreakdown.push({ module: 'Deals', count: dealsResult.count });
 
+    // CONTACTS
     const contactsResult = await processModule('Contacts', 'contact', clustersUpdated, (record) => {
       const d = record.data;
       return {
@@ -181,6 +184,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += contactsResult.count;
     moduleBreakdown.push({ module: 'Contacts', count: contactsResult.count });
 
+    // ACCOUNTS
     const accountsResult = await processModule('Accounts', 'account', clustersUpdated, (record) => {
       const d = record.data;
       const website = d.Website?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '';
@@ -201,6 +205,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += accountsResult.count;
     moduleBreakdown.push({ module: 'Accounts', count: accountsResult.count });
 
+    // Update all cluster stats with multi-signal scoring
     console.log(`📊 [DuplicateRadar] Updating stats for ${clustersUpdated.size} clusters...`);
     let processed = 0;
     for (const clusterId of clustersUpdated) {
@@ -260,6 +265,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
   }
 }
 
+// Exported for use by Inngest cron
 export { scanZohoCRMForDuplicates };
 
 initDuplicateRadarTables().catch(err => {
@@ -952,6 +958,9 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // ═══════════════════════════════════════════════════════════
+  //  MERGE / RESOLVE WORKFLOW
+  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/clusters/:id/resolve",
     method: "POST" as const,
@@ -1046,6 +1055,9 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // ═══════════════════════════════════════════════════════════
+  //  REAL-TIME DUPLICATE CHECK (pre-creation)
+  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/check",
     method: "POST" as const,
@@ -1067,6 +1079,9 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // ═══════════════════════════════════════════════════════════
+  //  OWNER ACCOUNTABILITY
+  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/owner-accountability",
     method: "GET" as const,
@@ -1082,6 +1097,9 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // ═══════════════════════════════════════════════════════════
+  //  ENHANCED SUMMARY
+  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/enhanced-summary",
     method: "GET" as const,

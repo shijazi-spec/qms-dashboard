@@ -248,7 +248,7 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
 }
 
 const kpiAutoCalcFunction = inngest.createFunction(
-  { id: "kpi-auto-calculation", name: "KPI Auto Calculation" },
+  { id: "kpi-auto-calculation" },
   { cron: process.env.KPI_AUTO_CALC_CRON || "0 2 * * *" },
   async ({ step }) => {
     return await step.run("run-kpi-auto-calc", async () => {

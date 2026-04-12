@@ -133,6 +133,7 @@ export function calculateSimilarity(str1: string, str2: string): number {
   if (s1 === s2) return 100;
   
   const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
   
   if (longer.length === 0) return 100;
   
@@ -715,6 +716,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
   const stats = statsResult.rows[0];
   const totalRecords = parseInt(stats.total_count) || 0;
 
+  // Multi-signal confidence: compare all record pairs in the cluster
   const records = await pool.query(
     'SELECT email, domain, phone, phone_normalized, company_name FROM duplicate_records WHERE cluster_id = $1 LIMIT 50',
     [clusterId]
@@ -734,6 +736,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     }
   }
 
+  // If only 1 record, score = 0 (not a duplicate). If multiple but no signal match, give base score from count.
   let confidenceScore: number;
   if (totalRecords <= 1) {
     confidenceScore = 0;
@@ -743,6 +746,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     confidenceScore = totalRecords > 3 ? 65 : 55;
   }
 
+  // Pipeline inflation = total deal value of non-primary deals in the cluster
   const inflationResult = await pool.query(`
     SELECT COALESCE(SUM(deal_value), 0) as inflation
     FROM duplicate_records
@@ -750,6 +754,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
   `, [clusterId]);
   const pipelineInflation = parseFloat(inflationResult.rows[0]?.inflation) || 0;
 
+  // Auto-mark primary: earliest created record
   const primaryCheck = await pool.query(
     'SELECT COUNT(*) as cnt FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true', [clusterId]
   );
@@ -911,6 +916,7 @@ export async function findOrCreateClusterByCompany(
   const normalizedName = normalizeCompanyName(companyName);
   const normalizedPhone = phone ? normalizePhone(phone) : '';
 
+  // Signal 1: Exact domain match (strongest for B2B)
   if (domain) {
     const existingByDomain = await pool.query(
       'SELECT * FROM duplicate_clusters WHERE domain = $1',
@@ -921,6 +927,7 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 2: Exact email match in existing records
   if (email) {
     const existingByEmail = await pool.query(
       `SELECT dc.* FROM duplicate_clusters dc
@@ -933,6 +940,7 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 3: Phone match in existing records
   if (normalizedPhone && normalizedPhone.length >= 7) {
     const existingByPhone = await pool.query(
       `SELECT dc.* FROM duplicate_clusters dc
@@ -945,6 +953,7 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 4: Exact company name match
   if (normalizedName) {
     const existingByCompany = await pool.query(
       `SELECT * FROM duplicate_clusters 
@@ -956,6 +965,7 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 5: Fuzzy company name match (Levenshtein) — limit to recent clusters for performance
   const recentClusters = await pool.query(
     'SELECT * FROM duplicate_clusters ORDER BY updated_at DESC LIMIT 5000'
   );
@@ -980,6 +990,10 @@ export async function findOrCreateClusterByCompany(
     status: 'active'
   });
 }
+
+// ═══════════════════════════════════════════════════════════
+//  MERGE WORKFLOW
+// ═══════════════════════════════════════════════════════════
 
 export async function markPrimaryRecord(clusterId: number, recordId: number): Promise<boolean> {
   await pool.query('UPDATE duplicate_records SET is_primary = false WHERE cluster_id = $1', [clusterId]);
@@ -1047,6 +1061,10 @@ export async function getMergeHistory(clusterId?: number, limit: number = 50): P
   return result.rows;
 }
 
+// ═══════════════════════════════════════════════════════════
+//  OWNER ACCOUNTABILITY SCORING
+// ═══════════════════════════════════════════════════════════
+
 export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
   const result = await pool.query(`
     SELECT 
@@ -1077,6 +1095,10 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
     estimated_waste_value: parseFloat(r.estimated_waste_value) || 0
   }));
 }
+
+// ═══════════════════════════════════════════════════════════
+//  REAL-TIME DUPLICATE CHECK (pre-creation)
+// ═══════════════════════════════════════════════════════════
 
 export async function checkForDuplicates(params: {
   email?: string;
@@ -1151,6 +1173,10 @@ export async function checkForDuplicates(params: {
     matching_records: result.rows
   };
 }
+
+// ═══════════════════════════════════════════════════════════
+//  ENHANCED SUMMARY (with true duplicate count)
+// ═══════════════════════════════════════════════════════════
 
 export async function getEnhancedSummary(): Promise<{
   totalClusters: number;
