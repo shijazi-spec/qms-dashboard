@@ -63,6 +63,24 @@
             </div>
         </div>
 
+        <div class="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-sm font-medium text-gray-700">Date Filter:</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-500">From</label>
+                <input type="date" id="dateFrom" data-testid="input-date-from" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-500">To</label>
+                <input type="date" id="dateTo" data-testid="input-date-to" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <button onclick="applyDateFilter()" data-testid="button-apply-date-filter" class="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">Apply</button>
+            <button onclick="clearDateFilter()" data-testid="button-clear-date-filter" class="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium">Clear</button>
+            <span id="dateFilterStatus" class="text-xs text-gray-400 ml-auto"></span>
+        </div>
+
         <div class="flex gap-2 mb-6 flex-wrap">
             <button onclick="showTab('summary')" id="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
             <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
@@ -454,12 +472,48 @@
         let sourceChart = null;
         let confidenceChart = null;
 
+        function getDateFilterParams() {
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const params = new URLSearchParams();
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            return params.toString();
+        }
+
+        function buildUrl(base) {
+            const dateParams = getDateFilterParams();
+            return dateParams ? `${base}?${dateParams}` : base;
+        }
+
+        function applyDateFilter() {
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const statusEl = document.getElementById('dateFilterStatus');
+            if (dateFrom || dateTo) {
+                const parts = [];
+                if (dateFrom) parts.push('from ' + dateFrom);
+                if (dateTo) parts.push('to ' + dateTo);
+                statusEl.textContent = 'Filtering: ' + parts.join(' ');
+            } else {
+                statusEl.textContent = '';
+            }
+            refreshData();
+        }
+
+        function clearDateFilter() {
+            document.getElementById('dateFrom').value = '';
+            document.getElementById('dateTo').value = '';
+            document.getElementById('dateFilterStatus').textContent = '';
+            refreshData();
+        }
+
         async function refreshData() {
             try {
                 const [summaryRes, clustersRes, ownersRes, logsRes] = await Promise.all([
-                    fetch('/api/duplicates/summary'),
-                    fetch('/api/duplicates/clusters'),
-                    fetch('/api/duplicates/by-owner'),
+                    fetch(buildUrl('/api/duplicates/summary')),
+                    fetch(buildUrl('/api/duplicates/clusters')),
+                    fetch(buildUrl('/api/duplicates/by-owner')),
                     fetch('/api/duplicates/logs')
                 ]);
 
@@ -578,9 +632,9 @@
         async function loadLeadsAndDeals() {
             try {
                 const [leadsRes, dealsRes, accountsRes] = await Promise.all([
-                    fetch('/api/duplicates/leads'),
-                    fetch('/api/duplicates/deals'),
-                    fetch('/api/duplicates/accounts')
+                    fetch(buildUrl('/api/duplicates/leads')),
+                    fetch(buildUrl('/api/duplicates/deals')),
+                    fetch(buildUrl('/api/duplicates/accounts'))
                 ]);
 
                 const leadsData = await leadsRes.json();

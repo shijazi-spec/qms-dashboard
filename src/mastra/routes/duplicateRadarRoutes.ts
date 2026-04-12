@@ -305,7 +305,11 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const summary = await getClusterSummary();
+          const url = new URL(c.req.url);
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
+          const dateFilters = { date_from, date_to };
+          const summary = await getClusterSummary(dateFilters);
           const kpis = await getKPIMetrics();
           return c.json({ ...summary, kpis });
         } catch (error: any) {
@@ -326,10 +330,14 @@ export const duplicateRadarRoutes = [
           const confidence_level = url.searchParams.get('confidence_level');
           const limit = parseInt(url.searchParams.get('limit') || '100');
           const offset = parseInt(url.searchParams.get('offset') || '0');
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
 
           const filters = {
             status: status || undefined,
-            confidence_level: confidence_level || undefined
+            confidence_level: confidence_level || undefined,
+            date_from,
+            date_to
           };
 
           const [clusters, total] = await Promise.all([
@@ -401,7 +409,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const data = await getDuplicatesByOwner();
+          const url = new URL(c.req.url);
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
+          const data = await getDuplicatesByOwner({ date_from, date_to });
           return c.json({ owners: data });
         } catch (error: any) {
           console.error('Error fetching by owner:', error);
@@ -629,7 +640,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const clusters = await getAllClusters({ status: 'active' });
+          const url = new URL(c.req.url);
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
+          const clusters = await getAllClusters({ status: 'active', date_from, date_to });
           const leadsWithDuplicates: any[] = [];
 
           for (const cluster of clusters) {
@@ -661,7 +675,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const clusters = await getAllClusters({ status: 'active' });
+          const url = new URL(c.req.url);
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
+          const clusters = await getAllClusters({ status: 'active', date_from, date_to });
           const dealsWithDuplicates: any[] = [];
 
           for (const cluster of clusters) {
@@ -694,7 +711,10 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const clusters = await getAllClusters({ status: 'active' });
+          const url = new URL(c.req.url);
+          const date_from = url.searchParams.get('date_from') || undefined;
+          const date_to = url.searchParams.get('date_to') || undefined;
+          const clusters = await getAllClusters({ status: 'active', date_from, date_to });
           const accountsWithDuplicates: any[] = [];
 
           for (const cluster of clusters) {

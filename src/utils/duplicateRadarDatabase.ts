@@ -296,6 +296,8 @@ export async function getAllClusters(filters?: {
   confidence_level?: string;
   limit?: number;
   offset?: number;
+  date_from?: string;
+  date_to?: string;
 }): Promise<DuplicateCluster[]> {
   let query = 'SELECT * FROM duplicate_clusters WHERE 1=1';
   const params: any[] = [];
@@ -308,6 +310,14 @@ export async function getAllClusters(filters?: {
   if (filters?.confidence_level) {
     query += ` AND confidence_level = $${paramIndex++}`;
     params.push(filters.confidence_level);
+  }
+  if (filters?.date_from) {
+    query += ` AND created_at >= $${paramIndex++}`;
+    params.push(filters.date_from);
+  }
+  if (filters?.date_to) {
+    query += ` AND created_at <= ($${paramIndex++})::timestamp + interval '1 day'`;
+    params.push(filters.date_to);
   }
 
   query += ' ORDER BY total_records DESC, confidence_score DESC';
@@ -328,6 +338,8 @@ export async function getAllClusters(filters?: {
 export async function getClusterCount(filters?: {
   status?: string;
   confidence_level?: string;
+  date_from?: string;
+  date_to?: string;
 }): Promise<number> {
   let query = 'SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1';
   const params: any[] = [];
@@ -340,6 +352,14 @@ export async function getClusterCount(filters?: {
   if (filters?.confidence_level) {
     query += ` AND confidence_level = $${paramIndex++}`;
     params.push(filters.confidence_level);
+  }
+  if (filters?.date_from) {
+    query += ` AND created_at >= $${paramIndex++}`;
+    params.push(filters.date_from);
+  }
+  if (filters?.date_to) {
+    query += ` AND created_at <= ($${paramIndex++})::timestamp + interval '1 day'`;
+    params.push(filters.date_to);
   }
 
   const result = await pool.query(query, params);
@@ -359,7 +379,7 @@ export async function getRecordsByClusterId(clusterId: number): Promise<Duplicat
   return result.rows;
 }
 
-export async function getClusterSummary(): Promise<{
+export async function getClusterSummary(dateFilters?: { date_from?: string; date_to?: string }): Promise<{
   totalClusters: number;
   totalDuplicateLeads: number;
   totalDuplicateDeals: number;
@@ -370,6 +390,17 @@ export async function getClusterSummary(): Promise<{
   activeCount: number;
   resolvedCount: number;
 }> {
+  let whereClause = 'WHERE 1=1';
+  const params: any[] = [];
+  let paramIndex = 1;
+  if (dateFilters?.date_from) {
+    whereClause += ` AND created_at >= $${paramIndex++}`;
+    params.push(dateFilters.date_from);
+  }
+  if (dateFilters?.date_to) {
+    whereClause += ` AND created_at <= ($${paramIndex++})::timestamp + interval '1 day'`;
+    params.push(dateFilters.date_to);
+  }
   const result = await pool.query(`
     SELECT 
       COUNT(*) as total_clusters,
@@ -382,8 +413,8 @@ export async function getClusterSummary(): Promise<{
       COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
       COUNT(*) FILTER (WHERE status = 'active') as active_count,
       COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count
-    FROM duplicate_clusters
-  `);
+    FROM duplicate_clusters ${whereClause}
+  `, params);
   
   const row = result.rows[0];
   return {
@@ -400,13 +431,24 @@ export async function getClusterSummary(): Promise<{
   };
 }
 
-export async function getDuplicatesByOwner(): Promise<Array<{
+export async function getDuplicatesByOwner(dateFilters?: { date_from?: string; date_to?: string }): Promise<Array<{
   owner_name: string;
   owner_email: string;
   lead_count: number;
   deal_count: number;
   total_duplicates: number;
 }>> {
+  let whereClause = 'WHERE owner_name IS NOT NULL';
+  const params: any[] = [];
+  let paramIndex = 1;
+  if (dateFilters?.date_from) {
+    whereClause += ` AND created_at >= $${paramIndex++}`;
+    params.push(dateFilters.date_from);
+  }
+  if (dateFilters?.date_to) {
+    whereClause += ` AND created_at <= ($${paramIndex++})::timestamp + interval '1 day'`;
+    params.push(dateFilters.date_to);
+  }
   const result = await pool.query(`
     SELECT 
       owner_name,
@@ -415,10 +457,10 @@ export async function getDuplicatesByOwner(): Promise<Array<{
       COUNT(*) FILTER (WHERE record_type = 'deal') as deal_count,
       COUNT(*) as total_duplicates
     FROM duplicate_records
-    WHERE owner_name IS NOT NULL
+    ${whereClause}
     GROUP BY owner_name, owner_email
     ORDER BY total_duplicates DESC
-  `);
+  `, params);
   return result.rows;
 }
 
