@@ -1,12 +1,12 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 3.8
-**Last Updated:** April 12, 2026
+**Version:** 4.0
+**Last Updated:** April 13, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
-**Next Review Date:** July 8, 2026
+**Next Review Date:** July 13, 2026
 
 ---
 
@@ -15,12 +15,12 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 3.8 |
+| **Version** | 4.0 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
-| **Effective Date** | April 12, 2026 |
-| **Next Review** | July 8, 2026 (quarterly) |
+| **Effective Date** | April 13, 2026 |
+| **Next Review** | July 13, 2026 (quarterly) |
 | **Distribution** | All platform users (internal) |
 
 ### Revision History
@@ -39,6 +39,7 @@
 | 3.6 | Apr 9, 2026 | Engineering | 22-fix security hardening: SQL injection fixes (parameterized make_interval in getTrendData, getRiskTrends, getUpcomingDeadlines), path traversal fix in screenshot endpoint, kpiDatabase table name corrections, crmComplianceTool fake data removal + Zoho datacenter URL fix, OIDC nonce verification (via oauth_data cookie, redirect on mismatch), directAuditRunner trigger chain, eventLogsDatabase error propagation, UUID treatment action resolution, dashboard HTML fixes (policies.html, executive.html, pdpl.html), uniform requireAdminOrKey auth guards on rbacRoutes/pdplRoutes/callIntelligenceRoutes/duplicateRadarRoutes, Telegram webhook secret validation, Linear webhook HMAC-SHA256 signature verification with timingSafeEqual |
 | 3.7 | Apr 10, 2026 | Engineering | SOP accuracy corrections: fixed OIDC nonce cookie name (oauth_data, not oidc_nonce) and rejection behavior (redirect to `/login?error=nonce_mismatch`, not 403), clarified Linear webhook HMAC-SHA256 implementation details (createHmac + timingSafeEqual), clarified uniform requireAdminOrKey usage across RBAC/PDPL/CallIntel/DuplicateRadar with note on requireWriteRole in other modules, updated Recent Changes Log |
 | 3.8 | Apr 12, 2026 | Engineering | Added AI Consultant & Assistant module (Section 4.20/6.4/7/8): GPT-4o agent with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. Updated AI engine to GPT-4o. |
+| 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. Weekly duplicate scan cron (Sunday 3 AM). KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination expanded to 20,000 records/module. Notification hub integration. Database expanded to 103+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -56,10 +57,12 @@
 WalaPlus is committed to delivering an enterprise-grade Quality Management System that ensures the accuracy, completeness, and governance of CRM data and business processes. We achieve this through:
 
 - **AI-powered continuous monitoring** of CRM data quality across all modules
-- **Automated governance enforcement** through configurable rules and scorecards
+- **Automated governance enforcement** through 76 configurable rules and scorecards
 - **Transparent compliance tracking** aligned with ISO 9001, NCA ECC, and PDPL requirements
 - **Data-driven decision making** supported by real-time dashboards and trend analysis
-- **Continuous improvement** driven by audit findings, CAPA effectiveness, and user feedback
+- **Proactive duplicate detection** with multi-signal scoring across all CRM modules
+- **SLA monitoring** with automated breach detection for Sales and SDR pipelines
+- **Continuous improvement** driven by audit findings, CAPA effectiveness, KPI tracking, and user feedback
 
 ### 1.2 Measurable Quality Objectives
 
@@ -72,6 +75,9 @@ WalaPlus is committed to delivering an enterprise-grade Quality Management Syste
 | First Pass Yield | ≥ 75% | QMS Audit KPI dashboard | Monthly |
 | Platform Uptime | ≥ 99.5% | Replit health checks and monitoring | Monthly |
 | User Satisfaction | ≥ 4.0/5.0 | Feedback module (`/feedback`) | Quarterly |
+| Duplicate Rate | ≤ 2% | Duplicate Radar KPI SDR-KPI-09 | Monthly |
+| SDR Contact Rate | ≥ 30% | KPI SDR-KPI-02 | Monthly |
+| CRM Data Accuracy | ≥ 95% | KPI SDR-KPI-08 | Monthly |
 
 ### 1.3 Quality Objective Review
 - Quality objectives are reviewed during quarterly Management Review meetings (see Section 15)
@@ -82,13 +88,28 @@ WalaPlus is committed to delivering an enterprise-grade Quality Management Syste
 
 ## 2. Platform Overview
 
-WalaPlus QMS is an AI-powered enterprise Quality Management System that integrates Governance, Risk, and Compliance (GRC) with quality management capabilities. The platform connects directly to Zoho CRM (production, via OAuth 2.0) to perform automated quality audits, data hygiene checks, and compliance monitoring.
+WalaPlus QMS is an AI-powered enterprise Quality Management System that integrates Governance, Risk, and Compliance (GRC) with quality management capabilities. The platform connects directly to Zoho CRM (production, via OAuth 2.0) to perform automated quality audits, data hygiene checks, SLA monitoring, duplicate detection, and compliance monitoring.
 
 **Platform URL:** https://qms-dashboard.replit.app
 **Tech Stack:** Mastra AI Framework, Hono HTTP Server, PostgreSQL, Inngest Workflows
 **Hosting:** Replit Autoscale with automatic health checks
-**Database:** PostgreSQL with 98+ auto-initialized tables
+**Database:** PostgreSQL with 103+ auto-initialized tables
 **AI Engine:** GPT-4o via OpenAI / Replit AI Integrations (configurable)
+
+### 2.1 Platform Architecture Summary
+
+| Component | Count | Description |
+|-----------|-------|-------------|
+| Dashboard Pages | 29 | Static HTML dashboards with Tailwind CSS |
+| API Route Files | 29 | Hono HTTP route handlers |
+| Utility Modules | 39 | Database, security, integration, and business logic |
+| AI Agents | 4 | Quality Specialist, AI Consultant, SDR Quality, Sales Quality |
+| AI Tools | 16 | Consultant agent tools + 8 audit/analysis tools |
+| Database Tables | 103+ | Auto-initialized, no manual migration required |
+| CRM Governance Rules | 76 | Sales SOP (28) + SDR SOP (28) + Account Rules (20) |
+| SDR KPIs | 11 | Seeded performance indicators |
+| Background Checks | 12 | AI scanner automated checks |
+| Cron Jobs | 4 | Audit, KPI calc, AI scanner, duplicate scan |
 
 ---
 
@@ -197,7 +218,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Key Features:**
 - Compliance assessment management with scoring
 - Regulation tracking (NCA ECC, ISO 27001, PDPL, etc.) with jurisdiction and effective dates
-- Obligation monitoring with due dates, priority levels, and requirement types
+- Obligation monitoring with compliance frequency, priority levels, and requirement types
 - Gap analysis and remediation tracking
 - Compliance score trends over time
 - Compliance calendar for scheduled compliance events
@@ -306,6 +327,8 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 ### 4.11 QMS Dashboard (`/qms`)
 **Purpose:** Comprehensive Quality Management System dashboard with evaluations, CAPA, nonconformances, and training.
 
+**Navigation Label:** "Audit Reports" in sidebar
+
 **Tabs:**
 - **Overview:** Summary cards (Evaluations, Open CAPA, Open NC, Training Completion) + **Audit Runs card** showing total audits completed and open findings count + Recent Evaluations & CAPA
 - **Deal Evaluations:** Run and review deal quality evaluations against configurable evaluation frameworks
@@ -328,6 +351,14 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
    - **Assigned To:** Person responsible for resolution
 5. Click "Create NC" to save
 
+**Enhanced Features:**
+- Evidence management for NCs and CAPAs
+- CSV export for NCs and CAPAs
+- Bulk status updates
+- Change history audit trail
+- Closure approval workflow
+- CAPA effectiveness review
+
 **Backend Tables:** `evaluation_frameworks`, `evaluation_criteria`, `deal_evaluations`, `capa_records`, `capa_action_items`, `nonconformance_records`, `training_records`, `training_assignments`, `audit_findings`, `quality_metrics`, `qms_documents`
 
 ### 4.12 PMP Project Portfolio (`/projects`)
@@ -345,13 +376,44 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Backend Tables:** `pmp_projects`, `project_risks`, `project_milestones`
 
 ### 4.13 KPI Tracking (`/kpis`)
-**Purpose:** Key Performance Indicator definition and monitoring.
+**Purpose:** Key Performance Indicator definition, monitoring, and automated calculation.
 
 **Key Features:**
-- KPI definition with targets and thresholds
+- KPI definition with targets, thresholds, weights, and navigation maps
 - Progress tracking with visual indicators
 - Trend visualization over time
 - Automated data collection from platform modules
+- **11 SDR KPIs** pre-seeded via `POST /api/kpis/seed-sdr`
+- KPI auto-calculation cron (daily at 2:00 AM) for 6 platform KPIs
+
+**Pre-Seeded SDR KPIs:**
+
+| Code | KPI Name | Target | Formula |
+|------|----------|--------|---------|
+| SDR-KPI-01 | Calls Per Day | 40 calls/day | Total outbound calls / working days |
+| SDR-KPI-02 | Contact Rate | 30% | (Connected calls / Total calls) × 100 |
+| SDR-KPI-03 | Qualification Rate | 25% | (Qualified leads / Total contacted) × 100 |
+| SDR-KPI-04 | Meetings Booked Per Week | 5 meetings | Count of qualified meetings booked |
+| SDR-KPI-05 | Show Rate | 80% | (Meetings attended / Meetings booked) × 100 |
+| SDR-KPI-06 | Average Speed to Lead | 2 hours | Average time from creation to first attempt |
+| SDR-KPI-07 | Lead-to-Qualified Conversion | 20% | (Qualified / Total new leads) × 100 |
+| SDR-KPI-08 | CRM Data Accuracy Score | 95% | % of leads with all required fields |
+| SDR-KPI-09 | Duplicate Rate | ≤ 2% | (Duplicate leads / Total leads) × 100 |
+| SDR-KPI-10 | Pipeline Aging | ≤ 5 days | Avg days in Contacting/Contacted |
+| SDR-KPI-11 | Follow-Up Compliance | 95% | % of follow-up tasks completed on time |
+
+**Auto-Calculated Platform KPIs (daily 2 AM):**
+
+| KPI | Calculation |
+|-----|-------------|
+| Governance Doc Lifecycle | % of policies with valid review cycles |
+| Compliance Obligation Tracking | % of obligations not overdue |
+| Audit Evidence Pack Readiness | % of evidence packs with complete status |
+| Quality→GRC Handoff | Count of active handoff rules |
+| Risk Register Hygiene | % of risks with treatment plans assigned |
+| Executive Reporting Readiness | Count of executive reports generated |
+
+**Backend Tables:** `kpi_definitions`, `kpi_entries`
 
 ### 4.14 Scorecard (`/scorecard`)
 **Purpose:** Balanced scorecard for organizational performance measurement.
@@ -366,16 +428,71 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Backend Tables:** `employee_scorecards`
 
 ### 4.15 Duplicate Radar (`/duplicates`)
-**Purpose:** CRM data deduplication and hygiene management.
+**Purpose:** AI-powered CRM data deduplication, hygiene management, and pipeline inflation detection across all Zoho modules.
 
 **Key Features:**
-- Duplicate record detection across Leads, Contacts, Deals
-- AI-detected duplicate clusters with confidence scoring
-- AI-powered merge recommendations
-- Cluster analysis for related duplicates
-- Bulk duplicate management
+- **Multi-Signal Confidence Scoring:** Email match (40 points), domain match (25 points), phone match (30 points), company name match (20 points). Maximum confidence: 100.
+- **Cross-Module Matching:** Detects duplicates across Leads, Contacts, Deals, and Accounts simultaneously
+- **5-Signal Cluster Matching:** domain → email → phone → exact company name → fuzzy company name (Levenshtein distance)
+- **Confidence Levels:** High (≥90 points), Medium (60–89 points), Low (<60 points)
+- **Pipeline Inflation:** Calculates estimated duplicate deal value (non-primary deals only)
+- **Merge Workflow:** Resolve/ignore clusters, mark primary records, bulk resolution
+- **Owner Accountability:** Track duplicate clusters per CRM owner for coaching
+- **Real-Time Duplicate Check:** Pre-creation validation endpoint to check if a record already exists
+- **Async Scanning:** Background scan with live progress polling (no gateway timeout)
+- **Date Filtering:** Filter clusters by detection date range
+- **AI Recommendations:** Per-cluster merge/keep recommendations based on record age and type
+- **Export:** CSV export with all duplicate records and recommendations
 
-**Backend Tables:** `duplicate_clusters`
+**Tabs:**
+- **Executive Summary:** Total clusters, duplicate counts by type, confidence distribution, pipeline inflation
+- **Domain Clusters:** All clusters with status, confidence, and record counts
+- **Lead Duplicates:** Groups of duplicate leads by cluster
+- **Deal Duplicates:** Groups of duplicate deals with combined value
+- **Account Duplicates:** Duplicate accounts from Zoho Accounts module
+- **Owner Accountability:** Duplicates grouped by CRM owner with resolution stats
+- **Export Center:** CSV export with filters
+- **Logs:** Scan history with records scanned, clusters found, and duration
+
+**Scan Process:**
+1. Click **"Scan from Zoho"** button on the Duplicate Radar page
+2. Scan starts in background — button shows live progress
+3. System clears previous data and fetches up to 20,000 records per module
+4. Modules scanned: Leads, Contacts, Deals, Accounts (4 modules)
+5. Records are grouped into clusters using the 5-signal matching algorithm
+6. Cluster statistics are calculated (confidence scores, pipeline inflation)
+7. On completion, dashboard refreshes with results
+8. Scan progress is polled every 5 seconds via `/api/duplicates/scan-status`
+
+**API Endpoints:**
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/duplicates/summary` | GET | Summary with KPIs and last scan date |
+| `/api/duplicates/enhanced-summary` | GET | Enhanced summary with per-type breakdowns |
+| `/api/duplicates/clusters` | GET | List clusters with status/confidence filters |
+| `/api/duplicates/clusters/:id` | GET | Cluster details with all records |
+| `/api/duplicates/clusters/:id/status` | PATCH | Update cluster status (active/resolved/ignored) |
+| `/api/duplicates/clusters/:id/resolve` | POST | Resolve cluster with action (resolve/ignore) and notes |
+| `/api/duplicates/clusters/:id/primary` | POST | Mark a record as primary in the cluster |
+| `/api/duplicates/bulk-resolve` | POST | Bulk resolve multiple clusters |
+| `/api/duplicates/merge-history` | GET | Get merge/resolution history |
+| `/api/duplicates/check` | POST | Real-time duplicate check (email/phone/company) |
+| `/api/duplicates/owner-accountability` | GET | Duplicates grouped by CRM owner |
+| `/api/duplicates/by-owner` | GET | Duplicate records by owner |
+| `/api/duplicates/by-source` | GET | Duplicate records by lead source |
+| `/api/duplicates/kpis` | GET | Dedup KPI metrics |
+| `/api/duplicates/search` | GET/POST | Search duplicates by domain/phone/company/email |
+| `/api/duplicates/scan-zoho` | POST | Start async Zoho scan (requires admin) |
+| `/api/duplicates/scan-status` | GET | Poll scan progress |
+| `/api/duplicates/export` | GET | Export CSV of duplicate records |
+| `/api/duplicates/leads` | GET | Lead duplicate groups |
+| `/api/duplicates/deals` | GET | Deal duplicate groups |
+| `/api/duplicates/logs` | GET | Scan detection logs |
+| `/api/duplicates/ai-recommendations/:id` | POST | AI merge recommendations per cluster |
+| `/api/duplicates/test-record` | POST | Add test record for sandbox testing |
+
+**Backend Tables:** `duplicate_clusters`, `duplicate_records` (with `phone_normalized`, `match_signals`), `duplicate_merge_actions`, `duplicate_detection_logs`, `duplicate_export_logs`
 
 ### 4.16 PDPL Privacy Compliance (`/pdpl`)
 **Purpose:** Personal Data Protection Law compliance tracking (Saudi Arabia).
@@ -436,25 +553,27 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | Accept Invite | `/accept-invite` | Invitation acceptance page for new users (public) |
 
 ### 4.21 AI Consultant & Assistant (`/consultant`)
-**Purpose:** AI-powered quality management consultant providing real-time guidance, automated platform monitoring, and proactive alerting.
+**Purpose:** AI-powered quality management consultant providing real-time guidance, automated platform monitoring, proactive alerting, and direct QMS operations (NC/CAPA creation, checklists, knowledge search).
 
 **Key Features:**
 - **Chat Interface:** Full conversational UI with GPT-4o powered responses, supporting both English and Arabic
 - **Quick Actions Sidebar:** Pre-built prompts for common queries (quality score summary, recent NCs, risk status, compliance gaps, KPI performance, improvement suggestions)
-- **8 AI Tools:** Query platform data across 11 modules, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts, review documents
+- **16 AI Tools:** Query platform data across 11 modules, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts, review documents, create NCs, list NCs, create CAPAs, list CAPAs, get CAPA details, run compliance checklists, manage checklists, search knowledge base
 - **Streaming Responses:** Server-Sent Events (SSE) for real-time streaming chat, with standard response fallback
 - **Alert Bell:** Navigation bar badge showing unread alert count, updated every 60 seconds
-- **Background Scanner:** Automated 6-hour scans detecting quality issues (see Section 8.2)
+- **Background Scanner:** Automated 6-hour scans detecting 12 quality issue types (see Section 8.2)
 - **Markdown Rendering:** Chat responses support formatted text, tables, and lists
 
 **How to Use:**
 1. Navigate to `/consultant` or click "AI Consultant" in the Support navigation group
 2. Type a question in the chat input or click a quick action button in the sidebar
 3. The AI consultant queries live platform data to answer your question
-4. Review the alert bell icon in the navigation bar for proactive findings from the background scanner
-5. Click the alert bell to view all alerts with severity and details
+4. Ask the AI to create NCs, CAPAs, or run checklists directly from chat
+5. Review the alert bell icon in the navigation bar for proactive findings from the background scanner
+6. Click the alert bell to view all alerts with severity and details
 
 **API Endpoints:**
+
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/consultant/chat` | POST | Send a message and receive AI response |
@@ -488,6 +607,26 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 
 **Backend Tables:** `user_onboarding_status`, `onboarding_tour_steps`
 
+### 4.24 Knowledge Base
+**Purpose:** Centralized repository for regulatory documents, SOPs, and organizational knowledge.
+
+**Key Features:**
+- Document upload and storage with metadata
+- Chunk-based full-text search across all documents
+- AI-powered knowledge retrieval via the Consultant agent's `searchKnowledgeTool`
+- Compliance checklist engine with automated verification
+
+**Backend Tables:** Knowledge base tables managed by `knowledgeDatabase.ts`
+
+### 4.25 Notification Hub
+**Purpose:** Unified notification routing across channels.
+
+**Key Features:**
+- In-app notifications with severity levels
+- Slack channel notifications (via `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID`)
+- Email notifications via Resend (with Replit mail fallback)
+- Triggered by weekly duplicate scans, AI scanner findings, and audit completion
+
 ---
 
 ## 5. Zoho CRM Integration
@@ -499,24 +638,26 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 - **Token Refresh:** Automatic — tokens renew with a 5-minute buffer before expiry
 - **Token Caching:** Access tokens cached in memory; auto-cleared and re-fetched on 401 errors
 - **Credential Detection:** System recognizes both legacy access tokens AND OAuth credentials (Client ID + Client Secret + Refresh Token)
-- **Pagination:** Supports fetching up to 10,000 records per module via automatic pagination
+- **Pagination:** Supports fetching up to 20,000 records per module via automatic pagination (200 records/page)
 
 ### 5.2 Modules Accessed
+
 | Zoho Module | Data Read | Purpose |
 |-------------|-----------|---------|
-| **Leads** | Email, Phone, Lead Source, Status, Company, Region, Owner | Quality audits, hygiene scoring |
-| **Deals** | Deal Name, Stage, Amount, Closing Date, Stage History | Pipeline governance, progression analysis |
-| **Contacts** | Email, Last Name, Owner, Region, Title | Data completeness checks |
+| **Leads** | Email, Phone, Lead Source, Status, Company, Region, Owner, City, No_of_Employees, Industry, Designation, Outgoing_Call_Result, Description, Tag | Quality audits, hygiene scoring, SDR SLA monitoring, duplicate detection |
+| **Deals** | Deal_Name, Stage, Amount, Closing_Date, Stage_History, Account_Name, Contact_Name, Pipeline, Lead_Source, Owner, First_Call_Date, Meeting_Date, Proposal_Sent_Date, Agreement_Sent_Date, Agreement_Signed_Date, On_Hold_Reason, Probability, Bundle_Type, Discount, Onboarding_Method, Contract_No_of_Employees, Trial_Period, National_Address | Pipeline governance, Sales SLA monitoring, duplicate detection |
+| **Contacts** | Email, Phone, Mobile, Last_Name, First_Name, Owner, Account_Name, Lead_Source | Data completeness checks, duplicate detection |
 | **Tasks** | Subject, Due Date, Owner, Activity timestamps | Activity compliance verification |
-| **Accounts** | Company details | Optional hygiene audits |
+| **Accounts** | Account_Name, Website, Email, Phone, Owner | Hygiene audits, duplicate detection |
 
 ### 5.3 CRM Functions Available
+
 | Function | Purpose |
 |----------|---------|
 | `fetchZohoRecords` | Fetches a single page of records from any module |
-| `fetchAllZohoRecords` | Paginated retrieval of up to 10,000 records |
+| `fetchAllZohoRecords` | Paginated retrieval of up to 20,000 records per module |
 | `searchZohoRecords` | Searches records using Zoho COQL-like criteria |
-| `analyzeRecordHygiene` | Validates records against required, format, enum, and custom rules |
+| `analyzeRecordHygiene` | Validates records against 76 governance rules |
 | `calculateQualityScores` | Weight-based scoring producing People, Process, Governance, and Overall scores |
 | `updateZohoRecord` | Updates record fields in CRM (used for evaluation logging) |
 | `updateZohoRecordNotes` | Adds evaluation notes to CRM records |
@@ -527,16 +668,86 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 - No financial/billing records beyond deal amounts
 - Write operations limited to adding evaluation notes — no deletion or bulk modification
 
-### 5.5 Default Governance Rules
-The system applies default hygiene rules when no custom governance documents are configured:
+### 5.5 CRM Governance Rules (76 Rules)
 
-| Module | Required Fields | Format Rules | Enum Checks |
-|--------|----------------|--------------|-------------|
-| Leads | Email, Phone, Lead Source, Owner | Email format, Phone format | Valid Lead Source values |
-| Deals | Deal Name, Stage, Amount, Closing Date | — | Valid Stage values |
-| Contacts | Email, Last Name, Owner | Email format | — |
-| Tasks | Subject, Due Date, Owner | — | — |
-| All | Owner | — | — |
+The platform enforces 76 governance rules across three SOPs:
+
+#### 5.5.1 Sales SOP Rules (28 Rules)
+
+**Document:** Sales SOP v1.1, Effective 2025-12-01, Prepared by Sarah Hijazi
+
+**Deal Stage Requirements:**
+
+| Stage | Max Duration | Required Fields | SLA |
+|-------|-------------|----------------|-----|
+| New Deal | — | Company Name, Contact Person, No. of Employees, Region, Industry | Qualified lead from SDR |
+| Contacted | — | First Call Activity Logged | Contact within 1 business day of SDR handoff |
+| Not Attend Meeting | 5 business days | Not Attend Reason (Client emergency, Postponed, etc.) | — |
+| Meeting | 10 business days | Meeting Notes, Client Requirements | — |
+| Proposal | 90 days | Proposal Document Attached, Proposal Sent Date | Proposal within 2 business days of meeting |
+| On Hold | 180 days | On Hold Reason (Critical, mandatory) | — |
+| Agreement Sent | 90 days | Agreement Document, Sent Date | Review & signature within 10 business days |
+| Agreement Signed | — | Signed Agreement, Invoice/Quotation in Zoho Books | — |
+| Closed Lost | — | Closed Lost Reason (Budget, SDR Issue, Client Not Responding, etc.) | — |
+
+**Sales SLAs:**
+- Contact after SDR Handoff: ≤ 1 business day
+- Proposal Preparation: ≤ 2 business days from meeting
+- Agreement Review & Signature: ≤ 10 business days
+- Zoho CRM Activity Logging: Same day
+
+**Sales Qualification Criteria:**
+- Market: KSA only
+- Minimum Employees: 15
+- Target Roles: HR, Operations, Procurement
+- Target Levels: Manager, Director, Head
+
+#### 5.5.2 SDR SOP Rules (28 Rules)
+
+**Document:** SDR SOP v2.1, Effective 2025-12-04
+
+**Lead Stage Requirements:**
+
+| Stage | Max Duration | Required Fields | SLA |
+|-------|-------------|----------------|-----|
+| New | — | Company, Name, Phone, Email, Lead Source | Inbound: ≤ 2 hours initial contact; Outbound: ≤ 4 hours |
+| Contacting | 5 business days | Outgoing Call Result | — |
+| Contacted | 3 business days | Description, Tag | — |
+| Qualified | 1 business day | No. of Employees (min 15), Industry, City, Designation | Handoff to Sales within 1 business day |
+| Not Qualified | — | Reason (Duplicate, Competitor, Budget, etc.) | — |
+| On Hold | 90 days | On Hold Reason | — |
+| Nurturing | 180 days | Nurturing Description | — |
+
+**SDR SLAs:**
+- Initial Contact (Inbound): ≤ 2 hours from creation
+- Outbound First Call: ≤ 4 hours from creation
+- Follow-up (No Answer): ≤ 24 hours
+- Handoff to Sales: ≤ 1 business day from qualification
+
+#### 5.5.3 Account/Deal Hygiene Rules (20 Rules)
+
+| Rule | Module | Severity | Description |
+|------|--------|----------|-------------|
+| Owner Required | All | High | All records must have an assigned owner |
+| Deal Name | Deals | High | Deal name is required |
+| Stage | Deals | High | Stage must be set |
+| Amount | Deals | High | Deal amount required |
+| Closing Date | Deals | High | Closing date required |
+| Account Name | Deals | High | Account must be associated |
+| Contact Name | Deals | High | Contact must be linked |
+| Pipeline | Deals | Medium | Pipeline must be set |
+| Lead Source | Deals | Medium | Lead source required |
+| Employees | Deals | Medium | Number of employees required |
+| Region | Deals | Medium | Region must be set |
+| Industry | Deals | Medium | Industry required |
+| Proposal Stage: Probability | Deals | High | Probability required (1-100%) in Proposal stage |
+| Proposal Stage: Bundle Type | Deals | Medium | Bundle Type required in Proposal stage |
+| Proposal Stage: Discount% | Deals | Medium | Discount (0-100%) required in Proposal stage |
+| On Hold: Reason | Deals | Critical | On Hold Reason mandatory when stage is On Hold |
+| Agreement Signed: Onboarding Method | Deals | High | Onboarding Method required when Agreement Signed |
+| Agreement Signed: Contract Employees | Deals | High | Contract No. of Employees required |
+| Business Email (Leads) | Leads | Medium | Free providers (Gmail, Yahoo, etc.) prohibited |
+| Phone Format (Leads) | Leads | Medium | Must start with KSA code +966 |
 
 ### 5.6 AI Audit Process
 When "Run AI Audit" is triggered (via button or weekly schedule):
@@ -545,11 +756,13 @@ When "Run AI Audit" is triggered (via button or weekly schedule):
 3. Loads active scorecards and governance documents from the database
 4. AI agents perform parallel audits: SDR Quality Agent audits Leads, Sales Quality Agent audits Deals
 5. Falls back to direct (non-AI) rule-based audit if OpenAI keys are not configured
-6. Applies governance rules to each record:
+6. Applies 76 governance rules to each record:
    - Missing required fields (email, phone, company, etc.)
-   - Format validation (email format, phone format)
+   - Format validation (email format, phone format, KSA +966)
    - Enum checks (valid lead source, deal stage values)
    - Activity compliance (overdue tasks, stale records)
+   - Stage-specific requirements (Proposal fields, On Hold reason, Agreement Signed fields)
+   - Business email enforcement (no free email providers for leads)
 7. Calculates quality scores across three dimensions:
    - **People Score:** Owner assignment, contact completeness, activity compliance
    - **Process Score:** Stage progression, follow-up timing, task completion
@@ -578,7 +791,7 @@ Default (global) endpoints work for most other regions:
 
 ### 6.1 Quality Specialist Agent
 - Performs comprehensive CRM data hygiene audits across all modules
-- Analyzes record completeness against governance rules
+- Analyzes record completeness against 76 governance rules
 - Generates executive summaries, AI insights, and quality improvement recommendations
 - Uses configurable governance documents and scorecards
 - Orchestrates the insight-generation step of the audit workflow
@@ -586,27 +799,53 @@ Default (global) endpoints work for most other regions:
 ### 6.2 AI Consultant Agent
 - GPT-4o powered QMS AI Consultant accessible at `/consultant`
 - Provides real-time quality management guidance through a chat interface
-- Equipped with 8 specialized tools: query platform data, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts, review documents
+- Equipped with **16 specialized tools** (see Section 7)
 - Supports both standard and streaming (SSE) chat responses
 - Responds in English or Arabic based on user's language
 - Does not expose internal tool mechanics or database queries to users
 - Uses `@ai-sdk/openai` (v5 subpath export) with Replit AI proxy fallback (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
+- Can directly create NCs, CAPAs, run checklists, and search knowledge base documents
 
 ### 6.3 SDR Quality Agent
 - Evaluates SDR (Sales Development Representative) performance
-- Audits **Leads** module specifically using SDR-specific scorecards
+- Audits **Leads** module specifically using SDR-specific scorecards and 28 SDR SOP rules
 - Checks CRM update compliance after calls
+- Monitors SDR SLAs (initial contact timing, follow-up compliance)
 - Runs in parallel with Sales Quality Agent during audits
 
 ### 6.4 Sales Quality Agent
 - Monitors sales process adherence
-- Audits **Deals** module specifically using Sales-specific scorecards
+- Audits **Deals** module specifically using Sales-specific scorecards and 28 Sales SOP rules
 - Evaluates deal stage progression and pipeline hygiene
+- Monitors Sales SLAs (contact after handoff, proposal timing, agreement review)
 - Runs in parallel with SDR Quality Agent during audits
 
 ---
 
-## 7. AI Tools
+## 7. AI Tools (16 Consultant Tools + 8 Audit Tools)
+
+### 7.1 AI Consultant Tools (16)
+
+| # | Tool | ID | Function |
+|---|------|-----|----------|
+| 1 | **Query Platform Data** | `query-platform-data` | Queries data across 11 QMS modules (NCs, CAPAs, risks, policies, audits, KPIs, compliance, training, vendors, PDPL, team) |
+| 2 | **Analyze Nonconformities** | `analyze-nonconformities` | NC pattern detection, overdue CAPAs, severity distribution, and trend analysis |
+| 3 | **Suggest Improvements** | `suggest-improvements` | Quality score analysis with structured improvement recommendations |
+| 4 | **Check Regulation Compliance** | `check-regulation-compliance` | PDPL, ISO 9001, ISO 27001, NCA ECC compliance gap checks |
+| 5 | **Review Document** | `review-document` | Governance document review, gap analysis, and compliance checking |
+| 6 | **Monitor Risks** | `monitor-risks` | Risk register monitoring with threshold breach detection and overdue treatments |
+| 7 | **Monitor KPIs** | `monitor-kpis` | KPI missed targets, trends, and performance status monitoring |
+| 8 | **Create Alert** | `create-alert` | AI alert creation with automatic deduplication |
+| 9 | **Create NC** | `create-nonconformance` | Create new nonconformance records directly from chat |
+| 10 | **Get NC List** | `get-nonconformance-list` | List existing nonconformances with filters |
+| 11 | **Create CAPA** | `create-capa` | Create new CAPA (Corrective/Preventive Action) records |
+| 12 | **Get CAPA List** | `get-capa-list` | List existing CAPAs with filters |
+| 13 | **Get CAPA Details** | `get-capa-details` | Retrieve detailed CAPA info including action items |
+| 14 | **Run Checklist** | `run-checklist` | Execute compliance checklists against live platform data |
+| 15 | **Manage Checklist** | `manage-checklist` | Create, update, or view compliance checklists |
+| 16 | **Search Knowledge Base** | `search-knowledge-base` | Search regulatory knowledge base, SOPs, and uploaded documents |
+
+### 7.2 Audit & Analysis Tools (8)
 
 | Tool | Function |
 |------|----------|
@@ -616,20 +855,8 @@ Default (global) endpoints work for most other regions:
 | **Call Ingest** | Processes and stores call recordings for analysis |
 | **CRM Compliance** | Validates post-call CRM updates (was CRM updated after call?) |
 | **Deal Evaluation** | Assesses deal quality, risk factors, and progression compliance |
-| **CAPA Management** | Corrective/Preventive Action tracking and effectiveness monitoring |
-| **NC Management** | Non-Conformance creation, tracking, and resolution |
 | **Meeting MOM** | Minutes of Meeting generation from call/meeting data |
 | **Email Reports** | Automated email report delivery via Resend (with Replit mail fallback) |
-| **Training Management** | Training record management, course tracking, and assignments |
-| **Google Calendar** | Calendar integration for fetching events during audit periods |
-| **Query Platform Data** | Queries data across 11 QMS modules (NCs, CAPAs, risks, policies, audits, KPIs, compliance, training, vendors, PDPL, team) |
-| **Analyze Nonconformities** | NC pattern detection, overdue CAPAs, severity distribution, and trend analysis |
-| **Suggest Improvements** | Quality score analysis with structured improvement recommendations |
-| **Check Regulation Compliance** | PDPL, ISO 9001, ISO 27001, NCA ECC compliance gap checks |
-| **Monitor KPIs** | KPI missed targets, trends, and performance status monitoring |
-| **Monitor Risks** | Risk register monitoring with threshold breach detection and overdue treatments |
-| **Create Alert** | AI alert creation with automatic deduplication |
-| **Review Document** | Governance document review, gap analysis, and compliance checking |
 
 ---
 
@@ -648,30 +875,57 @@ Default (global) endpoints work for most other regions:
 - **Output:** Updated quality scores, issue reports, trend data, email notifications, automated triggers
 
 ### 8.2 AI Background Scanner
-- **Trigger:** Inngest cron — every 6 hours (`0 */6 * * *`)
+- **Trigger:** Inngest cron — every 6 hours (`0 */6 * * *`, configurable via `AI_SCANNER_CRON`)
 - **Purpose:** Proactively scans platform data for quality and compliance issues, creating AI alerts
-- **Checks performed (8 total):**
-  1. Nonconformances without linked CAPA records
-  2. High-severity risks (likelihood × impact ≥ 15) without treatment plans
-  3. Overdue risk treatment actions
-  4. KPIs missing their target values
-  5. Policies/governance documents expiring within 30 days or already expired
-  6. PDPL compliance gaps — checks 3 conditions: empty data inventory, no active AI guardrails, and open/unresolved data incidents
-  7. Audit score decline — detects declining trend across 3+ recent audits with >5% cumulative drop (not a fixed threshold)
-  8. Training compliance gaps (overdue training assignments past due date)
+- **Checks performed (12 total):**
+  1. **Nonconformances without CAPA** — Open NCs older than 7 days with no linked CAPA record
+  2. **High-severity risks** — Risks with likelihood × impact ≥ 15 without treatment plans
+  3. **Overdue risk treatment actions** — Treatment actions past their due date
+  4. **Low-progress treatments** — Treatments due within 14 days but less than 50% complete
+  5. **KPIs missing target** — KPI entries below their defined target values
+  6. **Expiring/expired policies** — Governance documents with review dates within 30 days or past
+  7. **PDPL compliance gaps** — Checks 3 conditions: empty data inventory, no active AI guardrails, open data incidents
+  8. **Audit score decline** — Detects declining trend across 3+ recent audits with >5% cumulative drop
+  9. **Training compliance gaps** — Overdue training assignments past due date
+  10. **Sales SLA violations** — Scans up to 500 Deals for: late first contact (>2 biz days), late proposal (>3 biz days), pending agreement (>14 days), stale CRM (>3 biz days no update), stage aging exceeding SOP maximums
+  11. **SDR SLA violations** — Scans up to 500 Leads for: late initial contact (inbound >2h, outbound >4h), stuck in Contacting/Contacted (>5 days), lead aging exceeding SOP stage maximums
+  12. **High-confidence duplicates** — Flags active duplicate clusters with confidence ≥90% and total estimated pipeline inflation
 - **Output:** Creates deduplicated AI alerts in the `ai_alerts` table with severity levels (critical, high, medium, low)
+- **Alert Types:** `nc_detection`, `risk_alert`, `kpi_miss`, `policy_expiry`, `regulation_gap`, `audit_decline`, `training_gap`, `improvement`, `sla_breach`
 - **Alert bell:** Navigation bar displays unread alert count badge, polls `/api/consultant/alerts/count` every 60 seconds
 
-### 8.3 Automated Triggers
+### 8.3 KPI Auto-Calculation
+- **Trigger:** Inngest cron — daily at 2:00 AM (`0 2 * * *`, configurable via `KPI_AUTO_CALC_CRON`)
+- **Purpose:** Automatically calculates 6 platform KPIs from live data
+- **KPIs Calculated:**
+  1. Governance Doc Lifecycle compliance
+  2. Compliance Obligation Tracking
+  3. Audit Evidence Pack Readiness
+  4. Quality→GRC Handoff activity
+  5. Risk Register Hygiene
+  6. Executive Reporting Readiness
+
+### 8.4 Weekly Duplicate Radar Scan
+- **Trigger:** Inngest cron — Sunday at 3:00 AM (`0 3 * * 0`, configurable via `DUPLICATE_SCAN_CRON`)
+- **Purpose:** Full automated scan of Zoho CRM for duplicate records across all 4 modules
+- **Process:** Same as manual scan (Section 4.15) — clears data, fetches up to 20K/module, clusters, scores
+- **Notification:** If high-confidence duplicates are found, sends notification via the Notification Hub with:
+  - Total records scanned
+  - Duplicate clusters detected
+  - High-confidence count
+  - Estimated pipeline inflation (SAR)
+  - Link to `/duplicates` dashboard
+
+### 8.5 Automated Triggers
 - **AUDIT_COMPLETED:** Fires after every successful audit
 - **NONCONFORMANCE_DETECTED:** Fires when issues are found during an audit
 - **CAPA_REQUIRED:** Fires when critical or high-severity issues are detected
 - Triggers appear in the QMS Dashboard **Triggers** tab
 - Actions: Acknowledge, Dismiss, or Decide (approve/reject)
 
-### 8.4 External Notification Triggers
+### 8.6 External Notification Triggers
 - **Cron Triggers:** Configurable scheduled triggers for weekly/monthly audits (`src/triggers/cronTriggers.ts`)
-- **Slack Integration:** Automated notifications to Slack channels (`src/triggers/slackTrigger.ts`)
+- **Slack Integration:** Automated notifications to Slack channels (`src/triggers/slackTrigger.ts`). Uses `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` environment variables.
 - **Telegram Integration:** Automated notifications to Telegram chats (`src/triggers/telegramTrigger.ts`). Webhook endpoint protected by `TELEGRAM_WEBHOOK_SECRET` query parameter validation when the secret is configured.
 - **Linear Webhook Integration:** Issue-created webhook handler (`src/triggers/exampleConnectorTrigger.ts`) with full HMAC-SHA256 signature verification when `LINEAR_WEBHOOK_SECRET` is configured. The handler computes `createHmac('sha256', secret).update(rawBody).digest('hex')` and compares against the `Linear-Signature` header using `timingSafeEqual` for constant-time comparison. Requests with invalid signatures are rejected with 403.
 
@@ -748,6 +1002,7 @@ Default (global) endpoints work for most other regions:
 ## 10. Environment Configuration
 
 ### 10.1 Required Secrets
+
 | Secret | Purpose | Notes |
 |--------|---------|-------|
 | `DATABASE_URL` | PostgreSQL connection string | Auto-provided if using Replit's DB |
@@ -758,6 +1013,7 @@ Default (global) endpoints work for most other regions:
 | `ZOHO_REFRESH_TOKEN` | Zoho CRM OAuth | Generated during CRM authorization |
 
 ### 10.2 Optional but Recommended Secrets
+
 | Secret | Default | Purpose |
 |--------|---------|---------|
 | `ZOHO_ACCOUNTS_URL` | https://accounts.zoho.com | Zoho OAuth endpoint (use .sa for Saudi region) |
@@ -765,14 +1021,23 @@ Default (global) endpoints work for most other regions:
 | `AI_INTEGRATIONS_OPENAI_API_KEY` | — | OpenAI API key (Replit-managed, preferred) for AI audits and AI Consultant |
 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | https://api.openai.com/v1 | Replit AI proxy endpoint |
 | `OPENAI_API_KEY` | — | Direct OpenAI API key (fallback if Replit-managed key unavailable) |
-| `SLACK_API_TOKEN` | — | Slack Bot token for QMS notifications |
-| `SLACK_QMS_CHANNEL` | — | Slack channel ID for QMS alert notifications |
+| `SLACK_BOT_TOKEN` | — | Slack Bot token for QMS notifications |
+| `SLACK_CHANNEL_ID` | — | Slack channel ID for QMS alert notifications |
 | `RESEND_API_KEY` | — | Email delivery via Resend |
 | `RESEND_FROM_EMAIL` | — | Sender address for quality report emails |
 | `TELEGRAM_WEBHOOK_SECRET` | — | Telegram webhook secret for validating incoming webhook requests |
 | `LINEAR_WEBHOOK_SECRET` | — | Linear webhook HMAC signing secret for signature verification |
 
-### 10.3 Reference File
+### 10.3 Configurable Cron Schedules
+
+| Environment Variable | Default | Purpose |
+|---------------------|---------|---------|
+| `SCHEDULE_CRON_EXPRESSION` | `0 8 * * 1` | Quality audit (Monday 8 AM) |
+| `KPI_AUTO_CALC_CRON` | `0 2 * * *` | KPI auto-calculation (daily 2 AM) |
+| `AI_SCANNER_CRON` | `0 */6 * * *` | AI background scanner (every 6 hours) |
+| `DUPLICATE_SCAN_CRON` | `0 3 * * 0` | Weekly duplicate scan (Sunday 3 AM) |
+
+### 10.4 Reference File
 A `.env.example` file is included in the project root with all variables documented. Do not deploy this file.
 
 ---
@@ -780,7 +1045,7 @@ A `.env.example` file is included in the project root with all variables documen
 ## 11. Database
 
 - **Engine:** PostgreSQL
-- **Tables:** 98+ auto-initialized tables (created on first use, no manual migration needed)
+- **Tables:** 103+ auto-initialized tables (created on first use, no manual migration needed)
 - **Key Table Groups:**
 
 | Group | Count | Tables | Purpose |
@@ -799,18 +1064,20 @@ A `.env.example` file is included in the project root with all variables documen
 | Handoff & Controls | 3 | handoff_rules, handoff_events, control_mappings | Cross-module automation |
 | Team & Projects | 11 | team_members, team_performance_metrics, team_project_assignments, pmp_projects, project_risks, project_milestones, project_stakeholders, project_team_assignments, project_procurement, project_change_requests, training_courses | Team, project, and training management |
 | Scorecard | 2 | employee_scorecards, course_assignments | Performance scorecards and course tracking |
-| Duplicate Radar | 4 | duplicate_clusters, duplicate_records, duplicate_detection_logs, duplicate_export_logs | CRM deduplication and audit |
+| Duplicate Radar | 5 | duplicate_clusters, duplicate_records, duplicate_merge_actions, duplicate_detection_logs, duplicate_export_logs | CRM deduplication, merge workflow, and audit |
 | Onboarding | 2 | user_onboarding_status, onboarding_tour_steps | User onboarding |
 | Event Logs | 1 | event_logs | System audit trail |
-| KPI & Reporting | 3 | kpi_definitions, kpi_values, executive_reports | KPI tracking and executive reporting |
+| KPI & Reporting | 3 | kpi_definitions, kpi_entries, executive_reports | KPI tracking and executive reporting |
 | AI Consultant | 1 | ai_alerts | AI-generated alerts and background scan findings |
 | Migration | 4 | demo_links, tooltip_definitions, integration_config, team_feedback | Migration support, UI config, and feedback |
+| Knowledge Base | 2+ | knowledge documents, knowledge chunks | Document storage and search |
 
 ---
 
 ## 12. API Architecture
 
 ### 12.1 Core API Endpoints
+
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/dashboard` | GET | Aggregated dashboard data |
@@ -818,13 +1085,17 @@ A `.env.example` file is included in the project root with all variables documen
 | `/api/integrations/status` | GET | Status of Zoho CRM, Google Calendar, and Email integrations |
 | `/api/crm/data` | GET | Fetches live records from Zoho CRM |
 | `/api/inngest` | POST | Inngest webhook for workflow execution |
+| `/api/health` | GET | Platform health check |
+| `/api/smoke` | GET | Smoke test endpoint |
 
 ### 12.2 Module API Endpoints
+
 | Module | Base Path | Operations |
 |--------|-----------|------------|
 | Auth | `/api/auth/`, `/api/login`, `/api/callback`, `/api/logout` | Login, callback, session check, logout |
 | Audits | `/api/audits/` | Latest results, history, summary |
 | QMS | `/api/qms/evaluations`, `/api/qms/capa`, `/api/qms/nc`, `/api/qms/training` | CRUD for all QMS entities |
+| QMS Enhanced | `/api/qms/*/export`, `/api/qms/*/bulk-update` | Evidence, CSV exports, bulk updates, change history, closure approval, CAPA effectiveness |
 | Risks | `/api/risks/` | CRUD, summary, heat map, CSV export |
 | Policies | `/api/policies/` | CRUD, lifecycle transitions, acknowledgments |
 | Compliance | `/api/compliance/` | Assessments, regulations, obligations |
@@ -836,10 +1107,129 @@ A `.env.example` file is included in the project root with all variables documen
 | Handoff | `/api/handoff/` | Rules, events, control mappings |
 | Admin | `/api/admin/documents`, `/api/admin/scorecards` | Governance document and scorecard CRUD |
 | AI Consultant | `/api/consultant/chat`, `/api/consultant/alerts`, `/api/consultant/scan` | AI chat, alerts, background scanning |
+| Duplicates | `/api/duplicates/` | Clusters, scan, search, merge, accountability, export (22 endpoints — see Section 4.15) |
+| KPIs | `/api/kpis/`, `/api/kpis/seed-sdr` | KPI definitions, entries, SDR seed |
+| Scorecard | `/api/scorecard/` | Employee scorecards, snapshots |
+| Notifications | `/api/notifications/` | Notification management, health index |
+| Knowledge | `/api/knowledge/` | Document CRUD, search, checklists |
+
+### 12.3 Route Files (29)
+
+| Route File | Module |
+|------------|--------|
+| `auditRoutes.ts` | Quality audit triggers and results |
+| `authRoutes.ts` | OIDC login, callback, session |
+| `callIntelligenceRoutes.ts` | Call analysis and QA |
+| `complianceRoutes.ts` | Compliance assessments |
+| `consultantRoutes.ts` | AI consultant chat and alerts |
+| `dashboardRoutes.ts` | Dashboard aggregation |
+| `duplicateRadarRoutes.ts` | Duplicate detection and merge (22 endpoints) |
+| `eventLogsRoutes.ts` | System event logs |
+| `handoffRoutes.ts` | QMS↔GRC handoff |
+| `knowledgeRoutes.ts` | Knowledge base and checklists |
+| `kpiRoutes.ts` | KPI definitions and entries |
+| `migrationRoutes.ts` | Data migration tools |
+| `notificationRoutes.ts` | Notifications and health index |
+| `onboardingRoutes.ts` | User onboarding |
+| `pdplRoutes.ts` | PDPL privacy compliance |
+| `pmpRoutes.ts` | Project management |
+| `policyRoutes.ts` | Policy lifecycle |
+| `qmsEnhancedRoutes.ts` | Evidence, export, bulk ops, change history |
+| `rbacRoutes.ts` | RBAC permissions and roles |
+| `reportRoutes.ts` | Report generation |
+| `riskRoutes.ts` | Risk register |
+| `roiRoutes.ts` | ROI evaluation |
+| `scorecardRoutes.ts` | Scorecards |
+| `smokeTestRoutes.ts` | Health/smoke checks |
+| `tablefRoutes.ts` | Table F governance |
+| `teamRoutes.ts` | Team management |
+| `triggerRoutes.ts` | Automated triggers |
+| `userAccessRoutes.ts` | User management |
+| `vendorRoutes.ts` | Vendor management |
+
+### 12.4 Utility Modules (39)
+
+| Utility | Purpose |
+|---------|---------|
+| `zohoCRM.ts` | Zoho CRM OAuth, fetch, search, hygiene analysis, 76 governance rules |
+| `governanceRules.ts` | Sales SOP (28 rules) + SDR SOP (28 rules) |
+| `database.ts` | Core PostgreSQL database operations |
+| `duplicateRadarDatabase.ts` | Multi-signal duplicate detection, merge workflow, owner accountability |
+| `aiBackgroundScanner.ts` | 12-check background scanner |
+| `aiAlertsDatabase.ts` | AI alerts CRUD, dedup, unread count |
+| `kpiDatabase.ts` | KPI definitions, entries, 11 SDR KPIs seed |
+| `scorecardDatabase.ts` | Scorecard management |
+| `qmsDatabase.ts` | QMS operations |
+| `riskDatabase.ts` | Risk management + UUID obfuscation |
+| `complianceDatabase.ts` | Compliance tracking |
+| `policyDatabase.ts` | Policy lifecycle |
+| `vendorDatabase.ts` | Vendor management |
+| `callIntelligenceDb.ts` | Call analysis storage |
+| `roiDatabase.ts` | ROI financial calculations |
+| `pdplDatabase.ts` | PDPL privacy management |
+| `teamDatabase.ts` | Team operations |
+| `auditDatabase.ts` | Audit results |
+| `auditTriggerDatabase.ts` | Audit trigger management |
+| `handoffDatabase.ts` | Handoff rules/events |
+| `eventLogsDatabase.ts` | Event log storage |
+| `rbacDatabase.ts` | RBAC permissions |
+| `userAccessDatabase.ts` | User account management |
+| `knowledgeDatabase.ts` | Knowledge base, chunk-based search |
+| `checklistDatabase.ts` | Compliance checklists |
+| `evidenceDatabase.ts` | Evidence/document management |
+| `changeHistoryDatabase.ts` | NC/CAPA change audit trail |
+| `onboardingDatabase.ts` | Onboarding status |
+| `migrationDatabase.ts` | Migration data |
+| `notificationHub.ts` | Unified notification routing (email, Slack, in-app) |
+| `directAuditRunner.ts` | Direct audit execution fallback |
+| `evaluationSchema.ts` | Evaluation framework schemas |
+| `reportGenerator.ts` | Report generation |
+| `exportUtils.ts` | CSV export utilities |
+| `inputSanitizer.ts` | XSS/injection prevention, field whitelisting |
+| `rateLimiter.ts` | Tiered rate limiting |
+| `rbacMiddleware.ts` | Auth middleware (requireAdminOrKey, requireWriteRole) |
+| `slackNotifications.ts` | Slack message delivery |
+| `googleCalendar.ts` | Google Calendar integration |
 
 ---
 
-## 13. Deployment
+## 13. Dashboard Pages (29)
+
+| Page | URL | Purpose |
+|------|-----|---------|
+| `index.html` | `/` | Quality Dashboard (main) |
+| `login.html` | `/login` | Authentication page |
+| `admin.html` | `/admin` | Administration panel |
+| `audits.html` | `/audits` | Audit readiness |
+| `calls.html` | `/calls` | Call intelligence |
+| `compliance.html` | `/compliance` | Compliance tracking |
+| `consultant.html` | `/consultant` | AI Consultant chat |
+| `crm.html` | `/crm` | CRM data browser |
+| `duplicates.html` | `/duplicates` | Duplicate Radar |
+| `executive.html` | `/executive` | Executive dashboard |
+| `feedback.html` | `/feedback` | User feedback |
+| `grc.html` | `/grc` | GRC Control Tower |
+| `guide.html` | `/guide` | Platform user guide |
+| `kpis.html` | `/kpis` | KPI tracking |
+| `logs.html` | `/logs` | System event logs |
+| `migration.html` | `/migration` | Data migration |
+| `onboarding.html` | `/onboarding` | User onboarding |
+| `pdpl.html` | `/pdpl` | PDPL privacy compliance |
+| `policies.html` | `/policies` | Policy governance |
+| `projects.html` | `/projects` | PMP projects |
+| `qms.html` | `/qms` | QMS dashboard (Audit Reports) |
+| `risks.html` | `/risks` | Risk register |
+| `roi.html` | `/roi` | ROI/NPV evaluation |
+| `scorecard.html` | `/scorecard` | Performance scorecards |
+| `tablef.html` | `/tablef` | Table F governance |
+| `team.html` | `/team` | Team performance |
+| `users.html` | `/users` | User access control |
+| `vendors.html` | `/vendors` | Vendor management |
+| `accept-invite.html` | `/accept-invite` | Invitation acceptance |
+
+---
+
+## 14. Deployment
 
 - **Hosting:** Replit Autoscale
 - **Domain:** https://qms-dashboard.replit.app
@@ -850,7 +1240,7 @@ A `.env.example` file is included in the project root with all variables documen
 
 ---
 
-## 14. First Steps After Deployment
+## 15. First Steps After Deployment
 
 1. **Set all secrets** in the Replit Secrets tab (see Section 10)
 2. **Open the platform** at https://qms-dashboard.replit.app
@@ -859,32 +1249,35 @@ A `.env.example` file is included in the project root with all variables documen
 5. **Upload governance documents** via Admin Panel — these define the rules AI agents use during audits
 6. **Configure scorecards** via Admin Panel — these define evaluation criteria for SDR and Sales agents
 7. **Run your first AI Audit:** Go to `/` (Quality Dashboard) and click "Run AI Audit" — this pulls live data from Zoho CRM
-8. **Check `/grc`** — verify the Audit Readiness table loads with audit records
-9. **Check `/policies`** — click "New Policy" and create a test policy to verify the workflow
-10. **Check `/team`** — use the "Add Member" button to register team members
-11. **Check `/qms`** — verify the Audit Runs card displays and try creating a test NC via "New NC"
-12. **Check `/pdpl`** — set up data inventory and retention policies
-13. **Check `/consultant`** — ask the AI Consultant a question like "What is the current quality score?" to verify the AI integration
+8. **Seed SDR KPIs:** Call `POST /api/kpis/seed-sdr` to initialize 11 SDR KPIs
+9. **Run Duplicate Radar:** Go to `/duplicates` and click "Scan from Zoho" to detect duplicates across CRM
+10. **Check `/grc`** — verify the Audit Readiness table loads with audit records
+11. **Check `/policies`** — click "New Policy" and create a test policy to verify the workflow
+12. **Check `/team`** — use the "Add Member" button to register team members
+13. **Check `/qms`** — verify the Audit Runs card displays and try creating a test NC via "New NC"
+14. **Check `/pdpl`** — set up data inventory and retention policies
+15. **Check `/consultant`** — ask the AI Consultant a question like "What is the current quality score?" to verify the AI integration
+16. **Check `/kpis`** — verify KPI definitions appear and auto-calculation is scheduled
 
 ---
 
-## 15. Data Protection & PDPL Compliance
+## 16. Data Protection & PDPL Compliance
 
-### 15.1 Data Protection Officer (DPO)
+### 16.1 Data Protection Officer (DPO)
 - The organization must designate a DPO responsible for overseeing PDPL compliance
 - DPO contact details should be configured in the PDPL module (`/pdpl`)
 - The DPO is responsible for: data processing oversight, breach notification, DSAR coordination, and cross-border transfer reviews
 
-### 15.2 Data Processing Register
+### 16.2 Data Processing Register
 The PDPL module (`/pdpl`) maintains a register of all data processing activities via the `data_inventory` table, including:
 - **Processing purpose** for each data category
 - **Legal basis** for processing (consent, legitimate interest, contractual necessity, legal obligation)
 - **Data categories** processed (CRM records: names, emails, phone numbers, company details, deal amounts)
 - **Data subjects** (leads, contacts, account holders in Zoho CRM)
 - **Recipients** (internal platform users only — no data shared with third parties)
-- **Retention periods** (see Section 15.5)
+- **Retention periods** (see Section 16.5)
 
-### 15.3 Breach Notification Procedure
+### 16.3 Breach Notification Procedure
 In the event of a personal data breach (tracked in `data_incidents` table):
 
 | Step | Action | Timeline | Responsible |
@@ -898,14 +1291,14 @@ In the event of a personal data breach (tracked in `data_incidents` table):
 | 7 | Post-incident review and corrective actions | Within 5 business days | DPO + Admin |
 | 8 | Create CAPA record in QMS for root cause analysis | Within 5 business days | Quality Manager |
 
-### 15.4 Cross-Border Data Transfer Controls
+### 16.4 Cross-Border Data Transfer Controls
 - WalaPlus is hosted on Replit infrastructure (US-based servers)
 - CRM data is read from Zoho CRM and processed in-memory during audits
 - Audit results (scores, issue summaries) are stored in the platform database
 - No raw CRM records are persisted — only aggregated quality metrics
 - Cross-border transfer is justified under PDPL Article 29 (legitimate business interest with adequate protection)
 
-### 15.5 Data Retention Schedule
+### 16.5 Data Retention Schedule
 Retention policies are configurable via the `retention_policies` table in the PDPL module:
 
 | Data Category | Retention Period | Disposal Method |
@@ -918,33 +1311,34 @@ Retention policies are configurable via the `retention_policies` table in the PD
 | User feedback | 2 years | Database deletion |
 | Call recordings and analysis | 1 year | Database deletion |
 | Invitation records | 90 days after acceptance/expiry | Database deletion |
+| Duplicate scan results | Until next scan (replaced) | Automatic replacement |
 
-### 15.6 Data Subject Access Requests (DSARs)
+### 16.6 Data Subject Access Requests (DSARs)
 - DSARs are tracked in the PDPL module (`/pdpl`) via the `dsar_requests` table
 - **Response SLA:** 30 calendar days from receipt (see Appendix C for all SLAs)
 - Supported rights: access, rectification, erasure, restriction, portability, objection
 - The DPO coordinates responses and ensures completeness
 
-### 15.7 AI Guardrails
+### 16.7 AI Guardrails
 - The `ai_guardrails` table stores PII masking patterns for AI interactions
 - Prevents AI agents from exposing sensitive data during analysis
 - Patterns applied before sending CRM data to AI models
 
-### 15.8 PDPL Audit Log
+### 16.8 PDPL Audit Log
 - The `pdpl_audit_log` table provides an immutable audit trail for all privacy-related actions
 - Each log entry includes a SHA-256 checksum for tamper detection
 - Used for regulatory audits and SDAIA compliance demonstrations
 
 ---
 
-## 16. Management Review
+## 17. Management Review
 
-### 16.1 Schedule
+### 17.1 Schedule
 - **Frequency:** Quarterly (minimum), with ad-hoc reviews for critical issues
 - **Participants:** Admin, Quality Manager, GRC Manager, DPO (as applicable)
 - **Duration:** 1–2 hours
 
-### 16.2 Agenda Items
+### 17.2 Agenda Items
 
 | # | Topic | Data Source |
 |---|-------|------------|
@@ -958,11 +1352,14 @@ Retention policies are configurable via the `retention_policies` table in the PD
 | 8 | Platform performance (uptime, incidents) | Event Logs (`/logs`), Replit dashboard |
 | 9 | PDPL/privacy status and any DSARs | PDPL module (`/pdpl`) |
 | 10 | Quality objective performance vs targets | Section 1.2 targets |
-| 11 | Improvement opportunities | All modules |
-| 12 | Resource needs and training gaps | Team Performance (`/team`) |
-| 13 | Escalation log review | `escalation_log` table |
+| 11 | KPI performance and trends | KPI Tracking (`/kpis`) |
+| 12 | Duplicate Radar results and pipeline hygiene | Duplicate Radar (`/duplicates`) |
+| 13 | Sales/SDR SLA compliance | AI Alerts (`/consultant` alert bell) |
+| 14 | Improvement opportunities | All modules |
+| 15 | Resource needs and training gaps | Team Performance (`/team`) |
+| 16 | Escalation log review | `escalation_log` table |
 
-### 16.3 Outputs
+### 17.3 Outputs
 - Updated quality objectives (if targets need adjustment)
 - Action items with owners and due dates
 - Decisions on resource allocation
@@ -970,12 +1367,12 @@ Retention policies are configurable via the `retention_policies` table in the PD
 
 ---
 
-## 17. Internal Audit Program
+## 18. Internal Audit Program
 
-### 17.1 Purpose
+### 18.1 Purpose
 The internal audit program verifies that the WalaPlus QMS platform itself operates in conformance with organizational requirements, ISO 9001 principles, and security policies. This is distinct from the CRM data audits performed by the AI agents.
 
-### 17.2 Audit Schedule
+### 18.2 Audit Schedule
 
 | Audit Area | Frequency | Auditor | Criteria |
 |------------|-----------|---------|----------|
@@ -984,39 +1381,42 @@ The internal audit program verifies that the WalaPlus QMS platform itself operat
 | Security controls (CSP, input sanitization) | Semi-annually | Admin or security reviewer | VAPT report baseline, security headers |
 | CRM integration and data accuracy | Quarterly | Quality Manager | Zoho data matches audit results |
 | CAPA and NC process effectiveness | Quarterly | Quality Manager | Closure rates, SLA compliance |
-| Backup and disaster recovery | Annually | Admin | RTO/RPO targets met (see Section 19) |
+| Backup and disaster recovery | Annually | Admin | RTO/RPO targets met (see Section 20) |
 | User training compliance | Semi-annually | Team Lead | Required training completed per role |
 | Policy governance lifecycle | Quarterly | GRC Manager | Policies reviewed on schedule, approvals in place |
 | AI guardrails and PII masking | Semi-annually | DPO | AI guardrail patterns effective, no PII leakage |
+| Duplicate Radar accuracy | Quarterly | Quality Manager | Scan results match manual spot-checks |
+| SLA compliance (Sales/SDR) | Monthly | Quality Manager | AI scanner SLA alerts reviewed and addressed |
+| KPI auto-calculation accuracy | Quarterly | Admin | Auto-calculated KPI values match manual calculations |
 
-### 17.3 Audit Process
+### 18.3 Audit Process
 1. **Plan:** Auditor reviews scope, criteria, and previous findings
 2. **Execute:** Auditor examines platform data, interviews users, reviews logs
 3. **Report:** Findings documented with severity (observation, minor, major, critical)
 4. **Follow-up:** Findings entered as NC records in QMS; CAPA created for major/critical findings
 5. **Close:** Verify corrective actions are effective before closing the finding
 
-### 17.4 Auditor Independence
+### 18.4 Auditor Independence
 - Auditors must not audit their own work or modules they manage
 - Admin audits should be performed by Quality Manager or external reviewer
 - Audit results are accessible to all Management Review participants
 
 ---
 
-## 18. Incident Response
+## 19. Incident Response
 
-### 18.1 Incident Categories
+### 19.1 Incident Categories
 
 | Category | Examples | Severity |
 |----------|----------|----------|
 | **Security Breach** | Unauthorized access, credential compromise, data exfiltration | Critical |
 | **System Outage** | Platform down, database unavailable, Replit hosting failure | High |
 | **Data Integrity** | Incorrect audit results, corrupted records, sync failures | High |
-| **Performance Degradation** | Slow response times, timeout errors | Medium |
+| **Performance Degradation** | Slow response times, timeout errors, scan timeouts | Medium |
 | **Zoho Integration Failure** | OAuth token expired, API errors, empty data returns | Medium |
 | **User-Reported Bug** | UI errors, broken functionality, missing data | Low–Medium |
 
-### 18.2 Escalation Matrix
+### 19.2 Escalation Matrix
 
 | Severity | First Responder | Escalation To | Escalation Timeline |
 |----------|----------------|---------------|-------------------|
@@ -1025,8 +1425,8 @@ The internal audit program verifies that the WalaPlus QMS platform itself operat
 | Medium | Admin | Relevant module owner | Within 4 hours |
 | Low | Any team member | Admin | Within 24 hours |
 
-### 18.3 Incident Response Steps
-1. **Detect:** Monitor event logs (`/logs`), user reports, Replit health checks
+### 19.3 Incident Response Steps
+1. **Detect:** Monitor event logs (`/logs`), user reports, Replit health checks, AI alerts
 2. **Classify:** Determine category and severity per the table above
 3. **Contain:** Isolate affected components (disable integrations, restrict access if needed)
 4. **Investigate:** Review logs, identify root cause, document findings
@@ -1038,47 +1438,47 @@ The internal audit program verifies that the WalaPlus QMS platform itself operat
 
 ---
 
-## 19. Backup & Disaster Recovery
+## 20. Backup & Disaster Recovery
 
-### 19.1 Database Backup
+### 20.1 Database Backup
 - **Provider:** Replit manages PostgreSQL database infrastructure
 - **Backup frequency:** Automatic (managed by Replit hosting platform)
 - **Backup type:** Full database snapshots
 - **Retention:** Per Replit's data retention policy
 - **Additional protection:** Project checkpoints (code + database state) created automatically
 
-### 19.2 Recovery Targets
+### 20.2 Recovery Targets
 
 | Metric | Target | Notes |
 |--------|--------|-------|
 | **RTO** (Recovery Time Objective) | 1 hour | Platform redeploy from checkpoint |
 | **RPO** (Recovery Point Objective) | 1 hour | Based on Replit checkpoint frequency |
 
-### 19.3 Recovery Procedures
+### 20.3 Recovery Procedures
 1. **Platform failure:** Replit Autoscale automatically restarts the application on health check failure
 2. **Database corruption:** Restore from Replit checkpoint (admin can initiate rollback via Replit dashboard)
 3. **Code regression:** Roll back to a previous checkpoint via Replit dashboard
 4. **Zoho integration failure:** System automatically retries OAuth token refresh; manual re-authorization via Zoho API Console if refresh token is revoked
 5. **Complete disaster:** Redeploy from git repository + restore database from latest checkpoint
 
-### 19.4 Recovery Testing
-- Recovery procedures should be tested annually as part of the internal audit program (see Section 17)
+### 20.4 Recovery Testing
+- Recovery procedures should be tested annually as part of the internal audit program (see Section 18)
 - Test should include: checkpoint rollback, service restart verification, and Zoho re-authentication
 
 ---
 
-## 20. Change Management
+## 21. Change Management
 
-### 20.1 Change Categories
+### 21.1 Change Categories
 
 | Category | Examples | Approval Required |
 |----------|----------|-------------------|
 | **Emergency** | Security patch, critical bug fix, data breach response | Admin (post-implementation review) |
 | **Standard** | New feature, UI enhancement, report addition | Admin + Quality Manager |
-| **Configuration** | Secret update, Zoho region change, role modification | Admin |
+| **Configuration** | Secret update, Zoho region change, role modification, cron schedule change | Admin |
 | **Infrastructure** | Database schema change, hosting change, new integration | Admin + Quality Manager + GRC Manager |
 
-### 20.2 Change Process
+### 21.2 Change Process
 1. **Request:** Document the change (what, why, impact, rollback plan)
 2. **Review:** Appropriate approver reviews the change per category above
 3. **Test:** Verify changes in the development environment (Replit workspace)
@@ -1088,35 +1488,35 @@ The internal audit program verifies that the WalaPlus QMS platform itself operat
 7. **Document:** Update this SOP if the change affects procedures, roles, or modules
 8. **Rollback:** If issues arise, roll back to previous checkpoint via Replit dashboard
 
-### 20.3 Change Log
+### 21.3 Change Log
 All changes are tracked in:
 - Git version control (commit history)
 - Replit checkpoints (code + database snapshots)
 - Event Logs (`/logs`) for runtime configuration changes
-- Section 24 (Recent Changes Log) of this SOP for procedural changes
+- Section 25 (Recent Changes Log) of this SOP for procedural changes
 
 ---
 
-## 21. User Training Requirements
+## 22. User Training Requirements
 
-### 21.1 Mandatory Training by Role
+### 22.1 Mandatory Training by Role
 
 | Role | Required Training | Completion Deadline |
 |------|-------------------|-------------------|
 | **All users** | Platform navigation, login procedure, feedback submission | Within 1 week of onboarding |
 | **Admin** | Full platform training, security procedures, incident response, user management | Before assuming role |
-| **Quality Manager** | Quality Dashboard, AI Audit, QMS (CAPA/NC), audit program, management review | Within 2 weeks |
+| **Quality Manager** | Quality Dashboard, AI Audit, QMS (CAPA/NC), audit program, management review, Duplicate Radar, KPI tracking | Within 2 weeks |
 | **GRC Manager** | GRC Control Tower, Risk Register, Compliance, Policy governance, audit readiness | Within 2 weeks |
 | **Team Lead** | Team Performance, Call Intelligence, training matrix management | Within 2 weeks |
 | **Auditor** | Audit Readiness, Compliance Tracking, findings management | Within 2 weeks |
 | **DPO** | PDPL module, data protection procedures, breach notification, DSAR handling | Before assuming role |
 
-### 21.2 Training Records
+### 22.2 Training Records
 - Training assignments and completions are tracked in the Team Performance module (`/team`) under the Training Matrix tab
 - Course management is available in the QMS Dashboard (`/qms`) Training tab
 - Training compliance percentage is displayed on the Team Overview dashboard
 
-### 21.3 Refresher Training
+### 22.3 Refresher Training
 - All users must complete annual refresher training on platform usage and security awareness
 - Role-specific refresher training is required when:
   - A major platform update is released
@@ -1125,9 +1525,9 @@ All changes are tracked in:
 
 ---
 
-## 22. Continual Improvement
+## 23. Continual Improvement
 
-### 22.1 Improvement Sources
+### 23.1 Improvement Sources
 The following sources feed into the continual improvement process:
 
 | Source | Module | Frequency |
@@ -1136,33 +1536,40 @@ The following sources feed into the continual improvement process:
 | CAPA effectiveness reviews | QMS Dashboard (`/qms`) | Monthly |
 | NC trend analysis | QMS Dashboard (`/qms`) | Monthly |
 | User feedback | Feedback module (`/feedback`) | Ongoing |
-| Internal audit findings | Section 17 | Per schedule |
-| Management review actions | Section 16 | Quarterly |
+| Internal audit findings | Section 18 | Per schedule |
+| Management review actions | Section 17 | Quarterly |
 | Pentest and security reviews | Section 9.4 | As conducted |
 | Platform performance data | Event Logs (`/logs`) | Ongoing |
 | AI Consultant alerts | AI Consultant (`/consultant`) alert bell | Ongoing (every 6 hours) |
+| Sales/SDR SLA breach alerts | AI Background Scanner | Ongoing (every 6 hours) |
+| Duplicate Radar findings | Duplicate Radar (`/duplicates`) | Weekly scan + on-demand |
+| KPI trend analysis | KPI Tracking (`/kpis`) | Daily (auto-calculated) |
 | Escalation log trends | `escalation_log` table | Monthly |
 
-### 22.2 Improvement Process
+### 23.2 Improvement Process
 1. **Identify:** Collect improvement opportunities from all sources above
 2. **Prioritize:** Rank by impact (quality score improvement, risk reduction, user satisfaction) and effort
 3. **Plan:** Define scope, owner, timeline, and success criteria
-4. **Implement:** Execute the improvement (following the Change Management process in Section 20)
+4. **Implement:** Execute the improvement (following the Change Management process in Section 21)
 5. **Measure:** Track effectiveness using platform KPIs and dashboards
 6. **Standardize:** Update SOPs, governance rules, or scorecards if the improvement is effective
 7. **Report:** Present results at the next Management Review
 
-### 22.3 Key Performance Indicators for Improvement
+### 23.3 Key Performance Indicators for Improvement
 - Quality Score trend (should be improving or stable quarter-over-quarter)
 - CAPA recurrence rate (same root cause should not recur)
 - NC resolution time trend (should be decreasing)
 - User satisfaction trend (should be improving)
+- Duplicate rate (should be decreasing — target ≤ 2%)
+- SLA compliance rate (should be improving — Sales and SDR)
+- CRM data accuracy (should be improving — target ≥ 95%)
 
 ---
 
-## 23. Support & Troubleshooting
+## 24. Support & Troubleshooting
 
 ### Common Issues
+
 | Issue | Solution |
 |-------|----------|
 | Can't log in | Clear browser cookies, try a different auth provider (Google, GitHub, Apple, email) |
@@ -1177,6 +1584,9 @@ The following sources feed into the continual improvement process:
 | AI audit uses sample data instead of live CRM | Verify Zoho OAuth secrets; check `/api/integrations/status` for connection status |
 | AI Consultant not responding | Verify `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY` is configured and has available quota |
 | Alert bell not showing count | Check `/api/consultant/alerts/count` — ensure the `ai_alerts` table was initialized |
+| Duplicate scan shows "Gateway Timeout" | Scan runs in background now — check progress via the UI polling or `/api/duplicates/scan-status` |
+| Duplicate scan shows 0 results | Run "Scan from Zoho" first; data is replaced on each scan |
+| KPIs not auto-calculating | Verify `KPI_AUTO_CALC_CRON` is not overridden; check Inngest cron logs |
 
 ### Feedback
 Use the **"Give Feedback"** floating button (bottom-right corner of every page) to submit feedback, bug reports, or feature requests.
@@ -1197,6 +1607,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | **Inngest** | Event-driven workflow engine used for orchestrating multi-step audit workflows |
 | **ISO 9001** | International standard for Quality Management Systems, specifying requirements for organizations to demonstrate consistent quality |
 | **KPI** | Key Performance Indicator — a measurable value that demonstrates how effectively objectives are being achieved |
+| **Levenshtein Distance** | A string similarity metric measuring the minimum number of single-character edits needed to change one word into another — used in duplicate detection fuzzy company name matching |
 | **Mastra** | AI agent framework used as the core application server, providing agent orchestration and tool management |
 | **MFA** | Multi-Factor Authentication — an authentication method requiring two or more verification factors |
 | **MOM** | Minutes of Meeting — AI-generated summary of meeting discussions and action items |
@@ -1205,6 +1616,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | **NPV** | Net Present Value — a financial calculation determining the present value of future cash flows minus the initial investment |
 | **OIDC** | OpenID Connect — an authentication protocol built on OAuth 2.0, used for user identity verification |
 | **PDPL** | Personal Data Protection Law — Saudi Arabia's data privacy regulation (similar to GDPR) |
+| **Pipeline Inflation** | The overstatement of CRM pipeline value caused by duplicate deal records — detected and quantified by the Duplicate Radar |
 | **PMP** | Project Management Professional — project management methodology used for the projects module |
 | **QMS** | Quality Management System — a formalized system documenting processes, procedures, and responsibilities for achieving quality policies and objectives |
 | **RACI** | Responsible, Accountable, Consulted, Informed — a matrix for clarifying roles and responsibilities |
@@ -1216,6 +1628,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | **SDR** | Sales Development Representative — a sales role focused on lead qualification and outreach |
 | **SHA-256** | Secure Hash Algorithm — a cryptographic hash function used for tamper detection in PDPL audit logs |
 | **SLA** | Service Level Agreement — a commitment defining expected response/resolution times |
+| **SOP** | Standard Operating Procedure — a documented set of step-by-step instructions for performing routine operations |
 | **VAPT** | Vulnerability Assessment and Penetration Testing — security testing to identify and exploit vulnerabilities |
 | **XSS** | Cross-Site Scripting — a security vulnerability where malicious scripts are injected into web pages |
 
@@ -1253,6 +1666,9 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | Handoff Rule Config | R/A | C | C | I | I | I | I |
 | AI Consultant Usage | I | R | R | C | R | R | I |
 | AI Alert Review | I | R/A | C | I | C | C | I |
+| Duplicate Radar Review | I | R/A | I | I | C | I | I |
+| SLA Compliance Review | I | R/A | C | I | C | I | I |
+| KPI Seeding/Config | R/A | C | I | I | I | I | I |
 
 ---
 
@@ -1266,6 +1682,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | Dashboard Data Refresh | Staleness after audit | ≤ 5 minutes | Automatic refresh |
 | Platform Availability | Monthly uptime | ≥ 99.5% | Replit health checks |
 | Login Response | Authentication time | ≤ 5 seconds | OIDC callback timing |
+| Duplicate Scan | Full 4-module scan | ≤ 10 minutes | Scan duration timer |
 
 ### C.2 Quality Process SLAs
 
@@ -1279,7 +1696,34 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | **Policy Review** | Time from review-due to completed | ≤ 30 calendar days | Notify GRC Manager at 15 days |
 | **Risk Treatment Action** | Time from creation to implementation | ≤ 60 calendar days | Escalate to GRC Manager at 45 days |
 
-### C.3 Privacy & Compliance SLAs
+### C.3 Sales SLAs (Monitored by AI Scanner)
+
+| Process | Metric | Target | Alert Type |
+|---------|--------|--------|------------|
+| **SDR Handoff Response** | Time from handoff to first contact | ≤ 1 business day | `sla_breach` (high) |
+| **Proposal Preparation** | Time from meeting to proposal sent | ≤ 2 business days | `sla_breach` (high) |
+| **Agreement Review** | Time from sent to signed | ≤ 10 business days | `sla_breach` (critical at 30+ days) |
+| **CRM Activity Logging** | Time from activity to CRM update | Same day | `sla_breach` (medium) |
+| **Stage Duration: Meeting** | Max time in Meeting stage | 10 days | `sla_breach` |
+| **Stage Duration: Proposal** | Max time in Proposal stage | 90 days | `sla_breach` |
+| **Stage Duration: Agreement Sent** | Max time in Agreement Sent | 90 days | `sla_breach` |
+| **Stage Duration: On Hold** | Max time in On Hold | 180 days | `sla_breach` |
+
+### C.4 SDR SLAs (Monitored by AI Scanner)
+
+| Process | Metric | Target | Alert Type |
+|---------|--------|--------|------------|
+| **Inbound Lead Contact** | Time from creation to first attempt | ≤ 2 hours | `sla_breach` |
+| **Outbound Lead Contact** | Time from creation to first call | ≤ 4 hours | `sla_breach` |
+| **Follow-up (No Answer)** | Time to next attempt | ≤ 24 hours | `sla_breach` |
+| **Qualification Decision** | Time from Contacted to Qualified/Not Qualified | ≤ 3 business days | `sla_breach` |
+| **Handoff to Sales** | Time from Qualified to Sales handoff | ≤ 1 business day | `sla_breach` |
+| **Stage Duration: Contacting** | Max time in Contacting | 5 days | `sla_breach` |
+| **Stage Duration: Contacted** | Max time in Contacted | 3 days | `sla_breach` |
+| **Stage Duration: On Hold** | Max time in On Hold | 90 days | `sla_breach` |
+| **Stage Duration: Nurturing** | Max time in Nurturing | 180 days | `sla_breach` |
+
+### C.5 Privacy & Compliance SLAs
 
 | Process | Metric | Target | Regulatory Basis |
 |---------|--------|--------|-----------------|
@@ -1287,7 +1731,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | **Breach Notification (Authority)** | Time from detection to SDAIA notification | ≤ 72 hours | PDPL Article 20 |
 | **Breach Notification (Subjects)** | Time from detection to data subject notification | Without undue delay | PDPL Article 20 |
 
-### C.4 Incident Response SLAs
+### C.6 Incident Response SLAs
 
 | Severity | Acknowledgment | Containment | Resolution |
 |----------|---------------|-------------|------------|
@@ -1298,30 +1742,19 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 ---
 
-## 24. Recent Changes Log
+## 25. Recent Changes Log
 
 | Date | Change | Impact |
 |------|--------|--------|
-| Apr 12, 2026 | AI Consultant & Assistant module added: GPT-4o agent with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents), background scanner (6h Inngest cron, 8 automated checks), alerts system with dedup, full chat UI at `/consultant`, alert bell in nav bar with badge polling, SSE streaming support | New AI-powered quality management guidance module; proactive issue detection via background scanning |
-| Apr 12, 2026 | Sandbox module removed: `/sandbox` route, navigation link, and API endpoints removed from platform | Simplified platform; sandbox mock data no longer accessible |
-| Apr 12, 2026 | Audit History Date/Time update: Audit History table now displays full date and time instead of date-only | Improved audit traceability with timestamps |
-| Apr 12, 2026 | Slack notification integration: `SLACK_API_TOKEN` and `SLACK_QMS_CHANNEL` secrets documented and integrated for QMS alert notifications | Slack channel receives QMS notifications |
+| Apr 13, 2026 | **SOP v4.0 major overhaul:** Comprehensive update reflecting all platform features as of this date. AI Consultant tools expanded from 8→16 (added NC/CAPA create/list, CAPA details, checklist run/manage, knowledge search). Duplicate Radar upgraded to Tier 1–3: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow (resolve/ignore/mark primary/bulk resolve), owner accountability, real-time pre-creation check, async scan with progress polling. AI Scanner expanded from 8→12 checks (added Sales SLA violations, SDR SLA violations, low-progress treatments, high-confidence duplicates). 76 CRM governance rules fully documented (Sales SOP 28 + SDR SOP 28 + Account Rules 20). 11 SDR KPIs seeded. 6 platform KPIs auto-calculated daily. Weekly duplicate scan cron (Sunday 3 AM). Zoho pagination expanded 10K→20K records/module. Database tables expanded 98→103+. Added complete dashboard page inventory (29), route file inventory (29), utility module inventory (39). All SLA tables updated with Sales/SDR SLA monitoring. RACI matrix updated. Added Knowledge Base, Notification Hub modules. | Full platform documentation reflecting all implemented capabilities |
+| Apr 12, 2026 | Duplicate Radar async scan: Scan runs in background with progress polling; no more gateway timeouts | Improved scan reliability for large CRM datasets |
+| Apr 12, 2026 | AI Consultant & Assistant module added: GPT-4o agent with 16 tools, background scanner (6h Inngest cron, 12 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. | New AI-powered quality management guidance module; proactive issue detection via background scanning |
 | Apr 9, 2026 | SOP v3.6: 22-fix security hardening — SQL injection (parameterized intervals), path traversal, fake data removal, OIDC nonce (oauth_data cookie, redirect on mismatch), uniform requireAdminOrKey auth guards on RBAC/PDPL/CallIntel/DuplicateRadar, webhook validation (Telegram secret + Linear HMAC-SHA256 with timingSafeEqual), audit trigger chain in fallback, error propagation, UUID resolution, dashboard HTML fixes | Protected API endpoints require authentication; webhook endpoints validated; SQL injection vectors eliminated |
-| Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses Inngest-first with direct fallback, admin key login redirects to dashboard, inngest.sh fixed, smoke test routes added, QMS-024 pentest finding description corrected | CSP, auth, and audit trigger accuracy verified |
-| Apr 9, 2026 | SOP v3.4: Restored auth documentation (authRoutes.ts with Replit OIDC + HMAC-SHA256 session signing), corrected CSP to reflect nonce-based implementation, documented tiered rate limiting (100/10/5/10 + unauth 10/3), updated VAPT status to 37/37 post-retest remediation, unified role system across rbacDatabase and userAccessDatabase | SOP accuracy verified against deployed codebase |
-| Apr 8, 2026 | SOP v3.3: Corrected 9 inaccuracies — database count 73→97+ tables, fixed section numbering, corrected policy/NC form fields, expanded table inventory (+24 tables, +2 groups) | SOP accuracy verified |
-| Apr 8, 2026 | SOP v3.2: Comprehensive codebase audit — expanded database to 97+ tables, added PDPL backend (data inventory, DSAR, AI guardrails, SHA-256 audit log), ROI engine (8 cost tables + AI validation), Call Intelligence (8 tables incl. transcripts, QA scores, MOM), handoff/control system, escalation system, vendor assessments, policy versions/acknowledgments, risk history, compliance calendar, evidence packs, onboarding system, sandbox/mock endpoints, admin governance/scorecard management, API architecture section, Zoho write capabilities, Google Calendar integration, Slack/Telegram triggers, MFA schema, access audit log, data scopes, screen permissions | SOP now reflects complete implemented codebase |
-| Apr 8, 2026 | SOP v3.1: Corrected 10 inaccuracies — GRC audit readiness, policy button, QMS KPI cards, NC types, PKCE, rate limiting, audit steps, link text, first-steps | SOP accuracy verified |
-| Apr 8, 2026 | SOP v3.0: Added Quality Policy, Document Control, Management Review, Internal Audit, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs | Comprehensive QMS documentation |
-| Apr 8, 2026 | Fixed CRM credential detection in audit workflow (OAuth support) | AI audits now work with OAuth credentials |
-| Apr 8, 2026 | Fixed policies.html JavaScript SyntaxError | Policy viewing, transitions, and approvals work correctly |
-| Apr 8, 2026 | Added "Add Member" button to Team page | Team members can be added directly from the members tab |
-| Apr 8, 2026 | Added Audit Readiness section to GRC Control Tower | Audit list visible on GRC page |
-| Apr 8, 2026 | Added Audit Runs card to QMS overview | Audit metrics on QMS dashboard |
-| Apr 8, 2026 | Added NC creation modal to QMS | Nonconformances can be created from the QMS dashboard |
-| Apr 8, 2026 | Created .env.example reference file | Easier secret configuration for new deployments |
+| Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses Inngest-first with direct fallback, admin key login redirects to dashboard, inngest.sh fixed, smoke test routes added | CSP, auth, and audit trigger accuracy verified |
+| Apr 9, 2026 | SOP v3.4: Restored auth documentation, corrected CSP, documented tiered rate limiting, updated VAPT status to 37/37, unified role system | SOP accuracy verified against deployed codebase |
+| Apr 8, 2026 | SOP v3.0–3.3: Added Quality Policy, Document Control, Management Review, Internal Audit, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs. Corrected 19 inaccuracies. Expanded database to 97+ tables. | Comprehensive QMS documentation |
+| Apr 8, 2026 | Fixed CRM credential detection, policies.html, Added Member button, Audit Readiness to GRC, NC creation modal | Core platform functionality fixes |
 | Apr 2, 2026 | Pentest v4 retest — 31/37 initially confirmed fixed | Retest baseline |
 | Apr 8–9, 2026 | Post-retest remediation — remaining 5 findings (QMS-024, 026, 031, 032, 036) closed | 37/37 findings now resolved |
-| Mar 2026 | Migrated to Replit Auth (OIDC) | Google, GitHub, Apple, and email login support |
-| Mar 2026 | Centralized RBAC middleware | Granular per-endpoint role-based access control |
+| Mar 2026 | Migrated to Replit Auth (OIDC), Centralized RBAC middleware | Google, GitHub, Apple, email login + granular access control |
 | Feb 2026 | Platform launched | Full WalaPlus QMS codebase deployed |

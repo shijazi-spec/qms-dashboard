@@ -7,7 +7,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **Framework**: Mastra (AI agent framework) with Hono HTTP server
 - **Frontend**: Static HTML dashboards served from `dashboard/` directory
 - **Backend**: Mastra API routes with Hono handlers
-- **Database**: PostgreSQL (98+ tables across 20 module groups) via `pg` module
+- **Database**: PostgreSQL (103+ tables across 21 module groups) via `pg` module
 - **AI**: GPT-4o via Replit AI Integrations / OpenAI
 - **Workflows**: Inngest for event-driven workflow orchestration
 - **Auth**: Replit OIDC (`authRoutes.ts`) with HMAC-SHA256 signed session cookie (`walaplus_session`, 7-day expiry). Supports Google, GitHub, Apple, email login. Admin API key via `X-Admin-Key` header.
@@ -68,7 +68,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/logs` - System Event Logs
 - `/pdpl` - PDPL Privacy Compliance (CSV export)
 - `/users` - Users & Access Control
-- `/consultant` - AI Consultant & Assistant (chat interface with 8 AI tools)
+- `/consultant` - AI Consultant & Assistant (chat interface with 16 AI tools)
 - `/kpis` - KPI Tracking (status filter, CSV export, auto-calc timestamp)
 - `/scorecard` - Scorecard
 - `/duplicates` - Duplicate Radar
@@ -117,8 +117,8 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `AI_INTEGRATIONS_OPENAI_API_KEY` - Replit-managed OpenAI key (preferred for AI Consultant)
 - `AI_INTEGRATIONS_OPENAI_BASE_URL` - Replit AI proxy base URL
 - `OPENAI_API_KEY` - Direct OpenAI API key (fallback)
-- `SLACK_API_TOKEN` - Slack Bot token for notifications
-- `SLACK_QMS_CHANNEL` - Slack channel ID for QMS alerts
+- `SLACK_BOT_TOKEN` - Slack Bot token for notifications
+- `SLACK_CHANNEL_ID` - Slack channel ID for QMS alerts
 
 ## Database Setup
 - Tables are auto-initialized by utility modules on first use (auditDatabase.ts, complianceDatabase.ts, kpiDatabase.ts, riskDatabase.ts, policyDatabase.ts, vendorDatabase.ts)
@@ -129,7 +129,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 ## AI Consultant Feature
 - **Agent**: `qmsConsultantAgent.ts` - GPT-4o powered QMS consultant with 16 tools, registered in Mastra agents config with @mastra/memory for conversation threading
 - **Tools**: queryPlatformData, analyzeNonconformities, suggestImprovements, checkRegulationCompliance, monitorKPIs, monitorRisks, createAlert, reviewDocument, searchKnowledge, runChecklist, manageChecklist, createNc, getNcList, createCapa, getCapaList, getCapaDetails
-- **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks running every 6 hours via Inngest
+- **Background Scanner**: `aiBackgroundScanner.ts` - 12 automated checks running every 6 hours via Inngest
 - **KPI Auto-Calculation**: Daily cron (2 AM UTC, configurable via KPI_AUTO_CALC_CRON) runs 6 scorecard KPI calculators and records values automatically
 - **Audit Trail**: `logEvent()` calls on all POST/PUT handlers across index.ts (NC/CAPA create), kpiRoutes (KPI create/update/value/report), pdplRoutes (inventory/DSAR/incidents/guardrails CRUD), authRoutes (logout)
 - **Alerts Database**: `aiAlertsDatabase.ts` - ai_alerts table with CRUD, dedup, severity-ordered queries
