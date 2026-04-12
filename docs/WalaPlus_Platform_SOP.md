@@ -1,8 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 3.7
-**Last Updated:** April 10, 2026
+**Version:** 3.8
+**Last Updated:** April 12, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
@@ -15,11 +15,11 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 3.7 |
+| **Version** | 3.8 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
-| **Effective Date** | April 10, 2026 |
+| **Effective Date** | April 12, 2026 |
 | **Next Review** | July 8, 2026 (quarterly) |
 | **Distribution** | All platform users (internal) |
 
@@ -38,6 +38,7 @@
 | 3.5 | Apr 9, 2026 | Engineering | CSP nonce removed (CSP Level 3 conflict with inline handlers), page-level auth now accepts admin_key cookie alongside session cookie, audit trigger uses Inngest-first with direct execution fallback, admin key login redirects to dashboard, inngest.sh DATABASE_URL check fixed, smoke test routes added (/api/health, /api/smoke) |
 | 3.6 | Apr 9, 2026 | Engineering | 22-fix security hardening: SQL injection fixes (parameterized make_interval in getTrendData, getRiskTrends, getUpcomingDeadlines), path traversal fix in screenshot endpoint, kpiDatabase table name corrections, crmComplianceTool fake data removal + Zoho datacenter URL fix, OIDC nonce verification (via oauth_data cookie, redirect on mismatch), directAuditRunner trigger chain, eventLogsDatabase error propagation, UUID treatment action resolution, dashboard HTML fixes (policies.html, executive.html, pdpl.html), uniform requireAdminOrKey auth guards on rbacRoutes/pdplRoutes/callIntelligenceRoutes/duplicateRadarRoutes, Telegram webhook secret validation, Linear webhook HMAC-SHA256 signature verification with timingSafeEqual |
 | 3.7 | Apr 10, 2026 | Engineering | SOP accuracy corrections: fixed OIDC nonce cookie name (oauth_data, not oidc_nonce) and rejection behavior (redirect to `/login?error=nonce_mismatch`, not 403), clarified Linear webhook HMAC-SHA256 implementation details (createHmac + timingSafeEqual), clarified uniform requireAdminOrKey usage across RBAC/PDPL/CallIntel/DuplicateRadar with note on requireWriteRole in other modules, updated Recent Changes Log |
+| 3.8 | Apr 12, 2026 | Engineering | Added AI Consultant & Assistant module (Section 4.20/6.4/7/8): GPT-4o agent with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. Updated AI engine to GPT-4o. |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/WalaPlus_Platform_SOP.md`
@@ -86,8 +87,8 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Platform URL:** https://qms-dashboard.replit.app
 **Tech Stack:** Mastra AI Framework, Hono HTTP Server, PostgreSQL, Inngest Workflows
 **Hosting:** Replit Autoscale with automatic health checks
-**Database:** PostgreSQL with 97+ auto-initialized tables
-**AI Engine:** GPT-4o via OpenAI (configurable)
+**Database:** PostgreSQL with 98+ auto-initialized tables
+**AI Engine:** GPT-4o via OpenAI / Replit AI Integrations (configurable)
 
 ---
 
@@ -431,11 +432,42 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | Feedback | `/feedback` | User feedback collection (also accessible via floating "Give Feedback" button) |
 | Onboarding | `/onboarding` | New user onboarding flow with guided tour steps |
 | Admin Panel | `/admin` | System administration (requires Admin API Key) — includes governance document and scorecard management |
-| Sandbox | `/sandbox` | Testing sandbox with mock data (Leads, Deals, Stats) for safe experimentation without affecting live CRM |
 | Guide | `/guide` | Platform user guide (public, no login required) |
 | Accept Invite | `/accept-invite` | Invitation acceptance page for new users (public) |
 
-### 4.21 Handoff & Control Mapping System
+### 4.21 AI Consultant & Assistant (`/consultant`)
+**Purpose:** AI-powered quality management consultant providing real-time guidance, automated platform monitoring, and proactive alerting.
+
+**Key Features:**
+- **Chat Interface:** Full conversational UI with GPT-4o powered responses, supporting both English and Arabic
+- **Quick Actions Sidebar:** Pre-built prompts for common queries (quality score summary, recent NCs, risk status, compliance gaps, KPI performance, improvement suggestions)
+- **8 AI Tools:** Query platform data across 11 modules, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts, review documents
+- **Streaming Responses:** Server-Sent Events (SSE) for real-time streaming chat, with standard response fallback
+- **Alert Bell:** Navigation bar badge showing unread alert count, updated every 60 seconds
+- **Background Scanner:** Automated 6-hour scans detecting quality issues (see Section 8.2)
+- **Markdown Rendering:** Chat responses support formatted text, tables, and lists
+
+**How to Use:**
+1. Navigate to `/consultant` or click "AI Consultant" in the Support navigation group
+2. Type a question in the chat input or click a quick action button in the sidebar
+3. The AI consultant queries live platform data to answer your question
+4. Review the alert bell icon in the navigation bar for proactive findings from the background scanner
+5. Click the alert bell to view all alerts with severity and details
+
+**API Endpoints:**
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/consultant/chat` | POST | Send a message and receive AI response |
+| `/api/consultant/chat/stream` | POST | Send a message with SSE streaming response |
+| `/api/consultant/alerts` | GET | List all AI alerts (severity-ordered) |
+| `/api/consultant/alerts/count` | GET | Get unread alert count |
+| `/api/consultant/alerts/:id/read` | PATCH | Mark an alert as read |
+| `/api/consultant/alerts/:id` | DELETE | Delete an alert |
+| `/api/consultant/scan` | POST | Trigger a manual background scan |
+
+**Backend Tables:** `ai_alerts`
+
+### 4.22 Handoff & Control Mapping System
 **Purpose:** Automates data flow between QMS and GRC modules.
 
 **Key Features:**
@@ -445,7 +477,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 
 **Backend Tables:** `handoff_rules`, `handoff_events`, `control_mappings`
 
-### 4.22 Onboarding System
+### 4.23 Onboarding System
 **Purpose:** Guided onboarding for new platform users.
 
 **Key Features:**
@@ -550,13 +582,22 @@ Default (global) endpoints work for most other regions:
 - Uses configurable governance documents and scorecards
 - Orchestrates the insight-generation step of the audit workflow
 
-### 6.2 SDR Quality Agent
+### 6.2 AI Consultant Agent
+- GPT-4o powered QMS AI Consultant accessible at `/consultant`
+- Provides real-time quality management guidance through a chat interface
+- Equipped with 8 specialized tools: query platform data, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts, review documents
+- Supports both standard and streaming (SSE) chat responses
+- Responds in English or Arabic based on user's language
+- Does not expose internal tool mechanics or database queries to users
+- Uses `@ai-sdk/openai-v5` with Replit AI proxy fallback (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
+
+### 6.3 SDR Quality Agent
 - Evaluates SDR (Sales Development Representative) performance
 - Audits **Leads** module specifically using SDR-specific scorecards
 - Checks CRM update compliance after calls
 - Runs in parallel with Sales Quality Agent during audits
 
-### 6.3 Sales Quality Agent
+### 6.4 Sales Quality Agent
 - Monitors sales process adherence
 - Audits **Deals** module specifically using Sales-specific scorecards
 - Evaluates deal stage progression and pipeline hygiene
@@ -580,6 +621,14 @@ Default (global) endpoints work for most other regions:
 | **Email Reports** | Automated email report delivery via Resend (with Replit mail fallback) |
 | **Training Management** | Training record management, course tracking, and assignments |
 | **Google Calendar** | Calendar integration for fetching events during audit periods |
+| **Query Platform Data** | Queries data across 11 QMS modules (NCs, CAPAs, risks, policies, audits, KPIs, compliance, training, vendors, PDPL, team) |
+| **Analyze Nonconformities** | NC pattern detection, overdue CAPAs, severity distribution, and trend analysis |
+| **Suggest Improvements** | Quality score analysis with structured improvement recommendations |
+| **Check Regulation Compliance** | PDPL, ISO 9001, ISO 27001, NCA ECC compliance gap checks |
+| **Monitor KPIs** | KPI missed targets, trends, and performance status monitoring |
+| **Monitor Risks** | Risk register monitoring with threshold breach detection and overdue treatments |
+| **Create Alert** | AI alert creation with automatic deduplication |
+| **Review Document** | Governance document review, gap analysis, and compliance checking |
 
 ---
 
@@ -597,7 +646,22 @@ Default (global) endpoints work for most other regions:
   5. `send-report` — Email delivery, database persistence, and trigger firing
 - **Output:** Updated quality scores, issue reports, trend data, email notifications, automated triggers
 
-### 8.2 Automated Triggers
+### 8.2 AI Background Scanner
+- **Trigger:** Inngest cron — every 6 hours (`0 */6 * * *`)
+- **Purpose:** Proactively scans platform data for quality and compliance issues, creating AI alerts
+- **Checks performed (8 total):**
+  1. Nonconformances without linked CAPA records
+  2. High-severity risks (score ≥ 12) without treatment plans
+  3. Overdue risk treatment actions
+  4. KPIs missing their target values
+  5. Policies expiring within 30 days
+  6. PDPL compliance gaps (data incidents without resolution)
+  7. Audit score decline (latest score below 85%)
+  8. Training compliance gaps (overdue assignments)
+- **Output:** Creates deduplicated AI alerts in the `ai_alerts` table with severity levels (critical, high, medium, low)
+- **Alert bell:** Navigation bar displays unread alert count badge, polls `/api/consultant/alerts/count` every 60 seconds
+
+### 8.3 Automated Triggers (renamed from 8.2)
 - **AUDIT_COMPLETED:** Fires after every successful audit
 - **NONCONFORMANCE_DETECTED:** Fires when issues are found during an audit
 - **CAPA_REQUIRED:** Fires when critical or high-severity issues are detected
@@ -697,8 +761,11 @@ Default (global) endpoints work for most other regions:
 |--------|---------|---------|
 | `ZOHO_ACCOUNTS_URL` | https://accounts.zoho.com | Zoho OAuth endpoint (use .sa for Saudi region) |
 | `ZOHO_API_DOMAIN` | https://www.zohoapis.com | Zoho API domain (use .sa for Saudi region) |
-| `AI_INTEGRATIONS_OPENAI_API_KEY` | — | OpenAI API key for AI-powered audit insights |
-| `AI_INTEGRATIONS_OPENAI_BASE_URL` | https://api.openai.com/v1 | OpenAI endpoint |
+| `AI_INTEGRATIONS_OPENAI_API_KEY` | — | OpenAI API key (Replit-managed, preferred) for AI audits and AI Consultant |
+| `AI_INTEGRATIONS_OPENAI_BASE_URL` | https://api.openai.com/v1 | Replit AI proxy endpoint |
+| `OPENAI_API_KEY` | — | Direct OpenAI API key (fallback if Replit-managed key unavailable) |
+| `SLACK_API_TOKEN` | — | Slack Bot token for QMS notifications |
+| `SLACK_QMS_CHANNEL` | — | Slack channel ID for QMS alert notifications |
 | `RESEND_API_KEY` | — | Email delivery via Resend |
 | `RESEND_FROM_EMAIL` | — | Sender address for quality report emails |
 | `TELEGRAM_WEBHOOK_SECRET` | — | Telegram webhook secret for validating incoming webhook requests |
@@ -712,7 +779,7 @@ A `.env.example` file is included in the project root with all variables documen
 ## 11. Database
 
 - **Engine:** PostgreSQL
-- **Tables:** 97+ auto-initialized tables (created on first use, no manual migration needed)
+- **Tables:** 98+ auto-initialized tables (created on first use, no manual migration needed)
 - **Key Table Groups:**
 
 | Group | Count | Tables | Purpose |
@@ -735,6 +802,7 @@ A `.env.example` file is included in the project root with all variables documen
 | Onboarding | 2 | user_onboarding_status, onboarding_tour_steps | User onboarding |
 | Event Logs | 1 | event_logs | System audit trail |
 | KPI & Reporting | 3 | kpi_definitions, kpi_values, executive_reports | KPI tracking and executive reporting |
+| AI Consultant | 1 | ai_alerts | AI-generated alerts and background scan findings |
 | Migration | 4 | demo_links, tooltip_definitions, integration_config, team_feedback | Migration support, UI config, and feedback |
 
 ---
@@ -766,7 +834,7 @@ A `.env.example` file is included in the project root with all variables documen
 | RBAC | `/api/rbac/` | Permissions, roles, data scopes |
 | Handoff | `/api/handoff/` | Rules, events, control mappings |
 | Admin | `/api/admin/documents`, `/api/admin/scorecards` | Governance document and scorecard CRUD |
-| Sandbox | `/api/sandbox/leads`, `/api/sandbox/deals`, `/api/sandbox/stats` | Mock data for testing |
+| AI Consultant | `/api/consultant/chat`, `/api/consultant/alerts`, `/api/consultant/scan` | AI chat, alerts, background scanning |
 
 ---
 
@@ -795,7 +863,7 @@ A `.env.example` file is included in the project root with all variables documen
 10. **Check `/team`** — use the "Add Member" button to register team members
 11. **Check `/qms`** — verify the Audit Runs card displays and try creating a test NC via "New NC"
 12. **Check `/pdpl`** — set up data inventory and retention policies
-13. **Test sandbox:** Go to `/sandbox` to explore the platform using mock data without affecting live CRM
+13. **Check `/consultant`** — ask the AI Consultant a question like "What is the current quality score?" to verify the AI integration
 
 ---
 
@@ -1071,6 +1139,7 @@ The following sources feed into the continual improvement process:
 | Management review actions | Section 16 | Quarterly |
 | Pentest and security reviews | Section 9.4 | As conducted |
 | Platform performance data | Event Logs (`/logs`) | Ongoing |
+| AI Consultant alerts | AI Consultant (`/consultant`) alert bell | Ongoing (every 6 hours) |
 | Escalation log trends | `escalation_log` table | Monthly |
 
 ### 22.2 Improvement Process
@@ -1105,7 +1174,8 @@ The following sources feed into the continual improvement process:
 | Page not loading at all | Check internet connection, try hard refresh (Ctrl+Shift+R), check if app is published |
 | Email reports not sending | Verify RESEND_API_KEY and RESEND_FROM_EMAIL are configured |
 | AI audit uses sample data instead of live CRM | Verify Zoho OAuth secrets; check `/api/integrations/status` for connection status |
-| Sandbox shows mock data | This is expected — sandbox (`/sandbox`) uses mock data by design |
+| AI Consultant not responding | Verify `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY` is configured and has available quota |
+| Alert bell not showing count | Check `/api/consultant/alerts/count` — ensure the `ai_alerts` table was initialized |
 
 ### Feedback
 Use the **"Give Feedback"** floating button (bottom-right corner of every page) to submit feedback, bug reports, or feature requests.
@@ -1180,6 +1250,8 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 | Scorecard Config | R/A | R | I | I | I | I | I |
 | Escalation Review | I | C | C | I | I | I | R/A |
 | Handoff Rule Config | R/A | C | C | I | I | I | I |
+| AI Consultant Usage | I | R | R | C | R | R | I |
+| AI Alert Review | I | R/A | C | I | C | C | I |
 
 ---
 
@@ -1229,6 +1301,10 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Apr 12, 2026 | AI Consultant & Assistant module added: GPT-4o agent with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents), background scanner (6h Inngest cron, 8 automated checks), alerts system with dedup, full chat UI at `/consultant`, alert bell in nav bar with badge polling, SSE streaming support | New AI-powered quality management guidance module; proactive issue detection via background scanning |
+| Apr 12, 2026 | Sandbox module removed: `/sandbox` route, navigation link, and API endpoints removed from platform | Simplified platform; sandbox mock data no longer accessible |
+| Apr 12, 2026 | Audit History Date/Time update: Audit History table now displays full date and time instead of date-only | Improved audit traceability with timestamps |
+| Apr 12, 2026 | Slack notification integration: `SLACK_API_TOKEN` and `SLACK_QMS_CHANNEL` secrets documented and integrated for QMS alert notifications | Slack channel receives QMS notifications |
 | Apr 9, 2026 | SOP v3.6: 22-fix security hardening — SQL injection (parameterized intervals), path traversal, fake data removal, OIDC nonce (oauth_data cookie, redirect on mismatch), uniform requireAdminOrKey auth guards on RBAC/PDPL/CallIntel/DuplicateRadar, webhook validation (Telegram secret + Linear HMAC-SHA256 with timingSafeEqual), audit trigger chain in fallback, error propagation, UUID resolution, dashboard HTML fixes | Protected API endpoints require authentication; webhook endpoints validated; SQL injection vectors eliminated |
 | Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses Inngest-first with direct fallback, admin key login redirects to dashboard, inngest.sh fixed, smoke test routes added, QMS-024 pentest finding description corrected | CSP, auth, and audit trigger accuracy verified |
 | Apr 9, 2026 | SOP v3.4: Restored auth documentation (authRoutes.ts with Replit OIDC + HMAC-SHA256 session signing), corrected CSP to reflect nonce-based implementation, documented tiered rate limiting (100/10/5/10 + unauth 10/3), updated VAPT status to 37/37 post-retest remediation, unified role system across rbacDatabase and userAccessDatabase | SOP accuracy verified against deployed codebase |

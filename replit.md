@@ -7,7 +7,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **Framework**: Mastra (AI agent framework) with Hono HTTP server
 - **Frontend**: Static HTML dashboards served from `dashboard/` directory
 - **Backend**: Mastra API routes with Hono handlers
-- **Database**: PostgreSQL (97+ tables across 19 module groups) via `pg` module
+- **Database**: PostgreSQL (98+ tables across 20 module groups) via `pg` module
 - **AI**: GPT-4o via Replit AI Integrations / OpenAI
 - **Workflows**: Inngest for event-driven workflow orchestration
 - **Auth**: Replit OIDC (`authRoutes.ts`) with HMAC-SHA256 signed session cookie (`walaplus_session`, 7-day expiry). Supports Google, GitHub, Apple, email login. Admin API key via `X-Admin-Key` header.
