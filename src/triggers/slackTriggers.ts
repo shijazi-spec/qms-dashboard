@@ -265,92 +265,94 @@ export function registerSlackTrigger<
     triggerInfo: TriggerInfoSlackOnNewMessage,
   ) => Promise<WorkflowResult<TState, TInput, TOutput, TSteps> | null>;
 }): Array<ApiRoute> {
+  const slackWebhookHandler = async (c: Context<Env>) => {
+    const mastra = c.get("mastra");
+    const logger = mastra.getLogger();
+    try {
+      const payload = await c.req.json();
+
+      if (payload && payload["challenge"]) {
+        return c.text(payload["challenge"], 200);
+      }
+
+      const { slack, auth } = await getClient();
+      const reactToMessage = createReactToMessage({ slack, logger });
+
+      logger?.info("📝 [Slack] payload", { payload });
+
+      if (payload && payload.event && payload.event.channel) {
+        try {
+          const result = await slack.conversations.info({
+            channel: payload.event.channel,
+          });
+          logger?.info("📝 [Slack] result", { result });
+          payload.channel = result.channel;
+        } catch (error) {
+          logger?.error("Error fetching channel info", {
+            error: format(error),
+          });
+        }
+      }
+
+      if (
+        payload.event?.subtype === "message_changed" ||
+        payload.event?.subtype === "message_deleted"
+      ) {
+        return c.text("OK", 200);
+      }
+
+      if (
+        (payload.event?.channel_type === "im" &&
+          payload.event?.text === "test:ping") ||
+        payload.event?.text === `<@${auth.user_id}> test:ping`
+      ) {
+        await slack.chat.postMessage({
+          channel: payload.event.channel,
+          text: "pong",
+          thread_ts: payload.event.ts,
+        });
+        logger?.info("📝 [Slack] pong");
+        return c.text("OK", 200);
+      }
+
+      if (payload.event?.bot_id) {
+        return c.text("OK", 200);
+      }
+
+      if (checkDuplicateEvent(payload.event_id)) {
+        return c.text("OK", 200);
+      }
+
+      const result = await handler(mastra, {
+        type: triggerType,
+        params: {
+          channel: payload.event.channel,
+          channelDisplayName: payload.channel.name,
+        },
+        payload,
+      } as TriggerInfoSlackOnNewMessage);
+
+      await reactToMessage(payload.event.channel, payload.event.ts, result);
+
+      return c.text("OK", 200);
+    } catch (error) {
+      logger?.error("Error handling Slack webhook", {
+        error: format(error),
+      });
+      return c.text("Internal Server Error", 500);
+    }
+  };
+
   return [
     registerApiRoute("/webhooks/slack/action", {
       method: "POST",
-      handler: async (c) => {
-        const mastra = c.get("mastra");
-        const logger = mastra.getLogger();
-        try {
-          const payload = await c.req.json();
-
-          if (payload && payload["challenge"]) {
-            return c.text(payload["challenge"], 200);
-          }
-
-          const { slack, auth } = await getClient();
-          const reactToMessage = createReactToMessage({ slack, logger });
-
-          logger?.info("📝 [Slack] payload", { payload });
-
-          // Augment event with channel info
-          if (payload && payload.event && payload.event.channel) {
-            try {
-              const result = await slack.conversations.info({
-                channel: payload.event.channel,
-              });
-              logger?.info("📝 [Slack] result", { result });
-              payload.channel = result.channel;
-            } catch (error) {
-              logger?.error("Error fetching channel info", {
-                error: format(error),
-              });
-              // Continue processing even if channel info fetch fails
-            }
-          }
-
-          // Check subtype
-          if (
-            payload.event?.subtype === "message_changed" ||
-            payload.event?.subtype === "message_deleted"
-          ) {
-            return c.text("OK", 200);
-          }
-
-          if (
-            (payload.event?.channel_type === "im" &&
-              payload.event?.text === "test:ping") ||
-            payload.event?.text === `<@${auth.user_id}> test:ping`
-          ) {
-            // This is a test message to the bot saying just "test:ping", or a mention that contains "test:ping".
-            // We'll reply in the same thread.
-            await slack.chat.postMessage({
-              channel: payload.event.channel,
-              text: "pong",
-              thread_ts: payload.event.ts,
-            });
-            logger?.info("📝 [Slack] pong");
-            return c.text("OK", 200);
-          }
-
-          if (payload.event?.bot_id) {
-            return c.text("OK", 200);
-          }
-
-          if (checkDuplicateEvent(payload.event_id)) {
-            return c.text("OK", 200);
-          }
-
-          const result = await handler(mastra, {
-            type: triggerType,
-            params: {
-              channel: payload.event.channel,
-              channelDisplayName: payload.channel.name,
-            },
-            payload,
-          } as TriggerInfoSlackOnNewMessage);
-
-          await reactToMessage(payload.event.channel, payload.event.ts, result);
-
-          return c.text("OK", 200);
-        } catch (error) {
-          logger?.error("Error handling Slack webhook", {
-            error: format(error),
-          });
-          return c.text("Internal Server Error", 500);
-        }
-      },
+      handler: slackWebhookHandler,
     }),
+    {
+      path: "/api/webhooks/slack/action",
+      method: "POST",
+      handler: slackWebhookHandler,
+    },
     {
       path: "/test/slack",
       method: "GET",

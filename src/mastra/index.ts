@@ -160,12 +160,12 @@ export const mastra = new Mastra({
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/test/slack'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/api/webhooks/slack', '/test/slack'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
-        if (urlPath.startsWith('/webhooks/') || urlPath.startsWith('/test/slack')) {
+        if (urlPath.startsWith('/webhooks/') || urlPath.startsWith('/api/webhooks/') || urlPath.startsWith('/test/slack')) {
           const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
-          const rateCheck = checkRateLimit(ip, true, urlPath, false);
+          const rateCheck = checkRateLimit(ip, false, urlPath, true);
           if (!rateCheck.allowed) {
             c.header('Retry-After', String(rateCheck.retryAfter || 60));
             return c.json({ error: 'Too many requests' }, 429);
