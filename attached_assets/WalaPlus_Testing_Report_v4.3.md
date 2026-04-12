@@ -29,6 +29,8 @@
 | Admin Panel | `/api/admin/documents` GET no longer returns 401 for cookie-authenticated admins |
 | ROI | 14 `parseInt()` guards added — invalid IDs return 400 instead of crashing with 500 |
 | Security | Admin key comparison uses independent header/cookie check — no false negatives |
+| Slack App API | Slack integration switched to direct Slack App API (`@slack/web-api`). Live `auth.test` confirms bot `walaplus_qms` on WalaPlus workspace. Scopes: `chat:write`, `chat:write.public`. Missing: `channels:read`, `groups:read`, `im:read`, `mpim:read` (to be added in Slack App settings at api.slack.com) |
+| Integrations API | `/api/integrations/status` now includes Slack with live auth test, workspace, bot name, current scopes, and missing scopes |
 | Platform Metrics | Updated to reflect 25/25 pages, 29/30 APIs confirmed |
 
 ---
@@ -51,7 +53,7 @@
 | 7 | CRM Deals | PASS | Live deal data flowing |
 | 8 | CRM Contacts | PASS | Live contact data flowing |
 | 9 | CRM Tasks | PASS | Live task data flowing |
-| 10 | Integration Status | PASS | All 5 modules show Connected |
+| 10 | Integration Status | PASS | All 5 modules show Connected. Slack App API live (walaplus_qms bot, 2 scopes active, 4 pending) |
 
 ### API Health (#11-12) — ALL PASS
 | # | Test | Status | Notes |
@@ -376,9 +378,9 @@ The Adoption Tracker is designed for Sarah Hijazi and Mohammed Al Muzini to manu
 |-------------|--------|---------|
 | Zoho CRM | CONNECTED | All 5 modules (Leads, Deals, Contacts, Tasks, Accounts). Paginated fetch up to 10k/module |
 | OpenAI | CONFIGURED | OPENAI_API_KEY secret set. Agents use fallback |
-| Slack | CONNECTED | SLACK_API_TOKEN set. WalaPlus workspace verified. Needs channels:read, im:read scopes added |
-| Google Calendar | NOT CONFIGURED | Needs GOOGLE_CLIENT_SECRET setup |
-| Resend Email | NOT CONFIGURED | Needs RESEND_API_KEY for audit emails |
+| Slack App API | CONNECTED | Via `@slack/web-api` with `SLACK_API_TOKEN`. Live `auth.test` verified. Workspace: **WalaPlus** (`walaplus.slack.com`). Bot: **walaplus_qms** (U0ASQQ12S0H). Bot ID: B0AS9R8V0P8. Team ID: T3Z00BA0L. Current scopes: `chat:write`, `chat:write.public`. **Pending scopes**: `channels:read`, `groups:read`, `im:read`, `mpim:read` — add at api.slack.com/apps → OAuth & Permissions |
+| Google Calendar | CONNECTED | GOOGLE_CLIENT_ID configured |
+| Email | CONNECTED | Replit Mail configured |
 
 ---
 
@@ -386,6 +388,8 @@ The Adoption Tracker is designed for Sarah Hijazi and Mohammed Al Muzini to manu
 
 - **Total API Endpoints**: 29/30 verified (Sandbox is frontend-only, no dedicated API)
 - **Total Dashboard Pages**: 25/25 verified (all load correctly)
+- **Integrations Connected**: 4/4 (Zoho CRM, Slack App API, Google Calendar, Replit Mail)
+- **Slack App API**: Bot `walaplus_qms` on WalaPlus workspace. 2 scopes active (`chat:write`, `chat:write.public`), 4 pending (`channels:read`, `groups:read`, `im:read`, `mpim:read`)
 - **CRM Records Auditable**: 400 per audit cycle (100 per module)
 - **Duplicate Radar Scan**: Up to 10,000 records/module (paginated via fetchAllZohoRecords)
 - **Quality Score**: 90.1% (People: 67%, Process: 100%, Governance: 100%)

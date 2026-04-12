@@ -408,11 +408,41 @@ export const mastra = new Mastra({
                 process.env.GOOGLE_CLIENT_EMAIL
               );
               
+              const hasSlackToken = !!(process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN);
+              let slackStatus: { connected: boolean; message: string; workspace?: string; bot?: string; scopes?: string[]; missingScopes?: string[] } = {
+                connected: false,
+                message: 'Not configured'
+              };
+
+              if (hasSlackToken) {
+                try {
+                  const { WebClient } = await import('@slack/web-api');
+                  const slackClient = new WebClient(process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN);
+                  const authResult = await slackClient.auth.test();
+                  if (authResult.ok) {
+                    const currentScopes = (authResult as any).response_metadata?.scopes || [];
+                    const requiredScopes = ['chat:write', 'channels:read', 'groups:read', 'im:read', 'mpim:read'];
+                    const missing = requiredScopes.filter(s => !currentScopes.includes(s));
+                    slackStatus = {
+                      connected: true,
+                      message: missing.length > 0 ? `Connected (${missing.length} scopes pending)` : 'Fully connected',
+                      workspace: (authResult as any).team,
+                      bot: (authResult as any).user,
+                      scopes: currentScopes,
+                      missingScopes: missing.length > 0 ? missing : undefined
+                    };
+                  }
+                } catch (slackErr: any) {
+                  slackStatus = { connected: false, message: `Auth failed: ${slackErr?.message || 'unknown error'}` };
+                }
+              }
+
               return c.json({
                 zoho: {
                   connected: hasOAuthConfig || hasStaticToken,
                   message: (hasOAuthConfig || hasStaticToken) ? 'Connected' : 'Not configured'
                 },
+                slack: slackStatus,
                 googleCalendar: {
                   connected: hasGoogleCalendar,
                   message: hasGoogleCalendar ? 'Connected' : 'Not configured'
