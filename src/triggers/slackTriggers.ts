@@ -273,13 +273,13 @@ export function registerSlackTrigger<
         const logger = mastra.getLogger();
         try {
           const payload = await c.req.json();
-          const { slack, auth } = await getClient();
-          const reactToMessage = createReactToMessage({ slack, logger });
 
-          // Handle challenge
           if (payload && payload["challenge"]) {
             return c.text(payload["challenge"], 200);
           }
+
+          const { slack, auth } = await getClient();
+          const reactToMessage = createReactToMessage({ slack, logger });
 
           logger?.info("📝 [Slack] payload", { payload });
 

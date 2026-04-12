@@ -13,6 +13,7 @@ import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
 import { registerCronTrigger } from "../triggers/cronTriggers";
+import { registerSlackTrigger } from "../triggers/slackTriggers";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "./agents/sdrQualityAgent";
 import { salesQualityAgent } from "./agents/salesQualityAgent";
@@ -159,7 +160,7 @@ export const mastra = new Mastra({
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/test/slack'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
@@ -3535,6 +3536,42 @@ export const mastra = new Mastra({
       ...triggerRoutes,
       ...userAccessRoutes,
       ...smokeTestRoutes,
+      ...registerSlackTrigger({
+        triggerType: "slack/message.channels",
+        handler: async (mastra, triggerInfo) => {
+          const logger = mastra.getLogger();
+          logger?.info("📨 [Slack] Message received", {
+            channel: triggerInfo.params.channel,
+            channelName: triggerInfo.params.channelDisplayName,
+          });
+
+          const message = triggerInfo.payload?.event?.text || "";
+          const userId = triggerInfo.payload?.event?.user || "unknown";
+
+          try {
+            const response = await qualitySpecialistAgent.generate(
+              [{ role: "user", content: `Slack message from user ${userId} in #${triggerInfo.params.channelDisplayName}: ${message}` }],
+            );
+
+            const { getClient } = await import("../triggers/slackTriggers");
+            const { slack } = await getClient();
+
+            await slack.chat.postMessage({
+              channel: triggerInfo.params.channel,
+              text: response.text || "I received your message but couldn't generate a response.",
+              thread_ts: triggerInfo.payload?.event?.ts,
+            });
+
+            logger?.info("✅ [Slack] Response sent");
+          } catch (error) {
+            logger?.error("❌ [Slack] Error processing message", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+
+          return null;
+        },
+      }),
     ],
   },
   logger:
