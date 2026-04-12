@@ -531,13 +531,6 @@ export async function createExportLog(log: Omit<DuplicateExportLog, 'id' | 'crea
   return result.rows[0];
 }
 
-export async function clearMockData(): Promise<void> {
-  await pool.query('DELETE FROM duplicate_records WHERE is_mock_data = true');
-  await pool.query(`
-    DELETE FROM duplicate_clusters 
-    WHERE id NOT IN (SELECT DISTINCT cluster_id FROM duplicate_records WHERE cluster_id IS NOT NULL)
-  `);
-}
 
 export async function getKPIMetrics(): Promise<{
   duplicateLeadRate: number;

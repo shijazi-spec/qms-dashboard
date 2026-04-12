@@ -20,7 +20,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `src/mastra/tools/` - AI tool definitions (callAnalysis, capaManagement, crmCompliance, consultant tools: queryPlatformData, analyzeNonconformities, suggestImprovements, checkRegulationCompliance, monitorKPIs, monitorRisks, createAlert, reviewDocument, searchKnowledge, checklistTools [runChecklist, manageChecklist], ncManagement, capaManagement)
 - `src/mastra/workflows/` - Mastra workflow definitions
 - `src/mastra/routes/authRoutes.ts` - Replit Auth (OIDC) routes and session management
-- `src/mastra/data/` - Data layer and mock data
+- `src/data/` - Data layer (real Zoho CRM integration only, no mock data)
 - `src/mastra/storage/` - Storage configuration
 - `src/utils/` - Database utilities (audit, compliance, KPI, risk, policy, vendor, etc.) and security utilities:
   - `rbacMiddleware.ts` - RBAC enforcement, route permission map, `getSessionUser()`

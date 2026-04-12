@@ -760,7 +760,7 @@ export const mastra = new Mastra({
         path: "/api/agents/performance",
         method: "GET",
         createHandler: async () => {
-          const { getLeadsWithSeparateFilters, getDealsWithSeparateFilters, getUsers, getDataMode } = await import("../data");
+          const { getLeadsWithSeparateFilters, getDealsWithSeparateFilters, getUsers } = await import("../data");
           let cachedResult: any = null;
           let cacheTime = 0;
           const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -819,7 +819,6 @@ export const mastra = new Mastra({
                 console.log(`📅 [API] Date filters applied:`, dateFilters);
               }
               
-              const mode = getDataMode();
               const agentPerfLimit = 5000;
               const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters, agentPerfLimit);
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters, agentPerfLimit);
@@ -918,7 +917,7 @@ export const mastra = new Mastra({
               
               const responseData = {
                 success: true,
-                mode,
+                mode: 'REAL',
                 agents,
                 totalLeads: leads.length,
                 totalDeals: deals.length,

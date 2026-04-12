@@ -826,7 +826,7 @@ export const duplicateRadarRoutes = [
             modified_date: new Date(),
             is_primary: false,
             confidence_score: 95,
-            is_mock_data: true
+            is_mock_data: false
           });
 
           await updateClusterStats(cluster.id!);
