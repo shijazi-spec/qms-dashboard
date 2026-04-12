@@ -48,6 +48,12 @@
                     </svg>
                     Scan from Zoho
                 </button>
+                <button onclick="generateMockData()" id="generateBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                    </svg>
+                    Generate Test Data
+                </button>
                 <button onclick="exportData()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -63,41 +69,22 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap items-center gap-4">
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                <span class="text-sm font-medium text-gray-700">Date Filter:</span>
-            </div>
-            <div class="flex items-center gap-2">
-                <label class="text-sm text-gray-500">From</label>
-                <input type="date" id="dateFrom" data-testid="input-date-from" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-            </div>
-            <div class="flex items-center gap-2">
-                <label class="text-sm text-gray-500">To</label>
-                <input type="date" id="dateTo" data-testid="input-date-to" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-            </div>
-            <button onclick="applyDateFilter()" data-testid="button-apply-date-filter" class="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">Apply</button>
-            <button onclick="clearDateFilter()" data-testid="button-clear-date-filter" class="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium">Clear</button>
-            <span id="dateFilterStatus" class="text-xs text-gray-400 ml-auto"></span>
-        </div>
-
         <div class="flex gap-2 mb-6 flex-wrap">
             <button onclick="showTab('summary')" id="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
-            <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
-            <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
-            <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
-            <button onclick="showTab('accounts')" id="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
-            <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
-            <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
-            <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
             <button onclick="showTab('search')" id="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 Search
             </button>
+            <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
+            <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
+            <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
+            <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
+            <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
+            <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
         </div>
 
         <div id="content-summary" class="tab-content">
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-600">
                     <div class="text-sm text-gray-500">Total Clusters</div>
                     <div id="totalClusters" class="text-2xl font-bold text-blue-600">-</div>
@@ -112,11 +99,6 @@
                     <div class="text-sm text-gray-500">Duplicate Deals</div>
                     <div id="totalDeals" class="text-2xl font-bold text-red-600">-</div>
                     <div id="dealRate" class="text-xs text-red-500">-% duplicate rate</div>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
-                    <div class="text-sm text-gray-500">Duplicate Accounts</div>
-                    <div id="totalAccounts" class="text-2xl font-bold text-indigo-600">-</div>
-                    <div class="text-xs text-indigo-500">Zoho Accounts module</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
                     <div class="text-sm text-gray-500">High Confidence</div>
@@ -338,26 +320,6 @@
             </div>
         </div>
 
-        <div id="content-accounts" class="tab-content hidden">
-            <div class="bg-white rounded-lg shadow overflow-hidden">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
-                        </tr>
-                    </thead>
-                    <tbody id="accountsTable" class="bg-white divide-y divide-gray-200">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <div id="content-owners" class="tab-content hidden">
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -472,48 +434,12 @@
         let sourceChart = null;
         let confidenceChart = null;
 
-        function getDateFilterParams() {
-            const dateFrom = document.getElementById('dateFrom').value;
-            const dateTo = document.getElementById('dateTo').value;
-            const params = new URLSearchParams();
-            if (dateFrom) params.set('date_from', dateFrom);
-            if (dateTo) params.set('date_to', dateTo);
-            return params.toString();
-        }
-
-        function buildUrl(base) {
-            const dateParams = getDateFilterParams();
-            return dateParams ? `${base}?${dateParams}` : base;
-        }
-
-        function applyDateFilter() {
-            const dateFrom = document.getElementById('dateFrom').value;
-            const dateTo = document.getElementById('dateTo').value;
-            const statusEl = document.getElementById('dateFilterStatus');
-            if (dateFrom || dateTo) {
-                const parts = [];
-                if (dateFrom) parts.push('from ' + dateFrom);
-                if (dateTo) parts.push('to ' + dateTo);
-                statusEl.textContent = 'Filtering: ' + parts.join(' ');
-            } else {
-                statusEl.textContent = '';
-            }
-            refreshData();
-        }
-
-        function clearDateFilter() {
-            document.getElementById('dateFrom').value = '';
-            document.getElementById('dateTo').value = '';
-            document.getElementById('dateFilterStatus').textContent = '';
-            refreshData();
-        }
-
         async function refreshData() {
             try {
                 const [summaryRes, clustersRes, ownersRes, logsRes] = await Promise.all([
-                    fetch(buildUrl('/api/duplicates/summary')),
-                    fetch(buildUrl('/api/duplicates/clusters')),
-                    fetch(buildUrl('/api/duplicates/by-owner')),
+                    fetch('/api/duplicates/summary'),
+                    fetch('/api/duplicates/clusters'),
+                    fetch('/api/duplicates/by-owner'),
                     fetch('/api/duplicates/logs')
                 ]);
 
@@ -537,7 +463,6 @@
             document.getElementById('totalClusters').textContent = data.totalClusters || 0;
             document.getElementById('totalLeads').textContent = data.totalDuplicateLeads || 0;
             document.getElementById('totalDeals').textContent = data.totalDuplicateDeals || 0;
-            document.getElementById('totalAccounts').textContent = data.totalDuplicateAccounts || 0;
             document.getElementById('highConfidence').textContent = data.highConfidence || 0;
             document.getElementById('mediumConfidence').textContent = data.mediumConfidence || 0;
             document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
@@ -631,28 +556,19 @@
 
         async function loadLeadsAndDeals() {
             try {
-                const [leadsRes, dealsRes, accountsRes] = await Promise.all([
-                    fetch(buildUrl('/api/duplicates/leads')),
-                    fetch(buildUrl('/api/duplicates/deals')),
-                    fetch(buildUrl('/api/duplicates/accounts'))
+                const [leadsRes, dealsRes] = await Promise.all([
+                    fetch('/api/duplicates/leads'),
+                    fetch('/api/duplicates/deals')
                 ]);
 
                 const leadsData = await leadsRes.json();
                 const dealsData = await dealsRes.json();
-                const accountsData = await accountsRes.json();
 
                 renderLeads(leadsData.groups || []);
                 renderDeals(dealsData.groups || []);
-                renderAccounts(accountsData.groups || []);
             } catch (error) {
-                console.error('Error loading leads/deals/accounts:', error);
+                console.error('Error loading leads/deals:', error);
             }
-        }
-
-        function zohoLink(module, zohoId, name) {
-            if (!zohoId || zohoId.startsWith('LEAD_') || zohoId.startsWith('DEAL_')) return name;
-            const url = `https://crm.zoho.com/crm/tab/${module}/${zohoId}`;
-            return `${name} <a href="${url}" target="_blank" rel="noopener" class="inline-flex items-center ml-1 text-blue-500 hover:text-blue-700" title="Open in Zoho CRM"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>`;
         }
 
         function renderLeads(groups) {
@@ -663,7 +579,7 @@
                     rows += `
                         <tr>
                             <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
-                            <td class="px-6 py-4 text-sm text-gray-900">${zohoLink('Leads', lead.zoho_record_id, lead.record_name)}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${lead.record_name}</td>
                             <td class="px-6 py-4 text-sm text-gray-500">${lead.company_name || '-'}</td>
                             <td class="px-6 py-4 text-sm text-gray-500">${lead.owner_name || '-'}</td>
                             <td class="px-6 py-4 text-sm">
@@ -692,7 +608,7 @@
                     rows += `
                         <tr>
                             <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
-                            <td class="px-6 py-4 text-sm text-gray-900">${zohoLink('Deals', deal.zoho_record_id, deal.record_name)}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${deal.record_name}</td>
                             <td class="px-6 py-4 text-sm text-gray-500">${deal.company_name || '-'}</td>
                             <td class="px-6 py-4 text-sm text-gray-500">${deal.owner_name || '-'}</td>
                             <td class="px-6 py-4 text-sm">
@@ -709,35 +625,6 @@
                 }
             }
             tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
-        }
-
-        function renderAccounts(groups) {
-            const tbody = document.getElementById('accountsTable');
-            let rows = '';
-            for (const group of groups) {
-                for (const account of group.accounts) {
-                    rows += `
-                        <tr>
-                            <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
-                            <td class="px-6 py-4 text-sm text-gray-900">${zohoLink('Accounts', account.zoho_record_id, account.record_name)}</td>
-                            <td class="px-6 py-4 text-sm text-gray-500">${account.company_name || '-'}</td>
-                            <td class="px-6 py-4 text-sm text-gray-500">${account.owner_name || '-'}</td>
-                            <td class="px-6 py-4 text-sm">
-                                <span class="px-2 py-1 rounded text-xs bg-purple-100 text-purple-800">${account.status || '-'}</span>
-                            </td>
-                            <td class="px-6 py-4 text-sm">
-                                <span class="confidence-${getConfidenceLevel(account.confidence_score)} px-2 py-1 rounded text-xs">
-                                    ${account.confidence_score}%
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-sm">
-                                ${account.is_primary ? '<span class="text-green-600 font-medium">Primary</span>' : '<span class="text-gray-400">Duplicate</span>'}
-                            </td>
-                        </tr>
-                    `;
-                }
-            }
-            tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate accounts found</td></tr>';
         }
 
         function renderOwners(owners) {
@@ -876,20 +763,21 @@
         async function scanZohoCRM() {
             const btn = document.getElementById('scanZohoBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="animate-spin">⏳</span> Scanning Zoho...';
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Starting scan...';
 
             try {
                 const res = await fetch('/api/duplicates/scan-zoho', { method: 'POST' });
                 const data = await res.json();
-                if (data.success || data.status === 'already_running') {
-                    btn.innerHTML = '<span class="animate-spin">⏳</span> Scan in progress...';
-                    pollScanStatus();
-                } else {
+                if (!data.success && res.status === 409) {
+                    btn.innerHTML = '<span class="animate-spin">⏳</span> ' + (data.progress || 'Scan in progress...');
+                } else if (!data.success) {
                     alert('Scan failed: ' + (data.error || 'Unknown error'));
                     resetScanBtn();
+                    return;
                 }
+                pollScanStatus();
             } catch (error) {
-                console.error('Error scanning Zoho CRM:', error);
+                console.error('Error starting scan:', error);
                 alert('Failed to start scan: ' + error.message);
                 resetScanBtn();
             }
@@ -901,33 +789,79 @@
             btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
         }
 
-        function pollScanStatus() {
-            const interval = setInterval(async () => {
+        async function pollScanStatus() {
+            const btn = document.getElementById('scanZohoBtn');
+            let attempts = 0;
+            const maxAttempts = 120;
+
+            const poll = async () => {
                 try {
                     const res = await fetch('/api/duplicates/scan-status');
                     const data = await res.json();
-                    const btn = document.getElementById('scanZohoBtn');
+                    const elapsed = data.elapsedMs ? Math.round(data.elapsedMs / 1000) : 0;
 
-                    if (data.status === 'running') {
-                        btn.innerHTML = '<span class="animate-spin">⏳</span> ' + (data.progress || 'Scanning...');
-                    } else if (data.status === 'complete') {
-                        clearInterval(interval);
-                        alert(`Scanned ${data.totalRecordsScanned} records from Zoho CRM!\n\nFound ${data.totalClustersFound} clusters with ${data.duplicatesDetected} duplicates.\n\nBreakdown:\n${data.moduleBreakdown.map(m => `- ${m.module}: ${m.count}`).join('\n')}`);
+                    if (data.status === 'scanning') {
+                        btn.innerHTML = '<span class="animate-spin">⏳</span> ' + (data.progress || 'Scanning...') + ` (${elapsed}s)`;
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            setTimeout(poll, 3000);
+                        } else {
+                            btn.innerHTML = '<span class="animate-spin">⏳</span> Still running in background...';
+                            setTimeout(() => resetScanBtn(), 5000);
+                        }
+                        return;
+                    }
+
+                    if (data.status === 'completed' && data.result) {
+                        const r = data.result;
+                        alert(`Scan complete in ${Math.round((data.elapsedMs || 0) / 1000)}s!\n\nScanned ${r.totalRecordsScanned} records.\nFound ${r.totalClustersFound} clusters, ${r.duplicatesDetected} duplicates.\nHigh confidence: ${r.highConfidence}\nPipeline inflation: SAR ${(r.pipelineInflation || 0).toLocaleString()}`);
                         resetScanBtn();
                         refreshData();
-                    } else if (data.status === 'error') {
-                        clearInterval(interval);
+                        return;
+                    }
+
+                    if (data.status === 'failed') {
                         alert('Scan failed: ' + (data.error || 'Unknown error'));
                         resetScanBtn();
-                    } else {
-                        clearInterval(interval);
-                        resetScanBtn();
-                        refreshData();
+                        return;
                     }
-                } catch (e) {
-                    console.error('Error polling scan status:', e);
+
+                    resetScanBtn();
+                } catch (error) {
+                    console.error('Error polling scan status:', error);
+                    attempts++;
+                    if (attempts < maxAttempts) setTimeout(poll, 5000);
+                    else resetScanBtn();
                 }
-            }, 3000);
+            };
+
+            setTimeout(poll, 2000);
+        }
+
+        async function generateMockData() {
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Generating...';
+
+            try {
+                const res = await fetch('/api/duplicates/generate-mock-data', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Generated ${data.stats.clusters} clusters with ${data.stats.leads} leads and ${data.stats.deals} deals`);
+                    refreshData();
+                }
+            } catch (error) {
+                console.error('Error generating mock data:', error);
+                alert('Failed to generate mock data');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                    </svg>
+                    Generate Test Data
+                `;
+            }
         }
 
         function exportData() {

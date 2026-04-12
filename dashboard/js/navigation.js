@@ -28,7 +28,8 @@ const WalaPlusNav = {
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
-        { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
+        { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
+        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-check', id: 'reviews' }
       ]
     },
     {

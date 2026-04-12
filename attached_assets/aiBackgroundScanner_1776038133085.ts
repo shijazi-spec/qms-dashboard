@@ -292,6 +292,10 @@ async function checkLowProgressTreatments(result: ScanResult): Promise<void> {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+//  CRM SLA ENFORCEMENT CHECKS (Sales & SDR SOPs)
+// ═══════════════════════════════════════════════════════════
+
 async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
   result.checksPerformed++;
 
@@ -319,6 +323,7 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
       const modifiedAt = d.Modified_Time ? new Date(d.Modified_Time).getTime() : 0;
       const createdAt = d.Created_Time ? new Date(d.Created_Time).getTime() : 0;
 
+      // PR2: First Contact SLA (≤1 business day after SDR handoff = deal creation)
       if (stage === 'Contacted' || stage === 'Meeting' || stage === 'Proposal') {
         const firstCall = d.First_Call_Date ? new Date(d.First_Call_Date).getTime() : 0;
         if (firstCall && createdAt && (firstCall - createdAt) > 2 * ONE_BIZ_DAY) {
@@ -333,6 +338,7 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         }
       }
 
+      // PR3: Proposal Cycle Time (≤2 business days after meeting)
       if (d.Meeting_Date && d.Proposal_Sent_Date) {
         const meetingTime = new Date(d.Meeting_Date).getTime();
         const proposalTime = new Date(d.Proposal_Sent_Date).getTime();
@@ -348,6 +354,7 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         }
       }
 
+      // G4: Agreement Review & Signature (≤10 business days)
       if (d.Agreement_Sent_Date && stage === 'Agreement Sent') {
         const sentTime = new Date(d.Agreement_Sent_Date).getTime();
         const daysSinceSent = Math.round((now - sentTime) / ONE_BIZ_DAY);
@@ -362,6 +369,7 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         }
       }
 
+      // G1: Same-day CRM Update — flag deals not modified in >2 business days while in active stages
       const activeStages = ['Contacted', 'Meeting', 'Proposal', 'Agreement Sent'];
       if (activeStages.includes(stage) && modifiedAt && (now - modifiedAt) > 3 * ONE_BIZ_DAY) {
         const daysSinceUpdate = Math.round((now - modifiedAt) / ONE_BIZ_DAY);
@@ -374,6 +382,7 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         if (true) { result.alertsCreated++; result.findings.push(`G1 stale CRM: ${dealLabel}`); }
       }
 
+      // Stage max duration enforcement
       const maxDays = stageMaxDays[stage];
       if (maxDays && modifiedAt) {
         const daysInStage = Math.round((now - modifiedAt) / ONE_BIZ_DAY);
@@ -420,6 +429,7 @@ async function checkSDRSLAViolations(result: ScanResult): Promise<void> {
       const createdAt = d.Created_Time ? new Date(d.Created_Time).getTime() : 0;
       const modifiedAt = d.Modified_Time ? new Date(d.Modified_Time).getTime() : 0;
 
+      // Initial Contact SLA: Inbound ≤2h, Outbound ≤4h
       if (status === 'New' && createdAt) {
         const hoursSinceCreation = (now - createdAt) / ONE_HOUR;
         const isOutbound = source.includes('outbound') || source.includes('cold');
@@ -436,6 +446,7 @@ async function checkSDRSLAViolations(result: ScanResult): Promise<void> {
         }
       }
 
+      // Lead Qualification Decision SLA (≤3 business days from first contact)
       if ((status === 'Contacting' || status === 'Contacted') && modifiedAt) {
         const daysSinceModified = (now - modifiedAt) / ONE_BIZ_DAY;
         if (daysSinceModified > 5) {
@@ -449,6 +460,7 @@ async function checkSDRSLAViolations(result: ScanResult): Promise<void> {
         }
       }
 
+      // Stage max duration enforcement for Leads
       const maxDays = stageMaxDays[status];
       if (maxDays && modifiedAt) {
         const daysInStage = Math.round((now - modifiedAt) / ONE_BIZ_DAY);
@@ -542,7 +554,7 @@ async function checkCAPARecurrence(result: ScanResult): Promise<void> {
   result.checksPerformed++;
   try {
     const rows = await safeQuery(`
-      SELECT MIN(root_cause) as root_cause, COUNT(*) as cnt,
+      SELECT root_cause, COUNT(*) as cnt,
              array_agg(capa_number ORDER BY created_at DESC) as capa_numbers
       FROM capa_records
       WHERE root_cause IS NOT NULL AND TRIM(root_cause) != ''

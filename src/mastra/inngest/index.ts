@@ -356,6 +356,35 @@ const aiScannerFunction = inngest.createFunction(
 );
 inngestFunctions.push(aiScannerFunction);
 
+const executiveDigestFunction = inngest.createFunction(
+  { id: "weekly-executive-digest" },
+  { cron: process.env.DIGEST_CRON || "0 7 * * 1" },
+  async ({ step }) => {
+    return await step.run("send-executive-digest", async () => {
+      console.log("[Digest] Weekly executive quality digest triggered");
+      const { sendDigestEmail } = await import("../../utils/executiveDigest");
+      const result = await sendDigestEmail();
+      console.log("[Digest] Result:", result);
+
+      if (result.success) {
+        try {
+          const { createNotification } = await import("../../utils/notificationHub");
+          await createNotification({
+            type: 'info',
+            title: 'Weekly Quality Digest sent',
+            message: `Executive quality digest sent via ${result.method}.`,
+            link: '/executive',
+            severity: 'low'
+          });
+        } catch {}
+      }
+
+      return result;
+    });
+  },
+);
+inngestFunctions.push(executiveDigestFunction);
+
 export function inngestServe({
   mastra,
   inngest,

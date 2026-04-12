@@ -34,6 +34,8 @@ import { migrationRoutes } from "./routes/migrationRoutes";
 import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
+import { managementReviewRoutes } from "./routes/managementReviewRoutes";
+import { analyticsRoutes } from "./routes/analyticsRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
 import { pdplRoutes } from "./routes/pdplRoutes";
@@ -2775,6 +2777,32 @@ export const mastra = new Mastra({
         },
       },
       // ======================================================================
+      // Management Review Page
+      // ======================================================================
+      {
+        path: "/reviews",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "reviews.html"),
+                "/home/runner/workspace/dashboard/reviews.html",
+              ];
+              for (const p of possiblePaths) {
+                if (existsSync(p)) {
+                  return c.html(readFileSync(p, "utf-8"));
+                }
+              }
+              return c.text("Management Review page not found", 404);
+            } catch (error) {
+              console.error("Error serving Management Review page:", error);
+              return c.text("Error loading Management Review page", 500);
+            }
+          };
+        },
+      },
+      // ======================================================================
       // Compliance Tracker Routes
       // ======================================================================
       {
@@ -3472,6 +3500,8 @@ export const mastra = new Mastra({
       ...handoffRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
+      ...managementReviewRoutes,
+      ...analyticsRoutes,
       ...rbacRoutes,
       ...scorecardRoutes,
       ...pdplRoutes,

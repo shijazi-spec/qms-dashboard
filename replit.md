@@ -30,17 +30,22 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
   - `inputSanitizer.ts` - XSS/injection prevention, field whitelisting, password policy
   - `riskDatabase.ts` - Risk management + UUID obfuscation helpers
   - `aiAlertsDatabase.ts` - AI alerts table CRUD, dedup, unread count; 11 alert types including `sla_breach`
-  - `aiBackgroundScanner.ts` - 12-check background scanner (KPIs, risks, NCs, policies, PDPL, audits, training, Sales SLA, SDR SLA, high-confidence duplicates)
+  - `aiBackgroundScanner.ts` - 14-check background scanner (KPIs, risks, NCs, policies, PDPL, audits, training, Sales SLA, SDR SLA, high-confidence duplicates, auto-NC from critical SLA breaches, CAPA recurrence detection)
   - `duplicateRadarDatabase.ts` - Multi-signal duplicate detection (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module clustering (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time pre-creation check
   - `knowledgeDatabase.ts` - Knowledge base document storage, chunk-based full-text search
   - `checklistDatabase.ts` - Compliance checklist engine with automated verification
   - `evidenceDatabase.ts` - Evidence/document management across QMS modules
+  - `executiveDigest.ts` - Weekly quality digest email (NC/CAPA/risk/audit/KPI/compliance summary, HTML email via Resend or Replit Mail)
+  - `analyticsEngine.ts` - Cycle time metrics (NC/CAPA/risk/policy), agent compliance reports, CAPA recurrence detection, trend data
+  - `managementReviewDatabase.ts` - ISO 9001 Clause 9.3 management review CRUD, action items, auto-gather QMS inputs
   - `notificationHub.ts` - Unified notification routing (email, Slack, in-app)
   - `exportUtils.ts` - CSV export utilities
   - `changeHistoryDatabase.ts` - NC/CAPA change history audit trail
 - `src/mastra/routes/consultantRoutes.ts` - AI Consultant API endpoints (chat, stream, alerts, scan)
 - `src/mastra/routes/qmsEnhancedRoutes.ts` - Evidence management, CSV exports, bulk updates, change history, closure approval, CAPA effectiveness
 - `src/mastra/routes/knowledgeRoutes.ts` - Knowledge base CRUD, search, checklist endpoints
+- `src/mastra/routes/managementReviewRoutes.ts` - Management review CRUD, action items, gather inputs
+- `src/mastra/routes/analyticsRoutes.ts` - Cycle times, agent compliance, CAPA recurrence, trends, executive digest
 - `src/mastra/routes/notificationRoutes.ts` - Notifications, health index endpoints
 - `src/triggers/` - Cron, Slack, Telegram triggers
 - `dashboard/` - Static HTML dashboards (index.html, audits.html, login.html, etc.)
@@ -71,7 +76,8 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/consultant` - AI Consultant & Assistant (chat interface with 16 AI tools)
 - `/kpis` - KPI Tracking (status filter, CSV export, auto-calc timestamp)
 - `/scorecard` - Scorecard
-- `/duplicates` - Duplicate Radar
+- `/duplicates` - Duplicate Radar (async Zoho scan with progress polling)
+- `/reviews` - Management Review (ISO 9001 Clause 9.3, action tracking, auto-gather QMS inputs)
 - `/migration` - Data Migration
 - `/crm` - CRM Integration
 - `/feedback` - Feedback
