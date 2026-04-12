@@ -12,6 +12,7 @@ export interface DuplicateCluster {
   company_name_arabic?: string;
   total_leads: number;
   total_deals: number;
+  total_accounts: number;
   total_records: number;
   confidence_level: 'high' | 'medium' | 'low';
   confidence_score: number;
@@ -153,6 +154,7 @@ export async function initDuplicateRadarTables(): Promise<void> {
       company_name_arabic VARCHAR(500),
       total_leads INTEGER DEFAULT 0,
       total_deals INTEGER DEFAULT 0,
+      total_accounts INTEGER DEFAULT 0,
       total_records INTEGER DEFAULT 0,
       confidence_level VARCHAR(20) DEFAULT 'medium',
       confidence_score INTEGER DEFAULT 0,
@@ -242,19 +244,23 @@ export async function initDuplicateRadarTables(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_duplicate_records_type ON duplicate_records(record_type)
   `);
+
+  await pool.query(`
+    ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS total_accounts INTEGER DEFAULT 0
+  `);
 }
 
 export async function createCluster(cluster: Omit<DuplicateCluster, 'id' | 'created_at' | 'updated_at'>): Promise<DuplicateCluster> {
   const result = await pool.query(
     `INSERT INTO duplicate_clusters 
-     (domain, company_name, company_name_arabic, total_leads, total_deals, total_records, 
+     (domain, company_name, company_name_arabic, total_leads, total_deals, total_accounts, total_records, 
       confidence_level, confidence_score, first_record_date, latest_activity_date, 
       owners_involved, estimated_pipeline_value, status, ai_recommendation)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
       cluster.domain, cluster.company_name, cluster.company_name_arabic,
-      cluster.total_leads, cluster.total_deals, cluster.total_records,
+      cluster.total_leads, cluster.total_deals, cluster.total_accounts || 0, cluster.total_records,
       cluster.confidence_level, cluster.confidence_score,
       cluster.first_record_date, cluster.latest_activity_date,
       JSON.stringify(cluster.owners_involved || []),
@@ -369,6 +375,7 @@ export async function getClusterSummary(): Promise<{
       COUNT(*) as total_clusters,
       COALESCE(SUM(total_leads), 0) as total_leads,
       COALESCE(SUM(total_deals), 0) as total_deals,
+      COALESCE(SUM(total_accounts), 0) as total_accounts,
       COUNT(*) FILTER (WHERE confidence_level = 'high') as high_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'medium') as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low') as low_confidence,
@@ -383,6 +390,7 @@ export async function getClusterSummary(): Promise<{
     totalClusters: parseInt(row.total_clusters) || 0,
     totalDuplicateLeads: parseInt(row.total_leads) || 0,
     totalDuplicateDeals: parseInt(row.total_deals) || 0,
+    totalDuplicateAccounts: parseInt(row.total_accounts) || 0,
     highConfidence: parseInt(row.high_confidence) || 0,
     mediumConfidence: parseInt(row.medium_confidence) || 0,
     lowConfidence: parseInt(row.low_confidence) || 0,
@@ -586,6 +594,7 @@ export async function findOrCreateClusterByDomain(domain: string): Promise<Dupli
     domain,
     total_leads: 0,
     total_deals: 0,
+    total_accounts: 0,
     total_records: 0,
     confidence_level: 'medium',
     confidence_score: 75,
@@ -598,6 +607,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     SELECT 
       COUNT(*) FILTER (WHERE record_type = 'lead') as lead_count,
       COUNT(*) FILTER (WHERE record_type = 'deal') as deal_count,
+      COUNT(*) FILTER (WHERE record_type = 'account') as account_count,
       COUNT(*) as total_count,
       COALESCE(SUM(deal_value), 0) as total_value,
       MIN(created_date) as first_date,
@@ -614,18 +624,20 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     UPDATE duplicate_clusters SET
       total_leads = $1,
       total_deals = $2,
-      total_records = $3,
-      estimated_pipeline_value = $4,
-      first_record_date = $5,
-      latest_activity_date = $6,
-      owners_involved = $7,
-      confidence_score = $8,
-      confidence_level = $9,
+      total_accounts = $3,
+      total_records = $4,
+      estimated_pipeline_value = $5,
+      first_record_date = $6,
+      latest_activity_date = $7,
+      owners_involved = $8,
+      confidence_score = $9,
+      confidence_level = $10,
       updated_at = CURRENT_TIMESTAMP
-    WHERE id = $10
+    WHERE id = $11
   `, [
     parseInt(stats.lead_count) || 0,
     parseInt(stats.deal_count) || 0,
+    parseInt(stats.account_count) || 0,
     totalRecords,
     parseFloat(stats.total_value) || 0,
     stats.first_date,
@@ -786,6 +798,7 @@ export async function findOrCreateClusterByCompany(companyName: string, domain?:
     company_name: companyName,
     total_leads: 0,
     total_deals: 0,
+    total_accounts: 0,
     total_records: 0,
     confidence_level: 'medium',
     confidence_score: 75,

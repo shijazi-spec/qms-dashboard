@@ -68,6 +68,7 @@
             <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
             <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
             <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
+            <button onclick="showTab('accounts')" id="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
             <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
@@ -78,7 +79,7 @@
         </div>
 
         <div id="content-summary" class="tab-content">
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-600">
                     <div class="text-sm text-gray-500">Total Clusters</div>
                     <div id="totalClusters" class="text-2xl font-bold text-blue-600">-</div>
@@ -93,6 +94,11 @@
                     <div class="text-sm text-gray-500">Duplicate Deals</div>
                     <div id="totalDeals" class="text-2xl font-bold text-red-600">-</div>
                     <div id="dealRate" class="text-xs text-red-500">-% duplicate rate</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
+                    <div class="text-sm text-gray-500">Duplicate Accounts</div>
+                    <div id="totalAccounts" class="text-2xl font-bold text-indigo-600">-</div>
+                    <div class="text-xs text-indigo-500">Zoho Accounts module</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
                     <div class="text-sm text-gray-500">High Confidence</div>
@@ -314,6 +320,26 @@
             </div>
         </div>
 
+        <div id="content-accounts" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div id="content-owners" class="tab-content hidden">
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -457,6 +483,7 @@
             document.getElementById('totalClusters').textContent = data.totalClusters || 0;
             document.getElementById('totalLeads').textContent = data.totalDuplicateLeads || 0;
             document.getElementById('totalDeals').textContent = data.totalDuplicateDeals || 0;
+            document.getElementById('totalAccounts').textContent = data.totalDuplicateAccounts || 0;
             document.getElementById('highConfidence').textContent = data.highConfidence || 0;
             document.getElementById('mediumConfidence').textContent = data.mediumConfidence || 0;
             document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
@@ -550,18 +577,21 @@
 
         async function loadLeadsAndDeals() {
             try {
-                const [leadsRes, dealsRes] = await Promise.all([
+                const [leadsRes, dealsRes, accountsRes] = await Promise.all([
                     fetch('/api/duplicates/leads'),
-                    fetch('/api/duplicates/deals')
+                    fetch('/api/duplicates/deals'),
+                    fetch('/api/duplicates/accounts')
                 ]);
 
                 const leadsData = await leadsRes.json();
                 const dealsData = await dealsRes.json();
+                const accountsData = await accountsRes.json();
 
                 renderLeads(leadsData.groups || []);
                 renderDeals(dealsData.groups || []);
+                renderAccounts(accountsData.groups || []);
             } catch (error) {
-                console.error('Error loading leads/deals:', error);
+                console.error('Error loading leads/deals/accounts:', error);
             }
         }
 
@@ -619,6 +649,35 @@
                 }
             }
             tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
+        }
+
+        function renderAccounts(groups) {
+            const tbody = document.getElementById('accountsTable');
+            let rows = '';
+            for (const group of groups) {
+                for (const account of group.accounts) {
+                    rows += `
+                        <tr>
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${account.record_name}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${account.company_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${account.owner_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="px-2 py-1 rounded text-xs bg-purple-100 text-purple-800">${account.status || '-'}</span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="confidence-${getConfidenceLevel(account.confidence_score)} px-2 py-1 rounded text-xs">
+                                    ${account.confidence_score}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                ${account.is_primary ? '<span class="text-green-600 font-medium">Primary</span>' : '<span class="text-gray-400">Duplicate</span>'}
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+            tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate accounts found</td></tr>';
         }
 
         function renderOwners(owners) {

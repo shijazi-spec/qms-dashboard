@@ -182,7 +182,7 @@ async function scanZohoCRMForDuplicates(): Promise<{
       
       await addRecordToCluster({
         cluster_id: cluster.id!,
-        record_type: 'lead',
+        record_type: 'account',
         zoho_record_id: record.id,
         record_name: companyName,
         company_name: companyName,
@@ -191,8 +191,8 @@ async function scanZohoCRMForDuplicates(): Promise<{
         phone: account.Phone,
         owner_name: account.Owner?.name || 'Unknown',
         owner_email: account.Owner?.email,
-        status: 'Account',
-        source: 'Account',
+        status: account.Account_Status || 'Active',
+        source: account.Account_Type || 'Account',
         created_date: account.Created_Time ? new Date(account.Created_Time) : new Date(),
         modified_date: account.Modified_Time ? new Date(account.Modified_Time) : new Date(),
         is_primary: false,
@@ -641,6 +641,38 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error fetching deal duplicates:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/accounts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const clusters = await getAllClusters({ status: 'active' });
+          const accountsWithDuplicates: any[] = [];
+
+          for (const cluster of clusters) {
+            const records = await getRecordsByClusterId(cluster.id!);
+            const accounts = records.filter(r => r.record_type === 'account');
+            if (accounts.length > 1) {
+              accountsWithDuplicates.push({
+                cluster,
+                accounts,
+                duplicate_count: accounts.length
+              });
+            }
+          }
+
+          return c.json({
+            total_duplicate_groups: accountsWithDuplicates.length,
+            groups: accountsWithDuplicates
+          });
+        } catch (error: any) {
+          console.error('Error fetching account duplicates:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
