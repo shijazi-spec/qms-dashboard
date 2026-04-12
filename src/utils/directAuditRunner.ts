@@ -10,11 +10,13 @@ import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
 
 const BATCH_SIZE = 500;
 const MAX_RECORDS_PER_MODULE = 50000;
+const MAX_DETAILED_ISSUES = 500;
 
 function analyzeRecordBatch(
   records: ZohoCRMRecord[],
   governanceRules: any[],
-  issueTypeCounts: Record<string, { count: number; severity: string; module: string }>
+  issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
+  detailedIssues?: Array<{ recordId: string; module: string; owner: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>
 ): { issueCount: number; critical: number; high: number; medium: number; low: number } {
   let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0;
   for (const record of records) {
@@ -30,6 +32,21 @@ function analyzeRecordBatch(
         issueTypeCounts[key] = { count: 0, severity: issue.severity, module: issue.module };
       }
       issueTypeCounts[key].count++;
+
+      if (detailedIssues && detailedIssues.length < MAX_DETAILED_ISSUES) {
+        const ownerData = record.data?.Owner;
+        const ownerName = record.owner || (ownerData ? (ownerData.name || ownerData.id || '-') : '-');
+        detailedIssues.push({
+          recordId: issue.recordId,
+          module: issue.module,
+          owner: ownerName,
+          fieldName: issue.fieldName || '',
+          issueType: issue.issueType,
+          description: issue.description,
+          severity: issue.severity,
+          suggestedFix: issue.suggestedFix || `Update the ${issue.fieldName || 'field'} in this record`,
+        });
+      }
     }
   }
   return { issueCount, critical, high, medium, low };
@@ -56,6 +73,7 @@ export async function runDirectAudit(logger?: any) {
   const topIssues: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
+  const detailedIssues: Array<{ recordId: string; module: string; owner: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
 
   if (!hasZohoCredentials) {
     logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
@@ -104,7 +122,7 @@ export async function runDirectAudit(logger?: any) {
 
           for (let i = 0; i < recordCount; i += BATCH_SIZE) {
             const batch = allRecords.slice(i, i + BATCH_SIZE);
-            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts);
+            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues);
             moduleIssueCount += batchResult.issueCount;
             moduleCritical += batchResult.critical;
             moduleHigh += batchResult.high;
@@ -178,6 +196,7 @@ export async function runDirectAudit(logger?: any) {
         insights: skipReason 
           ? `Partial audit completed. ${skipReason}` 
           : `Quality audit completed with ${totalIssuesFound} issues found across ${totalRecordsAudited} records.`,
+        all_issues: detailedIssues,
       },
     };
 

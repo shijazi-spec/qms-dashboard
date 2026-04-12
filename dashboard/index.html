@@ -659,9 +659,10 @@
                     id: issue.recordId || `issue_${idx + 1}`,
                     module: issue.module,
                     owner: issue.owner || '-',
-                    issue: issue.description || issue.issueType,
+                    issue: issue.description || formatIssueType(issue.issueType, issue.fieldName),
                     severity: issue.severity,
-                    recommendation: issue.suggestedFix || 'Update the record with missing information to ensure data quality compliance.'
+                    fieldName: issue.fieldName || '',
+                    recommendation: issue.suggestedFix || `Fill in the ${issue.fieldName || 'required field'} for this ${issue.module} record.`
                 }));
             } else {
                 const topIssues = allDashboardData?.latestAudit?.issues_by_category;
@@ -672,12 +673,13 @@
                 if (Array.isArray(issuesList) && issuesList.length > 0) {
                     const filtered = category === 'all' ? issuesList : issuesList.filter(i => i.module === category);
                     issues = filtered.map((issue, idx) => ({
-                        id: `issue_${idx + 1}`,
+                        id: `summary_${idx + 1}`,
                         module: issue.module,
                         owner: '-',
-                        issue: (issue.issueType || '').replace(/_/g, ' '),
+                        issue: formatIssueType(issue.issueType, null),
                         severity: issue.severity,
-                        recommendation: `${issue.count} occurrences found. Review and fix ${issue.issueType} in ${issue.module} records.`
+                        fieldName: '',
+                        recommendation: `${issue.count} records affected in ${issue.module}. Run a new audit to see per-record details.`
                     }));
                 } else {
                     issues = [];
@@ -686,6 +688,17 @@
 
             currentIssues = issues;
             renderIssuesTable(issues);
+        }
+
+        function formatIssueType(issueType, fieldName) {
+            if (!issueType) return 'Unknown issue';
+            const typeLabels = {
+                'missing_required_field': fieldName ? `Missing: ${fieldName.replace(/_/g, ' ')}` : 'Missing required field',
+                'invalid_format': fieldName ? `Invalid format: ${fieldName.replace(/_/g, ' ')}` : 'Invalid field format',
+                'invalid_value': fieldName ? `Invalid value: ${fieldName.replace(/_/g, ' ')}` : 'Invalid field value',
+                'governance_violation': fieldName ? `Rule violated: ${fieldName.replace(/_/g, ' ')}` : 'Governance rule violation',
+            };
+            return typeLabels[issueType] || issueType.replace(/_/g, ' ');
         }
 
         function renderIssuesTable(issues) {
