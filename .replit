@@ -43,8 +43,8 @@ waitForPort = 5000
 [userenv.shared]
 NODE_OPTIONS = "--max-old-space-size=4096"
 GOOGLE_CLIENT_ID = "73897591604-aprs8jpoas72vv86rdb2l3iebhdajc6l.apps.googleusercontent.com"
-ZOHO_ACCOUNTS_URL = "https://accounts.zoho.sa"
-ZOHO_API_DOMAIN = "https://www.zohoapis.sa"
+ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
+ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 ADMIN_API_KEY = "QMS2026"
 ZOHO_CLIENT_ID = "1000.LPD4MMX1T04ISDL93Z1GZMUA7JZSPR"
 ZOHO_CLIENT_SECRET = "22074974b46795f0bb4936697647a6723b5657a826"
