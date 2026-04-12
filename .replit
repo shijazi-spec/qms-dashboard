@@ -41,6 +41,7 @@ waitForPort = 5000
 [userenv]
 
 [userenv.shared]
+ADMIN_API_KEY = "WalaPlus-QMS-Admin-2026"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0"]
