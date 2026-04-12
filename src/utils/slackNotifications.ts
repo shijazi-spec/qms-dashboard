@@ -4,7 +4,7 @@ let slackClient: WebClient | null = null;
 
 function getSlackClient(): WebClient | null {
   if (slackClient) return slackClient;
-  const token = process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN;
+  const token = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
   if (!token) {
     console.log('[Slack Notifications] No bot token configured');
     return null;
@@ -14,7 +14,7 @@ function getSlackClient(): WebClient | null {
 }
 
 function getChannel(): string | null {
-  return process.env.SLACK_QMS_CHANNEL || null;
+  return process.env.SLACK_CHANNEL_ID || process.env.SLACK_QMS_CHANNEL || null;
 }
 
 function scoreEmoji(score: number): string {

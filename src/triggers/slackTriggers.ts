@@ -139,18 +139,18 @@ export async function getClient() {
           }
         }
       } catch (connectorError) {
-        console.log("[Slack] Replit connector not available, checking SLACK_API_TOKEN env var...");
+        console.log("[Slack] Replit connector not available, checking SLACK_BOT_TOKEN env var...");
       }
     }
 
-    const envToken = process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN;
+    const envToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
     if (envToken) {
-      console.log("[Slack] Using SLACK_API_TOKEN from environment");
+      console.log("[Slack] Using SLACK_BOT_TOKEN from environment");
       return { token: envToken, user: undefined };
     }
 
     throw new Error(
-      "Slack not connected: No Replit Slack connector and no SLACK_API_TOKEN environment variable set",
+      "Slack not connected: No Replit Slack connector and no SLACK_BOT_TOKEN environment variable set",
     );
   }
 

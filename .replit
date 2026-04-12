@@ -41,7 +41,8 @@ waitForPort = 5000
 [userenv]
 
 [userenv.shared]
-ADMIN_API_KEY = "WalaPlus-QMS-Admin-2026"
+ZOHO_ACCOUNTS_URL = "https://accounts.zoho.sa"
+ZOHO_API_DOMAIN = "https://www.zohoapis.sa"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0"]

@@ -409,7 +409,7 @@ export const mastra = new Mastra({
                 process.env.GOOGLE_CLIENT_EMAIL
               );
               
-              const hasSlackToken = !!(process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN);
+              const hasSlackToken = !!(process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN);
               let slackStatus: { connected: boolean; message: string; workspace?: string; bot?: string; scopes?: string[]; missingScopes?: string[] } = {
                 connected: false,
                 message: 'Not configured'
@@ -418,7 +418,7 @@ export const mastra = new Mastra({
               if (hasSlackToken) {
                 try {
                   const { WebClient } = await import('@slack/web-api');
-                  const slackClient = new WebClient(process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN);
+                  const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN);
                   const authResult = await slackClient.auth.test();
                   if (authResult.ok) {
                     const currentScopes = (authResult as any).response_metadata?.scopes || [];
