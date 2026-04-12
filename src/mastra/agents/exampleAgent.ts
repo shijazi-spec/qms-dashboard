@@ -20,7 +20,7 @@ import { createOpenAI } from "@ai-sdk/openai";
  */
 const openai = createOpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 /*
  * OPTION 2: Standard OpenAI Setup (Your Own API Key)

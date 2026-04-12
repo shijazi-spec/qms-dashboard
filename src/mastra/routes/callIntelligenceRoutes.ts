@@ -262,7 +262,7 @@ export const callIntelligenceRoutes = [
 
           const openai = createOpenAI({
             baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
+            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY
           });
 
           const analysisPrompt = `Analyze this sales call transcript and provide JSON:
@@ -571,7 +571,7 @@ Respond with JSON only:
 
           const openai = createOpenAI({
             baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
+            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY
           });
 
           const momPrompt = `Analyze this meeting and generate Minutes of Meeting (MoM):
@@ -863,7 +863,7 @@ Respond with JSON only:
 
               const OpenAI = (await import("openai")).default;
               const openai = new OpenAI({
-                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
                 baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
               });
 
@@ -893,7 +893,7 @@ Respond with JSON only:
 
               const aiSdk = createOpenAI({
                 baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
+                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY
               });
 
               logger?.info("🔬 [API] Starting comprehensive call analysis");
@@ -1322,7 +1322,7 @@ ${transcriptText}
               const transcribeRes = await fetch(`${process.env.AI_INTEGRATIONS_OPENAI_BASE_URL}/audio/transcriptions`, {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY}`
+                  'Authorization': `Bearer ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY}`
                 },
                 body: formData
               });
@@ -1369,7 +1369,7 @@ ${transcriptText}
 
           const aiSdk = createOpenAI({
             baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
+            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY
           });
 
           logger?.info("🔬 [API] Sending evaluation to AI");

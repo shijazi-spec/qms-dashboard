@@ -734,7 +734,7 @@ export const teamRoutes = [
 
           const openai = createOpenAI({
             baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+            apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
           });
 
           const prompt = `You are a Quality Management expert. Based on the following project information, generate a comprehensive project scope document.

@@ -149,9 +149,9 @@ export async function runDirectAudit(logger?: any) {
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 
     try {
-      const { createAuditCompletedTrigger, createNonconformanceTrigger, createCapaRequiredTrigger } = await import("./auditTriggerDatabase");
+      const { fireAuditCompletedTrigger, fireNonconformanceDetectedTrigger, fireCAPARequiredTrigger } = await import("./auditTriggerDatabase");
 
-      await createAuditCompletedTrigger(savedResult.id!, {
+      await fireAuditCompletedTrigger(savedResult.id!, {
         totalRecords: totalRecordsAudited,
         totalIssues: totalIssuesFound,
         overallScore: qualityScores.overallScore,
@@ -162,21 +162,21 @@ export async function runDirectAudit(logger?: any) {
       });
 
       if (criticalIssues > 0 || highIssues > 0) {
-        await createNonconformanceTrigger(savedResult.id!, {
+        await fireNonconformanceDetectedTrigger(savedResult.id!, {
           totalNCs: criticalIssues + highIssues,
           criticalCount: criticalIssues,
           majorCount: highIssues,
           minorCount: mediumIssues,
-          categories: topIssues.map(i => i.issueType),
+          ncIds: [savedResult.id!],
           auditDate: new Date(),
         });
       }
 
       if (criticalIssues > 0) {
         for (const issue of topIssues.filter(i => i.severity === 'critical').slice(0, 3)) {
-          await createCapaRequiredTrigger(savedResult.id!, {
+          await fireCAPARequiredTrigger(savedResult.id!, {
             ncTitle: issue.issueType,
-            ncId: `NC-${savedResult.id}-${issue.module}`,
+            ncId: savedResult.id!,
             severity: 'critical',
             suggestedAction: `Address critical ${issue.issueType} issues in ${issue.module} (${issue.count} occurrences)`,
             auditDate: new Date(),

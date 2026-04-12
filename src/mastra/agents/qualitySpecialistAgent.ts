@@ -9,7 +9,7 @@ import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
 
 const openai = createOpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 
 export const qualitySpecialistAgent = new Agent({
