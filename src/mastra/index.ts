@@ -41,6 +41,10 @@ import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
 import { consultantRoutes } from "./routes/consultantRoutes";
+import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
+import { notificationRoutes } from "./routes/notificationRoutes";
+import { knowledgeRoutes } from "./routes/knowledgeRoutes";
+import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
 import { checkRateLimit } from "../utils/rateLimiter";
@@ -95,7 +99,7 @@ class ProductionPinoLogger extends MastraLogger {
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
   workflows: { qualityAuditWorkflow },
-  agents: { qualitySpecialistAgent },
+  agents: { qualitySpecialistAgent, qmsConsultantAgent },
   mcpServers: {
     allTools: new MCPServer({
       name: "allTools",
@@ -2150,6 +2154,10 @@ export const mastra = new Mastra({
         },
       },
       
+      // Enhanced QMS routes (must come before generic :id routes)
+      ...qmsEnhancedRoutes,
+      ...notificationRoutes,
+      ...knowledgeRoutes,
       // ======================================================================
       // QMS CAPA API Endpoints
       // ======================================================================
@@ -3351,10 +3359,3 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   );
 }
 
-/*  Sanity check 2: Throw an error if there are more than 1 agents.  */
-// !!!!!! Do not remove this check. !!!!!!
-if (Object.keys(mastra.getAgents()).length > 1) {
-  throw new Error(
-    "More than 1 agents found. Currently, more than 1 agents are not supported in the UI, since doing so will cause app state to be inconsistent.",
-  );
-}

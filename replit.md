@@ -17,7 +17,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 ## Project Structure
 - `src/mastra/index.ts` - Main Mastra configuration (agents, tools, routes, server config, auth middleware)
 - `src/mastra/agents/` - AI agent definitions
-- `src/mastra/tools/` - AI tool definitions (callAnalysis, capaManagement, crmCompliance, consultant tools: queryPlatformData, analyzeNonconformities, suggestImprovements, checkRegulationCompliance, monitorKPIs, monitorRisks, createAlert, reviewDocument)
+- `src/mastra/tools/` - AI tool definitions (callAnalysis, capaManagement, crmCompliance, consultant tools: queryPlatformData, analyzeNonconformities, suggestImprovements, checkRegulationCompliance, monitorKPIs, monitorRisks, createAlert, reviewDocument, searchKnowledge, checklistTools [runChecklist, manageChecklist], ncManagement, capaManagement)
 - `src/mastra/workflows/` - Mastra workflow definitions
 - `src/mastra/routes/authRoutes.ts` - Replit Auth (OIDC) routes and session management
 - `src/mastra/data/` - Data layer and mock data
@@ -31,7 +31,16 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
   - `riskDatabase.ts` - Risk management + UUID obfuscation helpers
   - `aiAlertsDatabase.ts` - AI alerts table CRUD, dedup, unread count
   - `aiBackgroundScanner.ts` - 8-check background scanner (KPIs, risks, NCs, policies, PDPL, audits, training)
+  - `knowledgeDatabase.ts` - Knowledge base document storage, chunk-based full-text search
+  - `checklistDatabase.ts` - Compliance checklist engine with automated verification
+  - `evidenceDatabase.ts` - Evidence/document management across QMS modules
+  - `notificationHub.ts` - Unified notification routing (email, Slack, in-app)
+  - `exportUtils.ts` - CSV export utilities
+  - `changeHistoryDatabase.ts` - NC/CAPA change history audit trail
 - `src/mastra/routes/consultantRoutes.ts` - AI Consultant API endpoints (chat, stream, alerts, scan)
+- `src/mastra/routes/qmsEnhancedRoutes.ts` - Evidence management, CSV exports, bulk updates, change history, closure approval, CAPA effectiveness
+- `src/mastra/routes/knowledgeRoutes.ts` - Knowledge base CRUD, search, checklist endpoints
+- `src/mastra/routes/notificationRoutes.ts` - Notifications, health index endpoints
 - `src/triggers/` - Cron, Slack, Telegram triggers
 - `dashboard/` - Static HTML dashboards (index.html, audits.html, login.html, etc.)
 - `dashboard/css/` - Shared navigation CSS
@@ -116,16 +125,23 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## AI Consultant Feature
-- **Agent**: `qmsConsultantAgent.ts` - GPT-4o powered QMS consultant with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents)
-- **Tools**: `queryPlatformDataTool.ts`, `analyzeNonconformitiesTool.ts`, `suggestImprovementsTool.ts`, `checkRegulationComplianceTool.ts`, `monitorKPIsTool.ts`, `monitorRisksTool.ts`, `createAlertTool.ts`, `reviewDocumentTool.ts`
-- **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks (NCs without CAPA, high risks ≥15, overdue treatments, missed KPIs, expiring policies, PDPL gaps (3 conditions), audit decline trend, training gaps) running every 6 hours via Inngest
+- **Agent**: `qmsConsultantAgent.ts` - GPT-4o powered QMS consultant with 16 tools, registered in Mastra agents config with @mastra/memory for conversation threading
+- **Tools**: queryPlatformData, analyzeNonconformities, suggestImprovements, checkRegulationCompliance, monitorKPIs, monitorRisks, createAlert, reviewDocument, searchKnowledge, runChecklist, manageChecklist, createNc, getNcList, createCapa, getCapaList, getCapaDetails
+- **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks running every 6 hours via Inngest
 - **Alerts Database**: `aiAlertsDatabase.ts` - ai_alerts table with CRUD, dedup, severity-ordered queries
-- **Routes**: `consultantRoutes.ts` - `/api/consultant/chat`, `/api/consultant/chat/stream` (SSE), `/api/consultant/alerts`, `/api/consultant/alerts/count`, `/api/consultant/scan`
+- **Knowledge Base**: Upload regulatory documents (ISO, PDPL, SOPs), auto-chunked for full-text search, cited in AI responses
+- **Checklist Engine**: Create/run structured compliance checklists with automated data verification (count_check, existence_check, threshold_check, data_query, manual)
+- **Evidence Management**: Structured evidence upload/retrieval across NC, CAPA, compliance, risk, audit, policy modules
+- **Change History**: Immutable audit trail for NC and CAPA field changes
+- **Closure Workflow**: NC closure approval, CAPA effectiveness recording + closure approval
+- **CSV Exports**: NCs, CAPAs, compliance, PDPL, KPIs, vendors
+- **Routes**: consultantRoutes (chat, stream, alerts, scan), qmsEnhancedRoutes (evidence, exports, bulk ops, history, closures), knowledgeRoutes (docs, search, checklists), notificationRoutes (notifications, health index)
 - **Frontend**: `dashboard/consultant.html` - Full chat interface with sidebar quick actions, markdown rendering, streaming responses, alert bell integration
 - **Navigation**: Alert bell in nav bar polls `/api/consultant/alerts/count` every 60s, links to `/consultant`
 
 ## Recent Changes
-- AI Consultant feature complete (Apr 2026): GPT-4o powered QMS AI Consultant with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Model uses `openai.responses("gpt-4o")` via `@ai-sdk/openai-v5` with Replit AI proxy fallback. Agent NOT registered in Mastra agents config (used directly by consultantRoutes).
+- Agentic AI update (Apr 2026): Expanded QMS Consultant to 16 tools (added searchKnowledge, runChecklist, manageChecklist, NC/CAPA CRUD). Added knowledge base (document upload, chunking, full-text search), compliance checklist engine (automated verification), evidence management, change history, notification hub, CSV exports, NC/CAPA closure workflow with approval/effectiveness tracking. Agent registered in Mastra config with @mastra/memory. Fixed table names: nonconformances→nonconformance_records, capas→capa_records throughout tools/scanner. Added ALTER TABLE columns for closure_approved_by/at, effectiveness_result/evidence/reviewed_by/at, percent_complete/milestones. Model uses `openai.responses("gpt-4o")` via `@ai-sdk/openai` with Replit AI proxy.
+- AI Consultant feature complete (Apr 2026): GPT-4o powered QMS AI Consultant with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar.
 - Audit History Date/Time (Apr 2026): Audit History table now shows full date/time instead of date-only.
 - Slack webhook dual-path (Apr 2026): Webhook now accessible at both /webhooks/slack/action AND /api/webhooks/slack/action. Both paths are public (no auth required) and rate-limited. Challenge verification works on both paths for Slack Event Subscriptions URL verification.
 - Security hardening post-review (Apr 2026): Mastra internal endpoints (/api/workflows/*, /api/memory/*, /api/agents/*) now require auth (was bypassed). Webhook endpoints (/webhooks/*) now rate-limited. Both fixes in index.ts middleware.

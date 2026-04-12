@@ -48,8 +48,8 @@ async function createAlertIfNew(
 async function checkOpenNCsWithoutCAPA(result: ScanResult): Promise<void> {
   const rows = await safeQuery(`
     SELECT n.id, n.nc_number, n.title, n.severity, n.created_at
-    FROM nonconformances n
-    LEFT JOIN capas c ON c.nc_id = n.id
+    FROM nonconformance_records n
+    LEFT JOIN capa_records c ON c.source_id = n.id::text
     WHERE n.status NOT IN ('closed', 'rejected')
       AND c.id IS NULL
       AND n.created_at < NOW() - INTERVAL '7 days'

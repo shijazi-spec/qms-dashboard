@@ -6,15 +6,15 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const MODULE_TABLE_MAP: Record<string, { table: string; orderBy?: string; join?: string }> = {
-  nonconformances: { table: 'nonconformances' },
-  capas: { table: 'capas' },
+  nonconformances: { table: 'nonconformance_records' },
+  capas: { table: 'capa_records' },
   risks: { table: 'risks' },
   policies: { table: 'governance_documents' },
   audits: { table: 'quality_audit_results' },
   compliance: { table: 'obligations' },
   kpis: {
     table: 'kpi_definitions',
-    join: 'LEFT JOIN kpi_values ON kpi_definitions.id = kpi_values.kpi_id',
+    join: 'LEFT JOIN kpi_entries ON kpi_definitions.id = kpi_entries.kpi_definition_id',
   },
   vendors: { table: 'vendors' },
   pdpl: { table: 'pdpl_data_inventory' },

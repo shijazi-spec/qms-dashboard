@@ -83,7 +83,7 @@ export const suggestImprovementsTool = createTool({
         const result = await pool.query(
           `SELECT category, COUNT(*)::int AS count,
                   COUNT(*) FILTER (WHERE status = 'open')::int AS open_count
-           FROM nonconformances
+           FROM nonconformance_records
            WHERE nc_type = $1
              AND created_at >= NOW() - ($2 || ' days')::interval
            GROUP BY category
@@ -153,7 +153,7 @@ export const suggestImprovementsTool = createTool({
 
         const ncResult = await pool.query(
           `SELECT COUNT(*)::int AS open_ncs
-           FROM nonconformances
+           FROM nonconformance_records
            WHERE status = $1`,
           ['open']
         );

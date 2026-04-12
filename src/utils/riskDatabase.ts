@@ -61,6 +61,8 @@ export interface RiskTreatmentAction {
   evidence_required?: boolean;
   evidence_attached?: boolean;
   evidence_path?: string;
+  percent_complete?: number;
+  milestones?: any;
   created_at?: Date;
   updated_at?: Date;
 }

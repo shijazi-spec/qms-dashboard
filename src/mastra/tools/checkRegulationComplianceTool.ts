@@ -73,7 +73,7 @@ async function checkIso9001Compliance(): Promise<{ score: number; gaps: Complian
   let deductions = 0;
 
   const openNcResult = await pool.query(
-    `SELECT COUNT(*)::int AS count FROM nonconformances WHERE status = $1`,
+    `SELECT COUNT(*)::int AS count FROM nonconformance_records WHERE status = $1`,
     ['open']
   );
   const openNCs = openNcResult.rows[0]?.count ?? 0;
@@ -97,8 +97,8 @@ async function checkIso9001Compliance(): Promise<{ score: number; gaps: Complian
   }
 
   const overdueCapaResult = await pool.query(
-    `SELECT COUNT(*)::int AS count FROM capas
-     WHERE due_date < NOW() AND status != $1`,
+    `SELECT COUNT(*)::int AS count FROM capa_records
+     WHERE target_date < NOW() AND status != $1`,
     ['completed']
   );
   const overdueCAPAs = overdueCapaResult.rows[0]?.count ?? 0;

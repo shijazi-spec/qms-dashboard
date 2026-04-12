@@ -270,6 +270,64 @@
                             <span class="text-sm font-medium text-gray-700">Review Documents</span>
                         </div>
                     </button>
+                    <button class="action-card w-full text-left p-3 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Search Knowledge Base: Search our regulatory knowledge base for ISO 9001, PDPL, and internal SOP documents. Summarize the most relevant guidelines.')" data-testid="button-search-knowledge">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-md bg-cyan-50 flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                </svg>
+                            </div>
+                            <span class="text-sm font-medium text-gray-700">Search Knowledge Base</span>
+                        </div>
+                    </button>
+                    <button class="action-card w-full text-left p-3 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Run Compliance Checklist: Run the default compliance checklist against our current QMS data and report the pass/fail status of each item with recommendations for failed items.')" data-testid="button-run-checklist">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-md bg-lime-50 flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4 text-lime-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                </svg>
+                            </div>
+                            <span class="text-sm font-medium text-gray-700">Run Compliance Checklist</span>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Knowledge Base</span>
+                        <span class="text-xs text-gray-400 cursor-pointer hover:text-indigo-600" onclick="toggleKnowledgePanel()" data-testid="link-knowledge-toggle">Manage</span>
+                    </div>
+                    <div id="knowledgePanel" class="hidden">
+                        <div class="mb-2">
+                            <input type="text" id="knowledgeSearch" placeholder="Search documents..." class="w-full text-xs border border-gray-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400" data-testid="input-knowledge-search" />
+                        </div>
+                        <div id="knowledgeResults" class="space-y-1 max-h-32 overflow-y-auto text-xs text-gray-500">
+                            <div class="py-1 text-center">Search to find documents</div>
+                        </div>
+                        <div class="mt-2 flex gap-1">
+                            <button onclick="searchKnowledge()" class="flex-1 text-[10px] bg-indigo-50 text-indigo-600 rounded px-2 py-1 hover:bg-indigo-100" data-testid="button-knowledge-search">Search</button>
+                            <button onclick="showUploadDoc()" class="flex-1 text-[10px] bg-gray-50 text-gray-600 rounded px-2 py-1 hover:bg-gray-100" data-testid="button-knowledge-upload">Upload Doc</button>
+                        </div>
+                    </div>
+                    <div id="knowledgeStats" class="text-xs text-gray-400 py-1">
+                        <span id="knowledgeCount">0</span> documents indexed
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Checklists</span>
+                        <span class="text-xs text-gray-400 cursor-pointer hover:text-indigo-600" onclick="toggleChecklistPanel()" data-testid="link-checklist-toggle">View</span>
+                    </div>
+                    <div id="checklistPanel" class="hidden">
+                        <div id="checklistList" class="space-y-1 max-h-40 overflow-y-auto">
+                            <div class="text-xs text-gray-400 py-1 text-center">Loading checklists...</div>
+                        </div>
+                        <button onclick="sendQuickMessage('Create a new compliance checklist covering: NC management, CAPA effectiveness, risk mitigation, KPI tracking, and document control.')" class="w-full mt-2 text-[10px] bg-lime-50 text-lime-700 rounded px-2 py-1 hover:bg-lime-100" data-testid="button-create-checklist">+ Create Checklist via AI</button>
+                    </div>
+                    <div id="checklistStats" class="text-xs text-gray-400 py-1">
+                        <span id="checklistCount">0</span> checklists available
+                    </div>
                 </div>
 
                 <div class="mt-6 pt-4 border-t border-gray-200">
@@ -803,16 +861,111 @@
             overlay.classList.remove('open');
         }
 
+        function toggleKnowledgePanel() {
+            var panel = document.getElementById('knowledgePanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) loadKnowledgeCount();
+        }
+
+        function toggleChecklistPanel() {
+            var panel = document.getElementById('checklistPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) loadChecklists();
+        }
+
+        async function searchKnowledge() {
+            var query = document.getElementById('knowledgeSearch').value.trim();
+            if (!query) return;
+            var resultsEl = document.getElementById('knowledgeResults');
+            resultsEl.innerHTML = '<div class="py-1 text-center">Searching...</div>';
+            try {
+                var resp = await fetch('/api/knowledge/search?q=' + encodeURIComponent(query), { credentials: 'same-origin' });
+                var data = await resp.json();
+                var results = data.results || [];
+                if (!results.length) {
+                    resultsEl.innerHTML = '<div class="py-1 text-center">No results found</div>';
+                    return;
+                }
+                resultsEl.innerHTML = '';
+                results.slice(0, 5).forEach(function(r) {
+                    var item = document.createElement('div');
+                    item.className = 'p-1.5 rounded bg-gray-50 cursor-pointer hover:bg-indigo-50';
+                    item.innerHTML = '<div class="font-medium text-gray-700 truncate">' + escapeHtml(r.documentTitle || r.title || 'Document') + '</div><div class="text-[10px] text-gray-400 truncate">' + escapeHtml((r.content || '').substring(0, 60)) + '</div>';
+                    item.onclick = function() { sendQuickMessage('Tell me about this knowledge base document: ' + (r.documentTitle || r.title)); };
+                    resultsEl.appendChild(item);
+                });
+            } catch (e) {
+                resultsEl.innerHTML = '<div class="py-1 text-center text-red-400">Search failed</div>';
+            }
+        }
+
+        function showUploadDoc() {
+            sendQuickMessage('I want to upload a new document to the knowledge base. What information do you need from me to add a regulatory document (like an ISO standard, PDPL requirement, or internal SOP)?');
+        }
+
+        async function loadKnowledgeCount() {
+            try {
+                var resp = await fetch('/api/knowledge/documents', { credentials: 'same-origin' });
+                var data = await resp.json();
+                var docs = data.documents || [];
+                document.getElementById('knowledgeCount').textContent = docs.length;
+            } catch (e) {}
+        }
+
+        async function loadChecklists() {
+            var listEl = document.getElementById('checklistList');
+            try {
+                var resp = await fetch('/api/checklists', { credentials: 'same-origin' });
+                var data = await resp.json();
+                var checklists = data.checklists || [];
+                document.getElementById('checklistCount').textContent = checklists.length;
+                if (!checklists.length) {
+                    listEl.innerHTML = '<div class="text-xs text-gray-400 py-1 text-center">No checklists yet</div>';
+                    return;
+                }
+                listEl.innerHTML = '';
+                checklists.forEach(function(cl) {
+                    var item = document.createElement('div');
+                    item.className = 'flex items-center gap-2 p-1.5 rounded bg-gray-50 cursor-pointer hover:bg-lime-50 text-xs';
+                    var isActive = cl.is_active === true || cl.is_active === 1 || cl.status === 'active';
+                    var statusIcon = isActive ? '<span class="text-green-500">&#x25CF;</span>' : '<span class="text-gray-400">&#x25CB;</span>';
+                    item.innerHTML = statusIcon + '<span class="truncate text-gray-700 flex-1">' + escapeHtml(cl.name || cl.title || 'Checklist') + '</span><span class="text-[10px] text-gray-400">' + (cl.items_count || cl.item_count || '') + '</span>';
+                    item.onclick = function() { sendQuickMessage('Run checklist "' + (cl.name || cl.title) + '" and report results.'); };
+                    listEl.appendChild(item);
+                });
+            } catch (e) {
+                listEl.innerHTML = '<div class="text-xs text-gray-400 py-1 text-center">Could not load</div>';
+            }
+        }
+
+        async function loadChecklistCount() {
+            try {
+                var resp = await fetch('/api/checklists', { credentials: 'same-origin' });
+                var data = await resp.json();
+                document.getElementById('checklistCount').textContent = (data.checklists || []).length;
+            } catch (e) {}
+        }
+
         window.sendQuickMessage = sendQuickMessage;
         window.runFullScan = runFullScan;
         window.clearChat = clearChat;
         window.toggleSidebar = toggleSidebar;
+        window.toggleKnowledgePanel = toggleKnowledgePanel;
+        window.toggleChecklistPanel = toggleChecklistPanel;
+        window.searchKnowledge = searchKnowledge;
+        window.showUploadDoc = showUploadDoc;
 
         loadAlerts();
         pollAlertCount();
         setInterval(pollAlertCount, 60000);
+        loadKnowledgeCount();
+        loadChecklistCount();
 
         chatInput.focus();
+
+        document.getElementById('knowledgeSearch').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); searchKnowledge(); }
+        });
     })();
     </script>
 </body>

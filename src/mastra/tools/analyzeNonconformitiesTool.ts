@@ -47,7 +47,7 @@ export const analyzeNonconformitiesTool = createTool({
       if (context.analysisType === 'patterns') {
         const result = await pool.query(
           `SELECT nc_type, category, COUNT(*)::int AS count
-           FROM nonconformances
+           FROM nonconformance_records
            WHERE created_at >= NOW() - ($1 || ' days')::interval
            GROUP BY nc_type, category
            ORDER BY count DESC`,
@@ -69,11 +69,11 @@ export const analyzeNonconformitiesTool = createTool({
 
       } else if (context.analysisType === 'overdue_capas') {
         const result = await pool.query(
-          `SELECT c.id, c.capa_number, c.title, c.severity, c.due_date, c.status, c.assigned_to
-           FROM capas c
-           WHERE c.due_date < NOW()
+          `SELECT c.id, c.capa_number, c.title, c.severity, c.target_date AS due_date, c.status, c.assigned_to
+           FROM capa_records c
+           WHERE c.target_date < NOW()
              AND c.status != $1
-           ORDER BY c.due_date ASC`,
+           ORDER BY c.target_date ASC`,
           ['completed']
         );
 
@@ -96,7 +96,7 @@ export const analyzeNonconformitiesTool = createTool({
       } else if (context.analysisType === 'severity_trends') {
         const result = await pool.query(
           `SELECT severity, COUNT(*)::int AS count
-           FROM nonconformances
+           FROM nonconformance_records
            WHERE created_at >= NOW() - ($1 || ' days')::interval
            GROUP BY severity
            ORDER BY count DESC`,
@@ -121,7 +121,7 @@ export const analyzeNonconformitiesTool = createTool({
       } else if (context.analysisType === 'recurring') {
         const result = await pool.query(
           `SELECT title, nc_type, COUNT(*)::int AS count
-           FROM nonconformances
+           FROM nonconformance_records
            WHERE created_at >= NOW() - ($1 || ' days')::interval
            GROUP BY title, nc_type
            HAVING COUNT(*) >= 2

@@ -284,8 +284,22 @@ async function createQMSTables() {
     CREATE SEQUENCE IF NOT EXISTS finding_number_seq START 1;
   `;
 
+  const alterColumnsSQL = `
+    ALTER TABLE nonconformance_records ADD COLUMN IF NOT EXISTS closure_approved_by VARCHAR(255);
+    ALTER TABLE nonconformance_records ADD COLUMN IF NOT EXISTS closure_approved_at TIMESTAMP;
+    ALTER TABLE nonconformance_records ADD COLUMN IF NOT EXISTS investigation_notes TEXT;
+    ALTER TABLE nonconformance_records ADD COLUMN IF NOT EXISTS root_cause TEXT;
+    ALTER TABLE capa_records ADD COLUMN IF NOT EXISTS closure_approved_by VARCHAR(255);
+    ALTER TABLE capa_records ADD COLUMN IF NOT EXISTS closure_approved_at TIMESTAMP;
+    ALTER TABLE capa_records ADD COLUMN IF NOT EXISTS effectiveness_result VARCHAR(30);
+    ALTER TABLE capa_records ADD COLUMN IF NOT EXISTS effectiveness_evidence TEXT;
+    ALTER TABLE capa_records ADD COLUMN IF NOT EXISTS effectiveness_reviewed_by VARCHAR(255);
+    ALTER TABLE capa_records ADD COLUMN IF NOT EXISTS effectiveness_reviewed_at TIMESTAMP;
+  `;
+
   try {
     await pool.query(createTablesSQL);
+    await pool.query(alterColumnsSQL);
     console.log('✅ All QMS tables created successfully!');
     
     console.log('\n📋 Tables created:');

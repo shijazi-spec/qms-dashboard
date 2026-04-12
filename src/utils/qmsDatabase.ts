@@ -761,4 +761,43 @@ export async function getQmsDashboardData(): Promise<{
   };
 }
 
+export async function approveNCClosure(ncId: number, approvedBy: string): Promise<any> {
+  const result = await pool.query(
+    `UPDATE nonconformance_records 
+     SET status = 'closed', closed_by = $2, closed_date = NOW(),
+         closure_approved_by = $2, closure_approved_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND status != 'closed'
+     RETURNING *`,
+    [ncId, approvedBy]
+  );
+  return result.rows[0] || null;
+}
+
+export async function approveCAPAClosure(capaId: number, approvedBy: string): Promise<any> {
+  const result = await pool.query(
+    `UPDATE capa_records 
+     SET status = 'closed', completion_date = NOW(),
+         closure_approved_by = $2, closure_approved_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND status != 'closed' AND effectiveness_result IS NOT NULL
+     RETURNING *`,
+    [capaId, approvedBy]
+  );
+  return result.rows[0] || null;
+}
+
+export async function recordCAPAEffectiveness(
+  capaId: number, result: string, evidence: string, reviewedBy: string
+): Promise<any> {
+  const res = await pool.query(
+    `UPDATE capa_records 
+     SET effectiveness_result = $2, effectiveness_evidence = $3,
+         effectiveness_reviewed_by = $4, effectiveness_reviewed_at = NOW(),
+         status = 'verification', updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [capaId, result, evidence, reviewedBy]
+  );
+  return res.rows[0] || null;
+}
+
 export { pool as qmsPool };
