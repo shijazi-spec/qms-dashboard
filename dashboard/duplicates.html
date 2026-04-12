@@ -827,19 +827,53 @@
             try {
                 const res = await fetch('/api/duplicates/scan-zoho', { method: 'POST' });
                 const data = await res.json();
-                if (data.success) {
-                    alert(`Scanned ${data.totalRecordsScanned} records from Zoho CRM!\n\nFound ${data.totalClustersFound} clusters with ${data.duplicatesDetected} duplicates.\n\nBreakdown:\n${data.moduleBreakdown.map(m => `- ${m.module}: ${m.count}`).join('\n')}`);
-                    refreshData();
+                if (data.success || data.status === 'already_running') {
+                    btn.innerHTML = '<span class="animate-spin">⏳</span> Scan in progress...';
+                    pollScanStatus();
                 } else {
                     alert('Scan failed: ' + (data.error || 'Unknown error'));
+                    resetScanBtn();
                 }
             } catch (error) {
                 console.error('Error scanning Zoho CRM:', error);
-                alert('Failed to scan Zoho CRM: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
+                alert('Failed to start scan: ' + error.message);
+                resetScanBtn();
             }
+        }
+
+        function resetScanBtn() {
+            const btn = document.getElementById('scanZohoBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
+        }
+
+        function pollScanStatus() {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/duplicates/scan-status');
+                    const data = await res.json();
+                    const btn = document.getElementById('scanZohoBtn');
+
+                    if (data.status === 'running') {
+                        btn.innerHTML = '<span class="animate-spin">⏳</span> ' + (data.progress || 'Scanning...');
+                    } else if (data.status === 'complete') {
+                        clearInterval(interval);
+                        alert(`Scanned ${data.totalRecordsScanned} records from Zoho CRM!\n\nFound ${data.totalClustersFound} clusters with ${data.duplicatesDetected} duplicates.\n\nBreakdown:\n${data.moduleBreakdown.map(m => `- ${m.module}: ${m.count}`).join('\n')}`);
+                        resetScanBtn();
+                        refreshData();
+                    } else if (data.status === 'error') {
+                        clearInterval(interval);
+                        alert('Scan failed: ' + (data.error || 'Unknown error'));
+                        resetScanBtn();
+                    } else {
+                        clearInterval(interval);
+                        resetScanBtn();
+                        refreshData();
+                    }
+                } catch (e) {
+                    console.error('Error polling scan status:', e);
+                }
+            }, 3000);
         }
 
         function exportData() {
