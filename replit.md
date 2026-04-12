@@ -29,8 +29,8 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
   - `rateLimiter.ts` - Tiered rate limiting (100/10/5/10 + unauth 10/3)
   - `inputSanitizer.ts` - XSS/injection prevention, field whitelisting, password policy
   - `riskDatabase.ts` - Risk management + UUID obfuscation helpers
-  - `aiAlertsDatabase.ts` - AI alerts table CRUD, dedup, unread count
-  - `aiBackgroundScanner.ts` - 8-check background scanner (KPIs, risks, NCs, policies, PDPL, audits, training)
+  - `aiAlertsDatabase.ts` - AI alerts table CRUD, dedup, unread count; 11 alert types including `sla_breach`
+  - `aiBackgroundScanner.ts` - 11-check background scanner (KPIs, risks, NCs, policies, PDPL, audits, training, Sales SLA, SDR SLA)
   - `knowledgeDatabase.ts` - Knowledge base document storage, chunk-based full-text search
   - `checklistDatabase.ts` - Compliance checklist engine with automated verification
   - `evidenceDatabase.ts` - Evidence/document management across QMS modules

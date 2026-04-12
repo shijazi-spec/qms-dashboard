@@ -1,0 +1,37 @@
+Implementation Complete — 7 Files Modified
+What was done:
+1. Sales SOP — Stage-Conditional Field Validation (zohoCRM.ts)
+
+Probability, Bundle_Type, Discount% validated at Proposal stage
+On_Hold_Reason (with 7 valid enum values) validated at On Hold stage
+Onboarding_Method, Contract_No_of_Employees, Trial_Period, Trial_Period_Days, National_Address validated at Agreement Signed stage
+Item 10 (Closing_Date) skipped as requested
+2. Sales SOP — SLA Enforcement in Background Scanner (aiBackgroundScanner.ts)
+
+PR2 (First Contact SLA): Detects deals where first contact took >1 business day after creation
+PR3 (Proposal Cycle Time): Detects proposals sent >2 business days after meeting
+G4 (Agreement Review): Detects agreements pending >10 business days
+G1 (Same-Day CRM Update): Flags deals not updated in >2 business days while in active stages
+Stage max duration: Enforces Meeting ≤10d, Proposal ≤90d, etc.
+3. SDR SOP — Full Lead Pipeline Audit (zohoCRM.ts)
+
+20+ Lead rules covering all required fields, enum validations, business email check, KSA phone format
+Outbound-conditional rules: Outgoing_Call_Result, Not_Qualified_Reason only checked for outbound leads from Contacting stage
+All-source from Contacting: Tag, Description required
+SDR SLA scanner: Initial contact, qualification decision, stage aging
+4. Account Hygiene Rules (zohoCRM.ts)
+
+20 rules for Accounts module (name, type, industry, billing, employees, revenue, generic name detection, business email, etc.)
+5. 100K+ Scale Upgrade (directAuditRunner.ts)
+
+Pagination: From 100 records to 50,000 per module using fetchAllZohoRecords
+Batch processing in groups of 500 records
+Accounts module added as 5th module
+Memory-efficient counting instead of storing all issues in memory
+6. 11 SDR KPIs (kpiDatabase.ts + kpiRoutes.ts)
+
+Calls/Day, Contact Rate, Qualification Rate, Meetings Booked, Show Rate, Speed to Lead, Lead-to-Qualified Conversion, CRM Data Accuracy, Duplicate Rate, Pipeline Aging, Follow-Up Compliance
+Auto-seeded on server startup
+7. New Alert Type (aiAlertsDatabase.ts)
+
+Added sla_breach for all SLA violation alerts
