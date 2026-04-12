@@ -17,7 +17,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 ## Project Structure
 - `src/mastra/index.ts` - Main Mastra configuration (agents, tools, routes, server config, auth middleware)
 - `src/mastra/agents/` - AI agent definitions
-- `src/mastra/tools/` - AI tool definitions (callAnalysis, capaManagement, crmCompliance, etc.)
+- `src/mastra/tools/` - AI tool definitions (callAnalysis, capaManagement, crmCompliance, consultant tools: queryPlatformData, analyzeNonconformities, suggestImprovements, checkRegulationCompliance, monitorKPIs, monitorRisks, createAlert, reviewDocument)
 - `src/mastra/workflows/` - Mastra workflow definitions
 - `src/mastra/routes/authRoutes.ts` - Replit Auth (OIDC) routes and session management
 - `src/mastra/data/` - Data layer and mock data
@@ -29,10 +29,13 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
   - `rateLimiter.ts` - Tiered rate limiting (100/10/5/10 + unauth 10/3)
   - `inputSanitizer.ts` - XSS/injection prevention, field whitelisting, password policy
   - `riskDatabase.ts` - Risk management + UUID obfuscation helpers
+  - `aiAlertsDatabase.ts` - AI alerts table CRUD, dedup, unread count
+  - `aiBackgroundScanner.ts` - 8-check background scanner (KPIs, risks, NCs, policies, PDPL, audits, training)
+- `src/mastra/routes/consultantRoutes.ts` - AI Consultant API endpoints (chat, stream, alerts, scan)
 - `src/triggers/` - Cron, Slack, Telegram triggers
 - `dashboard/` - Static HTML dashboards (index.html, audits.html, login.html, etc.)
 - `dashboard/css/` - Shared navigation CSS
-- `dashboard/js/` - Shared navigation JS (includes user avatar/logout in nav bar)
+- `dashboard/js/` - Shared navigation JS (includes user avatar/logout in nav bar, AI alert bell with badge polling)
 - `scripts/` - Build and inngest scripts
 - `docs/mastra/` - Mastra documentation
 - `tests/` - Test files
@@ -101,6 +104,11 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` - Zoho CRM OAuth (read-only production access)
 - `ZOHO_ACCOUNTS_URL` - Zoho OAuth endpoint (default: https://accounts.zoho.com)
 - `ZOHO_API_DOMAIN` - Zoho API domain (default: https://www.zohoapis.com)
+- `AI_INTEGRATIONS_OPENAI_API_KEY` - Replit-managed OpenAI key (preferred for AI Consultant)
+- `AI_INTEGRATIONS_OPENAI_BASE_URL` - Replit AI proxy base URL
+- `OPENAI_API_KEY` - Direct OpenAI API key (fallback)
+- `SLACK_API_TOKEN` - Slack Bot token for notifications
+- `SLACK_QMS_CHANNEL` - Slack channel ID for QMS alerts
 
 ## Database Setup
 - Tables are auto-initialized by utility modules on first use (auditDatabase.ts, complianceDatabase.ts, kpiDatabase.ts, riskDatabase.ts, policyDatabase.ts, vendorDatabase.ts)
@@ -109,7 +117,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## AI Consultant Feature
-- **Agent**: `qmsConsultantAgent.ts` - GPT-4o-mini powered QMS consultant with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents)
+- **Agent**: `qmsConsultantAgent.ts` - GPT-4o powered QMS consultant with 8 tools (query data, analyze NCs, suggest improvements, check regulations, monitor KPIs, monitor risks, create alerts, review documents)
 - **Tools**: `queryPlatformDataTool.ts`, `analyzeNonconformitiesTool.ts`, `suggestImprovementsTool.ts`, `checkRegulationComplianceTool.ts`, `monitorKPIsTool.ts`, `monitorRisksTool.ts`, `createAlertTool.ts`, `reviewDocumentTool.ts`
 - **Background Scanner**: `aiBackgroundScanner.ts` - 8 automated checks (NCs without CAPA, high risks, overdue treatments, missed KPIs, expiring policies, PDPL gaps, audit score decline, training gaps) running every 6 hours via Inngest
 - **Alerts Database**: `aiAlertsDatabase.ts` - ai_alerts table with CRUD, dedup, severity-ordered queries
@@ -118,6 +126,8 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - **Navigation**: Alert bell in nav bar polls `/api/consultant/alerts/count` every 60s, links to `/consultant`
 
 ## Recent Changes
+- AI Consultant feature complete (Apr 2026): GPT-4o powered QMS AI Consultant with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Model uses `openai.responses("gpt-4o")` via `@ai-sdk/openai-v5` with Replit AI proxy fallback. Agent NOT registered in Mastra agents config (used directly by consultantRoutes).
+- Audit History Date/Time (Apr 2026): Audit History table now shows full date/time instead of date-only.
 - Slack webhook dual-path (Apr 2026): Webhook now accessible at both /webhooks/slack/action AND /api/webhooks/slack/action. Both paths are public (no auth required) and rate-limited. Challenge verification works on both paths for Slack Event Subscriptions URL verification.
 - Security hardening post-review (Apr 2026): Mastra internal endpoints (/api/workflows/*, /api/memory/*, /api/agents/*) now require auth (was bypassed). Webhook endpoints (/webhooks/*) now rate-limited. Both fixes in index.ts middleware.
 - Slack trigger registered (Apr 2026): registerSlackTrigger in apiRoutes of index.ts. Handler forwards messages to qualitySpecialistAgent and replies in thread. Challenge response moved before getClient() call for URL verification. Requires Slack connector in Replit integrations.
