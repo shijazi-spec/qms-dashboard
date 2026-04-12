@@ -908,8 +908,11 @@ export const mastra = new Mastra({
             try {
               const adminKey = process.env.ADMIN_API_KEY;
               const providedKey = c.req.header('X-Admin-Key');
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              if (!adminKey || !providedKey || providedKey !== adminKey || !session || session.role !== 'admin') {
+              const hasValidAdmin = adminKey && (providedKey === adminKey || adminKeyCookie === adminKey);
+              const hasAdminSession = session && session.role === 'admin';
+              if (!hasValidAdmin && !hasAdminSession) {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>
