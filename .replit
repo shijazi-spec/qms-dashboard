@@ -44,6 +44,8 @@ waitForPort = 5000
 ZOHO_ACCOUNTS_URL = "https://accounts.zoho.sa"
 ZOHO_API_DOMAIN = "https://www.zohoapis.sa"
 ADMIN_API_KEY = "WalaPlus-QMS-Admin-2026"
+ZOHO_CLIENT_SECRET = "22074974b46795f0bb4936697647a6723b5657a826"
+ZOHO_REFRESH_TOKEN = "1000.ea9233d9fb44776b6fc3707bf9b4fad5.d330919e920194d4a92bb008489a7362"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0"]
