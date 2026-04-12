@@ -49,7 +49,7 @@ Important rules:
 - Never expose internal database queries or tool mechanics to the user.
 - Respond in the same language as the user's question (Arabic or English).`,
 
-  model: openai("gpt-4o-mini"),
+  model: openai.responses("gpt-4o"),
 
   tools: {
     queryPlatformData: queryPlatformDataTool,
