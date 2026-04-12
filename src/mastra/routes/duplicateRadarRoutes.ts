@@ -1,6 +1,14 @@
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
 
+let scanState: {
+  status: 'idle' | 'running' | 'complete' | 'error';
+  progress?: string;
+  startedAt?: number;
+  result?: any;
+  error?: string;
+} = { status: 'idle' };
+
 import {
   initDuplicateRadarTables,
   getAllClusters,
@@ -100,7 +108,7 @@ async function processModule(
   return { count: records.length };
 }
 
-async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 'manual'): Promise<{
+async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 'manual', onProgress?: (msg: string) => void): Promise<{
   success: boolean;
   totalRecordsScanned: number;
   totalClustersFound: number;
@@ -116,12 +124,15 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
   console.log(`🔍 [DuplicateRadar] Starting Zoho CRM duplicate scan (${detectionType})...`);
 
   try {
+    const report = (msg: string) => { onProgress?.(msg); console.log(`📊 [DuplicateRadar] ${msg}`); };
+    report('Clearing old data...');
     await clearAllDuplicateData();
 
     const moduleBreakdown: any[] = [];
     let totalRecords = 0;
     const clustersUpdated = new Set<number>();
 
+    report('Scanning Leads module...');
     const leadsResult = await processModule('Leads', 'lead', clustersUpdated, (record) => {
       const d = record.data;
       return {
@@ -141,6 +152,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += leadsResult.count;
     moduleBreakdown.push({ module: 'Leads', count: leadsResult.count });
 
+    report(`Leads done (${leadsResult.count} records). Scanning Deals module...`);
     const dealsResult = await processModule('Deals', 'deal', clustersUpdated, (record) => {
       const d = record.data;
       return {
@@ -162,6 +174,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += dealsResult.count;
     moduleBreakdown.push({ module: 'Deals', count: dealsResult.count });
 
+    report(`Deals done (${dealsResult.count} records). Scanning Contacts module...`);
     const contactsResult = await processModule('Contacts', 'contact', clustersUpdated, (record) => {
       const d = record.data;
       return {
@@ -181,6 +194,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += contactsResult.count;
     moduleBreakdown.push({ module: 'Contacts', count: contactsResult.count });
 
+    report(`Contacts done (${contactsResult.count} records). Scanning Accounts module...`);
     const accountsResult = await processModule('Accounts', 'account', clustersUpdated, (record) => {
       const d = record.data;
       const website = d.Website?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '';
@@ -201,13 +215,13 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     totalRecords += accountsResult.count;
     moduleBreakdown.push({ module: 'Accounts', count: accountsResult.count });
 
-    console.log(`📊 [DuplicateRadar] Updating stats for ${clustersUpdated.size} clusters...`);
+    report(`Accounts done (${accountsResult.count} records). Updating ${clustersUpdated.size} cluster stats...`);
     let processed = 0;
     for (const clusterId of clustersUpdated) {
       await updateClusterStats(clusterId);
       processed++;
-      if (processed % 500 === 0) {
-        console.log(`  📊 Updated ${processed}/${clustersUpdated.size} clusters...`);
+      if (processed % 200 === 0) {
+        report(`Updating cluster stats... ${processed}/${clustersUpdated.size}`);
       }
     }
 
@@ -485,6 +499,22 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    path: "/api/duplicates/scan-status",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        if (scanState.status === 'complete' || scanState.status === 'error') {
+          const resp = { ...scanState };
+          if (scanState.status === 'complete') {
+            scanState = { status: 'idle' };
+          }
+          return c.json(resp);
+        }
+        return c.json(scanState);
+      };
+    },
+  },
+  {
     path: "/api/duplicates/scan-zoho",
     method: "POST" as const,
     createHandler: async () => {
@@ -494,27 +524,36 @@ export const duplicateRadarRoutes = [
           const sessionUser = requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
-          console.log('🚀 [DuplicateRadar] Zoho CRM scan triggered via API');
-          const result = await scanZohoCRMForDuplicates();
-          
-          if (result.success) {
-            return c.json({
-              success: true,
-              message: `Scanned ${result.totalRecordsScanned} records from Zoho CRM`,
-              totalRecordsScanned: result.totalRecordsScanned,
-              totalClustersFound: result.totalClustersFound,
-              duplicatesDetected: result.duplicatesDetected,
-              moduleBreakdown: result.moduleBreakdown,
-              durationMs: result.durationMs
-            });
-          } else {
-            return c.json({
-              success: false,
-              error: result.error || 'Scan failed'
-            }, 500);
+          if (scanState.status === 'running') {
+            return c.json({ success: true, status: 'already_running', progress: scanState.progress });
           }
+
+          scanState = { status: 'running', progress: 'Initializing scan...', startedAt: Date.now() };
+
+          scanZohoCRMForDuplicates('manual', (progress: string) => {
+            scanState.progress = progress;
+          }).then(result => {
+            if (result.success) {
+              scanState = {
+                status: 'complete',
+                result,
+                totalRecordsScanned: result.totalRecordsScanned,
+                totalClustersFound: result.totalClustersFound,
+                duplicatesDetected: result.duplicatesDetected,
+                moduleBreakdown: result.moduleBreakdown,
+                durationMs: result.durationMs,
+              } as any;
+            } else {
+              scanState = { status: 'error', error: result.error || 'Scan failed' };
+            }
+          }).catch(err => {
+            console.error('[DuplicateRadar] Background scan error:', err);
+            scanState = { status: 'error', error: 'Scan crashed unexpectedly' };
+          });
+
+          return c.json({ success: true, status: 'started', message: 'Scan started in background' });
         } catch (error: any) {
-          console.error('Error scanning Zoho CRM:', error);
+          console.error('Error starting scan:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
