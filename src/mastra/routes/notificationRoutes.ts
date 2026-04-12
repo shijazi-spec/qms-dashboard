@@ -74,10 +74,9 @@ export const notificationRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const pg = await import("pg");
-          const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
-
           const [auditScoreRes, ncResolutionRes, capaEffRes, kpiRes, complianceRes] = await Promise.all([
             pool.query(`SELECT AVG(overall_score) as avg_score FROM quality_audit_results WHERE created_at >= NOW() - INTERVAL '90 days'`).catch(() => ({ rows: [{ avg_score: null }] })),
             pool.query(`SELECT COUNT(*) FILTER (WHERE status = 'closed') as closed, COUNT(*) as total FROM nonconformance_records WHERE created_at >= NOW() - INTERVAL '90 days'`).catch(() => ({ rows: [{ closed: 0, total: 0 }] })),
@@ -85,8 +84,6 @@ export const notificationRoutes = [
             pool.query(`SELECT COUNT(*) FILTER (WHERE kv.actual_value >= kd.target_value) as met, COUNT(*) as total FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id WHERE kv.period_end >= NOW() - INTERVAL '90 days'`).catch(() => ({ rows: [{ met: 0, total: 0 }] })),
             pool.query(`SELECT COUNT(*) FILTER (WHERE status = 'compliant') as compliant, COUNT(*) as total FROM obligations`).catch(() => ({ rows: [{ compliant: 0, total: 0 }] })),
           ]);
-
-          await pool.end();
 
           const auditScore = parseFloat(auditScoreRes.rows[0]?.avg_score) || 0;
           const ncTotal = parseInt(ncResolutionRes.rows[0]?.total) || 0;
@@ -132,6 +129,8 @@ export const notificationRoutes = [
         } catch (error) {
           console.error("[HealthIndex] Error:", error);
           return c.json({ error: "Failed to calculate health index" }, 500);
+        } finally {
+          await pool.end();
         }
       };
     },

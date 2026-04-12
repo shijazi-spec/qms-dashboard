@@ -137,6 +137,10 @@ export const kpiRoutes = [
         try {
           const body = await c.req.json();
           const kpi = await createKPIDefinition(body);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'KPI', entityId: String(kpi.id), entityName: kpi.name, description: `KPI created: ${kpi.name}`, module: 'kpi', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, kpi });
         } catch (error) {
           console.error("Error creating KPI:", error);
@@ -157,6 +161,10 @@ export const kpiRoutes = [
           if (!kpi) {
             return c.json({ error: "KPI not found or no changes" }, 404);
           }
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'UPDATE', entityType: 'KPI', entityId: String(id), entityName: kpi.name, description: `KPI updated: ${kpi.name}`, module: 'kpi', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, kpi });
         } catch (error) {
           console.error("Error updating KPI:", error);
@@ -174,6 +182,10 @@ export const kpiRoutes = [
           const kpiId = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const value = await recordKPIValue({ ...body, kpi_id: kpiId });
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'KPI_VALUE', entityId: String(value.id), entityName: `KPI ${kpiId} value`, description: `KPI value recorded for KPI ${kpiId}`, module: 'kpi', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, value });
         } catch (error) {
           console.error("Error recording KPI value:", error);
@@ -223,6 +235,10 @@ export const kpiRoutes = [
         try {
           const body = await c.req.json();
           const report = await createExecutiveReport(body);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'EXECUTIVE_REPORT', entityId: String(report.id), entityName: report.title || 'Executive Report', description: `Executive report created`, module: 'kpi', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, report });
         } catch (error) {
           console.error("Error creating executive report:", error);

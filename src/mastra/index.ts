@@ -2274,6 +2274,10 @@ export const mastra = new Mastra({
               });
               
               logger?.info("✅ [QMS] CAPA created", { capaNumber: capa.capa_number });
+              try {
+                const { logEvent } = await import("../utils/eventLogsDatabase");
+                await logEvent({ actionType: 'CREATE', entityType: 'CAPA', entityId: String(capa.id), entityName: capa.capa_number, description: `CAPA created: ${capa.title}`, module: 'qms', severity: 'INFO' });
+              } catch {}
               return c.json(capa);
             } catch (error) {
               console.error("Error creating CAPA:", error);
@@ -2359,6 +2363,10 @@ export const mastra = new Mastra({
               });
               
               logger?.info("✅ [QMS] NC created", { ncNumber: nc.nc_number });
+              try {
+                const { logEvent } = await import("../utils/eventLogsDatabase");
+                await logEvent({ actionType: 'CREATE', entityType: 'NC', entityId: String(nc.id), entityName: nc.nc_number, description: `Nonconformance created: ${nc.title}`, module: 'qms', severity: 'INFO' });
+              } catch {}
               return c.json(nc);
             } catch (error) {
               console.error("Error creating NC:", error);

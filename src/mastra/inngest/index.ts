@@ -247,6 +247,69 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
   );
 }
 
+const kpiAutoCalcFunction = inngest.createFunction(
+  { id: "kpi-auto-calculation", name: "KPI Auto Calculation" },
+  { cron: process.env.KPI_AUTO_CALC_CRON || "0 2 * * *" },
+  async ({ step }) => {
+    return await step.run("run-kpi-auto-calc", async () => {
+      console.log("[KPI Auto] Daily KPI calculation triggered");
+      const results: any[] = [];
+      try {
+        const {
+          calculateKPI1_GovernanceDocLifecycle,
+          calculateKPI2_ComplianceObligationTracking,
+          calculateKPI3_AuditEvidencePackReadiness,
+          calculateKPI4_QualityGRCHandoff,
+          calculateKPI5_RiskRegisterHygiene,
+          calculateKPI6_ExecutiveReportingReadiness,
+        } = await import("../../utils/scorecardDatabase");
+        const { recordKPIValue, getKPIDefinitions } = await import("../../utils/kpiDatabase");
+
+        const calculators = [
+          { name: 'Governance Doc Lifecycle', fn: calculateKPI1_GovernanceDocLifecycle },
+          { name: 'Compliance Obligation Tracking', fn: calculateKPI2_ComplianceObligationTracking },
+          { name: 'Audit Evidence Pack Readiness', fn: calculateKPI3_AuditEvidencePackReadiness },
+          { name: 'Quality→GRC Handoff', fn: calculateKPI4_QualityGRCHandoff },
+          { name: 'Risk Register Hygiene', fn: calculateKPI5_RiskRegisterHygiene },
+          { name: 'Executive Reporting Readiness', fn: calculateKPI6_ExecutiveReportingReadiness },
+        ];
+
+        const kpiDefs = await getKPIDefinitions({});
+        const now = new Date();
+        const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        for (const calc of calculators) {
+          try {
+            const { value } = await calc.fn();
+            const matchingKpi = kpiDefs.definitions.find((k: any) =>
+              k.name.toLowerCase().includes(calc.name.split(' ')[0].toLowerCase())
+            );
+            if (matchingKpi) {
+              await recordKPIValue({
+                kpi_id: matchingKpi.id,
+                actual_value: value,
+                period_start: periodStart,
+                period_end: periodEnd,
+                calculated_by: 'system_auto',
+                notes: `Auto-calculated by scheduled job`,
+              });
+            }
+            results.push({ kpi: calc.name, value, status: 'recorded' });
+          } catch (err) {
+            results.push({ kpi: calc.name, error: String(err), status: 'failed' });
+          }
+        }
+      } catch (err) {
+        console.error("[KPI Auto] Fatal error:", err);
+      }
+      console.log("[KPI Auto] Completed:", results);
+      return { calculated: results.length, results };
+    });
+  },
+);
+inngestFunctions.push(kpiAutoCalcFunction);
+
 const backgroundScannerFunction = inngest.createFunction(
   { id: "ai-background-scanner", name: "AI Background Scanner" },
   { cron: "0 */6 * * *" },

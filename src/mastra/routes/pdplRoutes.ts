@@ -72,6 +72,10 @@ export const pdplRoutes = [
 
           const userEmail = body.userEmail || 'system@walaplus.com';
           const item = await addDataInventoryItem(body, userEmail);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'DATA_INVENTORY', entityId: String(item.id), entityName: body.field_name, description: `Data inventory item added: ${body.field_name}`, module: 'pdpl', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, item });
         } catch (error: any) {
           console.error("Error adding data inventory item:", error);
@@ -103,6 +107,10 @@ export const pdplRoutes = [
           if (!item) {
             return c.json({ success: false, error: "Item not found" }, 404);
           }
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'UPDATE', entityType: 'DATA_INVENTORY', entityId: String(id), entityName: body.field_name || `Item ${id}`, description: `Data inventory item updated: ${id}`, module: 'pdpl', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, item });
         } catch (error: any) {
           console.error("Error updating data inventory item:", error);
@@ -156,6 +164,10 @@ export const pdplRoutes = [
 
           const userEmail = body.userEmail || 'system@walaplus.com';
           const request = await createDSARRequest(body, userEmail);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'DSAR', entityId: String(request.id), entityName: body.request_type, description: `DSAR request created: ${body.request_type}`, module: 'pdpl', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, request });
         } catch (error: any) {
           console.error("Error creating DSAR request:", error);
@@ -187,6 +199,10 @@ export const pdplRoutes = [
           if (!request) {
             return c.json({ success: false, error: "Request not found" }, 404);
           }
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'UPDATE', entityType: 'DSAR', entityId: String(id), entityName: `DSAR ${id}`, description: `DSAR request updated: ${id}`, module: 'pdpl', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, request });
         } catch (error: any) {
           console.error("Error updating DSAR request:", error);
@@ -295,6 +311,10 @@ export const pdplRoutes = [
 
           const userEmail = body.userEmail || 'system@walaplus.com';
           const incident = await createDataIncident(body, userEmail);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'DATA_INCIDENT', entityId: String(incident.id), entityName: body.title, description: `Data incident created: ${body.title}`, module: 'pdpl', severity: 'WARNING' });
+          } catch {}
           return c.json({ success: true, incident });
         } catch (error: any) {
           console.error("Error creating data incident:", error);
@@ -326,6 +346,10 @@ export const pdplRoutes = [
           if (!incident) {
             return c.json({ success: false, error: "Incident not found" }, 404);
           }
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'UPDATE', entityType: 'DATA_INCIDENT', entityId: String(id), entityName: `Incident ${id}`, description: `Data incident updated: ${id}`, module: 'pdpl', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, incident });
         } catch (error: any) {
           console.error("Error updating data incident:", error);
@@ -376,6 +400,10 @@ export const pdplRoutes = [
 
           const userEmail = body.userEmail || 'system@walaplus.com';
           const guardrail = await addAIGuardrail(body, userEmail);
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({ actionType: 'CREATE', entityType: 'AI_GUARDRAIL', entityId: String(guardrail.id), entityName: body.field_name, description: `AI guardrail added: ${body.field_name}`, module: 'pdpl', severity: 'INFO' });
+          } catch {}
           return c.json({ success: true, guardrail });
         } catch (error: any) {
           console.error("Error adding AI guardrail:", error);

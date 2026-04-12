@@ -332,6 +332,10 @@ export const authRoutes = [
         const secure = isSecureDomain();
         const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
         c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`);
+        try {
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await logEvent({ actionType: 'LOGOUT', entityType: 'SESSION', entityId: 'session', entityName: 'user-session', description: 'User logged out', module: 'auth', severity: 'INFO' });
+        } catch {}
         return c.json({ success: true });
       };
     },
