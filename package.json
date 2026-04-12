@@ -35,6 +35,7 @@
     "connect-pg-simple": "^10.0.0",
     "dotenv": "^17.3.1",
     "exa-js": "^2.4.0",
+    "exceljs": "^4.4.0",
     "express-session": "^1.19.0",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",
@@ -48,7 +49,6 @@
     "pino": "^10.3.1",
     "prettier": "^3.8.1",
     "resend": "^6.9.2",
-    "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {
