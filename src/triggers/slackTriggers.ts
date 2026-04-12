@@ -107,40 +107,51 @@ export async function getClient() {
     }
 
     const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-    const { stdout } = await promisify(execFile)(
-      "replit",
-      ["identity", "create", "--audience", `https://${hostname}`],
-      { encoding: "utf8" },
-    );
+    if (hostname) {
+      try {
+        const { stdout } = await promisify(execFile)(
+          "replit",
+          ["identity", "create", "--audience", `https://${hostname}`],
+          { encoding: "utf8" },
+        );
 
-    const replitToken = stdout.trim();
-    if (!replitToken) {
-      throw new Error("Replit Identity Token not found for repl/depl");
+        const replitToken = stdout.trim();
+        if (replitToken) {
+          const res = await fetch(
+            "https://" +
+              hostname +
+              "/api/v2/connection?include_secrets=true&connector_names=slack-agent",
+            {
+              headers: {
+                Accept: "application/json",
+                "Replit-Authentication": `Bearer ${replitToken}`,
+              },
+            },
+          );
+          const resJson = await res.json();
+          connectionSettings = resJson?.items?.[0];
+          if (connectionSettings?.settings?.access_token) {
+            return {
+              token: connectionSettings.settings.access_token,
+              user: connectionSettings.settings.oauth?.credentials?.raw?.authed_user
+                ?.id,
+            };
+          }
+        }
+      } catch (connectorError) {
+        console.log("[Slack] Replit connector not available, checking SLACK_API_TOKEN env var...");
+      }
     }
 
-    const res = await fetch(
-      "https://" +
-        hostname +
-        "/api/v2/connection?include_secrets=true&connector_names=slack-agent",
-      {
-        headers: {
-          Accept: "application/json",
-          "Replit-Authentication": `Bearer ${replitToken}`,
-        },
-      },
-    );
-    const resJson = await res.json();
-    connectionSettings = resJson?.items?.[0];
-    if (!connectionSettings || !connectionSettings.settings.access_token) {
-      throw new Error(
-        `Slack not connected: HTTP ${res.status} ${res.statusText}: ${JSON.stringify(resJson)}`,
-      );
+    const envToken = process.env.SLACK_API_TOKEN || process.env.SLACK_BOT_TOKEN;
+    if (envToken) {
+      console.log("[Slack] Using SLACK_API_TOKEN from environment");
+      return { token: envToken, user: undefined };
     }
-    return {
-      token: connectionSettings.settings.access_token,
-      user: connectionSettings.settings.oauth?.credentials?.raw?.authed_user
-        ?.id,
-    };
+
+    throw new Error(
+      "Slack not connected: No Replit Slack connector and no SLACK_API_TOKEN environment variable set",
+    );
   }
 
   const { token, user } = await getAccessToken();
