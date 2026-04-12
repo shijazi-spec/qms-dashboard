@@ -40,8 +40,9 @@ export function getSessionUser(c: any): SessionUser | null {
     };
   }
   const adminKeyHeader = c.req.header('X-Admin-Key');
+  const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
   const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKeyHeader === expectedKey) {
+  if (expectedKey && (adminKeyHeader === expectedKey || adminKeyCookie === expectedKey)) {
     return {
       userId: 0,
       email: 'admin-key@system',

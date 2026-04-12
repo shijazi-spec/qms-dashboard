@@ -235,6 +235,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           logger?.info("📊 [ROI API] Fetching full initiative details", { id });
 
           const { getFullInitiativeDetails, initROITables } = await import("../../utils/roiDatabase");
@@ -266,6 +267,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
           logger?.info("📊 [ROI API] Creating/updating manpower breakdown", { initiativeId: id });
 
@@ -315,6 +317,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
           logger?.info("📊 [ROI API] Adding platform cost(s)", { initiativeId: id });
 
@@ -355,6 +358,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           logger?.info("📊 [ROI API] Listing platform costs", { initiativeId: id });
 
           const { listPlatformCosts, initROITables } = await import("../../utils/roiDatabase");
@@ -383,6 +387,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const costId = parseInt(c.req.param("costId"));
+          if (isNaN(costId)) { return c.json({ error: "Invalid ID" }, 400); }
           logger?.info("🗑️ [ROI API] Deleting platform cost", { costId });
 
           const { deletePlatformCost, initROITables } = await import("../../utils/roiDatabase");
@@ -414,6 +419,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
           logger?.info("📊 [ROI API] Creating/updating error costs", { initiativeId: id });
 
@@ -463,6 +469,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
           logger?.info("📊 [ROI API] Creating/updating revenue impact", { initiativeId: id });
 
@@ -512,6 +519,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
           logger?.info("📊 [ROI API] Creating/updating implementation breakdown", { initiativeId: id });
 
@@ -561,6 +569,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
           logger?.info("📊 [ROI API] Creating/updating risk inputs", { initiativeId: id });
 
@@ -610,6 +619,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           logger?.info("📊 [ROI API] Fetching AI validation logs", { initiativeId: id });
 
           const { listAIValidationLogs, initROITables } = await import("../../utils/roiDatabase");
@@ -638,6 +648,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           logger?.info("🔍 [ROI API] Running AI validation on initiative", { initiativeId: id });
 
           const { 
@@ -777,7 +788,11 @@ export const roiRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
-          const id = parseInt(c.req.param("id"));
+          const idParam = c.req.param("id");
+          const id = parseInt(idParam);
+          if (isNaN(id)) {
+            return c.json({ error: "Invalid initiative ID" }, 400);
+          }
           logger?.info("🔍 [ROI API] Fetching initiative", { id });
 
           const { getROIInitiativeById, initROITables } = await import("../../utils/roiDatabase");
@@ -809,6 +824,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           const data = await c.req.json();
 
           const { validateROIFinancials } = await import('../../utils/inputSanitizer');
@@ -864,6 +880,7 @@ export const roiRoutes = [
 
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) { return c.json({ error: "Invalid ID" }, 400); }
           logger?.info("🗑️ [ROI API] Deleting initiative", { id });
 
           const { deleteROIInitiative, initROITables } = await import("../../utils/roiDatabase");

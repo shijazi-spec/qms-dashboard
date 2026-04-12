@@ -1048,9 +1048,10 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
+              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
               
-              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
+              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
               const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
               if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Authentication required" }, 401);
