@@ -8,6 +8,7 @@ import { sendEmail } from "../../utils/replitmail";
 import { sendResendEmail, QUALITY_REPORT_RECIPIENTS } from "../../utils/resendMail";
 import {
   fetchZohoRecords,
+  fetchAllZohoRecords,
   analyzeRecordHygiene,
   calculateQualityScores,
   DEFAULT_GOVERNANCE_RULES,
@@ -257,15 +258,15 @@ const auditCRMWithAgentStep = createStep({
       logger?.info("📊 [Step 2] OpenAI API key not configured - performing direct CRM audit without AI agent...");
       
       try {
-        const modules = ["Leads", "Deals", "Contacts", "Tasks"];
+        const modules = ["Leads", "Deals", "Contacts", "Tasks", "Accounts"];
         const allIssues: any[] = [];
         const moduleBreakdown: Array<{ module: string; recordsAudited: number; issuesFound: number }> = [];
         let totalRecordsAudited = 0;
 
         for (const moduleName of modules) {
-          logger?.info(`📊 [Step 2] Auditing ${moduleName}...`);
+          logger?.info(`📊 [Step 2] Auditing ${moduleName} (all records)...`);
           try {
-            const records = await fetchZohoRecords(moduleName, { perPage: 100 });
+            const records = await fetchAllZohoRecords(moduleName, { maxRecords: 50000 });
             totalRecordsAudited += records.length;
             
             const moduleGovDoc = await getGovernanceDocumentByModule(moduleName);

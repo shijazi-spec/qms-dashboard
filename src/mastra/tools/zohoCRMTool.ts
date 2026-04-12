@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
   fetchZohoRecords,
+  fetchAllZohoRecords,
   searchZohoRecords,
   analyzeRecordHygiene,
   calculateQualityScores,
@@ -126,7 +127,7 @@ export const auditCRMHygieneTool = createTool({
         let records: ZohoCRMRecord[] = [];
         
         try {
-          records = await fetchZohoRecords(moduleName, { perPage: pageSize });
+          records = await fetchAllZohoRecords(moduleName, { maxRecords: 50000 });
           logger?.info(`📊 [auditCRMHygieneTool] Fetched ${records.length} ${moduleName} records`);
         } catch (error) {
           logger?.warn(`⚠️ [auditCRMHygieneTool] Could not fetch ${moduleName}: ${error instanceof Error ? error.message : String(error)}`);
