@@ -725,10 +725,18 @@
             }
             const realIssues = parsed?.all_issues || [];
 
-            let issues;
-            if (realIssues.length > 0) {
-                const filtered = category === 'all' ? realIssues : realIssues.filter(i => i.module === category);
-                issues = filtered.map((issue, idx) => ({
+            const topIssues = allDashboardData?.latestAudit?.issues_by_category;
+            let issuesList = topIssues;
+            if (typeof topIssues === 'string') {
+                try { issuesList = JSON.parse(topIssues); } catch(e) { issuesList = []; }
+            }
+            if (!Array.isArray(issuesList)) issuesList = [];
+
+            let issues = [];
+
+            const filteredReal = category === 'all' ? realIssues : realIssues.filter(i => i.module === category);
+            if (filteredReal.length > 0) {
+                issues = filteredReal.map((issue, idx) => ({
                     id: issue.recordId || `issue_${idx + 1}`,
                     module: issue.module,
                     owner: issue.owner || '-',
@@ -737,26 +745,24 @@
                     fieldName: issue.fieldName || '',
                     recommendation: issue.suggestedFix || `Fill in the ${issue.fieldName || 'required field'} for this ${issue.module} record.`
                 }));
-            } else {
-                const topIssues = allDashboardData?.latestAudit?.issues_by_category;
-                let issuesList = topIssues;
-                if (typeof topIssues === 'string') {
-                    try { issuesList = JSON.parse(topIssues); } catch(e) { issuesList = []; }
-                }
-                if (Array.isArray(issuesList) && issuesList.length > 0) {
-                    const filtered = category === 'all' ? issuesList : issuesList.filter(i => i.module === category);
-                    issues = filtered.map((issue, idx) => ({
-                        id: `summary_${idx + 1}`,
-                        module: issue.module,
-                        owner: '-',
-                        issue: formatIssueType(issue.issueType, null),
-                        severity: issue.severity,
-                        fieldName: '',
-                        recommendation: `${issue.count} records affected in ${issue.module}. Run a new audit to see per-record details.`
-                    }));
-                } else {
-                    issues = [];
-                }
+            }
+
+            const modulesWithRealData = new Set(realIssues.map(i => i.module));
+            const summaryModules = category === 'all'
+                ? issuesList.filter(i => !modulesWithRealData.has(i.module))
+                : issuesList.filter(i => i.module === category && !modulesWithRealData.has(i.module));
+
+            if (summaryModules.length > 0) {
+                const summaryIssues = summaryModules.map((issue, idx) => ({
+                    id: `summary_${issue.module}_${idx + 1}`,
+                    module: issue.module,
+                    owner: '-',
+                    issue: formatIssueType(issue.issueType, null),
+                    severity: issue.severity,
+                    fieldName: '',
+                    recommendation: `${(issue.count || 0).toLocaleString()} records affected in ${issue.module}. Run a new audit to see per-record details.`
+                }));
+                issues = issues.concat(summaryIssues);
             }
 
             currentIssues = issues;
