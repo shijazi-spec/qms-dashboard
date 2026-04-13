@@ -103,12 +103,12 @@
                     <div id="dealRate" class="text-xs text-red-500">-% duplicate rate</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
-                    <div class="text-sm text-gray-500">High Confidence</div>
+                    <div class="text-sm text-gray-500">Strong Similarity</div>
                     <div id="highConfidence" class="text-2xl font-bold text-green-600">-</div>
                     <div class="text-xs text-green-500">≥90% match</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
-                    <div class="text-sm text-gray-500">Medium Confidence</div>
+                    <div class="text-sm text-gray-500">Moderate Similarity</div>
                     <div id="mediumConfidence" class="text-2xl font-bold text-yellow-600">-</div>
                     <div class="text-xs text-yellow-500">60-89% match</div>
                 </div>
@@ -127,7 +127,7 @@
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold mb-4">Confidence Distribution</h3>
+                    <h3 class="text-lg font-semibold mb-4">Similarity Score Distribution</h3>
                     <div class="chart-container">
                         <canvas id="confidenceChart"></canvas>
                     </div>
@@ -231,7 +231,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cluster</th>
                             </tr>
                         </thead>
@@ -266,10 +266,10 @@
         <div id="content-clusters" class="tab-content hidden">
             <div class="mb-4 flex gap-4">
                 <select id="clusterFilter" onchange="filterClusters()" class="border rounded-lg px-3 py-2">
-                    <option value="">All Confidence Levels</option>
-                    <option value="high">High Confidence (≥90%)</option>
-                    <option value="medium">Medium Confidence (60-89%)</option>
-                    <option value="low">Low Confidence (<60%)</option>
+                    <option value="">All Similarity Scores</option>
+                    <option value="high">Strong (≥90%)</option>
+                    <option value="medium">Moderate (60-89%)</option>
+                    <option value="low">Weak (<60%)</option>
                 </select>
                 <select id="statusFilter" onchange="filterClusters()" class="border rounded-lg px-3 py-2">
                     <option value="">All Statuses</option>
@@ -292,7 +292,7 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
@@ -313,7 +313,7 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
                         </tr>
                     </thead>
                     <tbody id="dealsTable" class="bg-white divide-y divide-gray-200">
@@ -382,7 +382,7 @@
                         <li>Deal Value (if applicable)</li>
                         <li>Source</li>
                         <li>Created Date</li>
-                        <li>Duplicate Confidence Score</li>
+                        <li>Duplicate Similarity Score</li>
                         <li>AI Recommendation</li>
                     </ul>
                 </div>
@@ -564,7 +564,7 @@
             confidenceChart = new Chart(document.getElementById('confidenceChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['High (≥90%)', 'Medium (60-89%)', 'Low (<60%)'],
+                    labels: ['Strong (≥90%)', 'Moderate (60-89%)', 'Weak (<60%)'],
                     datasets: [{
                         data: [data.highConfidence || 0, data.mediumConfidence || 0, data.lowConfidence || 0],
                         backgroundColor: ['#22C55E', '#F59E0B', '#EF4444']
@@ -726,6 +726,8 @@
             `).join('') || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No logs found</td></tr>';
         }
 
+        function openCluster(id) { showClusterDetails(id); }
+
         async function showClusterDetails(id) {
             try {
                 const res = await fetch(`/api/duplicates/clusters/${id}`);
@@ -878,7 +880,7 @@
 
                     if (data.status === 'completed' && data.result) {
                         const r = data.result;
-                        alert(`Scan complete in ${Math.round((data.elapsedMs || 0) / 1000)}s!\n\nScanned ${r.totalRecordsScanned} records.\nFound ${r.totalClustersFound} clusters, ${r.duplicatesDetected} duplicates.\nHigh confidence: ${r.highConfidence}\nPipeline inflation: SAR ${(r.pipelineInflation || 0).toLocaleString()}`);
+                        alert(`Scan complete in ${Math.round((data.elapsedMs || 0) / 1000)}s!\n\nScanned ${r.totalRecordsScanned} records.\nFound ${r.totalClustersFound} clusters, ${r.duplicatesDetected} duplicates.\nStrong similarity: ${r.highConfidence}\nPipeline inflation: SAR ${(r.pipelineInflation || 0).toLocaleString()}`);
                         resetScanBtn();
                         refreshData();
                         return;
