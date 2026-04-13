@@ -161,8 +161,8 @@ const WalaPlusNav = {
           list.innerHTML = alerts.map(a => {
             const sc = severityColors[a.severity] || severityColors.low;
             const ago = WalaPlusNav.timeAgo(a.created_at);
-            return '<a href="/consultant" class="flex items-start gap-2 px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0" data-testid="alert-item-' + a.id + '">' +
-              '<span class="mt-0.5 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded ' + sc + '">' + (a.severity || 'info').toUpperCase() + '</span>' +
+            return '<a href="/consultant" class="flex items-start gap-2 px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0" data-testid="alert-item-' + WalaPlusNav.escapeHtml(a.id) + '">' +
+              '<span class="mt-0.5 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded ' + sc + '">' + WalaPlusNav.escapeHtml((a.severity || 'info').toUpperCase()) + '</span>' +
               '<div class="flex-1 min-w-0"><p class="text-xs font-medium text-gray-800 truncate">' + WalaPlusNav.escapeHtml(a.title || '') + '</p>' +
               '<p class="text-[10px] text-gray-400">' + ago + '</p></div></a>';
           }).join('');
