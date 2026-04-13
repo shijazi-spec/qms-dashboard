@@ -160,22 +160,44 @@ const WalaPlusNav = {
             list.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">No new notifications</p>';
             return;
           }
-          list.innerHTML = items.map(n => {
+          list.innerHTML = '';
+          items.forEach(n => {
             const time = new Date(n.created_at);
             const ago = this.timeAgo(time);
             const icons = {NC:'text-red-500',CAPA:'text-amber-500',RISK:'text-orange-500',COMPLIANCE:'text-blue-500',KPI:'text-green-500'};
             const safeModule = n.module && Object.prototype.hasOwnProperty.call(icons, n.module) ? n.module : null;
             const iconColor = safeModule ? icons[safeModule] : 'text-gray-500';
             const safeId = parseInt(n.id, 10);
-            return `<div class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer" onclick="WalaPlusNav.markRead(${safeId})">
-              <div class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</p>
-                <p class="text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</p>
-                <p class="text-xs ${iconColor} mt-0.5">${this.escapeHtml(n.module||'System')} · ${ago}</p>
-              </div>
-            </div>`;
-          }).join('');
+
+            const row = document.createElement('div');
+            row.className = 'flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer';
+            row.addEventListener('click', () => WalaPlusNav.markRead(safeId));
+
+            const dot = document.createElement('div');
+            dot.className = 'w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0';
+
+            const body = document.createElement('div');
+            body.className = 'flex-1 min-w-0';
+
+            const subject = document.createElement('p');
+            subject.className = 'text-sm font-medium text-gray-900 truncate';
+            subject.textContent = n.subject || 'Notification';
+
+            const message = document.createElement('p');
+            message.className = 'text-xs text-gray-500 truncate';
+            message.textContent = n.message || '';
+
+            const meta = document.createElement('p');
+            meta.className = `text-xs ${iconColor} mt-0.5`;
+            meta.textContent = `${n.module || 'System'} · ${ago}`;
+
+            body.appendChild(subject);
+            body.appendChild(message);
+            body.appendChild(meta);
+            row.appendChild(dot);
+            row.appendChild(body);
+            list.appendChild(row);
+          });
         })
         .catch(() => {});
     };
