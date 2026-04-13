@@ -336,6 +336,43 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const data = await getDashboardData();
+
+              if (data.latestAudit && data.latestAudit.issues_by_category) {
+                try {
+                  const cats = typeof data.latestAudit.issues_by_category === 'string'
+                    ? JSON.parse(data.latestAudit.issues_by_category)
+                    : data.latestAudit.issues_by_category;
+                  const catArr = Array.isArray(cats) ? cats : Object.values(cats);
+                  const totalRecords = data.latestAudit.total_records_audited || 1;
+
+                  const sumByType = (type: string) => catArr
+                    .filter((c: any) => c.issueType === type)
+                    .reduce((s: number, c: any) => s + (c.count || 0), 0);
+                  const sumBySeverity = (sev: string) => catArr
+                    .filter((c: any) => c.severity === sev)
+                    .reduce((s: number, c: any) => s + (c.count || 0), 0);
+
+                  const missingField = sumByType('missing_required_field');
+                  const formatIssues = sumByType('invalid_format');
+                  const invalidValue = sumByType('invalid_value');
+                  const governance = sumByType('governance_violation');
+                  const critical = sumBySeverity('critical');
+
+                  const processRelated = formatIssues + invalidValue;
+                  const decay = (n: number) => 100 * Math.exp(-0.5 * n / totalRecords);
+
+                  const peopleScore = Math.round(Math.max(0, decay(missingField)) * 10) / 10;
+                  const processScore = Math.round(Math.max(0, decay(processRelated)) * 10) / 10;
+                  const governanceScore = Math.round(Math.max(0, decay(governance) - (critical / totalRecords * 10)) * 10) / 10;
+                  const overallScore = Math.round((peopleScore * 0.3 + processScore * 0.3 + governanceScore * 0.4) * 10) / 10;
+
+                  data.latestAudit.people_score = peopleScore;
+                  data.latestAudit.process_score = processScore;
+                  data.latestAudit.governance_score = governanceScore;
+                  data.latestAudit.overall_score = overallScore;
+                } catch (e) {}
+              }
+
               return c.json(data);
             } catch (error) {
               console.error("Error fetching dashboard data:", error);

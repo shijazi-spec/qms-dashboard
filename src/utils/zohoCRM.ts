@@ -682,11 +682,16 @@ export function calculateQualityScores(
   
   const missingFieldIssues = issues.filter(i => i.issueType === 'missing_required_field').length;
   const formatIssues = issues.filter(i => i.issueType === 'invalid_format').length;
+  const invalidValueIssues = issues.filter(i => i.issueType === 'invalid_value').length;
   const governanceIssues = issues.filter(i => i.issueType === 'governance_violation').length;
-  
-  const peopleScore = Math.max(0, 100 - (missingFieldIssues / totalRecords * 50));
-  const processScore = Math.max(0, 100 - (formatIssues / totalRecords * 50));
-  const governanceScore = Math.max(0, 100 - (governanceIssues / totalRecords * 50) - (criticalIssues / totalRecords * 25));
+
+  const processRelatedIssues = formatIssues + invalidValueIssues;
+
+  const decayScore = (issueCount: number) => 100 * Math.exp(-0.5 * issueCount / totalRecords);
+
+  const peopleScore = Math.max(0, decayScore(missingFieldIssues));
+  const processScore = Math.max(0, decayScore(processRelatedIssues));
+  const governanceScore = Math.max(0, decayScore(governanceIssues) - (criticalIssues / totalRecords * 10));
   
   const overallScore = (peopleScore * 0.3 + processScore * 0.3 + governanceScore * 0.4);
   

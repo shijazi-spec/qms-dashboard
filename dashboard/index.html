@@ -1900,12 +1900,32 @@
             }
         }
 
+        let auditRunning = false;
+        let auditStartTime = null;
+        let auditTimerInterval = null;
+
+        function updateAuditTimer() {
+            const btn = document.getElementById('manualAuditBtn');
+            if (!btn || !auditRunning || !auditStartTime) return;
+            const elapsed = Math.floor((Date.now() - auditStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="31.4 31.4"></circle></svg> Audit in progress... ' + timeStr;
+        }
+
         async function runManualAudit() {
             const btn = document.getElementById('manualAuditBtn');
-            if (!btn) return;
+            if (!btn || auditRunning) return;
+
+            auditRunning = true;
+            auditStartTime = Date.now();
             btn.disabled = true;
-            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="31.4 31.4"></circle></svg> Running AI Audit...';
-            
+            btn.classList.remove('from-purple-600', 'to-indigo-600');
+            btn.classList.add('from-amber-600', 'to-amber-700', 'cursor-not-allowed');
+            updateAuditTimer();
+            auditTimerInterval = setInterval(updateAuditTimer, 1000);
+
             try {
                 const response = await fetch('/api/audit/trigger', { 
                     method: 'POST',
@@ -1919,50 +1939,71 @@
                 const result = await response.json();
                 
                 if (response.ok && result.success) {
-                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Audit Started!';
-                    btn.classList.remove('from-purple-600', 'to-indigo-600');
-                    btn.classList.add('from-green-600', 'to-green-700');
-                    
-                    setTimeout(() => {
-                        resetAuditButton();
-                        refreshDashboard();
-                    }, 15000);
-                    
                     const checkInterval = setInterval(async () => {
-                        const data = await fetchDashboardData();
-                        if (data && data.latestAudit) {
-                            const currentTime = new Date(data.latestAudit.audit_date).getTime();
-                            const triggerTime = Date.now() - 120000;
-                            if (currentTime > triggerTime) {
-                                clearInterval(checkInterval);
-                                resetAuditButton();
-                                refreshDashboard();
+                        try {
+                            const data = await fetchDashboardData();
+                            if (data && data.latestAudit) {
+                                const auditTime = new Date(data.latestAudit.audit_date).getTime();
+                                if (auditTime > auditStartTime - 5000) {
+                                    clearInterval(checkInterval);
+                                    showAuditComplete();
+                                    refreshDashboard();
+                                }
                             }
-                        }
+                        } catch (e) {}
                     }, 5000);
-                    
+
                     setTimeout(() => {
                         clearInterval(checkInterval);
-                        resetAuditButton();
+                        showAuditComplete();
                         refreshDashboard();
-                    }, 90000);
+                    }, 180000);
                 } else {
                     console.error('[AuditBtn] Failed:', result.error);
-                    btn.innerHTML = '<span class="text-red-200">' + (result.error || 'Failed') + '</span>';
-                    setTimeout(() => resetAuditButton(), 5000);
+                    showAuditError(result.error || 'Audit failed');
                 }
             } catch (error) {
                 console.error('[AuditBtn] Error:', error);
-                btn.innerHTML = '<span class="text-red-200">Error: ' + error.message + '</span>';
-                setTimeout(() => resetAuditButton(), 5000);
+                showAuditError(error.message);
             }
         }
 
-        function resetAuditButton() {
+        function showAuditComplete() {
+            clearInterval(auditTimerInterval);
+            auditRunning = false;
+            auditStartTime = null;
             const btn = document.getElementById('manualAuditBtn');
+            if (!btn) return;
+            btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Audit Complete!';
+            btn.classList.remove('from-amber-600', 'to-amber-700', 'cursor-not-allowed');
+            btn.classList.add('from-green-600', 'to-green-700');
+            setTimeout(() => resetAuditButton(), 5000);
+        }
+
+        function showAuditError(msg) {
+            clearInterval(auditTimerInterval);
+            auditRunning = false;
+            auditStartTime = null;
+            const btn = document.getElementById('manualAuditBtn');
+            if (!btn) return;
+            const span = document.createElement('span');
+            span.className = 'text-red-200';
+            span.textContent = msg;
+            btn.innerHTML = '';
+            btn.appendChild(span);
+            btn.classList.remove('from-amber-600', 'to-amber-700', 'cursor-not-allowed');
+            setTimeout(() => resetAuditButton(), 5000);
+        }
+
+        function resetAuditButton() {
+            auditRunning = false;
+            auditStartTime = null;
+            clearInterval(auditTimerInterval);
+            const btn = document.getElementById('manualAuditBtn');
+            if (!btn) return;
             btn.disabled = false;
             btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Run AI Audit';
-            btn.classList.remove('from-green-600', 'to-green-700');
+            btn.classList.remove('from-green-600', 'to-green-700', 'from-amber-600', 'to-amber-700', 'cursor-not-allowed');
             btn.classList.add('from-purple-600', 'to-indigo-600');
         }
 
