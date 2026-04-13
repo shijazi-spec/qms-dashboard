@@ -510,7 +510,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | `/api/duplicates/logs` | GET | Scan detection logs |
 | `/api/duplicates/ai-recommendations/:id` | POST | Smart AI recommendations per cluster (multi-factor scoring) |
 | `/api/duplicates/mock-data` | DELETE | Clear mock/test data (RBAC) |
-| `/api/duplicates/recalculate-stats` | POST | Recalculate all cluster statistics |
+| `/api/duplicates/generate-mock-data` | POST | Generate mock/test data for sandbox testing (RBAC) |
 | `/api/duplicates/test-record` | POST | Add test record for sandbox testing |
 
 **Performance Optimizations (v4.1):**
@@ -938,7 +938,7 @@ Default (global) endpoints work for most other regions:
 ### 8.4 Weekly Duplicate Radar Scan
 - **Trigger:** Inngest cron — Sunday at 3:00 AM (`0 3 * * 0`, configurable via `DUPLICATE_SCAN_CRON`)
 - **Purpose:** Full automated scan of Zoho CRM for duplicate records across all 4 modules
-- **Process:** Same as manual scan (Section 4.15) — clears data, fetches up to 20K/module, clusters, scores
+- **Process:** Same as manual scan (Section 4.15) — in incremental mode, upserts records and marks stale entries; in full mode, clears data first. Fetches up to DUPLICATE_SCAN_LIMIT/module (default 5000), clusters, scores
 - **Notification:** If high-confidence duplicates are found, sends notification via the Notification Hub with:
   - Total records scanned
   - Duplicate clusters detected
@@ -1137,7 +1137,7 @@ A `.env.example` file is included in the project root with all variables documen
 | Handoff | `/api/handoff/` | Rules, events, control mappings |
 | Admin | `/api/admin/documents`, `/api/admin/scorecards` | Governance document and scorecard CRUD |
 | AI Consultant | `/api/consultant/chat`, `/api/consultant/alerts`, `/api/consultant/scan` | AI chat, alerts, background scanning |
-| Duplicates | `/api/duplicates/` | Clusters, scan, search, merge, accountability, export (22 endpoints — see Section 4.15) |
+| Duplicates | `/api/duplicates/` | Clusters, scan, search, merge, accountability, export (30 endpoints — see Section 4.15) |
 | KPIs | `/api/kpis/`, `/api/kpis/seed-sdr` | KPI definitions, entries, SDR seed |
 | Scorecard | `/api/scorecard/` | Employee scorecards, snapshots |
 | Notifications | `/api/notifications/` | Notification management, health index |
@@ -1153,7 +1153,7 @@ A `.env.example` file is included in the project root with all variables documen
 | `complianceRoutes.ts` | Compliance assessments |
 | `consultantRoutes.ts` | AI consultant chat and alerts |
 | `dashboardRoutes.ts` | Dashboard aggregation |
-| `duplicateRadarRoutes.ts` | Duplicate detection and merge (22 endpoints) |
+| `duplicateRadarRoutes.ts` | Duplicate detection and merge (30 endpoints) |
 | `eventLogsRoutes.ts` | System event logs |
 | `handoffRoutes.ts` | QMS↔GRC handoff |
 | `knowledgeRoutes.ts` | Knowledge base and checklists |
