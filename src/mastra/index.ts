@@ -952,7 +952,7 @@ export const mastra = new Mastra({
                     issues: agent.issues
                   };
                 })
-                .sort((a, b) => b.score - a.score);
+                .sort((a, b) => a.score - b.score);
               
               console.log(`✅ [API] Found ${agents.length} agents from CRM Lead Owners`);
               console.log(`📊 [API] Coverage - Leads: ${leadsCoverage.recordsAudited}/${leadsCoverage.totalRecordsInCRM}, Deals: ${dealsCoverage.recordsAudited}/${dealsCoverage.totalRecordsInCRM}`);
