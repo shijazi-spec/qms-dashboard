@@ -38,7 +38,7 @@ const WalaPlusNav = {
       items: [
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
-        { label: 'Risks', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
+        { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
         { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
