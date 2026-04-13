@@ -1,7 +1,7 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 4.1
+**Version:** 4.2
 **Last Updated:** April 13, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
@@ -15,7 +15,7 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 4.1 |
+| **Version** | 4.2 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
@@ -40,6 +40,7 @@
 | 3.7 | Apr 10, 2026 | Engineering | SOP accuracy corrections: fixed OIDC nonce cookie name (oauth_data, not oidc_nonce) and rejection behavior (redirect to `/login?error=nonce_mismatch`, not 403), clarified Linear webhook HMAC-SHA256 implementation details (createHmac + timingSafeEqual), clarified uniform requireAdminOrKey usage across RBAC/PDPL/CallIntel/DuplicateRadar with note on requireWriteRole in other modules, updated Recent Changes Log |
 | 3.8 | Apr 12, 2026 | Engineering | Added AI Consultant & Assistant module (Section 4.20/6.4/7/8): GPT-4o agent with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. Updated AI engine to GPT-4o. |
 | 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. Weekly duplicate scan cron (Sunday 3 AM). KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination expanded to 20,000 records/module. Notification hub integration. Database expanded to 103+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
+| 4.2 | Apr 13, 2026 | Engineering | **AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: A1 – XSS-safe renderMarkdown with escapeHtml + placeholder tokens for code/tables + URL protocol sanitization; A2 – sla_breach added to createAlertTool Zod enum; A3 – 9 `if(true)` scanner bugs fixed (use createAlertIfNew return); A4 – Auto-NC status query `'active'` → `IN ('open','acknowledged')`; A5 – KPI join column `kpi_definition_id` → `kpi_id`; A6 – monitorRisksTool column `rta.description` → `rta.action_description`; A7 – Dead `checkAgainst` param removed from reviewDocumentTool; A8 – Scan prompt revised to report-only (no force-create). Phase 2 Performance: B1 – Shared pg.Pool in sharedPool.ts (max:20); B2 – AbortController timeouts on all agent calls (120s chat, 300s scan, configurable via env vars); B3 – 13 scanner checks parallelized via Promise.all; B4 – safeQuery error logging + errors[] in ScanResult. Phase 3 Features: C1 – Alert action buttons (ack/resolve/dismiss) + View All modal with status/severity filters; C2 – Chat history panel with localStorage persistence; C3 – File upload endpoint (PDF/DOCX/TXT, 10MB limit); C4 – Clickable knowledge docs; C5 – Citation CSS + sanitized markdown links; C6 – Scan SSE progress bar endpoint (/api/consultant/scan-stream); C7 – Agent upgraded to 23 tools (added updateCapa, addCapaAction, createTraining, getTrainingList, assignTraining, getTrainingAssignments, completeTraining); C8 – Auth guards (session or X-Admin-Key) on all consultant endpoints; C9 – Contextual welcome dashboard with KPI summary. Phase 4 UI: D1 – Consolidated alert polling (60s interval); D2 – Touch swipe gestures + sticky input; D3 – Severity icons + inline actions + relative time; D4 – Retry button on stream failure; D5 – Export chat as Markdown; D6 – Arabic RTL detection. |
 | 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on zoho_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), Zoho record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
 
 ### Document Control Procedure
@@ -105,11 +106,11 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | API Route Files | 29 | Hono HTTP route handlers |
 | Utility Modules | 39 | Database, security, integration, and business logic |
 | AI Agents | 4 | Quality Specialist, AI Consultant, SDR Quality, Sales Quality |
-| AI Tools | 16 | Consultant agent tools + 8 audit/analysis tools |
+| AI Tools | 23 | Consultant agent tools + 8 audit/analysis tools |
 | Database Tables | 103+ | Auto-initialized, no manual migration required |
 | CRM Governance Rules | 76 | Sales SOP (28) + SDR SOP (28) + Account Rules (20) |
 | SDR KPIs | 11 | Seeded performance indicators |
-| Background Checks | 12 | AI scanner automated checks |
+| Background Checks | 14 | AI scanner automated checks (parallelized) |
 | Cron Jobs | 4 | Audit, KPI calc, AI scanner, duplicate scan |
 
 ---
@@ -583,39 +584,56 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | Accept Invite | `/accept-invite` | Invitation acceptance page for new users (public) |
 
 ### 4.21 AI Consultant & Assistant (`/consultant`)
-**Purpose:** AI-powered quality management consultant providing real-time guidance, automated platform monitoring, proactive alerting, and direct QMS operations (NC/CAPA creation, checklists, knowledge search).
+**Purpose:** AI-powered quality management consultant providing real-time guidance, automated platform monitoring, proactive alerting, and direct QMS operations (NC/CAPA management, training management, checklists, knowledge search).
 
 **Key Features:**
-- **Chat Interface:** Full conversational UI with GPT-4o powered responses, supporting both English and Arabic
-- **Quick Actions Sidebar:** Pre-built prompts for common queries (quality score summary, recent NCs, risk status, compliance gaps, KPI performance, improvement suggestions)
-- **16 AI Tools:** Query platform data across 11 modules, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts, review documents, create NCs, list NCs, create CAPAs, list CAPAs, get CAPA details, run compliance checklists, manage checklists, search knowledge base
-- **Streaming Responses:** Server-Sent Events (SSE) for real-time streaming chat, with standard response fallback
-- **Alert Bell:** Navigation bar badge showing unread alert count, updated every 60 seconds
-- **Background Scanner:** Automated 6-hour scans detecting 12 quality issue types (see Section 8.2)
-- **Markdown Rendering:** Chat responses support formatted text, tables, and lists
+- **Chat Interface:** Full conversational UI with GPT-4o powered responses, supporting both English and Arabic (automatic RTL detection)
+- **Quick Actions Sidebar:** Pre-built prompts for common queries (full platform scan, PDPL compliance check, NC analysis, risk register review, KPI status, improvement suggestions)
+- **23 AI Tools:** Query platform data across 11 modules, analyze nonconformities, suggest improvements, check regulation compliance, monitor KPIs, monitor risks, create alerts (supports sla_breach type), review documents, create/list NCs, create/update/list/detail CAPAs, add CAPA actions, run/manage compliance checklists, search knowledge base, create/list/assign/complete training
+- **Streaming Responses:** Server-Sent Events (SSE) for real-time streaming chat and scan progress, with standard response fallback
+- **XSS-Safe Markdown:** Rendered with escapeHtml + placeholder tokens for code/tables, URL protocol sanitization (blocks javascript:/data: URLs)
+- **Alert Management:** Sidebar alert list with severity icons, relative timestamps, and inline action buttons (Acknowledge/Resolve/Dismiss). "View All" modal with status/severity filters
+- **Chat History:** Conversations saved to localStorage, restorable from sidebar panel (up to 20 sessions)
+- **Knowledge Base Integration:** Document search from sidebar, file upload (PDF/DOCX/TXT, 10MB limit)
+- **Checklist Panel:** View available checklists, run them via AI, create new ones
+- **Scan Progress:** Full platform scan with SSE progress bar showing step-by-step status
+- **Export:** Export full conversation as Markdown file
+- **Welcome Dashboard:** KPI summary (open alerts, KPI health, last scan time) shown on first load
+- **Retry on Error:** Retry button appears on stream failures
+- **Background Scanner:** Automated 6-hour scans detecting 14 quality issue types (see Section 8.2), parallelized for performance
+- **Auth Guards:** All API endpoints require valid session cookie or X-Admin-Key header
+- **Timeouts:** AbortController-based timeouts — 120s for chat (configurable via `CONSULTANT_CHAT_TIMEOUT`), 300s for scan (configurable via `CONSULTANT_SCAN_TIMEOUT`)
+- **Shared Pool:** All database operations use a single shared pg.Pool (max 20 connections) via `sharedPool.ts`
+- **Mobile Support:** Touch swipe gestures for sidebar, sticky chat input
 
 **How to Use:**
 1. Navigate to `/consultant` or click "AI Consultant" in the Support navigation group
-2. Type a question in the chat input or click a quick action button in the sidebar
-3. The AI consultant queries live platform data to answer your question
-4. Ask the AI to create NCs, CAPAs, or run checklists directly from chat
-5. Review the alert bell icon in the navigation bar for proactive findings from the background scanner
-6. Click the alert bell to view all alerts with severity and details
+2. The welcome dashboard shows current alert count, KPI health, and last scan time
+3. Type a question in the chat input or click a quick action button in the sidebar
+4. The AI consultant queries live platform data to answer your question
+5. Ask the AI to create NCs, CAPAs, assign training, or run checklists directly from chat
+6. Click "Full Platform Scan" to run a comprehensive quality health check with progress tracking
+7. Review alerts in the sidebar — click Ack/Resolve/Dismiss for quick actions, or "View All" for the full modal
+8. Use the chat history panel to restore previous conversations
+9. Upload regulatory documents via the Knowledge Base section
+10. Export conversations via the "Export" button for record-keeping
 
 **API Endpoints:**
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/consultant/chat` | POST | Send a message and receive AI response |
-| `/api/consultant/chat/stream` | POST | Send a message with SSE streaming response |
-| `/api/consultant/alerts` | GET | List all AI alerts (severity-ordered) |
-| `/api/consultant/alerts/count` | GET | Get unread alert count |
-| `/api/consultant/alerts/:id/acknowledge` | POST | Acknowledge an alert |
-| `/api/consultant/alerts/:id/resolve` | POST | Mark alert as resolved |
-| `/api/consultant/alerts/:id/dismiss` | POST | Dismiss an alert |
-| `/api/consultant/scan` | POST | Trigger a manual background scan |
+| Endpoint | Method | Purpose | Auth |
+|----------|--------|---------|------|
+| `/api/consultant/chat` | POST | Send a message and receive AI response | Session / Admin Key |
+| `/api/consultant/chat/stream` | POST | Send a message with SSE streaming response | Session / Admin Key |
+| `/api/consultant/alerts` | GET | List all AI alerts (filterable by status, severity, type) | Session / Admin Key |
+| `/api/consultant/alerts/count` | GET | Get unread alert count | Session / Admin Key |
+| `/api/consultant/alerts/:id/acknowledge` | POST | Acknowledge an alert | Session / Admin Key |
+| `/api/consultant/alerts/:id/resolve` | POST | Mark alert as resolved | Session / Admin Key |
+| `/api/consultant/alerts/:id/dismiss` | POST | Dismiss an alert | Session / Admin Key |
+| `/api/consultant/scan` | POST | Trigger a manual background scan | Session / Admin Key |
+| `/api/consultant/scan-stream` | POST | SSE-streamed scan with progress updates | Session / Admin Key |
+| `/api/knowledge/upload-file` | POST | Upload regulatory document (PDF/DOCX/TXT) | Session / Admin Key |
 
-**Backend Tables:** `ai_alerts`
+**Backend Tables:** `ai_alerts`, `knowledge_documents`
 
 ### 4.22 Handoff & Control Mapping System
 **Purpose:** Automates data flow between QMS and GRC modules.
@@ -829,12 +847,14 @@ Default (global) endpoints work for most other regions:
 ### 6.2 AI Consultant Agent
 - GPT-4o powered QMS AI Consultant accessible at `/consultant`
 - Provides real-time quality management guidance through a chat interface
-- Equipped with **16 specialized tools** (see Section 7)
-- Supports both standard and streaming (SSE) chat responses
-- Responds in English or Arabic based on user's language
+- Equipped with **23 specialized tools** (see Section 7)
+- Supports both standard and streaming (SSE) chat responses with AbortController timeouts
+- Responds in English or Arabic based on user's language (automatic RTL detection)
 - Does not expose internal tool mechanics or database queries to users
-- Uses `@ai-sdk/openai` (v5 subpath export) with Replit AI proxy fallback (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
-- Can directly create NCs, CAPAs, run checklists, and search knowledge base documents
+- Uses `@ai-sdk/openai` v1.3.24 with `openai.chat("gpt-4o")` model format and `generateLegacy()`/`streamLegacy()` methods via Replit AI proxy (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
+- Can directly create/update NCs, CAPAs (with action items), manage training assignments, run checklists, and search knowledge base documents
+- All database operations use shared pg.Pool (max 20 connections) via `sharedPool.ts`
+- Auth guards on all endpoints (session cookie or X-Admin-Key header)
 
 ### 6.3 SDR Quality Agent
 - Evaluates SDR (Sales Development Representative) performance
@@ -852,9 +872,9 @@ Default (global) endpoints work for most other regions:
 
 ---
 
-## 7. AI Tools (16 Consultant Tools + 8 Audit Tools)
+## 7. AI Tools (23 Consultant Tools + 8 Audit Tools)
 
-### 7.1 AI Consultant Tools (16)
+### 7.1 AI Consultant Tools (23)
 
 | # | Tool | ID | Function |
 |---|------|-----|----------|
@@ -863,17 +883,24 @@ Default (global) endpoints work for most other regions:
 | 3 | **Suggest Improvements** | `suggest-improvements` | Quality score analysis with structured improvement recommendations |
 | 4 | **Check Regulation Compliance** | `check-regulation-compliance` | PDPL, ISO 9001, ISO 27001, NCA ECC compliance gap checks |
 | 5 | **Review Document** | `review-document` | Governance document review, gap analysis, and compliance checking |
-| 6 | **Monitor Risks** | `monitor-risks` | Risk register monitoring with threshold breach detection and overdue treatments |
+| 6 | **Monitor Risks** | `monitor-risks` | Risk register monitoring with threshold breach detection and overdue treatment actions |
 | 7 | **Monitor KPIs** | `monitor-kpis` | KPI missed targets, trends, and performance status monitoring |
-| 8 | **Create Alert** | `create-alert` | AI alert creation with automatic deduplication |
+| 8 | **Create Alert** | `create-alert` | AI alert creation with automatic deduplication (supports sla_breach type) |
 | 9 | **Create NC** | `create-nonconformance` | Create new nonconformance records directly from chat |
 | 10 | **Get NC List** | `get-nonconformance-list` | List existing nonconformances with filters |
 | 11 | **Create CAPA** | `create-capa` | Create new CAPA (Corrective/Preventive Action) records |
-| 12 | **Get CAPA List** | `get-capa-list` | List existing CAPAs with filters |
-| 13 | **Get CAPA Details** | `get-capa-details` | Retrieve detailed CAPA info including action items |
-| 14 | **Run Checklist** | `run-checklist` | Execute compliance checklists against live platform data |
-| 15 | **Manage Checklist** | `manage-checklist` | Create, update, or view compliance checklists |
-| 16 | **Search Knowledge Base** | `search-knowledge-base` | Search regulatory knowledge base, SOPs, and uploaded documents |
+| 12 | **Update CAPA** | `update-capa` | Update existing CAPA records with status, root cause, corrective/preventive actions |
+| 13 | **Get CAPA List** | `get-capa-list` | List existing CAPAs with filters |
+| 14 | **Get CAPA Details** | `get-capa-details` | Retrieve detailed CAPA info including action items |
+| 15 | **Add CAPA Action** | `add-capa-action` | Add action items to a CAPA record (immediate, corrective, preventive, verification) |
+| 16 | **Run Checklist** | `run-checklist` | Execute compliance checklists against live platform data |
+| 17 | **Manage Checklist** | `manage-checklist` | Create, update, or view compliance checklists |
+| 18 | **Search Knowledge Base** | `search-knowledge-base` | Search regulatory knowledge base, SOPs, and uploaded documents |
+| 19 | **Create Training** | `create-training` | Create new training courses/programs in the system |
+| 20 | **Get Training List** | `get-training-list` | List available training courses with filtering by type, status |
+| 21 | **Assign Training** | `assign-training` | Assign training to employees with due dates |
+| 22 | **Get Training Assignments** | `get-training-assignments` | Retrieve training assignments with filters (employee, status, training) |
+| 23 | **Complete Training** | `complete-training` | Mark training assignments as completed with optional assessment scores |
 
 ### 7.2 Audit & Analysis Tools (8)
 
@@ -907,12 +934,13 @@ Default (global) endpoints work for most other regions:
 ### 8.2 AI Background Scanner
 - **Trigger:** Inngest cron — every 6 hours (`0 */6 * * *`, configurable via `AI_SCANNER_CRON`)
 - **Purpose:** Proactively scans platform data for quality and compliance issues, creating AI alerts
-- **Checks performed (12 total):**
+- **Architecture:** All 14 checks run in parallel via `Promise.all` for performance; errors are captured in `ScanResult.errors[]` without stopping other checks; all database queries use `sharedPool.ts` (shared pg.Pool, max 20 connections); alert creation uses `createAlertIfNew` deduplication (no duplicate alerts for same finding)
+- **Checks performed (14 total, parallelized):**
   1. **Nonconformances without CAPA** — Open NCs older than 7 days with no linked CAPA record
   2. **High-severity risks** — Risks with likelihood × impact ≥ 15 without treatment plans
-  3. **Overdue risk treatment actions** — Treatment actions past their due date
+  3. **Overdue risk treatment actions** — Treatment actions past their due date (uses `action_description` column)
   4. **Low-progress treatments** — Treatments due within 14 days but less than 50% complete
-  5. **KPIs missing target** — KPI entries below their defined target values
+  5. **KPIs missing target** — KPI entries below their defined target values (uses `kpi_id` join column)
   6. **Expiring/expired policies** — Governance documents with review dates within 30 days or past
   7. **PDPL compliance gaps** — Checks 3 conditions: empty data inventory, no active AI guardrails, open data incidents
   8. **Audit score decline** — Detects declining trend across 3+ recent audits with >5% cumulative drop
@@ -920,9 +948,12 @@ Default (global) endpoints work for most other regions:
   10. **Sales SLA violations** — Scans up to 500 Deals for: late first contact (>2 biz days), late proposal (>3 biz days), pending agreement (>14 days), stale CRM (>3 biz days no update), stage aging exceeding SOP maximums
   11. **SDR SLA violations** — Scans up to 500 Leads for: late initial contact (inbound >2h, outbound >4h), stuck in Contacting/Contacted (>5 days), lead aging exceeding SOP stage maximums
   12. **High-confidence duplicates** — Flags active duplicate clusters with confidence ≥90% and total estimated pipeline inflation
+  13. **CAPA recurrence detection** — Identifies similar CAPAs that may indicate recurring systemic issues
+  14. **Auto-NC from critical SLA breaches** — Automatically creates nonconformance records from critical SLA breach alerts (status `IN ('open', 'acknowledged')`, last 24 hours)
 - **Output:** Creates deduplicated AI alerts in the `ai_alerts` table with severity levels (critical, high, medium, low)
-- **Alert Types:** `nc_detection`, `risk_alert`, `kpi_miss`, `policy_expiry`, `regulation_gap`, `audit_decline`, `training_gap`, `improvement`, `sla_breach`
+- **Alert Types:** `nc_detection`, `risk_alert`, `kpi_miss`, `policy_expiry`, `regulation_gap`, `audit_decline`, `training_gap`, `improvement`, `sla_breach`, `doc_review`
 - **Alert bell:** Navigation bar displays unread alert count badge, polls `/api/consultant/alerts/count` every 60 seconds
+- **Scan prompt:** Report-only mode — scan presents findings for user review; does NOT auto-create alerts, NCs, or CAPAs unless explicitly confirmed by user
 
 ### 8.3 KPI Auto-Calculation
 - **Trigger:** Inngest cron — daily at 2:00 AM (`0 2 * * *`, configurable via `KPI_AUTO_CALC_CRON`)
@@ -1065,6 +1096,8 @@ Default (global) endpoints work for most other regions:
 | `SCHEDULE_CRON_EXPRESSION` | `0 8 * * 1` | Quality audit (Monday 8 AM) |
 | `KPI_AUTO_CALC_CRON` | `0 2 * * *` | KPI auto-calculation (daily 2 AM) |
 | `AI_SCANNER_CRON` | `0 */6 * * *` | AI background scanner (every 6 hours) |
+| `CONSULTANT_CHAT_TIMEOUT` | `120000` | AI Consultant chat request timeout in ms (120s default) |
+| `CONSULTANT_SCAN_TIMEOUT` | `300000` | AI Consultant scan request timeout in ms (300s default) |
 | `DUPLICATE_SCAN_CRON` | `0 3 * * 0` | Weekly duplicate scan (Sunday 3 AM) |
 
 ### 10.4 Reference File
@@ -1098,7 +1131,7 @@ A `.env.example` file is included in the project root with all variables documen
 | Onboarding | 2 | user_onboarding_status, onboarding_tour_steps | User onboarding |
 | Event Logs | 1 | event_logs | System audit trail |
 | KPI & Reporting | 3 | kpi_definitions, kpi_entries, executive_reports | KPI tracking and executive reporting |
-| AI Consultant | 1 | ai_alerts | AI-generated alerts and background scan findings |
+| AI Consultant | 2 | ai_alerts, knowledge_documents | AI-generated alerts, background scan findings, knowledge base documents |
 | Migration | 4 | demo_links, tooltip_definitions, integration_config, team_feedback | Migration support, UI config, and feedback |
 | Knowledge Base | 2+ | knowledge documents, knowledge chunks | Document storage and search |
 
@@ -1136,7 +1169,7 @@ A `.env.example` file is included in the project root with all variables documen
 | RBAC | `/api/rbac/` | Permissions, roles, data scopes |
 | Handoff | `/api/handoff/` | Rules, events, control mappings |
 | Admin | `/api/admin/documents`, `/api/admin/scorecards` | Governance document and scorecard CRUD |
-| AI Consultant | `/api/consultant/chat`, `/api/consultant/alerts`, `/api/consultant/scan` | AI chat, alerts, background scanning |
+| AI Consultant | `/api/consultant/chat`, `/api/consultant/chat/stream`, `/api/consultant/alerts`, `/api/consultant/scan`, `/api/consultant/scan-stream`, `/api/knowledge/upload-file` | AI chat (standard + SSE stream), alerts (CRUD + actions), background scanning (standard + SSE stream), file upload |
 | Duplicates | `/api/duplicates/` | Clusters, scan, search, merge, accountability, export (30 endpoints — see Section 4.15) |
 | KPIs | `/api/kpis/`, `/api/kpis/seed-sdr` | KPI definitions, entries, SDR seed |
 | Scorecard | `/api/scorecard/` | Employee scorecards, snapshots |
@@ -1612,8 +1645,11 @@ The following sources feed into the continual improvement process:
 | Page not loading at all | Check internet connection, try hard refresh (Ctrl+Shift+R), check if app is published |
 | Email reports not sending | Verify RESEND_API_KEY and RESEND_FROM_EMAIL are configured |
 | AI audit uses sample data instead of live CRM | Verify Zoho OAuth secrets; check `/api/integrations/status` for connection status |
-| AI Consultant not responding | Verify `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY` is configured and has available quota |
+| AI Consultant not responding | Verify `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY` is configured and has available quota. Check `CONSULTANT_CHAT_TIMEOUT` (default 120s). Ensure `@ai-sdk/openai` is at v1.3.24 (not v3.x). |
+| AI Consultant returns 401 | All consultant API endpoints require valid session or X-Admin-Key header. Log in first or pass admin key. |
+| AI Consultant scan times out | Increase `CONSULTANT_SCAN_TIMEOUT` env var (default 300000ms). Scan-stream SSE endpoint provides real-time progress. |
 | Alert bell not showing count | Check `/api/consultant/alerts/count` — ensure the `ai_alerts` table was initialized |
+| Chat history not loading | Chat history is stored in browser localStorage. Clear browser data to reset. |
 | Duplicate scan shows "Gateway Timeout" | Scan runs in background now — check progress via the UI polling or `/api/duplicates/scan-status` |
 | Duplicate scan shows 0 results | Run "Scan from Zoho" first; data is replaced on each scan |
 | KPIs not auto-calculating | Verify `KPI_AUTO_CALC_CRON` is not overridden; check Inngest cron logs |
@@ -1776,6 +1812,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Apr 13, 2026 | **SOP v4.2 — AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: XSS-safe renderMarkdown (placeholder tokens + URL sanitization), sla_breach enum, `if(true)` scanner bugs, auto-NC status fix, KPI join column, monitorRisksTool column, dead param removal, scan prompt report-only. Phase 2 Performance: sharedPool.ts (shared pg.Pool max:20), AbortController timeouts (120s/300s configurable), parallelized 14 scanner checks, safeQuery error logging. Phase 3 Features: alert action buttons + modal, chat history, file upload, clickable knowledge docs, citation CSS, scan SSE progress bar, 23 tools on agent (+updateCapa +addCapaAction +5 training tools), auth guards on all endpoints, welcome dashboard. Phase 4 UI: consolidated polling, touch swipe, severity icons + relative time, retry button, export chat, Arabic RTL. | AI Consultant security hardening, performance optimization, feature completion, and UX polish |
 | Apr 13, 2026 | **SOP v4.0 major overhaul:** Comprehensive update reflecting all platform features as of this date. AI Consultant tools expanded from 8→16 (added NC/CAPA create/list, CAPA details, checklist run/manage, knowledge search). Duplicate Radar upgraded to Tier 1–3: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow (resolve/ignore/mark primary/bulk resolve), owner accountability, real-time pre-creation check, async scan with progress polling. AI Scanner expanded from 8→12 checks (added Sales SLA violations, SDR SLA violations, low-progress treatments, high-confidence duplicates). 76 CRM governance rules fully documented (Sales SOP 28 + SDR SOP 28 + Account Rules 20). 11 SDR KPIs seeded. 6 platform KPIs auto-calculated daily. Weekly duplicate scan cron (Sunday 3 AM). Zoho pagination expanded 10K→20K records/module. Database tables expanded 98→103+. Added complete dashboard page inventory (29), route file inventory (29), utility module inventory (39). All SLA tables updated with Sales/SDR SLA monitoring. RACI matrix updated. Added Knowledge Base, Notification Hub modules. | Full platform documentation reflecting all implemented capabilities |
 | Apr 13, 2026 | **SOP v4.1 — Duplicate Radar 21-item enhancement (4 phases).** Phase 1: Incremental upsert (ON CONFLICT), enhanced summary (singletonCount, resolutionRate), paramIndex fix, RBAC on mock-data DELETE, atomic phone_normalized. Phase 2: Parallel Promise.all() fetch, pg_trgm GIN index, JOIN-based queries, performance indexes. Phase 3: SSE scan-stream, Contact Duplicates tab, Owner RAG status, server-side pagination, auto-resolve engine, date range filters, smart multi-factor AI recommendations. Phase 4: Animated progress bar with module chips, side-by-side comparison modal with Zoho links, KPI gauge + resolution rate dashboard, Generate Test Data button removed. | Comprehensive Duplicate Radar upgrade: reliability, performance, features, and UX |
 | Apr 12, 2026 | Duplicate Radar async scan: Scan runs in background with progress polling; no more gateway timeouts | Improved scan reliability for large CRM datasets |
