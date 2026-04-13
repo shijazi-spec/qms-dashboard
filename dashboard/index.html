@@ -732,11 +732,11 @@
             currentOwnerFilter = ownerName || null;
             document.getElementById('issuesDrilldownModal').classList.remove('hidden');
             const titleText = category === 'all' ? 'All Issues' : `${category} Issues`;
-            document.getElementById('modalTitle').textContent = ownerName ? `${titleText} — ${ownerName}` : titleText;
+            document.getElementById('modalTitle').textContent = ownerName ? `Issues — ${ownerName}` : titleText;
             document.getElementById('modalSubtitle').textContent = ownerName
                 ? `Viewing issues owned by ${ownerName} for ${getFilterDescription()}`
                 : `Viewing issues for ${getFilterDescription()}`;
-            document.getElementById('modalModuleFilter').value = category === 'all' ? 'all' : category;
+            document.getElementById('modalModuleFilter').value = 'all';
             document.getElementById('modalSeverityFilter').value = 'all';
             loadIssuesForModal(category);
         }
@@ -1244,8 +1244,7 @@
         function showAgentDetails(agentId) {
             const agent = currentAgentData.find(a => a.id === agentId);
             if (agent) {
-                const module = agent.team === 'SDR' ? 'Leads' : 'Deals';
-                openIssuesModal(module, agent.name);
+                openIssuesModal('all', agent.name);
             }
         }
 
