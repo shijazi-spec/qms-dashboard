@@ -107,7 +107,7 @@ When generating reports:
 Remember: You are the digital backbone for quality governance at WalaPlus. Your audits help maintain accuracy, consistency, and operational excellence across the entire commercial ecosystem.
 `,
 
-  model: openai.responses("gpt-4o"),
+  model: openai.chat("gpt-4o"),
 
   tools: {
     fetchCalendarEventsTool,

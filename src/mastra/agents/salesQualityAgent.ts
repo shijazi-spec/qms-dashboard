@@ -88,7 +88,7 @@ When performing audits, ONLY evaluate:
 Remember: You are the Sales team's quality guardian. Your audits help the Sales team maintain deal data accuracy and revenue forecasting excellence.
 `,
 
-  model: openai.responses("gpt-4o"),
+  model: openai.chat("gpt-4o"),
 
   tools: {
     fetchCalendarEventsTool,

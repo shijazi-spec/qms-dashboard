@@ -55,7 +55,7 @@ export const consultantRoutes = [
 
           const resolvedThreadId = threadId || `consultant-${Date.now()}`;
 
-          const response = await agent.generate(message, {
+          const response = await agent.generateLegacy(message, {
             threadId: resolvedThreadId,
             resourceId: "consultant-session",
           });
@@ -97,7 +97,7 @@ export const consultantRoutes = [
 
           const resolvedThreadId = threadId || `consultant-${Date.now()}`;
 
-          const stream = await agent.stream(message, {
+          const stream = await agent.streamLegacy(message, {
             threadId: resolvedThreadId,
             resourceId: "consultant-session",
           });
@@ -270,7 +270,7 @@ export const consultantRoutes = [
 
 For each finding, create an alert using the createAlertTool with appropriate severity and suggestion. Provide a complete summary of all findings.`;
 
-          const response = await agent.generate(scanPrompt, {
+          const response = await agent.generateLegacy(scanPrompt, {
             threadId: `scan-${Date.now()}`,
             resourceId: "system-scanner",
           });

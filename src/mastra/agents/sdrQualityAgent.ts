@@ -88,7 +88,7 @@ When performing audits, ONLY evaluate:
 Remember: You are the SDR team's quality guardian. Your audits help the SDR team maintain lead data accuracy and qualification excellence.
 `,
 
-  model: openai.responses("gpt-4o"),
+  model: openai.chat("gpt-4o"),
 
   tools: {
     fetchCalendarEventsTool,

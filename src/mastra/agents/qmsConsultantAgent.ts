@@ -187,7 +187,7 @@ Additional capabilities:
 - Quality Health Index: Composite quality metric for management review
 `,
 
-  model: openai.responses("gpt-4o"),
+  model: openai.chat("gpt-4o"),
 
   tools: {
     queryPlatformDataTool,
