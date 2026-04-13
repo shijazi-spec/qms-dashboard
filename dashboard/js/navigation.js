@@ -158,14 +158,37 @@ const WalaPlusNav = {
             list.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 text-center">No new alerts</div>';
             return;
           }
-          list.innerHTML = alerts.map(a => {
+          list.replaceChildren();
+          alerts.forEach(a => {
             const sc = severityColors[a.severity] || severityColors.low;
             const ago = WalaPlusNav.timeAgo(a.created_at);
-            return '<a href="/consultant" class="flex items-start gap-2 px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0" data-testid="alert-item-' + WalaPlusNav.escapeHtml(a.id) + '">' +
-              '<span class="mt-0.5 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded ' + sc + '">' + WalaPlusNav.escapeHtml((a.severity || 'info').toUpperCase()) + '</span>' +
-              '<div class="flex-1 min-w-0"><p class="text-xs font-medium text-gray-800 truncate">' + WalaPlusNav.escapeHtml(a.title || '') + '</p>' +
-              '<p class="text-[10px] text-gray-400">' + ago + '</p></div></a>';
-          }).join('');
+
+            const link = document.createElement('a');
+            link.href = '/consultant';
+            link.className = 'flex items-start gap-2 px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0';
+            link.dataset.testid = 'alert-item-' + a.id;
+
+            const badge = document.createElement('span');
+            badge.className = 'mt-0.5 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded ' + sc;
+            badge.textContent = (a.severity || 'info').toUpperCase();
+
+            const info = document.createElement('div');
+            info.className = 'flex-1 min-w-0';
+
+            const title = document.createElement('p');
+            title.className = 'text-xs font-medium text-gray-800 truncate';
+            title.textContent = a.title || '';
+
+            const time = document.createElement('p');
+            time.className = 'text-[10px] text-gray-400';
+            time.textContent = ago;
+
+            info.appendChild(title);
+            info.appendChild(time);
+            link.appendChild(badge);
+            link.appendChild(info);
+            list.appendChild(link);
+          });
         })
         .catch(() => {});
     };
