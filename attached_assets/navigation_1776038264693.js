@@ -161,20 +161,38 @@ const WalaPlusNav = {
             list.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">No new notifications</p>';
             return;
           }
-          list.innerHTML = items.map(n => {
+          const nodes = items.map(n => {
             const time = new Date(n.created_at);
             const ago = this.timeAgo(time);
             const icons = {NC:'text-red-500',CAPA:'text-amber-500',RISK:'text-orange-500',COMPLIANCE:'text-blue-500',KPI:'text-green-500'};
             const iconColor = icons[n.module] || 'text-gray-500';
-            return `<div class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer" onclick="WalaPlusNav.markRead(${n.id})">
-              <div class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</p>
-                <p class="text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</p>
-                <p class="text-xs ${iconColor} mt-0.5">${n.module||'System'} · ${ago}</p>
-              </div>
-            </div>`;
-          }).join('');
+            const itemEl = document.createElement('div');
+            itemEl.className = 'flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer';
+            itemEl.addEventListener('click', () => WalaPlusNav.markRead(n.id));
+
+            const dot = document.createElement('div');
+            dot.className = 'w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0';
+
+            const body = document.createElement('div');
+            body.className = 'flex-1 min-w-0';
+
+            const subject = document.createElement('p');
+            subject.className = 'text-sm font-medium text-gray-900 truncate';
+            subject.textContent = n.subject || 'Notification';
+
+            const msg = document.createElement('p');
+            msg.className = 'text-xs text-gray-500 truncate';
+            msg.textContent = n.message || '';
+
+            const meta = document.createElement('p');
+            meta.className = `text-xs ${iconColor} mt-0.5`;
+            meta.textContent = `${n.module || 'System'} · ${ago}`;
+
+            body.append(subject, msg, meta);
+            itemEl.append(dot, body);
+            return itemEl;
+          });
+          list.replaceChildren(...nodes);
         })
         .catch(() => {});
     };
