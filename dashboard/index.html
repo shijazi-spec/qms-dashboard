@@ -567,7 +567,6 @@
                                 <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <h3 class="text-lg font-semibold mb-1">Active Governance Framework</h3>
-                                        <p id="governanceDocName" class="text-indigo-100">--</p>
                                         <p id="scorecardName" class="text-sm text-indigo-200 mt-1">--</p>
                                     </div>
                                 </div>
@@ -1513,14 +1512,6 @@
             updateHistory(data.auditHistory);
             updateAgentPerformance(data);
 
-            const govDocEl = document.getElementById('governanceDocName');
-            if (govDocEl) {
-                if (data.governance) {
-                    govDocEl.textContent = (data.governance.name || 'Governance Document') + ' v' + (data.governance.version || '1.0');
-                } else {
-                    govDocEl.textContent = 'CRM Data Quality Governance v1.0';
-                }
-            }
             const scorecardEl = document.getElementById('scorecardName');
             if (scorecardEl) {
                 if (data.scorecard) {
