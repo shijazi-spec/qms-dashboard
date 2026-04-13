@@ -17,11 +17,14 @@ import {
   clearMockData,
   getKPIMetrics,
   addRecordToCluster,
+  upsertRecord,
   findOrCreateClusterByDomain,
   updateClusterStats,
   searchDuplicates,
   createCluster,
   clearAllDuplicateData,
+  cleanupStaleRecords,
+  cleanupOrphanClusters,
   findOrCreateClusterByCompany,
   extractDomain,
   normalizePhone,
@@ -33,13 +36,16 @@ import {
   checkForDuplicates,
   getEnhancedSummary,
   getLastScanDate,
+  getDuplicateRecordsByType,
+  getExportRecords,
+  autoResolveClusters,
+  generateSmartRecommendations,
 } from '../../utils/duplicateRadarDatabase';
 
 import { fetchAllZohoRecords } from '../../utils/zohoCRM';
 
 const SCAN_MAX_PER_MODULE = parseInt(process.env.DUPLICATE_SCAN_LIMIT || '5000');
 
-// In-memory scan state for async tracking
 interface ScanState {
   status: 'idle' | 'scanning' | 'completed' | 'failed';
   progress: string;
@@ -47,6 +53,9 @@ interface ScanState {
   completedAt: number | null;
   result: any | null;
   error: string | null;
+  moduleStatuses: Record<string, string>;
+  recordCounts: Record<string, number>;
+  percentage: number;
 }
 
 const scanState: ScanState = {
@@ -56,8 +65,27 @@ const scanState: ScanState = {
   completedAt: null,
   result: null,
   error: null,
+  moduleStatuses: {},
+  recordCounts: {},
+  percentage: 0,
 };
 
+// SSE listeners for C1: real-time progress
+let sseClients: Array<{ id: string; controller: ReadableStreamDefaultController }> = [];
+
+function broadcastSSE(event: string, data: any) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  sseClients = sseClients.filter(client => {
+    try {
+      client.controller.enqueue(new TextEncoder().encode(msg));
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+// B2: upsert-based record processing (single query per record)
 async function processModule(
   moduleName: string,
   recordType: 'lead' | 'deal' | 'contact' | 'account',
@@ -65,14 +93,22 @@ async function processModule(
   extractRecord: (record: any) => { companyName: string; email: string; phone: string; recordName: string; domain: string | null; ownerName: string; ownerEmail: string; status: string; stage?: string; dealValue?: number; source: string; createdTime: string; modifiedTime: string }
 ): Promise<{ count: number }> {
   let records: any[] = [];
+  scanState.moduleStatuses[moduleName] = 'fetching';
+  broadcastSSE('module', { module: moduleName, status: 'fetching' });
+
   try {
     records = await fetchAllZohoRecords(moduleName, { maxRecords: SCAN_MAX_PER_MODULE });
   } catch (e) {
     console.error(`Error fetching ${moduleName}:`, e);
+    scanState.moduleStatuses[moduleName] = 'error';
+    broadcastSSE('module', { module: moduleName, status: 'error' });
     return { count: 0 };
   }
 
   console.log(`📥 [DuplicateRadar] Fetched ${records.length} ${moduleName} from Zoho`);
+  scanState.moduleStatuses[moduleName] = 'processing';
+  scanState.recordCounts[moduleName] = records.length;
+  broadcastSSE('module', { module: moduleName, status: 'processing', count: records.length });
 
   for (const record of records) {
     const data = extractRecord(record);
@@ -82,9 +118,7 @@ async function processModule(
       data.companyName, data.domain || undefined, data.phone || undefined, data.email || undefined
     );
 
-    const phoneNormalized = data.phone ? normalizePhone(data.phone) : undefined;
-
-    await addRecordToCluster({
+    await upsertRecord({
       cluster_id: cluster.id!,
       record_type: recordType,
       zoho_record_id: record.id,
@@ -107,15 +141,11 @@ async function processModule(
       raw_data: record.data
     });
 
-    if (phoneNormalized) {
-      await (await import('../../utils/duplicateRadarDatabase')).pool.query(
-        'UPDATE duplicate_records SET phone_normalized = $1 WHERE cluster_id = $2 AND zoho_record_id = $3',
-        [phoneNormalized, cluster.id, record.id]
-      ).catch(() => {});
-    }
-
     clustersUpdated.add(cluster.id!);
   }
+
+  scanState.moduleStatuses[moduleName] = 'done';
+  broadcastSSE('module', { module: moduleName, status: 'done', count: records.length });
   return { count: records.length };
 }
 
@@ -139,103 +169,117 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
   scanState.progress = 'Initializing scan...';
   scanState.result = null;
   scanState.error = null;
+  scanState.moduleStatuses = { Leads: 'pending', Deals: 'pending', Contacts: 'pending', Accounts: 'pending' };
+  scanState.recordCounts = {};
+  scanState.percentage = 0;
+
+  broadcastSSE('scan', { status: 'started', timestamp: startTime });
 
   try {
-    scanState.progress = 'Clearing previous data...';
+    scanState.progress = 'Preparing incremental scan...';
+    scanState.percentage = 5;
     await clearAllDuplicateData();
 
     const moduleBreakdown: any[] = [];
     let totalRecords = 0;
     const clustersUpdated = new Set<number>();
 
-    // LEADS
-    scanState.progress = 'Fetching Leads from Zoho CRM...';
-    const leadsResult = await processModule('Leads', 'lead', clustersUpdated, (record) => {
-      const d = record.data;
-      return {
-        companyName: d.Company || d.Last_Name || 'Unknown',
-        email: d.Email || '',
-        phone: d.Phone || d.Mobile || '',
-        recordName: d.Full_Name || `${d.First_Name || ''} ${d.Last_Name || ''}`.trim(),
-        domain: extractDomain(d.Email || ''),
-        ownerName: d.Owner?.name || 'Unknown',
-        ownerEmail: d.Owner?.email || '',
-        status: d.Lead_Status || '',
-        source: d.Lead_Source || '',
-        createdTime: d.Created_Time || '',
-        modifiedTime: d.Modified_Time || ''
-      };
-    });
-    totalRecords += leadsResult.count;
-    moduleBreakdown.push({ module: 'Leads', count: leadsResult.count });
-    scanState.progress = `Leads done (${leadsResult.count}). Fetching Deals...`;
+    // B3: Parallel module fetch
+    scanState.progress = 'Fetching all modules from Zoho CRM in parallel...';
+    scanState.percentage = 10;
+    broadcastSSE('progress', { percentage: 10, message: 'Fetching all modules...' });
 
-    // DEALS
-    const dealsResult = await processModule('Deals', 'deal', clustersUpdated, (record) => {
-      const d = record.data;
-      return {
-        companyName: d.Account_Name?.name || d.Deal_Name || 'Unknown',
-        email: d.Contact_Email || '',
-        phone: d.Contact_Phone || '',
-        recordName: d.Deal_Name || 'Unknown Deal',
-        domain: extractDomain(d.Contact_Email || ''),
-        ownerName: d.Owner?.name || 'Unknown',
-        ownerEmail: d.Owner?.email || '',
-        status: '',
-        stage: d.Stage || '',
-        dealValue: parseFloat(d.Amount) || 0,
-        source: d.Lead_Source || '',
-        createdTime: d.Created_Time || '',
-        modifiedTime: d.Modified_Time || ''
-      };
-    });
-    totalRecords += dealsResult.count;
-    moduleBreakdown.push({ module: 'Deals', count: dealsResult.count });
-    scanState.progress = `Leads + Deals done (${totalRecords}). Fetching Contacts...`;
+    const [leadsResult, dealsResult, contactsResult, accountsResult] = await Promise.all([
+      processModule('Leads', 'lead', clustersUpdated, (record) => {
+        const d = record.data;
+        return {
+          companyName: d.Company || d.Last_Name || 'Unknown',
+          email: d.Email || '',
+          phone: d.Phone || d.Mobile || '',
+          recordName: d.Full_Name || `${d.First_Name || ''} ${d.Last_Name || ''}`.trim(),
+          domain: extractDomain(d.Email || ''),
+          ownerName: d.Owner?.name || 'Unknown',
+          ownerEmail: d.Owner?.email || '',
+          status: d.Lead_Status || '',
+          source: d.Lead_Source || '',
+          createdTime: d.Created_Time || '',
+          modifiedTime: d.Modified_Time || ''
+        };
+      }),
+      processModule('Deals', 'deal', clustersUpdated, (record) => {
+        const d = record.data;
+        return {
+          companyName: d.Account_Name?.name || d.Deal_Name || 'Unknown',
+          email: d.Contact_Email || '',
+          phone: d.Contact_Phone || '',
+          recordName: d.Deal_Name || 'Unknown Deal',
+          domain: extractDomain(d.Contact_Email || ''),
+          ownerName: d.Owner?.name || 'Unknown',
+          ownerEmail: d.Owner?.email || '',
+          status: '',
+          stage: d.Stage || '',
+          dealValue: parseFloat(d.Amount) || 0,
+          source: d.Lead_Source || '',
+          createdTime: d.Created_Time || '',
+          modifiedTime: d.Modified_Time || ''
+        };
+      }),
+      processModule('Contacts', 'contact', clustersUpdated, (record) => {
+        const d = record.data;
+        return {
+          companyName: d.Account_Name?.name || d.Company || d.Last_Name || 'Unknown',
+          email: d.Email || '',
+          phone: d.Phone || d.Mobile || '',
+          recordName: d.Full_Name || `${d.First_Name || ''} ${d.Last_Name || ''}`.trim(),
+          domain: extractDomain(d.Email || ''),
+          ownerName: d.Owner?.name || 'Unknown',
+          ownerEmail: d.Owner?.email || '',
+          status: 'Contact',
+          source: d.Lead_Source || '',
+          createdTime: d.Created_Time || '',
+          modifiedTime: d.Modified_Time || ''
+        };
+      }),
+      processModule('Accounts', 'account', clustersUpdated, (record) => {
+        const d = record.data;
+        const website = d.Website?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '';
+        return {
+          companyName: d.Account_Name || 'Unknown',
+          email: d.Email || '',
+          phone: d.Phone || '',
+          recordName: d.Account_Name || 'Unknown',
+          domain: extractDomain(d.Email || '') || (website && !website.includes(' ') ? website : null),
+          ownerName: d.Owner?.name || 'Unknown',
+          ownerEmail: d.Owner?.email || '',
+          status: 'Account',
+          source: 'Account',
+          createdTime: d.Created_Time || '',
+          modifiedTime: d.Modified_Time || ''
+        };
+      })
+    ]);
 
-    // CONTACTS
-    const contactsResult = await processModule('Contacts', 'contact', clustersUpdated, (record) => {
-      const d = record.data;
-      return {
-        companyName: d.Account_Name?.name || d.Company || d.Last_Name || 'Unknown',
-        email: d.Email || '',
-        phone: d.Phone || d.Mobile || '',
-        recordName: d.Full_Name || `${d.First_Name || ''} ${d.Last_Name || ''}`.trim(),
-        domain: extractDomain(d.Email || ''),
-        ownerName: d.Owner?.name || 'Unknown',
-        ownerEmail: d.Owner?.email || '',
-        status: 'Contact',
-        source: d.Lead_Source || '',
-        createdTime: d.Created_Time || '',
-        modifiedTime: d.Modified_Time || ''
-      };
-    });
-    totalRecords += contactsResult.count;
-    moduleBreakdown.push({ module: 'Contacts', count: contactsResult.count });
-    scanState.progress = `Leads + Deals + Contacts done (${totalRecords}). Fetching Accounts...`;
+    totalRecords = leadsResult.count + dealsResult.count + contactsResult.count + accountsResult.count;
+    moduleBreakdown.push(
+      { module: 'Leads', count: leadsResult.count },
+      { module: 'Deals', count: dealsResult.count },
+      { module: 'Contacts', count: contactsResult.count },
+      { module: 'Accounts', count: accountsResult.count }
+    );
 
-    // ACCOUNTS
-    const accountsResult = await processModule('Accounts', 'account', clustersUpdated, (record) => {
-      const d = record.data;
-      const website = d.Website?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '';
-      return {
-        companyName: d.Account_Name || 'Unknown',
-        email: d.Email || '',
-        phone: d.Phone || '',
-        recordName: d.Account_Name || 'Unknown',
-        domain: extractDomain(d.Email || '') || (website && !website.includes(' ') ? website : null),
-        ownerName: d.Owner?.name || 'Unknown',
-        ownerEmail: d.Owner?.email || '',
-        status: 'Account',
-        source: 'Account',
-        createdTime: d.Created_Time || '',
-        modifiedTime: d.Modified_Time || ''
-      };
-    });
-    totalRecords += accountsResult.count;
-    moduleBreakdown.push({ module: 'Accounts', count: accountsResult.count });
+    scanState.percentage = 60;
+    broadcastSSE('progress', { percentage: 60, message: `All modules fetched (${totalRecords} records)` });
 
-    // Update all cluster stats with multi-signal scoring
+    // A1: Cleanup stale records and orphan clusters
+    const scanMode = process.env.DUPLICATE_SCAN_MODE || 'incremental';
+    if (scanMode !== 'full') {
+      scanState.progress = 'Cleaning up stale records...';
+      await cleanupStaleRecords();
+      await cleanupOrphanClusters();
+    }
+
+    scanState.percentage = 70;
+
     scanState.progress = `All modules fetched (${totalRecords} records). Scoring ${clustersUpdated.size} clusters...`;
     console.log(`📊 [DuplicateRadar] Updating stats for ${clustersUpdated.size} clusters...`);
     let processed = 0;
@@ -243,7 +287,10 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
       await updateClusterStats(clusterId);
       processed++;
       if (processed % 200 === 0) {
+        const pct = 70 + Math.round((processed / clustersUpdated.size) * 25);
         scanState.progress = `Scoring clusters: ${processed}/${clustersUpdated.size}...`;
+        scanState.percentage = pct;
+        broadcastSSE('progress', { percentage: pct, message: `Scoring: ${processed}/${clustersUpdated.size}` });
         console.log(`  📊 Updated ${processed}/${clustersUpdated.size} clusters...`);
       }
     }
@@ -284,6 +331,9 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     scanState.completedAt = Date.now();
     scanState.progress = `Complete: ${totalRecords} records scanned, ${summary.trueDuplicateClusters} duplicate clusters found`;
     scanState.result = resultData;
+    scanState.percentage = 100;
+
+    broadcastSSE('scan', { status: 'completed', result: resultData });
 
     return resultData;
 
@@ -308,11 +358,12 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     scanState.error = error?.message || 'An internal error occurred';
     scanState.result = errorResult;
 
+    broadcastSSE('scan', { status: 'failed', error: scanState.error });
+
     return errorResult;
   }
 }
 
-// Exported for use by Inngest cron
 export { scanZohoCRMForDuplicates };
 
 initDuplicateRadarTables().catch(err => {
@@ -360,6 +411,7 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // C4: Server-side pagination on clusters (30/page)
   {
     path: "/api/duplicates/clusters",
     method: "GET" as const,
@@ -369,12 +421,16 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const status = url.searchParams.get('status');
           const confidence_level = url.searchParams.get('confidence_level');
-          const limit = parseInt(url.searchParams.get('limit') || '100');
+          const limit = parseInt(url.searchParams.get('limit') || '30');
           const offset = parseInt(url.searchParams.get('offset') || '0');
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
 
           const filters = {
             status: status || undefined,
-            confidence_level: confidence_level || undefined
+            confidence_level: confidence_level || undefined,
+            start_date,
+            end_date
           };
 
           const [clusters, total] = await Promise.all([
@@ -382,7 +438,7 @@ export const duplicateRadarRoutes = [
             getClusterCount(filters)
           ]);
 
-          return c.json({ clusters, total, limit, offset });
+          return c.json({ clusters, total, limit, offset, pages: Math.ceil(total / limit) });
         } catch (error: any) {
           console.error('Error fetching clusters:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
@@ -397,12 +453,14 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const id = parseInt(c.req.param('id'));
+          if (isNaN(id)) return c.json({ error: 'Invalid cluster ID' }, 400);
           const cluster = await getClusterById(id);
           if (!cluster) {
             return c.json({ error: 'Cluster not found' }, 404);
           }
           const records = await getRecordsByClusterId(id);
-          return c.json({ cluster, records });
+          const recommendations = generateSmartRecommendations(records);
+          return c.json({ cluster, records, recommendations });
         } catch (error: any) {
           console.error('Error fetching cluster:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
@@ -417,6 +475,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const id = parseInt(c.req.param('id'));
+          if (isNaN(id)) return c.json({ error: 'Invalid cluster ID' }, 400);
           const { status } = await c.req.json();
           
           if (!['active', 'resolved', 'ignored'].includes(status)) {
@@ -558,7 +617,6 @@ export const duplicateRadarRoutes = [
 
           console.log('🚀 [DuplicateRadar] Zoho CRM scan triggered via API (async)');
 
-          // Fire-and-forget: run scan in background, return immediately
           scanZohoCRMForDuplicates().catch(err => {
             console.error('[DuplicateRadar] Background scan error:', err);
             scanState.status = 'failed';
@@ -567,7 +625,7 @@ export const duplicateRadarRoutes = [
 
           return c.json({
             success: true,
-            message: 'Scan started in background. Poll /api/duplicates/scan-status for progress.',
+            message: 'Scan started in background. Poll /api/duplicates/scan-status or connect to /api/duplicates/scan-stream for real-time progress.',
             status: 'scanning',
           });
         } catch (error: any) {
@@ -590,6 +648,9 @@ export const duplicateRadarRoutes = [
             startedAt: scanState.startedAt,
             completedAt: scanState.completedAt,
             elapsedMs: elapsed,
+            percentage: scanState.percentage,
+            moduleStatuses: scanState.moduleStatuses,
+            recordCounts: scanState.recordCounts,
             result: scanState.status === 'completed' || scanState.status === 'failed' ? scanState.result : null,
             error: scanState.error,
           });
@@ -599,9 +660,60 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // C1: SSE endpoint for real-time scan progress
   {
-    path: "/api/duplicates/generate-mock-data",
-    method: "POST" as const,
+    path: "/api/duplicates/scan-stream",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const clientId = `sse-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+          const stream = new ReadableStream({
+            start(controller) {
+              sseClients.push({ id: clientId, controller });
+
+              const initialMsg = `event: connected\ndata: ${JSON.stringify({
+                clientId,
+                currentStatus: scanState.status,
+                progress: scanState.progress,
+                percentage: scanState.percentage,
+                moduleStatuses: scanState.moduleStatuses,
+                elapsedMs: scanState.startedAt ? Date.now() - scanState.startedAt : 0
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(initialMsg));
+
+              const keepAlive = setInterval(() => {
+                try {
+                  controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
+                } catch {
+                  clearInterval(keepAlive);
+                }
+              }, 15000);
+            },
+            cancel() {
+              sseClients = sseClients.filter(c => c.id !== clientId);
+            }
+          });
+
+          return new Response(stream, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+              'X-Accel-Buffering': 'no'
+            }
+          });
+        } catch (error) {
+          return c.json({ error: 'Failed to create SSE stream' }, 500);
+        }
+      };
+    },
+  },
+  // A6: RBAC guard on DELETE mock-data
+  {
+    path: "/api/duplicates/mock-data",
+    method: "DELETE" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -609,150 +721,6 @@ export const duplicateRadarRoutes = [
           const sessionUser = requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
-          const startTime = Date.now();
-          await clearMockData();
-
-          const companies = [
-            { domain: 'acme-corp.com', names: ['ACME Corporation', 'أكمي للشركات', 'Acme Corp', 'ACME Corp.'] },
-            { domain: 'techsolutions.sa', names: ['Tech Solutions', 'تقنية الحلول', 'Tech Solutionss', 'TechSolutions SA'] },
-            { domain: 'saudiarabia-invest.com', names: ['Saudi Arabia Investment', 'استثمارات السعودية', 'SA Invest', 'Saudi Invest'] },
-            { domain: 'globaltrading.ae', names: ['Global Trading LLC', 'التجارة العالمية', 'Global Trade', 'GlobalTrading'] },
-            { domain: 'constructionplus.sa', names: ['Construction Plus', 'البناء بلس', 'Construction+', 'ConstructionPlus SA'] },
-            { domain: 'healthcare-ksa.com', names: ['Healthcare KSA', 'الرعاية الصحية', 'HealthCare Saudi', 'HC KSA'] },
-            { domain: 'finance-hub.sa', names: ['Finance Hub', 'مركز التمويل', 'FinanceHub', 'Finance Hub SA'] },
-            { domain: 'logistics-express.com', names: ['Logistics Express', 'اللوجستيات السريعة', 'LogisticsExpress', 'Logistics Xpress'] },
-            { domain: 'retail-kingdom.sa', names: ['Retail Kingdom', 'مملكة التجزئة', 'RetailKingdom', 'Retail Kingdum'] },
-            { domain: 'energy-solutions.sa', names: ['Energy Solutions', 'حلول الطاقة', 'EnergySolutions', 'Energy Sol'] },
-            { domain: 'pharma-gulf.com', names: ['Pharma Gulf', 'فارما الخليج', 'PharmaGulf', 'Pharma-Gulf Ltd'] },
-            { domain: 'automotive-sa.com', names: ['Automotive SA', 'السيارات السعودية', 'Auto SA', 'AutomotiveSA'] },
-            { domain: 'telecom-arabia.sa', names: ['Telecom Arabia', 'اتصالات العربية', 'TelecomArabia', 'Telcom Arabia'] },
-            { domain: 'food-industries.sa', names: ['Food Industries', 'الصناعات الغذائية', 'FoodInd', 'Food Ind. SA'] },
-            { domain: 'education-center.sa', names: ['Education Center', 'مركز التعليم', 'EduCenter', 'Education Centr'] }
-          ];
-
-          const owners = [
-            { name: 'Ahmed Al-Rashid', email: 'ahmed.rashid@walaplus.com' },
-            { name: 'Fatima Hassan', email: 'fatima.hassan@walaplus.com' },
-            { name: 'Omar Mahmoud', email: 'omar.mahmoud@walaplus.com' },
-            { name: 'Sara Al-Qahtani', email: 'sara.qahtani@walaplus.com' },
-            { name: 'Khalid Ibrahim', email: 'khalid.ibrahim@walaplus.com' }
-          ];
-
-          const sources = ['Website', 'Landing Page', 'Manual Entry', 'Import', 'Referral', 'LinkedIn', 'Trade Show'];
-          const leadStatuses = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Converted'];
-          const dealStages = ['Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'];
-
-          let totalLeads = 0;
-          let totalDeals = 0;
-          let totalClusters = 0;
-
-          for (const company of companies) {
-            const cluster = await findOrCreateClusterByDomain(company.domain);
-            totalClusters++;
-
-            const numLeads = Math.floor(Math.random() * 5) + 2;
-            const numDeals = Math.floor(Math.random() * 3) + 1;
-
-            for (let i = 0; i < numLeads; i++) {
-              const owner = owners[Math.floor(Math.random() * owners.length)];
-              const nameVariation = company.names[Math.floor(Math.random() * company.names.length)];
-              const createdDate = new Date(Date.now() - Math.random() * 180 * 24 * 60 * 60 * 1000);
-              
-              await addRecordToCluster({
-                cluster_id: cluster.id!,
-                record_type: 'lead',
-                zoho_record_id: `LEAD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                record_name: `Lead - ${nameVariation}`,
-                company_name: nameVariation,
-                email: `contact${i + 1}@${company.domain}`,
-                domain: company.domain,
-                phone: `+966 5${Math.floor(Math.random() * 90000000 + 10000000)}`,
-                owner_name: owner.name,
-                owner_email: owner.email,
-                status: leadStatuses[Math.floor(Math.random() * leadStatuses.length)],
-                source: sources[Math.floor(Math.random() * sources.length)],
-                created_date: createdDate,
-                modified_date: new Date(createdDate.getTime() + Math.random() * 30 * 24 * 60 * 60 * 1000),
-                is_primary: i === 0,
-                confidence_score: 75 + Math.floor(Math.random() * 25),
-                is_mock_data: true,
-                raw_data: { mock: true, generated_at: new Date().toISOString() }
-              });
-              totalLeads++;
-            }
-
-            for (let i = 0; i < numDeals; i++) {
-              const owner = owners[Math.floor(Math.random() * owners.length)];
-              const nameVariation = company.names[Math.floor(Math.random() * company.names.length)];
-              const createdDate = new Date(Date.now() - Math.random() * 120 * 24 * 60 * 60 * 1000);
-              const dealValue = Math.floor(Math.random() * 500000) + 50000;
-              
-              await addRecordToCluster({
-                cluster_id: cluster.id!,
-                record_type: 'deal',
-                zoho_record_id: `DEAL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                record_name: `Deal - ${nameVariation}`,
-                company_name: nameVariation,
-                email: `sales@${company.domain}`,
-                domain: company.domain,
-                phone: `+966 5${Math.floor(Math.random() * 90000000 + 10000000)}`,
-                owner_name: owner.name,
-                owner_email: owner.email,
-                stage: dealStages[Math.floor(Math.random() * dealStages.length)],
-                deal_value: dealValue,
-                source: sources[Math.floor(Math.random() * sources.length)],
-                created_date: createdDate,
-                modified_date: new Date(createdDate.getTime() + Math.random() * 30 * 24 * 60 * 60 * 1000),
-                is_primary: i === 0,
-                confidence_score: 80 + Math.floor(Math.random() * 20),
-                is_mock_data: true,
-                raw_data: { mock: true, generated_at: new Date().toISOString() }
-              });
-              totalDeals++;
-            }
-
-            await updateClusterStats(cluster.id!);
-          }
-
-          const duration = Date.now() - startTime;
-
-          await createDetectionLog({
-            detection_type: 'manual',
-            total_records_scanned: totalLeads + totalDeals,
-            total_clusters_found: totalClusters,
-            total_duplicates_detected: totalLeads + totalDeals - totalClusters,
-            high_confidence_count: Math.floor(totalClusters * 0.4),
-            medium_confidence_count: Math.floor(totalClusters * 0.4),
-            low_confidence_count: Math.floor(totalClusters * 0.2),
-            estimated_pipeline_inflation: 0,
-            detection_duration_ms: duration,
-            triggered_by: 'Mock Data Generator',
-            status: 'completed'
-          });
-
-          return c.json({
-            success: true,
-            message: 'Mock data generated successfully',
-            stats: {
-              clusters: totalClusters,
-              leads: totalLeads,
-              deals: totalDeals,
-              duration_ms: duration
-            }
-          });
-        } catch (error: any) {
-          console.error('Error generating mock data:', error);
-          return c.json({ error: 'An internal error occurred' }, 500);
-        }
-      };
-    },
-  },
-  {
-    path: "/api/duplicates/mock-data",
-    method: "DELETE" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        try {
           await clearMockData();
           return c.json({ success: true, message: 'Mock data cleared' });
         } catch (error: any) {
@@ -762,6 +730,7 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // B5: JOIN-based export (no N+1)
   {
     path: "/api/duplicates/export",
     method: "GET" as const,
@@ -770,37 +739,22 @@ export const duplicateRadarRoutes = [
         try {
           const url = new URL(c.req.url);
           const exportType = url.searchParams.get('type') || 'all';
-          const owner = url.searchParams.get('owner');
-          const startDate = url.searchParams.get('start_date');
-          const endDate = url.searchParams.get('end_date');
+          const owner = url.searchParams.get('owner') || undefined;
+          const startDate = url.searchParams.get('start_date') || undefined;
+          const endDate = url.searchParams.get('end_date') || undefined;
 
-          let clusters = await getAllClusters({ status: 'active' });
-          let records: any[] = [];
-
-          for (const cluster of clusters) {
-            const clusterRecords = await getRecordsByClusterId(cluster.id!);
-            records.push(...clusterRecords.map(r => ({
-              ...r,
-              cluster_domain: cluster.domain,
-              cluster_confidence: cluster.confidence_level
-            })));
-          }
-
-          if (owner) {
-            records = records.filter(r => r.owner_name === owner || r.owner_email === owner);
-          }
-          if (startDate) {
-            records = records.filter(r => new Date(r.created_date) >= new Date(startDate));
-          }
-          if (endDate) {
-            records = records.filter(r => new Date(r.created_date) <= new Date(endDate));
-          }
+          const records = await getExportRecords({
+            owner,
+            start_date: startDate,
+            end_date: endDate,
+            status: 'active'
+          });
 
           await createExportLog({
             export_type: exportType as any,
             filter_criteria: { owner, startDate, endDate },
             total_records_exported: records.length,
-            file_format: 'excel',
+            file_format: 'csv',
             exported_by: 'User'
           });
 
@@ -820,30 +774,26 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // B5: JOIN-based lead/deal/contact/account endpoints (no N+1)
   {
     path: "/api/duplicates/leads",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const clusters = await getAllClusters({ status: 'active' });
-          const leadsWithDuplicates: any[] = [];
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get('limit') || '50');
+          const offset = parseInt(url.searchParams.get('offset') || '0');
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
 
-          for (const cluster of clusters) {
-            if (cluster.total_leads > 1) {
-              const records = await getRecordsByClusterId(cluster.id!);
-              const leads = records.filter(r => r.record_type === 'lead');
-              leadsWithDuplicates.push({
-                cluster,
-                leads,
-                duplicate_count: leads.length
-              });
-            }
-          }
-
+          const result = await getDuplicateRecordsByType('lead', { limit, offset, start_date, end_date });
           return c.json({
-            total_duplicate_groups: leadsWithDuplicates.length,
-            groups: leadsWithDuplicates
+            total_duplicate_groups: result.total,
+            groups: result.groups,
+            limit,
+            offset,
+            pages: Math.ceil(result.total / limit)
           });
         } catch (error: any) {
           console.error('Error fetching lead duplicates:', error);
@@ -858,28 +808,50 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const clusters = await getAllClusters({ status: 'active' });
-          const dealsWithDuplicates: any[] = [];
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get('limit') || '50');
+          const offset = parseInt(url.searchParams.get('offset') || '0');
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
 
-          for (const cluster of clusters) {
-            if (cluster.total_deals > 1) {
-              const records = await getRecordsByClusterId(cluster.id!);
-              const deals = records.filter(r => r.record_type === 'deal');
-              dealsWithDuplicates.push({
-                cluster,
-                deals,
-                duplicate_count: deals.length,
-                total_value: deals.reduce((sum, d) => sum + (parseFloat(String(d.deal_value)) || 0), 0)
-              });
-            }
-          }
-
+          const result = await getDuplicateRecordsByType('deal', { limit, offset, start_date, end_date });
           return c.json({
-            total_duplicate_groups: dealsWithDuplicates.length,
-            groups: dealsWithDuplicates
+            total_duplicate_groups: result.total,
+            groups: result.groups,
+            limit,
+            offset,
+            pages: Math.ceil(result.total / limit)
           });
         } catch (error: any) {
           console.error('Error fetching deal duplicates:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  // C2: Contacts and Accounts endpoints
+  {
+    path: "/api/duplicates/contacts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get('limit') || '50');
+          const offset = parseInt(url.searchParams.get('offset') || '0');
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
+
+          const result = await getDuplicateRecordsByType('contact', { limit, offset, start_date, end_date });
+          return c.json({
+            total_duplicate_groups: result.total,
+            groups: result.groups,
+            limit,
+            offset,
+            pages: Math.ceil(result.total / limit)
+          });
+        } catch (error: any) {
+          console.error('Error fetching contact duplicates:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -891,24 +863,19 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const clusters = await getAllClusters({ status: 'active' });
-          const accountsWithDuplicates: any[] = [];
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get('limit') || '50');
+          const offset = parseInt(url.searchParams.get('offset') || '0');
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
 
-          for (const cluster of clusters) {
-            if (cluster.total_accounts > 1) {
-              const records = await getRecordsByClusterId(cluster.id!);
-              const accounts = records.filter(r => r.record_type === 'account');
-              accountsWithDuplicates.push({
-                cluster,
-                accounts,
-                duplicate_count: accounts.length
-              });
-            }
-          }
-
+          const result = await getDuplicateRecordsByType('account', { limit, offset, start_date, end_date });
           return c.json({
-            total_duplicate_groups: accountsWithDuplicates.length,
-            groups: accountsWithDuplicates
+            total_duplicate_groups: result.total,
+            groups: result.groups,
+            limit,
+            offset,
+            pages: Math.ceil(result.total / limit)
           });
         } catch (error: any) {
           console.error('Error fetching account duplicates:', error);
@@ -917,6 +884,7 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // C7: Smart AI recommendations
   {
     path: "/api/duplicates/ai-recommendations/:clusterId",
     method: "POST" as const,
@@ -924,40 +892,22 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const clusterId = parseInt(c.req.param('clusterId'));
+          if (isNaN(clusterId)) return c.json({ error: 'Invalid cluster ID' }, 400);
+
           const cluster = await getClusterById(clusterId);
           if (!cluster) {
             return c.json({ error: 'Cluster not found' }, 404);
           }
 
           const records = await getRecordsByClusterId(clusterId);
-          
-          const sortedRecords = [...records].sort((a, b) => {
-            const dateA = new Date(a.created_date || 0).getTime();
-            const dateB = new Date(b.created_date || 0).getTime();
-            return dateA - dateB;
-          });
-
-          const primaryRecord = sortedRecords[0];
-          const recommendations = sortedRecords.map((record, index) => ({
-            record_id: record.id,
-            record_name: record.record_name,
-            is_primary: index === 0,
-            recommendation: index === 0 
-              ? 'KEEP as primary record (earliest created)'
-              : record.record_type === 'lead' && sortedRecords.some(r => r.record_type === 'deal')
-                ? 'CLOSE as duplicate (Deal exists for this company)'
-                : 'MERGE into primary or CLOSE as duplicate',
-            action_type: index === 0 ? 'keep' : 'merge_or_close',
-            confidence: index === 0 ? 95 : 85
-          }));
+          const recommendations = generateSmartRecommendations(records);
 
           return c.json({
             cluster_id: clusterId,
             domain: cluster.domain,
-            primary_record: primaryRecord,
             total_records: records.length,
             recommendations,
-            ai_summary: `Found ${records.length} records for ${cluster.domain}. Recommend keeping the earliest record (${primaryRecord?.record_name}) as primary. ${records.length - 1} duplicate(s) should be reviewed for merge or closure.`
+            ai_summary: `Analyzed ${records.length} records for ${cluster.domain || cluster.company_name}. Smart scoring considers data completeness, deal activity, recency, and record age.`
           });
         } catch (error: any) {
           console.error('Error generating AI recommendations:', error);
@@ -1063,9 +1013,6 @@ export const duplicateRadarRoutes = [
       };
     },
   },
-  // ═══════════════════════════════════════════════════════════
-  //  MERGE / RESOLVE WORKFLOW
-  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/clusters/:id/resolve",
     method: "POST" as const,
@@ -1160,9 +1107,6 @@ export const duplicateRadarRoutes = [
       };
     },
   },
-  // ═══════════════════════════════════════════════════════════
-  //  REAL-TIME DUPLICATE CHECK (pre-creation)
-  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/check",
     method: "POST" as const,
@@ -1184,9 +1128,6 @@ export const duplicateRadarRoutes = [
       };
     },
   },
-  // ═══════════════════════════════════════════════════════════
-  //  OWNER ACCOUNTABILITY
-  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/owner-accountability",
     method: "GET" as const,
@@ -1202,9 +1143,6 @@ export const duplicateRadarRoutes = [
       };
     },
   },
-  // ═══════════════════════════════════════════════════════════
-  //  ENHANCED SUMMARY
-  // ═══════════════════════════════════════════════════════════
   {
     path: "/api/duplicates/enhanced-summary",
     method: "GET" as const,
@@ -1216,6 +1154,26 @@ export const duplicateRadarRoutes = [
           return c.json({ ...summary, lastScanDate: lastScan });
         } catch (error: any) {
           console.error('Error fetching enhanced summary:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  // C5: Auto-resolve engine
+  {
+    path: "/api/duplicates/auto-resolve",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const result = await autoResolveClusters();
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          console.error('Error auto-resolving:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };

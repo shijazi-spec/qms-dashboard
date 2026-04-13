@@ -1,0 +1,27 @@
+All 21 items from the Duplicate Radar Enhancement Plan are now complete.
+
+Phase 1 -- Bug Fixes (A1-A7)
+A1: Replaced destructive clearAllDuplicateData() with incremental upsert via upsertRecord() using ON CONFLICT (zoho_record_id). Added markStaleRecords() and cleanupOrphanClusters() to handle records no longer in Zoho. Scan mode is configurable via DUPLICATE_SCAN_MODE env var.
+A2: Fixed getEnhancedSummary() -- the low_confidence count now only includes clusters with total_records > 1, with a separate singletonCount field for non-duplicate singletons.
+A3: Fixed searchDuplicates() parameter binding -- company_name condition now correctly uses const pi = paramIndex++ to avoid double-referencing the same $N.
+A6: Added requireAdminOrKey RBAC guard to DELETE /api/duplicates/mock-data.
+A7: phone_normalized is now computed and included directly in the addRecordToCluster INSERT statement. The separate UPDATE ... .catch(() => {}) hack is removed.
+Phase 2 -- Performance (B2-B6)
+B2: Record processing now uses the new upsertRecord() with phone_normalized included atomically, reducing per-record queries from 3+ to 1.
+B3: All 4 Zoho modules (Leads, Deals, Contacts, Accounts) now fetch in parallel via Promise.all(), cutting fetch time by ~75%.
+B4: pg_trgm extension and GIN trigram index are created on company_name_normalized. Fuzzy matching now uses similarity() SQL operator instead of O(5000) Levenshtein loop. Falls back to limited Levenshtein (2000 clusters) if pg_trgm is unavailable.
+B5: /api/duplicates/leads, /deals, /accounts, /contacts, /export all now use JOIN-based queries via getDuplicateRecordsByType() and getExportRecords() -- completely eliminating the N+1 pattern.
+B6: Added indexes on zoho_record_id (unique partial), LOWER(email), phone_normalized, domain, company_name_normalized.
+Phase 3 -- Features (C1-C7)
+C1: SSE endpoint at GET /api/duplicates/scan-stream sends real-time progress events (per-module status, elapsed time, record counts). Frontend connects via EventSource with fallback to polling.
+C2: New /api/duplicates/accounts and /api/duplicates/contacts endpoints + UI tabs.
+C3: Owner Accountability table now shows duplicate rate per owner with RAG status (green/amber/red) against the 2% KPI target, plus per-owner export.
+C4: Server-side pagination on Domain Clusters grid (30/page with Prev/Next), and all record tables (50/page).
+C5: Auto-resolution engine at POST /api/duplicates/auto-resolve -- auto-ignores singletons and auto-resolves clusters with confidence >= 95% where a clear primary exists.
+C6: Global date range filter bar applies start_date/end_date across all tabs.
+C7: Smart AI recommendations consider record completeness, active deal status, recency, and age -- not just "keep earliest."
+Phase 4 -- UI/UX (D1-D5)
+D1: Non-blocking animated progress bar at the top of the page with module chips (Leads/Deals/Contacts/Accounts showing pending/fetching/processing/done status), elapsed time, and percentage fill.
+D2: Cluster modal now shows side-by-side record comparison table, AI recommendations with action badges (KEEP/MERGE/CLOSE), direct Zoho links, and bulk action buttons.
+D4: Executive Summary now includes resolution rate, KPI gauge (duplicate rate vs 2% target), top 5 clusters by pipeline inflation, top signal sources, and last scan info (date/duration/records).
+D5: "Generate Test Data" button removed from the production UI entirely. Mock data endpoints still require admin RBAC.
