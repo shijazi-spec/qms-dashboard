@@ -618,6 +618,7 @@
         };
         let currentIssues = [];
         let currentAgentData = [];
+        let currentOwnerIssueDetails = [];
         let allDashboardData = null;
 
         // Date filter functions
@@ -1106,6 +1107,7 @@
                 
                 if (result.success && result.agents && result.agents.length > 0) {
                     currentAgentData = result.agents;
+                    currentOwnerIssueDetails = result.ownerIssueDetails || [];
                     console.log(`Loaded ${result.agents.length} agents from CRM (${result.mode} mode)`);
                     displayCoverageMetrics(result.coverage);
                 } else {
@@ -1244,8 +1246,35 @@
         function showAgentDetails(agentId) {
             const agent = currentAgentData.find(a => a.id === agentId);
             if (agent) {
-                openIssuesModal('all', agent.name);
+                openIssuesModalWithOwnerData(agent.name);
             }
+        }
+
+        function openIssuesModalWithOwnerData(ownerName) {
+            currentOwnerFilter = ownerName;
+            document.getElementById('issuesDrilldownModal').classList.remove('hidden');
+            document.getElementById('modalTitle').textContent = `Issues — ${ownerName}`;
+            document.getElementById('modalSubtitle').textContent = `Viewing issues owned by ${ownerName} for ${getFilterDescription()}`;
+            document.getElementById('modalModuleFilter').value = 'all';
+            document.getElementById('modalSeverityFilter').value = 'all';
+
+            const ownerLower = ownerName.toLowerCase().trim();
+            const ownerIssues = currentOwnerIssueDetails.filter(i => {
+                const o = (i.owner || '').toLowerCase().trim();
+                return o === ownerLower || o.includes(ownerLower) || ownerLower.includes(o);
+            });
+
+            currentIssues = ownerIssues.map((issue, idx) => ({
+                id: issue.recordId || `issue_${idx + 1}`,
+                module: issue.module,
+                owner: issue.owner || ownerName,
+                issue: issue.issue,
+                severity: issue.severity,
+                fieldName: issue.fieldName || '',
+                recommendation: issue.recommendation || ''
+            }));
+
+            renderIssuesTable(currentIssues);
         }
 
         function exportAgentPerformance() {

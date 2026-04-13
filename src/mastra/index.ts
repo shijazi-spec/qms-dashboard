@@ -880,6 +880,16 @@ export const mastra = new Mastra({
                 issues: { critical: number; high: number; medium: number; low: number };
                 passCount: number;
               }> = {};
+
+              const ownerIssueDetails: Array<{
+                recordId: string;
+                module: string;
+                owner: string;
+                issue: string;
+                severity: string;
+                fieldName: string;
+                recommendation: string;
+              }> = [];
               
               for (const lead of leads) {
                 const ownerId = lead.Owner || 'Unassigned';
@@ -900,9 +910,18 @@ export const mastra = new Mastra({
                 
                 const hasIssue = !lead.Email || !lead.Lead_Source || !lead.Lead_Status;
                 if (hasIssue) {
-                  if (!lead.Email) ownerStats[ownerId].issues.high++;
-                  if (!lead.Lead_Source) ownerStats[ownerId].issues.medium++;
-                  if (!lead.Lead_Status) ownerStats[ownerId].issues.low++;
+                  if (!lead.Email) {
+                    ownerStats[ownerId].issues.high++;
+                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', owner: userInfo.name, issue: 'Missing: Email', severity: 'high', fieldName: 'Email', recommendation: 'Add an email address to this lead record.' });
+                  }
+                  if (!lead.Lead_Source) {
+                    ownerStats[ownerId].issues.medium++;
+                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', owner: userInfo.name, issue: 'Missing: Lead Source', severity: 'medium', fieldName: 'Lead_Source', recommendation: 'Set the lead source to track where this lead came from.' });
+                  }
+                  if (!lead.Lead_Status) {
+                    ownerStats[ownerId].issues.low++;
+                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', owner: userInfo.name, issue: 'Missing: Lead Status', severity: 'low', fieldName: 'Lead_Status', recommendation: 'Set the lead status to track progress.' });
+                  }
                 } else {
                   ownerStats[ownerId].passCount++;
                 }
@@ -927,9 +946,18 @@ export const mastra = new Mastra({
                 
                 const hasIssue = !deal.Deal_Name || !deal.Stage || !deal.Amount;
                 if (hasIssue) {
-                  if (!deal.Deal_Name) ownerStats[ownerId].issues.critical++;
-                  if (!deal.Stage) ownerStats[ownerId].issues.critical++;
-                  if (!deal.Amount) ownerStats[ownerId].issues.high++;
+                  if (!deal.Deal_Name) {
+                    ownerStats[ownerId].issues.critical++;
+                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', owner: userInfo.name, issue: 'Missing: Deal Name', severity: 'critical', fieldName: 'Deal_Name', recommendation: 'Add a deal name to this deal record.' });
+                  }
+                  if (!deal.Stage) {
+                    ownerStats[ownerId].issues.critical++;
+                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', owner: userInfo.name, issue: 'Missing: Stage', severity: 'critical', fieldName: 'Stage', recommendation: 'Set the deal stage to track pipeline progress.' });
+                  }
+                  if (!deal.Amount) {
+                    ownerStats[ownerId].issues.high++;
+                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', owner: userInfo.name, issue: 'Missing: Amount', severity: 'high', fieldName: 'Amount', recommendation: 'Add the deal amount for accurate pipeline value.' });
+                  }
                 } else {
                   ownerStats[ownerId].passCount++;
                 }
@@ -961,6 +989,7 @@ export const mastra = new Mastra({
                 success: true,
                 mode: 'REAL',
                 agents,
+                ownerIssueDetails,
                 totalLeads: leads.length,
                 totalDeals: deals.length,
                 coverage: {
