@@ -281,7 +281,7 @@ export async function fetchAllZohoRecords(
   const perPage = 200;
   let page = 1;
   let hasMore = true;
-  const maxRecords = params.maxRecords || 10000;
+  const maxRecords = params.maxRecords || Infinity;
   
   console.log(`📊 [ZohoCRM] Fetching all ${module} records with pagination...`);
   
