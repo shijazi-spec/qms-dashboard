@@ -165,6 +165,9 @@ export const mastra = new Mastra({
         c.header('X-XSS-Protection', '1; mode=block');
         c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'`);
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        c.header('Pragma', 'no-cache');
+        c.header('Expires', '0');
 
         (c as any)._cspNonce = cspNonce;
 
@@ -3442,7 +3445,7 @@ export const mastra = new Mastra({
               for (const cssPath of possiblePaths) {
                 if (existsSync(cssPath)) {
                   const css = readFileSync(cssPath, "utf-8");
-                  return c.text(css, 200, { "Content-Type": "text/css" });
+                  return c.text(css, 200, { "Content-Type": "text/css", "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" });
                 }
               }
               
@@ -3469,7 +3472,7 @@ export const mastra = new Mastra({
               for (const jsPath of possiblePaths) {
                 if (existsSync(jsPath)) {
                   const js = readFileSync(jsPath, "utf-8");
-                  return c.text(js, 200, { "Content-Type": "application/javascript" });
+                  return c.text(js, 200, { "Content-Type": "application/javascript", "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" });
                 }
               }
               
