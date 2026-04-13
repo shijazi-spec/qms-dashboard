@@ -665,7 +665,7 @@
             return Object.values(map);
         }
 
-        function computeRecordCountsByModule(rawData) {
+        function computeRecordCountsByModule(rawData, issuesByCategory) {
             let parsed = rawData;
             if (typeof rawData === 'string') {
                 try { parsed = JSON.parse(rawData); } catch(e) { parsed = {}; }
@@ -680,6 +680,27 @@
             });
             const counts = {};
             Object.keys(moduleSets).forEach(mod => { counts[mod] = moduleSets[mod].size; });
+
+            const normalized = normalizeIssuesByCategory(issuesByCategory);
+            const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+            allModules.forEach(mod => {
+                if (!counts[mod] && normalized[mod]) {
+                    const totalIssues = normalized[mod];
+                    const info = parsed?.insights || '';
+                    const totalRecordsMatch = info.match?.(/(\d+)\s*records/);
+                    const totalIssuesMatch = info.match?.(/(\d+)\s*issues/);
+                    if (totalRecordsMatch && totalIssuesMatch) {
+                        const totalRecords = parseInt(totalRecordsMatch[1], 10);
+                        const totalIssuesNum = parseInt(totalIssuesMatch[1], 10);
+                        if (totalIssuesNum > 0) {
+                            counts[mod] = Math.round((totalIssues / totalIssuesNum) * totalRecords);
+                        }
+                    }
+                    if (!counts[mod]) {
+                        counts[mod] = totalIssues;
+                    }
+                }
+            });
             return counts;
         }
 
@@ -1453,7 +1474,7 @@
 
             updateIssuesChart(audit.issues_by_category);
             updateIssuesCategoryCards(audit.issues_by_category);
-            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data);
+            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data, audit.issues_by_category);
             const hasRecordCounts = Object.keys(recordCounts).length > 0;
             updateIssuesTotalChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
