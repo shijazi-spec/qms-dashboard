@@ -726,10 +726,16 @@
             return counts;
         }
 
-        function openIssuesModal(category) {
+        let currentOwnerFilter = null;
+
+        function openIssuesModal(category, ownerName) {
+            currentOwnerFilter = ownerName || null;
             document.getElementById('issuesDrilldownModal').classList.remove('hidden');
-            document.getElementById('modalTitle').textContent = category === 'all' ? 'All Issues' : `${category} Issues`;
-            document.getElementById('modalSubtitle').textContent = `Viewing issues for ${getFilterDescription()}`;
+            const titleText = category === 'all' ? 'All Issues' : `${category} Issues`;
+            document.getElementById('modalTitle').textContent = ownerName ? `${titleText} — ${ownerName}` : titleText;
+            document.getElementById('modalSubtitle').textContent = ownerName
+                ? `Viewing issues owned by ${ownerName} for ${getFilterDescription()}`
+                : `Viewing issues for ${getFilterDescription()}`;
             document.getElementById('modalModuleFilter').value = category === 'all' ? 'all' : category;
             document.getElementById('modalSeverityFilter').value = 'all';
             loadIssuesForModal(category);
@@ -737,6 +743,7 @@
 
         function closeIssuesModal() {
             document.getElementById('issuesDrilldownModal').classList.add('hidden');
+            currentOwnerFilter = null;
         }
 
         function loadIssuesForModal(category) {
@@ -756,7 +763,14 @@
 
             let issues = [];
 
-            const filteredReal = category === 'all' ? realIssues : realIssues.filter(i => i.module === category);
+            let filteredReal = category === 'all' ? realIssues : realIssues.filter(i => i.module === category);
+            if (currentOwnerFilter) {
+                const ownerLower = currentOwnerFilter.toLowerCase().trim();
+                filteredReal = filteredReal.filter(i => {
+                    const o = (i.owner || '').toLowerCase().trim();
+                    return o === ownerLower || o.includes(ownerLower) || ownerLower.includes(o);
+                });
+            }
             if (filteredReal.length > 0) {
                 issues = filteredReal.map((issue, idx) => ({
                     id: issue.recordId || `issue_${idx + 1}`,
@@ -1217,7 +1231,8 @@
         function showAgentDetails(agentId) {
             const agent = currentAgentData.find(a => a.id === agentId);
             if (agent) {
-                openIssuesModal(agent.team === 'SDR' ? 'Leads' : 'Deals');
+                const module = agent.team === 'SDR' ? 'Leads' : 'Deals';
+                openIssuesModal(module, agent.name);
             }
         }
 
