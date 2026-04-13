@@ -1189,6 +1189,27 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    path: "/api/duplicates/recalculate-stats",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { pool } = await import('../../utils/duplicateRadarDatabase');
+          const clustersResult = await pool.query('SELECT id FROM duplicate_clusters');
+          let updated = 0;
+          for (const row of clustersResult.rows) {
+            await updateClusterStats(row.id);
+            updated++;
+          }
+          return c.json({ success: true, clustersUpdated: updated });
+        } catch (error: any) {
+          console.error('Error recalculating stats:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;

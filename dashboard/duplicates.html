@@ -490,6 +490,7 @@
 
         async function refreshData() {
             try {
+                await fetch('/api/duplicates/recalculate-stats', { method: 'POST' }).catch(() => {});
                 const [summaryRes, clustersRes, ownersRes, logsRes] = await Promise.all([
                     fetch('/api/duplicates/summary'),
                     fetch('/api/duplicates/clusters'),
@@ -736,19 +737,24 @@
                 document.getElementById('modalTitle').textContent = data.cluster.company_name || data.cluster.domain;
                 document.getElementById('modalDomain').textContent = data.cluster.domain;
 
+                const actualRecords = data.records || [];
+                const actualTotal = actualRecords.length;
+                const actualLeads = actualRecords.filter(r => r.record_type === 'lead').length;
+                const actualDeals = actualRecords.filter(r => r.record_type === 'deal').length;
+
                 let content = `
                     <div class="grid grid-cols-3 gap-4 mb-4">
                         <div class="bg-gray-50 p-3 rounded">
                             <div class="text-sm text-gray-500">Total Records</div>
-                            <div class="text-xl font-bold">${data.cluster.total_records}</div>
+                            <div class="text-xl font-bold">${actualTotal || data.cluster.total_records}</div>
                         </div>
                         <div class="bg-amber-50 p-3 rounded">
                             <div class="text-sm text-gray-500">Leads</div>
-                            <div class="text-xl font-bold text-amber-600">${data.cluster.total_leads}</div>
+                            <div class="text-xl font-bold text-amber-600">${actualLeads || data.cluster.total_leads}</div>
                         </div>
                         <div class="bg-red-50 p-3 rounded">
                             <div class="text-sm text-gray-500">Deals</div>
-                            <div class="text-xl font-bold text-red-600">${data.cluster.total_deals}</div>
+                            <div class="text-xl font-bold text-red-600">${actualDeals || data.cluster.total_deals}</div>
                         </div>
                     </div>
 
