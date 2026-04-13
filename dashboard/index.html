@@ -827,6 +827,19 @@
 
             const grouped = groupIssuesByRecord(issues);
 
+            if (grouped.length === 0) {
+                const ownerMsg = currentOwnerFilter ? ` for ${currentOwnerFilter}` : '';
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center">
+                    <div class="flex flex-col items-center gap-2">
+                        <svg class="w-12 h-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p class="text-base font-medium text-gray-700">No issues found${ownerMsg}</p>
+                        <p class="text-sm text-gray-400">All records passed the quality audit with no data hygiene issues.</p>
+                    </div>
+                </td></tr>`;
+                document.getElementById('modalFooter').textContent = `0 issues — all records are clean`;
+                return;
+            }
+
             tbody.innerHTML = grouped.map(record => {
                 const issuesList = record.issues.map(i =>
                     `<div class="flex items-start gap-2 py-1">
