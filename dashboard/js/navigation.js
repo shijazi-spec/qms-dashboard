@@ -25,7 +25,6 @@ const WalaPlusNav = {
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
         { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
         { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' },
-        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
@@ -38,6 +37,7 @@ const WalaPlusNav = {
       color: 'slate',
       items: [
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
+        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Risks', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
         { label: 'Policies', href: '/policies', icon: 'document-text', id: 'policies' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
