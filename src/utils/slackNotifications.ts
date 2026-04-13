@@ -34,9 +34,11 @@ function scoreLabel(score: number): string {
 function formatDate(date: Date): string {
   const d = new Date(date);
   return d.toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric'
+    year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: 'Asia/Riyadh'
   }) + ' at ' + d.toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', hour12: true
+    hour: '2-digit', minute: '2-digit', hour12: true,
+    timeZone: 'Asia/Riyadh'
   });
 }
 
