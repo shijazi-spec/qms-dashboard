@@ -48,12 +48,6 @@
                     </svg>
                     Scan from Zoho
                 </button>
-                <button onclick="generateMockData()" id="generateBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
-                    </svg>
-                    Generate Test Data
-                </button>
                 <button onclick="exportData()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -69,18 +63,26 @@
             </div>
         </div>
 
-        <div class="flex gap-2 mb-6 flex-wrap">
+        <div class="flex gap-2 mb-4 flex-wrap">
             <button onclick="showTab('summary')" id="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
-            <button onclick="showTab('search')" id="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                Search
-            </button>
             <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
             <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
             <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
             <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
+            <button onclick="showTab('search')" id="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Search
+            </button>
+        </div>
+
+        <div class="flex gap-3 mb-4 items-center flex-wrap">
+            <label class="text-sm font-medium text-gray-700">Filter by Creation Date:</label>
+            <input type="date" id="filterDateFrom" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" onchange="applyDateFilter()">
+            <span class="text-gray-400 text-sm">to</span>
+            <input type="date" id="filterDateTo" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" onchange="applyDateFilter()">
+            <button onclick="clearDateFilter()" class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
         </div>
 
         <div id="content-summary" class="tab-content">
@@ -434,6 +436,58 @@
         let sourceChart = null;
         let confidenceChart = null;
 
+        let allLeadGroups = [];
+        let allDealGroups = [];
+        let allClustersRaw = [];
+        let allLogsRaw = [];
+
+        function getDateRange() {
+            const from = document.getElementById('filterDateFrom').value;
+            const to = document.getElementById('filterDateTo').value;
+            return { from: from || null, to: to || null };
+        }
+
+        function isInDateRange(dateStr, range) {
+            if (!dateStr) return true;
+            if (!range.from && !range.to) return true;
+            const d = dateStr.substring(0, 10);
+            if (range.from && d < range.from) return false;
+            if (range.to && d > range.to) return false;
+            return true;
+        }
+
+        function applyDateFilter() {
+            const range = getDateRange();
+            renderClusters(filterClustersByDate(allClustersRaw, range));
+            renderLeads(filterGroupsByDate(allLeadGroups, range, 'leads'));
+            renderDeals(filterGroupsByDate(allDealGroups, range, 'deals'));
+            renderLogs(filterLogsByDate(allLogsRaw, range));
+        }
+
+        function clearDateFilter() {
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            applyDateFilter();
+        }
+
+        function filterClustersByDate(clusterList, range) {
+            if (!range.from && !range.to) return clusterList;
+            return clusterList.filter(c => isInDateRange(c.created_at || c.first_seen, range));
+        }
+
+        function filterGroupsByDate(groups, range, key) {
+            if (!range.from && !range.to) return groups;
+            return groups.map(g => {
+                const filtered = (g[key] || []).filter(r => isInDateRange(r.created_at || r.zoho_created_time, range));
+                return filtered.length > 0 ? { ...g, [key]: filtered } : null;
+            }).filter(Boolean);
+        }
+
+        function filterLogsByDate(logs, range) {
+            if (!range.from && !range.to) return logs;
+            return logs.filter(l => isInDateRange(l.created_at || l.scan_date, range));
+        }
+
         async function refreshData() {
             try {
                 const [summaryRes, clustersRes, ownersRes, logsRes] = await Promise.all([
@@ -445,15 +499,22 @@
 
                 summary = await summaryRes.json();
                 const clustersData = await clustersRes.json();
-                clusters = clustersData.clusters || [];
+                allClustersRaw = clustersData.clusters || [];
+                clusters = allClustersRaw;
                 const ownersData = await ownersRes.json();
                 const logsData = await logsRes.json();
+                allLogsRaw = logsData.logs || [];
 
                 updateSummary(summary);
                 renderClusters(clusters);
                 renderOwners(ownersData.owners || []);
-                renderLogs(logsData.logs || []);
+                renderLogs(allLogsRaw);
                 await loadLeadsAndDeals();
+
+                const range = getDateRange();
+                if (range.from || range.to) {
+                    applyDateFilter();
+                }
             } catch (error) {
                 console.error('Error refreshing data:', error);
             }
@@ -564,8 +625,11 @@
                 const leadsData = await leadsRes.json();
                 const dealsData = await dealsRes.json();
 
-                renderLeads(leadsData.groups || []);
-                renderDeals(dealsData.groups || []);
+                allLeadGroups = leadsData.groups || [];
+                allDealGroups = dealsData.groups || [];
+
+                renderLeads(allLeadGroups);
+                renderDeals(allDealGroups);
             } catch (error) {
                 console.error('Error loading leads/deals:', error);
             }
