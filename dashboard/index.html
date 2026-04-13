@@ -407,8 +407,19 @@
                             </div>
                             <div class="p-6">
                                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="issuesCategoryCards"></div>
-                                <div class="chart-container" style="height: 180px;">
-                                    <canvas id="issuesChart"></canvas>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <p class="text-xs font-medium text-gray-500 uppercase mb-2 text-center">Records with Errors</p>
+                                        <div class="chart-container" style="height: 180px;">
+                                            <canvas id="issuesChart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-medium text-gray-500 uppercase mb-2 text-center">Total Issues</p>
+                                        <div class="chart-container" style="height: 180px;">
+                                            <canvas id="issuesChartTotal"></canvas>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -568,6 +579,7 @@
     <script>
         const API_BASE = '/api';
         let issuesChart = null;
+        let issuesTotalChart = null;
         let trendChart = null;
         let customizeMode = false;
         let sortableInstances = [];
@@ -1411,6 +1423,7 @@
             const recordCounts = computeRecordCountsByModule(audit.raw_audit_data);
             const hasRecordCounts = Object.keys(recordCounts).length > 0;
             updateIssuesChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
+            updateIssuesTotalChart(audit.issues_by_category);
             updateIssuesCategoryCards(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateTrendChart(data.auditHistory);
             updateOpportunities(audit);
@@ -1489,6 +1502,45 @@
                 });
             } catch (err) {
                 console.error('Error rendering issues chart:', err);
+            }
+        }
+
+        function updateIssuesTotalChart(issuesByCategory) {
+            try {
+                const canvas = document.getElementById('issuesChartTotal');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                if (issuesTotalChart) {
+                    issuesTotalChart.destroy();
+                    issuesTotalChart = null;
+                }
+                const normalized = normalizeIssuesByCategory(issuesByCategory);
+                const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+                const values = allModules.map(m => normalized[m] || 0);
+                issuesTotalChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: allModules,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#f43f5e'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        plugins: {
+                            legend: {
+                                position: 'right'
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Error rendering total issues chart:', err);
             }
         }
 
