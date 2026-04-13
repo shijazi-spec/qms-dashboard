@@ -1,0 +1,24 @@
+Part A: Integrated QMS (formerly Policies)
+Database Schema (policyDatabase.ts) — Extended the policies table with 10 new columns: document_type, document_number, file_name, file_size, file_mime_type, confidentiality, retention_period, distribution_list, supersedes_id, tags. Added 6 new functions: deletePolicy, linkPolicyToEntities, getDocumentsByTypeSummary, getReviewCycles, createReviewCycle, updateReviewCycle.
+
+File Upload (fileUpload.ts) — New utility supporting PDF, DOCX, XLSX, PPTX, PNG, JPG uploads up to 25MB, stored in /data/documents/.
+
+API Routes (policyRoutes.ts) — Added 10 new endpoints: DELETE, link, review-cycles CRUD, by-type-summary, file upload/download, CSV export. Updated GET to support document_type filter.
+
+UI Overhaul (policies.html) — Complete redesign as "Integrated QMS" with document type tabs (All/Policies/SOPs/Forms/Documents/Controls), enhanced table with Type and Confidentiality columns, full Create/Edit modal, delete with confirmation, CSV export, and all existing GRC approval flows preserved.
+
+Part B: Compliance Per-Framework
+Compliance DB (complianceDatabase.ts) — Added section_domain, section_order, clause_number to obligations; framework_type, total_clauses, icon_key to regulations. Added 3 new query functions: getFrameworksOverview, getFrameworkDetail, getFrameworkHeatmap.
+
+Framework Seed (complianceFrameworkSeed.ts) — Complete clause structures for 6 frameworks: ISO 9001 (28 clauses), ISO 27001 (27 clauses + Annex A), PDPL (21 articles), SOC 2 (30 criteria), NCA ECC (29 controls), PCI DSS (24 requirements). Idempotent seeding.
+
+PDPL Seed (qmsDocumentSeed.ts) — Seeds 148 controlled documents (27 Policies, 39 SOPs, 54 Forms, 22 Documents, 6 Controls) with WP-XXX-NNN numbering and full metadata.
+
+Compliance API (complianceRoutes.ts) — 5 new endpoints: frameworks overview, detail, heatmap, framework seed trigger, QMS document seed trigger.
+
+Compliance UI (compliance.html) — Framework cards grid with compliance percentage gauges, per-framework detail view with section-level progress bars and clause-level tables, compliance heatmap, evidence document picker in assessment modal, "Seed All Frameworks" button.
+
+Part C: Navigation & Documentation
+Navigation (navigation.js) — Sidebar label changed from "Policies" to "Integrated QMS".
+
+SOP (WalaPlus_Platform_SOP.md) — Section 4.4 updated with framework cards, heatmap, evidence linking, and new API endpoints. Section 4.6 renamed to "Integrated QMS" with complete documentation of all document types, WP numbering, file upload, PDPL seed, and new endpoints.

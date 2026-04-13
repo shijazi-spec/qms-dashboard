@@ -397,5 +397,42 @@ export const complianceRoutes = [
         }
       };
     }
+  },
+  {
+    path: "/api/compliance/dashboard",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getComplianceDashboardStats, initComplianceTables } = await import('../../utils/complianceDatabase');
+          await initComplianceTables();
+          const stats = await getComplianceDashboardStats();
+          return c.json(stats);
+        } catch (error) {
+          console.error('❌ [ComplianceAPI] Error fetching dashboard:', error);
+          return c.json({ error: 'Failed to fetch dashboard stats' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/compliance/gap-analysis",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getComplianceGapAnalysis, initComplianceTables } = await import('../../utils/complianceDatabase');
+          await initComplianceTables();
+          const url = new URL(c.req.url);
+          const regulationId = url.searchParams.get('regulation_id') ? parseInt(url.searchParams.get('regulation_id')!) : undefined;
+          const gaps = await getComplianceGapAnalysis(regulationId);
+          const { obfuscateResourceIdsList } = await import('../../utils/riskDatabase');
+          return c.json({ gap_analysis: obfuscateResourceIdsList(gaps) });
+        } catch (error) {
+          console.error('❌ [ComplianceAPI] Error fetching gap analysis:', error);
+          return c.json({ error: 'Failed to fetch gap analysis' }, 500);
+        }
+      };
+    }
   }
 ];

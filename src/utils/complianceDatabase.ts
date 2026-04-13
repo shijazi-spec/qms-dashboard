@@ -29,6 +29,9 @@ export interface Obligation {
   article_reference?: string;
   title: string;
   description: string;
+  section_domain?: string;
+  section_order?: number;
+  clause_number?: string;
   requirement_type: 'mandatory' | 'recommended' | 'optional';
   control_type: 'preventive' | 'detective' | 'corrective';
   applicability_criteria?: string;
@@ -178,7 +181,12 @@ export async function initComplianceTables(): Promise<void> {
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_obligations_public_id ON obligations(public_id)`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_assessments_public_id ON compliance_assessments(public_id)`);
 
+  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS section_domain VARCHAR(100)`);
+  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS section_order INTEGER`);
+  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`);
+
   await seedDefaultRegulations();
+  await seedPDPLObligations();
   console.log('✅ [ComplianceDB] Compliance tables initialized');
 }
 
@@ -336,7 +344,7 @@ export async function createObligation(obl: Obligation): Promise<Obligation> {
 }
 
 export async function getObligationsByRegulation(regulationId: number): Promise<Obligation[]> {
-  const result = await pool.query('SELECT * FROM obligations WHERE regulation_id = $1 ORDER BY priority DESC, title ASC', [regulationId]);
+  const result = await pool.query('SELECT * FROM obligations WHERE regulation_id = $1 ORDER BY section_order ASC NULLS LAST, obligation_code ASC', [regulationId]);
   return result.rows;
 }
 
@@ -590,5 +598,102 @@ export async function getOverdueEvents(): Promise<any[]> {
     AND cc.scheduled_date < NOW()
     ORDER BY cc.scheduled_date ASC
   `);
+  return result.rows;
+}
+
+async function seedPDPLObligations(): Promise<void> {
+  const existing = await pool.query("SELECT COUNT(*) FROM obligations WHERE obligation_code LIKE 'PDPL-%'");
+  if (parseInt(existing.rows[0].count) > 0) return;
+
+  const pdplReg = await pool.query("SELECT id FROM regulations WHERE regulation_code = 'PDPL'");
+  if (pdplReg.rows.length === 0) return;
+  const regId = pdplReg.rows[0].id;
+
+  console.log('🌱 [ComplianceDB] Seeding PDPL obligations...');
+
+  const pdplObligations = [
+    { code: 'PDPL-01', clause: 'Art 5', domain: 'Lawful Basis', order: 1, title: 'Lawful Basis for Processing', desc: 'Ensure all personal data processing has a valid lawful basis (consent, contractual necessity, legitimate interest, legal obligation, vital interest, or public interest)', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'Legal' },
+    { code: 'PDPL-02', clause: 'Art 6', domain: 'Lawful Basis', order: 2, title: 'Consent Requirements', desc: 'Obtain explicit, informed, and freely given consent for processing personal data where consent is the lawful basis', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'All Departments' },
+    { code: 'PDPL-03', clause: 'Art 7', domain: 'Data Subject Rights', order: 3, title: 'Right to Be Informed', desc: 'Inform data subjects about the purpose, legal basis, data categories, recipients, retention period, and their rights before or at the time of collection', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'high', dept: 'Privacy Office' },
+    { code: 'PDPL-04', clause: 'Art 8', domain: 'Data Subject Rights', order: 4, title: 'Right of Access', desc: 'Provide data subjects with access to their personal data upon request within 30 days', type: 'mandatory', ctrl: 'detective', freq: 'event_driven', priority: 'high', dept: 'Privacy Office' },
+    { code: 'PDPL-05', clause: 'Art 9', domain: 'Data Subject Rights', order: 5, title: 'Right to Rectification', desc: 'Allow data subjects to request correction or completion of inaccurate or incomplete personal data', type: 'mandatory', ctrl: 'corrective', freq: 'event_driven', priority: 'high', dept: 'Privacy Office' },
+    { code: 'PDPL-06', clause: 'Art 10', domain: 'Data Subject Rights', order: 6, title: 'Right to Erasure', desc: 'Delete personal data when it is no longer necessary, consent is withdrawn, or processing is unlawful', type: 'mandatory', ctrl: 'corrective', freq: 'event_driven', priority: 'high', dept: 'IT / Privacy Office' },
+    { code: 'PDPL-07', clause: 'Art 14', domain: 'Data Protection', order: 7, title: 'Data Minimisation', desc: 'Collect and process only personal data that is adequate, relevant, and limited to the stated purpose', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'high', dept: 'All Departments' },
+    { code: 'PDPL-08', clause: 'Art 15', domain: 'Data Protection', order: 8, title: 'Purpose Limitation', desc: 'Process personal data only for the specific, explicit, and legitimate purposes stated at the time of collection', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'All Departments' },
+    { code: 'PDPL-09', clause: 'Art 16', domain: 'Data Protection', order: 9, title: 'Storage Limitation', desc: 'Retain personal data only for as long as necessary to fulfil the purposes for which it was collected', type: 'mandatory', ctrl: 'detective', freq: 'quarterly', priority: 'medium', dept: 'IT / Records' },
+    { code: 'PDPL-10', clause: 'Art 17', domain: 'Security', order: 10, title: 'Technical & Organisational Measures', desc: 'Implement appropriate technical and organisational measures to protect personal data against unauthorised access, disclosure, alteration, or destruction', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'IT Security' },
+    { code: 'PDPL-11', clause: 'Art 19', domain: 'Breach Management', order: 11, title: 'Data Breach Notification', desc: 'Notify SDAIA and affected data subjects of personal data breaches within 72 hours of discovery', type: 'mandatory', ctrl: 'corrective', freq: 'event_driven', priority: 'critical', dept: 'Privacy Office / CISO' },
+    { code: 'PDPL-12', clause: 'Art 22', domain: 'Cross-Border', order: 12, title: 'Cross-Border Transfer Controls', desc: 'Ensure personal data transfers outside Saudi Arabia comply with SDAIA-approved adequacy decisions or contractual safeguards', type: 'mandatory', ctrl: 'preventive', freq: 'event_driven', priority: 'critical', dept: 'Legal / IT' },
+    { code: 'PDPL-13', clause: 'Art 30', domain: 'Governance', order: 13, title: 'Data Protection Impact Assessment', desc: 'Conduct DPIA for high-risk processing activities before commencement and maintain records', type: 'mandatory', ctrl: 'preventive', freq: 'event_driven', priority: 'high', dept: 'Privacy Office' },
+    { code: 'PDPL-14', clause: 'Art 31', domain: 'Governance', order: 14, title: 'Records of Processing Activities', desc: 'Maintain comprehensive, up-to-date records of all personal data processing activities (ROPA)', type: 'mandatory', ctrl: 'detective', freq: 'quarterly', priority: 'high', dept: 'Privacy Office' },
+    { code: 'PDPL-15', clause: 'Art 32', domain: 'Governance', order: 15, title: 'Data Protection Officer', desc: 'Appoint a qualified Data Protection Officer and ensure independence, resources, and direct reporting to senior management', type: 'mandatory', ctrl: 'preventive', freq: 'annual', priority: 'high', dept: 'Executive Management' },
+    { code: 'PDPL-16', clause: 'Art 11', domain: 'Sensitive Data', order: 16, title: 'Sensitive Data Processing', desc: 'Apply enhanced safeguards for processing sensitive personal data (health, biometric, genetic, religious, criminal, financial)', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'Privacy Office / Legal' },
+    { code: 'PDPL-17', clause: 'Art 20', domain: 'Third Parties', order: 17, title: 'Processor Agreements', desc: 'Establish binding agreements with data processors specifying processing scope, security measures, breach notification, and audit rights', type: 'mandatory', ctrl: 'preventive', freq: 'annual', priority: 'high', dept: 'Procurement / Legal' },
+    { code: 'PDPL-18', clause: 'Art 33', domain: 'Governance', order: 18, title: 'Awareness & Training', desc: 'Provide regular data protection awareness and training programmes to all employees handling personal data', type: 'recommended', ctrl: 'preventive', freq: 'annual', priority: 'medium', dept: 'HR / Privacy Office' },
+  ];
+
+  for (const ob of pdplObligations) {
+    await pool.query(`
+      INSERT INTO obligations (obligation_code, regulation_id, article_reference, title, description, section_domain, section_order, clause_number, requirement_type, control_type, compliance_frequency, priority, responsible_department, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'applicable')
+      ON CONFLICT (obligation_code) DO NOTHING
+    `, [ob.code, regId, ob.clause, ob.title, ob.desc, ob.domain, ob.order, ob.clause, ob.type, ob.ctrl, ob.freq, ob.priority, ob.dept]);
+  }
+
+  console.log('✅ [ComplianceDB] PDPL obligations seeded (' + pdplObligations.length + ' items)');
+}
+
+export async function getComplianceDashboardStats(): Promise<any> {
+  const [regsResult, oblResult, assessResult, overdueResult] = await Promise.all([
+    pool.query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = \'active\') as active FROM regulations'),
+    pool.query(`SELECT COUNT(*) as total,
+      COUNT(*) FILTER (WHERE status = 'applicable') as applicable,
+      COUNT(*) FILTER (WHERE priority = 'critical') as critical,
+      COUNT(*) FILTER (WHERE priority = 'high') as high
+      FROM obligations`),
+    pool.query(`SELECT COUNT(*) as total,
+      COUNT(*) FILTER (WHERE compliance_status = 'compliant') as compliant,
+      COUNT(*) FILTER (WHERE compliance_status = 'partially_compliant') as partial,
+      COUNT(*) FILTER (WHERE compliance_status = 'non_compliant') as non_compliant,
+      COUNT(*) FILTER (WHERE compliance_status = 'not_assessed') as not_assessed
+      FROM compliance_assessments`),
+    pool.query(`SELECT COUNT(*) as count FROM compliance_calendar WHERE status IN ('scheduled','in_progress') AND scheduled_date < NOW()`),
+  ]);
+
+  const totalOb = parseInt(oblResult.rows[0].total) || 0;
+  const assessed = parseInt(assessResult.rows[0].total) || 0;
+  const compliant = parseInt(assessResult.rows[0].compliant) || 0;
+
+  return {
+    regulations: regsResult.rows[0],
+    obligations: oblResult.rows[0],
+    assessments: assessResult.rows[0],
+    overdue_events: parseInt(overdueResult.rows[0].count),
+    compliance_rate: assessed > 0 ? Math.round((compliant / assessed) * 100) : 0,
+    coverage_rate: totalOb > 0 ? Math.round((assessed / totalOb) * 100) : 0,
+  };
+}
+
+export async function getComplianceGapAnalysis(regulationId?: number): Promise<any[]> {
+  let query = `
+    SELECT o.id, o.obligation_code, o.title, o.priority, o.section_domain,
+      o.responsible_department, r.name as regulation_name, r.regulation_code,
+      COALESCE(ca.compliance_status, 'not_assessed') as latest_status,
+      ca.score as latest_score,
+      ca.assessment_date as last_assessed
+    FROM obligations o
+    JOIN regulations r ON o.regulation_id = r.id
+    LEFT JOIN LATERAL (
+      SELECT * FROM compliance_assessments WHERE obligation_id = o.id ORDER BY assessment_date DESC LIMIT 1
+    ) ca ON true
+    WHERE o.status = 'applicable'
+  `;
+  const params: any[] = [];
+  if (regulationId) {
+    query += ' AND o.regulation_id = $1';
+    params.push(regulationId);
+  }
+  query += ' ORDER BY r.regulation_code, o.section_order ASC NULLS LAST';
+  const result = await pool.query(query, params);
   return result.rows;
 }

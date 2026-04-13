@@ -12,15 +12,16 @@ export const policyRoutes = [
           const url = new URL(c.req.url);
           const status = url.searchParams.get('status') || undefined;
           const category = url.searchParams.get('category') || undefined;
+          const document_type = url.searchParams.get('document_type') || undefined;
           const owner_department = url.searchParams.get('owner_department') || undefined;
           const search = url.searchParams.get('search') || undefined;
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const offset = parseInt(url.searchParams.get('offset') || '0');
 
-          logger?.info('📋 [PolicyAPI] GET /api/policies', { status, category });
+          logger?.info('📋 [PolicyAPI] GET /api/policies', { status, category, document_type });
 
           const result = await getAllPolicies({
-            status, category, owner_department, search, limit, offset
+            status, category, document_type, owner_department, search, limit, offset
           });
 
           return c.json(result);
@@ -67,6 +68,128 @@ export const policyRoutes = [
         } catch (error) {
           console.error('❌ [PolicyAPI] Error fetching overdue policies:', error);
           return c.json({ error: 'Failed to fetch overdue policies' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/by-type-summary",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getDocumentsByTypeSummary, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+          const summary = await getDocumentsByTypeSummary();
+          return c.json({ summary });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error fetching by-type summary:', error);
+          return c.json({ error: 'Failed to fetch summary' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/review-cycles",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getReviewCycles, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+          const url = new URL(c.req.url);
+          const policyId = url.searchParams.get('policy_id') ? parseInt(url.searchParams.get('policy_id')!) : undefined;
+          const cycles = await getReviewCycles(policyId);
+          return c.json({ review_cycles: cycles });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error fetching review cycles:', error);
+          return c.json({ error: 'Failed to fetch review cycles' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/review-cycles",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { createReviewCycle, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+          const body = await c.req.json();
+          if (!body.policy_id || !body.scheduled_date) return c.json({ error: 'Missing required fields' }, 400);
+          const cycle = await createReviewCycle(body);
+          return c.json({ success: true, review_cycle: cycle });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error creating review cycle:', error);
+          return c.json({ error: 'Failed to create review cycle' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/export",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getAllPolicies, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+
+          const url = new URL(c.req.url);
+          const document_type = url.searchParams.get('document_type') || undefined;
+          const status = url.searchParams.get('status') || undefined;
+          const { policies } = await getAllPolicies({ document_type, status, limit: 10000, offset: 0 });
+
+          const { escapeCSVValue } = await import('../../utils/inputSanitizer');
+          const headers = ['ID','Doc Number','Policy Number','Title','Type','Category','Status','Confidentiality','Owner','Department','Version','Effective Date','Review Date','Tags','Created'];
+          const rows = [headers.join(',')];
+          for (const p of policies) {
+            rows.push([
+              p.id, p.document_number || '', p.policy_number, p.title,
+              p.document_type || 'policy', p.category, p.status,
+              p.confidentiality || 'internal', p.owner_name || '', p.owner_department || '',
+              p.version, p.effective_date || '', p.review_date || '',
+              (p.tags || []).join('; '), p.created_at || ''
+            ].map(escapeCSVValue).join(','));
+          }
+
+          return new Response(rows.join('\n'), {
+            headers: {
+              'Content-Type': 'text/csv',
+              'Content-Disposition': `attachment; filename="qms_documents_${new Date().toISOString().split('T')[0]}.csv"`,
+            },
+          });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error exporting:', error);
+          return c.json({ error: 'Failed to export' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/pending-acknowledgments",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { getPendingAcknowledgments, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+          
+          const url = new URL(c.req.url);
+          const department = url.searchParams.get('department') || undefined;
+          
+          logger?.info('📋 [PolicyAPI] GET /api/policies/pending-acknowledgments', { department });
+          const policies = await getPendingAcknowledgments(department);
+          return c.json({ policies });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error fetching pending acknowledgments:', error);
+          return c.json({ error: 'Failed to fetch pending acknowledgments' }, 500);
         }
       };
     }
@@ -316,29 +439,6 @@ export const policyRoutes = [
     }
   },
   {
-    path: "/api/policies/pending-acknowledgments",
-    method: "GET" as const,
-    createHandler: async ({ mastra }: any) => {
-      return async (c: any) => {
-        try {
-          const logger = mastra?.getLogger();
-          const { getPendingAcknowledgments, initPolicyTables } = await import('../../utils/policyDatabase');
-          await initPolicyTables();
-          
-          const url = new URL(c.req.url);
-          const department = url.searchParams.get('department') || undefined;
-          
-          logger?.info('📋 [PolicyAPI] GET /api/policies/pending-acknowledgments', { department });
-          const policies = await getPendingAcknowledgments(department);
-          return c.json({ policies });
-        } catch (error) {
-          console.error('❌ [PolicyAPI] Error fetching pending acknowledgments:', error);
-          return c.json({ error: 'Failed to fetch pending acknowledgments' }, 500);
-        }
-      };
-    }
-  },
-  {
     path: "/api/policies/:id/grc-approval",
     method: "POST" as const,
     createHandler: async ({ mastra }: any) => {
@@ -576,6 +676,159 @@ export const policyRoutes = [
         } catch (error: any) {
           console.error('❌ [PolicyAPI] Error publishing policy:', error);
           return c.json({ error: 'Failed to publish policy' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/:id",
+    method: "DELETE" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const { requireWriteRole, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { deletePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
+          const { logEvent } = await import('../../utils/eventLogsDatabase');
+          await initPolicyTables();
+
+          const id = parseInt(c.req.param('id'));
+          const policy = await getPolicyById(id);
+          if (!policy) return c.json({ error: 'Policy not found' }, 404);
+
+          if (policy.status === 'published') {
+            return c.json({ error: 'Cannot delete a published document. Archive or retire it first.' }, 400);
+          }
+
+          await deletePolicy(id);
+          await logEvent({ entityType: 'DOCUMENT', entityId: id.toString(), actionType: 'DELETE', description: `Document deleted: ${policy.title} (${policy.policy_number})`, userName: sessionUser.email, severity: 'WARNING', module: 'policy_governance' });
+
+          return c.json({ success: true });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error deleting policy:', error);
+          return c.json({ error: 'Failed to delete document' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/:id/link",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { linkPolicyToEntities, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+
+          const id = parseInt(c.req.param('id'));
+          const body = await c.req.json();
+          const updated = await linkPolicyToEntities(id, body);
+          return c.json({ success: true, policy: updated });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error linking policy:', error);
+          return c.json({ error: 'Failed to link document' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/review-cycles/:id",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { updateReviewCycle, initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+          const id = parseInt(c.req.param('id'));
+          const body = await c.req.json();
+          const cycle = await updateReviewCycle(id, body);
+          return c.json({ success: true, review_cycle: cycle });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error updating review cycle:', error);
+          return c.json({ error: 'Failed to update review cycle' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/:id/upload",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { updatePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
+          const { validateFile, saveUploadedFile } = await import('../../utils/fileUpload');
+          await initPolicyTables();
+
+          const id = parseInt(c.req.param('id'));
+          const policy = await getPolicyById(id);
+          if (!policy) return c.json({ error: 'Document not found' }, 404);
+
+          const formData = await c.req.formData();
+          const file = formData.get('file');
+          if (!file || !(file instanceof File)) return c.json({ error: 'No file provided' }, 400);
+
+          const validation = validateFile(file.name, file.size, file.type);
+          if (!validation.valid) return c.json({ error: validation.error }, 400);
+
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const fileInfo = await saveUploadedFile(buffer, file.name, file.type);
+
+          await updatePolicy(id, {
+            file_path: fileInfo.filePath,
+            file_name: fileInfo.fileName,
+            file_size: fileInfo.fileSize,
+            file_mime_type: fileInfo.mimeType,
+          }, sessionUser.email);
+
+          return c.json({ success: true, file: fileInfo });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error uploading file:', error);
+          return c.json({ error: 'Failed to upload file' }, 500);
+        }
+      };
+    }
+  },
+  {
+    path: "/api/policies/:id/download",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
+          const { getUploadedFile } = await import('../../utils/fileUpload');
+          await initPolicyTables();
+
+          const id = parseInt(c.req.param('id'));
+          const policy = await getPolicyById(id);
+          if (!policy || !policy.file_path) return c.json({ error: 'No file attached' }, 404);
+
+          const file = getUploadedFile(policy.file_path);
+          if (!file) return c.json({ error: 'File not found on disk' }, 404);
+
+          return new Response(file.buffer, {
+            headers: {
+              'Content-Type': policy.file_mime_type || 'application/octet-stream',
+              'Content-Disposition': `attachment; filename="${policy.file_name || file.fileName}"`,
+            },
+          });
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error downloading file:', error);
+          return c.json({ error: 'Failed to download file' }, 500);
         }
       };
     }

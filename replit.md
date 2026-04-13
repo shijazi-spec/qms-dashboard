@@ -35,6 +35,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
   - `knowledgeDatabase.ts` - Knowledge base document storage, chunk-based full-text search
   - `checklistDatabase.ts` - Compliance checklist engine with automated verification
   - `evidenceDatabase.ts` - Evidence/document management across QMS modules
+  - `fileUpload.ts` - Document file upload/download/validation (PDF, DOCX, XLSX, PPTX, PNG, JPG; max 25MB)
   - `executiveDigest.ts` - Weekly quality digest email (NC/CAPA/risk/audit/KPI/compliance summary, HTML email via Resend or Replit Mail)
   - `analyticsEngine.ts` - Cycle time metrics (NC/CAPA/risk/policy), agent compliance reports, CAPA recurrence detection, trend data
   - `managementReviewDatabase.ts` - ISO 9001 Clause 9.3 management review CRUD, action items, auto-gather QMS inputs
@@ -62,9 +63,9 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/admin` - Admin Panel (requires ADMIN_API_KEY)
 - `/qms` - QMS Dashboard (CAPA detail modals, bulk close, effectiveness checks, CSV export, approval flows)
 - `/audits` - Audit Readiness
-- `/compliance` - Compliance Tracking (status filter, CSV export)
+- `/compliance` - Compliance Tracking (status filter, CSV export, gap analysis, PDPL 18 obligations seeded, dashboard stats)
 - `/risks` - Risk Register (date filters, treatment progress bars, milestones, CSV export)
-- `/policies` - Policy Governance
+- `/policies` - Integrated QMS (Policies, Procedures, Work Instructions, SOPs, Forms, Templates — with document type filter, CSV export, file upload/download, confidentiality levels, tags)
 - `/vendors` - Vendor Risk Management (CSV export)
 - `/calls` - Call Intelligence
 - `/roi` - ROI & NPV Evaluation

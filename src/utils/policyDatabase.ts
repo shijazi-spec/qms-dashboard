@@ -11,6 +11,8 @@ export interface Policy {
   title: string;
   description?: string;
   category: 'governance' | 'operational' | 'hr' | 'it' | 'compliance' | 'security' | 'quality' | 'finance';
+  document_type?: 'policy' | 'sop' | 'form' | 'document' | 'control';
+  document_number?: string;
   version: string;
   status: 'draft' | 'review' | 'approval' | 'published' | 'archived' | 'retired';
   owner_name?: string;
@@ -29,6 +31,14 @@ export interface Policy {
   expiry_date?: Date;
   content_text?: string;
   file_path?: string;
+  file_name?: string;
+  file_size?: number;
+  file_mime_type?: string;
+  confidentiality?: 'public' | 'internal' | 'confidential' | 'restricted';
+  retention_period?: string;
+  distribution_list?: string[];
+  supersedes_id?: number;
+  tags?: string[];
   linked_risk_ids?: number[];
   linked_control_ids?: number[];
   linked_regulation_ids?: number[];
@@ -158,6 +168,17 @@ export async function initPolicyTables(): Promise<void> {
   await pool.query(`UPDATE policies SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_policies_public_id ON policies(public_id)`);
 
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS document_type VARCHAR(20) DEFAULT 'policy'`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS document_number VARCHAR(50)`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS file_name VARCHAR(500)`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS file_size INTEGER`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS file_mime_type VARCHAR(100)`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS confidentiality VARCHAR(20) DEFAULT 'internal'`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS retention_period VARCHAR(50)`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS distribution_list TEXT[]`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS supersedes_id INTEGER`);
+  await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS tags TEXT[]`);
+
   console.log('✅ [PolicyDB] Policy governance tables initialized');
 }
 
@@ -166,21 +187,26 @@ export async function createPolicy(policy: Policy): Promise<Policy> {
   
   const result = await pool.query(`
     INSERT INTO policies (
-      policy_number, title, description, category, version, status,
+      policy_number, title, description, category, document_type, document_number,
+      version, status,
       owner_name, owner_department, approver_name,
       effective_date, review_date, expiry_date,
-      content_text, file_path,
+      content_text, file_path, file_name, file_size, file_mime_type,
+      confidentiality, retention_period, distribution_list, supersedes_id, tags,
       linked_risk_ids, linked_control_ids, linked_regulation_ids,
       requires_acknowledgment, acknowledgment_frequency,
       parent_policy_id, change_summary, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
     RETURNING *
   `, [
     policy.policy_number, policy.title, policy.description, policy.category,
+    policy.document_type || 'policy', policy.document_number,
     policy.version || '1.0', policy.status || 'draft',
     policy.owner_name, policy.owner_department, policy.approver_name,
     policy.effective_date, policy.review_date, policy.expiry_date,
-    policy.content_text, policy.file_path,
+    policy.content_text, policy.file_path, policy.file_name, policy.file_size, policy.file_mime_type,
+    policy.confidentiality || 'internal', policy.retention_period,
+    policy.distribution_list, policy.supersedes_id, policy.tags,
     policy.linked_risk_ids, policy.linked_control_ids, policy.linked_regulation_ids,
     policy.requires_acknowledgment || false, policy.acknowledgment_frequency || 'annual',
     policy.parent_policy_id, policy.change_summary, policy.created_by
@@ -208,14 +234,17 @@ export async function updatePolicy(id: number, policy: Partial<Policy>, updatedB
   let paramCount = 1;
 
   const allowedFields = [
-    'title', 'description', 'category', 'version', 'status',
+    'title', 'description', 'category', 'document_type', 'document_number',
+    'version', 'status',
     'owner_name', 'owner_department', 'approver_name',
     'operational_owner', 'operational_owner_email',
     'compliance_owner', 'compliance_owner_email',
     'compliance_approved', 'compliance_approved_by', 'compliance_approved_at',
     'approval_blocked_reason',
     'effective_date', 'review_date', 'expiry_date',
-    'content_text', 'file_path',
+    'content_text', 'file_path', 'file_name', 'file_size', 'file_mime_type',
+    // NOTE: file_path is here for internal use by upload handler only - API routes must NOT allow external callers to set file_path directly
+    'confidentiality', 'retention_period', 'distribution_list', 'supersedes_id', 'tags',
     'linked_risk_ids', 'linked_control_ids', 'linked_regulation_ids',
     'requires_acknowledgment', 'acknowledgment_frequency',
     'change_summary'
@@ -258,6 +287,7 @@ export async function getPolicyById(id: number): Promise<Policy | null> {
 export async function getAllPolicies(filters?: {
   status?: string;
   category?: string;
+  document_type?: string;
   owner_department?: string;
   search?: string;
   limit?: number;
@@ -279,13 +309,18 @@ export async function getAllPolicies(filters?: {
     values.push(filters.category);
     paramCount++;
   }
+  if (filters?.document_type) {
+    whereConditions.push(`document_type = $${paramCount}`);
+    values.push(filters.document_type);
+    paramCount++;
+  }
   if (filters?.owner_department) {
     whereConditions.push(`owner_department = $${paramCount}`);
     values.push(filters.owner_department);
     paramCount++;
   }
   if (filters?.search) {
-    whereConditions.push(`(title ILIKE $${paramCount} OR policy_number ILIKE $${paramCount})`);
+    whereConditions.push(`(title ILIKE $${paramCount} OR policy_number ILIKE $${paramCount} OR document_number ILIKE $${paramCount})`);
     values.push(`%${filters.search}%`);
     paramCount++;
   }
@@ -498,4 +533,72 @@ export async function getPendingAcknowledgments(department?: string): Promise<an
   
   const result = await pool.query(query, params);
   return result.rows;
+}
+
+export async function deletePolicy(id: number): Promise<boolean> {
+  console.log('🗑️ [PolicyDB] Deleting policy ID:', id);
+  const result = await pool.query('DELETE FROM policies WHERE id = $1', [id]);
+  return (result.rowCount || 0) > 0;
+}
+
+export async function linkPolicyToEntities(policyId: number, links: { risk_ids?: number[]; control_ids?: number[]; regulation_ids?: number[] }): Promise<Policy> {
+  const updates: any = {};
+  if (links.risk_ids) updates.linked_risk_ids = links.risk_ids;
+  if (links.control_ids) updates.linked_control_ids = links.control_ids;
+  if (links.regulation_ids) updates.linked_regulation_ids = links.regulation_ids;
+  return updatePolicy(policyId, updates, 'system');
+}
+
+export async function getDocumentsByTypeSummary(): Promise<any[]> {
+  const result = await pool.query(`
+    SELECT 
+      COALESCE(document_type, 'policy') as document_type,
+      COUNT(*) as count,
+      COUNT(*) FILTER (WHERE status = 'published') as published,
+      COUNT(*) FILTER (WHERE status = 'draft') as draft,
+      COUNT(*) FILTER (WHERE status = 'review') as in_review,
+      COUNT(*) FILTER (WHERE status = 'approval') as pending_approval
+    FROM policies
+    GROUP BY COALESCE(document_type, 'policy')
+    ORDER BY count DESC
+  `);
+  return result.rows;
+}
+
+export async function getReviewCycles(policyId?: number): Promise<PolicyReviewCycle[]> {
+  let query = 'SELECT prc.*, p.title as policy_title, p.policy_number FROM policy_review_cycles prc JOIN policies p ON prc.policy_id = p.id';
+  const params: any[] = [];
+  if (policyId) {
+    query += ' WHERE prc.policy_id = $1';
+    params.push(policyId);
+  }
+  query += ' ORDER BY prc.scheduled_date DESC';
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
+export async function createReviewCycle(cycle: PolicyReviewCycle): Promise<PolicyReviewCycle> {
+  const result = await pool.query(`
+    INSERT INTO policy_review_cycles (policy_id, scheduled_date, reviewer_name, status)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *
+  `, [cycle.policy_id, cycle.scheduled_date, cycle.reviewer_name, cycle.status || 'scheduled']);
+  return result.rows[0];
+}
+
+export async function updateReviewCycle(id: number, updates: Partial<PolicyReviewCycle>): Promise<PolicyReviewCycle> {
+  const setClause: string[] = [];
+  const values: any[] = [];
+  let paramCount = 1;
+  const allowed = ['actual_date', 'reviewer_name', 'review_outcome', 'review_notes', 'next_scheduled_date', 'status'];
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowed.includes(key) && value !== undefined) {
+      setClause.push(`${key} = $${paramCount}`);
+      values.push(value);
+      paramCount++;
+    }
+  }
+  values.push(id);
+  const result = await pool.query(`UPDATE policy_review_cycles SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+  return result.rows[0];
 }
