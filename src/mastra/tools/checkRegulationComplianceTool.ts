@@ -1,9 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pg from 'pg';
-
-const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { sharedPool as pool } from "../../utils/sharedPool";
 
 interface ComplianceGap {
   area: string;

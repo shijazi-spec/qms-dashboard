@@ -1,11 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pg from 'pg';
-const { Pool } = pg;
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+import { sharedPool as pool } from "../../utils/sharedPool";
 
 export const reviewDocumentTool = createTool({
   id: "review-document",
@@ -18,8 +13,6 @@ export const reviewDocumentTool = createTool({
   inputSchema: z.object({
     documentId: z.number().optional().describe("Specific document ID to review. If omitted, reviews all non-archived documents."),
     documentType: z.enum(["policy", "sop", "governance"]).describe("Type of document to review"),
-    checkAgainst: z.enum(["pdpl", "iso_9001", "iso_27001", "general"]).optional()
-      .describe("Standard to check the document against (default: general)"),
   }),
 
   outputSchema: z.object({
@@ -40,7 +33,6 @@ export const reviewDocumentTool = createTool({
     logger?.info("📄 [reviewDocumentTool] Starting document review...", {
       documentId: context.documentId,
       documentType: context.documentType,
-      checkAgainst: context.checkAgainst || "general",
     });
 
     try {

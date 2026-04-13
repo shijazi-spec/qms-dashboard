@@ -13,7 +13,7 @@ export const createAlertTool = createTool({
     alertType: z.enum([
       "nc_detection", "risk_alert", "kpi_miss", "regulation_gap",
       "improvement", "capa_recommendation", "training_gap",
-      "doc_review", "policy_expiry", "audit_decline",
+      "doc_review", "policy_expiry", "audit_decline", "sla_breach",
     ]).describe("Type of alert to create"),
     severity: z.enum(["critical", "high", "medium", "low", "info"])
       .describe("Severity level of the alert"),

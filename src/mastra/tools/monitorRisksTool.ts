@@ -1,11 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pg from 'pg';
-const { Pool } = pg;
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+import { sharedPool as pool } from "../../utils/sharedPool";
 
 export const monitorRisksTool = createTool({
   id: "monitor-risks",
@@ -87,11 +82,11 @@ export const monitorRisksTool = createTool({
 
         case "overdue_treatments": {
           const result = await pool.query(
-            `SELECT rta.id, rta.action_description, rta.due_date, rta.status AS action_status,
+            `SELECT rta.id, rta.action_title, rta.action_description, rta.due_date, rta.status AS action_status,
                     r.id AS risk_id, r.title AS risk_title, r.likelihood, r.impact
              FROM risk_treatment_actions rta
              JOIN risks r ON r.id = rta.risk_id
-             WHERE rta.due_date < NOW() AND rta.status != 'completed'
+             WHERE rta.due_date < NOW() AND rta.status NOT IN ('completed', 'cancelled')
              ORDER BY rta.due_date ASC`
           );
           details = result.rows.map(r => {
@@ -101,7 +96,7 @@ export const monitorRisksTool = createTool({
               title: r.risk_title,
               score: r.likelihood * r.impact,
               status: r.action_status,
-              finding: `Treatment action "${r.action_description}" is ${daysOverdue} day(s) overdue (due: ${new Date(r.due_date).toISOString().split('T')[0]}).`,
+              finding: `Treatment action "${r.action_title || r.action_description}" is ${daysOverdue} day(s) overdue (due: ${new Date(r.due_date).toISOString().split('T')[0]}).`,
             };
           });
           break;

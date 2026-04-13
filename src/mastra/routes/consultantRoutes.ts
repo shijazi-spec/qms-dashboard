@@ -14,6 +14,17 @@ import {
 
 initAIAlertsTable().catch(console.error);
 
+const CHAT_TIMEOUT = parseInt(process.env.CONSULTANT_CHAT_TIMEOUT || "120000");
+const SCAN_TIMEOUT = parseInt(process.env.CONSULTANT_SCAN_TIMEOUT || "300000");
+
+function requireAuthOrKey(c: any): boolean {
+  const adminKey = c.req.header("x-admin-key");
+  if (adminKey === process.env.ADMIN_API_KEY) return true;
+  const session = c.get?.("session") || c.get?.("user");
+  if (session) return true;
+  return false;
+}
+
 export const consultantRoutes = [
   {
     path: "/consultant",
@@ -39,6 +50,7 @@ export const consultantRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const mastra = c.get("mastra");
           const body = await c.req.json();
@@ -55,16 +67,30 @@ export const consultantRoutes = [
 
           const resolvedThreadId = threadId || `consultant-${Date.now()}`;
 
-          const response = await agent.generateLegacy(message, {
-            threadId: resolvedThreadId,
-            resourceId: "consultant-session",
-          });
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), CHAT_TIMEOUT);
 
-          return c.json({
-            success: true,
-            threadId: resolvedThreadId,
-            response: response.text,
-          });
+          try {
+            const response = await agent.generateLegacy(message, {
+              threadId: resolvedThreadId,
+              resourceId: "consultant-session",
+              abortSignal: controller.signal,
+            });
+
+            clearTimeout(timeout);
+
+            return c.json({
+              success: true,
+              threadId: resolvedThreadId,
+              response: response.text,
+            });
+          } catch (err: any) {
+            clearTimeout(timeout);
+            if (err.name === 'AbortError') {
+              return c.json({ error: "Request timed out", details: `Exceeded ${CHAT_TIMEOUT / 1000}s limit` }, 504);
+            }
+            throw err;
+          }
         } catch (error) {
           console.error("[Consultant] Chat error:", error);
           return c.json({
@@ -81,6 +107,7 @@ export const consultantRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const mastra = c.get("mastra");
           const body = await c.req.json();
@@ -97,31 +124,44 @@ export const consultantRoutes = [
 
           const resolvedThreadId = threadId || `consultant-${Date.now()}`;
 
-          const stream = await agent.streamLegacy(message, {
-            threadId: resolvedThreadId,
-            resourceId: "consultant-session",
-          });
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), CHAT_TIMEOUT);
 
-          c.header("Content-Type", "text/event-stream");
-          c.header("Cache-Control", "no-cache");
-          c.header("Connection", "keep-alive");
+          let stream: any;
+          try {
+            stream = await agent.streamLegacy(message, {
+              threadId: resolvedThreadId,
+              resourceId: "consultant-session",
+              abortSignal: controller.signal,
+            });
+          } catch (initErr: any) {
+            clearTimeout(timeout);
+            if (initErr.name === 'AbortError') {
+              return c.json({ error: "Request timed out", details: `Exceeded ${CHAT_TIMEOUT / 1000}s limit` }, 504);
+            }
+            throw initErr;
+          }
 
           const encoder = new TextEncoder();
           const readable = new ReadableStream({
-            async start(controller) {
+            async start(ctrl) {
               try {
                 for await (const chunk of stream.textStream) {
-                  controller.enqueue(
+                  ctrl.enqueue(
                     encoder.encode(`data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`)
                   );
                 }
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId })}\n\n`));
-                controller.close();
-              } catch (err) {
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`)
-                );
-                controller.close();
+                ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId })}\n\n`));
+                ctrl.close();
+              } catch (err: any) {
+                if (err.name === 'AbortError') {
+                  ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Request timed out" })}\n\n`));
+                } else {
+                  ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`));
+                }
+                ctrl.close();
+              } finally {
+                clearTimeout(timeout);
               }
             },
           });
@@ -146,6 +186,7 @@ export const consultantRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const status = c.req.query("status") as AlertStatus | undefined;
           const severity = c.req.query("severity") as AlertSeverity | undefined;
@@ -175,6 +216,7 @@ export const consultantRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const count = await getUnreadAlertCount();
           return c.json({ count });
@@ -190,6 +232,7 @@ export const consultantRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
@@ -213,6 +256,7 @@ export const consultantRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
@@ -233,6 +277,7 @@ export const consultantRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
@@ -253,6 +298,7 @@ export const consultantRoutes = [
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
         try {
           const mastra = c.get("mastra");
           const agent = mastra?.getAgent("qmsConsultantAgent");
@@ -268,20 +314,180 @@ export const consultantRoutes = [
 5. Review governance documents for expired reviews
 6. Suggest improvements based on overall trends
 
-For each finding, create an alert using the createAlertTool with appropriate severity and suggestion. Provide a complete summary of all findings.`;
+Report all findings with severity levels and recommended actions. Do NOT auto-create alerts — present findings for user review and ask before creating any alerts, NCs, or CAPAs.`;
 
-          const response = await agent.generateLegacy(scanPrompt, {
-            threadId: `scan-${Date.now()}`,
-            resourceId: "system-scanner",
-          });
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), SCAN_TIMEOUT);
 
-          return c.json({
-            success: true,
-            summary: response.text,
-          });
+          try {
+            const response = await agent.generateLegacy(scanPrompt, {
+              threadId: `scan-${Date.now()}`,
+              resourceId: "system-scanner",
+              abortSignal: controller.signal,
+            });
+
+            clearTimeout(timeout);
+
+            return c.json({
+              success: true,
+              summary: response.text,
+            });
+          } catch (err: any) {
+            clearTimeout(timeout);
+            if (err.name === 'AbortError') {
+              return c.json({ error: "Scan timed out", details: `Exceeded ${SCAN_TIMEOUT / 1000}s limit` }, 504);
+            }
+            throw err;
+          }
         } catch (error) {
           console.error("[Consultant] Scan error:", error);
           return c.json({ error: "Failed to run platform scan" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/consultant/scan-stream",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
+        try {
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          if (!agent) {
+            return c.json({ error: "QMS Consultant agent not available" }, 503);
+          }
+
+          const scanPrompt = `Perform a comprehensive platform health scan. Use all available monitoring tools to:
+1. Check regulation compliance across PDPL, ISO 9001, ISO 27001, and NCA
+2. Analyze nonconformance patterns for the last 90 days
+3. Monitor the risk register for high risks and overdue treatments
+4. Check KPI performance for missed targets
+5. Review governance documents for expired reviews
+6. Suggest improvements based on overall trends
+
+Report all findings with severity levels and recommended actions. Do NOT auto-create alerts — present findings for user review.`;
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), SCAN_TIMEOUT);
+
+          let stream: any;
+          try {
+            stream = await agent.streamLegacy(scanPrompt, {
+              threadId: `scan-${Date.now()}`,
+              resourceId: "system-scanner",
+              abortSignal: controller.signal,
+            });
+          } catch (initErr: any) {
+            clearTimeout(timeout);
+            if (initErr.name === 'AbortError') {
+              return c.json({ error: "Scan timed out", details: `Exceeded ${SCAN_TIMEOUT / 1000}s limit` }, 504);
+            }
+            throw initErr;
+          }
+
+          const encoder = new TextEncoder();
+          let stepIndex = 0;
+          const steps = [
+            "Checking regulation compliance...",
+            "Analyzing nonconformances...",
+            "Monitoring risk register...",
+            "Evaluating KPI performance...",
+            "Reviewing documents...",
+            "Generating recommendations...",
+          ];
+
+          const readable = new ReadableStream({
+            async start(ctrl) {
+              try {
+                ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ progress: 0, step: "Starting scan..." })}\n\n`));
+
+                let charCount = 0;
+                for await (const chunk of stream.textStream) {
+                  charCount += chunk.length;
+                  const newStep = Math.min(Math.floor(charCount / 200), steps.length - 1);
+                  if (newStep > stepIndex) {
+                    stepIndex = newStep;
+                    const pct = Math.min(Math.round(((stepIndex + 1) / steps.length) * 90), 90);
+                    ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ progress: pct, step: steps[stepIndex] })}\n\n`));
+                  }
+                  ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+                }
+
+                ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ progress: 100, step: "Scan complete", done: true })}\n\n`));
+                ctrl.close();
+              } catch (err: any) {
+                if (err.name === 'AbortError') {
+                  ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Scan timed out" })}\n\n`));
+                } else {
+                  ctrl.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Scan error" })}\n\n`));
+                }
+                ctrl.close();
+              } finally {
+                clearTimeout(timeout);
+              }
+            },
+          });
+
+          return new Response(readable, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              "Connection": "keep-alive",
+            },
+          });
+        } catch (error) {
+          console.error("[Consultant] Scan stream error:", error);
+          return c.json({ error: "Failed to start scan stream" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/knowledge/upload-file",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        if (!requireAuthOrKey(c)) return c.json({ error: "Unauthorized" }, 401);
+        try {
+          const formData = await c.req.formData();
+          const file = formData.get("file");
+          if (!file || !(file instanceof File)) {
+            return c.json({ error: "No file provided" }, 400);
+          }
+
+          const allowedTypes = [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/plain",
+          ];
+          if (!allowedTypes.includes(file.type)) {
+            return c.json({ error: "Only PDF, DOCX, and TXT files are supported" }, 400);
+          }
+
+          const maxSize = 10 * 1024 * 1024;
+          if (file.size > maxSize) {
+            return c.json({ error: "File exceeds 10MB limit" }, 400);
+          }
+
+          const content = await file.text();
+          const title = formData.get("title") as string || file.name;
+          const category = formData.get("category") as string || "uploaded";
+
+          const { sharedPool } = await import("../../utils/sharedPool");
+          await sharedPool.query(
+            `INSERT INTO knowledge_documents (title, content, category, file_name, file_type, file_size, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+            [title, content, category, file.name, file.type, file.size]
+          );
+
+          return c.json({ success: true, message: `File "${file.name}" uploaded successfully` });
+        } catch (error) {
+          console.error("[Consultant] File upload error:", error);
+          return c.json({ error: "Failed to upload file" }, 500);
         }
       };
     },

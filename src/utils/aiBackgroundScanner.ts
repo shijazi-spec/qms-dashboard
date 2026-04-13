@@ -1,22 +1,20 @@
-import pg from 'pg';
-const { Pool } = pg;
+import { sharedPool as pool } from './sharedPool';
 import { createAIAlert, alertExists, type AlertType, type AlertSeverity } from './aiAlertsDatabase';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 interface ScanResult {
   alertsCreated: number;
   checksPerformed: number;
   findings: string[];
+  errors: string[];
 }
 
-async function safeQuery(sql: string, params: any[] = []): Promise<any[]> {
+async function safeQuery(sql: string, params: any[] = [], context?: string): Promise<any[]> {
   try {
     const result = await pool.query(sql, params);
     return result.rows;
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[AI Scanner] safeQuery failed${context ? ` (${context})` : ''}:`, msg);
     return [];
   }
 }
@@ -55,7 +53,7 @@ async function checkOpenNCsWithoutCAPA(result: ScanResult): Promise<void> {
       AND n.created_at < NOW() - INTERVAL '7 days'
     ORDER BY n.severity DESC, n.created_at ASC
     LIMIT 20
-  `);
+  `, [], 'checkOpenNCsWithoutCAPA');
   result.checksPerformed++;
 
   for (const nc of rows) {
@@ -79,7 +77,7 @@ async function checkHighRisks(result: ScanResult): Promise<void> {
       AND status NOT IN ('closed', 'mitigated')
     ORDER BY (likelihood * impact) DESC
     LIMIT 20
-  `);
+  `, [], 'checkHighRisks');
   result.checksPerformed++;
 
   for (const risk of rows) {
@@ -104,7 +102,7 @@ async function checkOverdueTreatments(result: ScanResult): Promise<void> {
       AND rta.status NOT IN ('completed', 'cancelled')
     ORDER BY rta.due_date ASC
     LIMIT 20
-  `);
+  `, [], 'checkOverdueTreatments');
   result.checksPerformed++;
 
   for (const action of rows) {
@@ -128,7 +126,7 @@ async function checkMissedKPIs(result: ScanResult): Promise<void> {
       SELECT value, period_end FROM kpi_entries WHERE kpi_id = kd.id ORDER BY period_end DESC LIMIT 1
     ) ke ON true
     WHERE ke.value < kd.target
-  `);
+  `, [], 'checkMissedKPIs');
   result.checksPerformed++;
 
   for (const kpi of rows) {
@@ -153,7 +151,7 @@ async function checkExpiringPolicies(result: ScanResult): Promise<void> {
       AND status NOT IN ('archived', 'superseded')
     ORDER BY review_date ASC
     LIMIT 20
-  `);
+  `, [], 'checkExpiringPolicies');
   result.checksPerformed++;
 
   for (const doc of rows) {
@@ -170,9 +168,9 @@ async function checkExpiringPolicies(result: ScanResult): Promise<void> {
 }
 
 async function checkPDPLGaps(result: ScanResult): Promise<void> {
-  const inventoryCount = await safeQuery(`SELECT COUNT(*) as cnt FROM pdpl_data_inventory`);
-  const guardrailCount = await safeQuery(`SELECT COUNT(*) as cnt FROM pdpl_ai_guardrails WHERE is_active = true`);
-  const openIncidents = await safeQuery(`SELECT COUNT(*) as cnt FROM data_incidents WHERE status NOT IN ('closed', 'resolved')`);
+  const inventoryCount = await safeQuery(`SELECT COUNT(*) as cnt FROM pdpl_data_inventory`, [], 'pdplInventory');
+  const guardrailCount = await safeQuery(`SELECT COUNT(*) as cnt FROM pdpl_ai_guardrails WHERE is_active = true`, [], 'pdplGuardrails');
+  const openIncidents = await safeQuery(`SELECT COUNT(*) as cnt FROM data_incidents WHERE status NOT IN ('closed', 'resolved')`, [], 'pdplIncidents');
   result.checksPerformed++;
 
   const invCount = parseInt(inventoryCount[0]?.cnt || '0');
@@ -219,7 +217,7 @@ async function checkAuditScoreDecline(result: ScanResult): Promise<void> {
     FROM quality_audit_results
     ORDER BY audit_date DESC
     LIMIT 5
-  `);
+  `, [], 'checkAuditScoreDecline');
   result.checksPerformed++;
 
   if (rows.length >= 3) {
@@ -249,7 +247,7 @@ async function checkTrainingGaps(result: ScanResult): Promise<void> {
       AND status NOT IN ('completed', 'cancelled')
     ORDER BY due_date ASC
     LIMIT 20
-  `);
+  `, [], 'checkTrainingGaps');
   result.checksPerformed++;
 
   if (rows.length > 0) {
@@ -276,7 +274,7 @@ async function checkLowProgressTreatments(result: ScanResult): Promise<void> {
       AND COALESCE(rta.percent_complete, 0) < 50
     ORDER BY rta.due_date ASC
     LIMIT 20
-  `);
+  `, [], 'checkLowProgressTreatments');
   result.checksPerformed++;
 
   for (const action of rows) {
@@ -296,8 +294,7 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
   result.checksPerformed++;
 
   try {
-    const { fetchAllZohoRecords, analyzeRecordHygiene, DEFAULT_GOVERNANCE_RULES } = await import('./zohoCRM');
-    const { walaPlusSalesGovernanceRules } = await import('./governanceRules');
+    const { fetchAllZohoRecords } = await import('./zohoCRM');
 
     const deals = await fetchAllZohoRecords('Deals', {
       maxRecords: 500,
@@ -323,13 +320,13 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         const firstCall = d.First_Call_Date ? new Date(d.First_Call_Date).getTime() : 0;
         if (firstCall && createdAt && (firstCall - createdAt) > 2 * ONE_BIZ_DAY) {
           const daysToContact = Math.round((firstCall - createdAt) / ONE_BIZ_DAY);
-          await createAlertIfNew('sla_breach', 'high',
+          const created = await createAlertIfNew('sla_breach', 'high',
             `SLA: First contact took ${daysToContact}d for "${dealLabel}"`,
             `Deal "${dealLabel}" was contacted ${daysToContact} days after SDR handoff. SLA is ≤1 business day (Scorecard PR2).`,
             `Coach the assigned Sales agent on SDR handoff response time. Update CRM workflow to auto-assign follow-up tasks.`,
             'deals', deal.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`SLA PR2 breach: ${dealLabel}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`SLA PR2 breach: ${dealLabel}`); }
         }
       }
 
@@ -338,13 +335,13 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         const proposalTime = new Date(d.Proposal_Sent_Date).getTime();
         if ((proposalTime - meetingTime) > 3 * ONE_BIZ_DAY) {
           const daysToProposal = Math.round((proposalTime - meetingTime) / ONE_BIZ_DAY);
-          await createAlertIfNew('sla_breach', 'high',
+          const created = await createAlertIfNew('sla_breach', 'high',
             `SLA: Proposal took ${daysToProposal}d after meeting for "${dealLabel}"`,
             `Proposal for "${dealLabel}" was sent ${daysToProposal} days after the meeting. SLA is ≤2 business days (Scorecard PR3).`,
             `Review proposal preparation process. Consider pre-prepared templates to accelerate turnaround.`,
             'deals', deal.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`SLA PR3 breach: ${dealLabel}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`SLA PR3 breach: ${dealLabel}`); }
         }
       }
 
@@ -352,44 +349,46 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
         const sentTime = new Date(d.Agreement_Sent_Date).getTime();
         const daysSinceSent = Math.round((now - sentTime) / ONE_BIZ_DAY);
         if (daysSinceSent > 14) {
-          await createAlertIfNew('sla_breach', daysSinceSent > 30 ? 'critical' : 'high',
+          const created = await createAlertIfNew('sla_breach', daysSinceSent > 30 ? 'critical' : 'high',
             `SLA: Agreement pending ${daysSinceSent}d for "${dealLabel}"`,
             `Agreement for "${dealLabel}" has been pending signature for ${daysSinceSent} days. SLA is ≤10 business days (Scorecard G4).`,
             `Escalate to Sales Manager. Follow up with client legal team. Consider involving GRC if delayed beyond 30 days.`,
             'deals', deal.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`SLA G4 breach: ${dealLabel}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`SLA G4 breach: ${dealLabel}`); }
         }
       }
 
       const activeStages = ['Contacted', 'Meeting', 'Proposal', 'Agreement Sent'];
       if (activeStages.includes(stage) && modifiedAt && (now - modifiedAt) > 3 * ONE_BIZ_DAY) {
         const daysSinceUpdate = Math.round((now - modifiedAt) / ONE_BIZ_DAY);
-        await createAlertIfNew('sla_breach', 'medium',
+        const created = await createAlertIfNew('sla_breach', 'medium',
           `CRM stale: "${dealLabel}" not updated in ${daysSinceUpdate}d`,
           `Deal "${dealLabel}" in "${stage}" stage has not been updated for ${daysSinceUpdate} days. SOP requires same-day CRM updates (Scorecard G1).`,
           `Remind the deal owner to update CRM with latest interaction notes or move the deal to appropriate stage.`,
           'deals', deal.id
         );
-        if (true) { result.alertsCreated++; result.findings.push(`G1 stale CRM: ${dealLabel}`); }
+        if (created) { result.alertsCreated++; result.findings.push(`G1 stale CRM: ${dealLabel}`); }
       }
 
       const maxDays = stageMaxDays[stage];
       if (maxDays && modifiedAt) {
         const daysInStage = Math.round((now - modifiedAt) / ONE_BIZ_DAY);
         if (daysInStage > maxDays) {
-          await createAlertIfNew('sla_breach', daysInStage > maxDays * 1.5 ? 'high' : 'medium',
+          const created = await createAlertIfNew('sla_breach', daysInStage > maxDays * 1.5 ? 'high' : 'medium',
             `Stage aging: "${dealLabel}" in ${stage} for ${daysInStage}d (max ${maxDays}d)`,
             `Deal "${dealLabel}" has been in "${stage}" for ${daysInStage} days, exceeding the maximum of ${maxDays} days defined in the Sales SOP.`,
             `Review deal status with owner. Either progress to next stage or move to On Hold/Closed Lost with documented reason.`,
             'deals', deal.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`Stage aging: ${dealLabel} in ${stage}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`Stage aging: ${dealLabel} in ${stage}`); }
         }
       }
     }
   } catch (error) {
-    console.error('[AI Scanner] Sales SLA check failed:', error instanceof Error ? error.message : error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn('[AI Scanner] Sales SLA check failed:', msg);
+    result.errors.push(`Sales SLA: ${msg}`);
   }
 }
 
@@ -426,26 +425,26 @@ async function checkSDRSLAViolations(result: ScanResult): Promise<void> {
         const threshold = isOutbound ? 4 : 2;
         if (hoursSinceCreation > threshold * 3) {
           const hoursLate = Math.round(hoursSinceCreation);
-          await createAlertIfNew('sla_breach', hoursLate > 48 ? 'high' : 'medium',
+          const created = await createAlertIfNew('sla_breach', hoursLate > 48 ? 'high' : 'medium',
             `SDR SLA: Lead "${leadLabel}" not contacted in ${hoursLate}h`,
             `Lead "${leadLabel}" (${source}) has been in New status for ${hoursLate} hours. SDR SOP requires ${isOutbound ? '≤4h' : '≤2h'} initial contact.`,
             `Assign to available SDR immediately. If source queue is overloaded, escalate to SDR TL for redistribution.`,
             'leads', lead.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`SDR SLA breach: ${leadLabel}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`SDR SLA breach: ${leadLabel}`); }
         }
       }
 
       if ((status === 'Contacting' || status === 'Contacted') && modifiedAt) {
         const daysSinceModified = (now - modifiedAt) / ONE_BIZ_DAY;
         if (daysSinceModified > 5) {
-          await createAlertIfNew('sla_breach', daysSinceModified > 10 ? 'high' : 'medium',
+          const created = await createAlertIfNew('sla_breach', daysSinceModified > 10 ? 'high' : 'medium',
             `SDR: Lead "${leadLabel}" stuck in ${status} for ${Math.round(daysSinceModified)}d`,
             `Lead "${leadLabel}" has been in "${status}" for ${Math.round(daysSinceModified)} days without qualification decision. SLA is ≤3 business days.`,
             `Follow up immediately or mark as Not Qualified/On Hold with documented reason.`,
             'leads', lead.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`SDR qualification delay: ${leadLabel}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`SDR qualification delay: ${leadLabel}`); }
         }
       }
 
@@ -453,18 +452,20 @@ async function checkSDRSLAViolations(result: ScanResult): Promise<void> {
       if (maxDays && modifiedAt) {
         const daysInStage = Math.round((now - modifiedAt) / ONE_BIZ_DAY);
         if (daysInStage > maxDays) {
-          await createAlertIfNew('sla_breach', daysInStage > maxDays * 2 ? 'high' : 'medium',
+          const created = await createAlertIfNew('sla_breach', daysInStage > maxDays * 2 ? 'high' : 'medium',
             `Lead aging: "${leadLabel}" in ${status} for ${daysInStage}d (max ${maxDays}d)`,
             `Lead "${leadLabel}" has been in "${status}" for ${daysInStage} days, exceeding the SDR SOP maximum of ${maxDays} days.`,
             `Progress the lead or move to appropriate disposition (Not Qualified, Junk, or On Hold with reason).`,
             'leads', lead.id
           );
-          if (true) { result.alertsCreated++; result.findings.push(`Lead aging: ${leadLabel} in ${status}`); }
+          if (created) { result.alertsCreated++; result.findings.push(`Lead aging: ${leadLabel} in ${status}`); }
         }
       }
     }
   } catch (error) {
-    console.error('[AI Scanner] SDR SLA check failed:', error instanceof Error ? error.message : error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn('[AI Scanner] SDR SLA check failed:', msg);
+    result.errors.push(`SDR SLA: ${msg}`);
   }
 }
 
@@ -479,7 +480,7 @@ async function checkHighConfidenceDuplicates(result: ScanResult): Promise<void> 
       WHERE status = 'active' AND confidence_level = 'high' AND total_records > 1
       ORDER BY confidence_score DESC, estimated_pipeline_value DESC
       LIMIT 10
-    `);
+    `, [], 'checkHighConfidenceDuplicates');
 
     if (rows.length > 0) {
       const totalInflation = rows.reduce((sum: number, r: any) => sum + (parseFloat(r.estimated_pipeline_value) || 0), 0);
@@ -493,7 +494,9 @@ async function checkHighConfidenceDuplicates(result: ScanResult): Promise<void> 
       if (created) { result.alertsCreated++; result.findings.push(`${rows.length} high-confidence duplicate clusters`); }
     }
   } catch (error) {
-    console.error('[AI Scanner] Duplicate check failed:', error instanceof Error ? error.message : error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn('[AI Scanner] Duplicate check failed:', msg);
+    result.errors.push(`Duplicates: ${msg}`);
   }
 }
 
@@ -503,14 +506,14 @@ async function autoCreateNCsFromCriticalSLABreaches(result: ScanResult): Promise
     const criticalAlerts = await safeQuery(`
       SELECT id, title, description, related_module, related_record_id
       FROM ai_alerts
-      WHERE alert_type = 'sla_breach' AND severity = 'critical' AND status = 'active'
+      WHERE alert_type = 'sla_breach' AND severity = 'critical' AND status IN ('open', 'acknowledged')
         AND created_at >= NOW() - INTERVAL '24 hours'
         AND NOT EXISTS (
           SELECT 1 FROM nonconformance_records
           WHERE source_type = 'sla_breach' AND source_id = CAST(ai_alerts.id AS TEXT)
         )
       ORDER BY created_at DESC LIMIT 10
-    `);
+    `, [], 'autoCreateNCsFromCriticalSLABreaches');
 
     for (const alert of criticalAlerts) {
       try {
@@ -519,13 +522,14 @@ async function autoCreateNCsFromCriticalSLABreaches(result: ScanResult): Promise
           INSERT INTO nonconformance_records (nc_number, title, description, nc_type, severity, status,
             source_type, source_id, source_reference, detected_by, detected_date, metadata)
           VALUES ($1, $2, $3, 'process', 'critical', 'open', 'sla_breach', $4, $5, 'AI Scanner', NOW(),
-            '{"auto_created": true, "alert_id": ${alert.id}}'::jsonb)
+            $6::jsonb)
         `, [
           ncNumber,
           `[Auto] ${alert.title}`,
           `Automatically created from critical SLA breach alert.\n\n${alert.description}`,
           String(alert.id),
-          `Alert #${alert.id} — ${alert.related_module}`
+          `Alert #${alert.id} — ${alert.related_module}`,
+          JSON.stringify({ auto_created: true, alert_id: alert.id })
         ]);
         result.alertsCreated++;
         result.findings.push(`Auto-NC created from critical SLA breach: ${alert.title}`);
@@ -534,7 +538,9 @@ async function autoCreateNCsFromCriticalSLABreaches(result: ScanResult): Promise
       }
     }
   } catch (error) {
-    console.error('[AI Scanner] Auto-NC creation check failed:', error instanceof Error ? error.message : error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn('[AI Scanner] Auto-NC creation check failed:', msg);
+    result.errors.push(`Auto-NC: ${msg}`);
   }
 }
 
@@ -551,7 +557,7 @@ async function checkCAPARecurrence(result: ScanResult): Promise<void> {
       HAVING COUNT(*) >= 2
       ORDER BY cnt DESC
       LIMIT 5
-    `);
+    `, [], 'checkCAPARecurrence');
 
     for (const row of rows) {
       const created = await createAlertIfNew(
@@ -564,31 +570,36 @@ async function checkCAPARecurrence(result: ScanResult): Promise<void> {
       if (created) { result.alertsCreated++; result.findings.push(`CAPA recurrence: ${row.root_cause.substring(0, 40)}`); }
     }
   } catch (error) {
-    console.error('[AI Scanner] CAPA recurrence check failed:', error instanceof Error ? error.message : error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn('[AI Scanner] CAPA recurrence check failed:', msg);
+    result.errors.push(`CAPA recurrence: ${msg}`);
   }
 }
 
 export async function runBackgroundScan(): Promise<ScanResult> {
-  const result: ScanResult = { alertsCreated: 0, checksPerformed: 0, findings: [] };
+  const result: ScanResult = { alertsCreated: 0, checksPerformed: 0, findings: [], errors: [] };
 
   console.log('[AI Scanner] Starting background platform scan...');
 
-  await checkOpenNCsWithoutCAPA(result);
-  await checkHighRisks(result);
-  await checkOverdueTreatments(result);
-  await checkLowProgressTreatments(result);
-  await checkMissedKPIs(result);
-  await checkExpiringPolicies(result);
-  await checkPDPLGaps(result);
-  await checkAuditScoreDecline(result);
-  await checkTrainingGaps(result);
-  await checkSalesSLAViolations(result);
-  await checkSDRSLAViolations(result);
-  await checkHighConfidenceDuplicates(result);
-  await autoCreateNCsFromCriticalSLABreaches(result);
-  await checkCAPARecurrence(result);
+  await Promise.all([
+    checkOpenNCsWithoutCAPA(result),
+    checkHighRisks(result),
+    checkOverdueTreatments(result),
+    checkLowProgressTreatments(result),
+    checkMissedKPIs(result),
+    checkExpiringPolicies(result),
+    checkPDPLGaps(result),
+    checkAuditScoreDecline(result),
+    checkTrainingGaps(result),
+    checkSalesSLAViolations(result),
+    checkSDRSLAViolations(result),
+    checkHighConfidenceDuplicates(result),
+    checkCAPARecurrence(result),
+  ]);
 
-  console.log(`[AI Scanner] Scan complete. Checks: ${result.checksPerformed}, Alerts created: ${result.alertsCreated}, Findings: ${result.findings.length}`);
+  await autoCreateNCsFromCriticalSLABreaches(result);
+
+  console.log(`[AI Scanner] Scan complete. Checks: ${result.checksPerformed}, Alerts created: ${result.alertsCreated}, Findings: ${result.findings.length}, Errors: ${result.errors.length}`);
 
   return result;
 }

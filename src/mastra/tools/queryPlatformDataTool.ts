@@ -1,9 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pg from 'pg';
-
-const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { sharedPool as pool } from "../../utils/sharedPool";
 
 const MODULE_TABLE_MAP: Record<string, { table: string; orderBy?: string; join?: string }> = {
   nonconformances: { table: 'nonconformance_records' },
@@ -14,7 +11,7 @@ const MODULE_TABLE_MAP: Record<string, { table: string; orderBy?: string; join?:
   compliance: { table: 'obligations' },
   kpis: {
     table: 'kpi_definitions',
-    join: 'LEFT JOIN kpi_entries ON kpi_definitions.id = kpi_entries.kpi_definition_id',
+    join: 'LEFT JOIN kpi_entries ON kpi_definitions.id = kpi_entries.kpi_id',
   },
   vendors: { table: 'vendors' },
   pdpl: { table: 'pdpl_data_inventory' },

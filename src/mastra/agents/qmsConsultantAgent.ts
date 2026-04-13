@@ -12,9 +12,10 @@ import { monitorRisksTool } from "../tools/monitorRisksTool";
 import { monitorKPIsTool } from "../tools/monitorKPIsTool";
 import { createAlertTool } from "../tools/createAlertTool";
 import { createNcTool, getNcListTool } from "../tools/ncManagementTool";
-import { createCapaTool, getCapaListTool, getCapaDetailsTool } from "../tools/capaManagementTool";
+import { createCapaTool, updateCapaTool, getCapaListTool, getCapaDetailsTool, addCapaActionTool } from "../tools/capaManagementTool";
 import { runChecklistTool, manageChecklistTool } from "../tools/checklistTools";
 import { searchKnowledgeTool } from "../tools/searchKnowledgeTool";
+import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainingAssignmentsTool, completeTrainingTool } from "../tools/trainingManagementTool";
 
 const openai = createOpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -76,19 +77,28 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 7. **monitorKPIsTool**: KPI tracking — missed targets, declining trends, overall status
 
 ### Action Tools
-8. **createAlertTool**: Create structured alerts in the platform for findings that need attention
+8. **createAlertTool**: Create structured alerts in the platform for findings that need attention (supports sla_breach type)
 9. **createNcTool**: Create nonconformance records when issues are detected
 10. **getNcListTool**: List existing nonconformances with filters
 11. **createCapaTool**: Create CAPA records for corrective actions
-12. **getCapaListTool**: List existing CAPAs with filters
-13. **getCapaDetailsTool**: Get detailed CAPA information
+12. **updateCapaTool**: Update existing CAPA records with status, root cause, corrective/preventive actions
+13. **getCapaListTool**: List existing CAPAs with filters
+14. **getCapaDetailsTool**: Get detailed CAPA information including action items
+15. **addCapaActionTool**: Add action items to a CAPA record (immediate, corrective, preventive, verification)
 
 ### Checklist Engine Tools
-14. **runChecklistTool**: Execute compliance checklists against live platform data. Use action="list" to see available checklists, action="run" with a checklistId to execute one and get a scored pass/fail report, or action="history" to see past runs and score trends.
-15. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, data_query, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, pdpl, vendors, audits, event_logs.
+16. **runChecklistTool**: Execute compliance checklists against live platform data. Use action="list" to see available checklists, action="run" with a checklistId to execute one and get a scored pass/fail report, or action="history" to see past runs and score trends.
+17. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, data_query, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, pdpl, vendors, audits, event_logs.
 
 ### Knowledge Base Tools
-16. **searchKnowledgeTool**: Search the uploaded regulatory knowledge base. Use action="search" with a query to find relevant clauses, requirements, or guidance from uploaded documents (ISO standards, PDPL law, SOPs). Use action="list" to see all uploaded documents. When answering regulatory questions, ALWAYS search the knowledge base first to provide citations from actual uploaded documents rather than relying solely on training knowledge.
+18. **searchKnowledgeTool**: Search the uploaded regulatory knowledge base. Use action="search" with a query to find relevant clauses, requirements, or guidance from uploaded documents (ISO standards, PDPL law, SOPs). Use action="list" to see all uploaded documents. When answering regulatory questions, ALWAYS search the knowledge base first to provide citations from actual uploaded documents rather than relying solely on training knowledge.
+
+### Training Management Tools
+19. **createTrainingTool**: Create new training courses/programs in the system
+20. **getTrainingListTool**: List available training courses with filtering
+21. **assignTrainingTool**: Assign training to employees
+22. **getTrainingAssignmentsTool**: Retrieve training assignments with filters
+23. **completeTrainingTool**: Mark training assignments as completed with optional assessment scores
 
 ## CHECKLIST WORKFLOW
 
@@ -201,11 +211,18 @@ Additional capabilities:
     createNcTool,
     getNcListTool,
     createCapaTool,
+    updateCapaTool,
     getCapaListTool,
     getCapaDetailsTool,
+    addCapaActionTool,
     runChecklistTool,
     manageChecklistTool,
     searchKnowledgeTool,
+    createTrainingTool,
+    getTrainingListTool,
+    assignTrainingTool,
+    getTrainingAssignmentsTool,
+    completeTrainingTool,
   },
 
   memory: new Memory({
