@@ -564,7 +564,7 @@
                                 </svg>
                             </div>
                             <div class="p-6">
-                                <div class="flex items-center justify-between">
+                                <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <h3 class="text-lg font-semibold mb-2">Active Governance Framework</h3>
                                         <p id="governanceDocName" class="text-indigo-100">--</p>
@@ -574,6 +574,10 @@
                                         <div class="text-sm text-indigo-200">Framework</div>
                                         <div id="framework" class="font-medium">ISO 9001 + COPC</div>
                                     </div>
+                                </div>
+                                <div id="linkedSOPs" class="border-t border-white/20 pt-3 mt-1 hidden">
+                                    <div class="text-xs font-medium uppercase opacity-75 mb-2">Linked SOPs</div>
+                                    <div id="sopList" class="flex flex-wrap gap-2"></div>
                                 </div>
                             </div>
                         </div>
@@ -1503,7 +1507,33 @@
                 if (data.scorecard) {
                     scorecardEl.textContent = data.scorecard.name || 'Scorecard';
                 } else {
-                    scorecardEl.textContent = 'Quality Scorecard (People 25% • Process 35% • Governance 40%)';
+                    scorecardEl.textContent = 'Quality Scorecard (People 25% · Process 35% · Governance 40%)';
+                }
+            }
+
+            const sopContainer = document.getElementById('linkedSOPs');
+            const sopList = document.getElementById('sopList');
+            if (sopContainer && sopList) {
+                const docs = data.governanceDocs || [];
+                const sopDocs = docs.filter(d => d.document_type === 'sop');
+                if (sopDocs.length > 0) {
+                    sopContainer.classList.remove('hidden');
+                    sopList.innerHTML = '';
+                    const moduleIcons = {
+                        'Leads': '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>',
+                        'Deals': '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
+                    };
+                    sopDocs.forEach(sop => {
+                        const chip = document.createElement('div');
+                        chip.className = 'flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-lg px-3 py-1.5 text-sm';
+                        chip.setAttribute('data-testid', 'sop-chip-' + (sop.crm_module || 'unknown').toLowerCase());
+                        const icon = moduleIcons[sop.crm_module] || '';
+                        const teamLabel = sop.team_name ? ' (' + sop.team_name + ')' : '';
+                        chip.innerHTML = icon + '<span>' + sop.name + ' v' + (sop.version || '1.0') + teamLabel + '</span>';
+                        sopList.appendChild(chip);
+                    });
+                } else {
+                    sopContainer.classList.add('hidden');
                 }
             }
 

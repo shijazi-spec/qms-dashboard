@@ -435,6 +435,26 @@ const auditCRMWithAgentStep = createStep({
 
       let sdrScorecardInfo = "";
       let salesScorecardInfo = "";
+      let sdrSOPInfo = "";
+      let salesSOPInfo = "";
+
+      try {
+        const { getGovernanceDocumentByModule } = await import("../../utils/database");
+        const sdrSOP = await getGovernanceDocumentByModule('Leads');
+        if (sdrSOP?.rules_json) {
+          const rules = typeof sdrSOP.rules_json === 'string' ? JSON.parse(sdrSOP.rules_json) : sdrSOP.rules_json;
+          sdrSOPInfo = `\n## Active SOP: ${sdrSOP.name} v${sdrSOP.version}\nTeam: ${sdrSOP.team_name || 'SDR'}\nSLAs: ${JSON.stringify(rules.slas || {})}\nKPIs: ${JSON.stringify(rules.kpis || {})}\nLead Stages: ${(rules.leadStages || []).join(', ')}\nContact Policy: ${JSON.stringify(rules.contactPolicy || {})}\nEvaluate CRM records against these SOP requirements.\n`;
+          logger?.info(`📋 [Step 2] Loaded SDR SOP: "${sdrSOP.name}" v${sdrSOP.version}`);
+        }
+        const salesSOP = await getGovernanceDocumentByModule('Deals');
+        if (salesSOP?.rules_json) {
+          const rules = typeof salesSOP.rules_json === 'string' ? JSON.parse(salesSOP.rules_json) : salesSOP.rules_json;
+          salesSOPInfo = `\n## Active SOP: ${salesSOP.name} v${salesSOP.version}\nTeam: ${salesSOP.team_name || 'Sales'}\nSLAs: ${JSON.stringify(rules.slas || {})}\nKPIs: ${JSON.stringify(rules.kpis || {})}\nDeal Stages: ${(rules.dealStages || []).join(', ')}\nRequired Documents: ${JSON.stringify(rules.requiredDocuments || [])}\nSpot-Check Criteria: ${JSON.stringify(rules.spotCheckCriteria || [])}\nEvaluate CRM records against these SOP requirements.\n`;
+          logger?.info(`📋 [Step 2] Loaded Sales SOP: "${salesSOP.name}" v${salesSOP.version}`);
+        }
+      } catch (err) {
+        logger?.warn("⚠️ [Step 2] Could not load SOP documents", { error: err });
+      }
 
       try {
         const sdrScorecards = await getScorecardsByModuleAndTeam('Leads', 'SDR');
@@ -477,6 +497,7 @@ For each attribute, evaluate whether the CRM record complies based on the evalua
       const sdrAuditPrompt = `
 You are performing a quality audit for the SDR team on LEADS data.
 ${sdrScorecardInfo}
+${sdrSOPInfo}
 
 Please use the auditCRMHygieneTool to audit ONLY the Leads module.
 
@@ -484,7 +505,8 @@ After getting the audit results, provide a summary of:
 1. Total leads audited
 2. Total issues found by severity (critical, high, medium, low)
 3. Top SDR-related issues that need attention
-4. Quality scores (People, Process, Governance, Overall) for SDR team
+4. SOP compliance gaps (e.g., contact SLA violations, missing qualification fields, follow-up delays)
+5. Quality scores (People, Process, Governance, Overall) for SDR team
 
 Execute the audit now and report the findings.
 `;
@@ -492,6 +514,7 @@ Execute the audit now and report the findings.
       const salesAuditPrompt = `
 You are performing a quality audit for the Sales team on DEALS data.
 ${salesScorecardInfo}
+${salesSOPInfo}
 
 Please use the auditCRMHygieneTool to audit ONLY the Deals module.
 
@@ -499,7 +522,8 @@ After getting the audit results, provide a summary of:
 1. Total deals audited
 2. Total issues found by severity (critical, high, medium, low)
 3. Top Sales-related issues that need attention
-4. Quality scores (People, Process, Governance, Overall) for Sales team
+4. SOP compliance gaps (e.g., proposal SLA violations, missing documents, stage duration breaches)
+5. Quality scores (People, Process, Governance, Overall) for Sales team
 
 Execute the audit now and report the findings.
 `;

@@ -219,6 +219,7 @@ export async function getDashboardData(): Promise<{
   latestAudit: QualityAuditResult | null;
   auditHistory: QualityAuditResult[];
   governance: GovernanceDocument | null;
+  governanceDocs: GovernanceDocument[];
   scorecard: QualityScorecard | null;
   trends: {
     overall: any[];
@@ -227,10 +228,11 @@ export async function getDashboardData(): Promise<{
     governance: any[];
   };
 }> {
-  const [latestAudit, auditHistory, governance, scorecard] = await Promise.all([
+  const [latestAudit, auditHistory, governance, governanceDocs, scorecard] = await Promise.all([
     getLatestAuditResult(),
     getAuditHistory(20),
     getActiveGovernanceDocument(),
+    getActiveGovernanceDocumentsByModule(),
     getActiveScorecard()
   ]);
   
@@ -245,6 +247,7 @@ export async function getDashboardData(): Promise<{
     latestAudit,
     auditHistory,
     governance,
+    governanceDocs,
     scorecard,
     trends: {
       overall: overallTrend,

@@ -131,6 +131,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - Tables are auto-initialized by utility modules on first use (auditDatabase.ts, complianceDatabase.ts, kpiDatabase.ts, riskDatabase.ts, policyDatabase.ts, vendorDatabase.ts)
 - Additional QMS tables created via `npx tsx scripts/createQMSTables.ts`
 - Core tables: quality_scorecards, quality_audit_results, quality_trends, governance_documents + 30+ others
+- governance_documents stores SOPs linked to CRM modules: Sales SOP (Deals/Sales team) v1.1 and SDR SOP (Leads/SDR team) v2.1, with structured rules_json containing SLAs, KPIs, stage definitions, and qualification criteria used by AI audit agents
 - Data populates through platform usage (call evaluations, audits, governance document uploads)
 
 ## AI Consultant Feature
