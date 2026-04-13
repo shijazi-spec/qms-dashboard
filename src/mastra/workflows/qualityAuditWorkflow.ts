@@ -341,7 +341,21 @@ const auditCRMWithAgentStep = createStep({
         const mediumIssues = allIssues.filter((i: any) => i.severity === 'medium').length;
         const lowIssues = allIssues.filter((i: any) => i.severity === 'low').length;
 
-        const detailedIssues = allIssues.slice(0, 500).map((issue: any) => ({
+        const maxDetailedIssues = 500;
+        const issuesByModule: Record<string, any[]> = {};
+        for (const issue of allIssues) {
+          const mod = issue.module || 'Unknown';
+          if (!issuesByModule[mod]) issuesByModule[mod] = [];
+          issuesByModule[mod].push(issue);
+        }
+        const moduleNames = Object.keys(issuesByModule);
+        const perModuleLimit = Math.max(Math.floor(maxDetailedIssues / Math.max(moduleNames.length, 1)), 10);
+        const sampledIssues: any[] = [];
+        for (const mod of moduleNames) {
+          const modIssues = issuesByModule[mod];
+          sampledIssues.push(...modIssues.slice(0, perModuleLimit));
+        }
+        const detailedIssues = sampledIssues.slice(0, maxDetailedIssues).map((issue: any) => ({
           recordId: issue.recordId,
           module: issue.module,
           owner: issue.owner || '-',
@@ -490,7 +504,22 @@ After getting the audit results, provide a summary of:
 Execute the audit now and report the findings.
 `;
 
-      const [sdrResponse, salesResponse] = await Promise.all([
+      const opsAuditPrompt = `
+You are performing a quality audit for Contacts, Tasks, and Accounts data.
+
+Please use the auditCRMHygieneTool to audit the Contacts, Tasks, and Accounts modules.
+Pass modules: ["Contacts", "Tasks", "Accounts"] to the tool.
+
+After getting the audit results, provide a summary of:
+1. Total records audited per module
+2. Total issues found by severity (critical, high, medium, low)
+3. Top issues that need attention
+4. Quality scores (People, Process, Governance, Overall)
+
+Execute the audit now and report the findings.
+`;
+
+      const [sdrResponse, salesResponse, opsResponse] = await Promise.all([
         sdrQualityAgent.generateLegacy(
           [{ role: "user", content: sdrAuditPrompt }],
           { maxSteps: 5 }
@@ -504,12 +533,20 @@ Execute the audit now and report the findings.
         ).catch(err => {
           logger?.warn("⚠️ [Step 2] Sales audit failed", { error: err.message });
           return null;
+        }),
+        qualitySpecialistAgent.generateLegacy(
+          [{ role: "user", content: opsAuditPrompt }],
+          { maxSteps: 5 }
+        ).catch(err => {
+          logger?.warn("⚠️ [Step 2] Ops audit (Contacts/Tasks/Accounts) failed", { error: err.message });
+          return null;
         })
       ]);
 
       logger?.info("✅ [Step 2] Department agents completed audits", {
         sdrCompleted: !!sdrResponse,
-        salesCompleted: !!salesResponse
+        salesCompleted: !!salesResponse,
+        opsCompleted: !!opsResponse
       });
 
       const extractAuditResult = (response: any) => {
@@ -525,51 +562,66 @@ Execute the audit now and report the findings.
 
       const sdrResult = extractAuditResult(sdrResponse);
       const salesResult = extractAuditResult(salesResponse);
+      const opsResult = extractAuditResult(opsResponse);
 
       const combinedModuleBreakdown = [
         ...(sdrResult?.moduleBreakdown || []),
-        ...(salesResult?.moduleBreakdown || [])
+        ...(salesResult?.moduleBreakdown || []),
+        ...(opsResult?.moduleBreakdown || [])
       ];
 
-      const totalRecordsAudited = 
-        (sdrResult?.auditSummary?.totalRecordsAudited || 0) + 
-        (salesResult?.auditSummary?.totalRecordsAudited || 0);
-      
-      const totalIssuesFound = 
-        (sdrResult?.auditSummary?.totalIssuesFound || 0) + 
-        (salesResult?.auditSummary?.totalIssuesFound || 0);
+      const allResults = [sdrResult, salesResult, opsResult].filter(Boolean);
 
-      const criticalIssues = 
-        (sdrResult?.auditSummary?.criticalIssues || 0) + 
-        (salesResult?.auditSummary?.criticalIssues || 0);
-      
-      const highIssues = 
-        (sdrResult?.auditSummary?.highIssues || 0) + 
-        (salesResult?.auditSummary?.highIssues || 0);
-      
-      const mediumIssues = 
-        (sdrResult?.auditSummary?.mediumIssues || 0) + 
-        (salesResult?.auditSummary?.mediumIssues || 0);
-      
-      const lowIssues = 
-        (sdrResult?.auditSummary?.lowIssues || 0) + 
-        (salesResult?.auditSummary?.lowIssues || 0);
+      const totalRecordsAudited = allResults.reduce((sum, r) => sum + (r?.auditSummary?.totalRecordsAudited || 0), 0);
+      const totalIssuesFound = allResults.reduce((sum, r) => sum + (r?.auditSummary?.totalIssuesFound || 0), 0);
+      const criticalIssues = allResults.reduce((sum, r) => sum + (r?.auditSummary?.criticalIssues || 0), 0);
+      const highIssues = allResults.reduce((sum, r) => sum + (r?.auditSummary?.highIssues || 0), 0);
+      const mediumIssues = allResults.reduce((sum, r) => sum + (r?.auditSummary?.mediumIssues || 0), 0);
+      const lowIssues = allResults.reduce((sum, r) => sum + (r?.auditSummary?.lowIssues || 0), 0);
 
-      const avgScore = (s1: any, s2: any, key: string) => {
-        const v1 = s1?.qualityScores?.[key] || 0;
-        const v2 = s2?.qualityScores?.[key] || 0;
-        const count = (s1 ? 1 : 0) + (s2 ? 1 : 0);
-        return count > 0 ? Math.round((v1 + v2) / count) : 0;
+      const avgScoreMulti = (results: any[], key: string) => {
+        const validResults = results.filter(r => r?.qualityScores?.[key] != null);
+        if (validResults.length === 0) return 0;
+        const total = validResults.reduce((sum, r) => sum + (r.qualityScores[key] || 0), 0);
+        return Math.round(total / validResults.length);
       };
 
       const combinedScores = {
-        peopleScore: avgScore(sdrResult, salesResult, 'peopleScore'),
-        processScore: avgScore(sdrResult, salesResult, 'processScore'),
-        governanceScore: avgScore(sdrResult, salesResult, 'governanceScore'),
-        overallScore: avgScore(sdrResult, salesResult, 'overallScore'),
+        peopleScore: avgScoreMulti(allResults, 'peopleScore'),
+        processScore: avgScoreMulti(allResults, 'processScore'),
+        governanceScore: avgScoreMulti(allResults, 'governanceScore'),
+        overallScore: avgScoreMulti(allResults, 'overallScore'),
       };
 
-      if (sdrResult || salesResult) {
+      if (sdrResult || salesResult || opsResult) {
+        const combinedAllIssues = [
+          ...(sdrResult?.allIssues || []),
+          ...(salesResult?.allIssues || []),
+          ...(opsResult?.allIssues || [])
+        ];
+        const agentIssuesByModule: Record<string, any[]> = {};
+        for (const issue of combinedAllIssues) {
+          const mod = issue.module || 'Unknown';
+          if (!agentIssuesByModule[mod]) agentIssuesByModule[mod] = [];
+          agentIssuesByModule[mod].push(issue);
+        }
+        const agentModuleNames = Object.keys(agentIssuesByModule);
+        const agentPerModuleLimit = Math.max(Math.floor(500 / Math.max(agentModuleNames.length, 1)), 10);
+        const agentSampledIssues: any[] = [];
+        for (const mod of agentModuleNames) {
+          agentSampledIssues.push(...agentIssuesByModule[mod].slice(0, agentPerModuleLimit));
+        }
+        const agentDetailedIssues = agentSampledIssues.slice(0, 500).map((issue: any) => ({
+          recordId: issue.recordId,
+          module: issue.module,
+          owner: issue.owner || '-',
+          fieldName: issue.fieldName || '',
+          issueType: issue.issueType,
+          description: issue.description,
+          severity: issue.severity,
+          suggestedFix: issue.suggestedFix || `Update the ${issue.fieldName || 'field'} in this record`,
+        }));
+
         return {
           calendarData,
           crmAudit: {
@@ -582,6 +634,7 @@ Execute the audit now and report the findings.
             lowIssues,
             moduleBreakdown: combinedModuleBreakdown,
             topIssues: combinedModuleBreakdown.flatMap((m: any) => m.topIssues || []),
+            detailedIssues: agentDetailedIssues,
             sdrAudit: sdrResult,
             salesAudit: salesResult,
           },
