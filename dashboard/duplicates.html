@@ -115,13 +115,73 @@
             </button>
         </div>
 
-        <!-- C6: Global date range filter -->
-        <div class="flex gap-3 mb-4 items-center flex-wrap">
-            <label class="text-sm font-medium text-gray-700">Filter by Date:</label>
-            <input type="date" id="filterDateFrom" data-testid="input-date-from" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" onchange="applyDateFilter()">
-            <span class="text-gray-400 text-sm">to</span>
-            <input type="date" id="filterDateTo" data-testid="input-date-to" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" onchange="applyDateFilter()">
-            <button onclick="clearDateFilter()" data-testid="button-clear-date" class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
+        <!-- Sync Status Indicator -->
+        <div id="syncStatusBar" class="bg-white rounded-lg shadow px-4 py-2 mb-4 flex items-center gap-4 flex-wrap hidden">
+            <span class="text-sm font-medium text-gray-600 flex items-center gap-1">
+                <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/></svg>
+                Sync Status:
+            </span>
+            <div id="syncModuleChips" class="flex gap-2 flex-wrap"></div>
+            <span id="syncLastRun" class="text-xs text-gray-400 ml-auto"></span>
+        </div>
+
+        <!-- Advanced Filters Panel -->
+        <div id="filterPanel" class="bg-white rounded-lg shadow px-4 py-3 mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <button onclick="toggleFilterPanel()" data-testid="button-toggle-filters" class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <svg id="filterChevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    Advanced Filters
+                    <span id="activeFilterCount" class="hidden px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">0</span>
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="applyAdvancedFilters()" data-testid="button-apply-filters" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Apply</button>
+                    <button onclick="clearAllFilters()" data-testid="button-clear-filters" class="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg">Clear All</button>
+                </div>
+            </div>
+            <div id="filterPanelBody" class="hidden">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Module</label>
+                        <select id="filterModule" data-testid="select-filter-module" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4">
+                            <option value="Leads">Leads</option>
+                            <option value="Deals">Deals</option>
+                            <option value="Contacts">Contacts</option>
+                            <option value="Accounts">Accounts</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Owner</label>
+                        <select id="filterOwner" data-testid="select-filter-owner" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Layout</label>
+                        <select id="filterLayout" data-testid="select-filter-layout" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Pipeline</label>
+                        <select id="filterPipeline" data-testid="select-filter-pipeline" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Confidence</label>
+                        <select id="filterConfidence" data-testid="select-filter-confidence" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                            <option value="">All</option>
+                            <option value="high">High (≥90%)</option>
+                            <option value="medium">Medium (60-89%)</option>
+                            <option value="low">Low (&lt;60%)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Domain</label>
+                        <input type="text" id="filterDomain" data-testid="input-filter-domain" placeholder="e.g. acme.com" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    </div>
+                </div>
+                <div class="flex gap-3 items-center">
+                    <label class="text-xs font-medium text-gray-600">Date Range:</label>
+                    <input type="date" id="filterDateFrom" data-testid="input-date-from" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                    <span class="text-gray-400 text-xs">to</span>
+                    <input type="date" id="filterDateTo" data-testid="input-date-to" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                </div>
+            </div>
         </div>
 
         <!-- ═══ EXECUTIVE SUMMARY TAB (D4 enhanced) ═══ -->
@@ -500,13 +560,6 @@
             return { from: from || null, to: to || null };
         }
 
-        function applyDateFilter() { refreshData(); }
-        function clearDateFilter() {
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
-            refreshData();
-        }
-
         async function refreshData() {
             try {
                 await fetch('/api/duplicates/recalculate-stats', { method: 'POST' }).catch(() => {});
@@ -789,11 +842,23 @@
                 { key: 'company_name', label: 'Company' },
                 { key: 'email', label: 'Email' },
                 { key: 'phone', label: 'Phone' },
+                { key: 'mobile', label: 'Mobile' },
                 { key: 'owner_name', label: 'Owner' },
                 { key: 'status', label: 'Status' },
                 { key: 'stage', label: 'Stage' },
                 { key: 'deal_value', label: 'Value', render: v => v ? formatCurrency(v) : '-' },
                 { key: 'source', label: 'Source' },
+                { key: 'layout_name', label: 'Layout' },
+                { key: 'zoho_module', label: 'Module' },
+                { key: 'pipeline', label: 'Pipeline' },
+                { key: 'contact_name', label: 'Contact' },
+                { key: 'account_name', label: 'Account' },
+                { key: 'cr_number', label: 'CR Number' },
+                { key: 'vat_number', label: 'VAT Number' },
+                { key: 'website', label: 'Website' },
+                { key: 'country', label: 'Country' },
+                { key: 'industry', label: 'Industry' },
+                { key: 'title', label: 'Title' },
                 { key: 'created_date', label: 'Created', render: v => formatDate(v) },
                 { key: 'modified_date', label: 'Modified', render: v => formatDate(v) },
             ];
@@ -1015,7 +1080,159 @@
             return 'low';
         }
 
-        // Check if a scan is in progress on page load
+        let filterOptionsLoaded = false;
+
+        function toggleFilterPanel() {
+            const body = document.getElementById('filterPanelBody');
+            const chevron = document.getElementById('filterChevron');
+            body.classList.toggle('hidden');
+            chevron.style.transform = body.classList.contains('hidden') ? '' : 'rotate(180deg)';
+            if (!filterOptionsLoaded) loadFilterOptions();
+        }
+
+        async function loadFilterOptions() {
+            try {
+                const res = await fetch('/api/duplicates/filters/options');
+                const data = await res.json();
+                filterOptionsLoaded = true;
+
+                const ownerSelect = document.getElementById('filterOwner');
+                ownerSelect.innerHTML = (data.owners || []).map(o => `<option value="${o}">${o}</option>`).join('');
+
+                const layoutSelect = document.getElementById('filterLayout');
+                layoutSelect.innerHTML = (data.layouts || []).map(l => `<option value="${l}">${l}</option>`).join('');
+
+                const pipelineSelect = document.getElementById('filterPipeline');
+                pipelineSelect.innerHTML = (data.pipelines || []).map(p => `<option value="${p}">${p}</option>`).join('');
+            } catch (e) {
+                console.error('Error loading filter options:', e);
+            }
+        }
+
+        function getSelectedValues(selectId) {
+            const sel = document.getElementById(selectId);
+            return Array.from(sel.selectedOptions).map(o => o.value);
+        }
+
+        function buildFilterParams() {
+            const params = new URLSearchParams();
+            const modules = getSelectedValues('filterModule');
+            if (modules.length) params.set('modules', modules.join(','));
+            const owners = getSelectedValues('filterOwner');
+            if (owners.length) params.set('owners', owners.join(','));
+            const layouts = getSelectedValues('filterLayout');
+            if (layouts.length) params.set('layouts', layouts.join(','));
+            const pipelines = getSelectedValues('filterPipeline');
+            if (pipelines.length) params.set('pipelines', pipelines.join(','));
+            const confidence = document.getElementById('filterConfidence').value;
+            if (confidence) params.set('confidence_level', confidence);
+            const domain = document.getElementById('filterDomain').value;
+            if (domain) params.set('domain', domain);
+            const from = document.getElementById('filterDateFrom').value;
+            if (from) params.set('start_date', from);
+            const to = document.getElementById('filterDateTo').value;
+            if (to) params.set('end_date', to);
+            return params;
+        }
+
+        function countActiveFilters() {
+            let count = 0;
+            if (getSelectedValues('filterModule').length) count++;
+            if (getSelectedValues('filterOwner').length) count++;
+            if (getSelectedValues('filterLayout').length) count++;
+            if (getSelectedValues('filterPipeline').length) count++;
+            if (document.getElementById('filterConfidence').value) count++;
+            if (document.getElementById('filterDomain').value) count++;
+            if (document.getElementById('filterDateFrom').value) count++;
+            if (document.getElementById('filterDateTo').value) count++;
+            return count;
+        }
+
+        async function applyAdvancedFilters() {
+            const count = countActiveFilters();
+            const badge = document.getElementById('activeFilterCount');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            const params = buildFilterParams();
+            try {
+                const [clustersRes, summaryRes] = await Promise.all([
+                    fetch('/api/duplicates/filtered-clusters?' + params.toString()),
+                    fetch('/api/duplicates/filtered-summary?' + params.toString())
+                ]);
+                const clustersData = await clustersRes.json();
+                const summaryData = await summaryRes.json();
+
+                renderFilteredClusters(clustersData.clusters || [], clustersData.total || 0);
+                updateFilteredSummaryBadge(summaryData);
+            } catch (e) {
+                console.error('Error applying filters:', e);
+            }
+        }
+
+        function renderFilteredClusters(clusters, total) {
+            showTab('clusters');
+            renderClusters(clusters);
+            const pagEl = document.getElementById('clustersPagination');
+            if (pagEl) pagEl.innerHTML = `<span class="text-sm text-gray-500">Showing ${clusters.length} of ${total} filtered clusters</span>`;
+        }
+
+        function updateFilteredSummaryBadge(data) {
+            const badge = document.getElementById('activeFilterCount');
+            if (badge && data.totalClusters !== undefined) {
+                badge.textContent = `${countActiveFilters()} (${data.totalClusters} clusters)`;
+                badge.classList.remove('hidden');
+            }
+        }
+
+        function clearAllFilters() {
+            document.getElementById('filterModule').selectedIndex = -1;
+            document.getElementById('filterOwner').selectedIndex = -1;
+            document.getElementById('filterLayout').selectedIndex = -1;
+            document.getElementById('filterPipeline').selectedIndex = -1;
+            document.getElementById('filterConfidence').value = '';
+            document.getElementById('filterDomain').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('activeFilterCount').classList.add('hidden');
+            refreshData();
+        }
+
+        function applyDateFilter() { applyAdvancedFilters(); }
+        function clearDateFilter() {
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            applyAdvancedFilters();
+        }
+
+        async function loadSyncStatus() {
+            try {
+                const res = await fetch('/api/duplicates/sync-status');
+                const data = await res.json();
+                const states = data.syncStates || [];
+                if (states.length === 0) return;
+
+                document.getElementById('syncStatusBar').classList.remove('hidden');
+                const chipsEl = document.getElementById('syncModuleChips');
+                const statusColors = { completed: 'bg-green-100 text-green-700', syncing: 'bg-blue-100 text-blue-700 animate-pulse', failed: 'bg-red-100 text-red-700', idle: 'bg-gray-100 text-gray-600' };
+                chipsEl.innerHTML = states.map(s => {
+                    const color = statusColors[s.sync_status] || statusColors.idle;
+                    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${color}">${s.module}: ${s.total_synced} (${s.sync_status})</span>`;
+                }).join('');
+
+                const latestSync = states.filter(s => s.last_sync_at).sort((a, b) => new Date(b.last_sync_at) - new Date(a.last_sync_at))[0];
+                if (latestSync) {
+                    document.getElementById('syncLastRun').textContent = 'Last sync: ' + new Date(latestSync.last_sync_at).toLocaleString('en-SA');
+                }
+            } catch (e) {
+                console.error('Error loading sync status:', e);
+            }
+        }
+
         async function checkScanStatus() {
             try {
                 const res = await fetch('/api/duplicates/scan-status');
@@ -1029,9 +1246,9 @@
             } catch {}
         }
 
-        // Initialize
         refreshData();
         checkScanStatus();
+        loadSyncStatus();
     </script>
 </body>
 </html>

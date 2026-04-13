@@ -40,7 +40,22 @@ import {
   getExportRecords,
   autoResolveClusters,
   generateSmartRecommendations,
+  getSyncState,
+  getAllSyncStates,
+  upsertSyncState,
+  getDistinctOwners,
+  getDistinctLayouts,
+  getDistinctDomains,
+  getDistinctPipelines,
+  getDistinctProducts,
+  getFilteredClusters,
+  getFilteredSummary,
+  upsertTask,
+  getTasksForRecords,
+  getTaskCountForCluster,
 } from '../../utils/duplicateRadarDatabase';
+
+import type { DuplicateFilters } from '../../utils/duplicateRadarDatabase';
 
 import { fetchAllZohoRecords } from '../../utils/zohoCRM';
 
@@ -85,23 +100,35 @@ function broadcastSSE(event: string, data: any) {
   });
 }
 
-// B2: upsert-based record processing (single query per record)
+interface ExtractedRecord {
+  companyName: string; email: string; phone: string; recordName: string;
+  domain: string | null; ownerName: string; ownerEmail: string; status: string;
+  stage?: string; dealValue?: number; source: string; createdTime: string; modifiedTime: string;
+  layoutName?: string; layoutId?: string; zohoModule?: string; pipeline?: string;
+  products?: string; mobile?: string; contactName?: string; accountName?: string;
+  crNumber?: string; vatNumber?: string; website?: string; country?: string;
+  region?: string; industry?: string; noOfEmployees?: number; title?: string;
+  leadType?: string; govType?: string; accountType?: string;
+}
+
 async function processModule(
   moduleName: string,
   recordType: 'lead' | 'deal' | 'contact' | 'account',
   clustersUpdated: Set<number>,
-  extractRecord: (record: any) => { companyName: string; email: string; phone: string; recordName: string; domain: string | null; ownerName: string; ownerEmail: string; status: string; stage?: string; dealValue?: number; source: string; createdTime: string; modifiedTime: string }
+  extractRecord: (record: any) => ExtractedRecord
 ): Promise<{ count: number }> {
   let records: any[] = [];
   scanState.moduleStatuses[moduleName] = 'fetching';
   broadcastSSE('module', { module: moduleName, status: 'fetching' });
 
   try {
+    await upsertSyncState(moduleName, 0, 'syncing');
     records = await fetchAllZohoRecords(moduleName, { maxRecords: SCAN_MAX_PER_MODULE });
   } catch (e) {
     console.error(`Error fetching ${moduleName}:`, e);
     scanState.moduleStatuses[moduleName] = 'error';
     broadcastSSE('module', { module: moduleName, status: 'error' });
+    await upsertSyncState(moduleName, 0, 'failed');
     return { count: 0 };
   }
 
@@ -110,42 +137,69 @@ async function processModule(
   scanState.recordCounts[moduleName] = records.length;
   broadcastSSE('module', { module: moduleName, status: 'processing', count: records.length });
 
+  let skipped = 0;
   for (const record of records) {
-    const data = extractRecord(record);
-    if (!data.companyName || data.companyName === 'Unknown') continue;
+    try {
+      const data = extractRecord(record);
+      if (!data.companyName || data.companyName === 'Unknown') continue;
 
-    const cluster = await findOrCreateClusterByCompany(
-      data.companyName, data.domain || undefined, data.phone || undefined, data.email || undefined
-    );
+      const cluster = await findOrCreateClusterByCompany(
+        data.companyName, data.domain || undefined, data.phone || undefined, data.email || undefined
+      );
 
-    await upsertRecord({
-      cluster_id: cluster.id!,
-      record_type: recordType,
-      zoho_record_id: record.id,
-      record_name: data.recordName,
-      company_name: data.companyName,
-      email: data.email || undefined,
-      domain: data.domain || undefined,
-      phone: data.phone || undefined,
-      owner_name: data.ownerName,
-      owner_email: data.ownerEmail,
-      status: data.status,
-      stage: data.stage,
-      deal_value: data.dealValue,
-      source: data.source,
-      created_date: data.createdTime ? new Date(data.createdTime) : new Date(),
-      modified_date: data.modifiedTime ? new Date(data.modifiedTime) : new Date(),
-      is_primary: false,
-      confidence_score: 0,
-      is_mock_data: false,
-      raw_data: record.data
-    });
+      await upsertRecord({
+        cluster_id: cluster.id!,
+        record_type: recordType,
+        zoho_record_id: record.id,
+        record_name: data.recordName,
+        company_name: data.companyName,
+        email: data.email || undefined,
+        domain: data.domain || undefined,
+        phone: data.phone || undefined,
+        mobile: data.mobile || undefined,
+        owner_name: data.ownerName,
+        owner_email: data.ownerEmail,
+        status: data.status,
+        stage: data.stage,
+        deal_value: data.dealValue,
+        source: data.source,
+        created_date: data.createdTime ? new Date(data.createdTime) : new Date(),
+        modified_date: data.modifiedTime ? new Date(data.modifiedTime) : new Date(),
+        is_primary: false,
+        confidence_score: 0,
+        is_mock_data: false,
+        raw_data: record.data,
+        layout_name: data.layoutName,
+        layout_id: data.layoutId,
+        zoho_module: data.zohoModule || moduleName,
+        pipeline: data.pipeline,
+        products: data.products,
+        contact_name: data.contactName,
+        account_name: data.accountName,
+        cr_number: data.crNumber,
+        vat_number: data.vatNumber,
+        website: data.website,
+        country: data.country,
+        region: data.region,
+        industry: data.industry,
+        no_of_employees: data.noOfEmployees,
+        title: data.title,
+        lead_type: data.leadType,
+        gov_type: data.govType,
+        account_type: data.accountType,
+      });
 
-    clustersUpdated.add(cluster.id!);
+      clustersUpdated.add(cluster.id!);
+    } catch (recordErr) {
+      skipped++;
+      if (skipped <= 5) console.warn(`⚠️ [DuplicateRadar] Skipped ${moduleName} record ${record.id}: ${recordErr}`);
+    }
   }
+  if (skipped > 0) console.warn(`⚠️ [DuplicateRadar] Skipped ${skipped} ${moduleName} records due to errors`);
 
   scanState.moduleStatuses[moduleName] = 'done';
   broadcastSSE('module', { module: moduleName, status: 'done', count: records.length });
+  await upsertSyncState(moduleName, records.length, 'completed');
   return { count: records.length };
 }
 
@@ -195,7 +249,8 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
         return {
           companyName: d.Company || d.Last_Name || 'Unknown',
           email: d.Email || '',
-          phone: d.Phone || d.Mobile || '',
+          phone: d.Phone || '',
+          mobile: d.Mobile || '',
           recordName: d.Full_Name || `${d.First_Name || ''} ${d.Last_Name || ''}`.trim(),
           domain: extractDomain(d.Email || ''),
           ownerName: d.Owner?.name || 'Unknown',
@@ -203,7 +258,15 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
           status: d.Lead_Status || '',
           source: d.Lead_Source || '',
           createdTime: d.Created_Time || '',
-          modifiedTime: d.Modified_Time || ''
+          modifiedTime: d.Modified_Time || '',
+          layoutName: d.Layout?.name || d.$layout?.name || '',
+          layoutId: d.Layout?.id || d.$layout?.id || '',
+          zohoModule: 'Leads',
+          title: d.Designation || d.Title || '',
+          leadType: d.Lead_Type || '',
+          country: d.Country || '',
+          industry: d.Industry || '',
+          website: d.Website || '',
         };
       }),
       processModule('Deals', 'deal', clustersUpdated, (record) => {
@@ -221,7 +284,14 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
           dealValue: parseFloat(d.Amount) || 0,
           source: d.Lead_Source || '',
           createdTime: d.Created_Time || '',
-          modifiedTime: d.Modified_Time || ''
+          modifiedTime: d.Modified_Time || '',
+          layoutName: d.Layout?.name || d.$layout?.name || '',
+          layoutId: d.Layout?.id || d.$layout?.id || '',
+          zohoModule: 'Deals',
+          pipeline: d.Pipeline || '',
+          products: d.Product_Details ? JSON.stringify(d.Product_Details) : '',
+          contactName: d.Contact_Name?.name || '',
+          accountName: d.Account_Name?.name || '',
         };
       }),
       processModule('Contacts', 'contact', clustersUpdated, (record) => {
@@ -229,7 +299,8 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
         return {
           companyName: d.Account_Name?.name || d.Company || d.Last_Name || 'Unknown',
           email: d.Email || '',
-          phone: d.Phone || d.Mobile || '',
+          phone: d.Phone || '',
+          mobile: d.Mobile || '',
           recordName: d.Full_Name || `${d.First_Name || ''} ${d.Last_Name || ''}`.trim(),
           domain: extractDomain(d.Email || ''),
           ownerName: d.Owner?.name || 'Unknown',
@@ -237,27 +308,74 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
           status: 'Contact',
           source: d.Lead_Source || '',
           createdTime: d.Created_Time || '',
-          modifiedTime: d.Modified_Time || ''
+          modifiedTime: d.Modified_Time || '',
+          layoutName: d.Layout?.name || d.$layout?.name || '',
+          layoutId: d.Layout?.id || d.$layout?.id || '',
+          zohoModule: 'Contacts',
+          title: d.Title || '',
+          accountName: d.Account_Name?.name || '',
+          country: d.Mailing_Country || d.Other_Country || '',
         };
       }),
       processModule('Accounts', 'account', clustersUpdated, (record) => {
         const d = record.data;
-        const website = d.Website?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '';
+        const websiteRaw = d.Website || '';
+        const websiteDomain = websiteRaw.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '';
         return {
           companyName: d.Account_Name || 'Unknown',
           email: d.Email || '',
           phone: d.Phone || '',
           recordName: d.Account_Name || 'Unknown',
-          domain: extractDomain(d.Email || '') || (website && !website.includes(' ') ? website : null),
+          domain: extractDomain(d.Email || '') || (websiteDomain && !websiteDomain.includes(' ') ? websiteDomain : null),
           ownerName: d.Owner?.name || 'Unknown',
           ownerEmail: d.Owner?.email || '',
           status: 'Account',
           source: 'Account',
           createdTime: d.Created_Time || '',
-          modifiedTime: d.Modified_Time || ''
+          modifiedTime: d.Modified_Time || '',
+          layoutName: d.Layout?.name || d.$layout?.name || '',
+          layoutId: d.Layout?.id || d.$layout?.id || '',
+          zohoModule: 'Accounts',
+          website: websiteRaw,
+          crNumber: d.CR_Number || d.Registration_Number || '',
+          vatNumber: d.VAT_Number || d.Tax_ID || '',
+          country: d.Billing_Country || d.Shipping_Country || '',
+          region: d.Billing_State || d.Shipping_State || '',
+          industry: d.Industry || '',
+          noOfEmployees: parseInt(d.Employees) || undefined,
+          accountType: d.Account_Type || '',
         };
       })
     ]);
+
+    scanState.percentage = 55;
+    broadcastSSE('progress', { percentage: 55, message: 'Syncing Tasks from Zoho...' });
+    scanState.progress = 'Syncing Tasks from Zoho CRM...';
+
+    try {
+      const tasks = await fetchAllZohoRecords('Tasks', { maxRecords: SCAN_MAX_PER_MODULE });
+      let tasksSynced = 0;
+      for (const task of tasks) {
+        const td = task.data;
+        const relatedId = td.What_Id?.id || td.Who_Id?.id || '';
+        if (!relatedId) continue;
+        await upsertTask({
+          zoho_task_id: task.id,
+          related_record_id: relatedId,
+          subject: td.Subject || '',
+          due_date: td.Due_Date ? new Date(td.Due_Date) : undefined,
+          status: td.Status || '',
+          owner_name: td.Owner?.name || '',
+          description: td.Description || '',
+        });
+        tasksSynced++;
+      }
+      console.log(`📋 [DuplicateRadar] Synced ${tasksSynced} Tasks from Zoho`);
+      await upsertSyncState('Tasks', tasksSynced, 'completed');
+    } catch (e) {
+      console.warn('⚠️ [DuplicateRadar] Tasks sync failed (non-fatal):', e);
+      await upsertSyncState('Tasks', 0, 'failed');
+    }
 
     totalRecords = leadsResult.count + dealsResult.count + contactsResult.count + accountsResult.count;
     moduleBreakdown.push(
@@ -1154,6 +1272,118 @@ export const duplicateRadarRoutes = [
           return c.json({ ...summary, lastScanDate: lastScan });
         } catch (error: any) {
           console.error('Error fetching enhanced summary:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/sync-status",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const states = await getAllSyncStates();
+          return c.json({ syncStates: states });
+        } catch (error: any) {
+          console.error('Error fetching sync status:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/filters/options",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const [owners, layouts, domains, pipelines, products] = await Promise.all([
+            getDistinctOwners(),
+            getDistinctLayouts(),
+            getDistinctDomains(),
+            getDistinctPipelines(),
+            getDistinctProducts(),
+          ]);
+          return c.json({ owners, layouts, domains, pipelines, products, modules: ['Leads', 'Deals', 'Contacts', 'Accounts'] });
+        } catch (error: any) {
+          console.error('Error fetching filter options:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/filtered-clusters",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const url = new URL(c.req.url);
+          const rawLimit = parseInt(url.searchParams.get('limit') || '30');
+          const rawOffset = parseInt(url.searchParams.get('offset') || '0');
+          const limit = isNaN(rawLimit) ? 30 : Math.min(Math.max(rawLimit, 1), 100);
+          const offset = isNaN(rawOffset) ? 0 : Math.max(rawOffset, 0);
+
+          const filters: DuplicateFilters = {
+            modules: url.searchParams.get('modules') ? url.searchParams.get('modules')!.split(',') : undefined,
+            owners: url.searchParams.get('owners') ? url.searchParams.get('owners')!.split(',') : undefined,
+            layouts: url.searchParams.get('layouts') ? url.searchParams.get('layouts')!.split(',') : undefined,
+            pipelines: url.searchParams.get('pipelines') ? url.searchParams.get('pipelines')!.split(',') : undefined,
+            domain: url.searchParams.get('domain') || undefined,
+            start_date: url.searchParams.get('start_date') || undefined,
+            end_date: url.searchParams.get('end_date') || undefined,
+            status: url.searchParams.get('status') || 'active',
+            confidence_level: url.searchParams.get('confidence_level') || undefined,
+          };
+
+          const { clusters, total } = await getFilteredClusters(filters, limit, offset);
+          return c.json({ clusters, total, limit, offset, pages: Math.ceil(total / limit) });
+        } catch (error: any) {
+          console.error('Error fetching filtered clusters:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/filtered-summary",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const url = new URL(c.req.url);
+          const filters: DuplicateFilters = {
+            modules: url.searchParams.get('modules') ? url.searchParams.get('modules')!.split(',') : undefined,
+            owners: url.searchParams.get('owners') ? url.searchParams.get('owners')!.split(',') : undefined,
+            domain: url.searchParams.get('domain') || undefined,
+          };
+          const summary = await getFilteredSummary(filters);
+          return c.json(summary);
+        } catch (error: any) {
+          console.error('Error fetching filtered summary:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/clusters/:id/tasks",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const clusterId = parseInt(c.req.param('id'));
+          if (isNaN(clusterId)) return c.json({ error: 'Invalid cluster ID' }, 400);
+
+          const records = await getRecordsByClusterId(clusterId);
+          const recordIds = records.map(r => r.zoho_record_id).filter(Boolean) as string[];
+          const tasks = await getTasksForRecords(recordIds);
+          const taskCount = await getTaskCountForCluster(clusterId);
+
+          return c.json({ tasks, total: taskCount });
+        } catch (error: any) {
+          console.error('Error fetching cluster tasks:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };

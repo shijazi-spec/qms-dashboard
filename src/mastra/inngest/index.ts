@@ -311,32 +311,50 @@ const kpiAutoCalcFunction = inngest.createFunction(
 inngestFunctions.push(kpiAutoCalcFunction);
 
 const duplicateScanFunction = inngest.createFunction(
-  { id: "duplicate-radar-weekly-scan" },
-  { cron: process.env.DUPLICATE_SCAN_CRON || "0 3 * * 0" },
+  { id: "duplicate-radar-6h-scan" },
+  { cron: process.env.DUPLICATE_SCAN_CRON || "0 */6 * * *" },
   async ({ step }) => {
-    return await step.run("run-duplicate-scan", async () => {
-      console.log("[DuplicateRadar] Weekly automated scan triggered");
+    const syncResult = await step.run("step-1-sync-modules", async () => {
+      console.log("[DuplicateRadar] Step 1: Syncing modules from Zoho CRM");
       const { scanZohoCRMForDuplicates } = await import("../routes/duplicateRadarRoutes");
       const result = await scanZohoCRMForDuplicates('scheduled');
-      console.log("[DuplicateRadar] Scan result:", { success: result.success, clusters: result.totalClustersFound, duplicates: result.duplicatesDetected });
+      console.log("[DuplicateRadar] Sync result:", { success: result.success, records: result.totalRecordsScanned, clusters: result.totalClustersFound });
+      return result;
+    });
 
-      if (result.success && result.highConfidence > 0) {
+    const autoResolveResult = await step.run("step-2-auto-resolve", async () => {
+      console.log("[DuplicateRadar] Step 2: Running auto-resolve engine");
+      try {
+        const { autoResolveClusters } = await import("../../utils/duplicateRadarDatabase");
+        const resolved = await autoResolveClusters();
+        console.log("[DuplicateRadar] Auto-resolve result:", resolved);
+        return resolved;
+      } catch (e) {
+        console.warn("[DuplicateRadar] Auto-resolve failed (non-fatal):", e);
+        return { resolved: 0, error: String(e) };
+      }
+    });
+
+    await step.run("step-3-notify", async () => {
+      console.log("[DuplicateRadar] Step 3: Sending notifications");
+      if (syncResult.success && syncResult.highConfidence > 0) {
         try {
           const { createNotification } = await import("../../utils/notificationHub");
           await createNotification({
             type: 'alert',
-            title: `Duplicate Radar: ${result.highConfidence} high-confidence duplicates found`,
-            message: `Weekly scan completed: ${result.totalRecordsScanned} records scanned, ${result.duplicatesDetected} duplicate clusters detected (${result.highConfidence} high confidence). Pipeline inflation: SAR ${result.pipelineInflation.toLocaleString()}.`,
+            title: `Duplicate Radar: ${syncResult.highConfidence} high-confidence duplicates found`,
+            message: `6-hourly scan completed: ${syncResult.totalRecordsScanned} records scanned, ${syncResult.duplicatesDetected} duplicate clusters detected (${syncResult.highConfidence} high confidence). Pipeline inflation: SAR ${syncResult.pipelineInflation.toLocaleString()}. Auto-resolved: ${((autoResolveResult as any)?.singletonsIgnored || 0) + ((autoResolveResult as any)?.highConfidenceResolved || 0)}.`,
             link: '/duplicates',
-            severity: result.highConfidence > 10 ? 'high' : 'medium'
+            severity: syncResult.highConfidence > 10 ? 'high' : 'medium'
           });
         } catch (e) {
           console.warn("[DuplicateRadar] Failed to send notification:", e);
         }
       }
-
-      return result;
+      return { notified: syncResult.highConfidence > 0 };
     });
+
+    return { sync: syncResult, autoResolve: autoResolveResult };
   },
 );
 inngestFunctions.push(duplicateScanFunction);

@@ -283,35 +283,58 @@ export async function fetchAllZohoRecords(
   let hasMore = true;
   const maxRecords = params.maxRecords || Infinity;
   
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  
   console.log(`📊 [ZohoCRM] Fetching all ${module} records with pagination...`);
   
   while (hasMore && allRecords.length < maxRecords) {
-    try {
-      const records = await fetchZohoRecords(module, {
-        page,
-        perPage,
-        fields: params.fields,
-        criteria: params.criteria,
-        sortBy: params.sortBy,
-        sortOrder: params.sortOrder,
-      });
-      
-      if (records.length === 0) {
-        hasMore = false;
-      } else {
-        allRecords.push(...records);
-        console.log(`📊 [ZohoCRM] Fetched page ${page}: ${records.length} records (total: ${allRecords.length})`);
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries <= maxRetries) {
+      try {
+        const records = await fetchZohoRecords(module, {
+          page,
+          perPage,
+          fields: params.fields,
+          criteria: params.criteria,
+          sortBy: params.sortBy,
+          sortOrder: params.sortOrder,
+        });
         
-        if (records.length < perPage) {
+        if (records.length === 0) {
           hasMore = false;
         } else {
-          page++;
+          allRecords.push(...records);
+          console.log(`📊 [ZohoCRM] Fetched page ${page}: ${records.length} records (total: ${allRecords.length})`);
+          
+          if (records.length < perPage) {
+            hasMore = false;
+          } else {
+            page++;
+          }
         }
-      }
-    } catch (error: any) {
-      if (error.message?.includes('204') || error.message?.includes('No Content')) {
-        hasMore = false;
-      } else {
+        
+        await sleep(150);
+        break;
+      } catch (error: any) {
+        if (error.message?.includes('204') || error.message?.includes('No Content')) {
+          hasMore = false;
+          break;
+        }
+        
+        if (error.message?.includes('429') || error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('Too Many')) {
+          retries++;
+          if (retries > maxRetries) {
+            console.error(`❌ [ZohoCRM] Rate limit exceeded after ${maxRetries} retries for ${module} page ${page}`);
+            throw error;
+          }
+          const backoffMs = retries * 5000;
+          console.warn(`⚠️ [ZohoCRM] Rate limited (429) on ${module} page ${page}, retry ${retries}/${maxRetries} in ${backoffMs/1000}s`);
+          await sleep(backoffMs);
+          continue;
+        }
+        
         throw error;
       }
     }
