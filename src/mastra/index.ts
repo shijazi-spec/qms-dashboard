@@ -219,6 +219,10 @@ export const mastra = new Mastra({
 
           isAuthenticated = !!(session || hasAdminKey);
 
+          if (session) {
+            c.set('session', session);
+          }
+
           if (isMastraInternal && !isAuthenticated) {
             return c.json({ error: 'Access denied' }, 403);
           }
