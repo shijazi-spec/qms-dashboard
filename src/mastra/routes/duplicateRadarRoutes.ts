@@ -1196,13 +1196,34 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { pool } = await import('../../utils/duplicateRadarDatabase');
-          const clustersResult = await pool.query('SELECT id FROM duplicate_clusters');
-          let updated = 0;
-          for (const row of clustersResult.rows) {
-            await updateClusterStats(row.id);
-            updated++;
-          }
-          return c.json({ success: true, clustersUpdated: updated });
+          const result = await pool.query(`
+            UPDATE duplicate_clusters dc SET
+              total_leads = sub.lead_count,
+              total_deals = sub.deal_count,
+              total_contacts = sub.contact_count,
+              total_accounts = sub.account_count,
+              total_records = sub.total_count,
+              estimated_pipeline_value = sub.inflation,
+              first_record_date = sub.first_date,
+              latest_activity_date = sub.latest_date,
+              updated_at = CURRENT_TIMESTAMP
+            FROM (
+              SELECT
+                cluster_id,
+                COUNT(*) FILTER (WHERE record_type = 'lead') as lead_count,
+                COUNT(*) FILTER (WHERE record_type = 'deal') as deal_count,
+                COUNT(*) FILTER (WHERE record_type = 'contact') as contact_count,
+                COUNT(*) FILTER (WHERE record_type = 'account') as account_count,
+                COUNT(*) as total_count,
+                COALESCE(SUM(deal_value) FILTER (WHERE is_primary = false AND record_type = 'deal'), 0) as inflation,
+                MIN(created_date) as first_date,
+                MAX(COALESCE(modified_date, created_date)) as latest_date
+              FROM duplicate_records
+              GROUP BY cluster_id
+            ) sub
+            WHERE dc.id = sub.cluster_id
+          `);
+          return c.json({ success: true, clustersUpdated: result.rowCount || 0 });
         } catch (error: any) {
           console.error('Error recalculating stats:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
