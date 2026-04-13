@@ -117,6 +117,7 @@ export async function sendNonconformanceNotification(
     minorCount: number;
     ncIds: number[];
     auditDate: Date;
+    moduleBreakdown?: Array<{ module: string; recordsAudited: number; issuesFound: number }>;
   }
 ): Promise<boolean> {
   const channel = channelOverride || getChannel();
@@ -131,16 +132,25 @@ export async function sendNonconformanceNotification(
   if (ncDetails.majorCount > 0) severityLines.push(`:large_orange_circle: Major: *${ncDetails.majorCount}*`);
   if (ncDetails.minorCount > 0) severityLines.push(`:large_yellow_circle: Minor: *${ncDetails.minorCount}*`);
 
-  const blocks = [
+  const moduleLines: string[] = [];
+  if (ncDetails.moduleBreakdown && ncDetails.moduleBreakdown.length > 0) {
+    for (const m of ncDetails.moduleBreakdown) {
+      if (m.issuesFound > 0) {
+        moduleLines.push(`:file_folder: *${m.module}:* ${m.issuesFound.toLocaleString()} issues _(${m.recordsAudited.toLocaleString()} records)_`);
+      }
+    }
+  }
+
+  const blocks: any[] = [
     {
       type: 'header',
-      text: { type: 'plain_text', text: `${headerEmoji} ${ncDetails.totalNCs} Nonconformance(s) Detected`, emoji: true }
+      text: { type: 'plain_text', text: `${headerEmoji} ${ncDetails.totalNCs.toLocaleString()} Nonconformance(s) Detected`, emoji: true }
     },
     { type: 'divider' },
     {
       type: 'section',
       fields: [
-        { type: 'mrkdwn', text: `*Total NCs:*\n${ncDetails.totalNCs}` },
+        { type: 'mrkdwn', text: `*Total NCs:*\n${ncDetails.totalNCs.toLocaleString()}` },
         { type: 'mrkdwn', text: `*Audit Date:*\n${formatDate(ncDetails.auditDate)}` }
       ]
     },
@@ -150,23 +160,36 @@ export async function sendNonconformanceNotification(
         type: 'mrkdwn',
         text: `*Severity Breakdown:*\n${severityLines.join('\n')}`
       }
-    },
-    {
+    }
+  ];
+
+  if (moduleLines.length > 0) {
+    blocks.push({ type: 'divider' });
+    blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: isCritical
-          ? ':exclamation: *Immediate action required for critical findings. Assign owners and initiate corrective actions.*'
-          : ':memo: *Review findings and assign corrective actions.*'
+        text: `*Findings Breakdown by Module:*\n${moduleLines.join('\n')}`
       }
-    },
-    {
-      type: 'context',
-      elements: [
-        { type: 'mrkdwn', text: `:robot_face: _WalaPlus QMS Dashboard | NC IDs: ${ncDetails.ncIds.slice(0, 10).join(', ')}${ncDetails.ncIds.length > 10 ? '...' : ''}_` }
-      ]
+    });
+  }
+
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: isCritical
+        ? ':exclamation: *Immediate action required for critical findings. Assign owners and initiate corrective actions.*'
+        : ':memo: *Review findings and assign corrective actions.*'
     }
-  ];
+  });
+
+  blocks.push({
+    type: 'context',
+    elements: [
+      { type: 'mrkdwn', text: `:robot_face: _WalaPlus QMS Dashboard | NC IDs: ${ncDetails.ncIds.slice(0, 10).join(', ')}${ncDetails.ncIds.length > 10 ? '...' : ''}_` }
+    ]
+  });
 
   return sendSlackNotification(channel, fallback, blocks);
 }

@@ -225,6 +225,7 @@ export async function runDirectAudit(logger?: any) {
           minorCount: mediumIssues,
           ncIds: [],
           auditDate: savedResult.audit_date || new Date(),
+          moduleBreakdown,
         });
         logger?.info("✅ [DirectAudit] NONCONFORMANCE_DETECTED trigger fired");
       }

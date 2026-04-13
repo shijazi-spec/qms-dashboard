@@ -222,6 +222,7 @@ export async function fireNonconformanceDetectedTrigger(
     minorCount: number;
     ncIds: number[];
     auditDate: Date;
+    moduleBreakdown?: Array<{ module: string; recordsAudited: number; issuesFound: number }>;
   }
 ): Promise<AuditTrigger> {
   const severity = ncDetails.criticalCount > 0 ? 'critical' : (ncDetails.majorCount > 0 ? 'warning' : 'info');
