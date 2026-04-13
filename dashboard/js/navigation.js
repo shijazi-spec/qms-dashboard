@@ -28,8 +28,7 @@ const WalaPlusNav = {
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
-        { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
-        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-check', id: 'reviews' }
+        { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
       ]
     },
     {
@@ -43,7 +42,8 @@ const WalaPlusNav = {
         { label: 'Policies', href: '/policies', icon: 'document-text', id: 'policies' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
-        { label: 'Migration', href: '/migration', icon: 'database', id: 'migration' }
+        { label: 'Migration', href: '/migration', icon: 'database', id: 'migration' },
+        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-check', id: 'reviews' }
       ]
     },
     {
