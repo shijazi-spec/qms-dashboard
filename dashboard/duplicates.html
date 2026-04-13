@@ -68,6 +68,7 @@
             <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
             <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
             <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
+            <button onclick="showTab('accounts')" id="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
             <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
@@ -101,6 +102,11 @@
                     <div class="text-sm text-gray-500">Duplicate Deals</div>
                     <div id="totalDeals" class="text-2xl font-bold text-red-600">-</div>
                     <div id="dealRate" class="text-xs text-red-500">-% duplicate rate</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
+                    <div class="text-sm text-gray-500">Duplicate Accounts</div>
+                    <div id="totalAccounts" class="text-2xl font-bold text-indigo-600">-</div>
+                    <div id="accountRate" class="text-xs text-indigo-500">duplicate accounts</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
                     <div class="text-sm text-gray-500">Strong Similarity</div>
@@ -322,6 +328,25 @@
             </div>
         </div>
 
+        <div id="content-accounts" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div id="content-owners" class="tab-content hidden">
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -438,6 +463,7 @@
 
         let allLeadGroups = [];
         let allDealGroups = [];
+        let allAccountGroups = [];
         let allClustersRaw = [];
         let allLogsRaw = [];
 
@@ -461,6 +487,7 @@
             renderClusters(filterClustersByDate(allClustersRaw, range));
             renderLeads(filterGroupsByDate(allLeadGroups, range, 'leads'));
             renderDeals(filterGroupsByDate(allDealGroups, range, 'deals'));
+            renderAccounts(filterGroupsByDate(allAccountGroups, range, 'accounts'));
             renderLogs(filterLogsByDate(allLogsRaw, range));
         }
 
@@ -525,6 +552,7 @@
             document.getElementById('totalClusters').textContent = data.totalClusters || 0;
             document.getElementById('totalLeads').textContent = data.totalDuplicateLeads || 0;
             document.getElementById('totalDeals').textContent = data.totalDuplicateDeals || 0;
+            document.getElementById('totalAccounts').textContent = data.totalDuplicateAccounts || 0;
             document.getElementById('highConfidence').textContent = data.highConfidence || 0;
             document.getElementById('mediumConfidence').textContent = data.mediumConfidence || 0;
             document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
@@ -601,6 +629,10 @@
                             <span class="font-medium text-red-600">${c.total_deals}</span>
                         </div>
                         <div>
+                            <span class="text-gray-500">Accounts:</span>
+                            <span class="font-medium text-indigo-600">${c.total_accounts || 0}</span>
+                        </div>
+                        <div>
                             <span class="text-gray-500">Value:</span>
                             <span class="font-medium">${formatCurrency(c.estimated_pipeline_value || 0)}</span>
                         </div>
@@ -618,19 +650,23 @@
 
         async function loadLeadsAndDeals() {
             try {
-                const [leadsRes, dealsRes] = await Promise.all([
+                const [leadsRes, dealsRes, accountsRes] = await Promise.all([
                     fetch('/api/duplicates/leads'),
-                    fetch('/api/duplicates/deals')
+                    fetch('/api/duplicates/deals'),
+                    fetch('/api/duplicates/accounts')
                 ]);
 
                 const leadsData = await leadsRes.json();
                 const dealsData = await dealsRes.json();
+                const accountsData = await accountsRes.json();
 
                 allLeadGroups = leadsData.groups || [];
                 allDealGroups = dealsData.groups || [];
+                allAccountGroups = accountsData.groups || [];
 
                 renderLeads(allLeadGroups);
                 renderDeals(allDealGroups);
+                renderAccounts(allAccountGroups);
             } catch (error) {
                 console.error('Error loading leads/deals:', error);
             }
@@ -692,6 +728,34 @@
             tbody.innerHTML = rows || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
         }
 
+        function renderAccounts(groups) {
+            const tbody = document.getElementById('accountsTable');
+            let rows = '';
+            for (const group of groups) {
+                for (const account of group.accounts) {
+                    rows += `
+                        <tr>
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">${group.cluster.domain}</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${account.record_name}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${account.owner_name || '-'}</td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="px-2 py-1 rounded text-xs bg-indigo-100 text-indigo-800">${account.source || '-'}</span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="confidence-${getConfidenceLevel(account.confidence_score)} px-2 py-1 rounded text-xs">
+                                    ${account.confidence_score}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                ${account.is_primary ? '<span class="text-green-600 font-medium">Primary</span>' : '<span class="text-gray-400">Duplicate</span>'}
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+            tbody.innerHTML = rows || '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No duplicate accounts found</td></tr>';
+        }
+
         function renderOwners(owners) {
             const tbody = document.getElementById('ownersTable');
             tbody.innerHTML = owners.map(o => `
@@ -741,9 +805,10 @@
                 const actualTotal = actualRecords.length;
                 const actualLeads = actualRecords.filter(r => r.record_type === 'lead').length;
                 const actualDeals = actualRecords.filter(r => r.record_type === 'deal').length;
+                const actualAccounts = actualRecords.filter(r => r.record_type === 'account').length;
 
                 let content = `
-                    <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="grid grid-cols-4 gap-4 mb-4">
                         <div class="bg-gray-50 p-3 rounded">
                             <div class="text-sm text-gray-500">Total Records</div>
                             <div class="text-xl font-bold">${actualTotal || data.cluster.total_records}</div>
@@ -756,6 +821,10 @@
                             <div class="text-sm text-gray-500">Deals</div>
                             <div class="text-xl font-bold text-red-600">${actualDeals || data.cluster.total_deals}</div>
                         </div>
+                        <div class="bg-indigo-50 p-3 rounded">
+                            <div class="text-sm text-gray-500">Accounts</div>
+                            <div class="text-xl font-bold text-indigo-600">${actualAccounts || data.cluster.total_accounts || 0}</div>
+                        </div>
                     </div>
 
                     <h4 class="font-semibold mb-2">Timeline</h4>
@@ -764,7 +833,7 @@
 
                 const sortedRecords = data.records.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
                 for (const record of sortedRecords) {
-                    const typeColor = record.record_type === 'lead' ? 'bg-amber-500' : 'bg-red-500';
+                    const typeColor = record.record_type === 'lead' ? 'bg-amber-500' : record.record_type === 'account' ? 'bg-indigo-500' : 'bg-red-500';
                     content += `
                         <div class="flex items-start gap-3">
                             <div class="timeline-dot ${typeColor} mt-1"></div>

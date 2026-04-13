@@ -886,6 +886,38 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    path: "/api/duplicates/accounts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const clusters = await getAllClusters({ status: 'active' });
+          const accountsWithDuplicates: any[] = [];
+
+          for (const cluster of clusters) {
+            if (cluster.total_accounts > 1) {
+              const records = await getRecordsByClusterId(cluster.id!);
+              const accounts = records.filter(r => r.record_type === 'account');
+              accountsWithDuplicates.push({
+                cluster,
+                accounts,
+                duplicate_count: accounts.length
+              });
+            }
+          }
+
+          return c.json({
+            total_duplicate_groups: accountsWithDuplicates.length,
+            groups: accountsWithDuplicates
+          });
+        } catch (error: any) {
+          console.error('Error fetching account duplicates:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/ai-recommendations/:clusterId",
     method: "POST" as const,
     createHandler: async () => {
