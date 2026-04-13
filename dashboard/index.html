@@ -407,19 +407,23 @@
                             </div>
                             <div class="p-6">
                                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="issuesCategoryCards"></div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <p class="text-xs font-medium text-gray-500 uppercase mb-2 text-center">Records with Errors</p>
-                                        <div class="chart-container" style="height: 180px;">
-                                            <canvas id="issuesChart"></canvas>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-medium text-gray-500 uppercase mb-2 text-center">Total Issues</p>
-                                        <div class="chart-container" style="height: 180px;">
-                                            <canvas id="issuesChartTotal"></canvas>
-                                        </div>
-                                    </div>
+                                <div class="chart-container" style="height: 180px;">
+                                    <canvas id="issuesChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="records-with-issues" data-name="Records with Issues">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Records with Issues</span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="recordsCategoryCards"></div>
+                                <div class="chart-container" style="height: 180px;">
+                                    <canvas id="issuesChartTotal"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -1210,24 +1214,48 @@
                 return `
                     <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
                         <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
-                        <div class="text-xs text-gray-600">${cat} Records</div>
+                        <div class="text-xs text-gray-600">${cat} Issues</div>
                     </div>
                 `;
             }).join('');
         }
 
         // Widget configuration
+        function updateRecordsCategoryCards(recordCounts) {
+            const container = document.getElementById('recordsCategoryCards');
+            if (!container) return;
+            const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+            const colors = {
+                'Leads': { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
+                'Deals': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
+                'Contacts': { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200' },
+                'Tasks': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
+                'Accounts': { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' }
+            };
+            container.innerHTML = allModules.map(cat => {
+                const count = recordCounts[cat] || 0;
+                const color = colors[cat];
+                return `
+                    <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
+                        <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
+                        <div class="text-xs text-gray-600">${cat} Records</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         const defaultWidgetConfig = {
             'overall-score': { visible: true, order: 1 },
             'dimension-breakdown': { visible: true, order: 2 },
             'audit-summary': { visible: true, order: 3 },
             'issues-chart': { visible: true, order: 4 },
-            'trend-chart': { visible: true, order: 5 },
-            'opportunities': { visible: true, order: 6 },
-            'recommendations': { visible: true, order: 7 },
-            'history': { visible: true, order: 8 },
-            'agent-performance': { visible: true, order: 9 },
-            'framework': { visible: true, order: 10 }
+            'records-with-issues': { visible: true, order: 5 },
+            'trend-chart': { visible: true, order: 6 },
+            'opportunities': { visible: true, order: 7 },
+            'recommendations': { visible: true, order: 8 },
+            'history': { visible: true, order: 9 },
+            'agent-performance': { visible: true, order: 10 },
+            'framework': { visible: true, order: 11 }
         };
 
         function getWidgetConfig() {
@@ -1420,11 +1448,12 @@
                 : 0;
             document.getElementById('complianceRate').textContent = complianceRate + '%';
 
+            updateIssuesChart(audit.issues_by_category);
+            updateIssuesCategoryCards(audit.issues_by_category);
             const recordCounts = computeRecordCountsByModule(audit.raw_audit_data);
             const hasRecordCounts = Object.keys(recordCounts).length > 0;
-            updateIssuesChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
-            updateIssuesTotalChart(audit.issues_by_category);
-            updateIssuesCategoryCards(hasRecordCounts ? recordCounts : audit.issues_by_category);
+            updateIssuesTotalChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
+            updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
             updateTrendChart(data.auditHistory);
             updateOpportunities(audit);
             updateRecommendations(audit.recommendations);
