@@ -211,9 +211,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recommendation</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                             </tr>
                         </thead>
                         <tbody id="issuesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -631,6 +629,41 @@
         }
 
         // Issues Modal functions
+        function zohoLink(id, module) {
+            if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_') || id.startsWith('summary_') || id.startsWith('issue_')) return `<span class="text-xs font-mono text-gray-400">${id || '-'}</span>`;
+            return `<a href="https://crm.zoho.com/crm/org/tab/${module}/${id}" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${id}</a>`;
+        }
+
+        function groupIssuesByRecord(issues) {
+            const map = {};
+            issues.forEach(issue => {
+                const key = issue.id;
+                if (!map[key]) {
+                    map[key] = { id: issue.id, module: issue.module, owner: issue.owner, issues: [] };
+                }
+                map[key].issues.push({ issue: issue.issue, severity: issue.severity, recommendation: issue.recommendation });
+            });
+            return Object.values(map);
+        }
+
+        function computeRecordCountsByModule(rawData) {
+            let parsed = rawData;
+            if (typeof rawData === 'string') {
+                try { parsed = JSON.parse(rawData); } catch(e) { parsed = {}; }
+            }
+            const allIssues = parsed?.all_issues || [];
+            const moduleSets = {};
+            allIssues.forEach(issue => {
+                const mod = issue.module;
+                if (!mod) return;
+                if (!moduleSets[mod]) moduleSets[mod] = new Set();
+                if (issue.recordId) moduleSets[mod].add(issue.recordId);
+            });
+            const counts = {};
+            Object.keys(moduleSets).forEach(mod => { counts[mod] = moduleSets[mod].size; });
+            return counts;
+        }
+
         function openIssuesModal(category) {
             document.getElementById('issuesDrilldownModal').classList.remove('hidden');
             document.getElementById('modalTitle').textContent = category === 'all' ? 'All Issues' : `${category} Issues`;
@@ -709,19 +742,33 @@
                 medium: 'bg-yellow-100 text-yellow-800',
                 low: 'bg-green-100 text-green-800'
             };
-            
-            tbody.innerHTML = issues.map(issue => `
-                <tr class="hover:bg-gray-50 cursor-pointer" onclick="highlightIssue('${issue.id}')">
-                    <td class="px-4 py-3 text-sm font-mono text-gray-900">${issue.id}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${issue.module}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${issue.owner}</td>
-                    <td class="px-4 py-3 text-sm text-gray-900">${issue.issue}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${severityColors[issue.severity]}">${issue.severity}</span></td>
-                    <td class="px-4 py-3 text-sm text-gray-500">${issue.recommendation}</td>
-                </tr>
-            `).join('');
-            
-            document.getElementById('modalFooter').textContent = `Showing ${issues.length} issues`;
+
+            const grouped = groupIssuesByRecord(issues);
+
+            tbody.innerHTML = grouped.map(record => {
+                const issuesList = record.issues.map(i =>
+                    `<div class="flex items-start gap-2 py-1">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${severityColors[i.severity] || 'bg-gray-100 text-gray-800'}">${i.severity}</span>
+                        <div class="min-w-0">
+                            <span class="text-sm text-gray-900">${i.issue}</span>
+                            <p class="text-xs text-gray-400 mt-0.5">${i.recommendation}</p>
+                        </div>
+                    </div>`
+                ).join('');
+                return `
+                <tr class="hover:bg-gray-50 align-top">
+                    <td class="px-4 py-3">${zohoLink(record.id, record.module)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.module}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.owner}</td>
+                    <td class="px-4 py-3">
+                        <div class="space-y-1">${issuesList}</div>
+                        <div class="mt-1 text-xs text-gray-400">${record.issues.length} issue${record.issues.length > 1 ? 's' : ''}</div>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            const totalIssues = grouped.reduce((sum, r) => sum + r.issues.length, 0);
+            document.getElementById('modalFooter').textContent = `Showing ${grouped.length} records with ${totalIssues} issues`;
         }
 
         function filterModalIssues() {
@@ -1150,8 +1197,8 @@
                 const color = colors[cat];
                 return `
                     <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
-                        <div class="text-2xl font-bold ${color.text}">${count}</div>
-                        <div class="text-xs text-gray-600">${cat} Issues</div>
+                        <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
+                        <div class="text-xs text-gray-600">${cat} Records</div>
                     </div>
                 `;
             }).join('');
@@ -1361,8 +1408,10 @@
                 : 0;
             document.getElementById('complianceRate').textContent = complianceRate + '%';
 
-            updateIssuesChart(audit.issues_by_category);
-            updateIssuesCategoryCards(audit.issues_by_category);
+            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data);
+            const hasRecordCounts = Object.keys(recordCounts).length > 0;
+            updateIssuesChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
+            updateIssuesCategoryCards(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateTrendChart(data.auditHistory);
             updateOpportunities(audit);
             updateRecommendations(audit.recommendations);
