@@ -531,7 +531,18 @@
                                 </div>
                             </div>
                             <div class="p-6">
-                                <!-- Filter impact hint -->
+                                <div class="mb-3 flex flex-col sm:flex-row gap-3">
+                                    <div class="relative flex-1">
+                                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        <input type="text" id="agentSearchInput" oninput="filterAndSortAgents()" placeholder="Search by name..." class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
+                                    </div>
+                                    <select id="agentSortOrder" onchange="filterAndSortAgents()" class="text-sm border border-gray-200 rounded-lg px-3 py-2" data-testid="select-agent-sort">
+                                        <option value="score-asc">Score: Low → High</option>
+                                        <option value="score-desc">Score: High → Low</option>
+                                        <option value="name-asc">Name: A → Z</option>
+                                        <option value="name-desc">Name: Z → A</option>
+                                    </select>
+                                </div>
                                 <div class="mb-3 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
                                     <div class="flex items-center space-x-1">
                                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1261,8 +1272,25 @@
         }
 
         function filterAgentsByTeam() {
-            const team = document.getElementById('teamFilter').value;
-            const filtered = team === 'all' ? currentAgentData : currentAgentData.filter(a => a.team === team);
+            filterAndSortAgents();
+        }
+
+        function filterAndSortAgents() {
+            var team = document.getElementById('teamFilter').value;
+            var search = (document.getElementById('agentSearchInput').value || '').toLowerCase().trim();
+            var sort = document.getElementById('agentSortOrder').value;
+
+            var filtered = currentAgentData;
+            if (team !== 'all') filtered = filtered.filter(function(a) { return a.team === team; });
+            if (search) filtered = filtered.filter(function(a) { return a.name.toLowerCase().indexOf(search) !== -1; });
+
+            filtered = filtered.slice().sort(function(a, b) {
+                if (sort === 'name-asc') return a.name.localeCompare(b.name);
+                if (sort === 'name-desc') return b.name.localeCompare(a.name);
+                if (sort === 'score-desc') return b.score - a.score;
+                return a.score - b.score;
+            });
+
             renderAgentPerformance(filtered);
         }
 
