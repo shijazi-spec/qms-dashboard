@@ -24,3 +24,9 @@ id = "z1nCS8aAHgV8peTnFbess"
 uri = "file://exports/WalaPlus_Platform_Hygiene_Rules.md"
 type = "text"
 title = "WalaPlus Platform Hygiene Rules — All Modules"
+
+[[outputs]]
+id = "K8L4KA1H4K3t-IKxneG60"
+uri = "file://exports/CRM_Users_Status.xlsx"
+type = "table"
+title = "CRM Users Status List"
