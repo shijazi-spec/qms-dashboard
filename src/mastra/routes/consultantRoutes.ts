@@ -11,6 +11,7 @@ import {
   type AlertSeverity,
   type AlertType,
 } from "../../utils/aiAlertsDatabase";
+import { getSessionFromCookie } from "./authRoutes";
 
 initAIAlertsTable().catch(console.error);
 
@@ -19,8 +20,10 @@ const SCAN_TIMEOUT = parseInt(process.env.CONSULTANT_SCAN_TIMEOUT || "300000");
 
 function requireAuthOrKey(c: any): boolean {
   const adminKey = c.req.header("x-admin-key");
-  if (adminKey === process.env.ADMIN_API_KEY) return true;
-  const session = c.get?.("session") || c.get?.("user");
+  const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
+  const expectedKey = process.env.ADMIN_API_KEY;
+  if (expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey)) return true;
+  const session = c.get?.("session") || c.get?.("user") || getSessionFromCookie(c.req.header("Cookie"));
   if (session) return true;
   return false;
 }
