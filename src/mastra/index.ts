@@ -947,9 +947,8 @@ export const mastra = new Mastra({
                 console.log(`📅 [API] Date filters applied:`, dateFilters);
               }
               
-              const agentPerfLimit = 5000;
-              const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters, agentPerfLimit);
-              const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters, agentPerfLimit);
+              const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters);
+              const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters);
               const users = await getUsers();
 
               const userOverrides: Record<string, { team: string; status: string }> = {
@@ -1031,7 +1030,7 @@ export const mastra = new Mastra({
               const modulesToCheck = ['Contacts', 'Accounts', 'Deals'];
               
               for (const mod of modulesToCheck) {
-                for (let pg = 1; pg <= 10; pg++) {
+                for (let pg = 1; pg <= 50; pg++) {
                   try {
                     const recs = await fetchZohoForOwners(mod, { page: pg, perPage: 200, fields: ['Owner'] });
                     if (!recs || recs.length === 0) break;
