@@ -76,6 +76,7 @@ const WalaPlusNav = {
       items: [
         { label: 'AI Consultant', href: '/consultant', icon: 'brain', id: 'consultant' },
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
+        { label: 'Platform SOP', href: '/sop', icon: 'document-text', id: 'sop' },
         { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
         { label: 'Admin', href: '/admin', icon: 'cog', id: 'admin' },
         { label: 'Users & Access', href: '/users', icon: 'users', id: 'users' },

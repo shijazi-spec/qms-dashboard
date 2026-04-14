@@ -83,6 +83,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/crm` - CRM Data Hub (live enrichment with quality scores + duplicate detection, health summary bar, row click detail modal, junk/spam detection, hygiene warnings, cluster badges linking to Duplicate Radar)
 - `/feedback` - Feedback
 - `/onboarding` - Onboarding
+- `/sop` - Platform SOP (rendered markdown with TOC sidebar, print/download, public access)
 - `/tablef` - Table F Governance
 
 ## Running
