@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Data Viewer - WalaPlus</title>
+    <title>CRM Data Hub - WalaPlus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -24,34 +24,46 @@
             --qms-purple-light: #A855F7;
             --qms-purple-bg: #EDE9FE;
         }
-        html, body { 
-            font-family: 'Inter', sans-serif;
-            scroll-behavior: smooth;
-        }
-        body {
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
+        html, body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        body { min-height: 100vh; overflow-x: hidden; }
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .tab-active { border-bottom: 2px solid var(--qms-blue); color: var(--qms-blue); font-weight: 600; }
         .loading-spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid var(--qms-blue);
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
+            border: 3px solid #f3f3f3; border-top: 3px solid var(--qms-blue);
+            border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .table-container {
-            max-height: 600px;
-            overflow-y: auto;
-        }
+        .table-container { max-height: 600px; overflow-y: auto; }
         .table-container::-webkit-scrollbar { width: 8px; }
         .table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
         .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .table-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .row-junk { background: #fef2f2 !important; }
+        .row-junk:hover { background: #fee2e2 !important; }
+        .row-duplicate { background: #fffbeb !important; }
+        .row-duplicate:hover { background: #fef3c7 !important; }
+        .row-issue-highlight { border-left: 3px solid #f59e0b; }
+        .quality-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+        .quality-excellent { background: #d1fae5; color: #065f46; }
+        .quality-good { background: #dbeafe; color: #1e40af; }
+        .quality-fair { background: #fef3c7; color: #92400e; }
+        .quality-poor { background: #fee2e2; color: #991b1b; }
+        .cluster-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .cluster-badge:hover { transform: scale(1.05); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .cluster-high { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .cluster-medium { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .cluster-low { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+        .enrichment-overlay {
+            position: fixed; bottom: 24px; right: 24px; z-index: 50;
+            background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: white; border-radius: 16px; max-width: 800px; width: 95%; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .hygiene-warning { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 500; background: #fef3c7; color: #92400e; margin-left: 4px; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
 </head>
@@ -68,13 +80,13 @@
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">Zoho CRM Data Viewer</h1>
-                    <p class="text-gray-500 text-sm mt-1">Real-time data from your Zoho CRM</p>
+                    <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">CRM Data Hub</h1>
+                    <p class="text-gray-500 text-sm mt-1">Live CRM data enriched with quality scores &amp; duplicate detection</p>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">Checking...</span>
+                    <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm" data-testid="status-connection">Checking...</span>
                     <span id="lastUpdated" class="text-xs text-gray-400"></span>
-                    <button onclick="refreshData()" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2">
+                    <button onclick="refreshData()" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2" data-testid="button-refresh">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
@@ -83,45 +95,68 @@
                 </div>
             </div>
 
+            <div id="healthBar" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 hidden">
+                <div class="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                    <div id="healthTotal" class="text-xl font-bold text-gray-700" data-testid="text-health-total">0</div>
+                    <div class="text-xs text-gray-500">Records Shown</div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                    <div id="healthClean" class="text-xl font-bold text-green-700" data-testid="text-health-clean">0</div>
+                    <div class="text-xs text-green-600">Clean</div>
+                </div>
+                <div class="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                    <div id="healthIssues" class="text-xl font-bold text-amber-700" data-testid="text-health-issues">0</div>
+                    <div class="text-xs text-amber-600">With Issues</div>
+                </div>
+                <div class="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+                    <div id="healthJunk" class="text-xl font-bold text-red-700" data-testid="text-health-junk">0</div>
+                    <div class="text-xs text-red-600">Junk / Spam</div>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+                    <div id="healthDuplicates" class="text-xl font-bold text-purple-700" data-testid="text-health-duplicates">0</div>
+                    <div class="text-xs text-purple-600">In Dup. Clusters</div>
+                </div>
+            </div>
+
             <div class="border-b border-gray-200 mb-6">
                 <nav class="flex space-x-8" id="moduleTabs">
-                    <button onclick="switchModule('Leads')" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active">
-                        Leads
-                    </button>
-                    <button onclick="switchModule('Deals')" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
-                        Deals
-                    </button>
-                    <button onclick="switchModule('Contacts')" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
-                        Contacts
-                    </button>
-                    <button onclick="switchModule('Tasks')" data-module="Tasks" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
-                        Tasks
-                    </button>
-                    <button onclick="switchModule('Accounts')" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
-                        Accounts
-                    </button>
+                    <button onclick="switchModule('Leads')" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads">Leads</button>
+                    <button onclick="switchModule('Deals')" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals">Deals</button>
+                    <button onclick="switchModule('Contacts')" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts">Contacts</button>
+                    <button onclick="switchModule('Tasks')" data-module="Tasks" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-tasks">Tasks</button>
+                    <button onclick="switchModule('Accounts')" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-accounts">Accounts</button>
                 </nav>
             </div>
 
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                 <div class="flex items-center space-x-4">
                     <div class="relative">
-                        <input type="text" id="searchInput" placeholder="Search records..." 
+                        <input type="text" id="searchInput" placeholder="Search records..."
                             class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
-                            onkeyup="filterTable()">
+                            onkeyup="filterTable()" data-testid="input-search">
                         <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
                     </div>
-                    <span id="recordCount" class="text-sm text-gray-500">0 records</span>
+                    <span id="recordCount" class="text-sm text-gray-500" data-testid="text-record-count">0 records</span>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <label class="text-sm text-gray-500">Per page:</label>
-                    <select id="perPageSelect" onchange="refreshData()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
-                        <option value="25">25</option>
-                        <option value="50" selected>50</option>
-                        <option value="100">100</option>
-                    </select>
+                <div class="flex items-center space-x-4">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="hideJunk" onchange="filterTable()" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-hide-junk">
+                        <span class="text-sm text-gray-600">Hide Junk</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="highlightIssues" onchange="reRenderRows()" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500" data-testid="checkbox-highlight-issues">
+                        <span class="text-sm text-gray-600">Highlight Issues</span>
+                    </label>
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm text-gray-500">Per page:</label>
+                        <select id="perPageSelect" onchange="refreshData()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500" data-testid="select-per-page">
+                            <option value="25">25</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -137,12 +172,12 @@
                     </svg>
                 </div>
                 <p id="errorMessage" class="text-red-600 font-medium mb-2">Error loading data</p>
-                <button onclick="refreshData()" class="text-indigo-600 hover:text-indigo-800 text-sm">Try again</button>
+                <button onclick="refreshData()" class="text-indigo-600 hover:text-indigo-800 text-sm" data-testid="button-retry">Try again</button>
             </div>
 
             <div id="dataContainer" class="table-container">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50 sticky top-0">
+                    <thead class="bg-gray-50 sticky top-0 z-10">
                         <tr id="tableHeader"></tr>
                     </thead>
                     <tbody id="tableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -159,49 +194,71 @@
             </div>
 
             <div id="pagination" class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                <button onclick="previousPage()" id="prevBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                    Previous
-                </button>
+                <button onclick="previousPage()" id="prevBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-testid="button-prev-page">Previous</button>
                 <span id="pageInfo" class="text-sm text-gray-500">Page 1</span>
-                <button onclick="nextPage()" id="nextBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Next
-                </button>
+                <button onclick="nextPage()" id="nextBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="button-next-page">Next</button>
             </div>
         </div>
 
         <div class="bg-white rounded-xl shadow-lg p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Module Statistics</h2>
-            <div id="moduleStats" class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div class="bg-blue-50 p-4 rounded-lg text-center">
-                    <div id="leadsCount" class="text-2xl font-bold text-blue-600">--</div>
-                    <div class="text-sm text-blue-800">Leads</div>
-                </div>
-                <div class="bg-green-50 p-4 rounded-lg text-center">
-                    <div id="dealsCount" class="text-2xl font-bold text-green-600">--</div>
-                    <div class="text-sm text-green-800">Deals</div>
-                </div>
-                <div class="bg-purple-50 p-4 rounded-lg text-center">
-                    <div id="contactsCount" class="text-2xl font-bold text-purple-600">--</div>
-                    <div class="text-sm text-purple-800">Contacts</div>
-                </div>
-                <div class="bg-amber-50 p-4 rounded-lg text-center">
-                    <div id="tasksCount" class="text-2xl font-bold text-amber-600">--</div>
-                    <div class="text-sm text-amber-800">Tasks</div>
-                </div>
-                <div class="bg-cyan-50 p-4 rounded-lg text-center">
-                    <div id="accountsCount" class="text-2xl font-bold text-cyan-600">--</div>
-                    <div class="text-sm text-cyan-800">Accounts</div>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">How to Read This View</h2>
+                <button onclick="toggleLegend()" class="text-sm text-indigo-600 hover:text-indigo-800" data-testid="button-toggle-legend">Show / Hide</button>
+            </div>
+            <div id="legendContent" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <span class="quality-badge quality-excellent">95</span>
+                        <div><strong>Quality Score</strong><br>0-100 score based on SOP field compliance. Green (80+) = clean, Blue (60-79) = good, Amber (40-59) = fair, Red (&lt;40) = poor.</div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <span class="cluster-badge cluster-high">⊕ Cluster #12</span>
+                        <div><strong>Duplicate Cluster</strong><br>Record belongs to a duplicate cluster in the Radar. Click the badge to jump to that cluster.</div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <span class="inline-block px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">JUNK</span>
+                        <div><strong>Junk / Spam</strong><br>Record has suspicious patterns — gibberish names, test emails, or disposable domains. Red row background.</div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <span class="hygiene-warning">⚠ phone too long</span>
+                        <div><strong>Hygiene Warning</strong><br>Inline warnings for common data issues — phone length, suspicious emails, gibberish names.</div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div class="w-6 h-6 bg-amber-50 border-l-4 border-amber-400 rounded"></div>
+                        <div><strong>Yellow Row</strong><br>Record is part of a duplicate cluster. Toggle "Highlight Issues" to add a left border to records with quality issues.</div>
+                    </div>
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <div><strong>Row Click</strong><br>Click any row to open a detail modal with full quality assessment, cluster info, and all record fields.</div>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <script>
-        let currentModule = 'Leads';
-        let currentPage = 1;
-        let allRecords = [];
+    <div id="recordModal" class="hidden"></div>
 
-        const moduleColumns = {
+    <div id="enrichmentOverlay" class="hidden enrichment-overlay">
+        <div class="loading-spinner" style="width:20px;height:20px;border-width:2px;"></div>
+        <span class="text-sm text-gray-600">Cross-referencing with Duplicate Radar &amp; Quality Engine...</span>
+    </div>
+
+    <script>
+        var currentModule = 'Leads';
+        var currentPage = 1;
+        var allRecords = [];
+        var enrichmentData = {};
+        var enrichmentLoaded = false;
+        var enrichRequestId = 0;
+
+        function esc(str) {
+            if (str === null || str === undefined) return '';
+            var d = document.createElement('div');
+            d.textContent = String(str);
+            return d.innerHTML;
+        }
+
+        var moduleColumns = {
             Leads: ['Full_Name', 'Email', 'Company', 'Phone', 'Lead_Source', 'Lead_Status', 'Owner'],
             Deals: ['Deal_Name', 'Amount', 'Stage', 'Closing_Date', 'Account_Name', 'Owner'],
             Contacts: ['Full_Name', 'Email', 'Phone', 'Account_Name', 'Mailing_City', 'Owner'],
@@ -211,10 +268,9 @@
 
         async function checkConnection() {
             try {
-                const response = await fetch('/api/integrations/status');
-                const data = await response.json();
-                const statusEl = document.getElementById('connectionStatus');
-                
+                var response = await fetch('/api/integrations/status');
+                var data = await response.json();
+                var statusEl = document.getElementById('connectionStatus');
                 if (data.zoho?.connected) {
                     statusEl.textContent = 'Connected';
                     statusEl.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
@@ -229,44 +285,92 @@
         }
 
         async function fetchModuleData(module) {
-            const perPage = document.getElementById('perPageSelect').value;
-            const response = await fetch(`/api/crm/data?module=${module}&page=${currentPage}&per_page=${perPage}`);
+            var perPage = document.getElementById('perPageSelect').value;
+            var response = await fetch('/api/crm/data?module=' + module + '&page=' + currentPage + '&per_page=' + perPage);
             return response.json();
         }
 
+        async function enrichRecords(records) {
+            var requestId = ++enrichRequestId;
+            var overlay = document.getElementById('enrichmentOverlay');
+            overlay.classList.remove('hidden');
+            try {
+                var payload = records.map(function(r) {
+                    return { id: r.id, module: currentModule, data: r };
+                });
+                var response = await fetch('/api/crm/enrich', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ records: payload })
+                });
+                var data = await response.json();
+                if (requestId !== enrichRequestId) return;
+                if (data.success && data.enrichments) {
+                    enrichmentData = data.enrichments;
+                    enrichmentLoaded = true;
+                    reRenderRows();
+                    updateHealthBar();
+                }
+            } catch (err) {
+                console.warn('Enrichment failed:', err);
+            } finally {
+                if (requestId === enrichRequestId) overlay.classList.add('hidden');
+            }
+        }
+
+        function updateHealthBar() {
+            var bar = document.getElementById('healthBar');
+            bar.classList.remove('hidden');
+            var total = allRecords.length;
+            var clean = 0, withIssues = 0, junk = 0, inClusters = 0;
+            for (var i = 0; i < allRecords.length; i++) {
+                var e = enrichmentData[allRecords[i].id];
+                if (!e) { clean++; continue; }
+                if (e.isJunk) junk++;
+                else if (e.issueCount > 0) withIssues++;
+                else clean++;
+                if (e.cluster) inClusters++;
+            }
+            document.getElementById('healthTotal').textContent = total;
+            document.getElementById('healthClean').textContent = clean;
+            document.getElementById('healthIssues').textContent = withIssues;
+            document.getElementById('healthJunk').textContent = junk;
+            document.getElementById('healthDuplicates').textContent = inClusters;
+        }
+
         async function refreshData() {
-            const loadingEl = document.getElementById('loadingState');
-            const dataEl = document.getElementById('dataContainer');
-            const errorEl = document.getElementById('errorState');
-            const emptyEl = document.getElementById('emptyState');
-            const refreshBtn = document.getElementById('refreshBtn');
-            
+            var loadingEl = document.getElementById('loadingState');
+            var dataEl = document.getElementById('dataContainer');
+            var errorEl = document.getElementById('errorState');
+            var emptyEl = document.getElementById('emptyState');
+            var refreshBtn = document.getElementById('refreshBtn');
+
             loadingEl.classList.remove('hidden');
             dataEl.classList.add('hidden');
             errorEl.classList.add('hidden');
             emptyEl.classList.add('hidden');
             refreshBtn.disabled = true;
-            
+            enrichmentData = {};
+            enrichmentLoaded = false;
+
             try {
-                const data = await fetchModuleData(currentModule);
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to fetch data');
-                }
-                
+                var data = await fetchModuleData(currentModule);
+                if (!data.success) throw new Error(data.error || 'Failed to fetch data');
+
                 allRecords = data.records || [];
-                document.getElementById('recordCount').textContent = `${allRecords.length} records`;
-                document.getElementById('lastUpdated').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
-                
+                document.getElementById('recordCount').textContent = allRecords.length + ' records';
+                document.getElementById('lastUpdated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
                 renderTable();
                 updatePagination(data);
-                
+
                 loadingEl.classList.add('hidden');
-                
                 if (allRecords.length === 0) {
                     emptyEl.classList.remove('hidden');
                 } else {
                     dataEl.classList.remove('hidden');
+                    enrichRecords(allRecords);
                 }
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -278,41 +382,184 @@
             }
         }
 
+        function getQualityBadge(score) {
+            if (score === undefined || score === null) return '';
+            var cls = 'quality-poor';
+            if (score >= 80) cls = 'quality-excellent';
+            else if (score >= 60) cls = 'quality-good';
+            else if (score >= 40) cls = 'quality-fair';
+            return '<span class="quality-badge ' + cls + '" title="Quality Score: ' + score + '/100">' + score + '</span>';
+        }
+
+        function getClusterBadgeHTML(cluster) {
+            if (!cluster) return '<span class="text-xs text-gray-300">—</span>';
+            var cls = 'cluster-low';
+            if (cluster.confidence_level === 'high') cls = 'cluster-high';
+            else if (cluster.confidence_level === 'medium') cls = 'cluster-medium';
+            return '<span class="cluster-badge ' + cls + '" onclick="event.stopPropagation(); window.location.href=\'/duplicates#cluster-' + cluster.cluster_id + '\'" title="Cluster #' + cluster.cluster_id + ' (' + cluster.cluster_record_count + ' records, ' + cluster.confidence_level + ' confidence)">' +
+                '⊕ #' + cluster.cluster_id + ' (' + cluster.cluster_record_count + ')' +
+                '</span>';
+        }
+
+        function getHygieneWarnings(record) {
+            var warnings = [];
+            var phone = String(record.Phone || '');
+            var email = String(record.Email || '');
+            var name = String(record.Full_Name || record.Deal_Name || '');
+            var company = String(record.Company || '');
+
+            if (phone && phone.replace(/\D/g, '').length > 15) warnings.push('phone too long');
+            if (phone && phone.replace(/\D/g, '').length < 7 && phone.replace(/\D/g, '').length > 0) warnings.push('phone too short');
+            if (email && /\.(tk|ml|ga|cf|gq)$/i.test(email)) warnings.push('suspicious email');
+            if (name && /^[a-z]{15,}$/i.test(name.replace(/\s/g, '')) && !/[aeiou]{2}/i.test(name)) warnings.push('gibberish name');
+            if (company && /^[a-z]{15,}$/i.test(company.replace(/\s/g, '')) && !/[aeiou]{2}/i.test(company)) warnings.push('gibberish company');
+
+            return warnings.map(function(w) { return '<span class="hygiene-warning">⚠ ' + w + '</span>'; }).join('');
+        }
+
         function renderTable() {
-            const columns = moduleColumns[currentModule] || ['id'];
-            const headerRow = document.getElementById('tableHeader');
-            const tbody = document.getElementById('tableBody');
-            
-            headerRow.innerHTML = columns.map(col => 
-                `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${formatColumnName(col)}</th>`
-            ).join('');
-            
-            tbody.innerHTML = allRecords.map(record => {
-                const cells = columns.map(col => {
-                    let value = getNestedValue(record, col);
-                    if (col === 'Owner' && typeof value === 'object') {
-                        value = value?.name || value?.id || '-';
+            var columns = moduleColumns[currentModule] || ['id'];
+            var headerRow = document.getElementById('tableHeader');
+            var enrichCols = enrichmentLoaded ? '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quality</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duplicates</th>' : '';
+            headerRow.innerHTML = columns.map(function(col) {
+                return '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">' + formatColumnName(col) + '</th>';
+            }).join('') + enrichCols;
+
+            buildTableBody(columns);
+        }
+
+        function reRenderRows() {
+            var columns = moduleColumns[currentModule] || ['id'];
+            renderTable();
+            filterTable();
+        }
+
+        function buildTableBody(columns) {
+            var tbody = document.getElementById('tableBody');
+            var hideJunk = document.getElementById('hideJunk').checked;
+            var highlightIssues = document.getElementById('highlightIssues').checked;
+
+            tbody.innerHTML = allRecords.map(function(record, idx) {
+                var e = enrichmentData[record.id];
+                var isJunk = e && e.isJunk;
+                var hasDup = e && e.cluster;
+                var hasIssues = e && e.issueCount > 0;
+
+                if (hideJunk && isJunk) return '';
+
+                var rowClass = 'hover:bg-gray-50 cursor-pointer transition-colors';
+                if (isJunk) rowClass = 'row-junk cursor-pointer transition-colors';
+                else if (hasDup) rowClass = 'row-duplicate cursor-pointer transition-colors';
+                if (highlightIssues && hasIssues && !isJunk) rowClass += ' row-issue-highlight';
+
+                var cells = columns.map(function(col) {
+                    var value = record[col];
+                    if (col === 'Owner' && typeof value === 'object') value = value?.name || value?.id || '-';
+                    if (col === 'Account_Name' && typeof value === 'object') value = value?.name || value?.id || '-';
+                    if (col === 'What_Id' && typeof value === 'object') value = value?.name || value?.id || '-';
+                    if (col === 'Amount' && value) value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+                    if ((col === 'Due_Date' || col === 'Closing_Date') && value) value = new Date(value).toLocaleDateString();
+
+                    var extra = '';
+                    if (isJunk && (col === 'Full_Name' || col === 'Deal_Name' || col === 'Account_Name')) {
+                        extra = ' <span class="inline-block px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">JUNK</span>';
                     }
-                    if (col === 'Account_Name' && typeof value === 'object') {
-                        value = value?.name || value?.id || '-';
+                    if (col === 'Phone') {
+                        var pv = String(value || '');
+                        if (pv && pv.replace(/\D/g, '').length > 15) extra += '<span class="hygiene-warning">⚠ phone too long</span>';
+                        if (pv && pv.replace(/\D/g, '').length < 7 && pv.replace(/\D/g, '').length > 0) extra += '<span class="hygiene-warning">⚠ phone too short</span>';
                     }
-                    if (col === 'What_Id' && typeof value === 'object') {
-                        value = value?.name || value?.id || '-';
+                    if (col === 'Email') {
+                        var ev = String(value || '');
+                        if (ev && /\.(tk|ml|ga|cf|gq)$/i.test(ev)) extra += '<span class="hygiene-warning">⚠ suspicious email</span>';
                     }
-                    if (col === 'Amount' && value) {
-                        value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-                    }
-                    if ((col === 'Due_Date' || col === 'Closing_Date') && value) {
-                        value = new Date(value).toLocaleDateString();
-                    }
-                    return `<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">${value || '-'}</td>`;
+
+                    return '<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">' + esc(value || '-') + extra + '</td>';
                 }).join('');
-                return `<tr class="hover:bg-gray-50">${cells}</tr>`;
+
+                var enrichCells = '';
+                if (enrichmentLoaded) {
+                    enrichCells = '<td class="px-3 py-3 text-sm">' + (e ? getQualityBadge(e.qualityScore) : '<span class="text-xs text-gray-300">—</span>') + '</td>';
+                    enrichCells += '<td class="px-3 py-3 text-sm">' + (e ? getClusterBadgeHTML(e.cluster) : '<span class="text-xs text-gray-300">—</span>') + '</td>';
+                }
+
+                return '<tr class="' + rowClass + '" onclick="openRecordModal(' + idx + ')" data-testid="row-record-' + idx + '">' + cells + enrichCells + '</tr>';
             }).join('');
         }
 
-        function getNestedValue(obj, key) {
-            return obj[key];
+        function openRecordModal(idx) {
+            var record = allRecords[idx];
+            if (!record) return;
+            var e = enrichmentData[record.id] || {};
+            var modal = document.getElementById('recordModal');
+
+            var qualitySection = '';
+            if (e.qualityScore !== undefined) {
+                qualitySection = '<div class="mb-6"><h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">Quality Assessment ' + getQualityBadge(e.qualityScore) + '</h3>';
+                if (e.issues && e.issues.length > 0) {
+                    qualitySection += '<div class="space-y-2">';
+                    for (var i = 0; i < e.issues.length; i++) {
+                        var iss = e.issues[i];
+                        var sevColor = iss.severity === 'critical' ? 'red' : iss.severity === 'high' ? 'orange' : iss.severity === 'medium' ? 'amber' : 'gray';
+                        qualitySection += '<div class="flex items-start gap-2 p-2 bg-' + sevColor + '-50 rounded border border-' + sevColor + '-200">' +
+                            '<span class="px-1.5 py-0.5 bg-' + sevColor + '-100 text-' + sevColor + '-700 rounded text-xs font-medium uppercase">' + esc(iss.severity) + '</span>' +
+                            '<div class="text-sm"><strong>' + esc(iss.field || 'General') + '</strong>: ' + esc(iss.description) + '</div></div>';
+                    }
+                    qualitySection += '</div>';
+                } else {
+                    qualitySection += '<p class="text-sm text-green-600">✓ No quality issues detected</p>';
+                }
+                if (e.isJunk) {
+                    qualitySection += '<div class="mt-3 p-2 bg-red-50 border border-red-200 rounded flex items-center gap-2"><span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold">JUNK</span><span class="text-sm text-red-700">This record shows junk/spam patterns</span></div>';
+                }
+                qualitySection += '</div>';
+            }
+
+            var clusterSection = '';
+            if (e.cluster) {
+                clusterSection = '<div class="mb-6"><h3 class="text-sm font-semibold text-gray-700 mb-3">Duplicate Cluster Info</h3>' +
+                    '<div class="grid grid-cols-2 gap-3 p-3 bg-purple-50 rounded-lg border border-purple-200">' +
+                    '<div><span class="text-xs text-gray-500">Cluster ID</span><div class="font-medium">#' + e.cluster.cluster_id + '</div></div>' +
+                    '<div><span class="text-xs text-gray-500">Records in Cluster</span><div class="font-medium">' + e.cluster.cluster_record_count + '</div></div>' +
+                    '<div><span class="text-xs text-gray-500">Confidence</span><div class="font-medium capitalize">' + esc(e.cluster.confidence_level) + ' (' + Math.round(e.cluster.confidence_score) + '%)</div></div>' +
+                    '<div><span class="text-xs text-gray-500">Status</span><div class="font-medium capitalize">' + esc(e.cluster.cluster_status || 'active') + '</div></div>' +
+                    '</div>' +
+                    '<a href="/duplicates#cluster-' + e.cluster.cluster_id + '" class="inline-flex items-center gap-1 mt-2 text-sm text-indigo-600 hover:text-indigo-800" data-testid="link-view-cluster">View in Duplicate Radar →</a>' +
+                    '</div>';
+            }
+
+            var fieldsSection = '<div><h3 class="text-sm font-semibold text-gray-700 mb-3">All Record Fields</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">';
+            var allKeys = Object.keys(record).filter(function(k) { return k !== 'id'; });
+            for (var k = 0; k < allKeys.length; k++) {
+                var key = allKeys[k];
+                var val = record[key];
+                if (typeof val === 'object' && val !== null) val = val.name || val.id || JSON.stringify(val);
+                if (val === null || val === undefined) val = '-';
+                fieldsSection += '<div class="flex justify-between p-2 rounded ' + (k % 2 === 0 ? 'bg-gray-50' : '') + '"><span class="text-gray-500">' + esc(formatColumnName(key)) + '</span><span class="font-medium text-right max-w-[60%] truncate" title="' + esc(val) + '">' + esc(val) + '</span></div>';
+            }
+            fieldsSection += '</div></div>';
+
+            var warnings = getHygieneWarnings(record);
+            var warningSection = warnings ? '<div class="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200"><span class="text-sm font-medium text-amber-800">Hygiene Warnings:</span> ' + warnings + '</div>' : '';
+
+            modal.innerHTML = '<div class="modal-overlay" onclick="closeRecordModal(event)">' +
+                '<div class="modal-content fade-in" onclick="event.stopPropagation()">' +
+                '<div class="flex items-center justify-between mb-4">' +
+                '<h2 class="text-lg font-bold text-gray-900">' + esc(record.Full_Name || record.Deal_Name || record.Account_Name || record.Subject || 'Record') + '</h2>' +
+                '<button onclick="closeRecordModal()" class="p-1 text-gray-400 hover:text-gray-600" data-testid="button-close-modal">✕</button>' +
+                '</div>' +
+                '<div class="text-xs text-gray-400 mb-4">Module: ' + esc(currentModule) + ' · Zoho ID: ' + esc(record.id) + '</div>' +
+                warningSection +
+                qualitySection +
+                clusterSection +
+                fieldsSection +
+                '</div></div>';
+            modal.classList.remove('hidden');
+        }
+
+        function closeRecordModal(e) {
+            if (e && e.target !== e.currentTarget) return;
+            document.getElementById('recordModal').classList.add('hidden');
         }
 
         function formatColumnName(col) {
@@ -322,42 +569,37 @@
         function switchModule(module) {
             currentModule = module;
             currentPage = 1;
-            
-            document.querySelectorAll('#moduleTabs button').forEach(btn => {
+            document.querySelectorAll('#moduleTabs button').forEach(function(btn) {
                 btn.classList.remove('tab-active');
-                if (btn.dataset.module === module) {
-                    btn.classList.add('tab-active');
-                }
+                if (btn.dataset.module === module) btn.classList.add('tab-active');
             });
-            
             refreshData();
         }
 
         function filterTable() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const rows = document.querySelectorAll('#tableBody tr');
-            
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            var searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            var hideJunk = document.getElementById('hideJunk').checked;
+            var rows = document.querySelectorAll('#tableBody tr');
+            rows.forEach(function(row) {
+                var text = row.textContent.toLowerCase();
+                var isJunkRow = row.classList.contains('row-junk');
+                var matchSearch = !searchTerm || text.includes(searchTerm);
+                var matchJunk = !hideJunk || !isJunkRow;
+                row.style.display = (matchSearch && matchJunk) ? '' : 'none';
             });
         }
 
         function updatePagination(data) {
-            const prevBtn = document.getElementById('prevBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            const pageInfo = document.getElementById('pageInfo');
-            
+            var prevBtn = document.getElementById('prevBtn');
+            var nextBtn = document.getElementById('nextBtn');
+            var pageInfo = document.getElementById('pageInfo');
             prevBtn.disabled = currentPage <= 1;
             nextBtn.disabled = data.count < parseInt(document.getElementById('perPageSelect').value);
-            pageInfo.textContent = `Page ${currentPage}`;
+            pageInfo.textContent = 'Page ' + currentPage;
         }
 
         function previousPage() {
-            if (currentPage > 1) {
-                currentPage--;
-                refreshData();
-            }
+            if (currentPage > 1) { currentPage--; refreshData(); }
         }
 
         function nextPage() {
@@ -365,27 +607,18 @@
             refreshData();
         }
 
-        async function loadModuleStats() {
-            const modules = ['Leads', 'Deals', 'Contacts', 'Tasks', 'Accounts'];
-            
-            for (const module of modules) {
-                try {
-                    const response = await fetch(`/api/crm/data?module=${module}&per_page=1`);
-                    const data = await response.json();
-                    const countEl = document.getElementById(`${module.toLowerCase()}Count`);
-                    if (countEl && data.success) {
-                        countEl.textContent = data.count || 0;
-                    }
-                } catch (error) {
-                    console.error(`Error fetching ${module} count:`, error);
-                }
-            }
+        function toggleLegend() {
+            var el = document.getElementById('legendContent');
+            el.classList.toggle('hidden');
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeRecordModal();
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
             checkConnection();
             refreshData();
-            loadModuleStats();
         });
     </script>
 </body>

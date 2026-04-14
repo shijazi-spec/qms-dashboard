@@ -564,6 +564,88 @@ export const mastra = new Mastra({
         },
       },
       {
+        path: "/api/crm/enrich",
+        method: "POST" as const,
+        createHandler: async () => {
+          const { lookupRecordsByZohoIds } = await import("../utils/duplicateRadarDatabase");
+          const { analyzeRecordHygiene, DEFAULT_GOVERNANCE_RULES } = await import("../utils/zohoCRM");
+          return async (c: any) => {
+            try {
+              const body = await c.req.json();
+              const records: Array<{ id: string; module: string; data: Record<string, any> }> = body.records || [];
+              if (!records.length) return c.json({ success: true, enrichments: {} });
+              if (records.length > 200) return c.json({ success: false, error: 'Max 200 records per batch' }, 400);
+
+              const zohoIds = records.map(r => r.id).filter(Boolean);
+              let clusterMap: Record<string, any> = {};
+              try {
+                const clusterResults = await lookupRecordsByZohoIds(zohoIds);
+                for (const cr of clusterResults) {
+                  clusterMap[cr.zoho_record_id] = cr;
+                }
+              } catch (e) {
+                console.warn('[CRM Enrich] Cluster lookup failed, continuing without:', e);
+              }
+
+              const enrichments: Record<string, any> = {};
+              for (const record of records) {
+                const crmRecord = {
+                  id: record.id,
+                  module: record.module || 'Leads',
+                  data: record.data || {},
+                  owner: record.data?.Owner?.name || record.data?.Owner?.id || '',
+                  createdTime: record.data?.Created_Time || '',
+                  modifiedTime: record.data?.Modified_Time || '',
+                };
+
+                const issues = analyzeRecordHygiene(crmRecord, DEFAULT_GOVERNANCE_RULES);
+                const totalWeighted = issues.reduce((sum, i) => {
+                  if (i.severity === 'critical') return sum + 10;
+                  if (i.severity === 'high') return sum + 6;
+                  if (i.severity === 'medium') return sum + 3;
+                  return sum + 1;
+                }, 0);
+                const qualityScore = issues.length === 0 ? 100 : Math.max(0, Math.round(100 * Math.exp(-0.08 * totalWeighted)));
+
+                const isJunk = detectJunkRecord(record.data, record.module);
+
+                enrichments[record.id] = {
+                  qualityScore: Math.min(100, Math.max(0, qualityScore)),
+                  issueCount: issues.length,
+                  issues: issues.slice(0, 5).map(i => ({
+                    field: i.fieldName,
+                    type: i.issueType,
+                    severity: i.severity,
+                    description: i.description,
+                  })),
+                  isJunk,
+                  cluster: clusterMap[record.id] || null,
+                };
+              }
+
+              return c.json({ success: true, enrichments });
+            } catch (error) {
+              console.error('[CRM Enrich] Error:', error);
+              return c.json({ success: false, error: 'Failed to enrich records' }, 500);
+            }
+          };
+
+          function detectJunkRecord(data: Record<string, any>, module: string): boolean {
+            const name = String(data.Full_Name || data.Deal_Name || data.Account_Name || data.Company || '');
+            const email = String(data.Email || '');
+            const company = String(data.Company || '');
+
+            if (/^[a-z]{20,}$/i.test(name.replace(/\s/g, '')) && !/[aeiou]{2}/i.test(name)) return true;
+            if (/test|spam|fake|xxx|asdf|qwerty/i.test(name)) return true;
+            if (/test|spam|fake|xxx|noreply/i.test(email)) return true;
+            if (/^[a-z]{20,}$/i.test(company.replace(/\s/g, '')) && !/[aeiou]{2}/i.test(company)) return true;
+            if (email && /\.(tk|ml|ga|cf|gq)$/i.test(email)) return true;
+
+            return false;
+          }
+        },
+      },
+      {
         path: "/api/governance",
         method: "GET",
         createHandler: async () => {

@@ -2035,4 +2035,45 @@ export async function calculateEnhancedScore(
   return { score: Math.min(score, 100), signals };
 }
 
+export async function lookupRecordsByZohoIds(zohoIds: string[]): Promise<Array<{
+  zoho_record_id: string;
+  cluster_id: number;
+  company_name: string;
+  domain: string | null;
+  confidence_score: number;
+  confidence_level: string;
+  cluster_status: string;
+  cluster_record_count: number;
+}>> {
+  if (!zohoIds.length) return [];
+  const batchSize = 500;
+  const results: any[] = [];
+  for (let i = 0; i < zohoIds.length; i += batchSize) {
+    const batch = zohoIds.slice(i, i + batchSize);
+    const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(',');
+    const { rows } = await pool.query(
+      `SELECT dr.zoho_record_id, dr.cluster_id, dr.company_name, dr.domain,
+              dc.confidence_score, dc.status as cluster_status,
+              (SELECT COUNT(*) FROM duplicate_records WHERE cluster_id = dc.id) as cluster_record_count
+       FROM duplicate_records dr
+       JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+       WHERE dr.zoho_record_id IN (${placeholders})`,
+      batch
+    );
+    for (const row of rows) {
+      results.push({
+        zoho_record_id: row.zoho_record_id,
+        cluster_id: row.cluster_id,
+        company_name: row.company_name,
+        domain: row.domain,
+        confidence_score: parseFloat(row.confidence_score) || 0,
+        confidence_level: getConfidenceLevel(parseFloat(row.confidence_score) || 0),
+        cluster_status: row.cluster_status,
+        cluster_record_count: parseInt(row.cluster_record_count) || 0,
+      });
+    }
+  }
+  return results;
+}
+
 export { pool };

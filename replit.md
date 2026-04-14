@@ -80,7 +80,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/duplicates` - Duplicate Radar (SSE scan stream, side-by-side comparison modal, RAG owner accountability, paginated clusters/records, auto-resolve, smart AI recommendations, KPI gauge)
 - `/reviews` - Management Review (ISO 9001 Clause 9.3, action tracking, auto-gather QMS inputs)
 - `/migration` - Data Migration
-- `/crm` - CRM Integration
+- `/crm` - CRM Data Hub (live enrichment with quality scores + duplicate detection, health summary bar, row click detail modal, junk/spam detection, hygiene warnings, cluster badges linking to Duplicate Radar)
 - `/feedback` - Feedback
 - `/onboarding` - Onboarding
 - `/tablef` - Table F Governance
