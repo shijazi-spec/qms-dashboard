@@ -364,8 +364,8 @@
                         </div>
                     </div>
 
-                    <!-- Row 2: Summary & Charts -->
-                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2">
+                    <!-- Row 2: Audit Summary (full width) -->
+                    <div class="widget-row" data-row="2">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="audit-summary" data-name="Audit Summary">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase">Audit Summary</span>
@@ -374,7 +374,7 @@
                                 </svg>
                             </div>
                             <div class="p-6">
-                                <div class="grid grid-cols-2 gap-4">
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div class="bg-gray-50 rounded-xl p-4 text-center">
                                         <div class="text-2xl font-bold text-gray-900" id="recordsAudited">--</div>
                                         <div class="text-sm text-gray-500">Records Audited</div>
@@ -394,7 +394,10 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
 
+                    <!-- Row 2b: Pie Charts side by side -->
+                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2b">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-chart" data-name="Issues by Category">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase">Issues by Category</span>
