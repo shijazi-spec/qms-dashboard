@@ -953,7 +953,8 @@ export const mastra = new Mastra({
               const users = await getUsers();
 
               const { fetchZohoRecords: fetchZohoForOwners } = await import("../utils/zohoCRM");
-              const activeOwnerIds = new Set<string>();
+              const activeOwnerNames = new Set<string>();
+              const activeOwnerIdSet = new Set<string>();
               const modulesToCheck = ['Contacts', 'Accounts', 'Deals'];
               
               for (const mod of modulesToCheck) {
@@ -962,8 +963,10 @@ export const mastra = new Mastra({
                     const recs = await fetchZohoForOwners(mod, { page: pg, perPage: 200, fields: ['Owner'] });
                     if (!recs || recs.length === 0) break;
                     for (const r of recs) {
-                      const oid = r.data?.Owner?.id;
-                      if (oid) activeOwnerIds.add(oid);
+                      const ownerName = r.data?.Owner?.name || r.owner;
+                      const ownerId = r.data?.Owner?.id;
+                      if (ownerName) activeOwnerNames.add(ownerName);
+                      if (ownerId) activeOwnerIdSet.add(ownerId);
                     }
                     if (recs.length < 200) break;
                   } catch (e) {
@@ -972,7 +975,7 @@ export const mastra = new Mastra({
                   }
                 }
               }
-              console.log(`👥 [API] Found ${activeOwnerIds.size} active owner IDs from Contacts/Accounts/Deals`);
+              console.log(`👥 [API] Found ${activeOwnerNames.size} active owner names from Contacts/Accounts/Deals`);
               
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
               for (const user of users) {
@@ -1086,7 +1089,7 @@ export const mastra = new Mastra({
                     score,
                     recordsAudited: agent.recordsAudited,
                     issues: agent.issues,
-                    status: activeOwnerIds.has(agent.id) ? 'Active' : 'Inactive'
+                    status: (activeOwnerNames.has(agent.name) || activeOwnerIdSet.has(agent.id)) ? 'Active' : 'Inactive'
                   };
                 })
                 .sort((a, b) => a.score - b.score);
