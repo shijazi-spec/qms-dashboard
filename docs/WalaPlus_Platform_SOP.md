@@ -1,8 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 4.2
-**Last Updated:** April 13, 2026
+**Version:** 4.3
+**Last Updated:** April 14, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
@@ -15,11 +15,11 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 4.2 |
+| **Version** | 4.3 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
-| **Effective Date** | April 13, 2026 |
+| **Effective Date** | April 14, 2026 |
 | **Next Review** | July 13, 2026 (quarterly) |
 | **Distribution** | All platform users (internal) |
 
@@ -40,6 +40,7 @@
 | 3.7 | Apr 10, 2026 | Engineering | SOP accuracy corrections: fixed OIDC nonce cookie name (oauth_data, not oidc_nonce) and rejection behavior (redirect to `/login?error=nonce_mismatch`, not 403), clarified Linear webhook HMAC-SHA256 implementation details (createHmac + timingSafeEqual), clarified uniform requireAdminOrKey usage across RBAC/PDPL/CallIntel/DuplicateRadar with note on requireWriteRole in other modules, updated Recent Changes Log |
 | 3.8 | Apr 12, 2026 | Engineering | Added AI Consultant & Assistant module (Section 4.20/6.4/7/8): GPT-4o agent with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. Updated AI engine to GPT-4o. |
 | 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. Weekly duplicate scan cron (Sunday 3 AM). KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination expanded to 20,000 records/module. Notification hub integration. Database expanded to 103+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
+| 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM Integration page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment: new `POST /api/crm/enrich` endpoint (batch up to 200 records), exponential decay quality scoring (`100 × exp(-0.08 × weightedIssues)`, severity weights: critical×10 + high×6 + medium×3 + low×1), junk/spam detection (gibberish names, test/fake keywords, disposable TLDs), duplicate cluster cross-reference via `lookupRecordsByZohoIds()` batch lookup. Frontend: health summary bar (Total/Clean/Issues/Junk/Dup counts), quality score badges (color-coded 0-100), cluster badges linking to Duplicate Radar, row-click detail modal with full quality assessment + cluster info, Hide Junk/Highlight Issues toggles, hygiene warning indicators, XSS-safe rendering (`esc()` applied to all dynamic content including modal), stale request guard. AI Consultant auth fix: `requireAuthOrKey()` now calls `getSessionFromCookie()` directly from cookie header instead of relying on unpopulated `c.get("session")`. Duplicate Radar reliability: per-record try/catch in `processModule`, limit/offset NaN bounds in filtered-clusters, Inngest notification uses correct count (`singletonsIgnored + highConfidenceResolved`), session context set in middleware. |
 | 4.2 | Apr 13, 2026 | Engineering | **AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: A1 – XSS-safe renderMarkdown with escapeHtml + placeholder tokens for code/tables + URL protocol sanitization; A2 – sla_breach added to createAlertTool Zod enum; A3 – 9 `if(true)` scanner bugs fixed (use createAlertIfNew return); A4 – Auto-NC status query `'active'` → `IN ('open','acknowledged')`; A5 – KPI join column `kpi_definition_id` → `kpi_id`; A6 – monitorRisksTool column `rta.description` → `rta.action_description`; A7 – Dead `checkAgainst` param removed from reviewDocumentTool; A8 – Scan prompt revised to report-only (no force-create). Phase 2 Performance: B1 – Shared pg.Pool in sharedPool.ts (max:20); B2 – AbortController timeouts on all agent calls (120s chat, 300s scan, configurable via env vars); B3 – 13 scanner checks parallelized via Promise.all; B4 – safeQuery error logging + errors[] in ScanResult. Phase 3 Features: C1 – Alert action buttons (ack/resolve/dismiss) + View All modal with status/severity filters; C2 – Chat history panel with localStorage persistence; C3 – File upload endpoint (PDF/DOCX/TXT, 10MB limit); C4 – Clickable knowledge docs; C5 – Citation CSS + sanitized markdown links; C6 – Scan SSE progress bar endpoint (/api/consultant/scan-stream); C7 – Agent upgraded to 23 tools (added updateCapa, addCapaAction, createTraining, getTrainingList, assignTraining, getTrainingAssignments, completeTraining); C8 – Auth guards (session or X-Admin-Key) on all consultant endpoints; C9 – Contextual welcome dashboard with KPI summary. Phase 4 UI: D1 – Consolidated alert polling (60s interval); D2 – Touch swipe gestures + sticky input; D3 – Severity icons + inline actions + relative time; D4 – Retry button on stream failure; D5 – Export chat as Markdown; D6 – Arabic RTL detection. |
 | 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on zoho_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), Zoho record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
 
@@ -549,14 +550,24 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 - Stage progression analysis
 - Activity logging compliance verification
 
-### 4.18 CRM Integration (`/crm`)
-**Purpose:** Zoho CRM data viewing and analysis.
+### 4.18 CRM Data Hub (`/crm`)
+**Purpose:** Live CRM data browsing with integrated quality enrichment, junk detection, and duplicate cross-referencing.
 
 **Key Features:**
 - Live CRM data browsing across 5 modules (Leads, Deals, Contacts, Tasks, Accounts)
-- Individual record detail viewing
-- Data hygiene analysis per record
-- Connection status monitoring
+- **Live Quality Enrichment:** Each page of records is sent to `POST /api/crm/enrich` which runs `analyzeRecordHygiene` (76 governance rules) and returns a 0-100 quality score per record using exponential decay scoring (`100 × exp(-0.08 × weightedIssues)`, severity weights: critical×10, high×6, medium×3, low×1)
+- **Junk/Spam Detection:** Identifies gibberish names (no vowel pairs in 20+ char strings), test/spam/fake keywords, noreply/test emails, and disposable TLDs (.tk, .ml, .ga, .cf, .gq)
+- **Duplicate Cluster Cross-Reference:** Batch lookup via `lookupRecordsByZohoIds()` matches CRM records against synced duplicate radar clusters, showing cluster badges that link directly to the Duplicate Radar page
+- **Health Summary Bar:** Displays Total Records, Clean, With Issues, Junk/Spam, and In Dup. Clusters counts for the current page
+- **Quality Score Badges:** Color-coded badges (green ≥80, lime ≥60, amber ≥40, orange ≥20, red <20) on each table row
+- **Row-Click Detail Modal:** Full quality assessment with severity-tagged issues, cluster info with confidence level, and all record fields with XSS-safe rendering
+- **Filtering Controls:** Hide Junk checkbox and Highlight Issues toggle for focused data review
+- **Hygiene Warning Indicators:** Inline warnings for phone length issues and suspicious emails
+- **"How to Read" Legend:** Explains all badges, colors, and indicators
+- **Security:** XSS-safe rendering (`esc()`) on all dynamic content including modal innerHTML; stale request guard prevents race conditions on module switch; batch limit of 200 records per enrich request
+
+**Backend Endpoint:** `POST /api/crm/enrich` (requires admin key or session auth)
+**Backend Tables:** Uses `duplicate_records` and `duplicate_clusters` tables via `lookupRecordsByZohoIds()`
 
 ### 4.19 System Event Logs (`/logs`)
 **Purpose:** Audit trail for all system activities.
@@ -707,6 +718,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | `searchZohoRecords` | Searches records using Zoho COQL-like criteria |
 | `analyzeRecordHygiene` | Validates records against 76 governance rules |
 | `calculateQualityScores` | Weight-based scoring producing People, Process, Governance, and Overall scores |
+| `lookupRecordsByZohoIds` | Batch lookup of Zoho record IDs against duplicate radar database for cluster cross-reference (used by CRM Data Hub enrichment) |
 | `updateZohoRecord` | Updates record fields in CRM (used for evaluation logging) |
 | `updateZohoRecordNotes` | Adds evaluation notes to CRM records |
 
@@ -1217,8 +1229,8 @@ A `.env.example` file is included in the project root with all variables documen
 | `zohoCRM.ts` | Zoho CRM OAuth, fetch, search, hygiene analysis, 76 governance rules |
 | `governanceRules.ts` | Sales SOP (28 rules) + SDR SOP (28 rules) |
 | `database.ts` | Core PostgreSQL database operations |
-| `duplicateRadarDatabase.ts` | Multi-signal duplicate detection, merge workflow, owner accountability |
-| `aiBackgroundScanner.ts` | 12-check background scanner |
+| `duplicateRadarDatabase.ts` | Multi-signal duplicate detection, merge workflow, owner accountability, `lookupRecordsByZohoIds()` batch lookup for CRM Data Hub enrichment |
+| `aiBackgroundScanner.ts` | 14-check background scanner (parallelized via Promise.all) |
 | `aiAlertsDatabase.ts` | AI alerts CRUD, dedup, unread count |
 | `kpiDatabase.ts` | KPI definitions, entries, 11 SDR KPIs seed |
 | `scorecardDatabase.ts` | Scorecard management |
@@ -1812,6 +1824,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Apr 14, 2026 | **SOP v4.3 — CRM Data Hub & reliability fixes.** CRM Integration (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich` (exponential decay scoring, junk detection, duplicate cluster cross-reference). Frontend: health summary bar, quality score badges, cluster badges, row-click detail modal, Hide Junk/Highlight Issues toggles, XSS-safe rendering, stale request guard. AI Consultant auth fix: `requireAuthOrKey()` uses `getSessionFromCookie()` directly. Duplicate Radar reliability: per-record try/catch, NaN bounds, correct Inngest notification count, session context in middleware. | CRM data visibility with integrated quality intelligence; consultant auth reliability; duplicate radar error isolation |
 | Apr 13, 2026 | **SOP v4.2 — AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: XSS-safe renderMarkdown (placeholder tokens + URL sanitization), sla_breach enum, `if(true)` scanner bugs, auto-NC status fix, KPI join column, monitorRisksTool column, dead param removal, scan prompt report-only. Phase 2 Performance: sharedPool.ts (shared pg.Pool max:20), AbortController timeouts (120s/300s configurable), parallelized 14 scanner checks, safeQuery error logging. Phase 3 Features: alert action buttons + modal, chat history, file upload, clickable knowledge docs, citation CSS, scan SSE progress bar, 23 tools on agent (+updateCapa +addCapaAction +5 training tools), auth guards on all endpoints, welcome dashboard. Phase 4 UI: consolidated polling, touch swipe, severity icons + relative time, retry button, export chat, Arabic RTL. | AI Consultant security hardening, performance optimization, feature completion, and UX polish |
 | Apr 13, 2026 | **SOP v4.0 major overhaul:** Comprehensive update reflecting all platform features as of this date. AI Consultant tools expanded from 8→16 (added NC/CAPA create/list, CAPA details, checklist run/manage, knowledge search). Duplicate Radar upgraded to Tier 1–3: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow (resolve/ignore/mark primary/bulk resolve), owner accountability, real-time pre-creation check, async scan with progress polling. AI Scanner expanded from 8→12 checks (added Sales SLA violations, SDR SLA violations, low-progress treatments, high-confidence duplicates). 76 CRM governance rules fully documented (Sales SOP 28 + SDR SOP 28 + Account Rules 20). 11 SDR KPIs seeded. 6 platform KPIs auto-calculated daily. Weekly duplicate scan cron (Sunday 3 AM). Zoho pagination expanded 10K→20K records/module. Database tables expanded 98→103+. Added complete dashboard page inventory (29), route file inventory (29), utility module inventory (39). All SLA tables updated with Sales/SDR SLA monitoring. RACI matrix updated. Added Knowledge Base, Notification Hub modules. | Full platform documentation reflecting all implemented capabilities |
 | Apr 13, 2026 | **SOP v4.1 — Duplicate Radar 21-item enhancement (4 phases).** Phase 1: Incremental upsert (ON CONFLICT), enhanced summary (singletonCount, resolutionRate), paramIndex fix, RBAC on mock-data DELETE, atomic phone_normalized. Phase 2: Parallel Promise.all() fetch, pg_trgm GIN index, JOIN-based queries, performance indexes. Phase 3: SSE scan-stream, Contact Duplicates tab, Owner RAG status, server-side pagination, auto-resolve engine, date range filters, smart multi-factor AI recommendations. Phase 4: Animated progress bar with module chips, side-by-side comparison modal with Zoho links, KPI gauge + resolution rate dashboard, Generate Test Data button removed. | Comprehensive Duplicate Radar upgrade: reliability, performance, features, and UX |
