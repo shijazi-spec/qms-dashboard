@@ -951,6 +951,28 @@ export const mastra = new Mastra({
               const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters, agentPerfLimit);
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters, agentPerfLimit);
               const users = await getUsers();
+
+              const { fetchZohoRecords: fetchZohoForOwners } = await import("../utils/zohoCRM");
+              const activeOwnerIds = new Set<string>();
+              const modulesToCheck = ['Contacts', 'Accounts', 'Deals'];
+              
+              for (const mod of modulesToCheck) {
+                for (let pg = 1; pg <= 10; pg++) {
+                  try {
+                    const recs = await fetchZohoForOwners(mod, { page: pg, perPage: 200, fields: ['Owner'] });
+                    if (!recs || recs.length === 0) break;
+                    for (const r of recs) {
+                      const oid = r.data?.Owner?.id;
+                      if (oid) activeOwnerIds.add(oid);
+                    }
+                    if (recs.length < 200) break;
+                  } catch (e) {
+                    console.error(`⚠️ [API] Error fetching ${mod} page ${pg} for owner status:`, e);
+                    break;
+                  }
+                }
+              }
+              console.log(`👥 [API] Found ${activeOwnerIds.size} active owner IDs from Contacts/Accounts/Deals`);
               
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
               for (const user of users) {
@@ -1063,7 +1085,8 @@ export const mastra = new Mastra({
                     role: agent.role,
                     score,
                     recordsAudited: agent.recordsAudited,
-                    issues: agent.issues
+                    issues: agent.issues,
+                    status: activeOwnerIds.has(agent.id) ? 'Active' : 'Inactive'
                   };
                 })
                 .sort((a, b) => a.score - b.score);
