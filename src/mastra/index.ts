@@ -952,6 +952,79 @@ export const mastra = new Mastra({
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters, agentPerfLimit);
               const users = await getUsers();
 
+              const userOverrides: Record<string, { team: string; status: string }> = {
+                "Abdallah Alsheikh": { team: "CRM Admin", status: "Active" },
+                "Abdallah Khorshid": { team: "MP", status: "Active" },
+                "Abdalrahim Abuwarda": { team: "MP", status: "Inactive" },
+                "Abdulaziz Almassad": { team: "WO Sales", status: "Active" },
+                "Abdullah Alzalam": { team: "MP", status: "Active" },
+                "Abdulmalik  M Bin Aifan": { team: "WP Sales", status: "Inactive" },
+                "Abdulmalik Alfaleh": { team: "CS", status: "Active" },
+                "Abdulrahman  Abdulkarimm Alqurashi": { team: "WP Sales", status: "Active" },
+                "Abdulrahman AlFarram": { team: "MP", status: "Active" },
+                "Abdulrahman Alshehri": { team: "WO Sales", status: "Active" },
+                "Abdulrahman Dhafer": { team: "WP Sales", status: "Active" },
+                "Abdulrhman AlFahad": { team: "WP Sales", status: "Active" },
+                "Abobakr Ali": { team: "MP", status: "Active" },
+                "Abubaker Hashem": { team: "MP", status: "Active" },
+                "Ahmed Gasim": { team: "WO Sales", status: "Active" },
+                "Alhanouf  Aldarwish": { team: "CS", status: "Active" },
+                "Ali  AlRajhi": { team: "WP Sales", status: "Active" },
+                "Ali Jaafari": { team: "WO Sales", status: "Active" },
+                "Alia Altammami": { team: "MP", status: "Active" },
+                "Ameera Alshahri": { team: "BD", status: "Active" },
+                "Amwaj Alotaibi": { team: "WO Sales", status: "Active" },
+                "Ayman AlQahtani": { team: "WP Sales", status: "Active" },
+                "Bander Alaklabi": { team: "WP Sales", status: "Inactive" },
+                "Bashayr  ahmad": { team: "WP Sales", status: "Active" },
+                "Bisher khair": { team: "MP", status: "Inactive" },
+                "Doha  Sadek": { team: "MP", status: "Active" },
+                "Donia Hesham": { team: "MP", status: "Active" },
+                "Eid Alahmadi": { team: "MP", status: "Active" },
+                "Engy Magdy": { team: "MP", status: "Active" },
+                "Fadi Makhoul": { team: "MP", status: "Active" },
+                "Hassan Tabrizi": { team: "MP", status: "Active" },
+                "Hussain Ali": { team: "MP", status: "Inactive" },
+                "Hussain Nooraldeen": { team: "MP", status: "Active" },
+                "Ibrahim Qahtan": { team: "WO Sales", status: "Inactive" },
+                "Kareem Elhosany": { team: "WP Sales", status: "Active" },
+                "Khaled Alharbi": { team: "WP Sales", status: "Inactive" },
+                "Khalid Alkhowaiter": { team: "WO Sales", status: "Inactive" },
+                "Khalid AlMangour": { team: "WO Sales", status: "Inactive" },
+                "Khowla Saeed": { team: "WP Sales", status: "Active" },
+                "Majed Bamukideh": { team: "MP", status: "Active" },
+                "Mansour Alqahtani": { team: "WP Sales", status: "Active" },
+                "Mohamed AlSaleh": { team: "MP", status: "Active" },
+                "Mohamed Khreis": { team: "MP", status: "Active" },
+                "Mohammed Alrudaini": { team: "MP", status: "Active" },
+                "Mohammed Alsudani": { team: "WO Sales", status: "Active" },
+                "Mohammed Edwan": { team: "MP", status: "Active" },
+                "Mohammed Qasem": { team: "CRM Admin", status: "Active" },
+                "Mostafa Elzohairy": { team: "MP", status: "Active" },
+                "Muteb Albdrani": { team: "WO Sales", status: "Inactive" },
+                "Nawaf Al Shiban": { team: "WP Sales", status: "Inactive" },
+                "Nawaf alhoshan": { team: "WP Sales", status: "Active" },
+                "Obadah Khaled": { team: "WO Sales", status: "Active" },
+                "Reda Saleh": { team: "MP", status: "Active" },
+                "Saad Almalki": { team: "WP Sales", status: "Inactive" },
+                "Salman AlIssa": { team: "CS", status: "Active" },
+                "Samar Mansour": { team: "MP", status: "Active" },
+                "Sarah Hijazi": { team: "CRM Admin", status: "Active" },
+                "Sultan Alrefaei": { team: "MP", status: "Active" },
+                "Wafaa Alqudaiy": { team: "WP Sales", status: "Active" },
+                "WalaPlus": { team: "WP Sales", status: "Active" },
+                "Yahya Alshehri": { team: "WP Sales", status: "Active" },
+                "Zeina  Mamdouh": { team: "CS", status: "Active" },
+                "\u0628\u0634\u0627\u064A\u0631 \u0627\u0644\u0642\u062D\u0637\u0627\u0646\u064A": { team: "SDR", status: "Active" },
+                "\u062A\u063A\u0631\u064A\u062F \u0627\u0644\u062C\u0627\u0633\u0631": { team: "Eitmad", status: "Active" },
+                "\u0631\u064A\u0627\u0646 \u0627\u0644\u0633\u0645\u0627\u0643": { team: "SDR", status: "Inactive" },
+                "\u0635\u0627\u0644\u062D \u0627\u0644\u062D\u0645\u062F\u0651\u064A": { team: "CS", status: "Active" },
+                "\u0641\u0627\u064A\u0632 \u0627\u0644\u0623\u0633\u0645\u0631\u064A": { team: "WP Sales", status: "Active" },
+                "\u0641\u0627\u064A\u0632\u0629 \u0627\u0644\u0639\u062A\u064A\u0628\u064A": { team: "SDR", status: "Active" },
+                "\u0646\u0648\u0641 \u0627\u0644\u0639\u0627\u0635\u0645\u064A": { team: "SDR", status: "Inactive" },
+                "\u0647\u0627\u062C\u0631 \u0627\u0644\u062D\u0628\u0631\u062F\u064A": { team: "SDR", status: "Active" },
+              };
+
               const { fetchZohoRecords: fetchZohoForOwners } = await import("../utils/zohoCRM");
               const activeOwnerNames = new Set<string>();
               const activeOwnerIdSet = new Set<string>();
@@ -975,7 +1048,7 @@ export const mastra = new Mastra({
                   }
                 }
               }
-              console.log(`👥 [API] Found ${activeOwnerNames.size} active owner names from Contacts/Accounts/Deals`);
+              console.log(`👥 [API] Found ${activeOwnerNames.size} active owner names, ${Object.keys(userOverrides).length} manual overrides`);
               
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
               for (const user of users) {
@@ -1005,12 +1078,13 @@ export const mastra = new Mastra({
               for (const lead of leads) {
                 const ownerId = lead.Owner || 'Unassigned';
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'SDR', role: 'SDR Representative' };
+                const override = userOverrides[userInfo.name] || userOverrides[ownerId];
                 
                 if (!ownerStats[ownerId]) {
                   ownerStats[ownerId] = {
                     id: ownerId,
                     name: userInfo.name,
-                    team: userInfo.team,
+                    team: override?.team || userInfo.team,
                     role: userInfo.role,
                     recordsAudited: 0,
                     issues: { critical: 0, high: 0, medium: 0, low: 0 },
@@ -1041,12 +1115,13 @@ export const mastra = new Mastra({
               for (const deal of deals) {
                 const ownerId = deal.Owner || 'Unassigned';
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'Sales', role: 'Account Executive' };
+                const dealOverride = userOverrides[userInfo.name] || userOverrides[ownerId];
                 
                 if (!ownerStats[ownerId]) {
                   ownerStats[ownerId] = {
                     id: ownerId,
                     name: userInfo.name,
-                    team: userInfo.team,
+                    team: dealOverride?.team || userInfo.team,
                     role: userInfo.role,
                     recordsAudited: 0,
                     issues: { critical: 0, high: 0, medium: 0, low: 0 },
@@ -1089,7 +1164,7 @@ export const mastra = new Mastra({
                     score,
                     recordsAudited: agent.recordsAudited,
                     issues: agent.issues,
-                    status: (activeOwnerNames.has(agent.name) || activeOwnerIdSet.has(agent.id)) ? 'Active' : 'Inactive'
+                    status: userOverrides[agent.name]?.status || (activeOwnerNames.has(agent.name) || activeOwnerIdSet.has(agent.id) ? 'Active' : 'Inactive')
                   };
                 })
                 .sort((a, b) => a.score - b.score);

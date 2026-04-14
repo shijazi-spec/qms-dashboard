@@ -522,8 +522,14 @@
                                     </select>
                                     <select id="teamFilter" onchange="filterAgentsByTeam()" class="text-xs border border-gray-200 rounded px-2 py-1">
                                         <option value="all">All Teams</option>
-                                        <option value="SDR">SDR Team</option>
-                                        <option value="Sales">Sales Team</option>
+                                        <option value="WP Sales">WP Sales</option>
+                                        <option value="WO Sales">WO Sales</option>
+                                        <option value="MP">MP</option>
+                                        <option value="SDR">SDR</option>
+                                        <option value="CS">CS</option>
+                                        <option value="BD">BD</option>
+                                        <option value="CRM Admin">CRM Admin</option>
+                                        <option value="Eitmad">Eitmad</option>
                                     </select>
                                     <button onclick="exportAgentPerformance()" class="text-gray-400 hover:text-indigo-600 p-1" title="Export">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1242,7 +1248,18 @@
             container.innerHTML = agents.map(agent => {
                 const totalIssues = agent.issues.critical + agent.issues.high + agent.issues.medium + agent.issues.low;
                 const scoreColor = getScoreColor(agent.score);
-                const teamBadge = agent.team === 'SDR' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700';
+                const teamColors = {
+                    'WP Sales': 'bg-green-100 text-green-700',
+                    'WO Sales': 'bg-teal-100 text-teal-700',
+                    'MP': 'bg-purple-100 text-purple-700',
+                    'SDR': 'bg-blue-100 text-blue-700',
+                    'CS': 'bg-orange-100 text-orange-700',
+                    'BD': 'bg-pink-100 text-pink-700',
+                    'CRM Admin': 'bg-gray-200 text-gray-700',
+                    'Eitmad': 'bg-yellow-100 text-yellow-700',
+                    'Sales': 'bg-green-100 text-green-700',
+                };
+                const teamBadge = teamColors[agent.team] || 'bg-gray-100 text-gray-600';
                 const statusBadge = agent.status === 'Active'
                     ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                     : 'bg-red-100 text-red-700 border border-red-200';
