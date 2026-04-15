@@ -1041,6 +1041,7 @@ export const mastra = new Mastra({
                 "Naif Almutairi": { team: "WP Sales", status: "Inactive" },
                 "Naif AlSaif": { team: "WP Sales", status: "Inactive" },
                 "Nawaf Al Shiban": { team: "WP Sales", status: "Inactive" },
+                "Nawras": { team: "MP", status: "Inactive" },
                 "Nawaf alhoshan": { team: "WP Sales", status: "Active" },
                 "Nawaf Basif": { team: "WP Sales", status: "Inactive" },
                 "Noha AlZaben": { team: "WP Sales", status: "Inactive" },
