@@ -532,6 +532,8 @@
                                         <option value="BD">BD</option>
                                         <option value="CRM Admin">CRM Admin</option>
                                         <option value="Eitmad">Eitmad</option>
+                                        <option value="MGMT">MGMT</option>
+                                        <option value="WPE">WPE</option>
                                     </select>
                                     <button onclick="exportAgentPerformance()" class="text-gray-400 hover:text-indigo-600 p-1" title="Export">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1269,6 +1271,8 @@
                     'BD': 'bg-pink-100 text-pink-700',
                     'CRM Admin': 'bg-gray-200 text-gray-700',
                     'Eitmad': 'bg-yellow-100 text-yellow-700',
+                    'MGMT': 'bg-indigo-100 text-indigo-700',
+                    'WPE': 'bg-cyan-100 text-cyan-700',
                     'Sales': 'bg-green-100 text-green-700',
                 };
                 const teamBadge = teamColors[agent.team] || 'bg-gray-100 text-gray-600';
