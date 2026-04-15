@@ -346,7 +346,7 @@ export async function getLeads(maxRecords?: number): Promise<Lead[]> {
     Layouts: r.data?.Layout?.name || r.data?.Layout || '',
     Products: (Array.isArray(r.data?.Product_Details) && r.data.Product_Details.length > 0)
       ? r.data.Product_Details.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
-      : (r.data?.Product_Name || r.data?.Product || ''),
+      : (typeof r.data?.Products === 'object' ? r.data?.Products?.name : r.data?.Products) || r.data?.Product_Name || r.data?.Product || '',
     Created_By: r.data?.Created_By?.name || r.data?.Created_By || '',
     Created_Time: r.createdTime || '',
     Modified_Time: r.modifiedTime || '',
@@ -367,7 +367,7 @@ export async function getDeals(maxRecords?: number): Promise<Deal[]> {
     Layouts: r.data?.Layout?.name || r.data?.Layout || '',
     Products: (Array.isArray(r.data?.Product_Details) && r.data.Product_Details.length > 0)
       ? r.data.Product_Details.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
-      : (r.data?.Product_Name || r.data?.Product || ''),
+      : (typeof r.data?.Products === 'object' ? r.data?.Products?.name : r.data?.Products) || r.data?.Product_Name || r.data?.Product || '',
     Created_By: r.data?.Created_By?.name || r.data?.Created_By || '',
     Lead_Source: r.data?.Lead_Source || '',
     Contact_Name: r.data?.Contact_Name?.name || '',
