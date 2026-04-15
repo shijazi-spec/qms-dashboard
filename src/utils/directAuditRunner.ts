@@ -16,7 +16,7 @@ function analyzeRecordBatch(
   records: ZohoCRMRecord[],
   governanceRules: any[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
-  detailedIssues?: Array<{ recordId: string; module: string; owner: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>
+  detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>
 ): { issueCount: number; critical: number; high: number; medium: number; low: number } {
   let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0;
   for (const record of records) {
@@ -36,10 +36,22 @@ function analyzeRecordBatch(
       if (detailedIssues && detailedIssues.length < MAX_DETAILED_ISSUES) {
         const ownerData = record.data?.Owner;
         const ownerName = record.owner || (ownerData ? (ownerData.name || ownerData.id || '-') : '-');
+        const createdByData = record.data?.Created_By;
+        const createdByName = createdByData ? (createdByData.name || createdByData.id || '') : '';
+        const layoutData = record.data?.Layout;
+        const layoutName = layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '';
+        const productsRaw = record.data?.Product_Details;
+        const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
+          ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
+          : (typeof record.data?.Products === 'object' ? record.data?.Products?.name : record.data?.Products) || record.data?.Product_Name || record.data?.Product || '';
         detailedIssues.push({
           recordId: issue.recordId,
           module: issue.module,
           owner: ownerName,
+          layouts: layoutName,
+          products: productsName,
+          createdBy: createdByName,
+          createdTime: record.data?.Created_Time || record.createdTime || '',
           fieldName: issue.fieldName || '',
           issueType: issue.issueType,
           description: issue.description,
@@ -73,7 +85,7 @@ export async function runDirectAudit(logger?: any) {
   const topIssues: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
-  const detailedIssues: Array<{ recordId: string; module: string; owner: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
+  const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
 
   if (!hasZohoCredentials) {
     logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
