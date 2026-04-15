@@ -1105,6 +1105,7 @@ export const mastra = new Mastra({
               
               const ownerNameAliases: Record<string, string> = {
                 "Rayan": "Rayan Saleh",
+                "Khalil": "Khalil Aldadah",
               };
 
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
