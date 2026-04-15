@@ -210,6 +210,7 @@
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layout</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                             </tr>
@@ -726,7 +727,7 @@
             issues.forEach(issue => {
                 const key = issue.id;
                 if (!map[key]) {
-                    map[key] = { id: issue.id, module: issue.module, owner: issue.owner, issues: [] };
+                    map[key] = { id: issue.id, module: issue.module, layout: issue.layout || '', owner: issue.owner, issues: [] };
                 }
                 map[key].issues.push({ issue: issue.issue, severity: issue.severity, recommendation: issue.recommendation });
             });
@@ -821,6 +822,7 @@
                 issues = filteredReal.map((issue, idx) => ({
                     id: issue.recordId || `issue_${idx + 1}`,
                     module: issue.module,
+                    layout: issue.layout || '',
                     owner: issue.owner || '-',
                     issue: issue.description || formatIssueType(issue.issueType, issue.fieldName),
                     severity: issue.severity,
@@ -838,6 +840,7 @@
                 const summaryIssues = summaryModules.map((issue, idx) => ({
                     id: `summary_${issue.module}_${idx + 1}`,
                     module: issue.module,
+                    layout: '',
                     owner: '-',
                     issue: formatIssueType(issue.issueType, null),
                     severity: issue.severity,
@@ -875,7 +878,7 @@
 
             if (grouped.length === 0) {
                 const ownerMsg = currentOwnerFilter ? ` for ${currentOwnerFilter}` : '';
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center">
+                tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-12 text-center">
                     <div class="flex flex-col items-center gap-2">
                         <svg class="w-12 h-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <p class="text-base font-medium text-gray-700">No issues found${ownerMsg}</p>
@@ -900,6 +903,7 @@
                 <tr class="hover:bg-gray-50 align-top">
                     <td class="px-4 py-3">${zohoLink(record.id, record.module)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.module}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.layout || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.owner}</td>
                     <td class="px-4 py-3">
                         <div class="space-y-1">${issuesList}</div>
@@ -934,9 +938,9 @@
             if (severity !== 'all') issues = issues.filter(i => i.severity === severity);
             
             if (format === 'csv') {
-                const headers = ['Record ID', 'Module', 'Owner', 'Issue', 'Severity', 'Recommendation'];
+                const headers = ['Record ID', 'Module', 'Layout', 'Owner', 'Issue', 'Severity', 'Recommendation'];
                 const csv = [headers.join(',')].concat(
-                    issues.map(i => [i.id, i.module, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
+                    issues.map(i => [i.id, i.module, `"${i.layout || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
                 ).join('\n');
                 downloadFile(csv, 'quality_issues.csv', 'text/csv');
             } else {
@@ -1053,6 +1057,7 @@
                     const issueRows = currentIssues.slice(0, 30).map(issue => [
                         issue.id || '-',
                         issue.module || '-',
+                        issue.layout || '-',
                         issue.owner || '-',
                         (issue.issue || '').substring(0, 50),
                         issue.severity || '-'
@@ -1060,17 +1065,18 @@
                     
                     doc.autoTable({
                         startY: yPos,
-                        head: [['Record ID', 'Module', 'Owner', 'Issue', 'Severity']],
+                        head: [['Record ID', 'Module', 'Layout', 'Owner', 'Issue', 'Severity']],
                         body: issueRows,
                         theme: 'striped',
                         headStyles: { fillColor: [99, 102, 241], fontSize: 9 },
                         bodyStyles: { fontSize: 8 },
                         columnStyles: {
-                            0: { cellWidth: 25 },
-                            1: { cellWidth: 25 },
-                            2: { cellWidth: 30 },
-                            3: { cellWidth: 70 },
-                            4: { cellWidth: 20 }
+                            0: { cellWidth: 22 },
+                            1: { cellWidth: 20 },
+                            2: { cellWidth: 25 },
+                            3: { cellWidth: 25 },
+                            4: { cellWidth: 55 },
+                            5: { cellWidth: 18 }
                         },
                         margin: { left: margin, right: margin }
                     });
@@ -1352,6 +1358,7 @@
             currentIssues = ownerIssues.map((issue, idx) => ({
                 id: issue.recordId || `issue_${idx + 1}`,
                 module: issue.module,
+                layout: issue.layout || '',
                 owner: issue.owner || ownerName,
                 issue: issue.issue,
                 severity: issue.severity,

@@ -8,6 +8,7 @@ export interface Lead {
   Lead_Source: string;
   Lead_Status: string;
   Owner: string;
+  Layout: string;
   Created_Time: string;
   Modified_Time: string;
   _hygiene_issue?: string;
@@ -21,6 +22,7 @@ export interface Deal {
   Amount: number;
   Closing_Date: string;
   Owner: string;
+  Layout: string;
   Lead_Source: string;
   Contact_Name: string;
   Created_Time: string;
@@ -337,6 +339,7 @@ export async function getLeads(maxRecords?: number): Promise<Lead[]> {
     Lead_Source: r.data?.Lead_Source || '',
     Lead_Status: r.data?.Lead_Status || '',
     Owner: r.owner || r.data?.Owner?.name || r.data?.Owner?.id || '',
+    Layout: r.data?.Layout?.name || r.data?.Layout || '',
     Created_Time: r.createdTime || '',
     Modified_Time: r.modifiedTime || '',
   }));
@@ -353,6 +356,7 @@ export async function getDeals(maxRecords?: number): Promise<Deal[]> {
     Amount: r.data?.Amount || 0,
     Closing_Date: r.data?.Closing_Date || '',
     Owner: r.owner || r.data?.Owner?.name || r.data?.Owner?.id || '',
+    Layout: r.data?.Layout?.name || r.data?.Layout || '',
     Lead_Source: r.data?.Lead_Source || '',
     Contact_Name: r.data?.Contact_Name?.name || '',
     Created_Time: r.createdTime || '',
