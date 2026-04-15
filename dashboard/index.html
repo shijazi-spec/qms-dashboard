@@ -1158,7 +1158,13 @@
                 
                 const container = document.getElementById('agentPerformanceGrid');
                 if (retryCount === 0 && container) {
-                    container.innerHTML = '<div class="col-span-4 text-center py-8"><div class="text-gray-500">Loading CRM owner data...</div></div>';
+                    container.innerHTML = `<div class="col-span-4 text-center py-12">
+                        <div class="inline-flex items-center gap-3 mb-3">
+                            <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-indigo-600 font-semibold text-sm">Fetching CRM data from Zoho...</span>
+                        </div>
+                        <div class="text-gray-400 text-xs">This takes 3-4 minutes on first load (scanning 66,000+ records)</div>
+                    </div>`;
                 }
                 
                 const response = await fetch(url, { credentials: 'include' });
@@ -1170,38 +1176,50 @@
                     console.log(`Loaded ${result.agents.length} agents from CRM (${result.mode} mode)`);
                     displayCoverageMetrics(result.coverage);
                 } else {
-                    console.log('No agents found from CRM, using placeholder');
-                    currentAgentData = [{
-                        id: 'no_data',
-                        name: 'No Lead Owners Found',
-                        team: 'SDR',
-                        role: 'Configure Zoho CRM',
-                        score: 0,
-                        recordsAudited: 0,
-                        issues: { critical: 0, high: 0, medium: 0, low: 0 }
-                    }];
+                    const loadingMaxRetries = 18;
+                    const loadingRetryDelay = 15000;
+                    if (retryCount < loadingMaxRetries) {
+                        console.log(`CRM data still loading on server... auto-retry ${retryCount + 1}/${loadingMaxRetries} in ${loadingRetryDelay/1000}s`);
+                        const container = document.getElementById('agentPerformanceGrid');
+                        if (container) {
+                            const elapsed = retryCount * 15;
+                            container.innerHTML = `<div class="col-span-4 text-center py-12">
+                                <div class="inline-flex items-center gap-3 mb-3">
+                                    <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    <span class="text-indigo-600 font-semibold text-sm">Fetching CRM data from Zoho...</span>
+                                </div>
+                                <div class="text-gray-400 text-xs">This takes 3-4 minutes on first load (scanning 66,000+ records)</div>
+                                <div class="text-gray-400 text-xs mt-1">Elapsed: ~${elapsed}s — Auto-refreshing every 15s</div>
+                            </div>`;
+                        }
+                        setTimeout(() => updateAgentPerformance(data, retryCount + 1), loadingRetryDelay);
+                        return;
+                    }
+                    console.log('No agents found after all retries');
+                    currentAgentData = [];
                     hideCoverageMetrics();
                 }
             } catch (error) {
-                if (retryCount < maxRetries) {
-                    console.log(`Agent performance loading... retry ${retryCount + 1}/${maxRetries} in ${retryDelay/1000}s`);
+                const errorMaxRetries = 18;
+                const errorRetryDelay = 15000;
+                if (retryCount < errorMaxRetries) {
+                    console.log(`Agent performance loading... retry ${retryCount + 1}/${errorMaxRetries} in ${errorRetryDelay/1000}s`);
                     const container = document.getElementById('agentPerformanceGrid');
                     if (container) {
-                        container.innerHTML = `<div class="col-span-4 text-center py-8"><div class="text-gray-500">Loading CRM data from Zoho... (attempt ${retryCount + 2}/${maxRetries + 1})</div></div>`;
+                        const elapsed = retryCount * 15;
+                        container.innerHTML = `<div class="col-span-4 text-center py-12">
+                            <div class="inline-flex items-center gap-3 mb-3">
+                                <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                <span class="text-indigo-600 font-semibold text-sm">Connecting to Zoho CRM...</span>
+                            </div>
+                            <div class="text-gray-400 text-xs">Elapsed: ~${elapsed}s — Retrying automatically</div>
+                        </div>`;
                     }
-                    setTimeout(() => updateAgentPerformance(data, retryCount + 1), retryDelay);
+                    setTimeout(() => updateAgentPerformance(data, retryCount + 1), errorRetryDelay);
                     return;
                 }
                 console.error('Error fetching agent performance:', error);
-                currentAgentData = [{
-                    id: 'error',
-                    name: 'Loading CRM Data...',
-                    team: 'SDR',
-                    role: 'Refresh page in 30s',
-                    score: 0,
-                    recordsAudited: 0,
-                    issues: { critical: 0, high: 0, medium: 0, low: 0 }
-                }];
+                currentAgentData = [];
                 hideCoverageMetrics();
             }
             
@@ -1258,6 +1276,13 @@
 
         function renderAgentPerformance(agents) {
             const container = document.getElementById('agentPerformanceGrid');
+            
+            if (!agents || agents.length === 0) {
+                container.innerHTML = `<div class="col-span-4 text-center py-12">
+                    <div class="text-gray-400 text-sm">No agent data available. Please refresh the page.</div>
+                </div>`;
+                return;
+            }
             
             container.innerHTML = agents.map(agent => {
                 const totalIssues = agent.issues.critical + agent.issues.high + agent.issues.medium + agent.issues.low;
