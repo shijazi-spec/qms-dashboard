@@ -210,7 +210,7 @@
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layout</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layouts</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
@@ -727,7 +727,7 @@
             issues.forEach(issue => {
                 const key = issue.id;
                 if (!map[key]) {
-                    map[key] = { id: issue.id, module: issue.module, layout: issue.layout || '', products: issue.products || '', createdBy: issue.createdBy || '', owner: issue.owner, issues: [] };
+                    map[key] = { id: issue.id, module: issue.module, layouts: issue.layouts || '', products: issue.products || '', createdBy: issue.createdBy || '', owner: issue.owner, issues: [] };
                 }
                 map[key].issues.push({ issue: issue.issue, severity: issue.severity, recommendation: issue.recommendation });
             });
@@ -822,7 +822,7 @@
                 issues = filteredReal.map((issue, idx) => ({
                     id: issue.recordId || `issue_${idx + 1}`,
                     module: issue.module,
-                    layout: issue.layout || '',
+                    layouts: issue.layouts || '',
                     products: issue.products || '',
                     createdBy: issue.createdBy || '',
                     owner: issue.owner || '-',
@@ -842,7 +842,7 @@
                 const summaryIssues = summaryModules.map((issue, idx) => ({
                     id: `summary_${issue.module}_${idx + 1}`,
                     module: issue.module,
-                    layout: '',
+                    layouts: '',
                     products: '',
                     createdBy: '',
                     owner: '-',
@@ -907,7 +907,7 @@
                 <tr class="hover:bg-gray-50 align-top">
                     <td class="px-4 py-3">${zohoLink(record.id, record.module)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.module}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${record.layout || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.layouts || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.products || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.createdBy || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.owner}</td>
@@ -944,9 +944,9 @@
             if (severity !== 'all') issues = issues.filter(i => i.severity === severity);
             
             if (format === 'csv') {
-                const headers = ['Record ID', 'Module', 'Layout', 'Products', 'Created By', 'Owner', 'Issue', 'Severity', 'Recommendation'];
+                const headers = ['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Owner', 'Issue', 'Severity', 'Recommendation'];
                 const csv = [headers.join(',')].concat(
-                    issues.map(i => [i.id, i.module, `"${i.layout || ''}"`, `"${i.products || ''}"`, `"${i.createdBy || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
+                    issues.map(i => [i.id, i.module, `"${i.layouts || ''}"`, `"${i.products || ''}"`, `"${i.createdBy || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
                 ).join('\n');
                 downloadFile(csv, 'quality_issues.csv', 'text/csv');
             } else {
@@ -1063,7 +1063,7 @@
                     const issueRows = currentIssues.slice(0, 30).map(issue => [
                         issue.id || '-',
                         issue.module || '-',
-                        issue.layout || '-',
+                        issue.layouts || '-',
                         issue.products || '-',
                         issue.createdBy || '-',
                         issue.owner || '-',
@@ -1073,7 +1073,7 @@
                     
                     doc.autoTable({
                         startY: yPos,
-                        head: [['Record ID', 'Module', 'Layout', 'Products', 'Created By', 'Owner', 'Issue', 'Severity']],
+                        head: [['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Owner', 'Issue', 'Severity']],
                         body: issueRows,
                         theme: 'striped',
                         headStyles: { fillColor: [99, 102, 241], fontSize: 8 },
@@ -1395,7 +1395,7 @@
             currentIssues = ownerIssues.map((issue, idx) => ({
                 id: issue.recordId || `issue_${idx + 1}`,
                 module: issue.module,
-                layout: issue.layout || '',
+                layouts: issue.layouts || '',
                 products: issue.products || '',
                 createdBy: issue.createdBy || '',
                 owner: issue.owner || ownerName,
