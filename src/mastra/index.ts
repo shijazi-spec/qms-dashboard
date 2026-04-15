@@ -1133,6 +1133,7 @@ export const mastra = new Mastra({
                 module: string;
                 layout: string;
                 products: string;
+                createdBy: string;
                 owner: string;
                 issue: string;
                 severity: string;
@@ -1163,15 +1164,15 @@ export const mastra = new Mastra({
                 if (hasIssue) {
                   if (!lead.Email) {
                     ownerStats[ownerId].issues.high++;
-                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layout: lead.Layout || '', products: lead.Products || '', owner: userInfo.name, issue: 'Missing: Email', severity: 'high', fieldName: 'Email', recommendation: 'Add an email address to this lead record.' });
+                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layout: lead.Layout || '', products: lead.Products || '', createdBy: lead.Created_By || '', owner: userInfo.name, issue: 'Missing: Email', severity: 'high', fieldName: 'Email', recommendation: 'Add an email address to this lead record.' });
                   }
                   if (!lead.Lead_Source) {
                     ownerStats[ownerId].issues.medium++;
-                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layout: lead.Layout || '', products: lead.Products || '', owner: userInfo.name, issue: 'Missing: Lead Source', severity: 'medium', fieldName: 'Lead_Source', recommendation: 'Set the lead source to track where this lead came from.' });
+                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layout: lead.Layout || '', products: lead.Products || '', createdBy: lead.Created_By || '', owner: userInfo.name, issue: 'Missing: Lead Source', severity: 'medium', fieldName: 'Lead_Source', recommendation: 'Set the lead source to track where this lead came from.' });
                   }
                   if (!lead.Lead_Status) {
                     ownerStats[ownerId].issues.low++;
-                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layout: lead.Layout || '', products: lead.Products || '', owner: userInfo.name, issue: 'Missing: Lead Status', severity: 'low', fieldName: 'Lead_Status', recommendation: 'Set the lead status to track progress.' });
+                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layout: lead.Layout || '', products: lead.Products || '', createdBy: lead.Created_By || '', owner: userInfo.name, issue: 'Missing: Lead Status', severity: 'low', fieldName: 'Lead_Status', recommendation: 'Set the lead status to track progress.' });
                   }
                 } else {
                   ownerStats[ownerId].passCount++;
@@ -1201,15 +1202,15 @@ export const mastra = new Mastra({
                 if (hasIssue) {
                   if (!deal.Deal_Name) {
                     ownerStats[ownerId].issues.critical++;
-                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layout: deal.Layout || '', products: deal.Products || '', owner: userInfo.name, issue: 'Missing: Deal Name', severity: 'critical', fieldName: 'Deal_Name', recommendation: 'Add a deal name to this deal record.' });
+                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layout: deal.Layout || '', products: deal.Products || '', createdBy: deal.Created_By || '', owner: userInfo.name, issue: 'Missing: Deal Name', severity: 'critical', fieldName: 'Deal_Name', recommendation: 'Add a deal name to this deal record.' });
                   }
                   if (!deal.Stage) {
                     ownerStats[ownerId].issues.critical++;
-                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layout: deal.Layout || '', products: deal.Products || '', owner: userInfo.name, issue: 'Missing: Stage', severity: 'critical', fieldName: 'Stage', recommendation: 'Set the deal stage to track pipeline progress.' });
+                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layout: deal.Layout || '', products: deal.Products || '', createdBy: deal.Created_By || '', owner: userInfo.name, issue: 'Missing: Stage', severity: 'critical', fieldName: 'Stage', recommendation: 'Set the deal stage to track pipeline progress.' });
                   }
                   if (!deal.Amount) {
                     ownerStats[ownerId].issues.high++;
-                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layout: deal.Layout || '', products: deal.Products || '', owner: userInfo.name, issue: 'Missing: Amount', severity: 'high', fieldName: 'Amount', recommendation: 'Add the deal amount for accurate pipeline value.' });
+                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layout: deal.Layout || '', products: deal.Products || '', createdBy: deal.Created_By || '', owner: userInfo.name, issue: 'Missing: Amount', severity: 'high', fieldName: 'Amount', recommendation: 'Add the deal amount for accurate pipeline value.' });
                   }
                 } else {
                   ownerStats[ownerId].passCount++;

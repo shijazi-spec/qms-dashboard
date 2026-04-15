@@ -212,6 +212,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layout</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                             </tr>
@@ -726,7 +727,7 @@
             issues.forEach(issue => {
                 const key = issue.id;
                 if (!map[key]) {
-                    map[key] = { id: issue.id, module: issue.module, layout: issue.layout || '', products: issue.products || '', owner: issue.owner, issues: [] };
+                    map[key] = { id: issue.id, module: issue.module, layout: issue.layout || '', products: issue.products || '', createdBy: issue.createdBy || '', owner: issue.owner, issues: [] };
                 }
                 map[key].issues.push({ issue: issue.issue, severity: issue.severity, recommendation: issue.recommendation });
             });
@@ -823,6 +824,7 @@
                     module: issue.module,
                     layout: issue.layout || '',
                     products: issue.products || '',
+                    createdBy: issue.createdBy || '',
                     owner: issue.owner || '-',
                     issue: issue.description || formatIssueType(issue.issueType, issue.fieldName),
                     severity: issue.severity,
@@ -842,6 +844,7 @@
                     module: issue.module,
                     layout: '',
                     products: '',
+                    createdBy: '',
                     owner: '-',
                     issue: formatIssueType(issue.issueType, null),
                     severity: issue.severity,
@@ -906,6 +909,7 @@
                     <td class="px-4 py-3 text-sm text-gray-600">${record.module}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.layout || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.products || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${record.createdBy || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.owner}</td>
                     <td class="px-4 py-3">
                         <div class="space-y-1">${issuesList}</div>
@@ -940,9 +944,9 @@
             if (severity !== 'all') issues = issues.filter(i => i.severity === severity);
             
             if (format === 'csv') {
-                const headers = ['Record ID', 'Module', 'Layout', 'Products', 'Owner', 'Issue', 'Severity', 'Recommendation'];
+                const headers = ['Record ID', 'Module', 'Layout', 'Products', 'Created By', 'Owner', 'Issue', 'Severity', 'Recommendation'];
                 const csv = [headers.join(',')].concat(
-                    issues.map(i => [i.id, i.module, `"${i.layout || ''}"`, `"${i.products || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
+                    issues.map(i => [i.id, i.module, `"${i.layout || ''}"`, `"${i.products || ''}"`, `"${i.createdBy || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
                 ).join('\n');
                 downloadFile(csv, 'quality_issues.csv', 'text/csv');
             } else {
@@ -1061,6 +1065,7 @@
                         issue.module || '-',
                         issue.layout || '-',
                         issue.products || '-',
+                        issue.createdBy || '-',
                         issue.owner || '-',
                         (issue.issue || '').substring(0, 40),
                         issue.severity || '-'
@@ -1068,19 +1073,20 @@
                     
                     doc.autoTable({
                         startY: yPos,
-                        head: [['Record ID', 'Module', 'Layout', 'Products', 'Owner', 'Issue', 'Severity']],
+                        head: [['Record ID', 'Module', 'Layout', 'Products', 'Created By', 'Owner', 'Issue', 'Severity']],
                         body: issueRows,
                         theme: 'striped',
                         headStyles: { fillColor: [99, 102, 241], fontSize: 8 },
                         bodyStyles: { fontSize: 7 },
                         columnStyles: {
-                            0: { cellWidth: 20 },
-                            1: { cellWidth: 16 },
-                            2: { cellWidth: 22 },
-                            3: { cellWidth: 22 },
-                            4: { cellWidth: 22 },
-                            5: { cellWidth: 45 },
-                            6: { cellWidth: 16 }
+                            0: { cellWidth: 18 },
+                            1: { cellWidth: 14 },
+                            2: { cellWidth: 18 },
+                            3: { cellWidth: 18 },
+                            4: { cellWidth: 18 },
+                            5: { cellWidth: 18 },
+                            6: { cellWidth: 40 },
+                            7: { cellWidth: 14 }
                         },
                         margin: { left: margin, right: margin }
                     });
@@ -1391,6 +1397,7 @@
                 module: issue.module,
                 layout: issue.layout || '',
                 products: issue.products || '',
+                createdBy: issue.createdBy || '',
                 owner: issue.owner || ownerName,
                 issue: issue.issue,
                 severity: issue.severity,
