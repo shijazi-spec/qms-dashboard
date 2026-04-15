@@ -2427,5 +2427,6 @@
         function editStakeholder(id) { alert('Edit stakeholder: ' + id); }
         function deleteStakeholder(id) { if (confirm('Delete this stakeholder?')) fetch(`/api/pmp/stakeholders/${id}`, { method: 'DELETE' }).then(() => loadStakeholders()); }
     </script>
+    <script src="/js/ai-consultant-widget.js"></script>
 </body>
 </html>
