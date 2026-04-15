@@ -38,6 +38,7 @@
     }
 
     function formatInline(text) {
+        text = escapeHtml(text);
         text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, url) {
             return '<a href="' + sanitizeUrl(url) + '" target="_blank" rel="noopener" style="color:#4f46e5;text-decoration:underline;">' + label + '</a>';
