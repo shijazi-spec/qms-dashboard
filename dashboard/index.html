@@ -717,6 +717,15 @@
         }
 
         // Issues Modal functions
+        function formatDateTime(isoStr) {
+            if (!isoStr) return '';
+            try {
+                const d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+            } catch(e) { return isoStr; }
+        }
+
         function zohoLink(id, module) {
             if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_') || id.startsWith('summary_') || id.startsWith('issue_')) return `<span class="text-xs font-mono text-gray-400">${id || '-'}</span>`;
             return `<a href="https://crm.zoho.com/crm/org766568398/tab/${module}/${id}" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${id}</a>`;
@@ -727,7 +736,7 @@
             issues.forEach(issue => {
                 const key = issue.id;
                 if (!map[key]) {
-                    map[key] = { id: issue.id, module: issue.module, layouts: issue.layouts || '', products: issue.products || '', createdBy: issue.createdBy || '', owner: issue.owner, issues: [] };
+                    map[key] = { id: issue.id, module: issue.module, layouts: issue.layouts || '', products: issue.products || '', createdBy: issue.createdBy || '', createdTime: issue.createdTime || '', owner: issue.owner, issues: [] };
                 }
                 map[key].issues.push({ issue: issue.issue, severity: issue.severity, recommendation: issue.recommendation });
             });
@@ -825,6 +834,7 @@
                     layouts: issue.layouts || '',
                     products: issue.products || '',
                     createdBy: issue.createdBy || '',
+                    createdTime: issue.createdTime || '',
                     owner: issue.owner || '-',
                     issue: issue.description || formatIssueType(issue.issueType, issue.fieldName),
                     severity: issue.severity,
@@ -845,6 +855,7 @@
                     layouts: '',
                     products: '',
                     createdBy: '',
+                    createdTime: '',
                     owner: '-',
                     issue: formatIssueType(issue.issueType, null),
                     severity: issue.severity,
@@ -909,7 +920,10 @@
                     <td class="px-4 py-3 text-sm text-gray-600">${record.module}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.layouts || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.products || '-'}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${record.createdBy || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">
+                        <div>${record.createdBy || '-'}</div>
+                        ${record.createdTime ? `<div class="text-xs text-gray-400 mt-0.5">${formatDateTime(record.createdTime)}</div>` : ''}
+                    </td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.owner}</td>
                     <td class="px-4 py-3">
                         <div class="space-y-1">${issuesList}</div>
@@ -944,9 +958,9 @@
             if (severity !== 'all') issues = issues.filter(i => i.severity === severity);
             
             if (format === 'csv') {
-                const headers = ['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Owner', 'Issue', 'Severity', 'Recommendation'];
+                const headers = ['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Created Time', 'Owner', 'Issue', 'Severity', 'Recommendation'];
                 const csv = [headers.join(',')].concat(
-                    issues.map(i => [i.id, i.module, `"${i.layouts || ''}"`, `"${i.products || ''}"`, `"${i.createdBy || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
+                    issues.map(i => [i.id, i.module, `"${i.layouts || ''}"`, `"${i.products || ''}"`, `"${i.createdBy || ''}"`, `"${i.createdTime || ''}"`, i.owner, `"${i.issue}"`, i.severity, `"${i.recommendation}"`].join(','))
                 ).join('\n');
                 downloadFile(csv, 'quality_issues.csv', 'text/csv');
             } else {
@@ -1065,7 +1079,7 @@
                         issue.module || '-',
                         issue.layouts || '-',
                         issue.products || '-',
-                        issue.createdBy || '-',
+                        (issue.createdBy || '-') + (issue.createdTime ? '\n' + formatDateTime(issue.createdTime) : ''),
                         issue.owner || '-',
                         (issue.issue || '').substring(0, 40),
                         issue.severity || '-'
@@ -1398,6 +1412,7 @@
                 layouts: issue.layouts || '',
                 products: issue.products || '',
                 createdBy: issue.createdBy || '',
+                createdTime: issue.createdTime || '',
                 owner: issue.owner || ownerName,
                 issue: issue.issue,
                 severity: issue.severity,

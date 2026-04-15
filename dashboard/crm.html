@@ -281,11 +281,11 @@
         let enrichmentData = {};
 
         const moduleColumns = {
-            Leads:    ['Full_Name', 'Email', 'Company', 'Phone', 'Lead_Source', 'Lead_Status', 'Owner'],
-            Deals:    ['Deal_Name', 'Amount', 'Stage', 'Closing_Date', 'Account_Name', 'Owner'],
-            Contacts: ['Full_Name', 'Email', 'Phone', 'Account_Name', 'Mailing_City', 'Owner'],
-            Tasks:    ['Subject', 'Due_Date', 'Status', 'Priority', 'What_Id', 'Owner'],
-            Accounts: ['Account_Name', 'Phone', 'Website', 'Industry', 'Billing_City', 'Owner']
+            Leads:    ['Full_Name', 'Email', 'Company', 'Phone', 'Lead_Source', 'Lead_Status', 'Created_By', 'Owner'],
+            Deals:    ['Deal_Name', 'Amount', 'Stage', 'Closing_Date', 'Account_Name', 'Created_By', 'Owner'],
+            Contacts: ['Full_Name', 'Email', 'Phone', 'Account_Name', 'Mailing_City', 'Created_By', 'Owner'],
+            Tasks:    ['Subject', 'Due_Date', 'Status', 'Priority', 'What_Id', 'Created_By', 'Owner'],
+            Accounts: ['Account_Name', 'Phone', 'Website', 'Industry', 'Billing_City', 'Created_By', 'Owner']
         };
 
         const FLAG_LABELS = {
@@ -450,6 +450,14 @@
                     if (col === 'Owner' && typeof value === 'object') value = value?.name || value?.id || '-';
                     if (col === 'Account_Name' && typeof value === 'object') value = value?.name || value?.id || '-';
                     if (col === 'What_Id' && typeof value === 'object') value = value?.name || value?.id || '-';
+                    if (col === 'Created_By') {
+                        var cbName = typeof value === 'object' ? (value?.name || value?.id || '-') : (value || '-');
+                        var cbTime = record.Created_Time ? formatDateTime(record.Created_Time) : '';
+                        return '<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">' +
+                            '<div>' + escapeHtml(cbName) + '</div>' +
+                            (cbTime ? '<div class="text-xs text-gray-400 mt-0.5">' + escapeHtml(cbTime) + '</div>' : '') +
+                            '</td>';
+                    }
                     if (col === 'Amount' && value) value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
                     if ((col === 'Due_Date' || col === 'Closing_Date') && value) value = new Date(value).toLocaleDateString();
 
@@ -584,6 +592,15 @@
 
         function closeDetailModal() {
             document.getElementById('detailModal').classList.remove('active');
+        }
+
+        function formatDateTime(isoStr) {
+            if (!isoStr) return '';
+            try {
+                var d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+            } catch(e) { return isoStr; }
         }
 
         function formatColumnName(col) {
