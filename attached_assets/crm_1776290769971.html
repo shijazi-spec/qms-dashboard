@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Data Hub - WalaPlus</title>
+    <title>CRM Data Viewer - WalaPlus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -73,6 +73,17 @@
         .row-duplicate { background: #FFFFF0 !important; }
         .row-duplicate:hover { background: #FEFCE8 !important; }
 
+        .summary-ring {
+            width: 56px; height: 56px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 14px; position: relative;
+        }
+        .summary-ring::after {
+            content: ''; position: absolute; inset: 3px;
+            border-radius: 50%; background: white;
+        }
+        .summary-ring span { position: relative; z-index: 1; }
+
         .detail-modal {
             display: none; position: fixed; inset: 0; z-index: 50;
             background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
@@ -101,16 +112,17 @@
     </script>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">CRM Data Hub</h1>
-                    <p class="text-gray-500 text-sm mt-1">Live CRM data enriched with quality scores &amp; duplicate detection</p>
+                    <h1 class="text-2xl font-bold text-gray-900">CRM Data Hub</h1>
+                    <p class="text-gray-500 text-sm mt-1">Live CRM data enriched with quality scores & duplicate detection</p>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm" data-testid="status-connection">Checking...</span>
+                    <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">Checking...</span>
                     <span id="lastUpdated" class="text-xs text-gray-400"></span>
-                    <button onclick="refreshData()" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2" data-testid="button-refresh">
+                    <button onclick="refreshData()" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
@@ -119,63 +131,76 @@
                 </div>
             </div>
 
+            <!-- Health Summary Bar -->
             <div id="healthBar" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-                <div class="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-                    <div id="stat-total" class="text-xl font-bold text-gray-800" data-testid="text-health-total">--</div>
+                <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <div id="stat-total" class="text-xl font-bold text-gray-800">--</div>
                     <div class="text-xs text-gray-500">Records Shown</div>
                 </div>
-                <div class="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-                    <div id="stat-clean" class="text-xl font-bold text-green-700" data-testid="text-health-clean">--</div>
+                <div class="bg-green-50 rounded-lg p-3 text-center">
+                    <div id="stat-clean" class="text-xl font-bold text-green-700">--</div>
                     <div class="text-xs text-green-600">Clean Records</div>
                 </div>
-                <div class="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
-                    <div id="stat-issues" class="text-xl font-bold text-amber-700" data-testid="text-health-issues">--</div>
+                <div class="bg-amber-50 rounded-lg p-3 text-center">
+                    <div id="stat-issues" class="text-xl font-bold text-amber-700">--</div>
                     <div class="text-xs text-amber-600">With Issues</div>
                 </div>
-                <div class="bg-red-50 rounded-lg p-3 text-center border border-red-200">
-                    <div id="stat-junk" class="text-xl font-bold text-red-700" data-testid="text-health-junk">--</div>
+                <div class="bg-red-50 rounded-lg p-3 text-center">
+                    <div id="stat-junk" class="text-xl font-bold text-red-700">--</div>
                     <div class="text-xs text-red-600">Junk / Spam</div>
                 </div>
-                <div class="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
-                    <div id="stat-duplicates" class="text-xl font-bold text-purple-700" data-testid="text-health-duplicates">--</div>
+                <div class="bg-purple-50 rounded-lg p-3 text-center">
+                    <div id="stat-duplicates" class="text-xl font-bold text-purple-700">--</div>
                     <div class="text-xs text-purple-600">In Dup. Clusters</div>
                 </div>
             </div>
 
+            <!-- Tabs -->
             <div class="border-b border-gray-200 mb-6">
                 <nav class="flex space-x-8" id="moduleTabs">
-                    <button onclick="switchModule('Leads')" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads">Leads</button>
-                    <button onclick="switchModule('Deals')" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals">Deals</button>
-                    <button onclick="switchModule('Contacts')" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts">Contacts</button>
-                    <button onclick="switchModule('Tasks')" data-module="Tasks" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-tasks">Tasks</button>
-                    <button onclick="switchModule('Accounts')" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-accounts">Accounts</button>
+                    <button onclick="switchModule('Leads')" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active">
+                        Leads
+                    </button>
+                    <button onclick="switchModule('Deals')" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
+                        Deals
+                    </button>
+                    <button onclick="switchModule('Contacts')" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
+                        Contacts
+                    </button>
+                    <button onclick="switchModule('Tasks')" data-module="Tasks" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
+                        Tasks
+                    </button>
+                    <button onclick="switchModule('Accounts')" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300">
+                        Accounts
+                    </button>
                 </nav>
             </div>
 
+            <!-- Toolbar -->
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                 <div class="flex items-center space-x-4">
                     <div class="relative">
                         <input type="text" id="searchInput" placeholder="Search records..."
                             class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
-                            onkeyup="filterTable()" data-testid="input-search">
+                            onkeyup="filterTable()">
                         <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
                     </div>
-                    <span id="recordCount" class="text-sm text-gray-500" data-testid="text-record-count">0 records</span>
+                    <span id="recordCount" class="text-sm text-gray-500">0 records</span>
                 </div>
                 <div class="flex items-center space-x-3">
                     <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
                         <input type="checkbox" id="highlightIssues" checked onchange="renderTable()"
-                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-highlight-issues">
+                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                         <span>Highlight Issues</span>
                     </label>
                     <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
                         <input type="checkbox" id="hideJunk" onchange="filterTable()"
-                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-hide-junk">
+                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                         <span>Hide Junk</span>
                     </label>
-                    <select id="perPageSelect" onchange="refreshData()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500" data-testid="select-per-page">
+                    <select id="perPageSelect" onchange="refreshData()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
                         <option value="25">25</option>
                         <option value="50" selected>50</option>
                         <option value="100">100</option>
@@ -183,6 +208,7 @@
                 </div>
             </div>
 
+            <!-- Loading / Error States -->
             <div id="loadingState" class="hidden py-12 text-center">
                 <div class="loading-spinner mx-auto mb-4"></div>
                 <p class="text-gray-500">Loading CRM data...</p>
@@ -194,9 +220,10 @@
                     </svg>
                 </div>
                 <p id="errorMessage" class="text-red-600 font-medium mb-2">Error loading data</p>
-                <button onclick="refreshData()" class="text-indigo-600 hover:text-indigo-800 text-sm" data-testid="button-retry">Try again</button>
+                <button onclick="refreshData()" class="text-indigo-600 hover:text-indigo-800 text-sm">Try again</button>
             </div>
 
+            <!-- Data Table -->
             <div id="dataContainer" class="table-container relative">
                 <div id="enrichingOverlay" class="enriching-overlay hidden">
                     <div class="text-center">
@@ -221,13 +248,19 @@
                 <p class="text-gray-500">No records found in this module</p>
             </div>
 
+            <!-- Pagination -->
             <div id="pagination" class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                <button onclick="previousPage()" id="prevBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-testid="button-prev-page">Previous</button>
+                <button onclick="previousPage()" id="prevBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Previous
+                </button>
                 <span id="pageInfo" class="text-sm text-gray-500">Page 1</span>
-                <button onclick="nextPage()" id="nextBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="button-next-page">Next</button>
+                <button onclick="nextPage()" id="nextBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
+                </button>
             </div>
         </div>
 
+        <!-- Legend -->
         <div class="bg-white rounded-xl shadow-lg p-6">
             <h2 class="text-lg font-semibold text-gray-900 mb-3">How to Read This View</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -260,11 +293,12 @@
         </div>
     </main>
 
+    <!-- Record Detail Modal -->
     <div id="detailModal" class="detail-modal" onclick="if(event.target===this)closeDetailModal()">
         <div class="detail-modal-content">
             <div class="flex items-center justify-between mb-4">
                 <h3 id="detailTitle" class="text-lg font-bold text-gray-900">Record Details</h3>
-                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600" data-testid="button-close-modal">
+                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -288,6 +322,7 @@
             Accounts: ['Account_Name', 'Phone', 'Website', 'Industry', 'Billing_City', 'Owner']
         };
 
+        const PHONE_FIELDS = ['Phone', 'Mobile'];
         const FLAG_LABELS = {
             missing_name: 'Missing name',
             garbage_name: 'Garbage name',
@@ -301,11 +336,12 @@
             no_business_domain: 'No business domain',
         };
 
+        // ---- CONNECTION CHECK ----
         async function checkConnection() {
             try {
-                var response = await fetch('/api/integrations/status');
-                var data = await response.json();
-                var statusEl = document.getElementById('connectionStatus');
+                const response = await fetch('/api/integrations/status');
+                const data = await response.json();
+                const statusEl = document.getElementById('connectionStatus');
                 if (data.zoho?.connected) {
                     statusEl.textContent = 'Connected';
                     statusEl.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
@@ -319,22 +355,22 @@
             }
         }
 
+        // ---- FETCH & ENRICH ----
         async function fetchModuleData(module) {
-            var perPage = document.getElementById('perPageSelect').value;
-            var response = await fetch('/api/crm/data?module=' + module + '&page=' + currentPage + '&per_page=' + perPage);
+            const perPage = document.getElementById('perPageSelect').value;
+            const response = await fetch(`/api/crm/data?module=${module}&page=${currentPage}&per_page=${perPage}`);
             return response.json();
         }
 
         async function enrichRecords(records) {
             if (!records.length || currentModule === 'Tasks') return {};
             try {
-                var resp = await fetch('/api/crm/enrich', {
+                const resp = await fetch('/api/crm/enrich', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ records: records }),
+                    body: JSON.stringify({ records }),
                 });
-                var data = await resp.json();
+                const data = await resp.json();
                 return data.success ? data.enrichment : {};
             } catch (e) {
                 console.warn('Enrichment failed, showing raw data:', e);
@@ -343,11 +379,11 @@
         }
 
         async function refreshData() {
-            var loadingEl = document.getElementById('loadingState');
-            var dataEl = document.getElementById('dataContainer');
-            var errorEl = document.getElementById('errorState');
-            var emptyEl = document.getElementById('emptyState');
-            var refreshBtn = document.getElementById('refreshBtn');
+            const loadingEl = document.getElementById('loadingState');
+            const dataEl = document.getElementById('dataContainer');
+            const errorEl = document.getElementById('errorState');
+            const emptyEl = document.getElementById('emptyState');
+            const refreshBtn = document.getElementById('refreshBtn');
 
             loadingEl.classList.remove('hidden');
             dataEl.classList.add('hidden');
@@ -356,12 +392,12 @@
             refreshBtn.disabled = true;
 
             try {
-                var data = await fetchModuleData(currentModule);
+                const data = await fetchModuleData(currentModule);
                 if (!data.success) throw new Error(data.error || 'Failed to fetch data');
 
                 allRecords = data.records || [];
-                document.getElementById('recordCount').textContent = allRecords.length + ' records';
-                document.getElementById('lastUpdated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                document.getElementById('recordCount').textContent = `${allRecords.length} records`;
+                document.getElementById('lastUpdated').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
 
                 loadingEl.classList.add('hidden');
 
@@ -390,15 +426,15 @@
             }
         }
 
+        // ---- HEALTH BAR ----
         function updateHealthBar(enrichment) {
-            var total = allRecords.length;
-            var clean = 0, issues = 0, junk = 0, duplicates = 0;
+            const total = allRecords.length;
+            let clean = 0, issues = 0, junk = 0, duplicates = 0;
 
-            for (var i = 0; i < allRecords.length; i++) {
-                var r = allRecords[i];
-                var e = enrichment[r.id];
+            for (const r of allRecords) {
+                const e = enrichment[r.id];
                 if (!e || !e.quality) { clean++; continue; }
-                var s = e.quality.score;
+                const s = e.quality.score;
                 if (e.quality.isJunk) junk++;
                 else if (s < 50) issues++;
                 else clean++;
@@ -411,62 +447,63 @@
             document.getElementById('stat-duplicates').textContent = duplicates;
         }
 
+        // ---- TABLE RENDERING ----
         function renderTable() {
-            var columns = moduleColumns[currentModule] || ['id'];
-            var headerRow = document.getElementById('tableHeader');
-            var tbody = document.getElementById('tableBody');
-            var showHighlights = document.getElementById('highlightIssues').checked;
-            var isTaskModule = currentModule === 'Tasks';
+            const columns = moduleColumns[currentModule] || ['id'];
+            const headerRow = document.getElementById('tableHeader');
+            const tbody = document.getElementById('tableBody');
+            const showHighlights = document.getElementById('highlightIssues').checked;
+            const isTaskModule = currentModule === 'Tasks';
 
-            var extraCols = isTaskModule ? [] : ['_quality', '_duplicates'];
-            var allCols = extraCols.concat(columns);
+            const extraCols = isTaskModule ? [] : ['_quality', '_duplicates'];
+            const allCols = [...extraCols, ...columns];
 
-            headerRow.innerHTML = allCols.map(function(col) {
+            headerRow.innerHTML = allCols.map(col => {
                 if (col === '_quality') return '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="min-width:80px">Quality</th>';
                 if (col === '_duplicates') return '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="min-width:90px">Duplicates</th>';
-                return '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">' + formatColumnName(col) + '</th>';
+                return `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${formatColumnName(col)}</th>`;
             }).join('');
 
-            tbody.innerHTML = allRecords.map(function(record) {
-                var enr = enrichmentData[record.id];
-                var qScore = enr && enr.quality ? enr.quality.score : undefined;
-                var qFlags = enr && enr.quality ? enr.quality.flags || [] : [];
-                var isJunk = enr && enr.quality ? enr.quality.isJunk : false;
-                var cluster = enr ? enr.cluster : null;
-                var inCluster = cluster && !cluster.isJunk && cluster.totalInCluster > 1;
+            tbody.innerHTML = allRecords.map(record => {
+                const enr = enrichmentData[record.id];
+                const qScore = enr?.quality?.score;
+                const qFlags = enr?.quality?.flags || [];
+                const isJunk = enr?.quality?.isJunk;
+                const cluster = enr?.cluster;
+                const inCluster = cluster && !cluster.isJunk && cluster.totalInCluster > 1;
 
-                var rowClass = 'hover:bg-gray-50 cursor-pointer';
+                let rowClass = 'hover:bg-gray-50 cursor-pointer';
                 if (showHighlights && isJunk) rowClass = 'row-junk cursor-pointer';
                 else if (showHighlights && inCluster) rowClass = 'row-duplicate cursor-pointer';
 
-                var hideJunk = document.getElementById('hideJunk').checked;
-                var hideStyle = (hideJunk && isJunk) ? ' style="display:none"' : '';
+                const hideJunk = document.getElementById('hideJunk').checked;
+                const hideStyle = (hideJunk && isJunk) ? ' style="display:none"' : '';
 
-                var cells = allCols.map(function(col) {
+                const cells = allCols.map(col => {
                     if (col === '_quality') return renderQualityCell(qScore, qFlags, isJunk);
                     if (col === '_duplicates') return renderClusterCell(cluster);
 
-                    var value = record[col];
+                    let value = getNestedValue(record, col);
                     if (col === 'Owner' && typeof value === 'object') value = value?.name || value?.id || '-';
                     if (col === 'Account_Name' && typeof value === 'object') value = value?.name || value?.id || '-';
                     if (col === 'What_Id' && typeof value === 'object') value = value?.name || value?.id || '-';
                     if (col === 'Amount' && value) value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
                     if ((col === 'Due_Date' || col === 'Closing_Date') && value) value = new Date(value).toLocaleDateString();
 
-                    var hygiene = '';
+                    let hygiene = '';
                     if (showHighlights && !isTaskModule) {
                         if (col === 'Phone' && value && value !== '-') hygiene = checkPhoneHygiene(value);
-                        if (col === 'Email' && value && value !== '-' && qFlags.indexOf('suspicious_email') !== -1) hygiene = '<span class="hygiene-warn" title="Suspicious email pattern">&#9888;</span>';
-                        if ((col === 'Full_Name' || col === 'Deal_Name') && (qFlags.indexOf('gibberish_name') !== -1 || qFlags.indexOf('garbage_name') !== -1)) {
-                            hygiene = '<span class="hygiene-warn" title="' + (qFlags.indexOf('gibberish_name') !== -1 ? 'Gibberish name detected' : 'Garbage name') + '">&#9888;</span>';
+                        if (col === 'Email' && value && value !== '-' && qFlags.includes('suspicious_email')) hygiene = '<span class="hygiene-warn" title="Suspicious email pattern">&#9888;</span>';
+                        if ((col === 'Full_Name' || col === 'Deal_Name') && (qFlags.includes('gibberish_name') || qFlags.includes('garbage_name'))) {
+                            hygiene = '<span class="hygiene-warn" title="' + (qFlags.includes('gibberish_name') ? 'Gibberish name detected' : 'Garbage name') + '">&#9888;</span>';
                         }
-                        if (col === 'Company' && qFlags.indexOf('gibberish_company') !== -1) hygiene = '<span class="hygiene-warn" title="Gibberish company name">&#9888;</span>';
+                        if (col === 'Company' && qFlags.includes('gibberish_company')) hygiene = '<span class="hygiene-warn" title="Gibberish company name">&#9888;</span>';
                     }
 
-                    return '<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">' + escapeHtml(value || '-') + hygiene + '</td>';
+                    return `<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">${escapeHtml(value || '-')}${hygiene}</td>`;
                 }).join('');
 
-                return '<tr class="' + rowClass + '" data-record-id="' + record.id + '" onclick="showRecordDetail(\'' + record.id + '\')"' + hideStyle + ' data-testid="row-record-' + record.id + '">' + cells + '</tr>';
+                return `<tr class="${rowClass}" data-record-id="${record.id}" onclick="showRecordDetail('${record.id}')"${hideStyle}>${cells}</tr>`;
             }).join('');
         }
 
@@ -474,13 +511,13 @@
             if (score === undefined || score === null) {
                 return '<td class="px-3 py-3 text-sm"><span class="text-gray-300 text-xs">--</span></td>';
             }
-            var cls = 'quality-good';
+            let cls = 'quality-good';
             if (isJunk || score <= 20) cls = 'quality-junk';
             else if (score < 50) cls = 'quality-poor';
             else if (score < 85) cls = 'quality-fair';
 
-            var flagTip = flags.length ? flags.map(function(f) { return FLAG_LABELS[f] || f; }).join(', ') : 'No issues';
-            return '<td class="px-3 py-3 text-sm"><span class="quality-badge ' + cls + '" title="' + escapeHtml(flagTip) + '">' + score + '</span></td>';
+            const flagTip = flags.length ? flags.map(f => FLAG_LABELS[f] || f).join(', ') : 'No issues';
+            return `<td class="px-3 py-3 text-sm"><span class="quality-badge ${cls}" title="${escapeHtml(flagTip)}">${score}</span></td>`;
         }
 
         function renderClusterCell(cluster) {
@@ -490,91 +527,83 @@
             if (cluster.totalInCluster <= 1) {
                 return '<td class="px-3 py-3 text-sm"><span class="text-gray-400 text-xs">Unique</span></td>';
             }
-            var lvl = cluster.confidenceLevel || 'low';
-            var cls = lvl === 'high' ? 'cluster-high' : lvl === 'medium' ? 'cluster-medium' : 'cluster-low';
-            var label = cluster.totalInCluster + ' recs';
-            var tip = 'Cluster: ' + (cluster.clusterCompany || cluster.clusterDomain) + ' (' + lvl + ' confidence, score ' + cluster.confidenceScore + ')';
-            return '<td class="px-3 py-3 text-sm">' +
-                '<span class="cluster-badge ' + cls + '" title="' + escapeHtml(tip) + '" onclick="event.stopPropagation(); window.open(\'/duplicates#cluster-' + cluster.clusterId + '\',\'_blank\')">' +
-                '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>' +
-                label +
-                '</span>' +
-            '</td>';
+            const lvl = cluster.confidenceLevel || 'low';
+            const cls = lvl === 'high' ? 'cluster-high' : lvl === 'medium' ? 'cluster-medium' : 'cluster-low';
+            const label = `${cluster.totalInCluster} recs`;
+            const tip = `Cluster: ${cluster.clusterCompany || cluster.clusterDomain} (${lvl} confidence, score ${cluster.confidenceScore})`;
+            return `<td class="px-3 py-3 text-sm">
+                <span class="cluster-badge ${cls}" title="${escapeHtml(tip)}" onclick="event.stopPropagation(); window.open('/duplicates#cluster-${cluster.clusterId}','_blank')">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+                    ${label}
+                </span>
+            </td>`;
         }
 
         function checkPhoneHygiene(phone) {
             if (!phone || phone === '-') return '';
-            var digits = phone.replace(/\D/g, '');
+            const digits = phone.replace(/\D/g, '');
             if (digits.length > 15) return '<span class="hygiene-warn" title="Phone number too long (' + digits.length + ' digits)">&#9888; long</span>';
             if (digits.length < 7 && digits.length > 0) return '<span class="hygiene-warn" title="Phone number too short (' + digits.length + ' digits)">&#9888; short</span>';
             return '';
         }
 
+        // ---- RECORD DETAIL MODAL ----
         function showRecordDetail(recordId) {
-            var record = allRecords.find(function(r) { return r.id === recordId; });
+            const record = allRecords.find(r => r.id === recordId);
             if (!record) return;
 
-            var enr = enrichmentData[recordId];
-            var modal = document.getElementById('detailModal');
-            var title = document.getElementById('detailTitle');
-            var body = document.getElementById('detailBody');
+            const enr = enrichmentData[recordId];
+            const modal = document.getElementById('detailModal');
+            const title = document.getElementById('detailTitle');
+            const body = document.getElementById('detailBody');
 
-            var name = record.Full_Name || record.Deal_Name || (record.Account_Name && typeof record.Account_Name === 'object' ? record.Account_Name.name : record.Account_Name) || record.Subject || record.id;
+            const name = record.Full_Name || record.Deal_Name || record.Account_Name?.name || record.Subject || record.id;
             title.textContent = name;
 
-            var html = '';
+            let html = '';
 
-            if (enr && enr.quality) {
-                var q = enr.quality;
-                var cls = q.isJunk ? 'quality-junk' : q.score < 50 ? 'quality-poor' : q.score < 85 ? 'quality-fair' : 'quality-good';
-                var bgCls = q.isJunk ? 'bg-red-50' : q.score < 50 ? 'bg-orange-50' : q.score < 85 ? 'bg-amber-50' : 'bg-green-50';
-                html += '<div class="mb-4 p-4 rounded-lg ' + bgCls + '">' +
-                    '<div class="flex items-center justify-between mb-2">' +
-                    '<span class="font-semibold text-sm">Data Quality</span>' +
-                    '<span class="quality-badge ' + cls + '">' + q.score + '/100</span>' +
-                    '</div>';
-                if (q.flags && q.flags.length) {
-                    html += '<div class="flex flex-wrap gap-1">';
-                    for (var fi = 0; fi < q.flags.length; fi++) {
-                        html += '<span class="inline-block px-2 py-0.5 bg-white/60 rounded text-xs text-gray-700">' + (FLAG_LABELS[q.flags[fi]] || q.flags[fi]) + '</span>';
-                    }
-                    html += '</div>';
-                } else {
-                    html += '<span class="text-xs text-green-700">No issues detected</span>';
-                }
-                html += '</div>';
+            // Quality card
+            if (enr?.quality) {
+                const q = enr.quality;
+                const cls = q.isJunk ? 'quality-junk' : q.score < 50 ? 'quality-poor' : q.score < 85 ? 'quality-fair' : 'quality-good';
+                html += `<div class="mb-4 p-4 rounded-lg ${q.isJunk ? 'bg-red-50' : q.score < 50 ? 'bg-orange-50' : q.score < 85 ? 'bg-amber-50' : 'bg-green-50'}">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-semibold text-sm">Data Quality</span>
+                        <span class="quality-badge ${cls}">${q.score}/100</span>
+                    </div>
+                    ${q.flags.length ? `<div class="flex flex-wrap gap-1">${q.flags.map(f => `<span class="inline-block px-2 py-0.5 bg-white/60 rounded text-xs text-gray-700">${FLAG_LABELS[f] || f}</span>`).join('')}</div>` : '<span class="text-xs text-green-700">No issues detected</span>'}
+                </div>`;
             }
 
-            if (enr && enr.cluster && !enr.cluster.isJunk && enr.cluster.totalInCluster > 1) {
-                var c = enr.cluster;
-                html += '<div class="mb-4 p-4 rounded-lg bg-purple-50">' +
-                    '<div class="flex items-center justify-between mb-2">' +
-                    '<span class="font-semibold text-sm">Duplicate Cluster</span>' +
-                    '<span class="cluster-badge cluster-' + c.confidenceLevel + '">' + c.totalInCluster + ' records</span>' +
-                    '</div>' +
-                    '<div class="text-xs text-gray-600 space-y-1">' +
-                    '<div><strong>Company:</strong> ' + escapeHtml(c.clusterCompany || '-') + '</div>' +
-                    '<div><strong>Domain:</strong> ' + escapeHtml(c.clusterDomain || '-') + '</div>' +
-                    '<div><strong>Confidence:</strong> ' + c.confidenceLevel + ' (' + c.confidenceScore + '%)</div>' +
-                    '</div>' +
-                    '<a href="/duplicates#cluster-' + c.clusterId + '" target="_blank" class="inline-block mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium" data-testid="link-view-cluster">View in Duplicate Radar &rarr;</a>' +
-                    '</div>';
+            // Duplicate cluster card
+            if (enr?.cluster && !enr.cluster.isJunk && enr.cluster.totalInCluster > 1) {
+                const c = enr.cluster;
+                html += `<div class="mb-4 p-4 rounded-lg bg-purple-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-semibold text-sm">Duplicate Cluster</span>
+                        <span class="cluster-badge cluster-${c.confidenceLevel}">${c.totalInCluster} records</span>
+                    </div>
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <div><strong>Company:</strong> ${escapeHtml(c.clusterCompany || '-')}</div>
+                        <div><strong>Domain:</strong> ${escapeHtml(c.clusterDomain || '-')}</div>
+                        <div><strong>Confidence:</strong> ${c.confidenceLevel} (${c.confidenceScore}%)</div>
+                    </div>
+                    <a href="/duplicates#cluster-${c.clusterId}" target="_blank" class="inline-block mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">View in Duplicate Radar &rarr;</a>
+                </div>`;
             }
 
+            // Record fields
             html += '<div class="border rounded-lg overflow-hidden"><table class="min-w-full divide-y divide-gray-200">';
-            var skipKeys = ['id', 'createdTime', 'modifiedTime', '$currency_symbol', '$approved', '$approval', '$editable', '$review_process', '$orchestration', '$in_merge', '$approval_state', '$review', '$converted', '$followed'];
-            var keys = Object.keys(record);
-            for (var ki = 0; ki < keys.length; ki++) {
-                var key = keys[ki];
-                if (skipKeys.indexOf(key) !== -1 || key.charAt(0) === '$') continue;
-                var val = record[key];
-                var display = val;
+            const skipKeys = new Set(['id', 'createdTime', 'modifiedTime', '$currency_symbol', '$approved', '$approval', '$editable', '$review_process', '$orchestration', '$in_merge', '$approval_state', '$review', '$converted', '$followed']);
+            for (const [key, val] of Object.entries(record)) {
+                if (skipKeys.has(key) || key.startsWith('$')) continue;
+                let display = val;
                 if (val && typeof val === 'object') display = val.name || val.id || JSON.stringify(val);
                 if (display === null || display === undefined) display = '-';
-                html += '<tr class="hover:bg-gray-50">' +
-                    '<td class="px-4 py-2 text-xs font-medium text-gray-500 w-1/3">' + formatColumnName(key) + '</td>' +
-                    '<td class="px-4 py-2 text-sm text-gray-900">' + escapeHtml(String(display)) + '</td>' +
-                    '</tr>';
+                html += `<tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 text-xs font-medium text-gray-500 w-1/3">${formatColumnName(key)}</td>
+                    <td class="px-4 py-2 text-sm text-gray-900">${escapeHtml(String(display))}</td>
+                </tr>`;
             }
             html += '</table></div>';
 
@@ -586,13 +615,16 @@
             document.getElementById('detailModal').classList.remove('active');
         }
 
+        // ---- UTILITIES ----
+        function getNestedValue(obj, key) { return obj[key]; }
+
         function formatColumnName(col) {
             return col.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
         }
 
         function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.textContent = String(str);
+            const div = document.createElement('div');
+            div.textContent = str;
             return div.innerHTML;
         }
 
@@ -600,7 +632,7 @@
             currentModule = module;
             currentPage = 1;
             enrichmentData = {};
-            document.querySelectorAll('#moduleTabs button').forEach(function(btn) {
+            document.querySelectorAll('#moduleTabs button').forEach(btn => {
                 btn.classList.remove('tab-active');
                 if (btn.dataset.module === module) btn.classList.add('tab-active');
             });
@@ -608,15 +640,15 @@
         }
 
         function filterTable() {
-            var searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            var hideJunk = document.getElementById('hideJunk').checked;
-            var rows = document.querySelectorAll('#tableBody tr');
-            rows.forEach(function(row) {
-                var text = row.textContent.toLowerCase();
-                var id = row.dataset.recordId;
-                var isJunk = enrichmentData[id] && enrichmentData[id].quality && enrichmentData[id].quality.isJunk;
-                var matchesSearch = !searchTerm || text.indexOf(searchTerm) !== -1;
-                var matchesJunk = !hideJunk || !isJunk;
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const hideJunk = document.getElementById('hideJunk').checked;
+            const rows = document.querySelectorAll('#tableBody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const id = row.dataset.recordId;
+                const isJunk = enrichmentData[id]?.quality?.isJunk;
+                const matchesSearch = !searchTerm || text.includes(searchTerm);
+                const matchesJunk = !hideJunk || !isJunk;
                 row.style.display = (matchesSearch && matchesJunk) ? '' : 'none';
             });
         }
@@ -624,21 +656,21 @@
         function updatePagination(data) {
             document.getElementById('prevBtn').disabled = currentPage <= 1;
             document.getElementById('nextBtn').disabled = data.count < parseInt(document.getElementById('perPageSelect').value);
-            document.getElementById('pageInfo').textContent = 'Page ' + currentPage;
+            document.getElementById('pageInfo').textContent = `Page ${currentPage}`;
         }
 
         function previousPage() { if (currentPage > 1) { currentPage--; refreshData(); } }
         function nextPage() { currentPage++; refreshData(); }
 
-        document.addEventListener('DOMContentLoaded', function() {
+        // ---- INIT ----
+        document.addEventListener('DOMContentLoaded', () => {
             checkConnection();
             refreshData();
         });
 
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeDetailModal();
         });
     </script>
-    <script src="/js/ai-consultant-widget.js"></script>
 </body>
 </html>

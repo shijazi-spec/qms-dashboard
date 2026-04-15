@@ -1,0 +1,46 @@
+CRM Data Hub -- Accurate Technical Description
+Purpose
+A live CRM data browser enriched with quality scoring and duplicate cross-referencing. Instead of switching between Zoho CRM, quality audits, and Duplicate Radar, the CRM Data Hub merges all three into one view.
+
+Architecture
+1. Backend -- Two API Endpoints (src/mastra/index.ts)
+
+GET /api/crm/data -- Fetches raw records from Zoho CRM via fetchZohoRecords(). Accepts module, page, per_page parameters.
+
+POST /api/crm/enrich -- Takes the current page of records and enriches each with:
+
+Quality score -- runs runLiveQualityCheck() which calls assessDataQuality() (from duplicateRadarDatabase.ts). Starts at 100 and subtracts fixed penalties per issue: -50 gibberish name, -40 garbage name, -30 gibberish company, -20 missing name, -15 missing company/suspicious email, -10 missing email/phone, -5 missing owner/no business domain. Records scoring <=20 or flagged as gibberish/garbage are marked isJunk.
+Duplicate cluster lookup -- lookupRecordsByZohoIds() queries duplicate_records JOIN duplicate_clusters using WHERE zoho_record_id = ANY($1) to find records belonging to known duplicate clusters.
+2. Quality & Junk Detection (src/utils/duplicateRadarDatabase.ts)
+
+assessDataQuality() -- scores records on 7 dimensions: name quality (gibberish/garbage/missing), company quality (gibberish/missing), email quality (missing/suspicious), phone quality (missing), owner quality (missing), business domain presence
+isGibberishName() -- flags: 20+ all-letter strings, 25+ alphanumeric strings, 8+ consecutive capitals, >60% uppercase ratio in 10+ letters, zero vowels in 10+ letters, consonant/vowel ratio >8:1 in 15+ letters
+isSuspiciousEmail() -- flags: 6+ consecutive digits in local part, long local parts (30+ chars) with >4 dots
+3. Duplicate Cross-Reference (src/utils/duplicateRadarDatabase.ts)
+
+lookupRecordsByZohoIds() -- single PostgreSQL query joining duplicate_records with duplicate_clusters. Returns cluster ID, domain, company, confidence level/score, total records in cluster, data quality score/flags, and junk status.
+4. Frontend (dashboard/crm.html)
+
+Module tabs -- Leads, Deals, Contacts, Tasks, Accounts
+Two-phase loading -- raw table renders immediately, then enrichment overlay ("Cross-referencing with Duplicate Radar...") appears while POST /api/crm/enrich runs in background. Quality and Duplicates columns appear when enrichment returns.
+Health bar -- 5 KPIs: Total Records, Clean, With Issues, Junk/Spam, In Dup. Clusters
+Quality badges -- 4-tier color coding: green (>=85 good), amber (50-84 fair), orange (21-49 poor), red (<=20 junk)
+Cluster badges -- clickable, links to /duplicates#cluster-{id}. Color by confidence: red (high), amber (medium), blue (low)
+Row highlighting -- red background for junk, yellow for duplicates (when "Highlight Issues" toggle is on)
+Inline hygiene warnings -- amber icons for: phone too long (>15 digits), phone too short (<7 digits), suspicious email, gibberish name/company
+Record detail modal -- click any row for: quality card with score + flags, cluster card with link to Duplicate Radar, and all Zoho record fields
+Controls -- text search, Hide Junk checkbox, Highlight Issues toggle, per-page selector (25/50/100)
+XSS protection -- escapeHtml() on all dynamic content
+Legend -- "How to Read This View" section explaining badges, colors, and indicators
+Data Flow
+User opens /crm
+  -> GET /api/crm/data?module=Leads&page=1&per_page=50
+  -> Zoho CRM API returns raw records
+  -> Table renders immediately with module-specific columns
+  -> POST /api/crm/enrich (same records)
+  -> Backend runs in parallel:
+      1. runLiveQualityCheck() -> assessDataQuality() per record -> score + flags + isJunk
+      2. lookupRecordsByZohoIds() -> cluster membership from duplicate_records table
+  -> Quality & Duplicates columns appear
+  -> Health bar updates with clean/issues/junk/duplicate counts
+Bottom line: Replace Replit's version with the corrected one above. The general concept is right but the implementation details are fabricated. If this goes into any documentation, audit evidence, or gets shared with stakeholders, the fabricated function names and formulas will be caught and will undermine credibility.

@@ -13,7 +13,6 @@ import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
 import { registerCronTrigger } from "../triggers/cronTriggers";
-import { registerSlackTrigger } from "../triggers/slackTriggers";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "./agents/sdrQualityAgent";
 import { salesQualityAgent } from "./agents/salesQualityAgent";
@@ -34,21 +33,21 @@ import { migrationRoutes } from "./routes/migrationRoutes";
 import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
-import { managementReviewRoutes } from "./routes/managementReviewRoutes";
-import { analyticsRoutes } from "./routes/analyticsRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
 import { pdplRoutes } from "./routes/pdplRoutes";
 import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
+import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 import { consultantRoutes } from "./routes/consultantRoutes";
 import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { knowledgeRoutes } from "./routes/knowledgeRoutes";
 import { reportRoutes } from "./routes/reportRoutes";
+import { managementReviewRoutes } from "./routes/managementReviewRoutes";
+import { analyticsRoutes } from "./routes/analyticsRoutes";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
-import { authRoutes, getSessionFromCookie } from "./routes/authRoutes";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
 import { checkRateLimit } from "../utils/rateLimiter";
 import { randomBytes } from "crypto";
@@ -163,25 +162,13 @@ export const mastra = new Mastra({
         c.header('X-Frame-Options', 'DENY');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
         c.header('X-XSS-Protection', '1; mode=block');
-        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'`);
+        c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
         c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-        c.header('Pragma', 'no-cache');
-        c.header('Expires', '0');
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/api/webhooks/slack', '/test/slack'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
-
-        if (urlPath.startsWith('/webhooks/') || urlPath.startsWith('/api/webhooks/') || urlPath.startsWith('/test/slack')) {
-          const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
-          const rateCheck = checkRateLimit(ip, false, urlPath, true);
-          if (!rateCheck.allowed) {
-            c.header('Retry-After', String(rateCheck.retryAfter || 60));
-            return c.json({ error: 'Too many requests' }, 429);
-          }
-        }
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
           const adminKey = c.req.header('X-Admin-Key');
@@ -209,7 +196,7 @@ export const mastra = new Mastra({
           isAuthenticated = true;
         }
 
-        if (isApi && !isPublic) {
+        if (isApi && !isPublic && !isMastraInternal) {
           const session = getSessionFromCookie(c.req.header('Cookie'));
           const adminKeyHeader = c.req.header('X-Admin-Key');
           const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
@@ -218,14 +205,6 @@ export const mastra = new Mastra({
           const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
 
           isAuthenticated = !!(session || hasAdminKey);
-
-          if (session) {
-            c.set('session', session);
-          }
-
-          if (isMastraInternal && !isAuthenticated) {
-            return c.json({ error: 'Access denied' }, 403);
-          }
 
           const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
           const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -340,46 +319,6 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const data = await getDashboardData();
-
-              if (data.latestAudit) {
-                const hasStoredScores = data.latestAudit.people_score > 0 || data.latestAudit.process_score > 0 || data.latestAudit.governance_score > 0 || data.latestAudit.overall_score > 0;
-                if (!hasStoredScores && data.latestAudit.issues_by_category) {
-                  try {
-                    const cats = typeof data.latestAudit.issues_by_category === 'string'
-                      ? JSON.parse(data.latestAudit.issues_by_category)
-                      : data.latestAudit.issues_by_category;
-                    const catArr = Array.isArray(cats) ? cats : Object.values(cats);
-                    const totalRecords = data.latestAudit.total_records_audited || 1;
-
-                    const sumByType = (type: string) => catArr
-                      .filter((c: any) => c.issueType === type)
-                      .reduce((s: number, c: any) => s + (c.count || 0), 0);
-                    const sumBySeverity = (sev: string) => catArr
-                      .filter((c: any) => c.severity === sev)
-                      .reduce((s: number, c: any) => s + (c.count || 0), 0);
-
-                    const missingField = sumByType('missing_required_field');
-                    const formatIssues = sumByType('invalid_format');
-                    const invalidValue = sumByType('invalid_value');
-                    const governance = sumByType('governance_violation');
-                    const critical = sumBySeverity('critical');
-
-                    const processRelated = formatIssues + invalidValue;
-                    const decay = (n: number) => 100 * Math.exp(-0.5 * n / totalRecords);
-
-                    const peopleScore = Math.round(Math.max(0, decay(missingField)) * 10) / 10;
-                    const processScore = Math.round(Math.max(0, decay(processRelated)) * 10) / 10;
-                    const governanceScore = Math.round(Math.max(0, decay(governance) - (critical / totalRecords * 10)) * 10) / 10;
-                    const overallScore = Math.round((peopleScore * 0.3 + processScore * 0.3 + governanceScore * 0.4) * 10) / 10;
-
-                    data.latestAudit.people_score = peopleScore;
-                    data.latestAudit.process_score = processScore;
-                    data.latestAudit.governance_score = governanceScore;
-                    data.latestAudit.overall_score = overallScore;
-                  } catch (e) {}
-                }
-              }
-
               return c.json(data);
             } catch (error) {
               console.error("Error fetching dashboard data:", error);
@@ -463,41 +402,11 @@ export const mastra = new Mastra({
                 process.env.GOOGLE_CLIENT_EMAIL
               );
               
-              const hasSlackToken = !!(process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN);
-              let slackStatus: { connected: boolean; message: string; workspace?: string; bot?: string; scopes?: string[]; missingScopes?: string[] } = {
-                connected: false,
-                message: 'Not configured'
-              };
-
-              if (hasSlackToken) {
-                try {
-                  const { WebClient } = await import('@slack/web-api');
-                  const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN);
-                  const authResult = await slackClient.auth.test();
-                  if (authResult.ok) {
-                    const currentScopes = (authResult as any).response_metadata?.scopes || [];
-                    const requiredScopes = ['chat:write', 'channels:read', 'groups:read', 'im:read', 'mpim:read'];
-                    const missing = requiredScopes.filter(s => !currentScopes.includes(s));
-                    slackStatus = {
-                      connected: true,
-                      message: missing.length > 0 ? `Connected (${missing.length} scopes pending)` : 'Fully connected',
-                      workspace: (authResult as any).team,
-                      bot: (authResult as any).user,
-                      scopes: currentScopes,
-                      missingScopes: missing.length > 0 ? missing : undefined
-                    };
-                  }
-                } catch (slackErr: any) {
-                  slackStatus = { connected: false, message: `Auth failed: ${slackErr?.message || 'unknown error'}` };
-                }
-              }
-
               return c.json({
                 zoho: {
                   connected: hasOAuthConfig || hasStaticToken,
                   message: (hasOAuthConfig || hasStaticToken) ? 'Connected' : 'Not configured'
                 },
-                slack: slackStatus,
                 googleCalendar: {
                   connected: hasGoogleCalendar,
                   message: hasGoogleCalendar ? 'Connected' : 'Not configured'
@@ -568,7 +477,7 @@ export const mastra = new Mastra({
       },
       {
         path: "/api/crm/enrich",
-        method: "POST" as const,
+        method: "POST",
         createHandler: async () => {
           const { lookupRecordsByZohoIds, runLiveQualityCheck } = await import("../utils/duplicateRadarDatabase");
           return async (c: any) => {
@@ -721,130 +630,13 @@ export const mastra = new Mastra({
         },
       },
       // ======================================================================
-      // Data-Driven Recommendations API
-      // ======================================================================
-      {
-        path: "/api/audit/recommendations",
-        method: "GET",
-        createHandler: async () => {
-          const { getDashboardData } = await import("../utils/database");
-          return async (c: any) => {
-            try {
-              const data = await getDashboardData();
-              const audit = data?.latestAudit;
-              if (!audit) {
-                return c.json({ success: false, recommendations: [] });
-              }
-
-              let rawData = audit.raw_audit_data;
-              if (typeof rawData === 'string') {
-                try { rawData = JSON.parse(rawData); } catch(e) { rawData = {}; }
-              }
-
-              const allIssues = rawData?.all_issues || [];
-              const issuesByCategory = audit.issues_by_category;
-              let topIssues: any[] = [];
-              if (typeof issuesByCategory === 'string') {
-                try { topIssues = JSON.parse(issuesByCategory); } catch(e) { topIssues = []; }
-              } else if (Array.isArray(issuesByCategory)) {
-                topIssues = issuesByCategory;
-              }
-
-              const recommendations: string[] = [];
-              const totalIssues = audit.total_issues_found || 0;
-              const scores = {
-                peopleScore: audit.people_score || 0,
-                processScore: audit.process_score || 0,
-                governanceScore: audit.governance_score || 0
-              };
-
-              if (totalIssues > 0) {
-                const severityCounts: Record<string, number> = {};
-                const moduleCounts: Record<string, number> = {};
-                const issueTypeCounts: Record<string, { count: number; severity: string; module: string }> = {};
-
-                const issueSource = allIssues.length > 0 ? allIssues : topIssues;
-                for (const issue of issueSource) {
-                  const sev = issue.severity || 'medium';
-                  severityCounts[sev] = (severityCounts[sev] || 0) + (issue.count || 1);
-                  const mod = issue.module || 'Unknown';
-                  moduleCounts[mod] = (moduleCounts[mod] || 0) + (issue.count || 1);
-                  const iType = issue.issueType || issue.description || 'unknown';
-                  if (!issueTypeCounts[iType]) {
-                    issueTypeCounts[iType] = { count: 0, severity: sev, module: mod };
-                  }
-                  issueTypeCounts[iType].count += (issue.count || 1);
-                }
-
-                if (severityCounts['critical'] > 0) {
-                  recommendations.push(`🚨 Address ${severityCounts['critical']} critical issues immediately — these pose compliance risks`);
-                }
-                if (severityCounts['high'] > 0) {
-                  recommendations.push(`⚠️ Resolve ${severityCounts['high']} high-priority issues within this week`);
-                }
-
-                const sortedTypes = Object.entries(issueTypeCounts)
-                  .sort((a, b) => b[1].count - a[1].count)
-                  .slice(0, 3);
-                for (const [iType, info] of sortedTypes) {
-                  const desc = iType.replace(/_/g, ' ');
-                  recommendations.push(`Fix ${info.count} "${desc}" issues in ${info.module} (${info.severity})`);
-                }
-
-                const sortedModules = Object.entries(moduleCounts)
-                  .sort((a, b) => b[1] - a[1]);
-                if (sortedModules.length > 0) {
-                  const [worstMod, worstCount] = sortedModules[0];
-                  recommendations.push(`Focus on ${worstMod} module — ${worstCount} issues found (highest concentration)`);
-                }
-              }
-
-              if (scores.peopleScore < 80) {
-                recommendations.push("Improve data entry quality — schedule team training on CRM best practices");
-              }
-              if (scores.processScore < 80) {
-                recommendations.push("Reinforce SOP compliance through regular team check-ins and process reviews");
-              }
-              if (scores.governanceScore < 80) {
-                recommendations.push("Strengthen governance controls — implement automated validation rules");
-              }
-
-              const overallScore = audit.overall_score || 0;
-              if (overallScore >= 95) {
-                recommendations.push("✅ Excellent quality score! Maintain current practices and monitor for regression");
-              } else if (overallScore >= 90) {
-                recommendations.push("Good quality score — target 95%+ by addressing top issue categories");
-              }
-
-              const unique = [...new Set(recommendations)];
-              return c.json({
-                success: true,
-                recommendations: unique.slice(0, 8),
-                meta: {
-                  auditDate: audit.audit_date,
-                  totalIssues,
-                  overallScore,
-                  scores
-                }
-              });
-            } catch (error) {
-              console.error("Error generating recommendations:", error);
-              return c.json({ success: false, recommendations: [] }, 500);
-            }
-          };
-        },
-      },
-      // ======================================================================
       // Agent Performance API - Real Lead Owner Data from CRM
       // ======================================================================
       {
         path: "/api/agents/performance",
         method: "GET",
         createHandler: async () => {
-          const { getLeadsWithSeparateFilters, getDealsWithSeparateFilters, getUsers } = await import("../data");
-          let cachedResult: any = null;
-          let cacheTime = 0;
-          const CACHE_TTL_MS = 10 * 60 * 1000;
+          const { getLeadsWithSeparateFilters, getDealsWithSeparateFilters, getUsers, getDataMode } = await import("../data");
           return async (c: any) => {
             try {
               // Parse separate date filters from query params
@@ -888,185 +680,16 @@ export const mastra = new Mastra({
                 }, 400);
               }
               
-              const hasDateFilters = !!(createdStart || createdEnd || modifiedStart || modifiedEnd);
-              const cacheKey = hasDateFilters ? null : 'default';
-              if (cacheKey && cachedResult && (Date.now() - cacheTime) < CACHE_TTL_MS) {
-                console.log('📊 [API] Returning cached agent performance data');
-                return c.json(cachedResult);
-              }
-
               console.log('📊 [API] Fetching agent performance from CRM Lead Owners...');
-              if (hasDateFilters) {
+              if (createdStart || modifiedStart) {
                 console.log(`📅 [API] Date filters applied:`, dateFilters);
               }
               
+              const mode = getDataMode();
               const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters);
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters);
               const users = await getUsers();
-
-              const userOverrides: Record<string, { team: string; status: string }> = {
-                "A Alsharif": { team: "WPE", status: "Active" },
-                "Abdallah Alsheikh": { team: "CRM Admin", status: "Active" },
-                "Abdallah Khorshid": { team: "MP", status: "Active" },
-                "Abdalrahim Abuwarda": { team: "MP", status: "Inactive" },
-                "Abdalrzaq Alshamari": { team: "", status: "Inactive" },
-                "Abdelhamid Said": { team: "WP Sales", status: "Inactive" },
-                "Abdulaziz Almassad": { team: "WO Sales", status: "Active" },
-                "Abdulaziz Almutairi": { team: "WO Sales", status: "Inactive" },
-                "Abdullah  Mubarak AlMubarak": { team: "WP Sales", status: "Inactive" },
-                "Abdullah Alzalam": { team: "MP", status: "Active" },
-                "Abdullah Shoeib": { team: "WO Sales", status: "Inactive" },
-                "Abdulmalik  M Bin Aifan": { team: "WP Sales", status: "Inactive" },
-                "Abdulmalik Alfaleh": { team: "CS", status: "Active" },
-                "Abdulrahman  Abdulkarimm Alqurashi": { team: "WP Sales", status: "Active" },
-                "Abdulrahman AlFarram": { team: "MP", status: "Active" },
-                "Abdulrahman Alshehri": { team: "WO Sales", status: "Active" },
-                "Abdulrahman Dhafer": { team: "WP Sales", status: "Active" },
-                "Abdulrahman Harith": { team: "WP Sales", status: "Inactive" },
-                "Abdulrhman AlFahad": { team: "WP Sales", status: "Active" },
-                "Abobakr Ali": { team: "MP", status: "Active" },
-                "Abubaker Hashem": { team: "MP", status: "Active" },
-                "AbuBaker Shams Aldeen": { team: "MP", status: "Inactive" },
-                "Ahmed Abuamasheh": { team: "MGMT", status: "Active" },
-                "Ahmed Aldukheel": { team: "MP", status: "Inactive" },
-                "Ahmed Alhusaynan": { team: "", status: "Inactive" },
-                "Ahmed Gasim": { team: "WO Sales", status: "Active" },
-                "Ahmed Jabbas": { team: "MP", status: "Inactive" },
-                "Alhanouf  Aldarwish": { team: "CS", status: "Active" },
-                "Ali  AlRajhi": { team: "WP Sales", status: "Active" },
-                "Ali  Chisty": { team: "WO Sales", status: "Inactive" },
-                "Ali  Hussein Abualhassan": { team: "CS", status: "Inactive" },
-                "Ali BaAusharah": { team: "WO Sales", status: "Inactive" },
-                "Ali Jaafari": { team: "WO Sales", status: "Active" },
-                "Alia Altammami": { team: "MP", status: "Active" },
-                "Ameera Alshahri": { team: "BD", status: "Active" },
-                "Amwaj Alotaibi": { team: "WO Sales", status: "Active" },
-                "Anas AlMasoud": { team: "WO Sales", status: "Inactive" },
-                "Ashwaq Alqahtani": { team: "WP Sales", status: "Inactive" },
-                "Ayman AlQahtani": { team: "WP Sales", status: "Active" },
-                "Bader  Alqahtani": { team: "WP Sales", status: "Active" },
-                "Bander Alaklabi": { team: "WP Sales", status: "Inactive" },
-                "Bashayr  ahmad": { team: "WP Sales", status: "Active" },
-                "Bisher khair": { team: "MP", status: "Inactive" },
-                "Bushra alamro": { team: "WP Sales", status: "Inactive" },
-                "Doha  Sadek": { team: "MP", status: "Active" },
-                "Donia Hesham": { team: "MP", status: "Active" },
-                "Eid Alahmadi": { team: "MP", status: "Active" },
-                "Engy Magdy": { team: "MP", status: "Active" },
-                "Fadi Makhoul": { team: "MP", status: "Active" },
-                "Fahad  Albraiki": { team: "MP", status: "Inactive" },
-                "Fahad AlGhunaim": { team: "CS", status: "Inactive" },
-                "Fahad BinHaqan": { team: "WP Sales", status: "Inactive" },
-                "Faisal Alaskar": { team: "", status: "Inactive" },
-                "GOV  WalaPlus": { team: "WP Sales", status: "Inactive" },
-                "Hassan Tabrizi": { team: "MP", status: "Active" },
-                "Hayat  Abu ElKassem": { team: "MP", status: "Inactive" },
-                "Hossam AlTamimi": { team: "MP", status: "Inactive" },
-                "Hussain Ali": { team: "MP", status: "Inactive" },
-                "Hussain Nooraldeen": { team: "MP", status: "Active" },
-                "Ibrahim Qahtan": { team: "WO Sales", status: "Inactive" },
-                "Jameel Douglas": { team: "MP", status: "Inactive" },
-                "Kareem Elhosany": { team: "WP Sales", status: "Active" },
-                "Khaled Alharbi": { team: "WP Sales", status: "Inactive" },
-                "Khalid Alkhowaiter": { team: "WO Sales", status: "Inactive" },
-                "Khalid AlMangour": { team: "WO Sales", status: "Inactive" },
-                "Khowla Saeed": { team: "WP Sales", status: "Active" },
-                "Maged Adel": { team: "WP Sales", status: "Inactive" },
-                "Majed Bamukideh": { team: "MP", status: "Active" },
-                "Mansoor Kadir": { team: "", status: "Inactive" },
-                "Meznah Alharthi": { team: "MP", status: "Inactive" },
-                "Mansour Alqahtani": { team: "WP Sales", status: "Active" },
-                "Maria Blioju": { team: "MP", status: "Active" },
-                "Moaz  Al Sahhar": { team: "MP", status: "Active" },
-                "Mohamed AlSaleh": { team: "MP", status: "Active" },
-                "Mohamed Khreis": { team: "MP", status: "Active" },
-                "Mohammed Alrudaini": { team: "MP", status: "Active" },
-                "Mohammed Alsudani": { team: "WO Sales", status: "Active" },
-                "Mohammed Alzahrani": { team: "WP Sales", status: "Inactive" },
-                "Mohammed Edwan": { team: "MP", status: "Active" },
-                "Mohammed Fouad": { team: "MRK", status: "Active" },
-                "Mohammed Qasem": { team: "MRK", status: "Active" },
-                "Mohammed Ridha": { team: "", status: "Inactive" },
-                "Mostafa Elzohairy": { team: "MP", status: "Active" },
-                "Muteb Albdrani": { team: "WO Sales", status: "Inactive" },
-                "Nada Bin Salman": { team: "SDR", status: "Active" },
-                "Naif Almutairi": { team: "WP Sales", status: "Inactive" },
-                "Naif AlSaif": { team: "WP Sales", status: "Inactive" },
-                "Nawaf Al Shiban": { team: "WP Sales", status: "Inactive" },
-                "Nawras": { team: "MP", status: "Inactive" },
-                "Nawaf alhoshan": { team: "WP Sales", status: "Active" },
-                "Nawaf Basif": { team: "WP Sales", status: "Inactive" },
-                "Noha AlZaben": { team: "WP Sales", status: "Inactive" },
-                "Noura AlMuneef": { team: "", status: "Inactive" },
-                "Obadah Khaled": { team: "WO Sales", status: "Active" },
-                "Osama Harfoush": { team: "MGMT", status: "Active" },
-                "Rayan Saleh": { team: "MGMT", status: "Active" },
-                "Reda Saleh": { team: "MP", status: "Active" },
-                "Saad Almalki": { team: "WP Sales", status: "Inactive" },
-                "Salman  Ali Mohammed Aloref": { team: "WP Sales", status: "Inactive" },
-                "Salman AlIssa": { team: "CS", status: "Active" },
-                "Samar Mansour": { team: "MP", status: "Active" },
-                "Sarah Hijazi": { team: "MGMT", status: "Active" },
-                "Sultan Alrefaei": { team: "MP", status: "Active" },
-                "Tamim Alajlan": { team: "WP Sales", status: "Inactive" },
-                "Thamer  Alsuhaibani": { team: "WO Sales", status: "Inactive" },
-                "Wafaa Alqudaiy": { team: "WP Sales", status: "Active" },
-                "WalaPlus": { team: "WP Sales", status: "Inactive" },
-                "Yahya Alshehri": { team: "WP Sales", status: "Active" },
-                "Zaid Alholaibah": { team: "WP Sales", status: "Inactive" },
-                "Zeina  Mamdouh": { team: "CS", status: "Active" },
-                "Ziad Abbas": { team: "WP Sales", status: "Active" },
-                "Abdulmajeed Alshabili": { team: "WP Sales", status: "Inactive" },
-                "Awis Kilani": { team: "MP", status: "Inactive" },
-                "HAMAD ALESSA": { team: "WP Sales", status: "Inactive" },
-                "Khalil Aldadah": { team: "MP", status: "Inactive" },
-                "Mohammed Ghanem": { team: "MP", status: "Inactive" },
-                "Aljawharah Almusharraf": { team: "MP", status: "Inactive" },
-                "Ahmad Alfheer": { team: "MP", status: "Inactive" },
-                "zahrah alnasser": { team: "MP", status: "Inactive" },
-                "waseem albalawi": { team: "MP", status: "Inactive" },
-                "\u0628\u0634\u0627\u064A\u0631 \u0627\u0644\u0642\u062D\u0637\u0627\u0646\u064A": { team: "SDR", status: "Active" },
-                "\u062A\u063A\u0631\u064A\u062F \u0627\u0644\u062C\u0627\u0633\u0631": { team: "Eitmad", status: "Active" },
-                "\u0631\u064A\u0627\u0646 \u0627\u0644\u0633\u0645\u0627\u0643": { team: "SDR", status: "Inactive" },
-                "\u0634\u0647\u062F \u0627\u0644\u0632\u064A\u062F": { team: "SDR", status: "Inactive" },
-                "\u0635\u0627\u0644\u062D \u0627\u0644\u062D\u0645\u062F\u0651\u064A": { team: "CS", status: "Active" },
-                "\u0639\u0628\u062F\u0627\u0644\u0645\u062C\u064A\u062F \u0627\u0644\u0634\u0628\u064A\u0644\u064A": { team: "", status: "Inactive" },
-                "\u0641\u0627\u064A\u0632 \u0627\u0644\u0623\u0633\u0645\u0631\u064A": { team: "WP Sales", status: "Active" },
-                "\u0641\u0627\u064A\u0632\u0629 \u0627\u0644\u0639\u062A\u064A\u0628\u064A": { team: "SDR", status: "Active" },
-                "\u0646\u0648\u0641 \u0627\u0644\u0639\u0627\u0635\u0645\u064A": { team: "SDR", status: "Inactive" },
-                "\u0647\u0627\u062C\u0631 \u0627\u0644\u062D\u0628\u0631\u062F\u064A": { team: "SDR", status: "Active" },
-              };
-
-              const { fetchZohoRecords: fetchZohoForOwners } = await import("../utils/zohoCRM");
-              const activeOwnerNames = new Set<string>();
-              const activeOwnerIdSet = new Set<string>();
-              const modulesToCheck = ['Contacts', 'Accounts', 'Deals'];
               
-              for (const mod of modulesToCheck) {
-                for (let pg = 1; pg <= 50; pg++) {
-                  try {
-                    const recs = await fetchZohoForOwners(mod, { page: pg, perPage: 200, fields: ['Owner'] });
-                    if (!recs || recs.length === 0) break;
-                    for (const r of recs) {
-                      const ownerName = r.data?.Owner?.name || r.owner;
-                      const ownerId = r.data?.Owner?.id;
-                      if (ownerName) activeOwnerNames.add(ownerName);
-                      if (ownerId) activeOwnerIdSet.add(ownerId);
-                    }
-                    if (recs.length < 200) break;
-                  } catch (e) {
-                    console.error(`⚠️ [API] Error fetching ${mod} page ${pg} for owner status:`, e);
-                    break;
-                  }
-                }
-              }
-              console.log(`👥 [API] Found ${activeOwnerNames.size} active owner names, ${Object.keys(userOverrides).length} manual overrides`);
-              
-              const ownerNameAliases: Record<string, string> = {
-                "Rayan": "Rayan Saleh",
-                "Khalil": "Khalil Aldadah",
-              };
-
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
               for (const user of users) {
                 userMap[user.id] = { name: user.name, team: user.team, role: user.role };
@@ -1081,31 +704,16 @@ export const mastra = new Mastra({
                 issues: { critical: number; high: number; medium: number; low: number };
                 passCount: number;
               }> = {};
-
-              const ownerIssueDetails: Array<{
-                recordId: string;
-                module: string;
-                layouts: string;
-                products: string;
-                createdBy: string;
-                owner: string;
-                issue: string;
-                severity: string;
-                fieldName: string;
-                recommendation: string;
-              }> = [];
               
               for (const lead of leads) {
-                const rawOwnerId = lead.Owner || 'Unassigned';
-                const ownerId = ownerNameAliases[rawOwnerId] || rawOwnerId;
+                const ownerId = lead.Owner || 'Unassigned';
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'SDR', role: 'SDR Representative' };
-                const override = userOverrides[userInfo.name] || userOverrides[ownerId];
                 
                 if (!ownerStats[ownerId]) {
                   ownerStats[ownerId] = {
                     id: ownerId,
                     name: userInfo.name,
-                    team: override?.team || userInfo.team,
+                    team: userInfo.team,
                     role: userInfo.role,
                     recordsAudited: 0,
                     issues: { critical: 0, high: 0, medium: 0, low: 0 },
@@ -1116,34 +724,23 @@ export const mastra = new Mastra({
                 
                 const hasIssue = !lead.Email || !lead.Lead_Source || !lead.Lead_Status;
                 if (hasIssue) {
-                  if (!lead.Email) {
-                    ownerStats[ownerId].issues.high++;
-                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layouts: lead.Layouts || '', products: lead.Products || '', createdBy: lead.Created_By || '', owner: userInfo.name, issue: 'Missing: Email', severity: 'high', fieldName: 'Email', recommendation: 'Add an email address to this lead record.' });
-                  }
-                  if (!lead.Lead_Source) {
-                    ownerStats[ownerId].issues.medium++;
-                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layouts: lead.Layouts || '', products: lead.Products || '', createdBy: lead.Created_By || '', owner: userInfo.name, issue: 'Missing: Lead Source', severity: 'medium', fieldName: 'Lead_Source', recommendation: 'Set the lead source to track where this lead came from.' });
-                  }
-                  if (!lead.Lead_Status) {
-                    ownerStats[ownerId].issues.low++;
-                    ownerIssueDetails.push({ recordId: lead.id, module: 'Leads', layouts: lead.Layouts || '', products: lead.Products || '', createdBy: lead.Created_By || '', owner: userInfo.name, issue: 'Missing: Lead Status', severity: 'low', fieldName: 'Lead_Status', recommendation: 'Set the lead status to track progress.' });
-                  }
+                  if (!lead.Email) ownerStats[ownerId].issues.high++;
+                  if (!lead.Lead_Source) ownerStats[ownerId].issues.medium++;
+                  if (!lead.Lead_Status) ownerStats[ownerId].issues.low++;
                 } else {
                   ownerStats[ownerId].passCount++;
                 }
               }
               
               for (const deal of deals) {
-                const rawDealOwnerId = deal.Owner || 'Unassigned';
-                const ownerId = ownerNameAliases[rawDealOwnerId] || rawDealOwnerId;
+                const ownerId = deal.Owner || 'Unassigned';
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'Sales', role: 'Account Executive' };
-                const dealOverride = userOverrides[userInfo.name] || userOverrides[ownerId];
                 
                 if (!ownerStats[ownerId]) {
                   ownerStats[ownerId] = {
                     id: ownerId,
                     name: userInfo.name,
-                    team: dealOverride?.team || userInfo.team,
+                    team: userInfo.team,
                     role: userInfo.role,
                     recordsAudited: 0,
                     issues: { critical: 0, high: 0, medium: 0, low: 0 },
@@ -1154,18 +751,9 @@ export const mastra = new Mastra({
                 
                 const hasIssue = !deal.Deal_Name || !deal.Stage || !deal.Amount;
                 if (hasIssue) {
-                  if (!deal.Deal_Name) {
-                    ownerStats[ownerId].issues.critical++;
-                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layouts: deal.Layouts || '', products: deal.Products || '', createdBy: deal.Created_By || '', owner: userInfo.name, issue: 'Missing: Deal Name', severity: 'critical', fieldName: 'Deal_Name', recommendation: 'Add a deal name to this deal record.' });
-                  }
-                  if (!deal.Stage) {
-                    ownerStats[ownerId].issues.critical++;
-                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layouts: deal.Layouts || '', products: deal.Products || '', createdBy: deal.Created_By || '', owner: userInfo.name, issue: 'Missing: Stage', severity: 'critical', fieldName: 'Stage', recommendation: 'Set the deal stage to track pipeline progress.' });
-                  }
-                  if (!deal.Amount) {
-                    ownerStats[ownerId].issues.high++;
-                    ownerIssueDetails.push({ recordId: deal.id, module: 'Deals', layouts: deal.Layouts || '', products: deal.Products || '', createdBy: deal.Created_By || '', owner: userInfo.name, issue: 'Missing: Amount', severity: 'high', fieldName: 'Amount', recommendation: 'Add the deal amount for accurate pipeline value.' });
-                  }
+                  if (!deal.Deal_Name) ownerStats[ownerId].issues.critical++;
+                  if (!deal.Stage) ownerStats[ownerId].issues.critical++;
+                  if (!deal.Amount) ownerStats[ownerId].issues.high++;
                 } else {
                   ownerStats[ownerId].passCount++;
                 }
@@ -1185,20 +773,17 @@ export const mastra = new Mastra({
                     role: agent.role,
                     score,
                     recordsAudited: agent.recordsAudited,
-                    issues: agent.issues,
-                    status: userOverrides[agent.name]?.status || (activeOwnerNames.has(agent.name) || activeOwnerIdSet.has(agent.id) ? 'Active' : 'Inactive')
+                    issues: agent.issues
                   };
                 })
-                .sort((a, b) => a.score - b.score);
+                .sort((a, b) => b.score - a.score);
               
               console.log(`✅ [API] Found ${agents.length} agents from CRM Lead Owners`);
               console.log(`📊 [API] Coverage - Leads: ${leadsCoverage.recordsAudited}/${leadsCoverage.totalRecordsInCRM}, Deals: ${dealsCoverage.recordsAudited}/${dealsCoverage.totalRecordsInCRM}`);
               
-              const responseData = {
+              return c.json({
                 success: true,
-                mode: 'REAL',
                 agents,
-                ownerIssueDetails,
                 totalLeads: leads.length,
                 totalDeals: deals.length,
                 coverage: {
@@ -1211,12 +796,7 @@ export const mastra = new Mastra({
                     separateFiltersApplied: dateFilters
                   }
                 }
-              };
-              if (cacheKey) {
-                cachedResult = responseData;
-                cacheTime = Date.now();
-              }
-              return c.json(responseData);
+              });
             } catch (error: any) {
               console.error('❌ [API] Error fetching agent performance:', error);
               return c.json({ 
@@ -1324,11 +904,8 @@ export const mastra = new Mastra({
             try {
               const adminKey = process.env.ADMIN_API_KEY;
               const providedKey = c.req.header('X-Admin-Key');
-              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const session = getSessionFromCookie(c.req.header('Cookie'));
-              const hasValidAdmin = adminKey && (providedKey === adminKey || adminKeyCookie === adminKey);
-              const hasAdminSession = session && session.role === 'admin';
-              if (!hasValidAdmin && !hasAdminSession) {
+              if (!adminKey || !providedKey || providedKey !== adminKey || !session || session.role !== 'admin') {
                 return c.html(`
                   <!DOCTYPE html>
                   <html><head><title>Admin Setup Required</title>
@@ -1475,32 +1052,15 @@ export const mastra = new Mastra({
         },
       },
       {
-        path: "/api/admin/auth/verify",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            const cookie = c.req.header('cookie') || '';
-            const match = cookie.match(/admin_key=([^;]+)/);
-            const key = match ? match[1] : null;
-            const expectedKey = process.env.ADMIN_API_KEY;
-            if (expectedKey && key && key === expectedKey) {
-              return c.json({ authenticated: true });
-            }
-            return c.json({ authenticated: false }, 401);
-          };
-        },
-      },
-      {
         path: "/api/admin/documents",
         method: "GET",
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
               const adminKey = c.req.header("X-Admin-Key");
-              const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
               const expectedKey = process.env.ADMIN_API_KEY;
               
-              const hasValidAdminKey = expectedKey && (adminKey === expectedKey || adminKeyCookie === expectedKey);
+              const hasValidAdminKey = expectedKey && adminKey === expectedKey;
               const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
               if (!hasValidAdminKey && !hasSession) {
                 return c.json({ error: "Authentication required" }, 401);
@@ -2569,28 +2129,6 @@ export const mastra = new Mastra({
       // QMS CAPA API Endpoints
       // ======================================================================
       {
-        path: "/api/qms/capa/export",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const { toCSV } = await import("../utils/exportUtils");
-              const pg = await import("pg");
-              const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
-              try {
-                const result = await pool.query(`SELECT capa_number, title, capa_type, severity, status, assigned_to, target_date, root_cause, effectiveness_result FROM capa_records ORDER BY created_at DESC LIMIT 10000`);
-                const csv = toCSV(result.rows);
-                c.header('Content-Type', 'text/csv');
-                c.header('Content-Disposition', 'attachment; filename="capa_export.csv"');
-                return c.body(csv);
-              } finally { await pool.end(); }
-            } catch (error) {
-              return c.json({ error: "Export failed" }, 500);
-            }
-          };
-        },
-      },
-      {
         path: "/api/qms/capa",
         method: "GET",
         createHandler: async ({ mastra }) => {
@@ -2717,6 +2255,7 @@ export const mastra = new Mastra({
                   severity: 'INFO',
                 });
               } catch {}
+
               return c.json(capa);
             } catch (error) {
               console.error("Error creating CAPA:", error);
@@ -2816,6 +2355,7 @@ export const mastra = new Mastra({
                   severity: 'INFO',
                 });
               } catch {}
+
               return c.json(nc);
             } catch (error) {
               console.error("Error creating NC:", error);
@@ -2996,6 +2536,328 @@ export const mastra = new Mastra({
           };
         },
       },
+      // ======================================================================
+      // Mock Data & Testing Sandbox API Endpoints
+      // ======================================================================
+      {
+        path: "/api/sandbox/mode",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            const logger = mastra?.getLogger();
+            logger?.info("🧪 [Sandbox] Getting data mode");
+            const { getDataMode } = await import("../data");
+            const mode = getDataMode();
+            return c.json({ status: 'active' });
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/stats",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Getting mock data stats");
+              const { getMockDataStats } = await import("../data");
+              const stats = getMockDataStats();
+              return c.json(stats);
+            } catch (error) {
+              console.error("Error getting mock data stats:", error);
+              return c.json({ error: "Failed to get mock data stats" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/leads",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching leads");
+              const { getLeads } = await import("../data");
+              const leads = await getLeads();
+              return c.json({ leads, count: leads.length });
+            } catch (error) {
+              console.error("Error fetching leads:", error);
+              return c.json({ error: "Failed to fetch leads" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/deals",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching deals");
+              const { getDeals } = await import("../data");
+              const deals = await getDeals();
+              return c.json({ deals, count: deals.length });
+            } catch (error) {
+              console.error("Error fetching deals:", error);
+              return c.json({ error: "Failed to fetch deals" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/activities",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching activities");
+              const { getActivities } = await import("../data");
+              const activities = await getActivities();
+              return c.json({ activities, count: activities.length });
+            } catch (error) {
+              console.error("Error fetching activities:", error);
+              return c.json({ error: "Failed to fetch activities" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/users",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching users");
+              const { getUsers } = await import("../data");
+              const users = await getUsers();
+              return c.json({ users, count: users.length });
+            } catch (error) {
+              console.error("Error fetching users:", error);
+              return c.json({ error: "Failed to fetch users" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/calendar",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching calendar events");
+              const { getCalendarEvents } = await import("../data");
+              const events = await getCalendarEvents();
+              return c.json({ events, count: events.length });
+            } catch (error) {
+              console.error("Error fetching calendar events:", error);
+              return c.json({ error: "Failed to fetch calendar events" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/calls",
+        method: "GET",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Fetching Five9 calls");
+              const { getFive9Calls } = await import("../data");
+              const calls = await getFive9Calls();
+              return c.json({ calls, count: calls.length });
+            } catch (error) {
+              console.error("Error fetching calls:", error);
+              return c.json({ error: "Failed to fetch calls" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/leads",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              const body = await c.req.json();
+              logger?.info("🧪 [Sandbox] Adding lead", body);
+              const { addLead } = await import("../data");
+              const lead = await addLead(body);
+              return c.json({ success: true, lead });
+            } catch (error) {
+              console.error("Error adding lead:", error);
+              return c.json({ error: "Failed to add lead" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/deals",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              const body = await c.req.json();
+              logger?.info("🧪 [Sandbox] Adding deal", body);
+              const { addDeal } = await import("../data");
+              const deal = await addDeal(body);
+              return c.json({ success: true, deal });
+            } catch (error) {
+              console.error("Error adding deal:", error);
+              return c.json({ error: "Failed to add deal" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sandbox/audit",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c: any) => {
+            try {
+              const logger = mastra?.getLogger();
+              logger?.info("🧪 [Sandbox] Running audit on mock data");
+              
+              const { getLeads, getDeals, getActivities, getCalendarEvents, getFive9Calls, getDataMode } = await import("../data");
+              
+              const mode = getDataMode();
+              const leads = await getLeads();
+              const deals = await getDeals();
+              const activities = await getActivities();
+              const calendarEvents = await getCalendarEvents();
+              const calls = await getFive9Calls();
+              
+              const leadIssues: any[] = [];
+              leads.forEach(lead => {
+                if (!lead.Email) leadIssues.push({ id: lead.id, issue: 'Missing email', field: 'Email', severity: 'high' });
+                else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.Email)) leadIssues.push({ id: lead.id, issue: 'Invalid email format', field: 'Email', severity: 'medium' });
+                if (!lead.Lead_Source) leadIssues.push({ id: lead.id, issue: 'Missing lead source', field: 'Lead_Source', severity: 'medium' });
+                if (!lead.Lead_Status) leadIssues.push({ id: lead.id, issue: 'Missing lead status', field: 'Lead_Status', severity: 'high' });
+                if (!lead.Owner) leadIssues.push({ id: lead.id, issue: 'Missing owner', field: 'Owner', severity: 'high' });
+                if (lead.Phone && !/^[+]?[\d\s\-()]+$/.test(lead.Phone)) leadIssues.push({ id: lead.id, issue: 'Invalid phone format', field: 'Phone', severity: 'low' });
+              });
+              
+              const dealIssues: any[] = [];
+              deals.forEach(deal => {
+                if (!deal.Deal_Name) dealIssues.push({ id: deal.id, issue: 'Missing deal name', field: 'Deal_Name', severity: 'critical' });
+                if (!deal.Stage) dealIssues.push({ id: deal.id, issue: 'Missing stage', field: 'Stage', severity: 'critical' });
+                if (!deal.Amount) dealIssues.push({ id: deal.id, issue: 'Missing amount', field: 'Amount', severity: 'high' });
+                if (!deal.Closing_Date) dealIssues.push({ id: deal.id, issue: 'Missing closing date', field: 'Closing_Date', severity: 'high' });
+                if (!deal.Owner) dealIssues.push({ id: deal.id, issue: 'Missing owner', field: 'Owner', severity: 'high' });
+              });
+              
+              const activityIssues: any[] = [];
+              activities.forEach(activity => {
+                if (!activity.Subject) activityIssues.push({ id: activity.id, issue: 'Missing subject', field: 'Subject', severity: 'high' });
+                if (!activity.Due_Date) activityIssues.push({ id: activity.id, issue: 'Missing due date', field: 'Due_Date', severity: 'medium' });
+                if (!activity.Owner) activityIssues.push({ id: activity.id, issue: 'Missing owner', field: 'Owner', severity: 'high' });
+              });
+              
+              const calendarIssues: any[] = [];
+              calendarEvents.forEach(event => {
+                if (!event.related_crm_record && event.attendees.some(a => !a.includes('@walaplus.com'))) {
+                  calendarIssues.push({ id: event.id, issue: 'External meeting not logged in CRM', field: 'related_crm_record', severity: 'medium' });
+                }
+              });
+              
+              const callIssues: any[] = [];
+              calls.forEach(call => {
+                if (!call.related_crm_record && call.duration_seconds > 60) {
+                  callIssues.push({ id: call.id, issue: 'Call not linked to CRM record', field: 'related_crm_record', severity: 'medium' });
+                }
+                if (!call.agent_id) callIssues.push({ id: call.id, issue: 'Missing agent information', field: 'agent_id', severity: 'high' });
+              });
+              
+              const totalIssues = leadIssues.length + dealIssues.length + activityIssues.length + calendarIssues.length + callIssues.length;
+              const totalRecords = leads.length + deals.length + activities.length + calendarEvents.length + calls.length;
+              
+              const criticalCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'critical').length;
+              const highCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'high').length;
+              const mediumCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'medium').length;
+              const lowCount = [...leadIssues, ...dealIssues, ...activityIssues, ...calendarIssues, ...callIssues].filter(i => i.severity === 'low').length;
+              
+              const peopleScore = Math.max(0, 100 - (highCount * 3) - (mediumCount * 1.5));
+              const processScore = Math.max(0, 100 - (criticalCount * 5) - (highCount * 2));
+              const governanceScore = Math.max(0, 100 - (totalIssues * 1.2));
+              const overallScore = Math.round((peopleScore * 0.25) + (processScore * 0.35) + (governanceScore * 0.40));
+              
+              const result = {
+                mode,
+                timestamp: new Date().toISOString(),
+                summary: {
+                  totalRecords,
+                  totalIssues,
+                  criticalCount,
+                  highCount,
+                  mediumCount,
+                  lowCount,
+                },
+                scores: {
+                  overall: overallScore,
+                  people: Math.round(peopleScore),
+                  process: Math.round(processScore),
+                  governance: Math.round(governanceScore),
+                },
+                moduleBreakdown: {
+                  leads: { records: leads.length, issues: leadIssues.length, details: leadIssues.slice(0, 10) },
+                  deals: { records: deals.length, issues: dealIssues.length, details: dealIssues.slice(0, 10) },
+                  activities: { records: activities.length, issues: activityIssues.length, details: activityIssues.slice(0, 10) },
+                  calendar: { records: calendarEvents.length, issues: calendarIssues.length, details: calendarIssues.slice(0, 10) },
+                  calls: { records: calls.length, issues: callIssues.length, details: callIssues.slice(0, 10) },
+                },
+                recommendations: [
+                  criticalCount > 0 ? `Fix ${criticalCount} critical issues immediately (missing deal names/stages)` : null,
+                  highCount > 0 ? `Address ${highCount} high-priority issues (missing owners, emails, amounts)` : null,
+                  leadIssues.length > 5 ? `SDR Team: Improve lead data quality - ${leadIssues.length} issues found` : null,
+                  dealIssues.length > 5 ? `Sales Team: Improve deal data quality - ${dealIssues.length} issues found` : null,
+                  calendarIssues.length > 0 ? `Log all external meetings in CRM for better tracking` : null,
+                ].filter(Boolean),
+              };
+              
+              logger?.info("✅ [Sandbox] Audit completed", { totalIssues, overallScore });
+              return c.json(result);
+            } catch (error) {
+              console.error("Error running sandbox audit:", error);
+              return c.json({ error: "Failed to run audit" }, 500);
+            }
+          };
+        },
+      },
+      // Testing Sandbox Page
+      {
+        path: "/sandbox",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "sandbox.html"),
+                join(process.cwd(), "..", "dashboard", "sandbox.html"),
+                "/home/runner/workspace/dashboard/sandbox.html",
+              ];
+              
+              for (const sandboxPath of possiblePaths) {
+                if (existsSync(sandboxPath)) {
+                  const html = readFileSync(sandboxPath, "utf-8");
+                  return c.html(html);
+                }
+              }
+              
+              return c.text("Testing Sandbox not found", 404);
+            } catch (error) {
+              console.error("Error serving sandbox:", error);
+              return c.text("Error loading Testing Sandbox", 500);
+            }
+          };
+        },
+      },
       // CRM Data Viewer Page
       {
         path: "/crm",
@@ -3050,32 +2912,6 @@ export const mastra = new Mastra({
             } catch (error) {
               console.error("Error serving Audits page:", error);
               return c.text("Error loading Audit Readiness", 500);
-            }
-          };
-        },
-      },
-      // ======================================================================
-      // Management Review Page
-      // ======================================================================
-      {
-        path: "/reviews",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "dashboard", "reviews.html"),
-                "/home/runner/workspace/dashboard/reviews.html",
-              ];
-              for (const p of possiblePaths) {
-                if (existsSync(p)) {
-                  return c.html(readFileSync(p, "utf-8"));
-                }
-              }
-              return c.text("Management Review page not found", 404);
-            } catch (error) {
-              console.error("Error serving Management Review page:", error);
-              return c.text("Error loading Management Review page", 500);
             }
           };
         },
@@ -3136,6 +2972,34 @@ export const mastra = new Mastra({
             } catch (error) {
               console.error("Error serving Policies page:", error);
               return c.text("Error loading Policy Governance", 500);
+            }
+          };
+        },
+      },
+      // ======================================================================
+      // Management Review Routes
+      // ======================================================================
+      {
+        path: "/reviews",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "reviews.html"),
+                join(process.cwd(), "..", "dashboard", "reviews.html"),
+                "/home/runner/workspace/dashboard/reviews.html",
+              ];
+              for (const reviewsPath of possiblePaths) {
+                if (existsSync(reviewsPath)) {
+                  const html = readFileSync(reviewsPath, "utf-8");
+                  return c.html(html);
+                }
+              }
+              return c.text("Management Review page not found", 404);
+            } catch (error) {
+              console.error("Error serving Management Review page:", error);
+              return c.text("Error loading Management Review", 500);
             }
           };
         },
@@ -3354,122 +3218,6 @@ export const mastra = new Mastra({
             } catch (error) {
               console.error("Error serving User Guide page:", error);
               return c.text("Error loading User Guide", 500);
-            }
-          };
-        },
-      },
-      // ======================================================================
-      // SOP Page & API
-      // ======================================================================
-      {
-        path: "/sop",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "dashboard", "sop.html"),
-                join(process.cwd(), "..", "dashboard", "sop.html"),
-                "/home/runner/workspace/dashboard/sop.html",
-              ];
-              for (const sopPath of possiblePaths) {
-                if (existsSync(sopPath)) {
-                  const html = readFileSync(sopPath, "utf-8");
-                  return c.html(html);
-                }
-              }
-              return c.text("SOP page not found", 404);
-            } catch (error) {
-              console.error("Error serving SOP page:", error);
-              return c.text("Error loading SOP", 500);
-            }
-          };
-        },
-      },
-      {
-        path: "/api/sop",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"),
-                join(process.cwd(), "..", "docs", "WalaPlus_Platform_SOP.md"),
-                "/home/runner/workspace/docs/WalaPlus_Platform_SOP.md",
-              ];
-              for (const sopPath of possiblePaths) {
-                if (existsSync(sopPath)) {
-                  const content = readFileSync(sopPath, "utf-8");
-                  const versionMatch = content.match(/\*\*Version:\*\*\s*(.+)/);
-                  const dateMatch = content.match(/\*\*Last Updated:\*\*\s*(.+)/);
-                  return c.json({
-                    content,
-                    version: versionMatch ? versionMatch[1].trim() : "Unknown",
-                    lastUpdated: dateMatch ? dateMatch[1].trim() : "Unknown",
-                  });
-                }
-              }
-              return c.json({ error: "SOP document not found" }, 404);
-            } catch (error) {
-              console.error("Error serving SOP API:", error);
-              return c.json({ error: "Failed to load SOP" }, 500);
-            }
-          };
-        },
-      },
-      {
-        path: "/api/sop/download",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"),
-                join(process.cwd(), "..", "docs", "WalaPlus_Platform_SOP.md"),
-                "/home/runner/workspace/docs/WalaPlus_Platform_SOP.md",
-              ];
-              for (const sopPath of possiblePaths) {
-                if (existsSync(sopPath)) {
-                  const content = readFileSync(sopPath, "utf-8");
-                  c.header("Content-Type", "text/markdown; charset=utf-8");
-                  c.header("Content-Disposition", "attachment; filename=\"WalaPlus_Platform_SOP.md\"");
-                  return c.body(content);
-                }
-              }
-              return c.text("SOP document not found", 404);
-            } catch (error) {
-              console.error("Error downloading SOP:", error);
-              return c.text("Error downloading SOP", 500);
-            }
-          };
-        },
-      },
-      // ======================================================================
-      // AI Consultant Page
-      // ======================================================================
-      {
-        path: "/consultant",
-        method: "GET",
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "dashboard", "consultant.html"),
-                join(process.cwd(), "..", "dashboard", "consultant.html"),
-                "/home/runner/workspace/dashboard/consultant.html",
-              ];
-              
-              for (const consultantPath of possiblePaths) {
-                if (existsSync(consultantPath)) {
-                  const html = readFileSync(consultantPath, "utf-8");
-                  return c.html(html);
-                }
-              }
-              
-              return c.text("AI Consultant page not found", 404);
-            } catch (error) {
-              console.error("Error serving AI Consultant page:", error);
-              return c.text("Error loading AI Consultant", 500);
             }
           };
         },
@@ -3806,7 +3554,7 @@ export const mastra = new Mastra({
               for (const cssPath of possiblePaths) {
                 if (existsSync(cssPath)) {
                   const css = readFileSync(cssPath, "utf-8");
-                  return c.text(css, 200, { "Content-Type": "text/css", "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" });
+                  return c.text(css, 200, { "Content-Type": "text/css" });
                 }
               }
               
@@ -3833,7 +3581,7 @@ export const mastra = new Mastra({
               for (const jsPath of possiblePaths) {
                 if (existsSync(jsPath)) {
                   const js = readFileSync(jsPath, "utf-8");
-                  return c.text(js, 200, { "Content-Type": "application/javascript", "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" });
+                  return c.text(js, 200, { "Content-Type": "application/javascript" });
                 }
               }
               
@@ -3841,33 +3589,6 @@ export const mastra = new Mastra({
             } catch (error) {
               console.error("Error serving navigation.js:", error);
               return c.text("// Error loading navigation.js", 500, { "Content-Type": "application/javascript" });
-            }
-          };
-        },
-      },
-      {
-        path: "/js/ai-consultant-widget.js",
-        method: "GET" as const,
-        createHandler: async () => {
-          return async (c: any) => {
-            try {
-              const possiblePaths = [
-                join(process.cwd(), "dashboard", "js", "ai-consultant-widget.js"),
-                join(process.cwd(), "..", "dashboard", "js", "ai-consultant-widget.js"),
-                "/home/runner/workspace/dashboard/js/ai-consultant-widget.js",
-              ];
-              
-              for (const jsPath of possiblePaths) {
-                if (existsSync(jsPath)) {
-                  const js = readFileSync(jsPath, "utf-8");
-                  return c.text(js, 200, { "Content-Type": "application/javascript", "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache" });
-                }
-              }
-              
-              return c.text("// ai-consultant-widget.js not found", 404, { "Content-Type": "application/javascript" });
-            } catch (error) {
-              console.error("Error serving ai-consultant-widget.js:", error);
-              return c.text("// Error loading ai-consultant-widget.js", 500, { "Content-Type": "application/javascript" });
             }
           };
         },
@@ -3881,7 +3602,6 @@ export const mastra = new Mastra({
       ...pmpRoutes,
       ...eventLogsRoutes,
       ...onboardingRoutes,
-      ...qmsEnhancedRoutes,
       ...riskRoutes,
       ...policyRoutes,
       ...complianceRoutes,
@@ -3891,8 +3611,6 @@ export const mastra = new Mastra({
       ...handoffRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
-      ...managementReviewRoutes,
-      ...analyticsRoutes,
       ...rbacRoutes,
       ...scorecardRoutes,
       ...pdplRoutes,
@@ -3900,45 +3618,12 @@ export const mastra = new Mastra({
       ...userAccessRoutes,
       ...smokeTestRoutes,
       ...consultantRoutes,
+      ...qmsEnhancedRoutes,
       ...notificationRoutes,
       ...knowledgeRoutes,
       ...reportRoutes,
-      ...registerSlackTrigger({
-        triggerType: "slack/message.channels",
-        handler: async (mastra, triggerInfo) => {
-          const logger = mastra.getLogger();
-          logger?.info("📨 [Slack] Message received", {
-            channel: triggerInfo.params.channel,
-            channelName: triggerInfo.params.channelDisplayName,
-          });
-
-          const message = triggerInfo.payload?.event?.text || "";
-          const userId = triggerInfo.payload?.event?.user || "unknown";
-
-          try {
-            const response = await qualitySpecialistAgent.generate(
-              [{ role: "user", content: `Slack message from user ${userId} in #${triggerInfo.params.channelDisplayName}: ${message}` }],
-            );
-
-            const { getClient } = await import("../triggers/slackTriggers");
-            const { slack } = await getClient();
-
-            await slack.chat.postMessage({
-              channel: triggerInfo.params.channel,
-              text: response.text || "I received your message but couldn't generate a response.",
-              thread_ts: triggerInfo.payload?.event?.ts,
-            });
-
-            logger?.info("✅ [Slack] Response sent");
-          } catch (error) {
-            logger?.error("❌ [Slack] Error processing message", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-
-          return null;
-        },
-      }),
+      ...managementReviewRoutes,
+      ...analyticsRoutes,
     ],
   },
   logger:
@@ -3961,3 +3646,10 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   );
 }
 
+/*  Sanity check 2: Throw an error if there are more than 1 agents.  */
+// !!!!!! Do not remove this check. !!!!!!
+if (Object.keys(mastra.getAgents()).length > 1) {
+  throw new Error(
+    "More than 1 agents found. Currently, more than 1 agents are not supported in the UI, since doing so will cause app state to be inconsistent.",
+  );
+}

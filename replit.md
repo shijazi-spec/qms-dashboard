@@ -80,7 +80,7 @@ AI-powered enterprise Quality Management System integrating governance, risk, an
 - `/duplicates` - Duplicate Radar (SSE scan stream, side-by-side comparison modal, RAG owner accountability, paginated clusters/records, auto-resolve, smart AI recommendations, KPI gauge)
 - `/reviews` - Management Review (ISO 9001 Clause 9.3, action tracking, auto-gather QMS inputs)
 - `/migration` - Data Migration
-- `/crm` - CRM Data Hub (live enrichment with quality scores + duplicate detection, health summary bar, row click detail modal, junk/spam detection, hygiene warnings, cluster badges linking to Duplicate Radar)
+- `/crm` - CRM Data Hub (live enrichment via `runLiveQualityCheck()`/`assessDataQuality()` with additive penalty scoring, duplicate cluster cross-reference via `lookupRecordsByZohoIds()` with `ANY($1)`, 4-tier quality badges [good >=85, fair 50-84, poor 21-49, junk <=20], `isGibberishName()`/`isSuspiciousEmail()` junk detection, health summary bar, row-click detail modal with quality flags + cluster cards, hygiene warnings, cluster badges linking to Duplicate Radar, parallel enrichment via `Promise.all()`)
 - `/feedback` - Feedback
 - `/onboarding` - Onboarding
 - `/sop` - Platform SOP (rendered markdown with TOC sidebar, print/download, public access)

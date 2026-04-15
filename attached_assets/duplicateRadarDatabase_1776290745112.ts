@@ -10,23 +10,17 @@ export interface DuplicateCluster {
   domain: string;
   company_name?: string;
   company_name_arabic?: string;
-  company_name_normalized?: string;
   total_leads: number;
   total_deals: number;
-  total_contacts: number;
-  total_accounts: number;
   total_records: number;
   confidence_level: 'high' | 'medium' | 'low';
   confidence_score: number;
-  match_signals?: string[];
   first_record_date?: Date;
   latest_activity_date?: Date;
   owners_involved?: string[];
   estimated_pipeline_value?: number;
   status: 'active' | 'resolved' | 'ignored';
   ai_recommendation?: string;
-  resolved_by?: string;
-  resolved_at?: Date;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -58,6 +52,7 @@ export interface DuplicateRecord {
   match_signals?: string[];
   is_mock_data: boolean;
   raw_data?: any;
+  created_at?: Date;
   layout_name?: string;
   layout_id?: string;
   zoho_module?: string;
@@ -76,39 +71,30 @@ export interface DuplicateRecord {
   lead_type?: string;
   gov_type?: string;
   account_type?: string;
-  created_at?: Date;
+  data_quality_score?: number;
+  data_quality_flags?: string[];
 }
 
 export interface ZohoSyncState {
   module: string;
   last_sync_at?: Date;
   total_synced: number;
-  sync_status: 'idle' | 'syncing' | 'completed' | 'failed';
+  last_full_sync_at?: Date;
+  sync_status: 'idle' | 'syncing' | 'failed';
+  error_message?: string;
+  updated_at?: Date;
 }
 
 export interface DuplicateRecordTask {
   id?: number;
   zoho_task_id: string;
   related_record_id?: string;
-  cluster_id?: number;
   subject?: string;
   due_date?: Date;
   status?: string;
+  priority?: string;
   owner_name?: string;
-  description?: string;
   created_at?: Date;
-}
-
-export interface DuplicateFilters {
-  modules?: string[];
-  owners?: string[];
-  layouts?: string[];
-  pipelines?: string[];
-  domain?: string;
-  start_date?: string;
-  end_date?: string;
-  status?: string;
-  confidence_level?: string;
 }
 
 export interface MergeAction {
@@ -131,7 +117,6 @@ export interface OwnerAccountability {
   clusters_involved: number;
   high_confidence_duplicates: number;
   estimated_waste_value: number;
-  rag_status: 'green' | 'amber' | 'red';
 }
 
 export interface DuplicateDetectionLog {
@@ -193,6 +178,7 @@ export function calculateSimilarity(str1: string, str2: string): number {
   if (s1 === s2) return 100;
   
   const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
   
   if (longer.length === 0) return 100;
   
@@ -226,9 +212,15 @@ export function getConfidenceLevel(score: number): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
+const PHONE_GARBAGE = ['na', 'n/a', 'nil', 'none', 'null', '-', '--', '.', '0', '00', '000', 'x', 'xx', 'test', 'unknown'];
+
 export function normalizePhone(phone: string): string {
   if (!phone) return '';
-  return phone.replace(/[\s\-\(\)\+\.]/g, '').replace(/^00/, '').replace(/^966/, '').slice(-9);
+  const trimmed = phone.trim().toLowerCase();
+  if (PHONE_GARBAGE.includes(trimmed)) return '';
+  const digits = phone.replace(/[\s\-\(\)\+\.]/g, '');
+  if (digits.length < 7) return '';
+  return digits.replace(/^00966/, '').replace(/^966/, '').replace(/^0/, '').slice(-9);
 }
 
 export interface MatchResult {
@@ -286,7 +278,6 @@ export async function initDuplicateRadarTables(): Promise<void> {
       domain VARCHAR(255) NOT NULL,
       company_name VARCHAR(500),
       company_name_arabic VARCHAR(500),
-      company_name_normalized VARCHAR(500),
       total_leads INTEGER DEFAULT 0,
       total_deals INTEGER DEFAULT 0,
       total_contacts INTEGER DEFAULT 0,
@@ -313,7 +304,6 @@ export async function initDuplicateRadarTables(): Promise<void> {
   await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS match_signals JSONB DEFAULT '[]'`);
   await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS resolved_by VARCHAR(255)`);
   await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`);
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS company_name_normalized VARCHAR(500)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_records (
@@ -348,20 +338,24 @@ export async function initDuplicateRadarTables(): Promise<void> {
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS phone_normalized VARCHAR(50)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS match_signals JSONB DEFAULT '[]'`);
 
+  // New columns for full CRM sync
+  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS data_quality_score INTEGER DEFAULT 100`);
+  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS data_quality_flags JSONB DEFAULT '[]'`);
+
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_name VARCHAR(255)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_id VARCHAR(100)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS zoho_module VARCHAR(50)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS pipeline VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS products TEXT`);
+  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS products VARCHAR(255)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS mobile VARCHAR(100)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS mobile_normalized VARCHAR(50)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255)`);
+  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS contact_name VARCHAR(500)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_name VARCHAR(500)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS cr_number VARCHAR(100)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS vat_number VARCHAR(100)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS website VARCHAR(500)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS country VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS region VARCHAR(100)`);
+  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS region VARCHAR(255)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS industry VARCHAR(255)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS no_of_employees INTEGER`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS title VARCHAR(255)`);
@@ -369,26 +363,30 @@ export async function initDuplicateRadarTables(): Promise<void> {
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS gov_type VARCHAR(100)`);
   await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_type VARCHAR(100)`);
 
+  // Sync state table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS zoho_sync_state (
       module VARCHAR(50) PRIMARY KEY,
       last_sync_at TIMESTAMP,
       total_synced INTEGER DEFAULT 0,
-      sync_status VARCHAR(50) DEFAULT 'idle'
+      last_full_sync_at TIMESTAMP,
+      sync_status VARCHAR(20) DEFAULT 'idle',
+      error_message TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
+  // Tasks linked to duplicate records
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_record_tasks (
       id SERIAL PRIMARY KEY,
       zoho_task_id VARCHAR(100) UNIQUE,
       related_record_id VARCHAR(100),
-      cluster_id INTEGER REFERENCES duplicate_clusters(id) ON DELETE SET NULL,
       subject VARCHAR(500),
       due_date TIMESTAMP,
       status VARCHAR(100),
+      priority VARCHAR(50),
       owner_name VARCHAR(255),
-      description TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -441,40 +439,57 @@ export async function initDuplicateRadarTables(): Promise<void> {
     )
   `);
 
+  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS company_name_normalized VARCHAR(500)`);
+
+  // Unique partial index for incremental upsert
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_records_zoho_id_unique
+    ON duplicate_records(zoho_record_id) WHERE zoho_record_id IS NOT NULL
+  `);
+
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_status ON duplicate_clusters(status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_cluster ON duplicate_records(cluster_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_type ON duplicate_records(record_type)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_zoho_id ON duplicate_records(zoho_record_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_email ON duplicate_records(LOWER(email))`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_phone_norm ON duplicate_records(phone_normalized)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_domain ON duplicate_records(domain)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_company_norm ON duplicate_clusters(company_name_normalized)`);
 
-  // B6: Additional performance indexes
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_records_zoho_id ON duplicate_records(zoho_record_id) WHERE zoho_record_id IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_email ON duplicate_records(LOWER(email)) WHERE email IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_phone_norm ON duplicate_records(phone_normalized) WHERE phone_normalized IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_domain ON duplicate_records(domain) WHERE domain IS NOT NULL`);
+  // Indexes for rich filtering
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_layout ON duplicate_records(layout_name)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_module ON duplicate_records(zoho_module)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_owner ON duplicate_records(owner_name)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_created ON duplicate_records(created_date)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_products ON duplicate_records(products)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_cr_number ON duplicate_records(cr_number)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_vat_number ON duplicate_records(vat_number)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_mobile_norm ON duplicate_records(mobile_normalized)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_website ON duplicate_records(website)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_record_tasks_related ON duplicate_record_tasks(related_record_id)`);
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_layout ON duplicate_records(layout_name) WHERE layout_name IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_zoho_module ON duplicate_records(zoho_module) WHERE zoho_module IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_pipeline ON duplicate_records(pipeline) WHERE pipeline IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_owner ON duplicate_records(owner_name) WHERE owner_name IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_country ON duplicate_records(country) WHERE country IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_industry ON duplicate_records(industry) WHERE industry IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_modified ON duplicate_records(modified_date)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_mobile_norm ON duplicate_records(mobile_normalized) WHERE mobile_normalized IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_cr ON duplicate_records(cr_number) WHERE cr_number IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_vat ON duplicate_records(vat_number) WHERE vat_number IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_record_tasks_record ON duplicate_record_tasks(related_record_id)`);
-
-  // B4: pg_trgm for fuzzy matching
+  // Try to enable pg_trgm for fuzzy matching (may not be available on all hosts)
   try {
     await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_clusters_company_trgm ON duplicate_clusters USING GIN (company_name_normalized gin_trgm_ops)`);
   } catch (e) {
-    console.log('⚠️ [DuplicateRadar] pg_trgm not available, falling back to Levenshtein matching');
+    console.log('[DuplicateRadar] pg_trgm extension not available, using Levenshtein fallback for fuzzy matching');
   }
+
+  // Backfill company_name_normalized for existing rows
+  await pool.query(`
+    UPDATE duplicate_clusters SET company_name_normalized = LOWER(
+      REGEXP_REPLACE(
+        REGEXP_REPLACE(company_name, '[^\\w\\s]', ' ', 'g'),
+        '\\s+', ' ', 'g'
+      )
+    ) WHERE company_name IS NOT NULL AND company_name_normalized IS NULL
+  `);
 }
 
 export async function createCluster(cluster: Omit<DuplicateCluster, 'id' | 'created_at' | 'updated_at'>): Promise<DuplicateCluster> {
-  const companyNormalized = cluster.company_name ? normalizeCompanyName(cluster.company_name) : null;
+  const companyNorm = cluster.company_name ? normalizeCompanyName(cluster.company_name) : null;
   const result = await pool.query(
     `INSERT INTO duplicate_clusters 
      (domain, company_name, company_name_arabic, company_name_normalized, total_leads, total_deals, total_records, 
@@ -483,7 +498,7 @@ export async function createCluster(cluster: Omit<DuplicateCluster, 'id' | 'crea
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
-      cluster.domain, cluster.company_name, cluster.company_name_arabic, companyNormalized,
+      cluster.domain, cluster.company_name, cluster.company_name_arabic, companyNorm,
       cluster.total_leads, cluster.total_deals, cluster.total_records,
       cluster.confidence_level, cluster.confidence_score,
       cluster.first_record_date, cluster.latest_activity_date,
@@ -495,20 +510,39 @@ export async function createCluster(cluster: Omit<DuplicateCluster, 'id' | 'crea
   return result.rows[0];
 }
 
-// A1: Incremental upsert for records (replaces destructive clearAllDuplicateData approach)
-export async function upsertRecord(record: Omit<DuplicateRecord, 'id' | 'created_at'>): Promise<DuplicateRecord> {
-  const phoneNorm = record.phone ? normalizePhone(record.phone) : null;
-  const mobileNorm = record.mobile ? normalizePhone(record.mobile) : null;
+export async function addRecordToCluster(record: Omit<DuplicateRecord, 'id' | 'created_at'> & { phone_normalized?: string }): Promise<DuplicateRecord> {
+  const phoneNorm = record.phone_normalized || (record.phone ? normalizePhone(record.phone) : null);
   const result = await pool.query(
     `INSERT INTO duplicate_records 
      (cluster_id, record_type, zoho_record_id, record_name, company_name, email, domain,
-      phone, phone_normalized, mobile, mobile_normalized, owner_name, owner_email, status, stage, deal_value, source, created_date,
-      modified_date, is_primary, ai_recommendation, confidence_score, is_mock_data, raw_data,
+      phone, phone_normalized, owner_name, owner_email, status, stage, deal_value, source, created_date,
+      modified_date, is_primary, ai_recommendation, confidence_score, is_mock_data, raw_data)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+     RETURNING *`,
+    [
+      record.cluster_id, record.record_type, record.zoho_record_id, record.record_name,
+      record.company_name, record.email, record.domain, record.phone, phoneNorm,
+      record.owner_name, record.owner_email, record.status, record.stage,
+      record.deal_value, record.source, record.created_date, record.modified_date,
+      record.is_primary, record.ai_recommendation, record.confidence_score,
+      record.is_mock_data, JSON.stringify(record.raw_data || {})
+    ]
+  );
+  return result.rows[0];
+}
+
+export async function upsertRecord(record: Omit<DuplicateRecord, 'id' | 'created_at'>): Promise<DuplicateRecord> {
+  const phoneNorm = record.phone_normalized || (record.phone ? normalizePhone(record.phone) : null);
+  const mobileNorm = record.mobile_normalized || (record.mobile ? normalizePhone(record.mobile) : null);
+  const result = await pool.query(
+    `INSERT INTO duplicate_records 
+     (cluster_id, record_type, zoho_record_id, record_name, company_name, email, domain,
+      phone, phone_normalized, mobile, mobile_normalized, owner_name, owner_email, status, stage, deal_value, source,
+      created_date, modified_date, is_primary, ai_recommendation, confidence_score, is_mock_data, raw_data,
       layout_name, layout_id, zoho_module, pipeline, products, contact_name, account_name,
-      cr_number, vat_number, website, country, region, industry, no_of_employees, title,
-      lead_type, gov_type, account_type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
-             $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+      cr_number, vat_number, website, country, region, industry, no_of_employees, title, lead_type, gov_type, account_type,
+      data_quality_score, data_quality_flags)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)
      ON CONFLICT (zoho_record_id) WHERE zoho_record_id IS NOT NULL DO UPDATE SET
        cluster_id = EXCLUDED.cluster_id,
        record_name = EXCLUDED.record_name,
@@ -544,44 +578,25 @@ export async function upsertRecord(record: Omit<DuplicateRecord, 'id' | 'created
        title = EXCLUDED.title,
        lead_type = EXCLUDED.lead_type,
        gov_type = EXCLUDED.gov_type,
-       account_type = EXCLUDED.account_type
+       account_type = EXCLUDED.account_type,
+       data_quality_score = EXCLUDED.data_quality_score,
+       data_quality_flags = EXCLUDED.data_quality_flags
      RETURNING *`,
     [
       record.cluster_id, record.record_type, record.zoho_record_id, record.record_name,
-      record.company_name, record.email, record.domain, record.phone,
-      phoneNorm, record.mobile, mobileNorm,
+      record.company_name, record.email, record.domain, record.phone, phoneNorm,
+      record.mobile || null, mobileNorm,
       record.owner_name, record.owner_email, record.status, record.stage,
       record.deal_value, record.source, record.created_date, record.modified_date,
       record.is_primary, record.ai_recommendation, record.confidence_score,
       record.is_mock_data, JSON.stringify(record.raw_data || {}),
-      record.layout_name, record.layout_id, record.zoho_module, record.pipeline,
-      record.products, record.contact_name, record.account_name,
-      record.cr_number, record.vat_number, record.website, record.country,
-      record.region, record.industry, record.no_of_employees, record.title,
-      record.lead_type, record.gov_type, record.account_type
-    ]
-  );
-  return result.rows[0];
-}
-
-// A7: phone_normalized included directly in INSERT
-export async function addRecordToCluster(record: Omit<DuplicateRecord, 'id' | 'created_at'>): Promise<DuplicateRecord> {
-  const phoneNorm = record.phone ? normalizePhone(record.phone) : null;
-  const result = await pool.query(
-    `INSERT INTO duplicate_records 
-     (cluster_id, record_type, zoho_record_id, record_name, company_name, email, domain,
-      phone, phone_normalized, owner_name, owner_email, status, stage, deal_value, source, created_date,
-      modified_date, is_primary, ai_recommendation, confidence_score, is_mock_data, raw_data)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-     RETURNING *`,
-    [
-      record.cluster_id, record.record_type, record.zoho_record_id, record.record_name,
-      record.company_name, record.email, record.domain, record.phone,
-      phoneNorm,
-      record.owner_name, record.owner_email, record.status, record.stage,
-      record.deal_value, record.source, record.created_date, record.modified_date,
-      record.is_primary, record.ai_recommendation, record.confidence_score,
-      record.is_mock_data, JSON.stringify(record.raw_data || {})
+      record.layout_name || null, record.layout_id || null, record.zoho_module || null,
+      record.pipeline || null, record.products || null, record.contact_name || null, record.account_name || null,
+      record.cr_number || null, record.vat_number || null, record.website || null,
+      record.country || null, record.region || null, record.industry || null,
+      record.no_of_employees || null, record.title || null, record.lead_type || null,
+      record.gov_type || null, record.account_type || null,
+      record.data_quality_score ?? 100, JSON.stringify(record.data_quality_flags || [])
     ]
   );
   return result.rows[0];
@@ -592,8 +607,6 @@ export async function getAllClusters(filters?: {
   confidence_level?: string;
   limit?: number;
   offset?: number;
-  start_date?: string;
-  end_date?: string;
 }): Promise<DuplicateCluster[]> {
   let query = 'SELECT * FROM duplicate_clusters WHERE 1=1';
   const params: any[] = [];
@@ -607,14 +620,6 @@ export async function getAllClusters(filters?: {
     query += ` AND confidence_level = $${paramIndex++}`;
     params.push(filters.confidence_level);
   }
-  if (filters?.start_date) {
-    query += ` AND created_at >= $${paramIndex++}`;
-    params.push(filters.start_date);
-  }
-  if (filters?.end_date) {
-    query += ` AND created_at <= $${paramIndex++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
-  }
 
   query += ' ORDER BY total_records DESC, confidence_score DESC';
 
@@ -622,7 +627,7 @@ export async function getAllClusters(filters?: {
     query += ` LIMIT $${paramIndex++}`;
     params.push(filters.limit);
   }
-  if (filters?.offset !== undefined && filters?.offset !== null) {
+  if (filters?.offset) {
     query += ` OFFSET $${paramIndex++}`;
     params.push(filters.offset);
   }
@@ -634,8 +639,6 @@ export async function getAllClusters(filters?: {
 export async function getClusterCount(filters?: {
   status?: string;
   confidence_level?: string;
-  start_date?: string;
-  end_date?: string;
 }): Promise<number> {
   let query = 'SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1';
   const params: any[] = [];
@@ -648,14 +651,6 @@ export async function getClusterCount(filters?: {
   if (filters?.confidence_level) {
     query += ` AND confidence_level = $${paramIndex++}`;
     params.push(filters.confidence_level);
-  }
-  if (filters?.start_date) {
-    query += ` AND created_at >= $${paramIndex++}`;
-    params.push(filters.start_date);
-  }
-  if (filters?.end_date) {
-    query += ` AND created_at <= $${paramIndex++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
   }
 
   const result = await pool.query(query, params);
@@ -908,8 +903,6 @@ export async function findOrCreateClusterByDomain(domain: string): Promise<Dupli
     domain,
     total_leads: 0,
     total_deals: 0,
-    total_contacts: 0,
-    total_accounts: 0,
     total_records: 0,
     confidence_level: 'medium',
     confidence_score: 75,
@@ -935,6 +928,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
   const stats = statsResult.rows[0];
   const totalRecords = parseInt(stats.total_count) || 0;
 
+  // Multi-signal confidence: compare all record pairs in the cluster
   const records = await pool.query(
     'SELECT email, domain, phone, phone_normalized, company_name FROM duplicate_records WHERE cluster_id = $1 LIMIT 50',
     [clusterId]
@@ -954,6 +948,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     }
   }
 
+  // If only 1 record, score = 0 (not a duplicate). If multiple but no signal match, give base score from count.
   let confidenceScore: number;
   if (totalRecords <= 1) {
     confidenceScore = 0;
@@ -963,6 +958,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     confidenceScore = totalRecords > 3 ? 65 : 55;
   }
 
+  // Pipeline inflation = total deal value of non-primary deals in the cluster
   const inflationResult = await pool.query(`
     SELECT COALESCE(SUM(deal_value), 0) as inflation
     FROM duplicate_records
@@ -970,6 +966,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
   `, [clusterId]);
   const pipelineInflation = parseFloat(inflationResult.rows[0]?.inflation) || 0;
 
+  // Auto-mark primary: earliest created record
   const primaryCheck = await pool.query(
     'SELECT COUNT(*) as cnt FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true', [clusterId]
   );
@@ -1025,7 +1022,6 @@ export interface DuplicateSearchParams {
   owner_email?: string;
 }
 
-// A3: Fixed paramIndex bug for company_name
 export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
   records: DuplicateRecord[];
   clusters: DuplicateCluster[];
@@ -1107,48 +1103,43 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
   };
 }
 
-// A1: Replaced destructive clear with incremental approach
 export async function clearAllDuplicateData(): Promise<void> {
-  const scanMode = process.env.DUPLICATE_SCAN_MODE || 'incremental';
-  if (scanMode === 'full') {
-    console.log('🗑️ [DuplicateRadar] FULL mode: Clearing all duplicate data for fresh Zoho import...');
-    await pool.query('DELETE FROM duplicate_records');
-    await pool.query('DELETE FROM duplicate_clusters');
-    console.log('✅ [DuplicateRadar] All duplicate data cleared');
-  } else {
-    console.log('♻️ [DuplicateRadar] INCREMENTAL mode: Marking existing records as stale...');
-    await markStaleRecords();
-  }
+  console.log('🗑️ [DuplicateRadar] Clearing all duplicate data for fresh Zoho import...');
+  await pool.query('DELETE FROM duplicate_records');
+  await pool.query('DELETE FROM duplicate_clusters');
+  console.log('✅ [DuplicateRadar] All duplicate data cleared');
 }
 
-// A1: Mark records as stale before incremental scan
-export async function markStaleRecords(): Promise<number> {
-  const result = await pool.query(`
-    UPDATE duplicate_records SET match_signals = match_signals || '["stale_pending"]'::jsonb
-    WHERE is_mock_data = false AND NOT (match_signals @> '["stale_pending"]'::jsonb)
-  `);
-  console.log(`📌 [DuplicateRadar] Marked ${result.rowCount} records as stale`);
+export async function markStaleRecords(seenZohoIds: string[]): Promise<number> {
+  if (seenZohoIds.length === 0) return 0;
+  const result = await pool.query(
+    `UPDATE duplicate_records SET status = 'stale'
+     WHERE zoho_record_id IS NOT NULL AND is_mock_data = false
+       AND zoho_record_id != ALL($1)
+       AND status != 'stale'`,
+    [seenZohoIds]
+  );
   return result.rowCount || 0;
 }
 
-// A1: Remove records that were stale and not refreshed
-export async function cleanupStaleRecords(): Promise<number> {
-  const result = await pool.query(`
-    DELETE FROM duplicate_records 
-    WHERE match_signals @> '["stale_pending"]'::jsonb AND is_mock_data = false
-  `);
-  console.log(`🧹 [DuplicateRadar] Cleaned up ${result.rowCount} stale records`);
-  return result.rowCount || 0;
-}
-
-// A1: Remove orphan clusters with no records
 export async function cleanupOrphanClusters(): Promise<number> {
   const result = await pool.query(`
-    DELETE FROM duplicate_clusters 
-    WHERE id NOT IN (SELECT DISTINCT cluster_id FROM duplicate_records WHERE cluster_id IS NOT NULL)
+    DELETE FROM duplicate_clusters
+    WHERE id NOT IN (
+      SELECT DISTINCT cluster_id FROM duplicate_records WHERE cluster_id IS NOT NULL AND status != 'stale'
+    ) AND status = 'active'
   `);
-  console.log(`🧹 [DuplicateRadar] Cleaned up ${result.rowCount} orphan clusters`);
   return result.rowCount || 0;
+}
+
+export async function getLastScanModifiedTime(moduleName: string): Promise<string | null> {
+  const result = await pool.query(`
+    SELECT MAX(modified_date) as last_modified
+    FROM duplicate_records
+    WHERE record_type = $1 AND is_mock_data = false AND zoho_record_id IS NOT NULL
+  `, [moduleName === 'Leads' ? 'lead' : moduleName === 'Deals' ? 'deal' : moduleName === 'Contacts' ? 'contact' : 'account']);
+  const d = result.rows[0]?.last_modified;
+  return d ? new Date(d).toISOString() : null;
 }
 
 export function normalizeCompanyName(name: string): string {
@@ -1161,7 +1152,127 @@ export function normalizeCompanyName(name: string): string {
     .trim();
 }
 
-// B4: Fuzzy match using pg_trgm similarity() with fallback
+// ═══════════════════════════════════════════════════════════
+//  DATA QUALITY ASSESSMENT
+// ═══════════════════════════════════════════════════════════
+
+export interface DataQualityResult {
+  score: number;         // 0-100: 0 = junk, 100 = pristine
+  flags: string[];       // machine-readable issue codes
+  isJunk: boolean;       // true = should be excluded from duplicate detection
+}
+
+const GIBBERISH_REGEX = /^[a-zA-Z]{20,}$/;
+const RANDOM_MIXED_REGEX = /^[a-zA-Z0-9]{25,}$/;
+const CONSECUTIVE_CAPS_REGEX = /[A-Z]{8,}/;
+const NAME_GARBAGE = ['test', 'testing', 'asdf', 'qwerty', 'xxx', 'yyy', 'zzz', 'demo', 'sample', 'unknown', 'n/a', 'na', '-', '.', '..', 'null'];
+
+function isGibberishName(name: string): boolean {
+  if (!name) return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 2) return true;
+
+  const words = trimmed.split(/\s+/);
+  if (words.some(w => w.length > 25 && /^[a-zA-Z]+$/.test(w))) return true;
+  if (GIBBERISH_REGEX.test(trimmed.replace(/\s/g, ''))) return true;
+  if (RANDOM_MIXED_REGEX.test(trimmed.replace(/\s/g, ''))) return true;
+
+  const latinLetters = (trimmed.match(/[a-zA-Z]/g) || []).length;
+  const upperCase = (trimmed.match(/[A-Z]/g) || []).length;
+  if (latinLetters > 10 && upperCase / latinLetters > 0.6) return true;
+  if (CONSECUTIVE_CAPS_REGEX.test(trimmed)) return true;
+
+  const consonants = (trimmed.toLowerCase().match(/[bcdfghjklmnpqrstvwxyz]/g) || []).length;
+  const vowels = (trimmed.toLowerCase().match(/[aeiou]/g) || []).length;
+  if (latinLetters > 10 && vowels === 0) return true;
+  if (latinLetters > 15 && consonants > 0 && vowels > 0 && consonants / vowels > 8) return true;
+
+  return false;
+}
+
+function isSuspiciousEmail(email: string): boolean {
+  if (!email) return false;
+  const local = email.split('@')[0] || '';
+  if (/\d{6,}/.test(local)) return true;
+  if (local.length > 30 && /^[a-z0-9.]+$/.test(local)) {
+    const dots = (local.match(/\./g) || []).length;
+    if (dots > 4) return true;
+  }
+  return false;
+}
+
+export function assessDataQuality(record: {
+  recordName?: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  ownerName?: string;
+  domain?: string | null;
+}): DataQualityResult {
+  const flags: string[] = [];
+  let score = 100;
+
+  // Name quality
+  const name = record.recordName || '';
+  const nameLower = name.toLowerCase().trim();
+  if (!name || nameLower === '-' || nameLower === '.') {
+    flags.push('missing_name');
+    score -= 20;
+  } else if (NAME_GARBAGE.includes(nameLower)) {
+    flags.push('garbage_name');
+    score -= 40;
+  } else if (isGibberishName(name)) {
+    flags.push('gibberish_name');
+    score -= 50;
+  }
+
+  // Company quality
+  const company = record.companyName || '';
+  if (!company || company === 'Unknown') {
+    flags.push('missing_company');
+    score -= 15;
+  } else if (isGibberishName(company)) {
+    flags.push('gibberish_company');
+    score -= 30;
+  }
+
+  // Email quality
+  if (!record.email) {
+    flags.push('missing_email');
+    score -= 10;
+  } else if (isSuspiciousEmail(record.email)) {
+    flags.push('suspicious_email');
+    score -= 15;
+  }
+
+  // Phone quality
+  const phoneNorm = record.phone ? normalizePhone(record.phone) : '';
+  const mobileNorm = record.mobile ? normalizePhone(record.mobile) : '';
+  if (!phoneNorm && !mobileNorm) {
+    flags.push('missing_phone');
+    score -= 10;
+  }
+
+  // Owner quality
+  if (!record.ownerName || record.ownerName === 'Unknown') {
+    flags.push('missing_owner');
+    score -= 5;
+  }
+
+  // Domain quality (public domains already filtered to null)
+  if (!record.domain) {
+    flags.push('no_business_domain');
+    score -= 5;
+  }
+
+  return {
+    score: Math.max(0, score),
+    flags,
+    isJunk: score <= 20 || flags.includes('gibberish_name') || flags.includes('garbage_name'),
+  };
+}
+
 export async function findOrCreateClusterByCompany(
   companyName: string,
   domain?: string,
@@ -1171,6 +1282,7 @@ export async function findOrCreateClusterByCompany(
   const normalizedName = normalizeCompanyName(companyName);
   const normalizedPhone = phone ? normalizePhone(phone) : '';
 
+  // Signal 1: Exact domain match (strongest for B2B)
   if (domain) {
     const existingByDomain = await pool.query(
       'SELECT * FROM duplicate_clusters WHERE domain = $1',
@@ -1181,6 +1293,7 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 2: Exact email match in existing records
   if (email) {
     const existingByEmail = await pool.query(
       `SELECT dc.* FROM duplicate_clusters dc
@@ -1193,6 +1306,7 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 3: Phone match in existing records
   if (normalizedPhone && normalizedPhone.length >= 7) {
     const existingByPhone = await pool.query(
       `SELECT dc.* FROM duplicate_clusters dc
@@ -1205,44 +1319,33 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
+  // Signal 4: Normalized company name match (uses indexed column)
   if (normalizedName) {
     const existingByCompany = await pool.query(
       `SELECT * FROM duplicate_clusters 
-       WHERE company_name ILIKE $1 OR company_name ILIKE $2`,
-      [`%${normalizedName}%`, `%${companyName}%`]
+       WHERE company_name_normalized = $1 LIMIT 1`,
+      [normalizedName]
     );
     if (existingByCompany.rows[0]) {
       return existingByCompany.rows[0];
     }
   }
 
-  // B4: Try pg_trgm similarity() first, fallback to limited Levenshtein
+  // Signal 5: Fuzzy company name match via pg_trgm (index-accelerated)
   if (normalizedName && normalizedName.length > 2) {
     try {
-      const trgmResult = await pool.query(
+      const trigramResult = await pool.query(
         `SELECT *, similarity(company_name_normalized, $1) as sim
          FROM duplicate_clusters
-         WHERE company_name_normalized IS NOT NULL AND company_name_normalized != ''
-           AND similarity(company_name_normalized, $1) >= 0.4
+         WHERE company_name_normalized IS NOT NULL AND company_name_normalized % $1
          ORDER BY sim DESC LIMIT 1`,
         [normalizedName]
       );
-      if (trgmResult.rows[0] && trgmResult.rows[0].sim >= 0.4) {
-        return trgmResult.rows[0];
+      if (trigramResult.rows[0] && parseFloat(trigramResult.rows[0].sim) >= 0.4) {
+        return trigramResult.rows[0];
       }
     } catch {
-      const recentClusters = await pool.query(
-        'SELECT * FROM duplicate_clusters ORDER BY updated_at DESC LIMIT 2000'
-      );
-      for (const cluster of recentClusters.rows) {
-        const clusterNormalized = normalizeCompanyName(cluster.company_name || '');
-        if (clusterNormalized && normalizedName && clusterNormalized.length > 2 && normalizedName.length > 2) {
-          const similarity = calculateSimilarity(clusterNormalized, normalizedName);
-          if (similarity >= 80) {
-            return cluster;
-          }
-        }
-      }
+      // pg_trgm extension not available — skip fuzzy matching
     }
   }
 
@@ -1251,14 +1354,16 @@ export async function findOrCreateClusterByCompany(
     company_name: companyName,
     total_leads: 0,
     total_deals: 0,
-    total_contacts: 0,
-    total_accounts: 0,
     total_records: 0,
     confidence_level: 'low',
     confidence_score: 0,
     status: 'active'
   });
 }
+
+// ═══════════════════════════════════════════════════════════
+//  MERGE WORKFLOW
+// ═══════════════════════════════════════════════════════════
 
 export async function markPrimaryRecord(clusterId: number, recordId: number): Promise<boolean> {
   await pool.query('UPDATE duplicate_records SET is_primary = false WHERE cluster_id = $1', [clusterId]);
@@ -1326,7 +1431,10 @@ export async function getMergeHistory(clusterId?: number, limit: number = 50): P
   return result.rows;
 }
 
-// C3: Enhanced owner accountability with RAG status against 2% KPI target
+// ═══════════════════════════════════════════════════════════
+//  OWNER ACCOUNTABILITY SCORING
+// ═══════════════════════════════════════════════════════════
+
 export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
   const result = await pool.query(`
     SELECT 
@@ -1344,27 +1452,23 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
     ORDER BY duplicate_records DESC
   `);
 
-  return result.rows.map(r => {
-    const totalRecs = parseInt(r.total_records) || 0;
-    const dupRecs = parseInt(r.duplicate_records) || 0;
-    const dupRate = totalRecs > 0 ? Math.round((dupRecs / totalRecs) * 100) : 0;
-    let ragStatus: 'green' | 'amber' | 'red' = 'green';
-    if (dupRate > 5) ragStatus = 'red';
-    else if (dupRate > 2) ragStatus = 'amber';
-
-    return {
-      owner_name: r.owner_name,
-      owner_email: r.owner_email || '',
-      total_records: totalRecs,
-      duplicate_records: dupRecs,
-      duplicate_rate: dupRate,
-      clusters_involved: parseInt(r.clusters_involved) || 0,
-      high_confidence_duplicates: parseInt(r.high_confidence_duplicates) || 0,
-      estimated_waste_value: parseFloat(r.estimated_waste_value) || 0,
-      rag_status: ragStatus
-    };
-  });
+  return result.rows.map(r => ({
+    owner_name: r.owner_name,
+    owner_email: r.owner_email || '',
+    total_records: parseInt(r.total_records) || 0,
+    duplicate_records: parseInt(r.duplicate_records) || 0,
+    duplicate_rate: parseInt(r.total_records) > 0
+      ? Math.round((parseInt(r.duplicate_records) / parseInt(r.total_records)) * 100)
+      : 0,
+    clusters_involved: parseInt(r.clusters_involved) || 0,
+    high_confidence_duplicates: parseInt(r.high_confidence_duplicates) || 0,
+    estimated_waste_value: parseFloat(r.estimated_waste_value) || 0
+  }));
 }
+
+// ═══════════════════════════════════════════════════════════
+//  REAL-TIME DUPLICATE CHECK (pre-creation)
+// ═══════════════════════════════════════════════════════════
 
 export async function checkForDuplicates(params: {
   email?: string;
@@ -1440,7 +1544,10 @@ export async function checkForDuplicates(params: {
   };
 }
 
-// A2: Fixed low_confidence count — only clusters with total_records > 1, added singletonCount
+// ═══════════════════════════════════════════════════════════
+//  ENHANCED SUMMARY (with true duplicate count)
+// ═══════════════════════════════════════════════════════════
+
 export async function getEnhancedSummary(): Promise<{
   totalClusters: number;
   trueDuplicateClusters: number;
@@ -1457,18 +1564,17 @@ export async function getEnhancedSummary(): Promise<{
   activeCount: number;
   resolvedCount: number;
   ignoredCount: number;
-  resolutionRate: number;
   topSignals: Record<string, number>;
   duplicateLeadRate: number;
   duplicateDealRate: number;
-  topClustersByInflation: any[];
-  lastScanInfo: any;
+  resolutionRate: number;
+  topInflationClusters: Array<{ id: number; domain: string; company_name: string; value: number; total_records: number }>;
+  lastScanInfo: { date: Date | null; duration_ms: number | null; records_scanned: number | null } | null;
 }> {
   const result = await pool.query(`
     SELECT 
       COUNT(*) as total_clusters,
       COUNT(*) FILTER (WHERE total_records > 1) as true_dup_clusters,
-      COUNT(*) FILTER (WHERE total_records <= 1) as singleton_count,
       COALESCE(SUM(total_records), 0) as total_records,
       COALESCE(SUM(total_leads) FILTER (WHERE total_records > 1), 0) as dup_leads,
       COALESCE(SUM(total_deals) FILTER (WHERE total_records > 1), 0) as dup_deals,
@@ -1477,6 +1583,7 @@ export async function getEnhancedSummary(): Promise<{
       COUNT(*) FILTER (WHERE confidence_level = 'high' AND total_records > 1) as high_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'medium' AND total_records > 1) as medium_confidence,
       COUNT(*) FILTER (WHERE confidence_level = 'low' AND total_records > 1) as low_confidence,
+      COUNT(*) FILTER (WHERE total_records <= 1) as singleton_count,
       COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
       COUNT(*) FILTER (WHERE status = 'active') as active_count,
       COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count,
@@ -1499,33 +1606,30 @@ export async function getEnhancedSummary(): Promise<{
   for (const r of signalResult.rows) {
     const signals = Array.isArray(r.match_signals) ? r.match_signals : [];
     for (const s of signals) {
-      if (s !== 'stale_pending') topSignals[s] = (topSignals[s] || 0) + 1;
+      topSignals[s] = (topSignals[s] || 0) + 1;
     }
   }
 
-  // D4: Top 5 clusters by pipeline inflation
-  const topClustersResult = await pool.query(`
-    SELECT id, domain, company_name, estimated_pipeline_value, total_records, confidence_score
+  const topInflationResult = await pool.query(`
+    SELECT id, domain, company_name, estimated_pipeline_value as value, total_records
     FROM duplicate_clusters
-    WHERE estimated_pipeline_value > 0 AND total_records > 1
-    ORDER BY estimated_pipeline_value DESC
-    LIMIT 5
+    WHERE status = 'active' AND total_records > 1 AND estimated_pipeline_value > 0
+    ORDER BY estimated_pipeline_value DESC LIMIT 5
   `);
 
-  // D4: Last scan info
   const lastScanResult = await pool.query(`
-    SELECT completed_at, detection_duration_ms, total_records_scanned, total_clusters_found, total_duplicates_detected
+    SELECT completed_at, detection_duration_ms, total_records_scanned
     FROM duplicate_detection_logs WHERE status = 'completed'
     ORDER BY completed_at DESC LIMIT 1
   `);
+  const lastScanRow = lastScanResult.rows[0];
 
-  const totalClusters = parseInt(row.total_clusters) || 0;
+  const activeCount = parseInt(row.active_count) || 0;
   const resolvedCount = parseInt(row.resolved_count) || 0;
-  const ignoredCount = parseInt(row.ignored_count) || 0;
-  const resolutionRate = totalClusters > 0 ? Math.round(((resolvedCount + ignoredCount) / totalClusters) * 100) : 0;
+  const totalActionable = activeCount + resolvedCount + (parseInt(row.ignored_count) || 0);
 
   return {
-    totalClusters,
+    totalClusters: parseInt(row.total_clusters) || 0,
     trueDuplicateClusters: parseInt(row.true_dup_clusters) || 0,
     singletonCount: parseInt(row.singleton_count) || 0,
     totalRecords: parseInt(row.total_records) || 0,
@@ -1537,15 +1641,22 @@ export async function getEnhancedSummary(): Promise<{
     mediumConfidence: parseInt(row.medium_confidence) || 0,
     lowConfidence: parseInt(row.low_confidence) || 0,
     estimatedPipelineInflation: parseFloat(row.pipeline_inflation) || 0,
-    activeCount: parseInt(row.active_count) || 0,
+    activeCount,
     resolvedCount,
-    ignoredCount,
-    resolutionRate,
+    ignoredCount: parseInt(row.ignored_count) || 0,
     topSignals,
     duplicateLeadRate: Math.round((dupLeads / tLeads) * 100),
     duplicateDealRate: Math.round((dupDeals / tDeals) * 100),
-    topClustersByInflation: topClustersResult.rows,
-    lastScanInfo: lastScanResult.rows[0] || null
+    resolutionRate: totalActionable > 0 ? Math.round((resolvedCount / totalActionable) * 100) : 0,
+    topInflationClusters: topInflationResult.rows.map(r => ({
+      id: r.id, domain: r.domain, company_name: r.company_name || r.domain,
+      value: parseFloat(r.value) || 0, total_records: parseInt(r.total_records) || 0
+    })),
+    lastScanInfo: lastScanRow ? {
+      date: lastScanRow.completed_at,
+      duration_ms: parseInt(lastScanRow.detection_duration_ms) || null,
+      records_scanned: parseInt(lastScanRow.total_records_scanned) || null
+    } : null
   };
 }
 
@@ -1556,593 +1667,643 @@ export async function getLastScanDate(): Promise<Date | null> {
   return result.rows[0]?.completed_at || null;
 }
 
-// B5: JOIN-based queries eliminating N+1 pattern
+// ═══════════════════════════════════════════════════════════
+//  JOIN-BASED QUERIES (replacing N+1 pattern)
+// ═══════════════════════════════════════════════════════════
+
 export async function getDuplicateRecordsByType(
   recordType: string,
-  options?: { limit?: number; offset?: number; start_date?: string; end_date?: string }
+  filters?: { limit?: number; offset?: number; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }
 ): Promise<{ groups: any[]; total: number }> {
-  const countField = recordType === 'lead' ? 'total_leads' :
-                     recordType === 'deal' ? 'total_deals' :
-                     recordType === 'contact' ? 'total_contacts' : 'total_accounts';
+  const typeCountCol = recordType === 'lead' ? 'total_leads' : recordType === 'deal' ? 'total_deals' : recordType === 'contact' ? 'total_contacts' : 'total_accounts';
+  const limit = filters?.limit || 100;
+  const offset = filters?.offset || 0;
+  const sortBy = filters?.sort_by === 'confidence' ? 'dc.confidence_score' : filters?.sort_by === 'value' ? 'dc.estimated_pipeline_value' : 'dc.total_records';
+  const sortOrder = filters?.sort_order === 'asc' ? 'ASC' : 'DESC';
 
   let dateFilter = '';
   const params: any[] = [recordType];
   let pi = 2;
-
-  if (options?.start_date) {
-    dateFilter += ` AND dr.created_date >= $${pi++}`;
-    params.push(options.start_date);
-  }
-  if (options?.end_date) {
-    dateFilter += ` AND dr.created_date <= $${pi++}`;
-    params.push(options.end_date + 'T23:59:59Z');
-  }
-
-  const limit = options?.limit || 50;
-  const offset = options?.offset || 0;
-
-  const result = await pool.query(`
-    SELECT dr.*, dc.domain as cluster_domain, dc.company_name as cluster_company,
-           dc.confidence_level, dc.confidence_score as cluster_confidence,
-           dc.total_records as cluster_total, dc.estimated_pipeline_value,
-           dc.id as cluster_id_ref
-    FROM duplicate_records dr
-    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dr.record_type = $1 AND dc.${countField} > 1 AND dc.status = 'active'
-    ${dateFilter}
-    ORDER BY dc.confidence_score DESC, dr.is_primary DESC, dr.created_date ASC
-    LIMIT $${pi++} OFFSET $${pi++}
-  `, [...params, limit, offset]);
-
-  const countResult = await pool.query(`
-    SELECT COUNT(DISTINCT dc.id) as total
-    FROM duplicate_records dr
-    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dr.record_type = $1 AND dc.${countField} > 1 AND dc.status = 'active'
-    ${dateFilter}
-  `, params);
-
-  const grouped: Record<number, any> = {};
-  for (const row of result.rows) {
-    const cid = row.cluster_id;
-    if (!grouped[cid]) {
-      grouped[cid] = {
-        cluster: {
-          id: cid,
-          domain: row.cluster_domain,
-          company_name: row.cluster_company,
-          confidence_level: row.confidence_level,
-          confidence_score: row.cluster_confidence,
-          total_records: row.cluster_total,
-          estimated_pipeline_value: row.estimated_pipeline_value
-        },
-        [recordType + 's']: [],
-        duplicate_count: 0
-      };
-    }
-    grouped[cid][recordType + 's'].push(row);
-    grouped[cid].duplicate_count++;
-  }
-
-  return {
-    groups: Object.values(grouped),
-    total: parseInt(countResult.rows[0]?.total) || 0
-  };
-}
-
-// B5: JOIN-based export eliminating N+1
-export async function getExportRecords(filters?: {
-  owner?: string;
-  start_date?: string;
-  end_date?: string;
-  status?: string;
-}): Promise<any[]> {
-  let whereClause = 'WHERE 1=1';
-  const params: any[] = [];
-  let pi = 1;
-
-  if (filters?.status) {
-    whereClause += ` AND dc.status = $${pi++}`;
-    params.push(filters.status);
-  } else {
-    whereClause += ` AND dc.status = 'active'`;
-  }
-  if (filters?.owner) {
-    whereClause += ` AND (dr.owner_name = $${pi++} OR dr.owner_email = $${pi - 1})`;
-    params.push(filters.owner);
-  }
   if (filters?.start_date) {
-    whereClause += ` AND dr.created_date >= $${pi++}`;
+    dateFilter += ` AND dr.created_date >= $${pi++}`;
     params.push(filters.start_date);
   }
   if (filters?.end_date) {
-    whereClause += ` AND dr.created_date <= $${pi++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
+    dateFilter += ` AND dr.created_date <= $${pi++}`;
+    params.push(filters.end_date);
+  }
+
+  const countResult = await pool.query(`
+    SELECT COUNT(DISTINCT dc.id) as total
+    FROM duplicate_clusters dc
+    WHERE dc.status = 'active' AND dc.${typeCountCol} > 1
+  `);
+
+  params.push(limit, offset);
+  const result = await pool.query(`
+    SELECT dc.id as cluster_id, dc.domain, dc.company_name, dc.confidence_score, dc.confidence_level,
+           dc.total_records, dc.estimated_pipeline_value, dc.${typeCountCol} as type_count,
+           dr.id as record_id, dr.record_type, dr.zoho_record_id, dr.record_name, dr.company_name as rec_company,
+           dr.email, dr.domain as rec_domain, dr.phone, dr.owner_name, dr.owner_email,
+           dr.status as rec_status, dr.stage, dr.deal_value, dr.source,
+           dr.created_date, dr.is_primary, dr.confidence_score as rec_confidence
+    FROM duplicate_clusters dc
+    JOIN duplicate_records dr ON dr.cluster_id = dc.id
+    WHERE dc.status = 'active' AND dc.${typeCountCol} > 1 AND dr.record_type = $1 ${dateFilter}
+    ORDER BY ${sortBy} ${sortOrder}, dr.is_primary DESC, dr.created_date ASC
+    LIMIT $${pi++} OFFSET $${pi}
+  `, params);
+
+  const groupMap = new Map<number, any>();
+  for (const row of result.rows) {
+    if (!groupMap.has(row.cluster_id)) {
+      groupMap.set(row.cluster_id, {
+        cluster: { id: row.cluster_id, domain: row.domain, company_name: row.company_name, confidence_score: row.confidence_score, confidence_level: row.confidence_level, total_records: row.total_records, estimated_pipeline_value: row.estimated_pipeline_value },
+        [recordType + 's']: [],
+        duplicate_count: 0
+      });
+    }
+    const group = groupMap.get(row.cluster_id);
+    group[recordType + 's'].push({
+      id: row.record_id, record_type: row.record_type, zoho_record_id: row.zoho_record_id,
+      record_name: row.record_name, company_name: row.rec_company, email: row.email,
+      domain: row.rec_domain, phone: row.phone, owner_name: row.owner_name,
+      owner_email: row.owner_email, status: row.rec_status, stage: row.stage,
+      deal_value: row.deal_value, source: row.source, created_date: row.created_date,
+      is_primary: row.is_primary, confidence_score: row.rec_confidence
+    });
+    group.duplicate_count = group[recordType + 's'].length;
+  }
+
+  return { groups: Array.from(groupMap.values()), total: parseInt(countResult.rows[0]?.total) || 0 };
+}
+
+export async function getExportRecords(filters?: {
+  owner?: string; start_date?: string; end_date?: string; record_type?: string;
+}): Promise<any[]> {
+  let where = `dc.status = 'active'`;
+  const params: any[] = [];
+  let pi = 1;
+
+  if (filters?.owner) {
+    where += ` AND (dr.owner_name = $${pi} OR dr.owner_email = $${pi++})`;
+    params.push(filters.owner);
+  }
+  if (filters?.start_date) {
+    where += ` AND dr.created_date >= $${pi++}`;
+    params.push(filters.start_date);
+  }
+  if (filters?.end_date) {
+    where += ` AND dr.created_date <= $${pi++}`;
+    params.push(filters.end_date);
+  }
+  if (filters?.record_type && filters.record_type !== 'all') {
+    where += ` AND dr.record_type = $${pi++}`;
+    params.push(filters.record_type);
   }
 
   const result = await pool.query(`
     SELECT dr.*, dc.domain as cluster_domain, dc.confidence_level as cluster_confidence
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    ${whereClause}
-    ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
+    WHERE ${where}
+    ORDER BY dc.confidence_score DESC, dr.created_date ASC
   `, params);
-
   return result.rows;
 }
 
-// C5: Auto-resolution engine
-export async function autoResolveClusters(): Promise<{
-  singletonsIgnored: number;
-  highConfidenceResolved: number;
-  totalProcessed: number;
-}> {
-  let singletonsIgnored = 0;
-  let highConfidenceResolved = 0;
+// ═══════════════════════════════════════════════════════════
+//  AUTO-RESOLUTION ENGINE
+// ═══════════════════════════════════════════════════════════
 
-  const singletons = await pool.query(`
-    SELECT id FROM duplicate_clusters WHERE total_records <= 1 AND status = 'active'
-  `);
-  for (const row of singletons.rows) {
-    await pool.query(
-      "UPDATE duplicate_clusters SET status = 'ignored', resolved_by = 'auto-resolve', resolved_at = CURRENT_TIMESTAMP WHERE id = $1",
-      [row.id]
-    );
-    singletonsIgnored++;
+export async function autoResolveClusters(thresholds?: { min_confidence?: number; auto_ignore_singletons?: boolean }): Promise<{
+  resolved: number; ignored: number;
+}> {
+  const minConf = thresholds?.min_confidence ?? 95;
+  const ignoreSingletons = thresholds?.auto_ignore_singletons ?? true;
+  let resolved = 0;
+  let ignored = 0;
+
+  if (ignoreSingletons) {
+    const singletonResult = await pool.query(`
+      UPDATE duplicate_clusters SET status = 'ignored', resolved_by = 'auto-engine', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE total_records <= 1 AND status = 'active'
+    `);
+    ignored += singletonResult.rowCount || 0;
   }
 
-  const highConf = await pool.query(`
-    SELECT id FROM duplicate_clusters WHERE confidence_score >= 95 AND status = 'active' AND total_records > 1
-  `);
-  for (const row of highConf.rows) {
-    const primary = await pool.query(
+  const highConfClusters = await pool.query(`
+    SELECT id FROM duplicate_clusters
+    WHERE confidence_score >= $1 AND total_records > 1 AND status = 'active'
+  `, [minConf]);
+
+  for (const row of highConfClusters.rows) {
+    const primaryCheck = await pool.query(
       'SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true LIMIT 1',
       [row.id]
     );
-    if (primary.rows[0]) {
-      await resolveCluster(row.id, 'resolve', 'auto-resolve', primary.rows[0].id, 'Auto-resolved: confidence >= 95% with clear primary');
-      highConfidenceResolved++;
+    if (primaryCheck.rows[0]) {
+      await resolveCluster(row.id, 'resolve', 'auto-engine', primaryCheck.rows[0].id, 'Auto-resolved: high confidence with clear primary');
+      resolved++;
     }
   }
 
+  return { resolved, ignored };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SMARTER AI RECOMMENDATIONS
+// ═══════════════════════════════════════════════════════════
+
+export function scoreRecordCompleteness(record: any): number {
+  let score = 0;
+  const fields = ['email', 'phone', 'company_name', 'owner_name', 'source', 'domain'];
+  for (const f of fields) {
+    if (record[f] && String(record[f]).trim()) score += 15;
+  }
+  if (record.deal_value && parseFloat(record.deal_value) > 0) score += 10;
+  return Math.min(score, 100);
+}
+
+export function generateSmartRecommendation(records: DuplicateRecord[]): {
+  primary_id: number | null;
+  recommendations: Array<{
+    record_id: number; record_name: string; action: string; reason: string; completeness: number;
+  }>;
+  summary: string;
+} {
+  if (records.length === 0) return { primary_id: null, recommendations: [], summary: 'No records to analyze' };
+
+  const scored = records.map(r => ({
+    ...r,
+    completeness: scoreRecordCompleteness(r),
+    hasActiveDeal: r.record_type === 'deal' && r.stage && !['Closed Lost', 'Closed Won'].includes(r.stage),
+    recentActivity: r.modified_date ? new Date(r.modified_date).getTime() : 0,
+    age: r.created_date ? new Date(r.created_date).getTime() : Date.now()
+  }));
+
+  scored.sort((a, b) => {
+    if (a.hasActiveDeal !== b.hasActiveDeal) return a.hasActiveDeal ? -1 : 1;
+    if (a.completeness !== b.completeness) return b.completeness - a.completeness;
+    if (a.recentActivity !== b.recentActivity) return b.recentActivity - a.recentActivity;
+    return a.age - b.age;
+  });
+
+  const best = scored[0];
+  const recs = scored.map((r, i) => ({
+    record_id: r.id!,
+    record_name: r.record_name,
+    action: i === 0 ? 'KEEP' : r.record_type === 'lead' && scored.some(s => s.record_type === 'deal') ? 'CLOSE' : 'MERGE',
+    reason: i === 0
+      ? `Best candidate: ${r.completeness}% complete${r.hasActiveDeal ? ', active deal' : ''}`
+      : r.record_type === 'lead' && scored.some(s => s.record_type === 'deal')
+        ? 'Close lead — deal exists for this company'
+        : `Merge into primary (${r.completeness}% complete, less recent)`,
+    completeness: r.completeness
+  }));
+
   return {
-    singletonsIgnored,
-    highConfidenceResolved,
-    totalProcessed: singletonsIgnored + highConfidenceResolved
+    primary_id: best.id || null,
+    recommendations: recs,
+    summary: `Analyzed ${records.length} records. Recommend keeping "${best.record_name}" (${best.completeness}% complete${best.hasActiveDeal ? ', active deal' : ', earliest'}). ${records.length - 1} duplicate(s) for merge/closure.`
   };
 }
 
-// C7: Smart AI recommendations considering completeness, deals, recency
-export function generateSmartRecommendations(records: DuplicateRecord[]): Array<{
-  record_id: number;
-  record_name: string;
-  is_primary: boolean;
-  recommendation: string;
-  action_type: 'keep' | 'merge' | 'close';
-  confidence: number;
-  reasons: string[];
-}> {
-  if (records.length === 0) return [];
+// ═══════════════════════════════════════════════════════════
+//  SYNC STATE MANAGEMENT
+// ═══════════════════════════════════════════════════════════
 
-  const scored = records.map(r => {
-    let score = 0;
-    const reasons: string[] = [];
-
-    const fields = [r.email, r.phone, r.company_name, r.owner_name, r.source].filter(Boolean);
-    const completeness = Math.round((fields.length / 5) * 100);
-    score += completeness;
-    if (completeness >= 80) reasons.push('High data completeness');
-
-    if (r.record_type === 'deal' && r.deal_value && r.deal_value > 0) {
-      score += 30;
-      reasons.push('Has active deal value');
-    }
-
-    if (r.modified_date) {
-      const daysSinceModified = (Date.now() - new Date(r.modified_date).getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceModified < 30) {
-        score += 20;
-        reasons.push('Recently modified');
-      } else if (daysSinceModified < 90) {
-        score += 10;
-        reasons.push('Modified in last 90 days');
-      }
-    }
-
-    if (r.created_date) {
-      const ageInDays = (Date.now() - new Date(r.created_date).getTime()) / (1000 * 60 * 60 * 24);
-      if (ageInDays > 180) {
-        score += 5;
-        reasons.push('Established record (6mo+)');
-      }
-    }
-
-    if (r.stage && ['Closed Won', 'Negotiation', 'Proposal'].includes(r.stage)) {
-      score += 15;
-      reasons.push(`Active deal stage: ${r.stage}`);
-    }
-
-    return { record: r, score, reasons };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-
-  return scored.map((item, index) => ({
-    record_id: item.record.id!,
-    record_name: item.record.record_name,
-    is_primary: index === 0,
-    recommendation: index === 0
-      ? 'KEEP as primary record (highest quality score)'
-      : item.record.record_type === 'lead' && scored.some(s => s.record.record_type === 'deal')
-        ? 'CLOSE – Deal exists for this company'
-        : 'MERGE into primary record',
-    action_type: index === 0 ? 'keep' as const : (item.record.record_type === 'lead' && scored.some(s => s.record.record_type === 'deal') ? 'close' as const : 'merge' as const),
-    confidence: Math.min(95, 60 + (scored[0].score - item.score)),
-    reasons: item.reasons
-  }));
-}
-
-export async function getSyncState(module: string): Promise<ZohoSyncState | null> {
-  const result = await pool.query('SELECT * FROM zoho_sync_state WHERE module = $1', [module]);
-  return result.rows[0] || null;
-}
-
-export async function getAllSyncStates(): Promise<ZohoSyncState[]> {
+export async function getSyncState(): Promise<ZohoSyncState[]> {
   const result = await pool.query('SELECT * FROM zoho_sync_state ORDER BY module');
   return result.rows;
 }
 
-export async function upsertSyncState(module: string, totalSynced: number, status: string): Promise<void> {
-  await pool.query(
-    `INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, sync_status)
-     VALUES ($1, NOW(), $2, $3)
-     ON CONFLICT (module) DO UPDATE SET last_sync_at = NOW(), total_synced = $2, sync_status = $3`,
-    [module, totalSynced, status]
-  );
+export async function getSyncStateForModule(module: string): Promise<ZohoSyncState | null> {
+  const result = await pool.query('SELECT * FROM zoho_sync_state WHERE module = $1', [module]);
+  return result.rows[0] || null;
 }
 
-export async function getDistinctOwners(): Promise<string[]> {
-  const result = await pool.query(
-    `SELECT DISTINCT owner_name FROM duplicate_records WHERE owner_name IS NOT NULL AND owner_name != '' ORDER BY owner_name`
-  );
-  return result.rows.map(r => r.owner_name);
+export async function upsertSyncState(module: string, updates: Partial<ZohoSyncState>): Promise<void> {
+  await pool.query(`
+    INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, last_full_sync_at, sync_status, error_message, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+    ON CONFLICT (module) DO UPDATE SET
+      last_sync_at = COALESCE($2, zoho_sync_state.last_sync_at),
+      total_synced = COALESCE($3, zoho_sync_state.total_synced),
+      last_full_sync_at = COALESCE($4, zoho_sync_state.last_full_sync_at),
+      sync_status = COALESCE($5, zoho_sync_state.sync_status),
+      error_message = $6,
+      updated_at = CURRENT_TIMESTAMP
+  `, [module, updates.last_sync_at || null, updates.total_synced ?? null, updates.last_full_sync_at || null,
+      updates.sync_status || null, updates.error_message || null]);
 }
 
-export async function getDistinctLayouts(): Promise<string[]> {
-  const result = await pool.query(
-    `SELECT DISTINCT layout_name FROM duplicate_records WHERE layout_name IS NOT NULL AND layout_name != '' ORDER BY layout_name`
-  );
-  return result.rows.map(r => r.layout_name);
+// ═══════════════════════════════════════════════════════════
+//  FILTER METADATA
+// ═══════════════════════════════════════════════════════════
+
+export async function getDistinctOwners(): Promise<Array<{ owner_name: string; record_count: number }>> {
+  const result = await pool.query(`
+    SELECT owner_name, COUNT(*) as record_count
+    FROM duplicate_records
+    WHERE owner_name IS NOT NULL AND owner_name != '' AND owner_name != 'Unknown'
+    GROUP BY owner_name
+    ORDER BY record_count DESC
+    LIMIT 200
+  `);
+  return result.rows;
 }
 
-export async function getDistinctDomains(): Promise<string[]> {
-  const result = await pool.query(
-    `SELECT DISTINCT domain FROM duplicate_records WHERE domain IS NOT NULL AND domain != '' ORDER BY domain LIMIT 200`
-  );
-  return result.rows.map(r => r.domain);
+export async function getDistinctLayouts(): Promise<Array<{ layout_name: string; zoho_module: string; record_count: number }>> {
+  const result = await pool.query(`
+    SELECT layout_name, zoho_module, COUNT(*) as record_count
+    FROM duplicate_records
+    WHERE layout_name IS NOT NULL AND layout_name != ''
+    GROUP BY layout_name, zoho_module
+    ORDER BY zoho_module, record_count DESC
+  `);
+  return result.rows;
 }
 
-export async function getDistinctProducts(): Promise<string[]> {
-  const result = await pool.query(
-    `SELECT DISTINCT products FROM duplicate_records WHERE products IS NOT NULL AND products != '' ORDER BY products`
-  );
-  return result.rows.map(r => r.products);
+export async function getDistinctDomains(): Promise<Array<{ domain: string; record_count: number }>> {
+  const result = await pool.query(`
+    SELECT domain, COUNT(*) as record_count
+    FROM duplicate_records
+    WHERE domain IS NOT NULL AND domain != '' AND domain NOT LIKE '%.cluster'
+    GROUP BY domain
+    ORDER BY record_count DESC
+    LIMIT 500
+  `);
+  return result.rows;
 }
 
-export async function getDistinctPipelines(): Promise<string[]> {
-  const result = await pool.query(
-    `SELECT DISTINCT pipeline FROM duplicate_records WHERE pipeline IS NOT NULL AND pipeline != '' ORDER BY pipeline`
-  );
-  return result.rows.map(r => r.pipeline);
+export async function getDistinctProducts(): Promise<Array<{ products: string; record_count: number }>> {
+  const result = await pool.query(`
+    SELECT products, COUNT(*) as record_count
+    FROM duplicate_records
+    WHERE products IS NOT NULL AND products != ''
+    GROUP BY products
+    ORDER BY record_count DESC
+  `);
+  return result.rows;
 }
 
-export async function getFilteredClusters(filters: DuplicateFilters, limit = 30, offset = 0): Promise<{ clusters: DuplicateCluster[]; total: number }> {
-  let whereConditions = ['c.status = $1'];
-  let params: any[] = [filters.status || 'active'];
-  let paramIdx = 2;
+export async function getDistinctPipelines(): Promise<Array<{ pipeline: string; record_count: number }>> {
+  const result = await pool.query(`
+    SELECT pipeline, COUNT(*) as record_count
+    FROM duplicate_records
+    WHERE pipeline IS NOT NULL AND pipeline != ''
+    GROUP BY pipeline
+    ORDER BY record_count DESC
+  `);
+  return result.rows;
+}
 
-  if (filters.confidence_level) {
-    whereConditions.push(`c.confidence_level = $${paramIdx++}`);
-    params.push(filters.confidence_level);
+export interface DuplicateFilters {
+  module?: string;
+  layout?: string;
+  owner?: string;
+  start_date?: string;
+  end_date?: string;
+  domain?: string;
+  products?: string;
+  pipeline?: string;
+  status?: string;
+  confidence_level?: string;
+  limit?: number;
+  offset?: number;
+  sort_by?: string;
+  sort_order?: string;
+}
+
+function buildFilterWhere(filters: DuplicateFilters, tableAlias: string = 'dr'): { where: string; params: any[]; nextIndex: number } {
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let idx = 1;
+
+  if (filters.module) {
+    conditions.push(`${tableAlias}.zoho_module = $${idx++}`);
+    params.push(filters.module);
   }
-
+  if (filters.layout) {
+    conditions.push(`${tableAlias}.layout_name = $${idx++}`);
+    params.push(filters.layout);
+  }
+  if (filters.owner) {
+    conditions.push(`${tableAlias}.owner_name = $${idx++}`);
+    params.push(filters.owner);
+  }
   if (filters.start_date) {
-    whereConditions.push(`c.created_at >= $${paramIdx++}`);
+    conditions.push(`${tableAlias}.created_date >= $${idx++}`);
     params.push(filters.start_date);
   }
-
   if (filters.end_date) {
-    whereConditions.push(`c.created_at <= $${paramIdx++}`);
+    conditions.push(`${tableAlias}.created_date <= $${idx++}`);
     params.push(filters.end_date);
   }
-
-  let joinNeeded = false;
-  let recordConditions: string[] = [];
-
-  if (filters.modules && filters.modules.length > 0) {
-    joinNeeded = true;
-    recordConditions.push(`r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(',')})`);
-    params.push(...filters.modules);
-    paramIdx += filters.modules.length;
-  }
-
-  if (filters.owners && filters.owners.length > 0) {
-    joinNeeded = true;
-    recordConditions.push(`r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(',')})`);
-    params.push(...filters.owners);
-    paramIdx += filters.owners.length;
-  }
-
-  if (filters.layouts && filters.layouts.length > 0) {
-    joinNeeded = true;
-    recordConditions.push(`r.layout_name IN (${filters.layouts.map((_, i) => `$${paramIdx + i}`).join(',')})`);
-    params.push(...filters.layouts);
-    paramIdx += filters.layouts.length;
-  }
-
-  if (filters.pipelines && filters.pipelines.length > 0) {
-    joinNeeded = true;
-    recordConditions.push(`r.pipeline IN (${filters.pipelines.map((_, i) => `$${paramIdx + i}`).join(',')})`);
-    params.push(...filters.pipelines);
-    paramIdx += filters.pipelines.length;
-  }
-
   if (filters.domain) {
-    joinNeeded = true;
-    recordConditions.push(`r.domain ILIKE $${paramIdx++}`);
+    conditions.push(`LOWER(${tableAlias}.domain) LIKE LOWER($${idx++})`);
     params.push(`%${filters.domain}%`);
   }
-
-  const joinClause = joinNeeded ? 'INNER JOIN duplicate_records r ON r.cluster_id = c.id' : '';
-  const recordWhere = recordConditions.length > 0 ? 'AND ' + recordConditions.join(' AND ') : '';
-
-  const countQuery = `SELECT COUNT(DISTINCT c.id) as total FROM duplicate_clusters c ${joinClause} WHERE ${whereConditions.join(' AND ')} ${recordWhere}`;
-  const countResult = await pool.query(countQuery, params);
-  const total = parseInt(countResult.rows[0].total);
-
-  const dataParams = [...params, limit, offset];
-  const dataQuery = `SELECT DISTINCT c.* FROM duplicate_clusters c ${joinClause} WHERE ${whereConditions.join(' AND ')} ${recordWhere} ORDER BY c.confidence_score DESC, c.total_records DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
-  const dataResult = await pool.query(dataQuery, dataParams);
-
-  return { clusters: dataResult.rows, total };
-}
-
-export async function getFilteredSummary(filters: DuplicateFilters): Promise<any> {
-  let whereConditions = ["c.status = 'active'"];
-  let params: any[] = [];
-  let paramIdx = 1;
-
-  let joinNeeded = false;
-  let recordConditions: string[] = [];
-
-  if (filters.modules && filters.modules.length > 0) {
-    joinNeeded = true;
-    recordConditions.push(`r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(',')})`);
-    params.push(...filters.modules);
-    paramIdx += filters.modules.length;
+  if (filters.products) {
+    conditions.push(`${tableAlias}.products = $${idx++}`);
+    params.push(filters.products);
   }
-
-  if (filters.owners && filters.owners.length > 0) {
-    joinNeeded = true;
-    recordConditions.push(`r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(',')})`);
-    params.push(...filters.owners);
-    paramIdx += filters.owners.length;
+  if (filters.pipeline) {
+    conditions.push(`${tableAlias}.pipeline = $${idx++}`);
+    params.push(filters.pipeline);
   }
-
-  if (filters.domain) {
-    joinNeeded = true;
-    recordConditions.push(`r.domain ILIKE $${paramIdx++}`);
-    params.push(`%${filters.domain}%`);
-  }
-
-  const joinClause = joinNeeded ? 'INNER JOIN duplicate_records r ON r.cluster_id = c.id' : '';
-  const recordWhere = recordConditions.length > 0 ? 'AND ' + recordConditions.join(' AND ') : '';
-
-  const query = `
-    SELECT 
-      COUNT(DISTINCT c.id) as total_clusters,
-      COUNT(DISTINCT CASE WHEN c.confidence_level = 'high' THEN c.id END) as high_confidence,
-      COUNT(DISTINCT CASE WHEN c.confidence_level = 'medium' THEN c.id END) as medium_confidence,
-      COUNT(DISTINCT CASE WHEN c.confidence_level = 'low' THEN c.id END) as low_confidence,
-      COALESCE(SUM(c.estimated_pipeline_value), 0) as pipeline_inflation
-    FROM duplicate_clusters c ${joinClause}
-    WHERE ${whereConditions.join(' AND ')} ${recordWhere}
-  `;
-
-  const result = await pool.query(query, params);
-  const row = result.rows[0];
 
   return {
-    totalClusters: parseInt(row.total_clusters),
-    highConfidence: parseInt(row.high_confidence),
-    mediumConfidence: parseInt(row.medium_confidence),
-    lowConfidence: parseInt(row.low_confidence),
-    estimatedPipelineInflation: parseFloat(row.pipeline_inflation)
+    where: conditions.length > 0 ? conditions.join(' AND ') : '1=1',
+    params,
+    nextIndex: idx
   };
 }
 
-export async function upsertTask(task: Omit<DuplicateRecordTask, 'id' | 'created_at'>): Promise<DuplicateRecordTask> {
-  const result = await pool.query(
-    `INSERT INTO duplicate_record_tasks (zoho_task_id, related_record_id, cluster_id, subject, due_date, status, owner_name, description)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (zoho_task_id) DO UPDATE SET
-       subject = EXCLUDED.subject, due_date = EXCLUDED.due_date, status = EXCLUDED.status,
-       owner_name = EXCLUDED.owner_name, description = EXCLUDED.description
-     RETURNING *`,
-    [task.zoho_task_id, task.related_record_id, task.cluster_id, task.subject, task.due_date, task.status, task.owner_name, task.description]
-  );
-  return result.rows[0];
+export async function getFilteredClusters(filters: DuplicateFilters): Promise<{ clusters: DuplicateCluster[]; total: number }> {
+  const hasRecordFilters = filters.module || filters.layout || filters.owner || filters.start_date
+    || filters.end_date || filters.domain || filters.products || filters.pipeline;
+
+  if (!hasRecordFilters) {
+    const clusters = await getAllClusters({
+      status: filters.status, confidence_level: filters.confidence_level,
+      limit: filters.limit || 100, offset: filters.offset || 0
+    });
+    const total = await getClusterCount({ status: filters.status, confidence_level: filters.confidence_level });
+    return { clusters, total };
+  }
+
+  const { where, params, nextIndex } = buildFilterWhere(filters);
+  let idx = nextIndex;
+  let statusFilter = '';
+  if (filters.status) {
+    statusFilter = ` AND dc.status = $${idx++}`;
+    params.push(filters.status);
+  }
+  if (filters.confidence_level) {
+    statusFilter += ` AND dc.confidence_level = $${idx++}`;
+    params.push(filters.confidence_level);
+  }
+
+  const countResult = await pool.query(`
+    SELECT COUNT(DISTINCT dc.id) as total
+    FROM duplicate_clusters dc
+    JOIN duplicate_records dr ON dr.cluster_id = dc.id
+    WHERE ${where} ${statusFilter}
+  `, params);
+
+  const limit = filters.limit || 100;
+  const offset = filters.offset || 0;
+  const dataParams = [...params, limit, offset];
+  const dataResult = await pool.query(`
+    SELECT DISTINCT dc.*
+    FROM duplicate_clusters dc
+    JOIN duplicate_records dr ON dr.cluster_id = dc.id
+    WHERE ${where} ${statusFilter}
+    ORDER BY dc.total_records DESC, dc.confidence_score DESC
+    LIMIT $${idx++} OFFSET $${idx++}
+  `, dataParams);
+
+  return {
+    clusters: dataResult.rows,
+    total: parseInt(countResult.rows[0]?.total) || 0
+  };
 }
 
-export async function getTasksForRecords(recordIds: string[]): Promise<DuplicateRecordTask[]> {
-  if (recordIds.length === 0) return [];
-  const placeholders = recordIds.map((_, i) => `$${i + 1}`).join(',');
+export async function getFilteredSummary(filters: DuplicateFilters): Promise<any> {
+  const hasRecordFilters = filters.module || filters.layout || filters.owner || filters.start_date
+    || filters.end_date || filters.domain || filters.products || filters.pipeline;
+
+  if (!hasRecordFilters) {
+    return getEnhancedSummary();
+  }
+
+  const { where, params } = buildFilterWhere(filters);
+
+  const result = await pool.query(`
+    SELECT
+      COUNT(DISTINCT dc.id) as total_clusters,
+      COUNT(DISTINCT dc.id) FILTER (WHERE dc.total_records > 1) as true_duplicate_clusters,
+      COUNT(dr.id) as total_records,
+      COUNT(dr.id) FILTER (WHERE dr.record_type = 'lead') as total_leads,
+      COUNT(dr.id) FILTER (WHERE dr.record_type = 'deal') as total_deals,
+      COUNT(dr.id) FILTER (WHERE dr.record_type = 'contact') as total_contacts,
+      COUNT(dr.id) FILTER (WHERE dr.record_type = 'account') as total_accounts,
+      COUNT(DISTINCT dc.id) FILTER (WHERE dc.confidence_level = 'high') as high_confidence,
+      COUNT(DISTINCT dc.id) FILTER (WHERE dc.confidence_level = 'medium') as medium_confidence,
+      COUNT(DISTINCT dc.id) FILTER (WHERE dc.confidence_level = 'low') as low_confidence,
+      COALESCE(SUM(dc.estimated_pipeline_value), 0) as pipeline_inflation,
+      COUNT(DISTINCT dc.id) FILTER (WHERE dc.status = 'active') as active_clusters,
+      COUNT(DISTINCT dc.id) FILTER (WHERE dc.status = 'resolved') as resolved_clusters
+    FROM duplicate_records dr
+    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+    WHERE ${where}
+  `, params);
+
+  const row = result.rows[0];
+  return {
+    totalClusters: parseInt(row.total_clusters) || 0,
+    trueDuplicateClusters: parseInt(row.true_duplicate_clusters) || 0,
+    totalRecords: parseInt(row.total_records) || 0,
+    totalLeads: parseInt(row.total_leads) || 0,
+    totalDeals: parseInt(row.total_deals) || 0,
+    totalContacts: parseInt(row.total_contacts) || 0,
+    totalAccounts: parseInt(row.total_accounts) || 0,
+    highConfidence: parseInt(row.high_confidence) || 0,
+    mediumConfidence: parseInt(row.medium_confidence) || 0,
+    lowConfidence: parseInt(row.low_confidence) || 0,
+    estimatedPipelineInflation: parseFloat(row.pipeline_inflation) || 0,
+    activeClusters: parseInt(row.active_clusters) || 0,
+    resolvedClusters: parseInt(row.resolved_clusters) || 0
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TASK FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+
+export async function upsertTask(task: Omit<DuplicateRecordTask, 'id' | 'created_at'>): Promise<void> {
+  await pool.query(`
+    INSERT INTO duplicate_record_tasks (zoho_task_id, related_record_id, subject, due_date, status, priority, owner_name)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (zoho_task_id) DO UPDATE SET
+      related_record_id = EXCLUDED.related_record_id,
+      subject = EXCLUDED.subject,
+      due_date = EXCLUDED.due_date,
+      status = EXCLUDED.status,
+      priority = EXCLUDED.priority,
+      owner_name = EXCLUDED.owner_name
+  `, [task.zoho_task_id, task.related_record_id || null, task.subject || null,
+      task.due_date || null, task.status || null, task.priority || null, task.owner_name || null]);
+}
+
+export async function getTasksForRecords(zohoRecordIds: string[]): Promise<DuplicateRecordTask[]> {
+  if (zohoRecordIds.length === 0) return [];
   const result = await pool.query(
-    `SELECT * FROM duplicate_record_tasks WHERE related_record_id IN (${placeholders}) ORDER BY due_date DESC`,
-    recordIds
+    'SELECT * FROM duplicate_record_tasks WHERE related_record_id = ANY($1) ORDER BY due_date ASC',
+    [zohoRecordIds]
   );
   return result.rows;
 }
 
 export async function getTaskCountForCluster(clusterId: number): Promise<number> {
-  const result = await pool.query(
-    `SELECT COUNT(*) as cnt FROM duplicate_record_tasks WHERE cluster_id = $1`,
-    [clusterId]
-  );
-  return parseInt(result.rows[0].cnt);
+  const result = await pool.query(`
+    SELECT COUNT(t.id) as task_count
+    FROM duplicate_record_tasks t
+    JOIN duplicate_records dr ON t.related_record_id = dr.zoho_record_id
+    WHERE dr.cluster_id = $1
+  `, [clusterId]);
+  return parseInt(result.rows[0]?.task_count) || 0;
 }
 
-export async function calculateEnhancedScore(
-  record1: DuplicateRecord,
-  record2: DuplicateRecord
-): Promise<{ score: number; signals: string[] }> {
-  const base = calculateMultiSignalScore(
-    { email: record1.email, domain: record1.domain, phone: record1.phone, company_name: record1.company_name },
-    { email: record2.email, domain: record2.domain, phone: record2.phone, company_name: record2.company_name }
-  );
+// ═══════════════════════════════════════════════════════════
+//  ENHANCED MULTI-SIGNAL SCORING (with new fields)
+// ═══════════════════════════════════════════════════════════
 
-  let score = base.score;
-  const signals = [...base.signals];
+export function calculateEnhancedScore(record1: any, record2: any): { score: number; signals: string[] } {
+  let score = 0;
+  const signals: string[] = [];
 
-  if (record1.mobile && record2.mobile) {
-    const m1 = normalizePhone(record1.mobile);
-    const m2 = normalizePhone(record2.mobile);
-    if (m1 && m2 && m1.length >= 7 && m1 === m2) {
-      score += 25;
-      signals.push('mobile_match');
+  // CR Number match = definite duplicate
+  if (record1.cr_number && record2.cr_number && record1.cr_number === record2.cr_number) {
+    return { score: 99, signals: ['cr_number_match'] };
+  }
+  // VAT Number match = definite duplicate
+  if (record1.vat_number && record2.vat_number && record1.vat_number === record2.vat_number) {
+    return { score: 99, signals: ['vat_number_match'] };
+  }
+
+  // Website domain match
+  if (record1.website && record2.website) {
+    const d1 = extractDomain(record1.website);
+    const d2 = extractDomain(record2.website);
+    if (d1 && d2 && d1 === d2) {
+      score += 35;
+      signals.push('website_match');
     }
   }
 
-  if (record1.cr_number && record2.cr_number && record1.cr_number === record2.cr_number) {
-    score += 35;
-    signals.push('cr_number_match');
+  // Email exact match
+  if (record1.email && record2.email) {
+    if (record1.email.toLowerCase() === record2.email.toLowerCase()) {
+      score += 35;
+      signals.push('email_exact');
+    } else {
+      const d1 = extractDomain(record1.email);
+      const d2 = extractDomain(record2.email);
+      if (d1 && d2 && d1 === d2 && !isPublicDomain(d1)) {
+        score += 15;
+        signals.push('email_domain');
+      }
+    }
   }
 
-  if (record1.vat_number && record2.vat_number && record1.vat_number === record2.vat_number) {
-    score += 30;
-    signals.push('vat_number_match');
+  // Phone match (including mobile cross-check)
+  const phones1 = [record1.phone_normalized, record1.mobile_normalized].filter(Boolean);
+  const phones2 = [record2.phone_normalized, record2.mobile_normalized].filter(Boolean);
+  for (const p1 of phones1) {
+    for (const p2 of phones2) {
+      if (p1 && p2 && p1.length >= 7 && p1 === p2) {
+        score += 30;
+        signals.push('phone_match');
+        break;
+      }
+    }
+    if (signals.includes('phone_match')) break;
   }
 
-  if (record1.website && record2.website) {
-    const w1 = record1.website.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-    const w2 = record2.website.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-    if (w1 === w2) {
+  // Company name match
+  if (record1.company_name && record2.company_name) {
+    const sim = calculateSimilarity(normalizeCompanyName(record1.company_name), normalizeCompanyName(record2.company_name));
+    if (sim >= 90) {
       score += 20;
-      signals.push('website_match');
+      signals.push('company_exact');
+    } else if (sim >= 75) {
+      score += 10;
+      signals.push('company_fuzzy');
+    }
+  }
+
+  // Account name match (for deals/contacts)
+  if (record1.account_name && record2.account_name) {
+    const sim = calculateSimilarity(normalizeCompanyName(record1.account_name), normalizeCompanyName(record2.account_name));
+    if (sim >= 90) {
+      score += 15;
+      signals.push('account_match');
     }
   }
 
   return { score: Math.min(score, 100), signals };
 }
 
-export interface DataQualityResult {
-  score: number;
-  flags: string[];
-  isJunk: boolean;
+function isPublicDomain(domain: string): boolean {
+  const public_domains = ['gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','aol.com','live.com','mail.com','protonmail.com'];
+  return public_domains.includes(domain.toLowerCase());
 }
 
-const GIBBERISH_REGEX = /^[a-zA-Z]{20,}$/;
-const RANDOM_MIXED_REGEX = /^[a-zA-Z0-9]{25,}$/;
-const CONSECUTIVE_CAPS_REGEX = /[A-Z]{8,}/;
-const NAME_GARBAGE = ['test', 'testing', 'asdf', 'qwerty', 'xxx', 'yyy', 'zzz', 'demo', 'sample', 'unknown', 'n/a', 'na', '-', '.', '..', 'null'];
+// ═══════════════════════════════════════════════════════════
+//  DATA QUALITY STATS
+// ═══════════════════════════════════════════════════════════
 
-function isGibberishName(name: string): boolean {
-  if (!name) return false;
-  const trimmed = name.trim();
-  if (trimmed.length < 2) return true;
+export async function getDataQualityStats(): Promise<{
+  totalRecords: number;
+  junkRecords: number;
+  avgQualityScore: number;
+  qualityDistribution: { bucket: string; count: number }[];
+  topIssues: { flag: string; count: number }[];
+  byModule: { module: string; avgScore: number; junkCount: number; totalCount: number }[];
+}> {
+  const totalRes = await pool.query('SELECT COUNT(*) as cnt FROM duplicate_records WHERE is_mock_data = false');
+  const totalRecords = parseInt(totalRes.rows[0].cnt) || 0;
 
-  const words = trimmed.split(/\s+/);
-  if (words.some(w => w.length > 25 && /^[a-zA-Z]+$/.test(w))) return true;
-  if (GIBBERISH_REGEX.test(trimmed.replace(/\s/g, ''))) return true;
-  if (RANDOM_MIXED_REGEX.test(trimmed.replace(/\s/g, ''))) return true;
+  const junkRes = await pool.query('SELECT COUNT(*) as cnt FROM duplicate_records WHERE is_mock_data = false AND data_quality_score <= 20');
+  const junkRecords = parseInt(junkRes.rows[0].cnt) || 0;
 
-  const latinLetters = (trimmed.match(/[a-zA-Z]/g) || []).length;
-  const upperCase = (trimmed.match(/[A-Z]/g) || []).length;
-  if (latinLetters > 10 && upperCase / latinLetters > 0.6) return true;
-  if (CONSECUTIVE_CAPS_REGEX.test(trimmed)) return true;
+  const avgRes = await pool.query('SELECT ROUND(AVG(data_quality_score)) as avg FROM duplicate_records WHERE is_mock_data = false');
+  const avgQualityScore = parseInt(avgRes.rows[0]?.avg) || 0;
 
-  const consonants = (trimmed.toLowerCase().match(/[bcdfghjklmnpqrstvwxyz]/g) || []).length;
-  const vowels = (trimmed.toLowerCase().match(/[aeiou]/g) || []).length;
-  if (latinLetters > 10 && vowels === 0) return true;
-  if (latinLetters > 15 && consonants > 0 && vowels > 0 && consonants / vowels > 8) return true;
+  const distRes = await pool.query(`
+    SELECT
+      CASE
+        WHEN data_quality_score >= 80 THEN 'Good (80-100)'
+        WHEN data_quality_score >= 50 THEN 'Fair (50-79)'
+        WHEN data_quality_score >= 21 THEN 'Poor (21-49)'
+        ELSE 'Junk (0-20)'
+      END as bucket,
+      COUNT(*) as count
+    FROM duplicate_records WHERE is_mock_data = false
+    GROUP BY bucket ORDER BY MIN(data_quality_score) DESC
+  `);
 
-  return false;
-}
+  const flagRes = await pool.query(`
+    SELECT flag, COUNT(*) as count
+    FROM duplicate_records, jsonb_array_elements_text(data_quality_flags) AS flag
+    WHERE is_mock_data = false
+    GROUP BY flag ORDER BY count DESC LIMIT 15
+  `);
 
-function isSuspiciousEmail(email: string): boolean {
-  if (!email) return false;
-  const local = email.split('@')[0] || '';
-  if (/\d{6,}/.test(local)) return true;
-  if (local.length > 30 && /^[a-z0-9.]+$/.test(local)) {
-    const dots = (local.match(/\./g) || []).length;
-    if (dots > 4) return true;
-  }
-  return false;
-}
-
-export function assessDataQuality(record: {
-  recordName?: string;
-  companyName?: string;
-  email?: string;
-  phone?: string;
-  mobile?: string;
-  ownerName?: string;
-  domain?: string | null;
-}): DataQualityResult {
-  const flags: string[] = [];
-  let score = 100;
-
-  const name = record.recordName || '';
-  const nameLower = name.toLowerCase().trim();
-  if (!name || nameLower === '-' || nameLower === '.') {
-    flags.push('missing_name');
-    score -= 20;
-  } else if (NAME_GARBAGE.includes(nameLower)) {
-    flags.push('garbage_name');
-    score -= 40;
-  } else if (isGibberishName(name)) {
-    flags.push('gibberish_name');
-    score -= 50;
-  }
-
-  const company = record.companyName || '';
-  if (!company || company === 'Unknown') {
-    flags.push('missing_company');
-    score -= 15;
-  } else if (isGibberishName(company)) {
-    flags.push('gibberish_company');
-    score -= 30;
-  }
-
-  if (!record.email) {
-    flags.push('missing_email');
-    score -= 10;
-  } else if (isSuspiciousEmail(record.email)) {
-    flags.push('suspicious_email');
-    score -= 15;
-  }
-
-  const phoneNorm = record.phone ? normalizePhone(record.phone) : '';
-  const mobileNorm = record.mobile ? normalizePhone(record.mobile) : '';
-  if (!phoneNorm && !mobileNorm) {
-    flags.push('missing_phone');
-    score -= 10;
-  }
-
-  if (!record.ownerName || record.ownerName === 'Unknown') {
-    flags.push('missing_owner');
-    score -= 5;
-  }
-
-  if (!record.domain) {
-    flags.push('no_business_domain');
-    score -= 5;
-  }
+  const modRes = await pool.query(`
+    SELECT zoho_module as module,
+      ROUND(AVG(data_quality_score)) as avg_score,
+      COUNT(*) FILTER (WHERE data_quality_score <= 20) as junk_count,
+      COUNT(*) as total_count
+    FROM duplicate_records WHERE is_mock_data = false AND zoho_module IS NOT NULL
+    GROUP BY zoho_module ORDER BY zoho_module
+  `);
 
   return {
-    score: Math.max(0, score),
-    flags,
-    isJunk: score <= 20 || flags.includes('gibberish_name') || flags.includes('garbage_name'),
+    totalRecords,
+    junkRecords,
+    avgQualityScore,
+    qualityDistribution: distRes.rows,
+    topIssues: flagRes.rows,
+    byModule: modRes.rows.map((r: any) => ({
+      module: r.module,
+      avgScore: parseInt(r.avg_score) || 0,
+      junkCount: parseInt(r.junk_count) || 0,
+      totalCount: parseInt(r.total_count) || 0,
+    })),
   };
 }
 
