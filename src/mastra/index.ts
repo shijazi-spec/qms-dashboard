@@ -1101,6 +1101,10 @@ export const mastra = new Mastra({
               }
               console.log(`👥 [API] Found ${activeOwnerNames.size} active owner names, ${Object.keys(userOverrides).length} manual overrides`);
               
+              const ownerNameAliases: Record<string, string> = {
+                "Rayan": "Rayan Saleh",
+              };
+
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
               for (const user of users) {
                 userMap[user.id] = { name: user.name, team: user.team, role: user.role };
@@ -1129,7 +1133,8 @@ export const mastra = new Mastra({
               }> = [];
               
               for (const lead of leads) {
-                const ownerId = lead.Owner || 'Unassigned';
+                const rawOwnerId = lead.Owner || 'Unassigned';
+                const ownerId = ownerNameAliases[rawOwnerId] || rawOwnerId;
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'SDR', role: 'SDR Representative' };
                 const override = userOverrides[userInfo.name] || userOverrides[ownerId];
                 
@@ -1166,7 +1171,8 @@ export const mastra = new Mastra({
               }
               
               for (const deal of deals) {
-                const ownerId = deal.Owner || 'Unassigned';
+                const rawDealOwnerId = deal.Owner || 'Unassigned';
+                const ownerId = ownerNameAliases[rawDealOwnerId] || rawDealOwnerId;
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'Sales', role: 'Account Executive' };
                 const dealOverride = userOverrides[userInfo.name] || userOverrides[ownerId];
                 
