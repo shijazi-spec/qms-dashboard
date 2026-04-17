@@ -149,7 +149,7 @@ const WalaPlusNav = {
           }
         })
         .catch(() => {});
-      fetch('/api/consultant/alerts?limit=5&status=new', { credentials: 'same-origin' })
+      fetch('/api/consultant/alerts?limit=5&status=open', { credentials: 'same-origin' })
         .then(r => r.ok ? r.json() : { alerts: [] })
         .then(data => {
           const list = document.getElementById('nav-alert-list');
