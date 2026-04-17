@@ -1153,12 +1153,29 @@ export async function cleanupOrphanClusters(): Promise<number> {
 
 export function normalizeCompanyName(name: string): string {
   if (!name) return '';
-  return name
+  let n = name
     .toLowerCase()
     .replace(/[^\w\s\u0600-\u06FF]/g, ' ')
     .replace(/\s+/g, ' ')
-    .replace(/\b(llc|ltd|inc|corp|company|group|co|sa|ksa|uae|ae)\b/gi, '')
-    .trim();
+    .replace(/\b(llc|ltd|inc|corp|corporation|company|group|holdings?|holding|co|sa|ksa|uae|ae)\b/gi, ' ');
+
+  const arabicBoilerplate = [
+    'شركة', 'الشركة', 'مؤسسة', 'المؤسسة', 'مجموعة', 'المجموعة',
+    'محدودة', 'المحدودة', 'القابضة', 'قابضة',
+    'للتجارة', 'التجارية', 'التجاري',
+    'للمقاولات', 'المقاولات',
+    'للاستثمار', 'الاستثمارية',
+    'للخدمات', 'الخدمات',
+    'العامة', 'المتحدة',
+    'ذ.م.م', 'ذمم', 'ش.م.م', 'شمم', 'ش.م.ك', 'شمك'
+  ];
+  const boilerplateRe = new RegExp(
+    '(^|\\s)(' + arabicBoilerplate.map(w => w.replace(/\./g, '\\.')).join('|') + ')(?=\\s|$)',
+    'g'
+  );
+  n = n.replace(boilerplateRe, ' ');
+
+  return n.replace(/\s+/g, ' ').trim();
 }
 
 // B4: Fuzzy match using pg_trgm similarity() with fallback
@@ -1205,29 +1222,34 @@ export async function findOrCreateClusterByCompany(
     }
   }
 
-  if (normalizedName) {
+  // Only use a substring ILIKE shortcut when the normalized name is distinctive
+  // enough (>= 5 chars). Short fragments like "شركة" or "ltd" (after partial
+  // strips) used to match unrelated rows.
+  if (normalizedName && normalizedName.length >= 5) {
     const existingByCompany = await pool.query(
       `SELECT * FROM duplicate_clusters 
-       WHERE company_name ILIKE $1 OR company_name ILIKE $2`,
-      [`%${normalizedName}%`, `%${companyName}%`]
+       WHERE company_name_normalized = $1`,
+      [normalizedName]
     );
     if (existingByCompany.rows[0]) {
       return existingByCompany.rows[0];
     }
   }
 
-  // B4: Try pg_trgm similarity() first, fallback to limited Levenshtein
+  // B4: Try pg_trgm similarity() first, fallback to limited Levenshtein.
+  // Threshold raised to 0.6 — at 0.4, unrelated Arabic LLCs sharing only the
+  // boilerplate "شركة ... المحدودة" were being clustered together.
   if (normalizedName && normalizedName.length > 2) {
     try {
       const trgmResult = await pool.query(
         `SELECT *, similarity(company_name_normalized, $1) as sim
          FROM duplicate_clusters
          WHERE company_name_normalized IS NOT NULL AND company_name_normalized != ''
-           AND similarity(company_name_normalized, $1) >= 0.4
+           AND similarity(company_name_normalized, $1) >= 0.6
          ORDER BY sim DESC LIMIT 1`,
         [normalizedName]
       );
-      if (trgmResult.rows[0] && trgmResult.rows[0].sim >= 0.4) {
+      if (trgmResult.rows[0] && trgmResult.rows[0].sim >= 0.6) {
         return trgmResult.rows[0];
       }
     } catch {
@@ -1238,7 +1260,7 @@ export async function findOrCreateClusterByCompany(
         const clusterNormalized = normalizeCompanyName(cluster.company_name || '');
         if (clusterNormalized && normalizedName && clusterNormalized.length > 2 && normalizedName.length > 2) {
           const similarity = calculateSimilarity(clusterNormalized, normalizedName);
-          if (similarity >= 80) {
+          if (similarity >= 85) {
             return cluster;
           }
         }
