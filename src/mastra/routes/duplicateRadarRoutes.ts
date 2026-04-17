@@ -23,6 +23,7 @@ import {
   searchDuplicates,
   createCluster,
   clearAllDuplicateData,
+  truncateAllDuplicateData,
   cleanupStaleRecords,
   cleanupOrphanClusters,
   findOrCreateClusterByCompany,
@@ -543,12 +544,16 @@ export const duplicateRadarRoutes = [
           const offset = parseInt(url.searchParams.get('offset') || '0');
           const start_date = url.searchParams.get('start_date') || undefined;
           const end_date = url.searchParams.get('end_date') || undefined;
+          // Hide legitimate parent-child hierarchies (e.g. 1 account + N contacts/deals)
+          // by default. Pass ?include_hierarchies=true to see them.
+          const include_hierarchies = url.searchParams.get('include_hierarchies') === 'true';
 
           const filters = {
             status: status || undefined,
             confidence_level: confidence_level || undefined,
             start_date,
-            end_date
+            end_date,
+            hide_hierarchies: !include_hierarchies,
           };
 
           const [clusters, total] = await Promise.all([
@@ -748,6 +753,46 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           console.error('Error starting Zoho CRM scan:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/rebuild",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          if (scanState.status === 'scanning') {
+            return c.json({
+              success: false,
+              error: 'A scan is already in progress',
+              progress: scanState.progress,
+              startedAt: scanState.startedAt,
+            }, 409);
+          }
+
+          console.log('🧨 [DuplicateRadar] Rebuild Clusters triggered — wiping tables and rescanning');
+          await truncateAllDuplicateData();
+
+          scanZohoCRMForDuplicates('manual').catch(err => {
+            console.error('[DuplicateRadar] Background rebuild scan error:', err);
+            scanState.status = 'failed';
+            scanState.error = err?.message || 'Background scan failed';
+          });
+
+          return c.json({
+            success: true,
+            message: 'Clusters wiped. A fresh Zoho scan is rebuilding them. Watch /api/duplicates/scan-stream for progress.',
+            status: 'scanning',
+          });
+        } catch (error: any) {
+          console.error('Error rebuilding clusters:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };

@@ -594,6 +594,7 @@ export async function getAllClusters(filters?: {
   offset?: number;
   start_date?: string;
   end_date?: string;
+  hide_hierarchies?: boolean;
 }): Promise<DuplicateCluster[]> {
   let query = 'SELECT * FROM duplicate_clusters WHERE 1=1';
   const params: any[] = [];
@@ -614,6 +615,9 @@ export async function getAllClusters(filters?: {
   if (filters?.end_date) {
     query += ` AND created_at <= $${paramIndex++}`;
     params.push(filters.end_date + 'T23:59:59Z');
+  }
+  if (filters?.hide_hierarchies) {
+    query += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
   }
 
   query += ' ORDER BY total_records DESC, confidence_score DESC';
@@ -636,6 +640,7 @@ export async function getClusterCount(filters?: {
   confidence_level?: string;
   start_date?: string;
   end_date?: string;
+  hide_hierarchies?: boolean;
 }): Promise<number> {
   let query = 'SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1';
   const params: any[] = [];
@@ -657,9 +662,20 @@ export async function getClusterCount(filters?: {
     query += ` AND created_at <= $${paramIndex++}`;
     params.push(filters.end_date + 'T23:59:59Z');
   }
+  if (filters?.hide_hierarchies) {
+    query += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
+  }
 
   const result = await pool.query(query, params);
   return parseInt(result.rows[0]?.total) || 0;
+}
+
+// Hard reset for the "Rebuild Clusters" admin action.
+// Wipes all clusters + records so the next scan starts from a clean slate.
+export async function truncateAllDuplicateData(): Promise<void> {
+  console.log('🧨 [DuplicateRadar] Truncating all duplicate data for rebuild...');
+  await pool.query('TRUNCATE duplicate_records, duplicate_clusters RESTART IDENTITY CASCADE');
+  console.log('✅ [DuplicateRadar] Duplicate tables truncated');
 }
 
 export async function getClusterById(id: number): Promise<DuplicateCluster | null> {
@@ -954,9 +970,19 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     }
   }
 
+  // A cluster is a TRUE duplicate only when it has 2+ records of the same type.
+  // 1 account + N contacts/deals is a legitimate parent-child hierarchy, not a duplicate.
+  const leadCount = parseInt(stats.lead_count) || 0;
+  const dealCount = parseInt(stats.deal_count) || 0;
+  const contactCount = parseInt(stats.contact_count) || 0;
+  const accountCount = parseInt(stats.account_count) || 0;
+  const maxOfSameType = Math.max(leadCount, dealCount, contactCount, accountCount);
+  const isHierarchy = totalRecords > 1 && maxOfSameType <= 1;
+
   let confidenceScore: number;
-  if (totalRecords <= 1) {
+  if (totalRecords <= 1 || isHierarchy) {
     confidenceScore = 0;
+    if (isHierarchy) allSignals.add('legitimate_hierarchy');
   } else if (bestScore > 0) {
     confidenceScore = bestScore;
   } else {
@@ -1489,16 +1515,16 @@ export async function getEnhancedSummary(): Promise<{
   const result = await pool.query(`
     SELECT 
       COUNT(*) as total_clusters,
-      COUNT(*) FILTER (WHERE total_records > 1) as true_dup_clusters,
+      COUNT(*) FILTER (WHERE GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as true_dup_clusters,
       COUNT(*) FILTER (WHERE total_records <= 1) as singleton_count,
       COALESCE(SUM(total_records), 0) as total_records,
-      COALESCE(SUM(total_leads) FILTER (WHERE total_records > 1), 0) as dup_leads,
-      COALESCE(SUM(total_deals) FILTER (WHERE total_records > 1), 0) as dup_deals,
-      COALESCE(SUM(total_contacts) FILTER (WHERE total_records > 1), 0) as dup_contacts,
-      COALESCE(SUM(total_accounts) FILTER (WHERE total_records > 1), 0) as dup_accounts,
-      COUNT(*) FILTER (WHERE confidence_level = 'high' AND total_records > 1) as high_confidence,
-      COUNT(*) FILTER (WHERE confidence_level = 'medium' AND total_records > 1) as medium_confidence,
-      COUNT(*) FILTER (WHERE confidence_level = 'low' AND total_records > 1) as low_confidence,
+      COALESCE(SUM(total_leads) FILTER (WHERE total_leads > 1), 0) as dup_leads,
+      COALESCE(SUM(total_deals) FILTER (WHERE total_deals > 1), 0) as dup_deals,
+      COALESCE(SUM(total_contacts) FILTER (WHERE total_contacts > 1), 0) as dup_contacts,
+      COALESCE(SUM(total_accounts) FILTER (WHERE total_accounts > 1), 0) as dup_accounts,
+      COUNT(*) FILTER (WHERE confidence_level = 'high' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as high_confidence,
+      COUNT(*) FILTER (WHERE confidence_level = 'medium' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as medium_confidence,
+      COUNT(*) FILTER (WHERE confidence_level = 'low' AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1) as low_confidence,
       COALESCE(SUM(estimated_pipeline_value), 0) as pipeline_inflation,
       COUNT(*) FILTER (WHERE status = 'active') as active_count,
       COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count,

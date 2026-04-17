@@ -90,6 +90,12 @@
                     </svg>
                     Scan from Zoho
                 </button>
+                <button onclick="rebuildClusters()" id="rebuildBtn" data-testid="button-rebuild-clusters" title="Wipe all clusters and rebuild from scratch using the latest matching rules (use this after tuning the matching logic)" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                    </svg>
+                    Rebuild Clusters
+                </button>
                 <button onclick="exportData()" data-testid="button-export-csv" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -969,6 +975,47 @@
                 alert('Error starting scan');
                 btn.disabled = false;
                 btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
+            }
+        }
+
+        async function rebuildClusters() {
+            const confirmed = confirm(
+                'REBUILD CLUSTERS\n\n' +
+                'This will permanently DELETE every existing cluster and duplicate ' +
+                'record, then run a fresh Zoho scan to rebuild them with the latest ' +
+                'matching rules.\n\n' +
+                'Resolved/ignored decisions WILL be lost.\n\n' +
+                'Continue?'
+            );
+            if (!confirmed) return;
+
+            const adminKey = prompt('Enter admin API key to rebuild clusters:');
+            if (!adminKey) return;
+
+            const btn = document.getElementById('rebuildBtn');
+            btn.disabled = true;
+            btn.textContent = 'Rebuilding...';
+
+            try {
+                const res = await fetch('/api/duplicates/rebuild', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(data.error || 'Failed to start rebuild');
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> Rebuild Clusters';
+                    return;
+                }
+
+                document.getElementById('scanProgressBar').classList.remove('hidden');
+                document.getElementById('scanProgressText').textContent = 'Tables wiped — rescanning from Zoho...';
+                startScanPolling();
+            } catch (e) {
+                alert('Error starting rebuild');
+                btn.disabled = false;
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> Rebuild Clusters';
             }
         }
 

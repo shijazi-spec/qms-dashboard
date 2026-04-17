@@ -1,0 +1,49 @@
+What I fixed
+1. Zoho-correct duplicate actions (your main point)
+In the cluster you showed (1 Deal + 2 Accounts + 2 Contacts for "شركة أوقاف..."), the old recommendation told you to MERGE everything into "Record 1 (account)". That's wrong — Zoho does not allow cross-module merges. A Contact is a child of an Account via the Account_Name field, not the same thing as an Account.
+
+New logic in src/utils/duplicateRadarDatabase.ts → generateSmartRecommendation():
+
+Primary selection priority: Account → Contact → Deal → Lead → Task (ties broken by completeness, active deal, recency, age). So if any Account exists in the cluster, the best Account is picked as primary automatically.
+Per-record action is now module-aware:
+Same module as primary → MERGE (native Zoho merge)
+Contact/Deal/Task under an Account primary → LINK (set the Account_Name / What_Id field)
+Deal/Task under a Contact primary → LINK (set Contact_Name / Who_Id)
+Lead when an Account/Contact/Deal already exists → CLOSE (convert or close)
+Anything else → REVIEW (flagged as needing manual review)
+The API response now includes primary_type and is_cross_module so the UI can react.
+Frontend update in dashboard/duplicates.html:
+
+New color-coded badges: KEEP (green), MERGE (yellow), LINK (blue), CLOSE (red), REVIEW (gray).
+Cross-module clusters get a visible "Cross-module cluster" tag plus an inline explainer telling the user that MERGE only works within the same module and that LINK means setting the Account Name / Contact Name field in Zoho.
+The "Resolve" button now reads "Mark Resolved (merge same-module + link cross-module in Zoho)" on cross-module clusters so it's unambiguous.
+2. How the platform picks up changes you make manually in Zoho
+I found a real bug in how this was working, plus a missing piece. Both are now fixed:
+
+Bug (now fixed): markStaleRecords(seenZohoIds) was being called during incremental sync. In incremental mode seenZohoIds only contains records modified in the last window (e.g. 6 hours), so every record that wasn't touched in that window was getting flagged stale, then cleanupOrphanClusters() wiped out their clusters. Over time this quietly corrupts the duplicate radar.
+
+Missing piece (now added): When you merge two Accounts inside Zoho, the losing Account is deleted. A Modified_Time filter never returns deleted records, so the duplicate radar used to keep showing the "ghost" of the merged-away record forever. There was no mechanism at all for catching Zoho-side deletions.
+
+New flow in src/utils/zohoCRM.ts + duplicateRadarRoutes.ts:
+
+New helper fetchDeletedZohoRecords(module, { modifiedSince, type: 'all' }) that hits Zoho's GET /crm/v2/{module}/deleted?type=all endpoint. type=all covers recycle-bin, permanent deletions, and merges (it returns type: 'merged' with merged_into.id).
+New DB helper removeRecordsByZohoIds(ids, { module }) that purges those records and returns which clusters were affected.
+The incremental sync now runs a deletion-detection pass: for each module, it asks Zoho "what was deleted/merged since our last successful sync?", purges those records from the duplicate DB, recomputes affected cluster stats, and cleans up orphan clusters.
+The old unsafe markStaleRecords call now only runs in full mode (where seenZohoIds really is the complete live snapshot).
+3. How it reaches you end-to-end
+Nothing new to build on your side — the plumbing is:
+
+Automatic: The Inngest cron duplicate-radar-auto-sync runs every 6 hours (0 */6 * * *). It calls syncAllModules('incremental') → runDuplicateDetection(). With the new deletion-detection step, your manual Zoho merges are reflected in the platform within at most 6 hours, no action from you.
+On-demand: The "Scan from Zoho" button at the top of /duplicates calls POST /api/duplicates/scan-zoho (SSE progress via /api/duplicates/scan-stream). Click it after a merge in Zoho for immediate reflection.
+Visibility: The Sync Status Bar already displays "Leads: X records (Y minutes ago)" per module using GET /api/duplicates/sync-state. That tells you when the platform last saw each module.
+Best-practice workflow for you
+Do the merge in Zoho CRM — it's the source of truth. The platform is read-only by design.
+For cross-module records, don't try to "merge" — link them: on the child record (Contact, Deal, Task), set Account_Name to the surviving primary Account. The modal now tells you exactly this.
+Hit "Scan from Zoho" (or wait up to 6 hours for auto-sync). The merged/deleted records will be purged from the cluster; the surviving record stays.
+Click "Mark Resolved (Merged in Zoho)" to move the cluster out of your active queue, or "Ignore" if it was a false positive.
+What to send Replit
+The Duplicate Radar recommendation engine was updated to respect Zoho's data model: same-module records get MERGE, cross-module records get LINK (via Account_Name/Contact_Name), leads superseded by an Account/Contact/Deal get CLOSE. Primary-record selection now prioritises Accounts.
+
+Two sync bugs were fixed: (a) markStaleRecords is no longer called in incremental mode (it was using a partial ID list and falsely marking records stale), and (b) a new deletion-detection step calls Zoho's /crm/v2/{module}/deleted?type=all endpoint during every incremental sync to catch records deleted or merged inside Zoho CRM. This is what makes manual Zoho merges propagate to the platform automatically.
+
+Files changed: src/utils/duplicateRadarDatabase.ts, src/utils/zohoCRM.ts, src/mastra/routes/duplicateRadarRoutes.ts, dashboard/duplicates.html. No DB schema changes. No new API endpoints needed — existing POST /api/duplicates/scan-zoho serves as "Sync Now".
