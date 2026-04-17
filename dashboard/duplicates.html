@@ -921,7 +921,10 @@
                 const rec = recMap[r.id];
                 if (rec) {
                     const actionClass = `action-${rec.action_type}`;
-                    html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${rec.action_type.toUpperCase()}</span><div class="text-xs text-gray-500 mt-1">${rec.recommendation}</div>`;
+                    const typeTag = r.record_type
+                        ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">${r.record_type}</span>`
+                        : '';
+                    html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${rec.action_type.toUpperCase()}</span>${typeTag}<div class="text-xs text-gray-500 mt-1">${rec.recommendation}</div>`;
                     if (rec.reasons?.length) html += `<div class="text-xs text-gray-400 mt-1">${rec.reasons.join(', ')}</div>`;
                     html += '</td>';
                 } else {
@@ -935,9 +938,14 @@
                 const resolveLabel = is_cross_module
                     ? 'Mark Resolved (merge same-module + link cross-module in Zoho)'
                     : 'Mark Resolved (Merged in Zoho)';
-                html += `<div class="flex flex-wrap gap-3 border-t pt-4">
-                    <button onclick="resolveClusterAction(${cluster.id}, 'resolve')" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
-                    <button onclick="resolveClusterAction(${cluster.id}, 'ignore')" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore (false positive)</button>
+                html += `<div class="border-t pt-4">
+                    <div class="flex flex-wrap gap-3 mb-2">
+                        <button onclick="resolveClusterAction(${cluster.id}, 'resolve')" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
+                        <button onclick="resolveClusterAction(${cluster.id}, 'ignore')" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore (false positive)</button>
+                    </div>
+                    <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
+                        After merging or linking inside Zoho, click <strong>Scan from Zoho</strong> for an immediate refresh — otherwise the auto-sync picks it up within ~6 hours.
+                    </p>
                 </div>`;
             }
 

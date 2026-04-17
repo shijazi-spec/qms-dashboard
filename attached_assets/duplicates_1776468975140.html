@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WalaPlus - Duplicate Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; height: 100%; }
+        body { font-family: 'Inter', sans-serif; height: 100%; margin: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .tab-active { background-color: #1E3A8A; color: white; }
+        .tab-inactive { background-color: #E5E7EB; color: #374151; }
+        .confidence-high { background-color: #DCFCE7; color: #166534; }
+        .confidence-medium { background-color: #FEF3C7; color: #92400E; }
+        .confidence-low { background-color: #FEE2E2; color: #991B1B; }
+        .read-only-badge { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); }
+        .cluster-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .cluster-card { transition: all 0.2s ease; }
+        .chart-container { height: 220px; position: relative; }
+        .main-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+        .scan-bar { transition: width 0.5s ease; }
+        .rag-green { color: #16a34a; } .rag-amber { color: #d97706; } .rag-red { color: #dc2626; }
+        .module-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .module-pending { background: #f3f4f6; color: #6b7280; }
+        .module-fetching { background: #dbeafe; color: #1d4ed8; }
+        .module-processing { background: #fef3c7; color: #92400e; }
+        .module-done { background: #dcfce7; color: #166534; }
+        .module-error { background: #fee2e2; color: #991b1b; }
+        @keyframes pulse-scan { 0%,100%{opacity:1} 50%{opacity:.5} }
+        .pulse-scan { animation: pulse-scan 1.5s infinite; }
+        .filter-chip { cursor: pointer; transition: all 0.15s ease; }
+        .filter-chip:hover { transform: scale(1.05); }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+</head>
+<body class="bg-gray-100">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js"></script>
+    <script>document.addEventListener('DOMContentLoaded', function() { WalaPlusNav.init('duplicates'); });</script>
+
+    <!-- D1: Scan Progress Bar (fixed at top, non-blocking) -->
+    <div id="scanProgressBar" class="hidden bg-white border-b shadow-sm px-4 py-2">
+        <div class="max-w-7xl mx-auto flex items-center gap-4">
+            <div class="flex items-center gap-2 text-sm font-medium text-blue-700">
+                <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                <span id="scanProgressText">Scanning...</span>
+            </div>
+            <span id="scanPct" class="text-xs font-bold text-blue-600 whitespace-nowrap">0%</span>
+            <div class="flex-1 bg-gray-200 rounded-full h-2.5">
+                <div id="scanProgressFill" class="bg-blue-600 h-2.5 rounded-full scan-bar" style="width: 0%"></div>
+            </div>
+            <div id="scanModuleChips" class="flex gap-1 flex-wrap"></div>
+            <div id="scanElapsed" class="text-xs text-gray-500 whitespace-nowrap">0s</div>
+        </div>
+    </div>
+
+    <div class="main-scroll bg-gray-100">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Duplicate Radar &ndash; Full CRM</h1>
+                <p class="text-sm text-gray-500 mt-1">AI-powered duplicate detection across Leads, Deals, Contacts &amp; Accounts (Zoho-aligned, Read-Only)</p>
+                <div id="lastScanInfo" class="text-xs text-gray-400 mt-1"></div>
+            </div>
+            <div class="flex gap-2 items-center">
+                <button onclick="scanZohoCRM()" id="scanZohoBtn" class="px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium text-sm flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                    Scan from Zoho
+                </button>
+                <button onclick="runAutoResolve()" class="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm flex items-center gap-1" title="Auto-resolve high-confidence clusters">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Auto-Resolve
+                </button>
+                <button onclick="exportData()" class="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Export CSV
+                </button>
+                <button onclick="refreshData()" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Sync Status Indicator -->
+        <div id="syncStatusBar" class="mb-3 bg-white rounded-lg shadow px-4 py-2 flex items-center gap-4 text-xs text-gray-500 hidden">
+            <span class="font-semibold text-gray-700">Last Sync:</span>
+            <span id="syncModuleStates" class="flex gap-3 flex-wrap"></span>
+        </div>
+
+        <!-- Rich Filter Panel -->
+        <div class="mb-4 bg-white rounded-lg shadow px-4 py-3">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-semibold text-gray-700">Filters</span>
+                <div class="flex gap-2">
+                    <button onclick="applyFilters()" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Apply</button>
+                    <button onclick="clearAllFilters()" class="px-3 py-1 text-gray-500 border rounded text-sm hover:text-gray-700">Clear All</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Module</label>
+                    <div id="moduleChipFilters" class="flex flex-wrap gap-1">
+                        <button onclick="toggleModuleFilter(this,'Leads')" data-mod="Leads" class="filter-chip px-2 py-0.5 rounded-full text-xs border border-blue-300 text-blue-700 hover:bg-blue-100">Leads</button>
+                        <button onclick="toggleModuleFilter(this,'Deals')" data-mod="Deals" class="filter-chip px-2 py-0.5 rounded-full text-xs border border-green-300 text-green-700 hover:bg-green-100">Deals</button>
+                        <button onclick="toggleModuleFilter(this,'Contacts')" data-mod="Contacts" class="filter-chip px-2 py-0.5 rounded-full text-xs border border-purple-300 text-purple-700 hover:bg-purple-100">Contacts</button>
+                        <button onclick="toggleModuleFilter(this,'Accounts')" data-mod="Accounts" class="filter-chip px-2 py-0.5 rounded-full text-xs border border-orange-300 text-orange-700 hover:bg-orange-100">Accounts</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Layout</label>
+                    <select id="filterLayout" class="w-full border rounded px-2 py-1 text-xs">
+                        <option value="">All Layouts</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Owner</label>
+                    <select id="filterOwner" class="w-full border rounded px-2 py-1 text-xs">
+                        <option value="">All Owners</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Created From</label>
+                    <input type="date" id="globalStartDate" class="w-full border rounded px-2 py-1 text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Created To</label>
+                    <input type="date" id="globalEndDate" class="w-full border rounded px-2 py-1 text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Domain</label>
+                    <input type="text" id="filterDomain" placeholder="e.g. company.com" class="w-full border rounded px-2 py-1 text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Pipeline</label>
+                    <select id="filterPipeline" class="w-full border rounded px-2 py-1 text-xs">
+                        <option value="">All Pipelines</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-2 mb-6 flex-wrap">
+            <button onclick="showTab('summary')" id="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
+            <button onclick="showTab('search')" id="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Search
+            </button>
+            <button onclick="showTab('clusters')" id="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
+            <button onclick="showTab('leads')" id="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
+            <button onclick="showTab('deals')" id="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
+            <button onclick="showTab('accounts')" id="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
+            <button onclick="showTab('contacts')" id="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
+            <button onclick="showTab('owners')" id="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
+            <button onclick="showTab('export')" id="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
+            <button onclick="showTab('logs')" id="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
+            <button onclick="showTab('dq')" id="tab-dq" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                Data Quality
+            </button>
+        </div>
+
+        <!-- D4: Enhanced Executive Summary -->
+        <div id="content-summary" class="tab-content">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-600">
+                    <div class="text-sm text-gray-500">Total Clusters</div>
+                    <div id="totalClusters" class="text-2xl font-bold text-blue-600">-</div>
+                    <div class="text-xs text-gray-400">Company domains</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+                    <div class="text-sm text-gray-500">Duplicate Leads</div>
+                    <div id="totalLeads" class="text-2xl font-bold text-amber-600">-</div>
+                    <div id="leadRate" class="text-xs text-amber-500">-% duplicate rate</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+                    <div class="text-sm text-gray-500">Duplicate Deals</div>
+                    <div id="totalDeals" class="text-2xl font-bold text-red-600">-</div>
+                    <div id="dealRate" class="text-xs text-red-500">-% duplicate rate</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+                    <div class="text-sm text-gray-500">High Confidence</div>
+                    <div id="highConfidence" class="text-2xl font-bold text-green-600">-</div>
+                    <div class="text-xs text-green-500">&ge;90% match</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+                    <div class="text-sm text-gray-500">Medium Confidence</div>
+                    <div id="mediumConfidence" class="text-2xl font-bold text-yellow-600">-</div>
+                    <div class="text-xs text-yellow-500">60-89% match</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+                    <div class="text-sm text-gray-500">Pipeline Inflation</div>
+                    <div id="pipelineInflation" class="text-2xl font-bold text-purple-600">-</div>
+                    <div class="text-xs text-purple-500">Estimated duplicate value</div>
+                </div>
+            </div>
+
+            <!-- Resolution rate + KPI gauge row -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-2">Duplicate Rate vs Target</h3>
+                    <div class="flex items-center gap-4">
+                        <div class="relative w-24 h-24">
+                            <svg viewBox="0 0 36 36" class="w-24 h-24">
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+                                <path id="kpiGaugePath" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#16a34a" stroke-width="3" stroke-dasharray="0, 100"/>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <span id="kpiGaugeValue" class="text-lg font-bold">-%</span>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-600">
+                            <div>Target: <span class="font-semibold">&le;2%</span></div>
+                            <div id="kpiGaugeStatus" class="font-semibold mt-1">-</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-2">Resolution Rate</h3>
+                    <div id="resolutionRate" class="text-3xl font-bold text-indigo-600">-%</div>
+                    <div class="text-sm text-gray-500 mt-1">Clusters resolved vs total</div>
+                    <div class="flex gap-4 mt-3 text-sm">
+                        <span class="text-green-600"><span id="resolvedCount">0</span> resolved</span>
+                        <span class="text-gray-400"><span id="ignoredCount">0</span> ignored</span>
+                        <span class="text-orange-600"><span id="activeCount2">0</span> active</span>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-2">Top Signal Sources</h3>
+                    <div id="topSignals" class="space-y-2 text-sm"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Duplicates by Source</h3>
+                    <div class="chart-container"><canvas id="sourceChart"></canvas></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Confidence Distribution</h3>
+                    <div class="chart-container"><canvas id="confidenceChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Top 5 worst clusters by pipeline inflation -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Top 5 Clusters by Pipeline Inflation</h3>
+                <div id="topInflationClusters" class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50"><tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Records</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Inflation Value</th>
+                        </tr></thead>
+                        <tbody id="topInflationBody" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Data Hygiene KPIs</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Duplicate Lead Rate</div>
+                        <div id="kpiLeadRate" class="text-xl font-bold text-blue-600">-%</div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Duplicate Deal Rate</div>
+                        <div id="kpiDealRate" class="text-xl font-bold text-blue-600">-%</div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Domains with Multiple Deals</div>
+                        <div id="kpiMultiDeal" class="text-xl font-bold text-blue-600">-</div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <div class="text-sm text-gray-500">Active Clusters</div>
+                        <div id="kpiActive" class="text-xl font-bold text-blue-600">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Tab (unchanged structure) -->
+        <div id="content-search" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    Search for Potential Duplicates
+                </h3>
+                <p class="text-sm text-gray-500 mb-4">Search by any criteria to find and verify potential duplicate records.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Domain</label><input type="text" id="searchDomain" placeholder="e.g., acme-corp.com" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Mobile / Phone</label><input type="text" id="searchPhone" placeholder="e.g., +966501234567" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label><input type="text" id="searchCompany" placeholder="e.g., Acme Corporation" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Contract / Record #</label><input type="text" id="searchContract" placeholder="e.g., ZCR-12345" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="text" id="searchEmail" placeholder="e.g., john@company.com" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Lead/Deal Name</label><input type="text" id="searchName" placeholder="e.g., John Smith" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Owner Email</label><input type="text" id="searchOwner" placeholder="e.g., sara@walaplus.com" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div class="flex items-end"><button onclick="performSearch()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>Search</button></div>
+                </div>
+                <button onclick="clearSearch()" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
+            </div>
+            <div id="searchResults" class="hidden"></div>
+            <div id="noSearchResults" class="hidden text-center py-12"><h4 class="text-lg font-medium text-gray-500">No matching records found</h4></div>
+        </div>
+
+        <!-- C4: Cluster tab with pagination -->
+        <div id="content-clusters" class="tab-content hidden">
+            <div class="mb-4 flex gap-4 items-center flex-wrap">
+                <select id="clusterFilter" onchange="loadClusters()" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="">All Confidence Levels</option>
+                    <option value="high">High (&ge;90%)</option>
+                    <option value="medium">Medium (60-89%)</option>
+                    <option value="low">Low (&lt;60%)</option>
+                </select>
+                <select id="statusFilter" onchange="loadClusters()" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="ignored">Ignored</option>
+                </select>
+                <div class="ml-auto text-sm text-gray-500"><span id="clusterPageInfo">-</span></div>
+                <button onclick="clusterPage > 0 && (clusterPage--, loadClusters())" class="px-3 py-1 border rounded text-sm">Prev</button>
+                <button onclick="clusterPage++; loadClusters()" class="px-3 py-1 border rounded text-sm">Next</button>
+            </div>
+            <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- Lead/Deal/Account/Contact tabs with shared render -->
+        <div id="content-leads" class="tab-content hidden"><div id="leadsContainer"></div></div>
+        <div id="content-deals" class="tab-content hidden"><div id="dealsContainer"></div></div>
+        <div id="content-accounts" class="tab-content hidden"><div id="accountsContainer"></div></div>
+        <div id="content-contacts" class="tab-content hidden"><div id="contactsContainer"></div></div>
+
+        <!-- C3: Enhanced Owner Accountability -->
+        <div id="content-owners" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50"><tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicate Leads</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicate Deals</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Duplicates</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dup. Rate</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr></thead>
+                    <tbody id="ownersTable" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="content-export" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Export Duplicate Data</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Export Type</label><select id="exportType" class="w-full border rounded-lg px-3 py-2"><option value="all">All Duplicates</option><option value="lead">Leads Only</option><option value="deal">Deals Only</option><option value="account">Accounts Only</option></select></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" class="w-full border rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" class="w-full border rounded-lg px-3 py-2"></div>
+                </div>
+                <button onclick="downloadExport()" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">Download Excel/CSV Export</button>
+            </div>
+        </div>
+
+        <div id="content-logs" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50"><tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Records Scanned</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clusters Found</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicates</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr></thead>
+                    <tbody id="logsTable" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Data Quality Tab -->
+        <div id="content-dq" class="tab-content hidden">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+                    <div class="text-sm text-gray-500">Total Records</div>
+                    <div id="dqTotalRecords" class="text-2xl font-bold text-blue-600">-</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+                    <div class="text-sm text-gray-500">Junk / Spam Records</div>
+                    <div id="dqJunkRecords" class="text-2xl font-bold text-red-600">-</div>
+                    <div id="dqJunkPct" class="text-xs text-red-400">-% of total</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+                    <div class="text-sm text-gray-500">Avg Quality Score</div>
+                    <div id="dqAvgScore" class="text-2xl font-bold text-green-600">-</div>
+                    <div class="text-xs text-gray-400">out of 100</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+                    <div class="text-sm text-gray-500">Clean Record Rate</div>
+                    <div id="dqCleanRate" class="text-2xl font-bold text-purple-600">-%</div>
+                    <div class="text-xs text-gray-400">Score >= 80</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Quality Distribution</h3>
+                    <div id="dqDistribution" class="space-y-3"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Top Data Issues</h3>
+                    <div id="dqTopIssues" class="space-y-2"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Quality by Module</h3>
+                    <div id="dqByModule" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+                <h4 class="font-semibold mb-1">What does this mean?</h4>
+                <ul class="list-disc list-inside space-y-1">
+                    <li><strong>Junk records</strong> (score 0-20) are quarantined from duplicate detection -- they have gibberish names, fake data, or are clearly spam entries.</li>
+                    <li><strong>Poor records</strong> (score 21-49) are included in detection but may produce false positives due to missing fields.</li>
+                    <li><strong>Fair records</strong> (score 50-79) have some missing fields but enough data for reliable matching.</li>
+                    <li><strong>Good records</strong> (score 80-100) have complete, clean data for high-confidence duplicate detection.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- D2: Enhanced Cluster Modal -->
+        <div id="clusterModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div><h3 id="modalTitle" class="text-xl font-bold text-gray-900">Cluster Details</h3><p id="modalDomain" class="text-sm text-gray-500"></p></div>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+                    </div>
+                    <div id="modalContent"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+    </div>
+
+    <script>
+        let summary = {}, clusters = [], sourceChart = null, confidenceChart = null;
+        let clusterPage = 0;
+        const CLUSTER_PAGE_SIZE = 30;
+        const ZOHO_CRM_URL = 'https://crm.zoho.com/crm/org/tab';
+
+        async function refreshData() {
+            try {
+                const filters = getActiveFilters();
+                const qs = filtersToQuery(filters);
+                const hasFilters = Object.values(filters).some(v => v);
+
+                const summaryUrl = hasFilters ? `/api/duplicates/filtered-summary?${qs}` : '/api/duplicates/summary';
+                const [summaryRes, ownersRes, logsRes] = await Promise.all([
+                    fetch(summaryUrl),
+                    fetch('/api/duplicates/owner-accountability'),
+                    fetch('/api/duplicates/logs')
+                ]);
+                summary = await summaryRes.json();
+                const ownersData = await ownersRes.json();
+                const logsData = await logsRes.json();
+                updateSummary(summary);
+                renderOwners(ownersData.owners || []);
+                renderLogs(logsData.logs || []);
+                loadClusters();
+            } catch (error) { console.error('Error refreshing data:', error); }
+        }
+
+        function updateSummary(data) {
+            document.getElementById('totalClusters').textContent = data.trueDuplicateClusters || data.totalClusters || 0;
+            document.getElementById('totalLeads').textContent = data.totalDuplicateLeads || 0;
+            document.getElementById('totalDeals').textContent = data.totalDuplicateDeals || 0;
+            document.getElementById('highConfidence').textContent = data.highConfidence || 0;
+            document.getElementById('mediumConfidence').textContent = data.mediumConfidence || 0;
+            document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
+            const lr = data.kpis?.duplicateLeadRate || data.duplicateLeadRate || 0;
+            const dr = data.kpis?.duplicateDealRate || data.duplicateDealRate || 0;
+            document.getElementById('leadRate').textContent = `${lr}% duplicate rate`;
+            document.getElementById('dealRate').textContent = `${dr}% duplicate rate`;
+            document.getElementById('kpiLeadRate').textContent = `${lr}%`;
+            document.getElementById('kpiDealRate').textContent = `${dr}%`;
+            document.getElementById('kpiMultiDeal').textContent = data.kpis?.domainsWithMultipleDeals || 0;
+            document.getElementById('kpiActive').textContent = data.activeCount || 0;
+            // Resolution rate
+            document.getElementById('resolutionRate').textContent = `${data.resolutionRate || 0}%`;
+            document.getElementById('resolvedCount').textContent = data.resolvedCount || 0;
+            document.getElementById('ignoredCount').textContent = data.ignoredCount || 0;
+            document.getElementById('activeCount2').textContent = data.activeCount || 0;
+            // KPI gauge
+            const avgRate = Math.round((lr + dr) / 2);
+            const gaugeColor = avgRate <= 2 ? '#16a34a' : avgRate <= 5 ? '#d97706' : '#dc2626';
+            const gaugePercent = Math.min(avgRate * 10, 100);
+            document.getElementById('kpiGaugePath').setAttribute('stroke', gaugeColor);
+            document.getElementById('kpiGaugePath').setAttribute('stroke-dasharray', `${gaugePercent}, 100`);
+            document.getElementById('kpiGaugeValue').textContent = `${avgRate}%`;
+            document.getElementById('kpiGaugeValue').style.color = gaugeColor;
+            const statusEl = document.getElementById('kpiGaugeStatus');
+            statusEl.textContent = avgRate <= 2 ? 'Within Target' : avgRate <= 5 ? 'Above Target' : 'Critical';
+            statusEl.className = 'font-semibold mt-1 ' + (avgRate <= 2 ? 'rag-green' : avgRate <= 5 ? 'rag-amber' : 'rag-red');
+            // Top signals
+            const sigEl = document.getElementById('topSignals');
+            const sigs = data.topSignals || {};
+            const sigEntries = Object.entries(sigs).sort((a,b) => b[1] - a[1]).slice(0, 5);
+            sigEl.innerHTML = sigEntries.length ? sigEntries.map(([k,v]) => `<div class="flex justify-between"><span class="capitalize">${k.replace(/_/g,' ')}</span><span class="font-semibold">${v}</span></div>`).join('') : '<div class="text-gray-400">No data yet</div>';
+            // Top inflation clusters
+            const tic = data.topInflationClusters || [];
+            document.getElementById('topInflationBody').innerHTML = tic.length ? tic.map(c => `<tr class="cursor-pointer hover:bg-gray-50" onclick="showClusterDetails(${c.id})"><td class="px-4 py-2 text-sm text-blue-600">${c.domain}</td><td class="px-4 py-2 text-sm">${c.company_name}</td><td class="px-4 py-2 text-sm">${c.total_records}</td><td class="px-4 py-2 text-sm font-semibold text-purple-600">${formatCurrency(c.value)}</td></tr>`).join('') : '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">No inflation data</td></tr>';
+            // Last scan info
+            const lsi = data.lastScanInfo;
+            if (lsi && lsi.date) {
+                document.getElementById('lastScanInfo').textContent = `Last scan: ${formatDate(lsi.date)} | Duration: ${lsi.duration_ms ? Math.round(lsi.duration_ms/1000) + 's' : '-'} | Records: ${lsi.records_scanned || '-'}`;
+            }
+            updateCharts(data);
+        }
+
+        function updateCharts(data) {
+            const sourceData = data.kpis?.duplicateBySource || [];
+            if (sourceChart) sourceChart.destroy();
+            sourceChart = new Chart(document.getElementById('sourceChart'), {
+                type: 'bar', data: { labels: sourceData.map(s => s.source || 'Unknown'), datasets: [{ label: 'Duplicates by Source', data: sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+            if (confidenceChart) confidenceChart.destroy();
+            confidenceChart = new Chart(document.getElementById('confidenceChart'), {
+                type: 'doughnut', data: { labels: ['High (\u226590%)','Medium (60-89%)','Low (<60%)'], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#22C55E','#F59E0B','#EF4444'] }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        async function loadClusters() {
+            const confidence = document.getElementById('clusterFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const filters = getActiveFilters();
+            const hasGlobal = Object.values(filters).some(v => v);
+
+            let url;
+            if (hasGlobal) {
+                const qs = filtersToQuery({ ...filters, confidence_level: confidence || undefined, status: status || undefined });
+                url = `/api/duplicates/filtered-clusters?limit=${CLUSTER_PAGE_SIZE}&offset=${clusterPage * CLUSTER_PAGE_SIZE}&${qs}`;
+            } else {
+                url = `/api/duplicates/clusters?limit=${CLUSTER_PAGE_SIZE}&offset=${clusterPage * CLUSTER_PAGE_SIZE}`;
+                if (confidence) url += `&confidence_level=${confidence}`;
+                if (status) url += `&status=${status}`;
+            }
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                clusters = data.clusters || [];
+                const total = data.total || 0;
+                document.getElementById('clusterPageInfo').textContent = `${clusterPage * CLUSTER_PAGE_SIZE + 1}-${Math.min((clusterPage + 1) * CLUSTER_PAGE_SIZE, total)} of ${total}`;
+                renderClusters(clusters);
+            } catch (e) { console.error('Error loading clusters:', e); }
+        }
+
+        function renderClusters(list) {
+            document.getElementById('clustersGrid').innerHTML = list.map(c => `
+                <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" onclick="showClusterDetails(${c.id})">
+                    <div class="flex justify-between items-start mb-3">
+                        <div><h4 class="font-semibold text-gray-900">${c.domain}</h4><p class="text-sm text-gray-500">${c.company_name || 'Unknown'}</p></div>
+                        <span class="confidence-${c.confidence_level} px-2 py-1 rounded text-xs font-medium">${c.confidence_score}%</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div><span class="text-gray-500">Leads:</span> <span class="font-medium text-amber-600">${c.total_leads}</span></div>
+                        <div><span class="text-gray-500">Deals:</span> <span class="font-medium text-red-600">${c.total_deals}</span></div>
+                        <div><span class="text-gray-500">Value:</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
+                        <div><span class="text-gray-500">Status:</span> <span class="font-medium capitalize">${c.status}</span></div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t text-xs text-gray-400">${c.owners_involved?.length||0} owner(s) involved</div>
+                </div>
+            `).join('') || '<div class="col-span-3 text-center py-8 text-gray-400">No clusters found</div>';
+        }
+
+        function renderRecordTable(containerId, endpoint, type, columns) {
+            const container = document.getElementById(containerId);
+            let page = 0;
+            const load = async () => {
+                const sd = document.getElementById('globalStartDate').value;
+                const ed = document.getElementById('globalEndDate').value;
+                let url = `${endpoint}?limit=50&offset=${page*50}`;
+                if (sd) url += `&start_date=${sd}`;
+                if (ed) url += `&end_date=${ed}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                const groups = data.groups || [];
+                let rows = '';
+                for (const g of groups) {
+                    const recs = g[type+'s'] || g.leads || g.deals || g.accounts || g.contacts || [];
+                    for (const r of recs) {
+                        rows += `<tr class="hover:bg-gray-50">`;
+                        rows += `<td class="px-4 py-3 text-sm text-blue-600 cursor-pointer" onclick="showClusterDetails(${g.cluster?.id})">${g.cluster?.domain || '-'}</td>`;
+                        rows += `<td class="px-4 py-3 text-sm">${r.record_name || '-'}</td>`;
+                        rows += `<td class="px-4 py-3 text-sm">${r.company_name || '-'}</td>`;
+                        rows += `<td class="px-4 py-3 text-sm">${r.owner_name || '-'}</td>`;
+                        if (type === 'deal') {
+                            rows += `<td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${r.stage || '-'}</span></td>`;
+                            rows += `<td class="px-4 py-3 text-sm font-medium text-green-600">${formatCurrency(r.deal_value||0)}</td>`;
+                        } else {
+                            rows += `<td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${r.status || '-'}</span></td>`;
+                        }
+                        rows += `<td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score)} px-2 py-1 rounded text-xs">${r.confidence_score}%</span></td>`;
+                        rows += `<td class="px-4 py-3 text-sm">${r.is_primary ? '<span class="text-green-600 font-medium">Primary</span>' : '<span class="text-gray-400">Duplicate</span>'}</td>`;
+                        if (r.zoho_record_id && !r.zoho_record_id.startsWith('test_') && !r.zoho_record_id.startsWith('LEAD_')) {
+                            rows += `<td class="px-4 py-3 text-sm"><a href="${ZOHO_CRM_URL}/${r.zoho_record_id}" target="_blank" class="text-blue-500 hover:underline text-xs">Open</a></td>`;
+                        } else {
+                            rows += `<td class="px-4 py-3 text-sm text-gray-300">-</td>`;
+                        }
+                        rows += `</tr>`;
+                    }
+                }
+                const headers = type === 'deal'
+                    ? '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deal Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zoho</th>'
+                    : '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zoho</th>';
+
+                container.innerHTML = `
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="text-sm text-gray-500">${data.total_duplicate_groups || 0} duplicate groups</div>
+                        <div class="flex gap-2"><button onclick="this.closest('[id]').__page = Math.max(0,(this.closest('[id]').__page||0)-1); this.closest('[id]').__load()" class="px-3 py-1 border rounded text-sm">Prev</button><button onclick="this.closest('[id]').__page = (this.closest('[id]').__page||0)+1; this.closest('[id]').__load()" class="px-3 py-1 border rounded text-sm">Next</button></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50"><tr>${headers}</tr></thead>
+                            <tbody class="divide-y divide-gray-200">${rows || `<tr><td colspan="9" class="px-4 py-4 text-center text-gray-400">No duplicate ${type}s found</td></tr>`}</tbody>
+                        </table>
+                    </div>`;
+                container.__page = page;
+                container.__load = load;
+            };
+            load();
+        }
+
+        function renderOwners(owners) {
+            const KPI_TARGET = 2;
+            document.getElementById('ownersTable').innerHTML = owners.map(o => {
+                const rate = o.total_duplicates > 0 && o.lead_count !== undefined
+                    ? Math.round(((o.duplicate_records || o.total_duplicates) / (o.total_records || o.total_duplicates)) * 100)
+                    : (o.duplicate_rate || 0);
+                const ragClass = rate <= KPI_TARGET ? 'rag-green' : rate <= 5 ? 'rag-amber' : 'rag-red';
+                const ragLabel = rate <= KPI_TARGET ? 'OK' : rate <= 5 ? 'Warning' : 'Critical';
+                return `<tr>
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">${o.owner_name || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${o.owner_email || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-amber-600 font-medium">${o.lead_count || 0}</td>
+                    <td class="px-6 py-4 text-sm text-red-600 font-medium">${o.deal_count || 0}</td>
+                    <td class="px-6 py-4 text-sm font-bold">${o.total_duplicates || o.total_records || 0}</td>
+                    <td class="px-6 py-4 text-sm font-semibold ${ragClass}">${rate}%</td>
+                    <td class="px-6 py-4 text-sm"><span class="px-2 py-1 rounded text-xs font-medium ${rate <= KPI_TARGET ? 'bg-green-100 text-green-800' : rate <= 5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}">${ragLabel}</span></td>
+                    <td class="px-6 py-4 text-sm"><button onclick="exportByOwner('${o.owner_email}')" class="text-blue-600 hover:underline text-xs">Export</button></td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">No owner data found</td></tr>';
+        }
+
+        function renderLogs(logs) {
+            document.getElementById('logsTable').innerHTML = logs.map(l => `
+                <tr>
+                    <td class="px-6 py-4 text-sm text-gray-500">${formatDate(l.created_at)}</td>
+                    <td class="px-6 py-4 text-sm capitalize">${l.detection_type}</td>
+                    <td class="px-6 py-4 text-sm">${l.total_records_scanned}</td>
+                    <td class="px-6 py-4 text-sm">${l.total_clusters_found}</td>
+                    <td class="px-6 py-4 text-sm">${l.total_duplicates_detected}</td>
+                    <td class="px-6 py-4 text-sm">${l.detection_duration_ms ? Math.round(l.detection_duration_ms/1000) + 's' : '-'}</td>
+                    <td class="px-6 py-4 text-sm"><span class="px-2 py-1 rounded text-xs ${l.status==='completed'?'bg-green-100 text-green-800':'bg-yellow-100 text-yellow-800'}">${l.status}</span></td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No logs found</td></tr>';
+        }
+
+        async function showClusterDetails(id) {
+            try {
+                const [clusterRes, aiRes, tasksRes] = await Promise.all([
+                    fetch(`/api/duplicates/clusters/${id}`),
+                    fetch(`/api/duplicates/ai-recommendations/${id}`, { method: 'POST' }).catch(() => null),
+                    fetch(`/api/duplicates/clusters/${id}/tasks`).catch(() => null)
+                ]);
+                const data = await clusterRes.json();
+                const aiData = aiRes ? await aiRes.json().catch(() => null) : null;
+                const tasksData = tasksRes ? await tasksRes.json().catch(() => null) : null;
+                document.getElementById('modalTitle').textContent = data.cluster.company_name || data.cluster.domain;
+                document.getElementById('modalDomain').textContent = data.cluster.domain;
+                const records = data.records || [];
+                let content = `<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                    <div class="bg-gray-50 p-3 rounded"><div class="text-xs text-gray-500">Total Records</div><div class="text-xl font-bold">${data.cluster.total_records}</div></div>
+                    <div class="bg-amber-50 p-3 rounded"><div class="text-xs text-gray-500">Leads</div><div class="text-xl font-bold text-amber-600">${data.cluster.total_leads}</div></div>
+                    <div class="bg-red-50 p-3 rounded"><div class="text-xs text-gray-500">Deals</div><div class="text-xl font-bold text-red-600">${data.cluster.total_deals}</div></div>
+                    <div class="bg-cyan-50 p-3 rounded"><div class="text-xs text-gray-500">Contacts</div><div class="text-xl font-bold text-cyan-600">${data.cluster.total_contacts || 0}</div></div>
+                    <div class="bg-purple-50 p-3 rounded"><div class="text-xs text-gray-500">Confidence</div><div class="text-xl font-bold confidence-${data.cluster.confidence_level}">${data.cluster.confidence_score}%</div></div>
+                </div>`;
+                if (aiData && aiData.recommendations) {
+                    const actionStyle = {
+                        KEEP:   'bg-green-100 text-green-800',   // primary record
+                        MERGE:  'bg-yellow-100 text-yellow-800', // same-module duplicate — native Zoho merge
+                        LINK:   'bg-blue-100 text-blue-800',     // cross-module — link via Account_Name / Contact_Name
+                        CLOSE:  'bg-red-100 text-red-800',       // lead superseded by account/contact/deal
+                        REVIEW: 'bg-gray-200 text-gray-800'      // manual review required
+                    };
+                    content += `<div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">`;
+                    content += `<h4 class="font-semibold text-indigo-800 mb-2">AI Recommendation${aiData.is_cross_module ? ' <span class="ml-2 text-xs font-normal bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Cross-module cluster</span>' : ''}</h4>`;
+                    content += `<p class="text-sm text-indigo-700 mb-2">${aiData.ai_summary || ''}</p>`;
+                    if (aiData.is_cross_module) {
+                        content += `<div class="text-xs bg-white border border-blue-200 rounded p-2 mb-2 text-blue-900">
+                            <strong>Note on actions:</strong>
+                            <span class="ml-1"><span class="px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded text-[11px] font-medium">MERGE</span> means native Zoho merge (same module only).</span>
+                            <span class="ml-1"><span class="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded text-[11px] font-medium">LINK</span> means attach the child record to the primary Account/Contact via the <em>Account Name</em> / <em>Contact Name</em> field — Zoho does not allow cross-module merges.</span>
+                        </div>`;
+                    }
+                    content += `<div class="space-y-1">`;
+                    for (const rec of aiData.recommendations) {
+                        const badge = actionStyle[rec.action] || 'bg-gray-100 text-gray-700';
+                        const typeTag = rec.record_type ? `<span class="text-[10px] uppercase tracking-wide text-gray-400 ml-1">${rec.record_type}</span>` : '';
+                        content += `<div class="flex items-start gap-2 text-sm"><span class="px-2 py-0.5 rounded text-xs font-medium ${badge} shrink-0">${rec.action}</span><span class="font-medium">${rec.record_name}</span>${typeTag}<span class="text-gray-500 text-xs">— ${rec.reason}</span></div>`;
+                    }
+                    content += `</div></div>`;
+                }
+                // Side-by-side comparison table (with new fields)
+                content += `<h4 class="font-semibold mb-2">Record Comparison</h4><div class="overflow-x-auto mb-4"><table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left text-xs">Field</th>`;
+                records.forEach((r,i) => { content += `<th class="px-3 py-2 text-left text-xs">${r.record_name} ${r.is_primary?'(Primary)':''}</th>`; });
+                content += `</tr></thead><tbody>`;
+                const fields = [['Type','record_type'],['Module','zoho_module'],['Layout','layout_name'],['Data Quality', r => {
+                    const s = r.data_quality_score ?? 100;
+                    const color = s >= 80 ? 'text-green-600' : s >= 50 ? 'text-yellow-600' : s >= 21 ? 'text-orange-600' : 'text-red-600';
+                    const flags = (r.data_quality_flags || []).join(', ');
+                    return `<span class="${color} font-semibold">${s}/100</span>${flags ? `<br><span class="text-xs text-gray-400">${flags}</span>` : ''}`;
+                }],['Email','email'],['Phone','phone'],['Mobile','mobile'],['Company','company_name'],['Account','account_name'],['Owner','owner_name'],['Status/Stage', r => r.status||r.stage||'-'],['Pipeline','pipeline'],['Value', r => r.deal_value?formatCurrency(r.deal_value):'-'],['Source','source'],['Products','products'],['CR Number','cr_number'],['VAT Number','vat_number'],['Website','website'],['Created', r => formatDate(r.created_date)],['Zoho ID','zoho_record_id']];
+                fields.forEach(([label, key]) => {
+                    const vals = records.map(r => typeof key === 'function' ? key(r) : (r[key] || ''));
+                    if (vals.every(v => !v || v === '-')) return;
+                    content += `<tr><td class="px-3 py-2 font-medium text-gray-500">${label}</td>`;
+                    records.forEach(r => {
+                        const val = typeof key === 'function' ? key(r) : (r[key] || '-');
+                        content += `<td class="px-3 py-2">${val}</td>`;
+                    });
+                    content += `</tr>`;
+                });
+                content += `</tbody></table></div>`;
+
+                // Related Tasks section
+                if (tasksData && tasksData.tasks && tasksData.tasks.length > 0) {
+                    content += `<h4 class="font-semibold mb-2">Related Tasks (${tasksData.total})</h4>`;
+                    content += `<div class="overflow-x-auto mb-4"><table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left text-xs">Subject</th><th class="px-3 py-2 text-left text-xs">Due Date</th><th class="px-3 py-2 text-left text-xs">Status</th><th class="px-3 py-2 text-left text-xs">Priority</th><th class="px-3 py-2 text-left text-xs">Owner</th></tr></thead><tbody>`;
+                    for (const t of tasksData.tasks) {
+                        const prioClass = t.priority === 'High' ? 'text-red-600' : t.priority === 'Normal' ? 'text-blue-600' : 'text-gray-500';
+                        content += `<tr><td class="px-3 py-2">${t.subject || '-'}</td><td class="px-3 py-2">${formatDate(t.due_date)}</td><td class="px-3 py-2">${t.status || '-'}</td><td class="px-3 py-2 ${prioClass}">${t.priority || '-'}</td><td class="px-3 py-2">${t.owner_name || '-'}</td></tr>`;
+                    }
+                    content += `</tbody></table></div>`;
+                }
+
+                const isCross = aiData && aiData.is_cross_module;
+                const resolveLabel = isCross
+                    ? 'Mark Resolved (merge same-module + link cross-module in Zoho)'
+                    : 'Mark Resolved (Merged in Zoho)';
+                content += `<div class="flex gap-2 flex-wrap items-start">
+                    <button onclick="updateClusterStatus(${id}, 'resolved')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm" title="${isCross ? 'Confirm you have merged same-module duplicates AND linked cross-module records via Account Name / Contact Name in Zoho' : 'Confirm you have merged these duplicates in Zoho CRM'}">${resolveLabel}</button>
+                    <button onclick="updateClusterStatus(${id}, 'ignored')" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm">Ignore</button>
+                    <button onclick="bulkResolveCluster(${id})" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm" title="Apply the AI-chosen primary record to this cluster">Apply AI Primary</button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">After merging/linking in Zoho CRM, the next auto-sync (every 6 hours) or a manual <em>Scan from Zoho</em> will purge the merged records from this cluster automatically.</p>`;
+                document.getElementById('modalContent').innerHTML = content;
+                document.getElementById('clusterModal').classList.remove('hidden');
+            } catch (error) { console.error('Error loading cluster details:', error); }
+        }
+
+        async function updateClusterStatus(id, status) {
+            await fetch(`/api/duplicates/clusters/${id}/status`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status }) });
+            closeModal(); refreshData();
+        }
+
+        async function bulkResolveCluster(id) {
+            try {
+                const aiRes = await fetch(`/api/duplicates/ai-recommendations/${id}`, { method: 'POST' });
+                const ai = await aiRes.json();
+                await fetch(`/api/duplicates/clusters/${id}/resolve`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'resolve', primary_record_id: ai.primary_id, notes: 'Resolved via AI recommendation' }) });
+                closeModal(); refreshData();
+            } catch (e) { console.error(e); alert('Failed to resolve'); }
+        }
+
+        function closeModal() { document.getElementById('clusterModal').classList.add('hidden'); }
+
+        // D1: Scan with SSE progress
+        async function scanZohoCRM() {
+            const btn = document.getElementById('scanZohoBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Scanning...';
+            try {
+                const res = await fetch('/api/duplicates/scan-zoho', { method: 'POST' });
+                const data = await res.json();
+                if (!data.success && res.status === 409) {
+                    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Scan in progress...';
+                    showScanProgress();
+                    connectSSE();
+                    return;
+                } else if (!data.success) { alert('Scan failed: ' + (data.error||'Unknown')); resetScanBtn(); return; }
+                showScanProgress();
+                connectSSE();
+            } catch (error) { alert('Failed to start scan'); resetScanBtn(); }
+        }
+
+        let sseSource = null;
+        function connectSSE() {
+            if (sseSource) sseSource.close();
+            sseSource = new EventSource('/api/duplicates/scan-stream');
+            sseSource.addEventListener('progress', (e) => {
+                const data = JSON.parse(e.data);
+                updateScanUI(data);
+            });
+            sseSource.addEventListener('complete', (e) => {
+                const data = JSON.parse(e.data);
+                hideScanProgress();
+                resetScanBtn();
+                refreshData();
+                sseSource.close(); sseSource = null;
+            });
+            sseSource.addEventListener('error', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    alert('Scan failed: ' + data.error);
+                } catch {}
+                hideScanProgress(); resetScanBtn();
+                if (sseSource) { sseSource.close(); sseSource = null; }
+            });
+            sseSource.onerror = () => {
+                setTimeout(() => { if (scanState !== 'idle') pollScanStatusFallback(); }, 3000);
+                if (sseSource) { sseSource.close(); sseSource = null; }
+            };
+        }
+
+        function showScanProgress() { document.getElementById('scanProgressBar').classList.remove('hidden'); }
+        function hideScanProgress() { document.getElementById('scanProgressBar').classList.add('hidden'); }
+
+        function updateScanUI(data) {
+            document.getElementById('scanProgressText').textContent = data.progress || 'Scanning...';
+            const elapsed = data.elapsed_ms || data.elapsedMs || 0;
+            if (elapsed > 0) {
+                const secs = Math.round(elapsed / 1000);
+                const mins = Math.floor(secs / 60);
+                document.getElementById('scanElapsed').textContent = mins > 0 ? `${mins}m ${secs % 60}s` : `${secs}s`;
+            }
+            const ms = data.module_status || {};
+            const mc = data.module_counts || {};
+            const chips = Object.entries(ms).map(([mod, st]) => {
+                const count = mc[mod] ? `(${Number(mc[mod]).toLocaleString()})` : '';
+                const icon = st === 'done' ? '\u2713' : st === 'error' ? '\u2717' : '';
+                return `<span class="module-chip module-${String(st).split(' ')[0]}">${mod}: ${st} ${count} ${icon}</span>`;
+            }).join('');
+            document.getElementById('scanModuleChips').innerHTML = chips;
+            const pct = typeof data.pct === 'number' ? data.pct : null;
+            if (pct !== null) {
+                document.getElementById('scanProgressFill').style.width = `${pct}%`;
+                document.getElementById('scanPct').textContent = `${pct}%`;
+            } else {
+                const stages = ['pending','fetching','processing','done'];
+                const totalSteps = Object.keys(ms).length * stages.length;
+                let completedSteps = 0;
+                Object.values(ms).forEach(st => { completedSteps += stages.indexOf(String(st).split(' ')[0]) + 1; });
+                const fallbackPct = Math.round((completedSteps/totalSteps)*100);
+                document.getElementById('scanProgressFill').style.width = `${fallbackPct}%`;
+                document.getElementById('scanPct').textContent = `${fallbackPct}%`;
+            }
+        }
+
+        async function pollScanStatusFallback() {
+            showScanProgress();
+            const poll = async () => {
+                try {
+                    const res = await fetch('/api/duplicates/scan-status');
+                    const data = await res.json();
+                    if (data.status === 'scanning') {
+                        updateScanUI(data);
+                        setTimeout(poll, 2000);
+                    } else {
+                        hideScanProgress(); resetScanBtn(); refreshData();
+                    }
+                } catch { setTimeout(poll, 5000); }
+            };
+            poll();
+        }
+
+        function resetScanBtn() {
+            const btn = document.getElementById('scanZohoBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> Scan from Zoho';
+        }
+
+        async function runAutoResolve() {
+            if (!confirm('Auto-resolve high-confidence clusters and ignore singletons?')) return;
+            try {
+                const res = await fetch('/api/duplicates/auto-resolve', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+                const data = await res.json();
+                alert(`Auto-resolve complete: ${data.resolved} resolved, ${data.ignored} ignored`);
+                refreshData();
+            } catch (e) { alert('Auto-resolve failed'); }
+        }
+
+        function exportData() { window.location.href = '/api/duplicates/export'; }
+        function downloadExport() {
+            const type = document.getElementById('exportType').value;
+            const sd = document.getElementById('exportStartDate').value;
+            const ed = document.getElementById('exportEndDate').value;
+            let url = `/api/duplicates/export?type=${type}`;
+            if (sd) url += `&start_date=${sd}`;
+            if (ed) url += `&end_date=${ed}`;
+            window.location.href = url;
+        }
+        function exportByOwner(email) { window.location.href = `/api/duplicates/export?owner=${encodeURIComponent(email)}`; }
+
+        let activeModuleFilter = '';
+        let filterMeta = null;
+
+        function toggleModuleFilter(btn, mod) {
+            if (activeModuleFilter === mod) {
+                activeModuleFilter = '';
+                btn.classList.remove('bg-blue-600','text-white','bg-green-600','bg-purple-600','bg-orange-600');
+            } else {
+                document.querySelectorAll('#moduleChipFilters .filter-chip').forEach(b => b.classList.remove('bg-blue-600','text-white','bg-green-600','bg-purple-600','bg-orange-600'));
+                activeModuleFilter = mod;
+                btn.classList.add(mod==='Leads'?'bg-blue-600':mod==='Deals'?'bg-green-600':mod==='Contacts'?'bg-purple-600':'bg-orange-600','text-white');
+            }
+        }
+
+        function getActiveFilters() {
+            return {
+                module: activeModuleFilter || undefined,
+                layout: document.getElementById('filterLayout')?.value || undefined,
+                owner: document.getElementById('filterOwner')?.value || undefined,
+                start_date: document.getElementById('globalStartDate')?.value || undefined,
+                end_date: document.getElementById('globalEndDate')?.value || undefined,
+                domain: document.getElementById('filterDomain')?.value.trim() || undefined,
+                pipeline: document.getElementById('filterPipeline')?.value || undefined,
+            };
+        }
+
+        function filtersToQuery(filters) {
+            const params = new URLSearchParams();
+            Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+            return params.toString();
+        }
+
+        function applyFilters() { refreshData(); loadTabData(); }
+        function applyDateFilter() { applyFilters(); }
+        function clearAllFilters() {
+            activeModuleFilter = '';
+            document.querySelectorAll('#moduleChipFilters .filter-chip').forEach(b => b.classList.remove('bg-blue-600','text-white','bg-green-600','bg-purple-600','bg-orange-600'));
+            document.getElementById('filterLayout').value = '';
+            document.getElementById('filterOwner').value = '';
+            document.getElementById('globalStartDate').value = '';
+            document.getElementById('globalEndDate').value = '';
+            document.getElementById('filterDomain').value = '';
+            document.getElementById('filterPipeline').value = '';
+            applyFilters();
+        }
+        function clearDateFilter() { clearAllFilters(); }
+
+        async function loadFilterMeta() {
+            try {
+                const res = await fetch('/api/duplicates/filter-meta');
+                filterMeta = await res.json();
+                const layoutSel = document.getElementById('filterLayout');
+                layoutSel.innerHTML = '<option value="">All Layouts</option>' +
+                    (filterMeta.layouts || []).map(l => `<option value="${l.layout_name}">${l.layout_name} (${l.zoho_module}) - ${l.record_count}</option>`).join('');
+
+                const ownerSel = document.getElementById('filterOwner');
+                ownerSel.innerHTML = '<option value="">All Owners</option>' +
+                    (filterMeta.owners || []).map(o => `<option value="${o.owner_name}">${o.owner_name} (${o.record_count})</option>`).join('');
+
+                const pipSel = document.getElementById('filterPipeline');
+                pipSel.innerHTML = '<option value="">All Pipelines</option>' +
+                    (filterMeta.pipelines || []).map(p => `<option value="${p.pipeline}">${p.pipeline} (${p.record_count})</option>`).join('');
+
+                if (filterMeta.syncState && filterMeta.syncState.length > 0) {
+                    const bar = document.getElementById('syncStatusBar');
+                    bar.classList.remove('hidden');
+                    document.getElementById('syncModuleStates').innerHTML = filterMeta.syncState.map(s => {
+                        const ago = s.last_sync_at ? timeAgo(new Date(s.last_sync_at)) : 'never';
+                        const statusColor = s.sync_status === 'idle' ? 'text-green-600' : s.sync_status === 'syncing' ? 'text-blue-600' : 'text-red-600';
+                        return `<span class="${statusColor}">${s.module}: ${s.total_synced?.toLocaleString() || 0} records (${ago})</span>`;
+                    }).join('');
+                }
+            } catch (e) { console.warn('Failed to load filter meta:', e); }
+        }
+
+        function timeAgo(date) {
+            const ms = Date.now() - date.getTime();
+            const mins = Math.floor(ms / 60000);
+            if (mins < 60) return `${mins}m ago`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return `${hrs}h ago`;
+            return `${Math.floor(hrs / 24)}d ago`;
+        }
+
+        function loadTabData() {
+            renderRecordTable('leadsContainer', '/api/duplicates/leads', 'lead');
+            renderRecordTable('dealsContainer', '/api/duplicates/deals', 'deal');
+            renderRecordTable('accountsContainer', '/api/duplicates/accounts', 'account');
+            renderRecordTable('contactsContainer', '/api/duplicates/contacts', 'contact');
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => { el.classList.remove('tab-active'); el.classList.add('tab-inactive'); });
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabId}`).classList.remove('tab-inactive');
+            document.getElementById(`tab-${tabId}`).classList.add('tab-active');
+            if (['leads','deals','accounts','contacts'].includes(tabId)) {
+                renderRecordTable(`${tabId}Container`, `/api/duplicates/${tabId}`, tabId.replace(/s$/, ''));
+            }
+            if (tabId === 'dq') loadDataQuality();
+        }
+
+        async function performSearch() {
+            const params = {
+                domain: document.getElementById('searchDomain').value.trim(),
+                phone: document.getElementById('searchPhone').value.trim(),
+                company_name: document.getElementById('searchCompany').value.trim(),
+                contract_number: document.getElementById('searchContract').value.trim(),
+                email: document.getElementById('searchEmail').value.trim(),
+                record_name: document.getElementById('searchName').value.trim(),
+                owner_email: document.getElementById('searchOwner').value.trim()
+            };
+            if (!Object.values(params).some(v => v)) { alert('Please enter at least one search criteria'); return; }
+            try {
+                const res = await fetch('/api/duplicates/search', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(params) });
+                const data = await res.json();
+                if (data.total_records === 0) { document.getElementById('searchResults').classList.add('hidden'); document.getElementById('noSearchResults').classList.remove('hidden'); return; }
+                document.getElementById('noSearchResults').classList.add('hidden');
+                const sr = document.getElementById('searchResults');
+                sr.classList.remove('hidden');
+                let html = `<div class="text-sm text-gray-500 mb-3">${data.total_records} records in ${data.clusters?.length||0} clusters</div>`;
+                html += `<div class="bg-white rounded-lg shadow overflow-hidden"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Company</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Phone</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Owner</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cluster</th></tr></thead><tbody class="divide-y divide-gray-200">`;
+                for (const r of data.records) {
+                    html += `<tr class="hover:bg-gray-50"><td class="px-4 py-2 text-sm"><span class="px-2 py-0.5 rounded text-xs ${r.record_type==='lead'?'bg-blue-100 text-blue-800':'bg-green-100 text-green-800'}">${r.record_type}</span></td><td class="px-4 py-2 text-sm">${r.record_name||'-'}</td><td class="px-4 py-2 text-sm">${r.company_name||'-'}</td><td class="px-4 py-2 text-sm">${r.email||'-'}</td><td class="px-4 py-2 text-sm">${r.phone||'-'}</td><td class="px-4 py-2 text-sm">${r.owner_name||'-'}</td><td class="px-4 py-2 text-sm"><button onclick="showClusterDetails(${r.cluster_id})" class="text-blue-600 hover:underline text-xs">View</button></td></tr>`;
+                }
+                html += `</tbody></table></div>`;
+                sr.innerHTML = html;
+            } catch (e) { console.error(e); alert('Search failed'); }
+        }
+
+        function clearSearch() {
+            ['searchDomain','searchPhone','searchCompany','searchContract','searchEmail','searchName','searchOwner'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('searchResults').classList.add('hidden');
+            document.getElementById('noSearchResults').classList.add('hidden');
+        }
+
+        function getConfidenceLevel(score) { return score >= 90 ? 'high' : score >= 60 ? 'medium' : 'low'; }
+        function formatCurrency(v) { return new Intl.NumberFormat('en-SA', { style: 'currency', currency: 'SAR', maximumFractionDigits: 0 }).format(v); }
+        function formatDate(d) { if (!d) return '-'; return new Date(d).toLocaleDateString('en-SA', { year: 'numeric', month: 'short', day: 'numeric' }); }
+
+        async function checkForActiveScan() {
+            try {
+                const res = await fetch('/api/duplicates/scan-status');
+                const data = await res.json();
+                if (data.status === 'scanning') {
+                    const btn = document.getElementById('scanZohoBtn');
+                    btn.disabled = true;
+                    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Scanning...';
+                    showScanProgress();
+                    updateScanUI(data);
+                    connectSSE();
+                }
+            } catch {}
+        }
+        async function loadDataQuality() {
+            try {
+                const res = await fetch('/api/duplicates/data-quality');
+                const dq = await res.json();
+                document.getElementById('dqTotalRecords').textContent = (dq.totalRecords || 0).toLocaleString();
+                document.getElementById('dqJunkRecords').textContent = (dq.junkRecords || 0).toLocaleString();
+                const junkPct = dq.totalRecords > 0 ? ((dq.junkRecords / dq.totalRecords) * 100).toFixed(1) : '0';
+                document.getElementById('dqJunkPct').textContent = `${junkPct}% of total`;
+                document.getElementById('dqAvgScore').textContent = dq.avgQualityScore || 0;
+
+                const goodCount = (dq.qualityDistribution || []).find(d => d.bucket?.includes('Good'))?.count || 0;
+                const cleanRate = dq.totalRecords > 0 ? ((goodCount / dq.totalRecords) * 100).toFixed(1) : '0';
+                document.getElementById('dqCleanRate').textContent = `${cleanRate}%`;
+
+                const distColors = { 'Good': 'bg-green-500', 'Fair': 'bg-blue-500', 'Poor': 'bg-yellow-500', 'Junk': 'bg-red-500' };
+                document.getElementById('dqDistribution').innerHTML = (dq.qualityDistribution || []).map(d => {
+                    const pct = dq.totalRecords > 0 ? ((d.count / dq.totalRecords) * 100).toFixed(1) : '0';
+                    const colorKey = Object.keys(distColors).find(k => d.bucket?.includes(k)) || 'Good';
+                    return `<div>
+                        <div class="flex justify-between text-sm mb-1"><span>${d.bucket}</span><span class="font-medium">${Number(d.count).toLocaleString()} (${pct}%)</span></div>
+                        <div class="w-full bg-gray-200 rounded-full h-2"><div class="${distColors[colorKey]} h-2 rounded-full" style="width:${pct}%"></div></div>
+                    </div>`;
+                }).join('') || '<p class="text-gray-400 text-sm">No data yet. Run a sync first.</p>';
+
+                const flagLabels = {
+                    'missing_email': 'Missing Email', 'missing_phone': 'Missing Phone/Mobile',
+                    'missing_company': 'Missing Company', 'missing_name': 'Missing Name',
+                    'missing_owner': 'Missing Owner', 'gibberish_name': 'Gibberish/Spam Name',
+                    'gibberish_company': 'Gibberish Company', 'garbage_name': 'Garbage Name',
+                    'suspicious_email': 'Suspicious Email', 'no_business_domain': 'No Business Domain',
+                };
+                document.getElementById('dqTopIssues').innerHTML = (dq.topIssues || []).map(i => {
+                    const label = flagLabels[i.flag] || i.flag;
+                    const isSerious = ['gibberish_name','garbage_name','gibberish_company','suspicious_email'].includes(i.flag);
+                    return `<div class="flex justify-between items-center text-sm">
+                        <span class="${isSerious ? 'text-red-700 font-medium' : 'text-gray-700'}">${label}</span>
+                        <span class="px-2 py-0.5 rounded text-xs ${isSerious ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}">${Number(i.count).toLocaleString()}</span>
+                    </div>`;
+                }).join('') || '<p class="text-gray-400 text-sm">No issues detected.</p>';
+
+                document.getElementById('dqByModule').innerHTML = (dq.byModule || []).map(m => {
+                    const scoreColor = m.avgScore >= 80 ? 'text-green-600' : m.avgScore >= 50 ? 'text-yellow-600' : 'text-red-600';
+                    return `<div class="flex justify-between items-center text-sm border-b pb-2">
+                        <div>
+                            <div class="font-medium">${m.module}</div>
+                            <div class="text-xs text-gray-400">${m.totalCount.toLocaleString()} records</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="${scoreColor} font-bold">${m.avgScore}/100</div>
+                            <div class="text-xs text-red-400">${m.junkCount > 0 ? m.junkCount.toLocaleString() + ' junk' : 'No junk'}</div>
+                        </div>
+                    </div>`;
+                }).join('') || '<p class="text-gray-400 text-sm">No module data yet.</p>';
+            } catch (e) { console.error('Failed to load data quality:', e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { loadFilterMeta(); refreshData(); loadTabData(); checkForActiveScan(); });
+    </script>
+</body>
+</html>
