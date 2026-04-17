@@ -1,12 +1,12 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 4.3
-**Last Updated:** April 14, 2026
+**Version:** 4.4
+**Last Updated:** April 17, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
-**Next Review Date:** July 13, 2026
+**Next Review Date:** July 17, 2026
 
 ---
 
@@ -15,12 +15,12 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 4.3 |
+| **Version** | 4.4 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
-| **Effective Date** | April 14, 2026 |
-| **Next Review** | July 13, 2026 (quarterly) |
+| **Effective Date** | April 17, 2026 |
+| **Next Review** | July 17, 2026 (quarterly) |
 | **Distribution** | All platform users (internal) |
 
 ### Revision History
@@ -42,6 +42,7 @@
 | 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. 6-hourly duplicate auto-sync cron. KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination uncapped by default. Notification hub integration. Database expanded to 105+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
 | 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on zoho_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), Zoho record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
 | 4.2 | Apr 13, 2026 | Engineering | **AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: A1 – XSS-safe renderMarkdown with escapeHtml + placeholder tokens for code/tables + URL protocol sanitization; A2 – sla_breach added to createAlertTool Zod enum; A3 – 9 `if(true)` scanner bugs fixed (use createAlertIfNew return); A4 – Auto-NC status query `'active'` → `IN ('open','acknowledged')`; A5 – KPI join column `kpi_definition_id` → `kpi_id`; A6 – monitorRisksTool column `rta.description` → `rta.action_description`; A7 – Dead `checkAgainst` param removed from reviewDocumentTool; A8 – Scan prompt revised to report-only (no force-create). Phase 2 Performance: B1 – Shared pg.Pool in sharedPool.ts (max:20); B2 – AbortController timeouts on all agent calls (120s chat, 300s scan, configurable via env vars); B3 – 13 scanner checks parallelized via Promise.all; B4 – safeQuery error logging + errors[] in ScanResult. Phase 3 Features: C1 – Alert action buttons (ack/resolve/dismiss) + View All modal with status/severity filters; C2 – Chat history panel with localStorage persistence; C3 – File upload endpoint (PDF/DOCX/TXT, 10MB limit); C4 – Clickable knowledge docs; C5 – Citation CSS + sanitized markdown links; C6 – Scan SSE progress bar endpoint (/api/consultant/scan-stream); C7 – Agent upgraded to 23 tools (added updateCapa, addCapaAction, createTraining, getTrainingList, assignTraining, getTrainingAssignments, completeTraining); C8 – Auth guards (session or X-Admin-Key) on all consultant endpoints; C9 – Contextual welcome dashboard with KPI summary. Phase 4 UI: D1 – Consolidated alert polling (60s interval); D2 – Touch swipe gestures + sticky input; D3 – Severity icons + inline actions + relative time; D4 – Retry button on stream failure; D5 – Export chat as Markdown; D6 – Arabic RTL detection. |
+| 4.4 | Apr 17, 2026 | Engineering | **Duplicate Radar — cross-module intelligence, deletion sync, dashboard drill-downs.** (1) Module-aware recommendations: cluster decisions now distinguish MERGE (same module), LINK (cross-module — set `Account_Name`/`Contact_Name` instead of merging, per Zoho rule), CLOSE, and REVIEW. Account-first primary selection across cross-module clusters. Cluster API (`GET /api/duplicates/clusters/:id`) returns `primary_type`, `is_cross_module`, and `record_types`; cluster modal shows cross-module banner + per-record type tags, dynamic Resolve label, and post-merge sync hint. (2) Deletion detection: `fetchDeletedZohoRecords()` calls Zoho's `/deleted?type=all` with `If-Modified-Since`; `runDeletionDetection()` purges merged/deleted records on each scan. Removed unsafe `markStaleRecords()` from incremental sync to avoid false purges. Deletion detection is skipped on the very first scan (no `last_sync_at` baseline). (3) "View All" drill-down modals on the dashboard: new endpoints `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal` with DB helpers `getAllClustersByInflation` / `getClustersBySignal`. Generic `listModal` with "View all signals →" and "View all clusters →" links; inline signal rows are clickable. (4) Layout filter on Clusters tab: shared `buildClusterFilterClause()` helper used by both `getAllClusters` and `getClusterCount` (guarantees list/count parity); new `layouts` param uses an `EXISTS` subquery on `duplicate_records.layout_name` (uses existing `idx_duplicate_records_layout` index); Layout `<select>` populated once from `/api/duplicates/filters/options` with a live count hint. Resolved/ignored decisions are still LOST on full Rebuild Clusters (admin-only). |
 | 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByZohoIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `zoho_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
 
 ### Document Control Procedure
@@ -436,6 +437,8 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Key Features:**
 - **Multi-Signal Confidence Scoring:** Email match (40 points), domain match (25 points), phone match (30 points), company name match (20 points). Maximum confidence: 100.
 - **Cross-Module Matching:** Detects duplicates across Leads, Contacts, Deals, and Accounts simultaneously
+- **Module-Aware Recommendations (v4.4):** Cluster decisions are now classified as **MERGE** (records in the same Zoho module — safe to merge), **LINK** (records in different modules — must NOT be merged; instead set `Account_Name`/`Contact_Name` on the child record per Zoho's cross-module rule), **CLOSE** (low-value duplicates), or **REVIEW**. Cluster API returns `primary_type`, `is_cross_module`, and `record_types`. The cluster modal shows a cross-module banner, per-record type tags, a dynamic Resolve button label that reflects the recommended action, and a post-merge sync hint. Account-first selection is used for the primary record in cross-module clusters.
+- **Deletion Detection (v4.4):** `fetchDeletedZohoRecords()` calls Zoho's `/deleted?type=all` endpoint with an `If-Modified-Since` header derived from `zoho_sync_state.last_sync_at`. `runDeletionDetection()` purges merged/deleted Zoho records from the local store on each scan. Skipped automatically on the first scan (no baseline). The unsafe `markStaleRecords()` call has been removed from the incremental sync path to prevent false purges when Zoho returns partial pages.
 - **5-Signal Cluster Matching:** domain → email → phone → exact company name → fuzzy company name (pg_trgm similarity with Levenshtein fallback)
 - **Confidence Levels:** Strong (≥90 points, red), Moderate (60–89 points, amber), Weak (<60 points, green)
 - **Pipeline Inflation:** Calculates estimated duplicate deal value (non-primary deals only)
@@ -469,6 +472,10 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 
 **Filter Panel:** Shared filters across tabs — Module (Leads/Deals/Contacts/Accounts), Layout, Owner, Created Date range, Domain, and Pipeline
 
+**Clusters Tab Filters (v4.4):** In addition to Similarity and Status (Active/Resolved/Ignored), the Clusters tab now exposes a **Layout** dropdown that filters clusters to those containing at least one record in the selected Zoho layout (Corporate Accounts, Standard, Marketplace, ...). The dropdown is populated once from `/api/duplicates/filters/options` and shows a live count hint such as `"42 cluster(s) in 'Corporate Accounts'"`. The list and total count always stay in lock-step because both queries share `buildClusterFilterClause()`.
+
+**Dashboard Drill-Down Modals (v4.4):** The Executive Summary's "Top Match Signals" and "Top 5 Clusters by Inflation" panels now expose **"View all signals →"** and **"View all clusters →"** links that open a generic `listModal` powered by `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal`. Inline signal rows are also clickable.
+
 **Scan Process:**
 1. Click **"Scan from Zoho"** button on the Duplicate Radar page
 2. Animated progress bar appears with module status chips (pending → fetching → processing → done)
@@ -490,7 +497,9 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 |----------|--------|---------|
 | `/api/duplicates/summary` | GET | Summary with KPIs, enhanced data, and last scan date |
 | `/api/duplicates/enhanced-summary` | GET | Enhanced summary with resolution rate, top signals, top clusters by inflation |
-| `/api/duplicates/clusters` | GET | Paginated clusters (30/page) with status/confidence/date filters |
+| `/api/duplicates/clusters` | GET | Paginated clusters (30/page) with status/confidence/date/`layouts` filters (v4.4) |
+| `/api/duplicates/clusters-by-inflation` | GET | Full list of clusters ranked by estimated pipeline inflation (powers "View all clusters" modal, v4.4) |
+| `/api/duplicates/clusters-by-signal/:signal` | GET | Full list of clusters matched on a given signal (email / domain / phone / company / mobile / cr_number / vat_number / website) for the "View all signals" modal (v4.4) |
 | `/api/duplicates/clusters/:id` | GET | Cluster details with all records and smart AI recommendations |
 | `/api/duplicates/clusters/:id/status` | PATCH | Update cluster status (active/resolved/ignored) |
 | `/api/duplicates/clusters/:id/resolve` | POST | Resolve cluster with action (resolve/ignore) and notes (RBAC) |
@@ -523,6 +532,11 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | `/api/duplicates/filtered-summary` | GET | Summary statistics with applied filters |
 | `/api/duplicates/clusters/:id/tasks` | GET | Zoho Tasks linked to a cluster's records |
 | `/api/duplicates/data-quality` | GET | Data quality stats: junk count, quality distribution, top issues, quality by module |
+
+**Cross-Module Merge Rule (v4.4 — IMPORTANT):**
+Zoho does not allow merging records that live in different modules. The Resolve action therefore branches on `is_cross_module`:
+- **Same module (Leads↔Leads, Deals↔Deals, ...):** safe to merge in Zoho; the cluster recommendation is `MERGE` and the Resolve button reads "Merge in Zoho".
+- **Cross-module (e.g. Account ↔ Contact ↔ Deal):** the cluster recommendation is `LINK`; the Resolve button reads "Link in Zoho" and the post-merge sync hint instructs the operator to set `Account_Name` / `Contact_Name` on the child record so the relationship is preserved without data loss.
 
 **Performance Optimizations (v4.1):**
 - `ON CONFLICT` upsert eliminates destructive data clearing
