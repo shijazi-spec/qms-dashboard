@@ -172,6 +172,47 @@ const PUBLIC_DOMAINS = [
   'stc.com.sa', 'mobily.com.sa', 'zain.com.sa'
 ];
 
+// Full list (no LIMIT 5) for "View All" modals on the dashboard
+export async function getAllClustersByInflation(opts: { limit?: number; offset?: number } = {}): Promise<any[]> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const r = await pool.query(
+    `SELECT id, domain, company_name, company_name_arabic,
+            estimated_pipeline_value, total_records,
+            total_leads, total_deals, total_contacts, total_accounts,
+            confidence_score, confidence_level, status
+       FROM duplicate_clusters
+      WHERE estimated_pipeline_value > 0
+        AND total_records > 1
+      ORDER BY estimated_pipeline_value DESC, total_records DESC
+      LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  );
+  return r.rows;
+}
+
+// All clusters that include a given match signal (e.g. exact_email, phone_match)
+export async function getClustersBySignal(
+  signal: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<any[]> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const r = await pool.query(
+    `SELECT id, domain, company_name, company_name_arabic,
+            estimated_pipeline_value, total_records,
+            total_leads, total_deals, total_contacts, total_accounts,
+            confidence_score, confidence_level, status, match_signals
+       FROM duplicate_clusters
+      WHERE total_records > 1
+        AND match_signals @> to_jsonb(ARRAY[$1::text])
+      ORDER BY confidence_score DESC, total_records DESC
+      LIMIT $2 OFFSET $3`,
+    [signal, limit, offset],
+  );
+  return r.rows;
+}
+
 export function extractDomain(email: string): string | null {
   if (!email || typeof email !== 'string') return null;
   const match = email.toLowerCase().trim().match(/@([^@]+)$/);

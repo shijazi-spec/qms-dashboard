@@ -29,6 +29,8 @@ import {
   removeRecordsByZohoIds,
   getClusterRecordTypeMeta,
   getSyncState,
+  getAllClustersByInflation,
+  getClustersBySignal,
   findOrCreateClusterByCompany,
   extractDomain,
   normalizePhone,
@@ -590,6 +592,47 @@ export const duplicateRadarRoutes = [
           return c.json({ ...summary, kpis, lastScanDate: lastScan });
         } catch (error: any) {
           console.error('Error fetching summary:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  // "View All" support for the executive-summary cards (Top Match Signal Sources
+  // and Top Clusters by Pipeline Inflation). These endpoints return the full
+  // ranked list, not just the top 5 rendered inline on the page.
+  {
+    path: "/api/duplicates/clusters-by-inflation",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get('limit') || '500');
+          const offset = parseInt(url.searchParams.get('offset') || '0');
+          const rows = await getAllClustersByInflation({ limit, offset });
+          return c.json({ clusters: rows, total: rows.length, limit, offset });
+        } catch (error: any) {
+          console.error('Error fetching clusters by inflation:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/clusters-by-signal/:signal",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const signal = c.req.param('signal');
+          if (!signal) return c.json({ error: 'signal is required' }, 400);
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get('limit') || '500');
+          const offset = parseInt(url.searchParams.get('offset') || '0');
+          const rows = await getClustersBySignal(signal, { limit, offset });
+          return c.json({ signal, clusters: rows, total: rows.length, limit, offset });
+        } catch (error: any) {
+          console.error('Error fetching clusters by signal:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
