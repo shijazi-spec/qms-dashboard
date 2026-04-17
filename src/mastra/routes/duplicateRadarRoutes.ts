@@ -26,6 +26,9 @@ import {
   truncateAllDuplicateData,
   cleanupStaleRecords,
   cleanupOrphanClusters,
+  removeRecordsByZohoIds,
+  getClusterRecordTypeMeta,
+  getSyncState,
   findOrCreateClusterByCompany,
   extractDomain,
   normalizePhone,
@@ -58,7 +61,7 @@ import {
 
 import type { DuplicateFilters } from '../../utils/duplicateRadarDatabase';
 
-import { fetchAllZohoRecords } from '../../utils/zohoCRM';
+import { fetchAllZohoRecords, fetchDeletedZohoRecords } from '../../utils/zohoCRM';
 
 const SCAN_MAX_PER_MODULE = parseInt(process.env.DUPLICATE_SCAN_LIMIT || '5000');
 
@@ -202,6 +205,51 @@ async function processModule(
   broadcastSSE('module', { module: moduleName, status: 'done', count: records.length });
   await upsertSyncState(moduleName, records.length, 'completed');
   return { count: records.length };
+}
+
+// Detect records deleted/merged inside Zoho CRM since the last successful sync
+// and purge them from the duplicate radar. Without this, a manual Zoho merge
+// would leave the losing record visible in the radar forever (Modified_Time
+// filters never return deleted records).
+async function runDeletionDetection(clustersUpdated: Set<number>): Promise<{
+  totalRemoved: number;
+  perModule: Record<string, number>;
+}> {
+  const modules: Array<{ name: string }> = [
+    { name: 'Leads' },
+    { name: 'Deals' },
+    { name: 'Contacts' },
+    { name: 'Accounts' },
+  ];
+  const perModule: Record<string, number> = {};
+  let totalRemoved = 0;
+
+  for (const m of modules) {
+    try {
+      const syncState = await getSyncState(m.name);
+      const since = syncState?.last_sync_at || undefined;
+      // Skip on first ever sync — no baseline to diff against, and the
+      // initial fetch will populate the radar from scratch anyway.
+      if (!since) {
+        perModule[m.name] = 0;
+        continue;
+      }
+      const deleted = await fetchDeletedZohoRecords(m.name, { type: 'all', modifiedSince: since });
+      if (deleted.length === 0) {
+        perModule[m.name] = 0;
+        continue;
+      }
+      const ids = deleted.map(d => d.id).filter(Boolean);
+      const { removedCount, affectedClusterIds } = await removeRecordsByZohoIds(ids, { module: m.name });
+      affectedClusterIds.forEach(id => clustersUpdated.add(id));
+      perModule[m.name] = removedCount;
+      totalRemoved += removedCount;
+    } catch (e: any) {
+      console.warn(`⚠️ [DuplicateRadar] Deletion detection failed for ${m.name} (non-fatal):`, e?.message || e);
+      perModule[m.name] = 0;
+    }
+  }
+  return { totalRemoved, perModule };
 }
 
 async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 'manual'): Promise<{
@@ -389,10 +437,27 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
     scanState.percentage = 60;
     broadcastSSE('progress', { percentage: 60, message: `All modules fetched (${totalRecords} records)` });
 
-    // A1: Cleanup stale records and orphan clusters
+    // Deletion-detection pass: ask Zoho which records were deleted/merged
+    // since our last sync and purge them locally. This is what makes a
+    // manual Zoho merge propagate into the duplicate radar.
     const scanMode = process.env.DUPLICATE_SCAN_MODE || 'incremental';
+    scanState.progress = 'Checking Zoho for deleted/merged records...';
+    broadcastSSE('progress', { percentage: 62, message: 'Checking Zoho for deletions...' });
+    const deletionResult = await runDeletionDetection(clustersUpdated);
+    if (deletionResult.totalRemoved > 0) {
+      console.log(
+        `🗑️ [DuplicateRadar] Deletion-detection removed ${deletionResult.totalRemoved} record(s):`,
+        deletionResult.perModule,
+      );
+      broadcastSSE('progress', {
+        percentage: 65,
+        message: `Removed ${deletionResult.totalRemoved} deleted/merged Zoho records`,
+      });
+    }
+
+    // Cleanup stale records (legacy, mostly a no-op now) and orphan clusters
     if (scanMode !== 'full') {
-      scanState.progress = 'Cleaning up stale records...';
+      scanState.progress = 'Cleaning up orphan clusters...';
       await cleanupStaleRecords();
       await cleanupOrphanClusters();
     }
@@ -583,7 +648,15 @@ export const duplicateRadarRoutes = [
           }
           const records = await getRecordsByClusterId(id);
           const recommendations = generateSmartRecommendations(records);
-          return c.json({ cluster, records, recommendations });
+          const meta = getClusterRecordTypeMeta(records);
+          return c.json({
+            cluster,
+            records,
+            recommendations,
+            primary_type: meta.primary_type,
+            is_cross_module: meta.is_cross_module,
+            record_types: meta.record_types,
+          });
         } catch (error: any) {
           console.error('Error fetching cluster:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
@@ -1064,13 +1137,19 @@ export const duplicateRadarRoutes = [
 
           const records = await getRecordsByClusterId(clusterId);
           const recommendations = generateSmartRecommendations(records);
+          const meta = getClusterRecordTypeMeta(records);
 
           return c.json({
             cluster_id: clusterId,
             domain: cluster.domain,
             total_records: records.length,
             recommendations,
-            ai_summary: `Analyzed ${records.length} records for ${cluster.domain || cluster.company_name}. Smart scoring considers data completeness, deal activity, recency, and record age.`
+            primary_type: meta.primary_type,
+            is_cross_module: meta.is_cross_module,
+            record_types: meta.record_types,
+            ai_summary: meta.is_cross_module
+              ? `Cross-module cluster (${meta.record_types.join(' + ')}) for ${cluster.domain || cluster.company_name}. Same-module records get MERGE; cross-module get LINK (set Account_Name / Contact_Name in Zoho — never merge across modules).`
+              : `Analyzed ${records.length} ${meta.primary_type || 'record'}(s) for ${cluster.domain || cluster.company_name}. Smart scoring considers data completeness, deal activity, recency, and record age.`,
           });
         } catch (error: any) {
           console.error('Error generating AI recommendations:', error);

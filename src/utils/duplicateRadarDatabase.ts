@@ -1134,6 +1134,14 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
 }
 
 // A1: Replaced destructive clear with incremental approach
+//
+// IMPORTANT: in incremental mode we deliberately do NOT call markStaleRecords()
+// any more. The previous behaviour was unsafe: an incremental Zoho fetch only
+// returns recently-modified records (or the most-recent N), so every untouched
+// record would be marked stale and then purged by cleanupStaleRecords() —
+// silently corrupting the radar over time. Records that were truly deleted in
+// Zoho are now caught by the deletion-detection pass in the scan flow
+// (fetchDeletedZohoRecords + removeRecordsByZohoIds).
 export async function clearAllDuplicateData(): Promise<void> {
   const scanMode = process.env.DUPLICATE_SCAN_MODE || 'incremental';
   if (scanMode === 'full') {
@@ -1142,9 +1150,42 @@ export async function clearAllDuplicateData(): Promise<void> {
     await pool.query('DELETE FROM duplicate_clusters');
     console.log('✅ [DuplicateRadar] All duplicate data cleared');
   } else {
-    console.log('♻️ [DuplicateRadar] INCREMENTAL mode: Marking existing records as stale...');
-    await markStaleRecords();
+    console.log('♻️ [DuplicateRadar] INCREMENTAL mode: relying on upserts + Zoho deletion detection (no stale-marking)');
   }
+}
+
+// Purge records by their Zoho ID (used when Zoho reports them as deleted/merged).
+// Returns the cluster IDs that lost records so the caller can re-score them.
+export async function removeRecordsByZohoIds(
+  zohoIds: string[],
+  opts?: { module?: string }
+): Promise<{ removedCount: number; affectedClusterIds: number[] }> {
+  if (!zohoIds || zohoIds.length === 0) {
+    return { removedCount: 0, affectedClusterIds: [] };
+  }
+  const params: any[] = [zohoIds];
+  let where = 'zoho_record_id = ANY($1::text[])';
+  if (opts?.module) {
+    params.push(opts.module);
+    where += ` AND zoho_module = $${params.length}`;
+  }
+  const affected = await pool.query(
+    `SELECT DISTINCT cluster_id FROM duplicate_records WHERE ${where} AND cluster_id IS NOT NULL`,
+    params,
+  );
+  const affectedClusterIds = affected.rows
+    .map(r => r.cluster_id)
+    .filter((v): v is number => v != null);
+  const del = await pool.query(`DELETE FROM duplicate_records WHERE ${where}`, params);
+  const removedCount = del.rowCount || 0;
+  if (removedCount > 0) {
+    console.log(
+      `🗑️ [DuplicateRadar] Removed ${removedCount} record(s) deleted/merged in Zoho` +
+        (opts?.module ? ` (${opts.module})` : '') +
+        ` — ${affectedClusterIds.length} cluster(s) affected`,
+    );
+  }
+  return { removedCount, affectedClusterIds };
 }
 
 // A1: Mark records as stale before incremental scan
@@ -1761,15 +1802,41 @@ export async function autoResolveClusters(): Promise<{
 }
 
 // C7: Smart AI recommendations considering completeness, deals, recency
-export function generateSmartRecommendations(records: DuplicateRecord[]): Array<{
+// Zoho-correct recommendation engine.
+//
+// Zoho does NOT support cross-module merges (you cannot merge a Contact into an
+// Account). The right action depends on the relationship between the record
+// types in the cluster, not just on which one looks "best":
+//
+//   • same module as primary  → MERGE (native Zoho merge inside the module)
+//   • Contact/Deal under an Account primary → LINK (set Account_Name field)
+//   • Deal under a Contact primary          → LINK (set Contact_Name field)
+//   • Lead when a real Account/Contact/Deal already exists → CLOSE/convert
+//   • anything else (e.g. Deal vs Contact with no Account) → REVIEW manually
+//
+// Primary selection priority is by record type first
+// (Account > Contact > Deal > Lead > Task), with quality-score breaking ties.
+export type DuplicateActionType = 'keep' | 'merge' | 'link' | 'close' | 'review';
+
+export interface SmartRecommendation {
   record_id: number;
   record_name: string;
   is_primary: boolean;
   recommendation: string;
-  action_type: 'keep' | 'merge' | 'close';
+  action_type: DuplicateActionType;
   confidence: number;
   reasons: string[];
-}> {
+}
+
+const RECORD_TYPE_PRIORITY: Record<string, number> = {
+  account: 5,
+  contact: 4,
+  deal: 3,
+  lead: 2,
+  task: 1,
+};
+
+export function generateSmartRecommendations(records: DuplicateRecord[]): SmartRecommendation[] {
   if (records.length === 0) return [];
 
   const scored = records.map(r => {
@@ -1813,21 +1880,90 @@ export function generateSmartRecommendations(records: DuplicateRecord[]): Array<
     return { record: r, score, reasons };
   });
 
-  scored.sort((a, b) => b.score - a.score);
+  // Pick primary by Zoho-module priority first, then by quality score.
+  // Account beats Contact beats Deal beats Lead beats Task.
+  scored.sort((a, b) => {
+    const pa = RECORD_TYPE_PRIORITY[a.record.record_type] || 0;
+    const pb = RECORD_TYPE_PRIORITY[b.record.record_type] || 0;
+    if (pa !== pb) return pb - pa;
+    return b.score - a.score;
+  });
 
-  return scored.map((item, index) => ({
-    record_id: item.record.id!,
-    record_name: item.record.record_name,
-    is_primary: index === 0,
-    recommendation: index === 0
-      ? 'KEEP as primary record (highest quality score)'
-      : item.record.record_type === 'lead' && scored.some(s => s.record.record_type === 'deal')
-        ? 'CLOSE – Deal exists for this company'
-        : 'MERGE into primary record',
-    action_type: index === 0 ? 'keep' as const : (item.record.record_type === 'lead' && scored.some(s => s.record.record_type === 'deal') ? 'close' as const : 'merge' as const),
-    confidence: Math.min(95, 60 + (scored[0].score - item.score)),
-    reasons: item.reasons
-  }));
+  const primary = scored[0].record;
+  const primaryType = primary.record_type;
+  const primaryScore = scored[0].score;
+  const hasAccount = scored.some(s => s.record.record_type === 'account');
+  const hasContact = scored.some(s => s.record.record_type === 'contact');
+  const hasDeal = scored.some(s => s.record.record_type === 'deal');
+
+  return scored.map((item, index) => {
+    if (index === 0) {
+      return {
+        record_id: item.record.id!,
+        record_name: item.record.record_name,
+        is_primary: true,
+        recommendation: `KEEP as primary ${primaryType} (best Zoho-priority + quality score)`,
+        action_type: 'keep' as const,
+        confidence: 95,
+        reasons: item.reasons,
+      };
+    }
+
+    const t = item.record.record_type;
+    let action: DuplicateActionType;
+    let recommendation: string;
+
+    if (t === primaryType) {
+      action = 'merge';
+      recommendation = `MERGE into primary ${primaryType} (native Zoho merge — same module)`;
+    } else if (primaryType === 'account' && (t === 'contact' || t === 'deal' || t === 'task')) {
+      action = 'link';
+      const field = t === 'contact' || t === 'deal' ? 'Account_Name' : 'What_Id';
+      recommendation = `LINK to primary account by setting ${field} on this ${t} (cross-module — do NOT merge)`;
+    } else if (primaryType === 'contact' && (t === 'deal' || t === 'task')) {
+      action = 'link';
+      const field = t === 'deal' ? 'Contact_Name' : 'Who_Id';
+      recommendation = `LINK to primary contact by setting ${field} on this ${t} (cross-module — do NOT merge)`;
+    } else if (t === 'lead' && (hasAccount || hasContact || hasDeal)) {
+      action = 'close';
+      recommendation = 'CLOSE — a converted Account/Contact/Deal already exists for this company';
+    } else {
+      action = 'review';
+      recommendation = `REVIEW manually — cross-module pairing (${primaryType} ↔ ${t}) has no automatic Zoho action`;
+    }
+
+    return {
+      record_id: item.record.id!,
+      record_name: item.record.record_name,
+      is_primary: false,
+      recommendation,
+      action_type: action,
+      confidence: Math.min(95, 60 + Math.max(0, primaryScore - item.score)),
+      reasons: item.reasons,
+    };
+  });
+}
+
+// Convenience: derive cluster-level metadata from a set of records, used by
+// the cluster API responses so the UI can render cross-module banners and
+// pick the right Resolve button label.
+export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
+  primary_type: string | null;
+  is_cross_module: boolean;
+  record_types: string[];
+} {
+  if (!records || records.length === 0) {
+    return { primary_type: null, is_cross_module: false, record_types: [] };
+  }
+  const types = Array.from(new Set(records.map(r => r.record_type).filter(Boolean)));
+  const sorted = [...records].sort(
+    (a, b) => (RECORD_TYPE_PRIORITY[b.record_type] || 0) - (RECORD_TYPE_PRIORITY[a.record_type] || 0),
+  );
+  return {
+    primary_type: sorted[0].record_type,
+    is_cross_module: types.length > 1,
+    record_types: types,
+  };
 }
 
 export async function getSyncState(module: string): Promise<ZohoSyncState | null> {

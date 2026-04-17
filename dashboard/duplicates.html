@@ -23,9 +23,11 @@
         .rag-green { background-color: #DCFCE7; color: #166534; }
         .rag-amber { background-color: #FEF3C7; color: #92400E; }
         .rag-red { background-color: #FEE2E2; color: #991B1B; }
-        .action-keep { background-color: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
-        .action-merge { background-color: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
-        .action-close { background-color: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+        .action-keep   { background-color: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
+        .action-merge  { background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+        .action-link   { background-color: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
+        .action-close  { background-color: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+        .action-review { background-color: #F3F4F6; color: #374151; border: 1px solid #D1D5DB; }
         .progress-bar-fill { transition: width 0.5s ease; }
         .module-chip { padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
         .module-pending { background: #E5E7EB; color: #6B7280; }
@@ -842,7 +844,7 @@
 
             const res = await fetch(`/api/duplicates/clusters/${id}`);
             const data = await res.json();
-            const { cluster, records, recommendations } = data;
+            const { cluster, records, recommendations, primary_type, is_cross_module, record_types } = data;
 
             document.getElementById('modalTitle').textContent = cluster.company_name || cluster.domain;
             document.getElementById('modalDomain').textContent = `Domain: ${cluster.domain} | Score: ${cluster.confidence_score}% | Status: ${cluster.status}`;
@@ -850,11 +852,24 @@
             const recMap = {};
             (recommendations || []).forEach(r => { recMap[r.record_id] = r; });
 
-            let html = `<div class="mb-4 flex gap-2">
+            let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
                 <span class="confidence-${cluster.confidence_level} px-3 py-1 rounded-full text-sm font-medium">${cluster.confidence_score}% match</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${records.length} records</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${formatCurrency(cluster.estimated_pipeline_value||0)} inflation</span>
+                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">Primary: ${primary_type}</span>` : ''}
+                ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).join(' + ')})</span>` : ''}
             </div>`;
+
+            if (is_cross_module) {
+                html += `<div data-testid="banner-cross-module" class="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
+                    <strong>Heads up:</strong> Zoho does not allow cross-module merges. Records of the same module
+                    (e.g. two Accounts) get a native <strong>MERGE</strong>. Cross-module children
+                    (Contact / Deal / Task under an Account) get a <strong>LINK</strong> — set the
+                    <code class="bg-amber-100 px-1 rounded">Account_Name</code> /
+                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> field in Zoho on the child record.
+                    A Lead superseded by a real Account/Contact/Deal should be <strong>CLOSED</strong> or converted.
+                </div>`;
+            }
 
             // Side-by-side comparison table
             html += `<div class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
@@ -905,7 +920,7 @@
             records.forEach(r => {
                 const rec = recMap[r.id];
                 if (rec) {
-                    const actionClass = rec.action_type === 'keep' ? 'action-keep' : rec.action_type === 'merge' ? 'action-merge' : 'action-close';
+                    const actionClass = `action-${rec.action_type}`;
                     html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${rec.action_type.toUpperCase()}</span><div class="text-xs text-gray-500 mt-1">${rec.recommendation}</div>`;
                     if (rec.reasons?.length) html += `<div class="text-xs text-gray-400 mt-1">${rec.reasons.join(', ')}</div>`;
                     html += '</td>';
@@ -915,11 +930,14 @@
             });
             html += '</tr></tbody></table></div>';
 
-            // Action buttons
+            // Action buttons — label depends on whether the cluster is cross-module
             if (cluster.status === 'active') {
-                html += `<div class="flex gap-3 border-t pt-4">
-                    <button onclick="resolveClusterAction(${cluster.id}, 'resolve')" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">Resolve (Mark Merged)</button>
-                    <button onclick="resolveClusterAction(${cluster.id}, 'ignore')" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore</button>
+                const resolveLabel = is_cross_module
+                    ? 'Mark Resolved (merge same-module + link cross-module in Zoho)'
+                    : 'Mark Resolved (Merged in Zoho)';
+                html += `<div class="flex flex-wrap gap-3 border-t pt-4">
+                    <button onclick="resolveClusterAction(${cluster.id}, 'resolve')" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
+                    <button onclick="resolveClusterAction(${cluster.id}, 'ignore')" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore (false positive)</button>
                 </div>`;
             }
 

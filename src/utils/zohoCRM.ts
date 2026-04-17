@@ -344,6 +344,122 @@ export async function fetchAllZohoRecords(
   return allRecords;
 }
 
+// Records that Zoho has deleted, recycled, or merged. type=all covers
+// recycle-bin, permanent deletions, AND merges (returns type='merged' with
+// merged_into.id). This is the only way to detect a Zoho-side merge: a
+// Modified_Time filter never returns deleted records, so the duplicate radar
+// would otherwise keep showing the "ghost" of the merged-away record forever.
+export interface ZohoDeletedRecord {
+  id: string;
+  type: 'recycle' | 'permanent' | 'merged' | string;
+  displayName?: string;
+  deletedTime?: string;
+  mergedIntoId?: string;
+}
+
+export async function fetchDeletedZohoRecords(
+  module: string,
+  params: {
+    type?: 'all' | 'recycle' | 'permanent';
+    modifiedSince?: Date | string;
+    maxRecords?: number;
+  } = {}
+): Promise<ZohoDeletedRecord[]> {
+  const type = params.type || 'all';
+  const perPage = 200;
+  const maxRecords = params.maxRecords || Infinity;
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const ifModifiedSince = params.modifiedSince
+    ? (typeof params.modifiedSince === 'string'
+        ? new Date(params.modifiedSince)
+        : params.modifiedSince
+      ).toISOString()
+    : null;
+
+  const all: ZohoDeletedRecord[] = [];
+  let page = 1;
+  let hasMore = true;
+
+  console.log(
+    `🗑️ [ZohoCRM] Fetching deleted ${module} records (type=${type}` +
+      (ifModifiedSince ? `, since=${ifModifiedSince}` : '') +
+      ')',
+  );
+
+  while (hasMore && all.length < maxRecords) {
+    let retries = 0;
+    const maxRetries = 3;
+
+    while (retries <= maxRetries) {
+      try {
+        const queryParams = new URLSearchParams({
+          type,
+          page: String(page),
+          per_page: String(perPage),
+        });
+
+        const response = await makeZohoRequest(
+          async (config) => {
+            const url = `${config.apiDomain}/crm/v2/${module}/deleted?${queryParams.toString()}`;
+            const headers: Record<string, string> = {
+              'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+              'Content-Type': 'application/json',
+            };
+            if (ifModifiedSince) headers['If-Modified-Since'] = ifModifiedSince;
+            return fetch(url, { method: 'GET', headers });
+          },
+          async (res) => {
+            // 204 / 304 = nothing deleted in window
+            if (res.status === 204 || res.status === 304) return { data: [], info: null };
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({}));
+              throw new Error(
+                `Zoho deleted API error: ${res.status} - ${errBody.message || res.statusText}`,
+              );
+            }
+            return res.json();
+          },
+        );
+
+        const rows: any[] = (response as any)?.data || [];
+        if (rows.length === 0) {
+          hasMore = false;
+          break;
+        }
+        for (const r of rows) {
+          all.push({
+            id: r.id,
+            type: r.type,
+            displayName: r.display_name,
+            deletedTime: r.deleted_time,
+            mergedIntoId: r.merged_into?.id,
+          });
+        }
+        const more = (response as any)?.info?.more_records;
+        if (!more || rows.length < perPage) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+        await sleep(150);
+        break;
+      } catch (error: any) {
+        if (error.message?.includes('429') || error.status === 429) {
+          retries++;
+          if (retries > maxRetries) throw error;
+          await sleep(retries * 5000);
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  console.log(`✅ [ZohoCRM] Found ${all.length} deleted/merged ${module} record(s)`);
+  return all;
+}
+
 export async function searchZohoRecords(
   module: string,
   searchCriteria: string
