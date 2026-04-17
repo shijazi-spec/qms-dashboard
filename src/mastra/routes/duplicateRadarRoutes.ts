@@ -655,6 +655,10 @@ export const duplicateRadarRoutes = [
           // Hide legitimate parent-child hierarchies (e.g. 1 account + N contacts/deals)
           // by default. Pass ?include_hierarchies=true to see them.
           const include_hierarchies = url.searchParams.get('include_hierarchies') === 'true';
+          const layoutsParam = url.searchParams.get('layouts');
+          const layouts = layoutsParam
+            ? layoutsParam.split(',').map(s => s.trim()).filter(Boolean)
+            : undefined;
 
           const filters = {
             status: status || undefined,
@@ -662,6 +666,7 @@ export const duplicateRadarRoutes = [
             start_date,
             end_date,
             hide_hierarchies: !include_hierarchies,
+            layouts,
           };
 
           const [clusters, total] = await Promise.all([

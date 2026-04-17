@@ -628,6 +628,56 @@ export async function addRecordToCluster(record: Omit<DuplicateRecord, 'id' | 'c
   return result.rows[0];
 }
 
+// Build the shared WHERE clause for cluster listing/counting. Centralised so
+// the new `layouts` filter (and any future ones) stay in lock-step between
+// `getAllClusters` and `getClusterCount`.
+function buildClusterFilterClause(
+  filters: {
+    status?: string;
+    confidence_level?: string;
+    start_date?: string;
+    end_date?: string;
+    hide_hierarchies?: boolean;
+    layouts?: string[];
+  } | undefined,
+  startIndex: number,
+): { clause: string; params: any[]; nextIndex: number } {
+  const params: any[] = [];
+  let paramIndex = startIndex;
+  let clause = '';
+
+  if (filters?.status) {
+    clause += ` AND status = $${paramIndex++}`;
+    params.push(filters.status);
+  }
+  if (filters?.confidence_level) {
+    clause += ` AND confidence_level = $${paramIndex++}`;
+    params.push(filters.confidence_level);
+  }
+  if (filters?.start_date) {
+    clause += ` AND created_at >= $${paramIndex++}`;
+    params.push(filters.start_date);
+  }
+  if (filters?.end_date) {
+    clause += ` AND created_at <= $${paramIndex++}`;
+    params.push(filters.end_date + 'T23:59:59Z');
+  }
+  if (filters?.hide_hierarchies) {
+    clause += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
+  }
+  // Layout filter: keep clusters that have at least one record in any of the
+  // selected Zoho layouts (Corporate Accounts, Standard, Marketplace, ...).
+  if (filters?.layouts && filters.layouts.length > 0) {
+    clause += ` AND EXISTS (
+      SELECT 1 FROM duplicate_records dr
+       WHERE dr.cluster_id = duplicate_clusters.id
+         AND dr.layout_name = ANY($${paramIndex++}::text[])
+    )`;
+    params.push(filters.layouts);
+  }
+  return { clause, params, nextIndex: paramIndex };
+}
+
 export async function getAllClusters(filters?: {
   status?: string;
   confidence_level?: string;
@@ -636,30 +686,11 @@ export async function getAllClusters(filters?: {
   start_date?: string;
   end_date?: string;
   hide_hierarchies?: boolean;
+  layouts?: string[];
 }): Promise<DuplicateCluster[]> {
-  let query = 'SELECT * FROM duplicate_clusters WHERE 1=1';
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (filters?.status) {
-    query += ` AND status = $${paramIndex++}`;
-    params.push(filters.status);
-  }
-  if (filters?.confidence_level) {
-    query += ` AND confidence_level = $${paramIndex++}`;
-    params.push(filters.confidence_level);
-  }
-  if (filters?.start_date) {
-    query += ` AND created_at >= $${paramIndex++}`;
-    params.push(filters.start_date);
-  }
-  if (filters?.end_date) {
-    query += ` AND created_at <= $${paramIndex++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
-  }
-  if (filters?.hide_hierarchies) {
-    query += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
-  }
+  const { clause, params, nextIndex } = buildClusterFilterClause(filters, 1);
+  let paramIndex = nextIndex;
+  let query = 'SELECT * FROM duplicate_clusters WHERE 1=1' + clause;
 
   query += ' ORDER BY total_records DESC, confidence_score DESC';
 
@@ -682,31 +713,10 @@ export async function getClusterCount(filters?: {
   start_date?: string;
   end_date?: string;
   hide_hierarchies?: boolean;
+  layouts?: string[];
 }): Promise<number> {
-  let query = 'SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1';
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (filters?.status) {
-    query += ` AND status = $${paramIndex++}`;
-    params.push(filters.status);
-  }
-  if (filters?.confidence_level) {
-    query += ` AND confidence_level = $${paramIndex++}`;
-    params.push(filters.confidence_level);
-  }
-  if (filters?.start_date) {
-    query += ` AND created_at >= $${paramIndex++}`;
-    params.push(filters.start_date);
-  }
-  if (filters?.end_date) {
-    query += ` AND created_at <= $${paramIndex++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
-  }
-  if (filters?.hide_hierarchies) {
-    query += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
-  }
-
+  const { clause, params } = buildClusterFilterClause(filters, 1);
+  const query = 'SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1' + clause;
   const result = await pool.query(query, params);
   return parseInt(result.rows[0]?.total) || 0;
 }

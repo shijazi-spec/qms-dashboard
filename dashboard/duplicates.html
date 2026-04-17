@@ -413,6 +413,10 @@
                     <option value="resolved">Resolved</option>
                     <option value="ignored">Ignored</option>
                 </select>
+                <select id="layoutFilter" onchange="loadClusters()" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
+                    <option value="">All Layouts</option>
+                </select>
+                <span id="layoutFilterHint" class="text-xs text-gray-400"></span>
             </div>
             <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             <div id="clustersPagination" class="flex justify-center gap-3 mt-6"></div>
@@ -630,6 +634,7 @@
                 updateSummary(summary);
                 renderLogs(logsData.logs || []);
                 renderOwners(ownerAccData.owners || []);
+                populateLayoutFilter();
                 loadClusters();
                 loadRecordTab('leads');
                 loadRecordTab('deals');
@@ -720,10 +725,12 @@
             clusterPage = page;
             const conf = document.getElementById('clusterFilter').value;
             const status = document.getElementById('statusFilter').value;
+            const layout = document.getElementById('layoutFilter')?.value || '';
             const range = getDateRange();
             let url = `/api/duplicates/clusters?limit=30&offset=${page * 30}`;
             if (conf) url += `&confidence_level=${conf}`;
             if (status) url += `&status=${status}`;
+            if (layout) url += `&layouts=${encodeURIComponent(layout)}`;
             if (range.from) url += `&start_date=${range.from}`;
             if (range.to) url += `&end_date=${range.to}`;
 
@@ -731,6 +738,25 @@
             const data = await res.json();
             renderClusters(data.clusters || []);
             renderPagination('clustersPagination', page, data.pages || 1, loadClusters);
+            const hint = document.getElementById('layoutFilterHint');
+            if (hint) hint.textContent = layout ? `${data.total ?? 0} cluster(s) in "${layout}"` : '';
+        }
+
+        async function populateLayoutFilter() {
+            const sel = document.getElementById('layoutFilter');
+            if (!sel || sel.dataset.loaded === '1') return;
+            try {
+                const res = await fetch('/api/duplicates/filters/options');
+                const data = await res.json();
+                const current = sel.value;
+                const opts = ['<option value="">All Layouts</option>']
+                    .concat((data.layouts || []).map(l => `<option value="${l}">${l}</option>`));
+                sel.innerHTML = opts.join('');
+                if (current) sel.value = current;
+                sel.dataset.loaded = '1';
+            } catch (e) {
+                console.warn('Failed to load layouts for cluster tab filter:', e);
+            }
         }
 
         function renderClusters(clusters) {
