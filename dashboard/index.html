@@ -1084,7 +1084,15 @@
                     doc.setFontSize(10);
                     doc.text(`Records Audited: ${pdfRecords}`, margin, yPos);
                     doc.text(`Issues Found: ${pdfIssues}`, margin + 60, yPos);
-                    doc.text(`Compliance Rate: ${(100 - (pdfIssues / Math.max(pdfRecords, 1)) * 100).toFixed(1)}%`, margin + 120, yPos);
+                    // Use unique records-with-issues so the rate stays in 0-100%.
+                    const pdfRecordCounts = computeRecordCountsByModule(pdfAudit?.raw_audit_data, pdfAudit?.issues_by_category);
+                    const pdfRecordsWithIssues = Object.values(pdfRecordCounts).reduce((s, n) => s + (Number(n) || 0), 0);
+                    let pdfComplianceText = '--';
+                    if (pdfRecords > 0 && pdfRecordsWithIssues >= 0 && Object.keys(pdfRecordCounts).length > 0) {
+                        const clean = Math.max(0, pdfRecords - pdfRecordsWithIssues);
+                        pdfComplianceText = ((clean / pdfRecords) * 100).toFixed(1) + '%';
+                    }
+                    doc.text(`Compliance Rate: ${pdfComplianceText}`, margin + 120, yPos);
                     yPos += 15;
                 }
                 
@@ -1718,16 +1726,31 @@
 
             document.getElementById('recordsAudited').textContent = audit.total_records_audited || 0;
             document.getElementById('issuesFound').textContent = audit.total_issues_found || 0;
-            
-            const complianceRate = audit.total_records_audited > 0 
-                ? (((audit.total_records_audited - audit.total_issues_found) / audit.total_records_audited) * 100).toFixed(1) 
+
+            // Compute records-with-issues FIRST so the compliance rate uses
+            // unique-record counts (consistent with the "Records With Issues"
+            // panel) instead of raw issue instances. The previous formula
+            // divided issue instances by records, which produced negative
+            // percentages whenever records had multiple issues each.
+            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data, audit.issues_by_category);
+            const hasRecordCounts = Object.keys(recordCounts).length > 0;
+            const totalRecordsWithIssues = hasRecordCounts
+                ? Object.values(recordCounts).reduce((sum, n) => sum + (Number(n) || 0), 0)
                 : 0;
-            document.getElementById('complianceRate').textContent = complianceRate + '%';
+
+            const audited = Number(audit.total_records_audited) || 0;
+            let complianceRate;
+            if (audited > 0 && hasRecordCounts) {
+                const clean = Math.max(0, audited - totalRecordsWithIssues);
+                complianceRate = ((clean / audited) * 100).toFixed(1);
+            } else {
+                complianceRate = '--';
+            }
+            document.getElementById('complianceRate').textContent =
+                complianceRate === '--' ? '--' : complianceRate + '%';
 
             updateIssuesChart(audit.issues_by_category);
             updateIssuesCategoryCards(audit.issues_by_category);
-            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data, audit.issues_by_category);
-            const hasRecordCounts = Object.keys(recordCounts).length > 0;
             updateIssuesTotalChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
             updateTrendChart(data.auditHistory);
