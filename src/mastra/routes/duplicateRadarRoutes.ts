@@ -1048,9 +1048,11 @@ export const duplicateRadarRoutes = [
             [r.zoho_record_id || r.id, r.record_type, r.record_name, r.company_name, r.domain, r.owner_name, r.status || r.stage, r.deal_value || '', r.source, r.created_date, `${r.confidence_score}%`, r.ai_recommendation || 'Review manually'].map(escapeCSVValue).join(',')
           ).join('\n');
 
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', `attachment; filename="duplicate_radar_export_${Date.now()}.csv"`);
-          return c.text(csvHeader + csvRows);
+          // c.text() forces text/plain; use c.body() so the explicit text/csv MIME survives
+          return c.body(csvHeader + csvRows, 200, {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="duplicate_radar_export_${Date.now()}.csv"`,
+          });
         } catch (error: any) {
           console.error('Error exporting data:', error);
           return c.json({ error: 'An internal error occurred' }, 500);

@@ -486,7 +486,10 @@ export const auditRoutes = [
           const { getAuditById, getFindingsByAudit, getChecklist, initAuditTables } = await import('../../utils/auditDatabase');
           await initAuditTables();
           
-          const id = parseInt(c.req.param('id'));
+          // audits.id is a UUID (varchar) — never parseInt. The numeric quality_audit_results.id
+          // is exported elsewhere; this route serves the GRC audits table.
+          const rawId = c.req.param('id');
+          const id: string | number = /^\d+$/.test(rawId) ? parseInt(rawId, 10) : rawId;
           logger?.info('📄 [AuditAPI] GET /api/audits/:id/export-pdf', { id });
 
           const audit = await getAuditById(id);
