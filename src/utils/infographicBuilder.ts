@@ -485,12 +485,23 @@ async function buildAudits(): Promise<InfographicData> {
     try { findings = (await pool.query(`SELECT COUNT(*)::int n FROM audit_findings`)).rows[0]?.n || 0; } catch {}
     latest = (await pool.query(
       `SELECT title,
-              COALESCE(completed_date, actual_end_date, scheduled_date) AS audit_date,
+              COALESCE(completed_date, actual_end_date) AS audit_date,
               status
          FROM audits
-        ORDER BY COALESCE(completed_date, actual_end_date, scheduled_date) DESC NULLS LAST
+        WHERE COALESCE(completed_date, actual_end_date) IS NOT NULL
+          AND COALESCE(completed_date, actual_end_date) <= NOW()
+        ORDER BY COALESCE(completed_date, actual_end_date) DESC
         LIMIT 1`
     )).rows[0] || null;
+    if (!latest) {
+      latest = (await pool.query(
+        `SELECT title, scheduled_date AS audit_date, status
+           FROM audits
+          WHERE scheduled_date <= NOW()
+          ORDER BY scheduled_date DESC
+          LIMIT 1`
+      )).rows[0] || null;
+    }
   } catch (e) { console.warn('[Infographic.audits]', (e as Error).message); }
 
   const statusCount = (k: string) => byStatus.find((r: any) => String(r.status).toLowerCase().includes(k))?.n || 0;
