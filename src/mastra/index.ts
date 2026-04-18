@@ -171,7 +171,7 @@ export const mastra = new Mastra({
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/accept-invite', '/css/', '/js/', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/', '/dashboard/tailwind.css', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
         if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
@@ -3647,6 +3647,33 @@ export const mastra = new Mastra({
       // ======================================================================
       // Static Asset Routes for Navigation CSS and JS
       // ======================================================================
+      {
+        path: "/dashboard/tailwind.css",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "tailwind.css"),
+                join(process.cwd(), "..", "dashboard", "tailwind.css"),
+                "/home/runner/workspace/dashboard/tailwind.css",
+              ];
+              for (const cssPath of possiblePaths) {
+                if (existsSync(cssPath)) {
+                  const css = readFileSync(cssPath, "utf-8");
+                  c.header("Content-Type", "text/css; charset=utf-8");
+                  c.header("Cache-Control", "public, max-age=3600");
+                  return c.body(css);
+                }
+              }
+              return c.text("/* tailwind.css not found */", 404, { "Content-Type": "text/css" });
+            } catch (error) {
+              console.error("Error serving tailwind.css:", error);
+              return c.text("/* Error loading tailwind.css */", 500, { "Content-Type": "text/css" });
+            }
+          };
+        },
+      },
       {
         path: "/css/navigation.css",
         method: "GET",
