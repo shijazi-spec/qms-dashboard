@@ -1,8 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 4.4
-**Last Updated:** April 17, 2026
+**Version:** 4.5
+**Last Updated:** April 18, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
@@ -15,11 +15,11 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 4.4 |
+| **Version** | 4.5 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
-| **Effective Date** | April 17, 2026 |
+| **Effective Date** | April 18, 2026 |
 | **Next Review** | July 17, 2026 (quarterly) |
 | **Distribution** | All platform users (internal) |
 
@@ -42,6 +42,7 @@
 | 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. 6-hourly duplicate auto-sync cron. KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination uncapped by default. Notification hub integration. Database expanded to 105+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
 | 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on zoho_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), Zoho record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
 | 4.2 | Apr 13, 2026 | Engineering | **AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: A1 – XSS-safe renderMarkdown with escapeHtml + placeholder tokens for code/tables + URL protocol sanitization; A2 – sla_breach added to createAlertTool Zod enum; A3 – 9 `if(true)` scanner bugs fixed (use createAlertIfNew return); A4 – Auto-NC status query `'active'` → `IN ('open','acknowledged')`; A5 – KPI join column `kpi_definition_id` → `kpi_id`; A6 – monitorRisksTool column `rta.description` → `rta.action_description`; A7 – Dead `checkAgainst` param removed from reviewDocumentTool; A8 – Scan prompt revised to report-only (no force-create). Phase 2 Performance: B1 – Shared pg.Pool in sharedPool.ts (max:20); B2 – AbortController timeouts on all agent calls (120s chat, 300s scan, configurable via env vars); B3 – 13 scanner checks parallelized via Promise.all; B4 – safeQuery error logging + errors[] in ScanResult. Phase 3 Features: C1 – Alert action buttons (ack/resolve/dismiss) + View All modal with status/severity filters; C2 – Chat history panel with localStorage persistence; C3 – File upload endpoint (PDF/DOCX/TXT, 10MB limit); C4 – Clickable knowledge docs; C5 – Citation CSS + sanitized markdown links; C6 – Scan SSE progress bar endpoint (/api/consultant/scan-stream); C7 – Agent upgraded to 23 tools (added updateCapa, addCapaAction, createTraining, getTrainingList, assignTraining, getTrainingAssignments, completeTraining); C8 – Auth guards (session or X-Admin-Key) on all consultant endpoints; C9 – Contextual welcome dashboard with KPI summary. Phase 4 UI: D1 – Consolidated alert polling (60s interval); D2 – Touch swipe gestures + sticky input; D3 – Severity icons + inline actions + relative time; D4 – Retry button on stream failure; D5 – Export chat as Markdown; D6 – Arabic RTL detection. |
+| 4.5 | Apr 18, 2026 | Engineering | **Human-in-the-Loop (HITL) AI Approval Gate (WP-DOC-005 alignment).** New module wraps every AI write-tool with a risk classifier and routes high-risk actions to a pending-approval queue before execution. (1) New utilities: `src/utils/aiApprovalDatabase.ts` (CRUD on `ai_pending_actions` with atomic `claimForApproval`), `src/utils/aiToolGovernance.ts` (per-tool risk classification + approver-role matrix), `src/utils/withApprovalGate.ts` (wrapper that intercepts AI tool calls via `AsyncLocalStorage` user context and queues high-risk actions), `src/utils/controlledDocumentRegistry.ts` (seeds 147 controlled documents into `policies` table on boot for citation linking). (2) New REST API at `/api/ai/approvals` (list, get-by-code, approve, reject, pending-count) — admins/quality_managers see all; users see their own. Segregation of duties enforced (a user cannot approve their own request). (3) New admin dashboard `/ai-approvals` for queue review. (4) Updated `qmsConsultantAgent` wraps write-tools with the gate; read-tools (e.g. `queryPlatformDataTool`) pass through unaffected. (5) New Inngest cron `ai-approval-expiry` (15-min interval) auto-expires stale pending actions. (6) `consultantRoutes` routes user identity through `withAgentUserContext` so the gate can attribute the requested action. Bootstrap log signature: `[ControlledDocSeeder] Inserted 147 coded documents`, `[AIApproval] ai_pending_actions table ready`, `[AI-Approval] Bootstrap complete`. |
 | 4.4 | Apr 17, 2026 | Engineering | **Duplicate Radar — cross-module intelligence, deletion sync, dashboard drill-downs.** (1) Module-aware recommendations: cluster decisions now distinguish MERGE (same module), LINK (cross-module — set `Account_Name`/`Contact_Name` instead of merging, per Zoho rule), CLOSE, and REVIEW. Account-first primary selection across cross-module clusters. Cluster API (`GET /api/duplicates/clusters/:id`) returns `primary_type`, `is_cross_module`, and `record_types`; cluster modal shows cross-module banner + per-record type tags, dynamic Resolve label, and post-merge sync hint. (2) Deletion detection: `fetchDeletedZohoRecords()` calls Zoho's `/deleted?type=all` with `If-Modified-Since`; `runDeletionDetection()` purges merged/deleted records on each scan. Removed unsafe `markStaleRecords()` from incremental sync to avoid false purges. Deletion detection is skipped on the very first scan (no `last_sync_at` baseline). (3) "View All" drill-down modals on the dashboard: new endpoints `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal` with DB helpers `getAllClustersByInflation` / `getClustersBySignal`. Generic `listModal` with "View all signals →" and "View all clusters →" links; inline signal rows are clickable. (4) Layout filter on Clusters tab: shared `buildClusterFilterClause()` helper used by both `getAllClusters` and `getClusterCount` (guarantees list/count parity); new `layouts` param uses an `EXISTS` subquery on `duplicate_records.layout_name` (uses existing `idx_duplicate_records_layout` index); Layout `<select>` populated once from `/api/duplicates/filters/options` with a live count hint. Resolved/ignored decisions are still LOST on full Rebuild Clusters (admin-only). |
 | 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByZohoIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `zoho_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
 
@@ -708,6 +709,42 @@ Zoho does not allow merging records that live in different modules. The Resolve 
 - Slack channel notifications (via `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID`)
 - Email notifications via Resend (with Replit mail fallback)
 - Triggered by 6-hourly duplicate auto-syncs, AI scanner findings, and audit completion
+
+### 4.26 Human-in-the-Loop AI Approval Gate (`/ai-approvals`)
+**Purpose:** Enforce human review on every AI-initiated write before it touches platform data, in alignment with controlled document **WP-DOC-005** (AI Governance & Segregation of Duties) and Saudi PDPL Article 26 (automated decision-making safeguards).
+
+**How it works:**
+1. **Risk classification** — Every tool exposed to `qmsConsultantAgent` is classified by `src/utils/aiToolGovernance.ts` into one of: `READ_ONLY` (passes through), `LOW_RISK`, `MEDIUM_RISK`, `HIGH_RISK`. Each risk level maps to an approver-role matrix (e.g. HIGH_RISK → admin or quality_manager only).
+2. **Wrapper interception** — `src/utils/withApprovalGate.ts` wraps every write-tool. When the agent invokes a wrapped tool, the wrapper:
+   - Reads the requesting user from `AsyncLocalStorage` (set by `withAgentUserContext` in `consultantRoutes.ts`).
+   - If the action requires approval, inserts a row into `ai_pending_actions` with a human-readable `action_code` (e.g. `WP-AI-2026-04-18-A1B2`) and returns `{ success: false, queued: true, actionCode }` to the agent — **the underlying mutation is never executed**.
+   - If the action is read-only or under the risk threshold for the requester's role, the tool runs immediately.
+3. **Approval queue** — Admins and quality_managers see all pending actions at `/ai-approvals`; regular users see only their own. **Segregation of duties is enforced at the API layer**: a user cannot approve their own request (returns 403).
+4. **Atomic claim** — `claimForApproval()` uses an atomic `UPDATE ... WHERE status = 'pending' AND expires_at > NOW()` to prevent two approvers from acting on the same ticket and to block approval of expired or already-resolved tickets.
+5. **Auto-expiry** — Inngest cron `ai-approval-expiry` runs every 15 minutes and marks stale pending actions as `expired`.
+
+**Bootstrap signature** (visible on every server start):
+- `[ControlledDocSeeder] Inserted 147 coded documents` (or `All 147 already present`)
+- `[AIApproval] ai_pending_actions table ready`
+- `[AI-Approval] Bootstrap complete (policies + ai_pending_actions + controlled-doc seed)`
+
+**API surface (`/api/ai/approvals`):**
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/ai/approvals` | GET | session | List pending actions (filtered by role) |
+| `/api/ai/approvals/pending-count` | GET | session | Bell-badge count |
+| `/api/ai/approvals/:code` | GET | session | Full detail of one ticket |
+| `/api/ai/approvals/:code/approve` | POST | session + approver role + not requester | Atomic claim → execute the deferred tool call |
+| `/api/ai/approvals/:code/reject` | POST | session + approver role | Mark as rejected with reason |
+
+**Files involved:**
+- `src/utils/aiApprovalDatabase.ts` — `ai_pending_actions` schema + CRUD (`createPendingAction`, `listPendingActions`, `getByCode`, `claimForApproval`, `markRejected`, `expireStale`)
+- `src/utils/aiToolGovernance.ts` — `RISK_BY_TOOL` registry + `APPROVER_ROLES_BY_RISK` matrix
+- `src/utils/withApprovalGate.ts` — `withApprovalGate(tool)` wrapper + `withAgentUserContext()` AsyncLocalStorage helper
+- `src/utils/controlledDocumentRegistry.ts` — seeds 147 controlled-doc rows into `policies` so approval citations resolve
+- `src/mastra/routes/aiApprovalRoutes.ts` — REST endpoints + page route
+- `dashboard/ai-approvals.html` — admin queue UI
+- `src/mastra/inngest/index.ts` — `ai-approval-expiry` cron (every 15 min)
 
 ---
 
