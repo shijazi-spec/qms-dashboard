@@ -263,18 +263,20 @@ const kpiAutoCalcFunction = inngest.createFunction(
           calculateKPI5_RiskRegisterHygiene,
           calculateKPI6_ExecutiveReportingReadiness,
         } = await import("../../utils/scorecardDatabase");
-        const { recordKPIValue, getKPIDefinitions } = await import("../../utils/kpiDatabase");
+        // FIX: was importing non-existent getKPIDefinitions and reading
+        // k.name (column is kpi_name). Resulted in zero rows ever recorded.
+        const { recordKPIValue, getAllKPIDefinitions } = await import("../../utils/kpiDatabase");
 
         const calculators = [
-          { name: 'Governance Doc Lifecycle', fn: calculateKPI1_GovernanceDocLifecycle },
-          { name: 'Compliance Obligation Tracking', fn: calculateKPI2_ComplianceObligationTracking },
-          { name: 'Audit Evidence Pack Readiness', fn: calculateKPI3_AuditEvidencePackReadiness },
-          { name: 'Quality→GRC Handoff', fn: calculateKPI4_QualityGRCHandoff },
-          { name: 'Risk Register Hygiene', fn: calculateKPI5_RiskRegisterHygiene },
-          { name: 'Executive Reporting Readiness', fn: calculateKPI6_ExecutiveReportingReadiness },
+          { keywords: ['governance', 'lifecycle', 'doc'], fn: calculateKPI1_GovernanceDocLifecycle, label: 'Governance Doc Lifecycle' },
+          { keywords: ['compliance', 'obligation'], fn: calculateKPI2_ComplianceObligationTracking, label: 'Compliance Obligation Tracking' },
+          { keywords: ['audit', 'evidence', 'readiness'], fn: calculateKPI3_AuditEvidencePackReadiness, label: 'Audit Evidence Pack Readiness' },
+          { keywords: ['handoff', 'quality'], fn: calculateKPI4_QualityGRCHandoff, label: 'Quality-GRC Handoff' },
+          { keywords: ['risk', 'register', 'hygiene'], fn: calculateKPI5_RiskRegisterHygiene, label: 'Risk Register Hygiene' },
+          { keywords: ['executive', 'reporting'], fn: calculateKPI6_ExecutiveReportingReadiness, label: 'Executive Reporting Readiness' },
         ];
 
-        const kpiDefs = await getKPIDefinitions({});
+        const kpiDefs = await getAllKPIDefinitions();
         const now = new Date();
         const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -282,22 +284,29 @@ const kpiAutoCalcFunction = inngest.createFunction(
         for (const calc of calculators) {
           try {
             const { value } = await calc.fn();
-            const matchingKpi = kpiDefs.definitions.find((k: any) =>
-              k.name.toLowerCase().includes(calc.name.split(' ')[0].toLowerCase())
-            );
+            const matchingKpi = kpiDefs.find((k: any) => {
+              const name = (k.kpi_name || '').toLowerCase();
+              return calc.keywords.every((kw) => name.includes(kw));
+            }) || kpiDefs.find((k: any) => {
+              const name = (k.kpi_name || '').toLowerCase();
+              return calc.keywords.some((kw) => name.includes(kw));
+            });
             if (matchingKpi) {
               await recordKPIValue({
-                kpi_id: matchingKpi.id,
+                kpi_id: matchingKpi.id!,
                 actual_value: value,
                 period_start: periodStart,
                 period_end: periodEnd,
-                calculated_by: 'system_auto',
-                notes: `Auto-calculated by scheduled job`,
-              });
+                status: 'green', // recordKPIValue recomputes from thresholds
+                calculated_by: 'system',
+                override_reason: `Auto-calculated by scheduled job`,
+              } as any);
+              results.push({ kpi: calc.label, matched: matchingKpi.kpi_name, value, status: 'recorded' });
+            } else {
+              results.push({ kpi: calc.label, value, status: 'no_matching_definition' });
             }
-            results.push({ kpi: calc.name, value, status: 'recorded' });
           } catch (err) {
-            results.push({ kpi: calc.name, error: String(err), status: 'failed' });
+            results.push({ kpi: calc.label, error: String(err), status: 'failed' });
           }
         }
       } catch (err) {
@@ -310,49 +319,62 @@ const kpiAutoCalcFunction = inngest.createFunction(
 );
 inngestFunctions.push(kpiAutoCalcFunction);
 
+// FIX: this previously imported `syncAllModules` and `runDuplicateDetection`
+// which do not exist on duplicateRadarRoutes. The cron silently threw on every
+// fire, leaving the radar stale for 5+ days. Use `scanZohoCRMForDuplicates`
+// which performs both sync and detection in one call.
 const duplicateSyncFunction = inngest.createFunction(
   { id: "duplicate-radar-auto-sync" },
   { cron: process.env.DUPLICATE_SCAN_CRON || "0 */6 * * *" },
   async ({ step }) => {
-    const syncResult = await step.run("sync-crm-data", async () => {
-      console.log("[DuplicateRadar] Auto-sync: fetching CRM data");
-      const { syncAllModules } = await import("../routes/duplicateRadarRoutes");
-      return await syncAllModules('incremental');
-    });
-
-    const detectionResult = await step.run("detect-duplicates", async () => {
-      console.log("[DuplicateRadar] Auto-sync: running duplicate detection");
-      const { runDuplicateDetection } = await import("../routes/duplicateRadarRoutes");
-      return await runDuplicateDetection();
+    const scanResult = await step.run("scan-crm-for-duplicates", async () => {
+      console.log("[DuplicateRadar] Auto-scan: starting scheduled Zoho scan");
+      const { scanZohoCRMForDuplicates } = await import("../routes/duplicateRadarRoutes");
+      return await scanZohoCRMForDuplicates('scheduled');
     });
 
     await step.run("notify-results", async () => {
-      console.log("[DuplicateRadar] Sync result:", {
-        synced: syncResult.totalSynced,
-        clustersScored: detectionResult.clustersScored,
-        modules: syncResult.moduleBreakdown
+      console.log("[DuplicateRadar] Scan result:", {
+        success: scanResult.success,
+        totalRecords: scanResult.totalRecordsScanned,
+        clusters: scanResult.totalClustersFound,
+        highConfidence: scanResult.highConfidence,
+        durationMs: scanResult.durationMs,
       });
 
-      try {
-        const { getEnhancedSummary } = await import("../../utils/duplicateRadarDatabase");
-        const summary = await getEnhancedSummary();
-
-        if (summary.highConfidence > 0) {
-          const { createNotification } = await import("../../utils/notificationHub");
-          await createNotification({
-            type: 'alert',
-            title: `Duplicate Radar: ${summary.highConfidence} high-confidence duplicates`,
-            message: `Auto-sync completed: ${syncResult.totalSynced} records synced, ${summary.trueDuplicateClusters} duplicate clusters (${summary.highConfidence} high confidence). Pipeline inflation: SAR ${summary.estimatedPipelineInflation.toLocaleString()}.`,
-            link: '/duplicates',
-            severity: summary.highConfidence > 10 ? 'high' : 'medium'
+      if (!scanResult.success) {
+        try {
+          const { notifyEvent } = await import("../../utils/notificationHub");
+          await notifyEvent({
+            type: 'duplicate_radar_scan_failed',
+            module: 'duplicates',
+            title: 'Duplicate Radar scan failed',
+            message: scanResult.error || 'Scheduled scan did not complete successfully',
+            priority: 'high',
+            actionUrl: '/duplicates',
           });
+        } catch (e) { console.warn("[DuplicateRadar] Failed to send failure notification:", e); }
+        return;
+      }
+
+      if (scanResult.highConfidence > 0) {
+        try {
+          const { notifyEvent } = await import("../../utils/notificationHub");
+          await notifyEvent({
+            type: 'duplicate_radar_alert',
+            module: 'duplicates',
+            title: `Duplicate Radar: ${scanResult.highConfidence} high-confidence duplicates`,
+            message: `Auto-scan completed: ${scanResult.totalRecordsScanned} records scanned, ${scanResult.totalClustersFound} clusters (${scanResult.highConfidence} high confidence). Estimated pipeline inflation: SAR ${(scanResult.pipelineInflation || 0).toLocaleString()}.`,
+            priority: scanResult.highConfidence > 10 ? 'high' : 'medium',
+            actionUrl: '/duplicates',
+          });
+        } catch (e) {
+          console.warn("[DuplicateRadar] Failed to send notification:", e);
         }
-      } catch (e) {
-        console.warn("[DuplicateRadar] Failed to send notification:", e);
       }
     });
 
-    return { syncResult, detectionResult };
+    return scanResult;
   },
 );
 inngestFunctions.push(duplicateSyncFunction);
