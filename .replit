@@ -44,6 +44,7 @@ waitForPort = 5000
 ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
+MANUAL_INTAKE_DIR = "./data/manual-intake"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
