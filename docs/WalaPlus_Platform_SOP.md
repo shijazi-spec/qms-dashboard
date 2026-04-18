@@ -99,7 +99,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 **Platform URL:** https://qms-dashboard.replit.app
 **Tech Stack:** Mastra AI Framework, Hono HTTP Server, PostgreSQL, Inngest Workflows
 **Hosting:** Replit Autoscale with automatic health checks
-**Database:** PostgreSQL with 105+ auto-initialized tables
+**Database:** PostgreSQL with 113+ auto-initialized tables (v4.5: +8 audit/intake/external tables)
 **AI Engine:** GPT-4o via OpenAI / Replit AI Integrations (configurable)
 
 ### 2.1 Platform Architecture Summary
@@ -111,7 +111,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | Utility Modules | 47 | Database, security, integration, and business logic |
 | AI Agents | 4 | Quality Specialist, AI Consultant, SDR Quality, Sales Quality |
 | AI Tools | 23 | Consultant agent tools + 8 audit/analysis tools |
-| Database Tables | 105+ | Auto-initialized, no manual migration required |
+| Database Tables | 113+ | Auto-initialized, no manual migration required (v4.5 added 8: audit programme + intake + external audits) |
 | CRM Governance Rules | 76 | Sales SOP (28) + SDR SOP (28) + Account Rules (20) |
 | SDR KPIs | 11 | Seeded performance indicators |
 | Background Checks | 14 | AI scanner automated checks (parallelized) |
@@ -126,8 +126,9 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 | Role | Access Level | Capabilities |
 |------|-------------|--------------|
 | **Admin** | Full access | All modules, user management, system settings, audit triggers, admin panel |
-| **Quality Manager** | Extended | Quality dashboards, audits, CRM data, compliance, policies, audit triggers |
-| **GRC Manager** | Extended | GRC Control Tower, risks, compliance, regulations, policies, policy approval |
+| **Quality Manager** | Extended | Quality dashboards, audits, CRM data, compliance, policies, audit triggers, manual audit intake (`/intake`) |
+| **Head of Operations & Quality** *(v4.5)* | Extended + Approver | All Quality Manager capabilities **plus** sole approver for the Annual Audit Programme sign-off (HITL via `/ai-approvals`, controlled under WP-CTL-007); HITL adjudication on Critical-trigger proposals |
+| **GRC Manager** | Extended | GRC Control Tower, risks, compliance, regulations, policies, policy approval, external audits & certificate register |
 | **Team Lead** | Standard+ | Team performance, call intelligence, audits, quality dashboards |
 | **Auditor** | Standard+ | Audit readiness, compliance tracking, findings management |
 | **Quality Specialist** | Standard | Quality dashboards, call analysis, CRM hygiene |
@@ -1346,7 +1347,7 @@ A `.env.example` file is included in the project root with all variables documen
 ## 11. Database
 
 - **Engine:** PostgreSQL
-- **Tables:** 105+ auto-initialized tables (created on first use, no manual migration needed)
+- **Tables:** 113+ auto-initialized tables (created on first use, no manual migration needed). v4.5 added 8 new tables across audit programme governance, manual intake, and external audits.
 - **Key Table Groups:**
 
 | Group | Count | Tables | Purpose |
@@ -1356,6 +1357,8 @@ A `.env.example` file is included in the project root with all variables documen
 | Risk | 4 | enterprise_risks, risk_treatment_actions, risk_assessment_history, risk_categories | Risk registry and treatment plans |
 | Compliance | 4 | regulations, obligations, compliance_assessments, compliance_calendar | Regulatory compliance tracking |
 | Audit | 7 | audits, grc_audit_findings, evidence_packs, audit_checklists, audit_triggers, audit_notifications, audit_trail | Audit readiness, evidence, and trail |
+| **Audit Programme & Intake** *(v4.5)* | 5 | audit_programmes, audit_programme_audits, manual_audit_intake, manual_audit_findings, audit_triggers_decisions | Annual audit programme governance, manual/off-platform intake, trigger decision log |
+| **External Audits** *(v4.5)* | 3 | external_audits, external_audit_certificates, external_audit_checklist | Third-party audits (regulatory, certification, surveillance), certificate register, readiness checklist |
 | Policy | 4 | policies, policy_versions, policy_acknowledgments, policy_review_cycles | Policy governance lifecycle |
 | Users & RBAC | 9 | system_users, platform_users, user_invitations, bu_processes, role_permissions, screen_permissions, data_scopes, access_audit_log, escalation_log | User management and access control |
 | Call Intelligence | 8 | call_records, call_transcripts, call_analysis, call_qa_scores, call_compliance, meeting_mom, ai_training_feedback, sdr_call_evaluations | Call analysis, compliance, and AI training |
@@ -2052,6 +2055,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| **Apr 18, 2026** | **SOP v4.5 — Internal Audits re-architecture + Admin & Tools + External Audits.** New §4.26 Internal Audits Dashboard with Annual Audit Programme HITL sign-off (sole approver: new role `head_of_operations_quality`, WP-CTL-007); trigger HITL gate (≥10-char dismiss reason, 24h auto-re-evaluate, "Propose via HITL" for Critical, `trigger-auto-escalate` Inngest cron @ 03:00 UTC, stale Critical@7d / Minor@30d auto-opens `grc_audit_findings` with bi-directional `escalation_finding_id`). New §4.27 Manual Audit Intake (`/intake`) — central Quality Manager workspace, GPT-4o structured extraction with paste-fallback, per-finding accept/edit/reject, `source_quote` traceability, Finalize promotes to `grc_audit_findings` with `intake_id`. New §4.28 External Audits (`/external-audits`) split out — Calendar/Audits + Certificate Register + Readiness Checklist tabs; hero card on `/grc` (Next Audit / Active Certs / Expiring ≤90d) backed by `GET /api/external-audits/summary`. New §4.29 Admin & Tools dropdown — consolidates Migration Engine (relocated from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (relocated from Analytics); role-gated. Migration Engine expanded with 5 Quality templates (CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations). Database expanded 105→**113 tables** (+8: `audit_programmes`, `audit_programme_audits`, `manual_audit_intake`, `manual_audit_findings`, `external_audits`, `external_audit_certificates`, `external_audit_checklist`, `audit_triggers_decisions`); +3 columns on `qms_triggers` (`dismiss_reason`, `re_evaluate_at`, `escalation_finding_id`); +3 FKs on `grc_audit_findings`; +1 RBAC role; 2 new HITL action codes (`audit_programme_signoff`, `trigger_decision`). 7 new controlled documents seeded: WP-SOP-040/041/042, WP-FORM-055/056/057, WP-CTL-007. Approximate code delta: ~2,500 BE LOC + ~1,400 FE LOC. | Closes ISO 19011:2018 §5.2 sign-off gap; ends "shadow audit register" risk; gives execs a single-pane External Audits view; consolidates operator tooling away from business modules |
 | Apr 14, 2026 | **SOP v4.3 — CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich` (additive penalty scoring via `assessDataQuality()`, junk detection, duplicate cluster cross-reference via `lookupRecordsByZohoIds()`). Frontend: health summary bar, 4-tier quality badges, cluster badges, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync model with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, 2 new tables (`zoho_sync_state`, `duplicate_record_tasks`). PDPL section corrected to reflect CRM data persistence in `duplicate_records`. SOP accuracy audit: corrected 23 discrepancies (counts, formulas, function names, retention claims). | CRM data visibility with integrated quality intelligence; PDPL compliance accuracy; duplicate radar full CRM sync |
 | Apr 13, 2026 | **SOP v4.2 — AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: XSS-safe renderMarkdown (placeholder tokens + URL sanitization), sla_breach enum, `if(true)` scanner bugs, auto-NC status fix, KPI join column, monitorRisksTool column, dead param removal, scan prompt report-only. Phase 2 Performance: sharedPool.ts (shared pg.Pool max:20), AbortController timeouts (120s/300s configurable), parallelized 14 scanner checks, safeQuery error logging. Phase 3 Features: alert action buttons + modal, chat history, file upload, clickable knowledge docs, citation CSS, scan SSE progress bar, 23 tools on agent (+updateCapa +addCapaAction +5 training tools), auth guards on all endpoints, welcome dashboard. Phase 4 UI: consolidated polling, touch swipe, severity icons + relative time, retry button, export chat, Arabic RTL. | AI Consultant security hardening, performance optimization, feature completion, and UX polish |
 | Apr 13, 2026 | **SOP v4.0 major overhaul:** Comprehensive update reflecting all platform features as of this date. AI Consultant tools expanded from 8→16 (added NC/CAPA create/list, CAPA details, checklist run/manage, knowledge search). Duplicate Radar upgraded to Tier 1–3: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow (resolve/ignore/mark primary/bulk resolve), owner accountability, real-time pre-creation check, async scan with progress polling. AI Scanner expanded from 8→12 checks (added Sales SLA violations, SDR SLA violations, low-progress treatments, high-confidence duplicates). 76 CRM governance rules fully documented (Sales SOP 28 + SDR SOP 28 + Account Rules 20). 11 SDR KPIs seeded. 6 platform KPIs auto-calculated daily. 6-hourly duplicate auto-sync cron. Zoho pagination uncapped by default. Database tables expanded 98→105+. Added complete dashboard page inventory (29), route file inventory (29), utility module inventory (39). All SLA tables updated with Sales/SDR SLA monitoring. RACI matrix updated. Added Knowledge Base, Notification Hub modules. | Full platform documentation reflecting all implemented capabilities |
