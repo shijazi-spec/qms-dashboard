@@ -398,6 +398,46 @@
                         </div>
                     </div>
 
+                    <!-- Row 2c: Data Quality Trend -->
+                    <div class="widget-row" data-row="2c">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="quality-trend" data-name="Data Quality Trend">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase">Data Quality Trend</span>
+                                <span class="text-xs text-gray-400" id="qualityTrendSubtitle">Last 30 audits & duplicate scans</span>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    <div class="bg-green-50 rounded-xl p-3 text-center">
+                                        <div class="text-xl font-bold text-green-700" id="trendComplianceNow" data-testid="text-trend-compliance">--</div>
+                                        <div class="text-xs text-gray-500">Compliance %</div>
+                                        <div class="text-xs font-medium" id="trendComplianceDelta">--</div>
+                                    </div>
+                                    <div class="bg-orange-50 rounded-xl p-3 text-center">
+                                        <div class="text-xl font-bold text-orange-700" id="trendIssuesNow" data-testid="text-trend-issues">--</div>
+                                        <div class="text-xs text-gray-500">Records w/ Issues</div>
+                                        <div class="text-xs font-medium" id="trendIssuesDelta">--</div>
+                                    </div>
+                                    <div class="bg-purple-50 rounded-xl p-3 text-center">
+                                        <div class="text-xl font-bold text-purple-700" id="trendClustersNow" data-testid="text-trend-clusters">--</div>
+                                        <div class="text-xs text-gray-500">Duplicate Clusters</div>
+                                        <div class="text-xs font-medium" id="trendClustersDelta">--</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-xl p-3 text-center">
+                                        <div class="text-xl font-bold text-red-700" id="trendInflationNow" data-testid="text-trend-inflation">--</div>
+                                        <div class="text-xs text-gray-500">Pipeline Inflation (SAR)</div>
+                                        <div class="text-xs font-medium" id="trendInflationDelta">--</div>
+                                    </div>
+                                </div>
+                                <div class="chart-container" style="height: 240px;">
+                                    <canvas id="qualityTrendChart"></canvas>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-2 text-center" id="qualityTrendEmpty" style="display:none;">
+                                    Not enough audit history yet. Trend will populate as more audits run.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Row 2b: Pie Charts side by side -->
                     <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2b">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-chart" data-name="Issues by Category">
@@ -751,6 +791,16 @@
             if (typeof rawData === 'string') {
                 try { parsed = JSON.parse(rawData); } catch(e) { parsed = {}; }
             }
+            // Preferred path: the audit runner now writes truthful per-module
+            // unique-records-with-issues counts based on every record it audited
+            // (not the 200-row sample). Use them when available.
+            if (parsed?.recordCountsByModule && typeof parsed.recordCountsByModule === 'object') {
+                const truthful = {};
+                Object.entries(parsed.recordCountsByModule).forEach(([mod, n]) => {
+                    truthful[mod] = Number(n) || 0;
+                });
+                if (Object.keys(truthful).length > 0) return truthful;
+            }
             const allIssues = parsed?.all_issues || [];
             const moduleSets = {};
             allIssues.forEach(issue => {
@@ -783,6 +833,125 @@
                 }
             });
             return counts;
+        }
+
+        let qualityTrendChart = null;
+        async function loadQualityTrend() {
+            try {
+                const resp = await fetch('/api/dashboard/quality-trend?limit=30', { credentials: 'include' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const audits = (data.audits || []).filter(a => a.compliance_pct != null);
+                const dups = data.duplicates || [];
+                const emptyEl = document.getElementById('qualityTrendEmpty');
+
+                const fmtDelta = (curr, prev, suffix = '', invertColor = false) => {
+                    if (prev == null || curr == null) return { text: '—', cls: 'text-gray-400' };
+                    const d = curr - prev;
+                    if (Math.abs(d) < 0.01) return { text: 'no change', cls: 'text-gray-400' };
+                    const sign = d > 0 ? '▲ +' : '▼ ';
+                    const good = invertColor ? d < 0 : d > 0;
+                    return {
+                        text: sign + Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 1 }) + suffix,
+                        cls: good ? 'text-green-600' : 'text-red-600',
+                    };
+                };
+                const setStat = (numId, deltaId, curr, prev, format, invertColor) => {
+                    document.getElementById(numId).textContent = curr == null ? '--' : format(curr);
+                    const d = fmtDelta(curr, prev, '', invertColor);
+                    const el = document.getElementById(deltaId);
+                    el.textContent = curr == null ? '--' : d.text;
+                    el.className = 'text-xs font-medium ' + d.cls;
+                };
+                const last = audits[audits.length - 1] || null;
+                const prev = audits[audits.length - 2] || null;
+                const lastDup = dups[dups.length - 1] || null;
+                const prevDup = dups[dups.length - 2] || null;
+
+                setStat('trendComplianceNow', 'trendComplianceDelta',
+                    last?.compliance_pct, prev?.compliance_pct,
+                    v => v.toFixed(1) + '%', false);
+                setStat('trendIssuesNow', 'trendIssuesDelta',
+                    last?.records_with_issues, prev?.records_with_issues,
+                    v => Number(v).toLocaleString(), true);
+                setStat('trendClustersNow', 'trendClustersDelta',
+                    lastDup?.clusters, prevDup?.clusters,
+                    v => Number(v).toLocaleString(), true);
+                setStat('trendInflationNow', 'trendInflationDelta',
+                    lastDup?.pipeline_inflation_sar, prevDup?.pipeline_inflation_sar,
+                    v => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }), true);
+
+                if (audits.length < 2 && dups.length < 2) {
+                    if (emptyEl) emptyEl.style.display = 'block';
+                    return;
+                }
+                if (emptyEl) emptyEl.style.display = 'none';
+
+                const labelDates = audits.map(a => new Date(a.date).toLocaleDateString());
+                const ctx = document.getElementById('qualityTrendChart')?.getContext('2d');
+                if (!ctx) return;
+                if (qualityTrendChart) qualityTrendChart.destroy();
+                const dupClustersAligned = labelDates.map((_, i) => dups[i]?.clusters ?? null);
+                qualityTrendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labelDates,
+                        datasets: [
+                            {
+                                label: 'Compliance %',
+                                data: audits.map(a => a.compliance_pct),
+                                borderColor: '#16a34a',
+                                backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                                yAxisID: 'y',
+                                tension: 0.3,
+                                pointRadius: 3,
+                            },
+                            {
+                                label: 'Records with Issues',
+                                data: audits.map(a => a.records_with_issues),
+                                borderColor: '#ea580c',
+                                backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                                yAxisID: 'y1',
+                                tension: 0.3,
+                                pointRadius: 3,
+                            },
+                            {
+                                label: 'Duplicate Clusters',
+                                data: dupClustersAligned,
+                                borderColor: '#9333ea',
+                                backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                                yAxisID: 'y1',
+                                tension: 0.3,
+                                pointRadius: 3,
+                                spanGaps: true,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                title: { display: true, text: 'Compliance %' },
+                                min: 0, max: 100,
+                            },
+                            y1: {
+                                type: 'linear',
+                                position: 'right',
+                                title: { display: true, text: 'Count' },
+                                grid: { drawOnChartArea: false },
+                                beginAtZero: true,
+                            },
+                        },
+                        plugins: { legend: { position: 'bottom' } },
+                    },
+                });
+            } catch (err) {
+                console.warn('[QualityTrend] Load failed:', err);
+            }
         }
 
         let currentOwnerFilter = null;
@@ -1754,6 +1923,7 @@
             updateIssuesTotalChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
             updateTrendChart(data.auditHistory);
+            loadQualityTrend();
             updateOpportunities(audit);
             updateRecommendations(audit.recommendations);
             updateHistory(data.auditHistory);

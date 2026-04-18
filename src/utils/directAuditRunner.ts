@@ -23,11 +23,12 @@ function analyzeRecordBatch(
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
   detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
   detailedCountsByModule?: Map<string, number>
-): { issueCount: number; critical: number; high: number; medium: number; low: number } {
-  let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0;
+): { issueCount: number; critical: number; high: number; medium: number; low: number; recordsWithIssues: number } {
+  let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0, recordsWithIssues = 0;
   for (const record of records) {
     const issues = analyzeRecordHygiene(record, governanceRules);
     issueCount += issues.length;
+    if (issues.length > 0) recordsWithIssues++;
     for (const issue of issues) {
       if (issue.severity === 'critical') critical++;
       else if (issue.severity === 'high') high++;
@@ -71,7 +72,7 @@ function analyzeRecordBatch(
       }
     }
   }
-  return { issueCount, critical, high, medium, low };
+  return { issueCount, critical, high, medium, low, recordsWithIssues };
 }
 
 export async function runDirectAudit(logger?: any) {
@@ -100,6 +101,11 @@ export async function runDirectAudit(logger?: any) {
   // issues — prevents the first modules in the iteration order from starving
   // later ones (e.g. Tasks, Accounts) of `all_issues` entries.
   const detailedCountsByModule = new Map<string, number>();
+  // Per-module unique-records-with-issues counts. Used by the dashboard's
+  // compliance-rate calc as the truthful denominator (was previously
+  // approximated from the 1000-row detailed sample, which made compliance
+  // effectively constant regardless of CRM data changes).
+  const recordCountsByModule: Record<string, number> = {};
 
   if (!hasZohoCredentials) {
     logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
@@ -145,6 +151,7 @@ export async function runDirectAudit(logger?: any) {
 
           let moduleIssueCount = 0;
           let moduleCritical = 0, moduleHigh = 0, moduleMedium = 0, moduleLow = 0;
+          let moduleRecordsWithIssues = 0;
 
           for (let i = 0; i < recordCount; i += BATCH_SIZE) {
             const batch = allRecords.slice(i, i + BATCH_SIZE);
@@ -154,6 +161,7 @@ export async function runDirectAudit(logger?: any) {
             moduleHigh += batchResult.high;
             moduleMedium += batchResult.medium;
             moduleLow += batchResult.low;
+            moduleRecordsWithIssues += batchResult.recordsWithIssues;
 
             if (i > 0 && i % 5000 === 0) {
               logger?.info(`  📊 [DirectAudit] ${moduleName}: processed ${i}/${recordCount} records...`);
@@ -165,12 +173,14 @@ export async function runDirectAudit(logger?: any) {
           highIssues += moduleHigh;
           mediumIssues += moduleMedium;
           lowIssues += moduleLow;
+          recordCountsByModule[moduleName] = moduleRecordsWithIssues;
 
           moduleBreakdown.push({
             module: moduleName,
             recordsAudited: recordCount,
             issuesFound: moduleIssueCount,
-          });
+            recordsWithIssues: moduleRecordsWithIssues,
+          } as any);
 
           logger?.info(`✅ [DirectAudit] Completed ${moduleName}: ${recordCount} records, ${moduleIssueCount} issues found`);
         } catch (error) {
@@ -223,6 +233,7 @@ export async function runDirectAudit(logger?: any) {
           ? `Partial audit completed. ${skipReason}` 
           : `Quality audit completed with ${totalIssuesFound} issues found across ${totalRecordsAudited} records.`,
         all_issues: detailedIssues,
+        recordCountsByModule,
       },
     };
 

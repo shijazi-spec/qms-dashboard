@@ -77,11 +77,13 @@ setTimeout(() => {
 setTimeout(() => {
   const tick = async () => {
     try {
-      const { runDuplicateScanIfStale, runKPIAutoCalcIfStale } = await import('../utils/scheduledJobs');
+      const { runDuplicateScanIfStale, runKPIAutoCalcIfStale, runQualityAuditIfStale } = await import('../utils/scheduledJobs');
       const dup = await runDuplicateScanIfStale(6);
       if (dup.ran) console.log(`⏰ [Fallback] Duplicate scan executed (was ${dup.ageHours.toFixed(1)}h stale)`);
       const kpi = await runKPIAutoCalcIfStale(24);
       if (kpi.ran) console.log(`⏰ [Fallback] KPI auto-calc executed (recorded ${kpi.result?.calculated || 0})`);
+      const audit = await runQualityAuditIfStale(6);
+      if (audit.ran) console.log(`⏰ [Fallback] Quality audit executed (was ${audit.ageHours === Infinity ? 'never' : audit.ageHours.toFixed(1) + 'h'} stale)`);
     } catch (err) {
       console.error('⏰ [Fallback] Tick failed:', err);
     }
@@ -468,6 +470,72 @@ export const mastra = new Mastra({
             } catch (error) {
               console.error("Error fetching audit history:", error);
               return c.json({ error: "Failed to fetch audit history" }, 500);
+            }
+          };
+        },
+      },
+      {
+        // Data Quality Trend — time series for the dashboard's trend tile.
+        // Returns parallel arrays of dates with: compliance %, total issues,
+        // duplicate clusters. Lets the team see the burden going down (or up)
+        // week over week as CRM hygiene work progresses.
+        path: "/api/dashboard/quality-trend",
+        method: "GET",
+        createHandler: async () => {
+          const { pool } = await import("../utils/kpiDatabase");
+          return async (c: any) => {
+            try {
+              const limit = Math.min(parseInt(c.req.query("limit") || "30"), 100);
+              const auditRes = await pool.query(
+                `SELECT id, created_at, total_records_audited, total_issues_found,
+                        raw_audit_data
+                   FROM quality_audit_results
+                  WHERE total_records_audited > 0
+                  ORDER BY created_at DESC
+                  LIMIT $1`,
+                [limit]
+              );
+              const audits = auditRes.rows.reverse().map((r: any) => {
+                let raw = r.raw_audit_data;
+                if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = {}; } }
+                let recordsWithIssues = 0;
+                const counts = raw?.recordCountsByModule;
+                if (counts && typeof counts === 'object') {
+                  for (const v of Object.values(counts)) recordsWithIssues += Number(v) || 0;
+                }
+                const audited = Number(r.total_records_audited) || 0;
+                const compliance = audited > 0 && recordsWithIssues > 0
+                  ? Math.max(0, Math.min(100, ((audited - recordsWithIssues) / audited) * 100))
+                  : null;
+                return {
+                  audit_id: r.id,
+                  date: r.created_at,
+                  records_audited: audited,
+                  records_with_issues: recordsWithIssues,
+                  total_issues: Number(r.total_issues_found) || 0,
+                  compliance_pct: compliance == null ? null : Number(compliance.toFixed(2)),
+                };
+              });
+              const dupRes = await pool.query(
+                `SELECT created_at, total_records_scanned, total_clusters_found,
+                        high_confidence_count, estimated_pipeline_inflation
+                   FROM duplicate_detection_logs
+                  WHERE status = 'completed'
+                  ORDER BY created_at DESC
+                  LIMIT $1`,
+                [limit]
+              );
+              const duplicates = dupRes.rows.reverse().map((r: any) => ({
+                date: r.created_at,
+                records_scanned: Number(r.total_records_scanned) || 0,
+                clusters: Number(r.total_clusters_found) || 0,
+                high_confidence: Number(r.high_confidence_count) || 0,
+                pipeline_inflation_sar: Number(r.estimated_pipeline_inflation) || 0,
+              }));
+              return c.json({ success: true, audits, duplicates });
+            } catch (error) {
+              console.error("Error fetching quality trend:", error);
+              return c.json({ error: "Failed to fetch quality trend" }, 500);
             }
           };
         },

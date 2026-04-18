@@ -143,3 +143,40 @@ export async function runKPIAutoCalcIfStale(maxAgeHours = 24): Promise<{ ran: bo
   const result = await runKPIAutoCalc();
   return { ran: true, ageHours, result };
 }
+
+/**
+ * Returns hours since the last successful Quality Audit.
+ */
+export async function hoursSinceLastQualityAudit(): Promise<number> {
+  try {
+    const r = await kpiPool.query(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 3600 AS hours
+       FROM quality_audit_results`
+    );
+    const h = r.rows[0]?.hours;
+    return h == null ? Infinity : Number(h);
+  } catch {
+    return Infinity;
+  }
+}
+
+/**
+ * Run a fresh quality audit if the latest one is older than `maxAgeHours`.
+ * Without this, Zoho data changes (merges, edits, completed records) only
+ * appear on the dashboard when someone manually triggers an audit.
+ */
+export async function runQualityAuditIfStale(maxAgeHours = 6): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const ageHours = await hoursSinceLastQualityAudit();
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+  console.log(`[QualityAudit Fallback] Last audit was ${ageHours === Infinity ? 'never' : ageHours.toFixed(1) + 'h ago'} (>= ${maxAgeHours}h); running audit.`);
+  try {
+    const { runDirectAudit } = await import("./directAuditRunner");
+    const result = await runDirectAudit();
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    console.error("[QualityAudit Fallback] Audit failed:", err);
+    return { ran: false, ageHours };
+  }
+}

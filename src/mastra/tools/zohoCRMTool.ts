@@ -54,6 +54,7 @@ export const auditCRMHygieneTool = createTool({
     moduleBreakdown: z.array(z.object({
       module: z.string(),
       recordsAudited: z.number(),
+      recordsWithIssues: z.number().optional(),
       issuesFound: z.number(),
       topIssues: z.array(z.object({
         issueType: z.string(),
@@ -93,6 +94,7 @@ export const auditCRMHygieneTool = createTool({
     const moduleBreakdown: Array<{
       module: string;
       recordsAudited: number;
+      recordsWithIssues: number;
       issuesFound: number;
       topIssues: Array<{ issueType: string; count: number; severity: string }>;
     }> = [];
@@ -137,9 +139,11 @@ export const auditCRMHygieneTool = createTool({
         totalRecordsAudited += records.length;
 
         const moduleIssues: HygieneIssue[] = [];
+        let recordsWithIssues = 0;
         
         for (const record of records) {
           const issues = analyzeRecordHygiene(record, moduleRules);
+          if (issues.length > 0) recordsWithIssues++;
           moduleIssues.push(...issues);
         }
 
@@ -161,6 +165,7 @@ export const auditCRMHygieneTool = createTool({
         moduleBreakdown.push({
           module: moduleName,
           recordsAudited: records.length,
+          recordsWithIssues,
           issuesFound: moduleIssues.length,
           topIssues,
         });

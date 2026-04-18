@@ -322,6 +322,23 @@ const duplicateSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateSyncFunction);
 
+// Quality audit: re-runs the full Zoho-CRM hygiene audit so dashboard
+// numbers (compliance %, issues by category, scores) reflect current data.
+// Without this, merges/edits/cleanups in CRM never appear on the dashboard
+// until someone manually triggers an audit.
+const qualityAuditFunction = inngest.createFunction(
+  { id: "quality-audit-auto-run" },
+  { cron: process.env.QUALITY_AUDIT_CRON || "0 */6 * * *" }, // every 6 hours
+  async ({ step }) => {
+    return await step.run("run-quality-audit", async () => {
+      const { runDirectAudit } = await import("../../utils/directAuditRunner");
+      console.log("[QualityAudit] Auto-run: starting scheduled audit");
+      return await runDirectAudit();
+    });
+  },
+);
+inngestFunctions.push(qualityAuditFunction);
+
 // HITL approval-queue expiry.
 // Rationale: ai_pending_actions rows auto-expire 24h after creation (see
 // WP-SOP-011 §Retention). We still need a cron to FLIP status from 'pending'
