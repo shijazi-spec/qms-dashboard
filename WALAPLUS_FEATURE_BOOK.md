@@ -98,6 +98,65 @@ Test ID namespaces: `T-IA-*` (dashboard), `T-PROG-*` (programme), `T-INTK-*` (in
 
 ---
 
+## 1.B — CRM Owner Data Quality Widget · *Tier 1 — daily-driver*
+
+**Purpose**: The owner-leaderboard card on `/` that scores each Zoho CRM record owner on data hygiene, tagged with their Department and Activity (Active/Inactive). Until v4.5.1 the activity badge always displayed `Unknown` and the department fell back to a hard-coded default — both have been fixed by wiring a real owner roster.
+
+**Primary user**: CRM Admin, Sales Manager, Quality Manager.
+
+**Key surfaces**
+- `/` — "CRM Owner Data Quality" card (filter by team, status, modules; sort by score)
+- `GET /api/agents/performance` — returns `{ id, name, team, role, status, score, recordsAudited, issues }` per owner
+
+**Data sources**
+- `src/data/seedUsers.ts` — **117-owner seed** loaded from `CRM_Users_Complete_117_Updated.xlsx` (snapshot 2026-04-18). Source of truth for `team`, `status`, `modules`.
+- `fetchZohoUsers()` in `src/utils/zohoCRM.ts` — `GET /crm/v2/users?type=AllUsers` for the live Zoho User ID → display name bridge.
+- Live Zoho `Leads` and `Deals` for the records being audited.
+
+**Resolution rules**
+1. Look up owner by Zoho User ID (from CRM record `Owner`).
+2. Match Zoho user's `full_name` against the seed (case-insensitive, whitespace-collapsed).
+3. Seed wins on `team`, `status`, `modules`. Zoho fills in any owner not yet on the seed (new hire path).
+4. Owners with seed `team = ""` are surfaced as `Unassigned` — flagged in `WALAPLUS_GAPS_AND_DATA_NEEDS.md §7.A`.
+
+**Roster snapshot (2026-04-18)**: 117 owners; 11 departments; 64 Active / 53 Inactive; 7 Unassigned (gap).
+
+**Acceptance criteria**
+
+```
+Scenario: Each agent card shows real Department and Activity
+  Given the 117-owner seed roster is loaded
+  And the Zoho Users API is reachable
+  When I GET /api/agents/performance
+  Then every agent in the response has team ∈ {WP Sales, WO Sales, MP, SDR, CS, BD, MGMT, CRM Admin, Eitmad, WPE, Unassigned}
+  And every agent has status ∈ {Active, Inactive, Unknown}
+  And NO more than 7 agents have team='Unassigned'
+
+Scenario: Zoho Users API outage falls back gracefully
+  Given the Zoho Users API returns 401/500
+  When I GET /api/agents/performance
+  Then the response still succeeds and getUsers() returns the 117-row seed only
+  And the API endpoint resolves owners via name-match against the seed (record.Owner.name → seed entry)
+  And owners that match the seed by name receive the seed's stable id, team, role, and status
+  And owners that do not match (e.g. former employees still on records) are returned with team='Unassigned' and status='Unknown'
+  And a warning is logged: "[Users] Zoho Users API unavailable, falling back to seed only"
+
+Scenario: New hire not on seed inherits Zoho profile
+  Given a CRM record is owned by a Zoho user not in the seed
+  When the dashboard renders that owner's card
+  Then team falls back to the Zoho profile name (or 'Unassigned')
+  And status falls back to the Zoho user's active flag
+```
+
+**Test cases**
+- T-OWN-01 `GET /api/agents/performance` → 200, every `agent.status` ∈ {Active, Inactive, Unknown} (no `null`/missing)
+- T-OWN-02 Open `/`, status filter dropdown → "Active" filters correctly to 64 owners max
+- T-OWN-03 Team filter "Unassigned" → ≤7 cards
+- T-OWN-04 Pull Zoho offline (kill creds) → endpoint still returns 200 with seed-only owners
+- T-OWN-05 Roster refresh: re-import seed file → counts in `/` widget update on next page load
+
+---
+
 ## 2.E — AI Quality Audits Surface · *Tier 1 — workhorse*
 
 **Purpose**: Weekly automated quality scan across all CRM data — surfaces NCs, missing fields, stale records and policy violations without anyone needing to schedule it. Lives as the **Quality Audits (AI)** tab inside `/qms`. As of v4.5 the dashboard is no longer iframed into `/audits` — the AI surface and the Internal Audits Dashboard (Module 3) are now distinct first-class pages.

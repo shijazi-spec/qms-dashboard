@@ -694,16 +694,30 @@ export const mastra = new Mastra({
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters);
               const users = await getUsers();
               
-              const userMap: Record<string, { name: string; team: string; role: string }> = {};
+              type ResolvedUser = { id: string; name: string; team: string; role: string; status: string };
+              const userMap: Record<string, ResolvedUser> = {};
+              const userMapByName: Record<string, ResolvedUser> = {};
+              const normName = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
               for (const user of users) {
-                userMap[user.id] = { name: user.name, team: user.team, role: user.role };
+                const entry: ResolvedUser = { id: user.id, name: user.name, team: user.team, role: user.role, status: user.status };
+                userMap[user.id] = entry;
+                if (user.name) userMapByName[normName(user.name)] = entry;
               }
+              const resolveOwner = (ownerId: string): ResolvedUser | null =>
+                userMap[ownerId] || userMapByName[normName(ownerId)] || null;
+              // Canonical key prevents the same person splitting into multiple agent rows
+              // when Zoho returns mixed representations (numeric ID on some records, display
+              // name on others). Resolved users key by their canonical user.id; unresolved
+              // owners key by normalized raw id.
+              const canonicalKey = (ownerId: string, resolved: ResolvedUser | null) =>
+                resolved ? `u:${resolved.id}` : `raw:${normName(ownerId)}`;
               
               const ownerStats: Record<string, {
                 id: string;
                 name: string;
                 team: string;
                 role: string;
+                status: string;
                 recordsAudited: number;
                 issues: { critical: number; high: number; medium: number; low: number };
                 passCount: number;
@@ -711,55 +725,61 @@ export const mastra = new Mastra({
               
               for (const lead of leads) {
                 const ownerId = lead.Owner || 'Unassigned';
-                const userInfo = userMap[ownerId] || { name: ownerId, team: 'SDR', role: 'SDR Representative' };
+                const resolved = resolveOwner(ownerId);
+                const userInfo = resolved || { id: ownerId, name: ownerId, team: 'Unassigned', role: 'CRM User', status: 'Unknown' };
+                const key = canonicalKey(ownerId, resolved);
                 
-                if (!ownerStats[ownerId]) {
-                  ownerStats[ownerId] = {
-                    id: ownerId,
+                if (!ownerStats[key]) {
+                  ownerStats[key] = {
+                    id: userInfo.id,
                     name: userInfo.name,
                     team: userInfo.team,
                     role: userInfo.role,
+                    status: userInfo.status,
                     recordsAudited: 0,
                     issues: { critical: 0, high: 0, medium: 0, low: 0 },
                     passCount: 0
                   };
                 }
-                ownerStats[ownerId].recordsAudited++;
+                ownerStats[key].recordsAudited++;
                 
                 const hasIssue = !lead.Email || !lead.Lead_Source || !lead.Lead_Status;
                 if (hasIssue) {
-                  if (!lead.Email) ownerStats[ownerId].issues.high++;
-                  if (!lead.Lead_Source) ownerStats[ownerId].issues.medium++;
-                  if (!lead.Lead_Status) ownerStats[ownerId].issues.low++;
+                  if (!lead.Email) ownerStats[key].issues.high++;
+                  if (!lead.Lead_Source) ownerStats[key].issues.medium++;
+                  if (!lead.Lead_Status) ownerStats[key].issues.low++;
                 } else {
-                  ownerStats[ownerId].passCount++;
+                  ownerStats[key].passCount++;
                 }
               }
               
               for (const deal of deals) {
                 const ownerId = deal.Owner || 'Unassigned';
-                const userInfo = userMap[ownerId] || { name: ownerId, team: 'Sales', role: 'Account Executive' };
+                const resolved = resolveOwner(ownerId);
+                const userInfo = resolved || { id: ownerId, name: ownerId, team: 'Unassigned', role: 'CRM User', status: 'Unknown' };
+                const key = canonicalKey(ownerId, resolved);
                 
-                if (!ownerStats[ownerId]) {
-                  ownerStats[ownerId] = {
-                    id: ownerId,
+                if (!ownerStats[key]) {
+                  ownerStats[key] = {
+                    id: userInfo.id,
                     name: userInfo.name,
                     team: userInfo.team,
                     role: userInfo.role,
+                    status: userInfo.status,
                     recordsAudited: 0,
                     issues: { critical: 0, high: 0, medium: 0, low: 0 },
                     passCount: 0
                   };
                 }
-                ownerStats[ownerId].recordsAudited++;
+                ownerStats[key].recordsAudited++;
                 
                 const hasIssue = !deal.Deal_Name || !deal.Stage || !deal.Amount;
                 if (hasIssue) {
-                  if (!deal.Deal_Name) ownerStats[ownerId].issues.critical++;
-                  if (!deal.Stage) ownerStats[ownerId].issues.critical++;
-                  if (!deal.Amount) ownerStats[ownerId].issues.high++;
+                  if (!deal.Deal_Name) ownerStats[key].issues.critical++;
+                  if (!deal.Stage) ownerStats[key].issues.critical++;
+                  if (!deal.Amount) ownerStats[key].issues.high++;
                 } else {
-                  ownerStats[ownerId].passCount++;
+                  ownerStats[key].passCount++;
                 }
               }
               
@@ -775,6 +795,7 @@ export const mastra = new Mastra({
                     name: agent.name,
                     team: agent.team,
                     role: agent.role,
+                    status: agent.status,
                     score,
                     recordsAudited: agent.recordsAudited,
                     issues: agent.issues

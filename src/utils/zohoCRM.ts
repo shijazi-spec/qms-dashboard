@@ -974,6 +974,54 @@ export async function createZohoRecord(
   );
 }
 
+export interface ZohoUser {
+  id: string;
+  full_name: string;
+  email: string;
+  status: string;
+  role: string;
+  profile: string;
+}
+
+/**
+ * Fetch all active + inactive users from Zoho CRM.
+ * Used by getUsers() to bridge CRM record Owner IDs (numeric Zoho IDs) to
+ * the seed roster (keyed by display name). Seed wins on team/status/modules;
+ * Zoho fills in any owners not yet on the seed.
+ */
+export async function fetchZohoUsers(type: 'AllUsers' | 'ActiveUsers' | 'DeactiveUsers' = 'AllUsers'): Promise<ZohoUser[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/users?type=${type}&per_page=200`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Zoho Users API error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      if (response.status === 204) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return (data.users || []).map((u: any) => ({
+        id: String(u.id || ''),
+        full_name: u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim(),
+        email: u.email || '',
+        status: u.status || 'active',
+        role: u.role?.name || '',
+        profile: u.profile?.name || '',
+      }));
+    }
+  );
+}
+
 export async function deleteZohoRecord(
   module: string,
   recordId: string

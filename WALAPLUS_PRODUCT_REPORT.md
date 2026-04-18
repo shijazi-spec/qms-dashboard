@@ -156,6 +156,7 @@ Once 7 days of telemetry have accumulated, I would like 30 minutes to walk throu
 |---|---|---|---|
 | 1.0 | 2026-04-18 | Product & Eng | Initial weekly report — covers Infographic Generator launch, Quality Audit cadence change, audits data fix, empty-state UX, and 4 product quick-wins |
 | 1.1 | 2026-04-18 | Product & Eng | Appended §9 v4.5 update block (Internal Audits re-architecture, Manual Intake, External Audits, Admin & Tools, +8 DB tables, ~111+ total). |
+| 1.2 | 2026-04-18 | Product & Eng | Appended §10 v4.5.1 hotfix — CRM Owner Roster wired (117-owner seed + Zoho Users API merge); closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect on the `/` dashboard. |
 
 ---
 
@@ -233,6 +234,56 @@ v4.5 deployment was clean except for one regression worth recording for posterit
 | P1-4 | First-run smoke of `/intake` with a real off-platform PDF | Quality Manager | 30 min |
 | P1-5 | Wire trigger-auto-escalate threshold env vars (`TRIGGER_ESCALATE_CRITICAL_DAYS`, `TRIGGER_ESCALATE_MINOR_DAYS`) for tunability | Eng | 1 h |
 | P1-6 | Telemetry read-out for the 5 new v4.5 dashboards (`/intake`, `/external-audits`, `/audits` rebuilt, `/qms` Triggers, `/ai-approvals`) | Product | 30 min |
+
+---
+
+## 10. Update — v4.5.1 hotfix (CRM Owner Roster wired)
+
+### 10.1 What broke
+
+The "CRM Owner Data Quality" widget on `/` (and any page calling `GET /api/agents/performance`) was showing every owner with the activity badge as **"Unknown"** and the department badge falling back to **"SDR" / "SDR Representative"** for lead-only owners or **"Sales" / "Account Executive"** for deal-only owners. Root cause: `getUsers()` in `src/data/index.ts` was a `return [];` stub — there was no roster behind the enrichment, so every CRM record's `Owner` ID hit the hard-coded fallback path in the API handler. We had been shipping the wrong department for ~117 active CRM users for an unknown number of weeks.
+
+### 10.2 What shipped
+
+| Stream | Headline |
+|---|---|
+| **117-owner seed roster** | New `src/data/seedUsers.ts` loaded from the official `CRM_Users_Complete_117_Updated.xlsx` snapshot (2026-04-18). Each entry carries `name`, `team`, `status` (Active/Inactive), `totalRecords`, `modules`. Source of truth for department + activity. |
+| **Live Zoho Users API bridge** | New `fetchZohoUsers()` in `src/utils/zohoCRM.ts` (`GET /crm/v2/users?type=AllUsers`) — provides Zoho User ID ↔ display-name lookup so CRM record `Owner` IDs resolve correctly. |
+| **Two-tier merge in `getUsers()`** | Seed wins on team/status/modules. Zoho fills in any owner not yet on the seed (covers brand-new hires). If Zoho is unreachable, seed is used standalone with synthetic IDs. |
+| **API now returns `status`** | `/api/agents/performance` adds the `status` field to every agent so the dashboard activity badge shows "Active" / "Inactive" instead of "Unknown". |
+| **Docs aligned** | New SOP §11.1 *Owner Roster*, Feature Book §1.B *CRM Owner Data Quality Widget*, Gaps §7.A *CRM Owner Roster status*. All three include the data-steward refresh procedure. |
+
+### 10.3 Roster snapshot (2026-04-18)
+
+| Department | Active | Inactive | Total |
+|---|---|---|---|
+| WP Sales | 15 | 22 | 37 |
+| MP | 24 | 9 | 33 |
+| WO Sales | 7 | 10 | 17 |
+| CS | 5 | 2 | 7 |
+| SDR | 4 | 3 | 7 |
+| MGMT | 4 | 0 | 4 |
+| CRM Admin | 2 | 0 | 2 |
+| BD | 1 | 0 | 1 |
+| Eitmad | 1 | 0 | 1 |
+| WPE | 1 | 0 | 1 |
+| **Unassigned** | 0 | **7** | **7** |
+| **Total** | **64** | **53** | **117** |
+
+### 10.4 Known gap
+
+7 owners (193 records under one of them) have no team in the CRM. They are listed in `WALAPLUS_GAPS_AND_DATA_NEEDS.md §7.A` for CRM Admin to triage within 5 working days.
+
+### 10.5 Code delta
+
+- +118-line seed file (`src/data/seedUsers.ts`, generated)
+- +47-line `fetchZohoUsers()` in `src/utils/zohoCRM.ts`
+- ~+45 LOC rewrite of `getUsers()` in `src/data/index.ts`
+- ~+10 LOC patch to `/api/agents/performance` handler (status propagation + name-fallback resolver)
+
+### 10.6 Manager ask
+
+Confirm by **2026-04-23** that the 7 unassigned owners have either been (a) assigned a team in Zoho or (b) flagged as system/test accounts to exclude from the next seed re-import.
 
 ---
 

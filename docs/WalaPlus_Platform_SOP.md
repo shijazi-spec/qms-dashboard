@@ -1376,6 +1376,41 @@ A `.env.example` file is included in the project root with all variables documen
 | Migration | 4 | demo_links, tooltip_definitions, integration_config, team_feedback | Migration support, UI config, and feedback |
 | Knowledge Base | 2+ | knowledge documents, knowledge chunks | Document storage and search |
 
+### 11.1 Owner Roster (CRM Owner Data Quality enrichment)
+
+The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET /api/agents/performance`) enriches each Zoho CRM record owner with **Department (Team)**, **Activity (Active/Inactive status)**, and **CRM Modules in scope**. Until v4.5 this enrichment returned an empty roster — every owner fell back to a hard-coded default (`SDR / SDR Representative` for lead-only owners, `Sales / Account Executive` for deal-only owners) and the activity badge always read `Unknown`.
+
+**v4.5 introduces a two-tier roster:**
+
+1. **Seed roster (source of truth):** `src/data/seedUsers.ts` — 117 owners loaded from the official `CRM_Users_Complete_117_Updated.xlsx` snapshot dated **2026-04-18**. Each entry carries `name`, `team`, `status` (Active/Inactive), `totalRecords`, and `modules` (the CRM modules the owner currently has records in).
+2. **Live Zoho Users API fill (id bridge):** `fetchZohoUsers()` in `src/utils/zohoCRM.ts` calls `GET /crm/v2/users?type=AllUsers` to map each Zoho User ID → display name. The seed wins on team/status/modules; Zoho fills any owner not yet on the seed (so brand-new hires don't disappear from the dashboard while the spreadsheet is being refreshed).
+
+**Roster composition (2026-04-18 snapshot):**
+
+| Department (Team) | Active | Inactive | Total | Notes |
+|---|---|---|---|---|
+| WP Sales | 15 | 22 | 37 | Largest team; WalaPlus core sales |
+| MP | 24 | 9 | 33 | Marketplace ops |
+| WO Sales | 7 | 10 | 17 | WalaOne sales |
+| CS | 5 | 2 | 7 | Customer Success |
+| SDR | 4 | 3 | 7 | SDR (lead generation) |
+| MGMT | 4 | 0 | 4 | Management |
+| CRM Admin | 2 | 0 | 2 | Zoho admin / data stewards |
+| BD | 1 | 0 | 1 | Business Development |
+| Eitmad | 1 | 0 | 1 | Eitmad-specific desk |
+| WPE | 1 | 0 | 1 | WPE desk |
+| **Unassigned** | 0 | 7 | 7 | **Gap — see WALAPLUS_GAPS_AND_DATA_NEEDS.md §7.A** |
+| **Total** | **64** | **53** | **117** | |
+
+**Data steward responsibilities:** the CRM Admin team owns the seed roster. When an owner joins, leaves, or changes department, they:
+1. Re-export `CRM_Users_Complete_*.xlsx` from Zoho.
+2. Re-run the import (drops in `src/data/seedUsers.ts`).
+3. Bump the snapshot date in this section and in §25 Recent Changes Log.
+
+Owners with Team = `Unassigned` should be triaged within 5 working days (assign a department in Zoho, or mark as system/test account).
+
+
+
 ---
 
 ## 12. API Architecture
@@ -2055,6 +2090,7 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 | Date | Change | Impact |
 |------|--------|--------|
+| **Apr 18, 2026** | **SOP v4.5.1 — CRM Owner Roster wired (closes "Unknown activity" gap).** Replaced the empty `getUsers()` stub in `src/data/index.ts` with a two-tier resolver: (a) hard-coded **117-owner seed** in new `src/data/seedUsers.ts` loaded from `CRM_Users_Complete_117_Updated.xlsx` (dated 2026-04-18) carrying name, team, status, totalRecords, modules; (b) live `fetchZohoUsers()` in `src/utils/zohoCRM.ts` (`GET /crm/v2/users?type=AllUsers`) that bridges Zoho User IDs → display names. Seed wins on team/status/modules; Zoho fills gaps for owners not yet on the seed. `GET /api/agents/performance` now propagates `status` so the dashboard activity badge resolves to **Active/Inactive** instead of **Unknown**. New SOP §11.1 "Owner Roster" documents the data steward refresh procedure. Roster breakdown: 11 departments, 64 Active, 53 Inactive, 7 Unassigned (logged as gap). | Closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect; CRM Owner Data Quality widget is now data-true; data steward refresh path documented. |
 | **Apr 18, 2026** | **SOP v4.5 — Internal Audits re-architecture + Admin & Tools + External Audits.** New §4.26 Internal Audits Dashboard with Annual Audit Programme HITL sign-off (sole approver: new role `head_of_operations_quality`, WP-CTL-007); trigger HITL gate (≥10-char dismiss reason, 24h auto-re-evaluate, "Propose via HITL" for Critical, `trigger-auto-escalate` Inngest cron @ 03:00 UTC, stale Critical@7d / Minor@30d auto-opens `grc_audit_findings` with bi-directional `escalation_finding_id`). New §4.27 Manual Audit Intake (`/intake`) — central Quality Manager workspace, GPT-4o structured extraction with paste-fallback, per-finding accept/edit/reject, `source_quote` traceability, Finalize promotes to `grc_audit_findings` with `intake_id`. New §4.28 External Audits (`/external-audits`) split out — Calendar/Audits + Certificate Register + Readiness Checklist tabs; hero card on `/grc` (Next Audit / Active Certs / Expiring ≤90d) backed by `GET /api/external-audits/summary`. New §4.29 Admin & Tools dropdown — consolidates Migration Engine (relocated from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (relocated from Analytics); role-gated. Migration Engine expanded with 5 Quality templates (CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations). Database expanded 105→**113 tables** (+8: `audit_programmes`, `audit_programme_audits`, `manual_audit_intake`, `manual_audit_findings`, `external_audits`, `external_audit_certificates`, `external_audit_checklist`, `audit_triggers_decisions`); +3 columns on `qms_triggers` (`dismiss_reason`, `re_evaluate_at`, `escalation_finding_id`); +3 FKs on `grc_audit_findings`; +1 RBAC role; 2 new HITL action codes (`audit_programme_signoff`, `trigger_decision`). 7 new controlled documents seeded: WP-SOP-040/041/042, WP-FORM-055/056/057, WP-CTL-007. Approximate code delta: ~2,500 BE LOC + ~1,400 FE LOC. | Closes ISO 19011:2018 §5.2 sign-off gap; ends "shadow audit register" risk; gives execs a single-pane External Audits view; consolidates operator tooling away from business modules |
 | Apr 14, 2026 | **SOP v4.3 — CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich` (additive penalty scoring via `assessDataQuality()`, junk detection, duplicate cluster cross-reference via `lookupRecordsByZohoIds()`). Frontend: health summary bar, 4-tier quality badges, cluster badges, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync model with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, 2 new tables (`zoho_sync_state`, `duplicate_record_tasks`). PDPL section corrected to reflect CRM data persistence in `duplicate_records`. SOP accuracy audit: corrected 23 discrepancies (counts, formulas, function names, retention claims). | CRM data visibility with integrated quality intelligence; PDPL compliance accuracy; duplicate radar full CRM sync |
 | Apr 13, 2026 | **SOP v4.2 — AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: XSS-safe renderMarkdown (placeholder tokens + URL sanitization), sla_breach enum, `if(true)` scanner bugs, auto-NC status fix, KPI join column, monitorRisksTool column, dead param removal, scan prompt report-only. Phase 2 Performance: sharedPool.ts (shared pg.Pool max:20), AbortController timeouts (120s/300s configurable), parallelized 14 scanner checks, safeQuery error logging. Phase 3 Features: alert action buttons + modal, chat history, file upload, clickable knowledge docs, citation CSS, scan SSE progress bar, 23 tools on agent (+updateCapa +addCapaAction +5 training tools), auth guards on all endpoints, welcome dashboard. Phase 4 UI: consolidated polling, touch swipe, severity icons + relative time, retry button, export chat, Arabic RTL. | AI Consultant security hardening, performance optimization, feature completion, and UX polish |

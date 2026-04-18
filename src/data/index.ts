@@ -394,7 +394,52 @@ export async function getActivities(): Promise<Activity[]> {
 }
 
 export async function getUsers(): Promise<User[]> {
-  return [];
+  const { SEED_USERS, findSeedUser } = await import('./seedUsers');
+  const out: User[] = [];
+  const consumedSeedKeys = new Set<string>();
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // 1. Pull live Zoho users (best-effort) so CRM record Owner IDs resolve to names.
+  let zohoUsers: { id: string; full_name: string; email: string; status: string; role: string; profile: string }[] = [];
+  try {
+    const { fetchZohoUsers } = await import('../utils/zohoCRM');
+    zohoUsers = await fetchZohoUsers('AllUsers');
+    console.log(`👥 [Users] Fetched ${zohoUsers.length} users from Zoho`);
+  } catch (err: any) {
+    console.warn(`⚠️ [Users] Zoho Users API unavailable, falling back to seed only: ${err?.message || err}`);
+  }
+
+  // 2. For every Zoho user, prefer the seed entry by name; seed wins on team/status/modules.
+  for (const zu of zohoUsers) {
+    const seed = findSeedUser(zu.full_name);
+    if (seed) consumedSeedKeys.add(norm(seed.name));
+    out.push({
+      id: zu.id,
+      name: zu.full_name || (seed?.name ?? ''),
+      email: zu.email,
+      role: seed ? `${seed.team} — ${seed.modules.join(', ') || 'No CRM modules'}` : (zu.role || zu.profile || 'CRM User'),
+      team: seed?.team ?? (zu.profile || 'Unassigned'),
+      status: seed ? seed.status : (zu.status?.toLowerCase() === 'active' ? 'Active' : 'Inactive'),
+      created_at: '',
+    });
+  }
+
+  // 3. Add any seed entries that didn't match a Zoho user (synthetic id so the API still groups them).
+  for (const s of SEED_USERS) {
+    if (consumedSeedKeys.has(norm(s.name))) continue;
+    out.push({
+      id: `seed:${norm(s.name)}`,
+      name: s.name,
+      email: '',
+      role: `${s.team} — ${s.modules.join(', ') || 'No CRM modules'}`,
+      team: s.team,
+      status: s.status,
+      created_at: '',
+    });
+  }
+
+  console.log(`👥 [Users] Final roster: ${out.length} (seed=${SEED_USERS.length}, zoho=${zohoUsers.length})`);
+  return out;
 }
 
 export async function getCalendarEvents(): Promise<CalendarEvent[]> {

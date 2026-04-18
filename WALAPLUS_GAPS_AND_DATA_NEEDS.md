@@ -123,6 +123,39 @@ The Migration Engine (under **Admin & Tools** in v4.5) ships with the following 
 
 ---
 
+## 7.A · CRM Owner Roster — what's wired, what's still a gap (v4.5.1)
+
+The CRM Owner Data Quality widget on `/` finally renders real Department + Activity badges. Source of truth is `src/data/seedUsers.ts`, loaded from `CRM_Users_Complete_117_Updated.xlsx` (snapshot **2026-04-18**) — 117 owners across 11 departments.
+
+**Resolved:**
+- Activity badge no longer shows `Unknown` — now resolves to `Active` (64) or `Inactive` (53).
+- Department badge no longer falls back to `SDR` or `Sales` — now reflects the real team (`WP Sales`, `MP`, `WO Sales`, `CS`, `SDR`, `MGMT`, `CRM Admin`, `BD`, `Eitmad`, `WPE`).
+- Live Zoho Users API (`fetchZohoUsers`) bridges Zoho User IDs to seed names; new hires not yet on the seed still appear (with their Zoho profile as the team).
+
+**Remaining gap — 7 unassigned owners** (no team in the CRM):
+
+| # | Owner | Status | Records | Modules with records |
+|---|---|---|---|---|
+| 1 | Abdalrzaq Alshamari | Inactive | 30 | Contacts, Accounts |
+| 2 | Ahmed Alhusaynan | Inactive | 2 | Contacts, Accounts |
+| 3 | Faisal Alaskar | Inactive | 2 | Contacts, Accounts |
+| 4 | Mansoor Kadir | Inactive | 14 | Contacts, Accounts |
+| 5 | Mohammed Ridha | Inactive | 3 | Contacts, Accounts |
+| 6 | Noura AlMuneef | Inactive | 15 | Accounts |
+| 7 | عبدالمجيد الشبيلي | Inactive | 193 | Contacts, Accounts |
+
+**Action required (CRM Admin, ≤5 working days):** assign a Department in Zoho for each, OR mark them as system/test accounts and exclude them from the seed re-import. The 193 records under `عبدالمجيد الشبيلي` are the most material.
+
+**Refresh procedure:** when owners join/leave/move teams → re-export `CRM_Users_Complete_*.xlsx` from Zoho → drop into the importer → bump snapshot date in `docs/WalaPlus_Platform_SOP.md §11.1` and §25 changelog.
+
+**Two operational asks discovered during the v4.5.1 smoke test (CRM Admin):**
+
+1. **Add the `ZohoCRM.users.READ` scope to the platform OAuth app.** The first end-to-end run of `getUsers()` against live Zoho returned `401` on `GET /crm/v2/users` (after a successful access-token refresh and successful `/crm/v2/Deals` calls in the same request). This means the refresh token has CRUD scopes for record modules (Leads/Deals/Contacts/Accounts) but is missing the `ZohoCRM.users.READ` scope. Until that's granted, the platform falls back to seed-only mode (which works, but loses the new-hire safety net) and ~21 record owners that exist in CRM but aren't on the seed render with `Unknown` activity.
+
+2. **~21 "ghost" owners on records but not on the seed.** During the smoke test the API returned 128 distinct owners; only 107 matched the seed by name. The other 21 (e.g. `Mohammed Alhumoudi`, `Khalid AlHumaidan`-style names) own real records but were not on the `CRM_Users_Complete_117_Updated.xlsx` export. CRM Admin should diff the next export against the live record-owner set and reconcile. Most of these are likely former employees whose records still carry their Zoho User ID; if so, the cleanest fix is a Zoho-side reassignment to a current team member or to a "Former Employee" service account that we then add to the seed.
+
+---
+
 ## 8 · Questions to confirm with the manager
 
 1. Do we have an existing risk register Excel we can import directly?
