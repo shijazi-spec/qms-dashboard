@@ -1,0 +1,103 @@
+File-by-file assessment
+1. WalaPlus_Platform_SOP.md — v4.5, mostly current ⚠️
+✅ Version bumped to 4.5, §4.26–4.29 added for Internal Audits Dashboard / Manual Intake / External Audits / Admin & Tools, revision history entry present.
+
+⚠️ One structural duplication to fix:
+
+Section	Title	URL	Status
+§4.3
+"Audit Readiness (/audits)"
+/audits
+Pre-v4.5 description
+§4.26
+"Internal Audits Dashboard (/audits) — Programme, Triggers & Finding Traceability"
+/audits
+v4.5 description
+Both describe the same page with different content. §4.3 should either be deleted, or rewritten as a one-line pointer: "See §4.26 Internal Audits Dashboard for the current surface."
+
+⚠️ Two small gaps in other sections:
+
+§4.2 GRC Control Tower — doesn't mention the new External Audits hero card (added in grc.html)
+§4.11 QMS Dashboard — doesn't mention the Triggers HITL gate additions (dismiss reason, Propose via HITL button)
+⚠️ Revision history ordering: v4.5 entry was inserted above v4.3 rather than at the top of the history block — inconsistent with how 4.0–4.4 are ordered. Cosmetic, easy fix.
+
+2. WALAPLUS_FEATURE_BOOK.md — stale, pre-v4.5 ❌
+Dated "18 April 2026" but authored before v4.5 work landed. Key problems:
+
+Problem	Location	Impact
+Module 2 "Quality Audits (AI)" described as standalone /qms surface
+Module 2
+Misaligned — this is now the "Internal Audits AI" tab inside /qms, surfaced from /audits
+Module 3 "ISO Internal Audits (manual)" is a separate module
+Module 3
+Should be merged with Module 2 under a new "Internal Audits" module covering both platform-driven + manual + the new Programme + Intake
+No module for Audit Programme (HITL sign-off, head_of_operations_quality role)
+Missing
+High — whole feature invisible to QA
+No module for Manual Audit Intake (/intake)
+Missing
+High — GPT-4o extraction flow has no test spec
+No module for External Audits (/external-audits)
+Missing
+High — CB register + readiness + certificates have no test spec
+No Admin & Tools module
+Missing
+Medium — new nav group
+Module 14 supporting-modules table missing /intake and /external-audits routes
+Bottom table
+Medium
+Module 11 "23 tools" count
+Module 11
+Correct for v4.2; should verify whether HITL-for-triggers and audit-programme-signoff added tool count
+Needed: add Module 2b (Audit Programme), 2c (Manual Intake), 2d (External Audits), 15 (Admin & Tools), plus acceptance criteria for each. Also sweep the existing Module 2/3/14 to match current naming.
+
+3. WALAPLUS_INTERNAL_AUDITS_FEATURE.md — superseded, most misleading doc ❌
+This describes the pre-P0 iframe-based two-tab merge you explicitly voted to evolve. Per your decision from two sessions ago ("keep the iframe during P0-P1, and kill it in P1-6"), the current truth is:
+
+Claim in this doc	Reality in v4.5
+"Primary URL: /audits, sub-tabs: ISO Audits + Quality Audits (AI iframe)"
+/audits is now Internal Audits Dashboard with Programme panel, Manual Intake link, no iframe at the top. /qms still has the AI-Quality-Audits tab but that's inside /qms, not embedded into /audits.
+"This caused three problems... merge consolidates everything under a single Internal Audits entry"
+Partly true but now outdated — the merge now includes 4 surfaces (Dashboard, AI, Intake, External)
+"Lines of code: ~85 net additions · Breaking changes: none · Backend changes: none"
+v4.5 added ~2,500 LOC backend (8 tables, 3 route files, trigger-auto-escalate cron, HITL wiring)
+§8.7 "Replace iframe with native merge (high effort)"
+Now scheduled — this is literally the P1-6 work you approved
+Acceptance criteria still reference the two-tab iframe
+Needs to reference Programme panel, Manual Intake button, Trigger HITL, External Audits card
+Needed: this doc should be re-sectioned as v2.0 covering the full P0 architecture (Dashboard + Intake + External + Programme) or replaced entirely.
+
+4. WALAPLUS_PRODUCT_REPORT.md — report for the wrong week ⚠️
+Dated "Week of 14–18 Apr 2026" (before v4.5). Key problems:
+
+Problem	Location
+§2 What shipped this week — doesn't include any P0 work (Programme HITL, Manual Intake, External Audits, Admin nav)
+§2
+§2.5 table claims "Audits → ISO Internal Audits" rename — overtaken by the v4.5 "Internal Audits Dashboard" rename
+§2.5 row 1
+§5 Operational metrics: "Database tables 103+" — v4.5 added 8 tables, should be ~111+
+§5
+§4 prioritized backlog item 2 "Disambiguate Quality Audits vs. ISO Internal Audits" marked ✅ Shipped — true but superseded by the Internal Audits consolidation
+§4
+AI Consultant tools = 23 — should verify (audit_programme_signoff and trigger_decision were added to the HITL registry, not as consultant tools, so 23 may still be correct)
+§5
+Needed: either append a "Week of 18–19 Apr" update block covering v4.5, or produce a new report (v1.1 or "Week of 22 April") since this is meant to be weekly.
+
+5. WALAPLUS_GAPS_AND_DATA_NEEDS.md — mostly still valid ✅
+This doc is about data population gaps, not feature gaps, so v4.5 doesn't invalidate most of it. Minor updates worth making:
+
+Gap	Suggestion
+§3 "Modules partially populated" — doesn't mention audit_programme (0 rows), manual_audit_intake (0), external_audits (0)
+Add as P1 (these are now features that need first-time data)
+§4 "Modules that ARE working" — doesn't list the 5 new migration templates
+Add a row: "Migration Templates: 9 (CAPA, NC, Training, Findings, Deal Evals + original 4)"
+§7 Questions — no question about External Audits schedule
+Add: "Do we have the 2026 certification audit calendar to seed external_audits?"
+Recommended action
+In priority order:
+
+Fix §4.3/§4.26 duplication in the SOP (5-minute surgical edit — rewrite §4.3 as a pointer).
+Decide the fate of WALAPLUS_INTERNAL_AUDITS_FEATURE.md — rewrite as v2.0, or delete and fold into the SOP (since §4.26 covers the same ground in more detail).
+Update WALAPLUS_FEATURE_BOOK.md — add 4 new modules (Programme, Intake, External, Admin) and fix Module 2/3 naming. This is the most important doc for your QA lead.
+Append a v4.5 section to WALAPLUS_PRODUCT_REPORT.md — or generate next week's report covering it.
+Light touch-up on WALAPLUS_GAPS_AND_DATA_NEEDS.md — 3 small additions.

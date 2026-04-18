@@ -1,6 +1,6 @@
 # WalaPlus Enterprise GRC & Quality Platform
-## Feature Book & Test Specifications — v1.0
-*Last updated: 18 April 2026*
+## Feature Book & Test Specifications — v1.1
+*Last updated: 18 April 2026 (v4.5 platform release)*
 
 ---
 
@@ -83,14 +83,14 @@ Scenario: Page views are logged for accountability
 
 ---
 
-# Module 2 — Quality Audits (AI) · *Tier 1 — workhorse*
+# Module 2 — Internal Audits — AI Quality Audit Surface · *Tier 1 — workhorse*
 
-**Purpose**: Weekly automated quality scan across all CRM data — surfaces NCs, missing fields, stale records and policy violations without anyone needing to schedule it.
+**Purpose**: Weekly automated quality scan across all CRM data — surfaces NCs, missing fields, stale records and policy violations without anyone needing to schedule it. Lives as the **Quality Audits (AI)** tab inside `/qms`. As of v4.5 the dashboard is no longer iframed into `/audits` — the AI surface and the Internal Audits Dashboard (Module 3) are now distinct first-class pages.
 
 **Primary user**: Quality Manager, CCO.
 
 **Key surfaces**
-- `/qms` — Audit Reports dashboard (badged "AI" in nav)
+- `/qms` — Audit Reports dashboard, **Quality Audits (AI)** tab (badged "AI" in nav)
 - `/api/audit/latest`, `/api/audit/history`, `/api/audit/recommendations`, `/api/audit/trigger`
 
 **Data sources**: `quality_audit_results`, `quality_metrics`, `quality_trends`, source data from Zoho CRM via `crm_data` snapshot.
@@ -132,42 +132,167 @@ Scenario: Manual trigger bypasses schedule for ad-hoc audits
 
 ---
 
-# Module 3 — ISO Internal Audits (manual) · *Tier 2*
+# Module 3 — Internal Audits Dashboard · *Tier 1*
 
-**Purpose**: Track scheduled internal/external ISO 9001 audits, capture findings, drive CAPAs.
+**Purpose**: Single native page for the internal audit lifecycle — Annual Programme, finding traceability, evidence, checklist, plus quick-links to Manual Intake and External Audits. Replaces the v1.0 iframe-based two-tab design under `/audits`.
 
-**Primary user**: QHSE Manager, Internal Auditor.
+**Primary user**: QHSE Manager, Quality Manager, Internal Auditor.
 
 **Key surfaces**
-- `/audits` — ISO Internal Audits dashboard
+- `/audits` — Internal Audits Dashboard (native; no iframe)
 - `/api/audits`, `/api/audits/:id`, `/api/audits/findings`, `/api/audits/checklist/:id`
 - `/api/audits/:id/export-pdf`, `/api/audits/:id/export-xlsx`, `/api/audits/evidence-packs`
 
-**Data sources**: `audits`, `audit_findings`, `audit_checklists`, `evidence_packs`
+**Data sources**: `audits`, `grc_audit_findings`, `audit_checklists`, `evidence_packs`
 
 **Job stories**
-- *When* I'm planning the Q2 internal audit cycle, *I want* to schedule audits with auditors and scope, *so I can* coordinate without spreadsheets.
+- *When* I open `/audits`, *I want* to see the current Annual Audit Programme status at the top, *so I can* decide whether to draft, submit, or chase sign-off.
 - *When* the auditor finishes, *I want* findings to flow into NC and CAPA modules automatically.
+- *When* a finding originated from an off-platform report or external audit, *I want* to see its provenance, *so I can* trust the audit trail.
 
 **Acceptance criteria**
 
 ```
+Scenario: Programme panel renders for current year
+  Given an audit_programme exists for the current year
+  When I GET /api/audit-programme?year=<current>
+  Then the panel shows code, status, planned audit count, and sign-off state
+
 Scenario: Latest audit card shows the most recent completed audit
   Given the audits table contains both completed and scheduled future audits
   When I GET /api/dashboard
   Then latestAudit shows the audit with the most recent completed_date or actual_end_date
   And no future-dated audit is shown as "latest"
 
-Scenario: Evidence pack export
-  Given an audit has 1+ findings with attached evidence
-  When I GET /api/audits/:id/export-pdf
-  Then I receive a PDF stream with HTTP 200
+Scenario: Finding provenance badges
+  Given grc_audit_findings rows exist with intake_id, external_audit_id, or neither
+  When the dashboard renders the findings grid
+  Then each row shows a provenance badge (AI / Intake / External / Manual)
 ```
 
 **Test cases**
 - T-ISO-01 `GET /api/audits` → 200, array
 - T-ISO-02 `GET /api/audits/summary` → 200
 - T-ISO-03 `GET /api/audits/evidence-packs` → 200
+- T-AUD-DASH-01 `GET /audits` returns native HTML (no iframe to `/qms`)
+
+---
+
+# Module 3b — Annual Audit Programme (HITL sign-off) · *Tier 1 — new in v4.5*
+
+**Purpose**: Govern the annual internal audit plan with a formal Head-of-Operations-&-Quality sign-off (ISO 19011 §5.2). One programme per calendar year, transitioning draft → pending_signoff → signed_off.
+
+**Primary user**: Quality Manager (drafts), Head of Operations & Quality (approves).
+
+**Key surfaces**
+- `/audits` (top panel)
+- `/ai-approvals` (HITL queue)
+- `/api/audit-programme`, `/api/audit-programme/:id/submit`
+
+**Data sources**: `audit_programmes`, `audit_programme_audits`, `ai_pending_actions` (action_code=`audit_programme_signoff`)
+
+**Job stories**
+- *When* a new fiscal year starts, *I want* to draft the year's audit plan, *so I can* lock the audit cycle before Q1.
+- *When* the programme is submitted, *I want* only the Head of Operations & Quality to be able to sign it off, *so I can* satisfy ISO 19011 §5.2.
+
+**Acceptance criteria**
+
+```
+Scenario: Only head_of_operations_quality can approve programme
+  Given an ai_pending_actions row with action_code='audit_programme_signoff'
+  When a user with role != 'head_of_operations_quality' attempts approval
+  Then the API returns 403
+
+Scenario: Programme transitions through correct states
+  Given a draft programme
+  When submitted
+  Then status='pending_signoff' and HITL ticket created
+  When approved by head_of_operations_quality
+  Then status='signed_off' and signoff_user_id, signoff_at populated
+```
+
+**Test cases**
+- T-IAP-01 `POST /api/audit-programme` (draft) → 200
+- T-IAP-02 `POST /api/audit-programme/:id/submit` → HITL ticket created
+- T-IAP-03 Non-HOQ approval → 403
+- T-IAP-04 HOQ approval → status=signed_off
+
+---
+
+# Module 3c — Manual Audit Intake · *Tier 1 — new in v4.5*
+
+**Purpose**: Central single-point intake for off-platform audit reports (HR's supplier audits, KPMG external assessments, vendor audits). GPT-4o extracts structured findings with source-quote traceability; reviewer accepts/edits/rejects each before promotion to the finding spine.
+
+**Primary user**: Quality Manager.
+
+**Key surfaces**
+- `/intake` — intake workspace
+- `/api/manual-audit-intake`, `/api/manual-audit-intake/:id`, `/api/manual-audit-intake/:id/findings`, `/api/manual-audit-intake/:id/finalize`
+
+**Data sources**: `manual_audit_intake`, `manual_audit_findings`, `grc_audit_findings` (`intake_id` FK)
+
+**Job stories**
+- *When* HR sends me a supplier audit PDF, *I want* to upload it once and have findings auto-extracted, *so I can* avoid manual rekeying.
+- *When* a finding is wrong, *I want* to edit or reject it before it enters the official log, *so I can* preserve audit-trail integrity.
+
+**Acceptance criteria**
+
+```
+Scenario: GPT-4o extraction
+  Given a PDF/DOCX upload via POST /api/manual-audit-intake
+  When extraction completes
+  Then manual_audit_findings rows are populated with source_quote per finding
+  And intake.status='ready_for_review'
+
+Scenario: Finalize promotes accepted findings
+  Given an intake with N findings in state ∈ {accepted, edited}
+  When POST /api/manual-audit-intake/:id/finalize
+  Then N rows appear in grc_audit_findings with intake_id set
+```
+
+**Test cases**
+- T-INT-01 Upload → 200 with intake_code
+- T-INT-02 Extraction populates findings with source_quote
+- T-INT-03 Finalize → grc_audit_findings rows with intake_id
+
+---
+
+# Module 3d — External Audits · *Tier 1 — new in v4.5*
+
+**Purpose**: Track every external audit (certification, recertification, surveillance, regulatory, customer) with its certificate body, calendar, certificate register, and pre-audit readiness checklist.
+
+**Primary user**: GRC Manager, Quality Manager.
+
+**Key surfaces**
+- `/external-audits` — three tabs: Calendar/Audits · Certificate Register · Readiness Checklist
+- `/grc` — External Audits hero card (Next / Active Certs / Expiring ≤90d)
+- `/api/external-audits`, `/api/external-audits/summary`, `/api/external-audits/certificates`, `/api/external-audits/checklist`
+
+**Data sources**: `external_audits`, `external_audit_certificates`, `external_audit_checklist`
+
+**Job stories**
+- *When* a surveillance audit is due, *I want* to see how many days remain and the current certificate's expiry, *so I can* prepare on time.
+- *When* the GRC dashboard loads, *I want* a one-glance view of certification status, *so I can* spot expiring certs.
+
+**Acceptance criteria**
+
+```
+Scenario: Hero card matches summary endpoint
+  Given external_audit_certificates with 3 active and 1 expiring ≤90d
+  When I load /grc
+  Then the External Audits card shows Active=3, Expiring=1
+
+Scenario: Audit kind filter works
+  Given external_audits rows of mixed kinds
+  When I GET /api/external-audits?kind=certification
+  Then only certification rows are returned
+```
+
+**Test cases**
+- T-EXT-01 `/api/external-audits/summary` → 200
+- T-EXT-02 `/api/external-audits?kind=certification` → 200
+- T-EXT-03 `/api/external-audits/certificates` → 200
+- T-GRC-EXT `/grc` hero matches summary
 
 ---
 
@@ -374,7 +499,7 @@ Scenario: Owner RAG breakdown
 
 # Module 11 — AI Consultant + HITL Approvals · *Tier 1*
 
-**Purpose**: Conversational AI with 23 tools (NC mgmt, CAPA, risk monitor, KPI monitor, alerts, knowledge search, etc.) plus a human-in-the-loop gate for any state-changing action.
+**Purpose**: Conversational AI with 23 consultant tools (NC mgmt, CAPA, risk monitor, KPI monitor, alerts, knowledge search, etc.) plus a human-in-the-loop gate for any state-changing action. **v4.5 added two HITL action codes** (`audit_programme_signoff` for the Annual Programme — Head-of-Operations-&-Quality only — and `trigger_decision` for Critical-trigger proposals); these are HITL action codes, **not** consultant tools, so the consultant tool count remains 23.
 
 **Primary user**: Quality Manager, CCO, ops staff.
 
@@ -476,6 +601,8 @@ Scenario: Email recipient cap enforced
 | GRC Control Tower | `/grc` | T-GRC-01 | 200 |
 | Table F | `/tablef` | T-TBLF-01 | 200 |
 | CRM Data | `/crm` | T-CRM-01 | 200 |
+| Manual Audit Intake | `/intake` | T-INT-DASH-01 | 200 |
+| External Audits | `/external-audits` | T-EXT-DASH-01 | 200 |
 | Migration | `/migration` | T-MIG-01 | 200 |
 | ROI & NPV | `/roi` | T-ROI-01 | 200 |
 | Projects (PMP) | `/projects` | T-PROJ-01 | 200 |
@@ -487,6 +614,48 @@ Scenario: Email recipient cap enforced
 | Feedback | `/feedback` | T-FB-01 | 200 |
 | Admin | `/admin` | T-ADM-01 | 200 with key, prompt without |
 | Users & Access | `/users` | T-USERS-01 | 200 |
+
+---
+
+# Module 15 — Admin & Tools · *Tier 2 — new in v4.5*
+
+**Purpose**: Top-nav dropdown consolidating platform-wide operator tooling that is not day-to-day for Quality/GRC users — data loading, RBAC, HITL queue, system health, logs. Role-gated at render time so the group only appears for operator roles.
+
+**Primary user**: Admin, Head of Operations & Quality, GRC Manager, Quality Manager, AI Specialist.
+
+**Key surfaces**
+- Nav group **Admin & Tools** (label change from "Admin")
+- `/migration` — Data Migration Engine (moved from GRC; v4.5 added 5 Quality templates: CAPA, NC, Training, Findings, Deal Evaluations)
+- `/admin` — User & Role Management
+- `/users` — Users & Access
+- `/ai-approvals` — AI Approvals Queue
+- `/logs` — System Logs (moved from Analytics)
+
+**Data sources**: `platform_users`, `role_permissions`, `migration_jobs`, `migration_templates`, `ai_pending_actions`, `event_logs`
+
+**Job stories**
+- *When* I'm onboarding a new role, *I want* one place to manage users, roles, permissions, and HITL queue, *so I can* avoid hunting across menus.
+- *When* importing legacy CAPA/NC data, *I want* a templated importer that pre-checks duplicates and maps columns with AI, *so I can* finish in minutes not days.
+
+**Acceptance criteria**
+
+```
+Scenario: Group is hidden for users without operator role
+  Given a user with role 'auditor' (read-only)
+  When I render the navigation
+  Then the 'Admin & Tools' group is not present in the DOM
+
+Scenario: Group is visible for head_of_operations_quality
+  Given a user with role 'head_of_operations_quality'
+  When I render the navigation
+  Then the 'Admin & Tools' dropdown is present with all 5 items
+```
+
+**Test cases**
+- T-ADM-NAV-01 Nav renders for admin role
+- T-ADM-NAV-02 Nav hidden for non-operator role
+- T-MIG-TPL-01 5 new Quality templates present in template registry
+- T-MIG-TPL-02 Template seed creates importer rows with column mapper
 
 ---
 

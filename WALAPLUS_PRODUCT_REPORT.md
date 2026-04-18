@@ -155,6 +155,45 @@ Once 7 days of telemetry have accumulated, I would like 30 minutes to walk throu
 | Version | Date | Author | Change summary |
 |---|---|---|---|
 | 1.0 | 2026-04-18 | Product & Eng | Initial weekly report — covers Infographic Generator launch, Quality Audit cadence change, audits data fix, empty-state UX, and 4 product quick-wins |
+| 1.1 | 2026-04-18 | Product & Eng | Appended §9 v4.5 update block (Internal Audits re-architecture, Manual Intake, External Audits, Admin & Tools, +8 DB tables, ~111+ total). |
+
+---
+
+## 9. Update — v4.5 (also shipped this week)
+
+A second wave of work landed late in the same week, materially extending the Quality / GRC surface. Treat this as the **18 April 2026 v4.5 release**.
+
+### 9.1 What shipped (v4.5)
+
+| Stream | Headline |
+|---|---|
+| **Internal Audits re-architecture** | `/audits` rebuilt as a native **Internal Audits Dashboard** (no iframe). Top-of-page **Annual Audit Programme** panel with HITL sign-off routed through `/ai-approvals`, gated to a new `head_of_operations_quality` role. (Supersedes the v1.0 iframe design.) |
+| **Trigger HITL gate** | `/qms` Triggers tab now requires a written ≥10-char dismiss reason; Critical triggers expose **"Propose via HITL"**. New `trigger-auto-escalate` Inngest cron (daily 03:00 UTC) re-activates dismissed triggers and auto-opens `grc_audit_findings` rows for stale Critical@7d / Minor@30d, with bi-directional `escalation_finding_id` linkage. |
+| **Manual Audit Intake** | New `/intake` workspace owned by the Quality Manager. GPT-4o structured extraction with paste-fallback; per-finding accept/edit/reject; `Finalize` promotes findings to `grc_audit_findings` with `intake_id` lineage and `source_quote` traceability. |
+| **External Audits** | New `/external-audits` page with Calendar/Audits + Certificate Register + Readiness Checklist tabs. Hero summary card on `/grc` (Next / Active Certs / Expiring ≤90d). 5 audit kinds: certification / recertification / surveillance / regulatory / customer. |
+| **Admin & Tools dropdown** | Top-nav rename from "Admin" → **Admin & Tools**, consolidating Data Migration Engine (moved from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (moved from Analytics). Role-gated. |
+| **Migration Engine** | +5 Quality templates: CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations. AI column-mapper + duplicate pre-check inherited. |
+| **Controlled documents** | +7 SOPs/forms seeded (WP-SOP-040 Audit Programme Governance, WP-SOP-041 Manual Intake Control, WP-SOP-042 External Audit Preparation, WP-FORM-055/056/…). |
+| **Navigation** | Quality narrowed to 5 items (Dashboard, CRM Data, Internal Audits, Calls, Duplicates Radar); GRC expanded to 8 items (Control Tower, Table F, Risk Mgmt, Integrated QMS, Compliance, External Audits, Vendors, Mgmt Review); "Analytics" renamed **Team Mgmt** (KPIs, Board Dashboard, Team Performance, Mohammed's SOW). |
+
+### 9.2 Backlog item §4 status correction
+Backlog item 2 ("Disambiguate Quality Audits vs. ISO Internal Audits") was marked ✅ Shipped earlier this week; v4.5 has now **superseded** that fix with a fuller Internal Audits consolidation (Programme + Dashboard + Intake + External). The earlier rename ("Audits" → "ISO Internal Audits") in §2.5 row 1 is overtaken by the v4.5 rename to **"Internal Audits Dashboard"**.
+
+### 9.3 Updated operational metrics
+
+| Metric | v1.0 value | v4.5 value | Δ |
+|---|---|---|---|
+| Database tables | 103+ | **111+** | +8 (audit_programmes, audit_programme_audits, manual_audit_intake, manual_audit_findings, external_audits, external_audit_certificates, external_audit_checklist, audit_triggers_decisions) |
+| Dashboards live | 33 | **35** | +2 (`/intake`, `/external-audits`) |
+| AI Consultant tools | 23 | **23** | unchanged — programme sign-off and trigger decisions are HITL action codes, not consultant tools |
+| HITL action codes | n/a | **2 new** | `audit_programme_signoff`, `trigger_decision` |
+| Backend LOC delta | — | **~+2,500** | 8 tables, 3 route files, 1 cron, 1 RBAC role |
+| RBAC roles | 11 | **12** | +1 (`head_of_operations_quality`) |
+
+### 9.4 Risks & watch-items added by v4.5
+- **Programme is empty.** `audit_programmes` has 0 rows. Q1 2026 should be drafted and signed off before the next Mgmt Review.
+- **External audit calendar is empty.** `external_audits` has 0 rows. Need the 2026 certification audit calendar to seed.
+- **HOQ role unassigned.** `head_of_operations_quality` exists in the role registry but no user is currently assigned. Programme sign-off cannot complete until at least one user holds this role.
 
 ---
 

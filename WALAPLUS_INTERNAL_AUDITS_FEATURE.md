@@ -1,293 +1,223 @@
 # Internal Audits — Unified Feature Specification
-**Version:** 1.0 · **Effective:** 18 April 2026 · **Status:** Live
+**Version:** 2.0 · **Effective:** 18 April 2026 · **Status:** Live · **Supersedes:** v1.0 (Apr 2026)
 
-> **One destination for every internal audit activity at WalaPlus** — combining ISO-style internal audits, findings, evidence, AI-powered Quality Audits, CAPA, and nonconformance management.
-
----
-
-## 1 · Why this merge happened
-
-Before this release the platform had **two parallel audit experiences**:
-
-| Old surface | URL | What it covered |
-|---|---|---|
-| ISO Internal Audits → "Audit Readiness Center" | `/audits` | Audit schedule, findings, evidence packs |
-| Quality Audits (AI) → "Quality Management System" | `/qms` | AI-driven evaluations, CAPA, NCs, training, framework |
-
-This caused three problems:
-
-1. **Auditors didn't know where to go.** A finding raised in an AI quality audit had no obvious path to becoming an ISO audit finding.
-2. **Two metrics dashboards** tracked overlapping work — leading to confusion about "the real" audit numbers.
-3. **Navigation was cluttered** with two near-identical entries, both branded "Audit".
-
-The merge consolidates everything under a single **Internal Audits** entry in the sidebar, with two clear sub-tabs.
+> **One end-to-end audit lifecycle at WalaPlus** — covering the Annual Audit Programme (HITL sign-off), Internal Audits Dashboard, AI Quality Audits, Manual Audit Intake (off-platform reports), and External Audits (certification/regulatory/customer), all wired into a single finding traceability spine.
 
 ---
 
-## 2 · What's there now
+## Document control
 
-### 2.1 — URL & navigation
-
-| Aspect | Value |
+| Field | Value |
 |---|---|
-| Primary URL | `/audits` |
-| Direct deep-link to AI tab | `/audits?tab=quality` |
-| Old `/qms` URL | Still works — used internally as the embedded source for the Quality tab |
-| Sidebar label | **Internal Audits** (single entry, replaces two old entries) |
-| Page title | "WalaPlus — Internal Audits" |
-| H1 on page | "Internal Audits" |
+| Document ID | WP-FEAT-002 |
+| Version | 2.0 |
+| Predecessor | v1.0 — *iframe-based two-tab merge under `/audits`* (now superseded) |
+| Authors | Product & Engineering |
+| Approvers | Quality Management Representative, Head of Operations & Quality |
+| Linked SOP sections | §4.26 Internal Audits Dashboard, §4.27 Manual Intake, §4.28 External Audits, §4.29 Admin & Tools |
 
-### 2.2 — Page anatomy
+### Why v2.0 supersedes v1.0
+v1.0 documented an interim P0 design where `/audits` rendered an iframe of `/qms` as a "Quality Audits (AI)" sub-tab. That iframe was the explicit P0–P1 placeholder. **v4.5 retired that placeholder** and rebuilt `/audits` as a native Internal Audits Dashboard with four first-class surfaces (Programme, Findings, Manual Intake link, External Audits link). The AI Quality Audit module still lives inside `/qms` but is no longer iframed into `/audits`.
+
+---
+
+## 1 · Architecture overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Internal Audits                                            │
-│  ISO audit readiness, findings, evidence packs, and         │
-│  AI-powered Quality Audits in one place                     │
-│                                  [+ Finding]  [+ New Audit] │
-├─────────────────────────────────────────────────────────────┤
-│  [ ISO Audits ]  [ Quality Audits  AI ]   ← sub-tab strip   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ACTIVE PANEL CONTENT                                       │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                       INTERNAL AUDITS LIFECYCLE                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ① ANNUAL PROGRAMME              ② DASHBOARD               ③ AI    │
+│   /audits (top panel)             /audits                   /qms     │
+│   audit_programmes                grc_audit_findings        Quality  │
+│   ▶ HITL sign-off via             ▶ Programme panel          Audits  │
+│     /ai-approvals                 ▶ Trigger HITL gate        tab     │
+│   ▶ head_of_operations_           ▶ Finding traceability     ▶ AI-   │
+│     quality role                  ▶ Auto-escalation cron       gen   │
+│                                                                NCs   │
+│                                                                      │
+│   ④ MANUAL INTAKE                 ⑤ EXTERNAL AUDITS                 │
+│   /intake                         /external-audits                   │
+│   manual_audit_intake             external_audits                    │
+│   manual_audit_findings           external_audit_certificates        │
+│   ▶ GPT-4o extraction             external_audit_checklist           │
+│   ▶ Per-finding accept/edit       ▶ Calendar/Audits tab             │
+│   ▶ Finalize → grc_audit_         ▶ Certificate Register             │
+│     findings (intake_id           ▶ Readiness Checklist              │
+│     lineage)                      ▶ Hero card on /grc               │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                  All findings converge into
+                  grc_audit_findings (single
+                  spine), feeding NC/CAPA flow
 ```
 
-### 2.3 — Tab 1: **ISO Audits** (default)
+**Single source of truth:** Every finding — whether AI-detected, manually intaken from an off-platform report, raised in an internal audit, or recorded after a certification body audit — lands in `grc_audit_findings` with provenance columns (`intake_id`, `external_audit_id`, `escalation_finding_id`).
 
-This is the original Audit Readiness Center surface, unchanged in functionality:
+---
 
-- **6 KPI tiles**: Total Audits · Planned · In Progress · Closed · Open Findings · Overdue Findings
-- **Audit Schedule table** with status filter (Planned / In Progress / Fieldwork Complete / Report Draft / Closed)
-- **Findings by Severity** panel
-- **Upcoming Audits** sidebar
-- **Action buttons** in header: `+ Finding`, `+ New Audit`
-- Per-row XLSX and PDF evidence-pack download links
+## 2 · Surfaces
 
-**Backed by:** `audits`, `audit_findings`, `evidence_packs`, `evidence_records` tables · `/api/audits/*` endpoints
+### 2.1 Internal Audits Dashboard (`/audits`)
+**Native page** (no iframe). Top-to-bottom:
 
-### 2.4 — Tab 2: **Quality Audits (AI)**
+1. **Annual Audit Programme panel** — current-year programme card showing code, status, planned audit count, sign-off state. Actions: *Draft programme*, *Submit for sign-off*, *View HITL queue*. ISO 19011 §5.2 reference inline.
+2. **Manual Intake quick-link** — "+ New Manual Intake" jumps to `/intake`.
+3. **External Audits quick-link** — opens `/external-audits` summary.
+4. **Findings table** — full `grc_audit_findings` grid filtered by audit, with provenance badges (AI / Intake / External / Manual).
+5. **Triggers HITL gate** *(shared with `/qms` Triggers tab)* — dismissing requires written reason ≥10 chars; "Propose via HITL" on Critical triggers.
 
-Embeds the full QMS dashboard via a same-origin iframe (`/qms?embed=1`). Embed mode hides the global navigation chrome so it visually integrates with the parent page.
+### 2.2 AI Quality Audit tab (`/qms` → Quality Audits)
+Unchanged from pre-v4.5: weekly cron, scoring across people / process / governance dimensions, recommendations engine. **No longer iframed under `/audits`** — direct access only via `/qms`.
 
-The Quality tab itself contains its own tab strip:
+### 2.3 Manual Audit Intake (`/intake`)
+Central single-point intake for off-platform audit reports (HR's supplier audits, KPMG external assessments, vendor audits, etc.). Quality Manager owns the workspace.
 
-| QMS tab | Purpose |
+- **Upload** — PDF/DOCX/TXT or paste-text fallback for un-parsed binaries.
+- **GPT-4o extraction** — structured findings with `source_quote` traceability per finding.
+- **Per-finding review** — Accept / Edit / Reject.
+- **Finalize** — promotes accepted findings into `grc_audit_findings` with `intake_id` lineage.
+
+### 2.4 External Audits (`/external-audits`)
+Three tabs: **Calendar/Audits**, **Certificate Register**, **Readiness Checklist**.
+
+- Audit kinds: certification, recertification, surveillance, regulatory, customer.
+- Certificate body field (BSI, DNV, SGS, TÜV…).
+- Hero summary card mirrored on `/grc`: Next Audit · Active Certs · Expiring ≤90d.
+
+### 2.5 HITL Approvals queue (`/ai-approvals`)
+Centralised queue for any audit-cycle action that requires human sign-off. v4.5 added two action codes:
+- `audit_programme_signoff` — only `head_of_operations_quality` can approve (WP-CTL-007).
+- `trigger_decision` — Critical-trigger HITL proposal.
+
+---
+
+## 3 · Data model (v4.5)
+
+### New tables (8)
+| Table | Purpose |
 |---|---|
-| **Overview** | Evaluations (30d), Open CAPA, Open NC, Training Completion, Audit KPI Score, First Pass Yield, CAPA Effectiveness |
-| **Deal Evaluations** | AI-graded sales call/deal evaluations against scorecard |
-| **CAPA** | Corrective & Preventive Actions register |
-| **Nonconformances** | NC log with severity, source, status |
-| **Training** | Training matrix and completion tracking |
-| **Framework** | ISO 9001 / COPC framework mapping |
-| **Triggers** | Automated rules that raise NCs/CAPAs |
+| `audit_programmes` | Annual programme header, status, sign-off metadata |
+| `audit_programme_audits` | Planned audits within a programme |
+| `manual_audit_intake` | Intake header (upload metadata, status, intake_code) |
+| `manual_audit_findings` | Extracted findings with `source_quote`, accept/edit/reject state |
+| `external_audits` | External audit register |
+| `external_audit_certificates` | Certificate register with expiry tracking |
+| `external_audit_checklist` | Pre-audit readiness checklist items |
+| `audit_triggers_decisions` | HITL trigger decisions audit log |
 
-**Backed by:** `quality_audit_results`, `capa_records`, `non_conformances`, `team_performance_metrics`, `kpi_definitions` tables · `/api/qms/*` and `/api/audit/*` endpoints
+### New columns on existing tables
+- `grc_audit_findings.intake_id` (FK → `manual_audit_intake`)
+- `grc_audit_findings.external_audit_id` (FK → `external_audits`)
+- `grc_audit_findings.escalation_finding_id` (self-FK, links auto-escalated triggers)
+- `qms_triggers.dismiss_reason` (text, NOT NULL when status=dismissed)
+- `qms_triggers.re_evaluate_at` (timestamp)
 
-### 2.5 — Tab behavior details
+---
 
-| Behavior | Implementation |
+## 4 · Backend changes (~2,500 LOC additions)
+
+| Area | Files |
 |---|---|
-| **Default tab** | ISO Audits |
-| **URL deep-link** | `?tab=quality` opens directly on Quality tab |
-| **Tab persistence** | Switching updates the URL via `history.replaceState` (no reload) |
-| **Lazy load** | Quality iframe `src` is set only when the tab is first opened — saves a full QMS page load on default visits |
-| **Action bar visibility** | `+ Finding` / `+ New Audit` buttons hide on Quality tab (Quality has its own actions inside the iframe) |
-| **Accessibility** | Tabs use `role="tablist"`, `role="tab"`, `aria-selected`, panels use `role="tabpanel"` |
-| **Test IDs** | `tab-iso-audits`, `tab-quality-audits`, `iframe-quality-audits`, `text-page-title` |
+| Utils | `auditProgrammeDatabase.ts`, `manualAuditDatabase.ts`, `externalAuditDatabase.ts`, `rbacDatabase.ts`, `rbacMiddleware.ts`, `aiToolGovernance.ts` (new role registered), trigger auto-escalate helper |
+| Routes | `auditProgrammeRoutes.ts`, `manualAuditRoutes.ts`, `externalAuditRoutes.ts`, `triggerRoutes.ts` |
+| Cron | `trigger-auto-escalate` (Inngest, daily 03:00 UTC) — re-activates dismissed triggers when re-eval window elapses; auto-opens `grc_audit_findings` for stale Critical@7d / Minor@30d pending triggers |
+| RBAC | New role `head_of_operations_quality` registered in `platform_users.role` enum, granted via `rbacDatabase.ts` |
+| HITL registry | Two new action codes: `audit_programme_signoff`, `trigger_decision` |
+
+**Net delta from v1.0:** ~2,500 LOC added across 8 tables, 3 route files, 1 cron, 1 RBAC role, 2 HITL action codes. (v1.0 claimed "0 backend changes" — no longer accurate.)
 
 ---
 
-## 3 · Data model touchpoints
-
-| Concept | Lives in | Surfaced on tab |
-|---|---|---|
-| Planned/In-progress/Closed audits | `audits` | ISO Audits |
-| ISO findings | `audit_findings` | ISO Audits |
-| Evidence files (PDF/XLSX) | `evidence_packs`, `evidence_records` | ISO Audits |
-| AI quality audit runs (180k+ records) | `quality_audit_results` | Quality Audits → Overview |
-| Deal-level evaluations | `qms_deal_evaluations` | Quality Audits → Deal Evaluations |
-| CAPA records | `capa_records`, `capa_action_items`, `capa_change_history` | Quality Audits → CAPA |
-| Nonconformances | `non_conformances`, `nonconformance_records`, `nc_change_history` | Quality Audits → Nonconformances |
-| Audit KPIs | `kpi_definitions` (filter: ISO 9001) | Both tabs |
-
----
-
-## 4 · API surface (no breaking changes)
-
-All endpoints kept their original paths — the merge is purely a UI consolidation:
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /api/audits` | List ISO audits |
-| `GET /api/audits/summary` | KPI tile counts |
-| `GET /api/audits/:id` | Single audit detail |
-| `GET /api/audits/evidence-packs?auditId=...` | Evidence pack listing |
-| `GET /api/audit/latest` | Latest AI quality audit run |
-| `GET /api/audit/history?limit=N` | History of AI audit runs |
-| `GET /api/audit/recommendations` | AI-generated recommendations |
-| `GET /api/qms/dashboard` | QMS overview data |
-| `GET /api/qms/evaluations` | Deal evaluations list |
-| `GET /api/qms/evaluations/stats` | Evaluation rollups |
-| `GET /api/qms/capa` / `POST /api/qms/capa` | CAPA list / create |
-| `GET /api/qms/capa/:id` | Single CAPA + action items |
-| `GET /api/qms/capa/export` | CAPA Excel export |
-
----
-
-## 5 · User journeys after the merge
-
-### 5.1 — ISO auditor preparing for a surveillance audit
-1. Click **Internal Audits** in the sidebar
-2. ISO Audits tab is open by default — see schedule, planned vs overdue
-3. Click `+ New Audit` to add the upcoming surveillance entry
-4. Add findings as they are identified, attach evidence packs
-5. Generate XLSX/PDF for external auditor
-6. **Same destination, one click** to switch to Quality Audits to cross-reference recent NCs
-
-### 5.2 — Quality manager reviewing AI audit findings
-1. Click **Internal Audits**
-2. Click **Quality Audits (AI)** sub-tab — single click, no page navigation
-3. See Overview KPIs (evaluations 30d, open CAPA, open NC, training)
-4. Drill into CAPA tab → review open actions
-5. Drill into Nonconformances → review and update status
-6. Click **ISO Audits** to log a parallel ISO finding if needed
-
-### 5.3 — Executive reviewing audit posture (deep-link from email)
-1. Click `https://qms-dashboard.replit.app/audits?tab=quality` in an email
-2. Lands directly on the Quality Audits Overview
-3. Sees the AI Audit KPI Score against 95% target
-4. Closes browser — URL state preserved if they bookmark
-
----
-
-## 6 · Acceptance criteria (Gherkin)
+## 5 · Acceptance criteria (v4.5)
 
 ```gherkin
-Scenario: Default landing on ISO Audits tab
-  Given I am authenticated
-  When I navigate to /audits
-  Then the page H1 is "Internal Audits"
-  And the "ISO Audits" tab is selected
-  And the original Audit Readiness Center content is visible
-  And the "+ Finding" and "+ New Audit" buttons are visible
+Scenario: Annual Programme requires Head of Operations & Quality sign-off
+  Given a draft audit_programme exists for year 2026
+  When the Quality Manager submits it for sign-off
+  Then a row appears in ai_pending_actions with action_code='audit_programme_signoff'
+  And only users with role 'head_of_operations_quality' can approve it
+  And the programme.status transitions draft → pending_signoff → signed_off
 
-Scenario: Switching to Quality Audits tab
-  Given I am on /audits with ISO Audits tab active
-  When I click the "Quality Audits" tab
-  Then the QMS dashboard loads inside an iframe
-  And the global navigation does NOT appear inside the iframe
-  And the URL updates to /audits?tab=quality
-  And the "+ Finding" and "+ New Audit" buttons are hidden
+Scenario: Trigger dismissal requires a written reason
+  Given a qms_triggers row with status='active'
+  When a user attempts to dismiss it without a reason ≥10 chars
+  Then the API returns 400 with error 'dismiss_reason_required'
 
-Scenario: Deep-link directly to Quality tab
-  Given I am authenticated
-  When I navigate to /audits?tab=quality
-  Then the "Quality Audits" tab is selected immediately
-  And the QMS iframe begins loading
+Scenario: Critical trigger HITL proposal
+  Given a qms_triggers row with severity='critical' and status='active'
+  When the user clicks 'Propose via HITL'
+  Then a row appears in ai_pending_actions with action_code='trigger_decision'
 
-Scenario: Lazy-load saves a request
-  Given I navigate to /audits and stay on ISO Audits
-  Then the QMS iframe src is "about:blank"
-  And no /qms request is made
+Scenario: Auto-escalation of stale Critical trigger
+  Given a qms_triggers row with severity='critical' and status='pending' for ≥7 days
+  When the trigger-auto-escalate cron runs
+  Then a grc_audit_findings row is auto-created
+  And the trigger.escalation_finding_id is set bi-directionally
 
-Scenario: Sidebar shows single entry
-  When I open the navigation menu
-  Then I see exactly one "Internal Audits" entry
-  And I do NOT see a separate "Quality Audits (AI)" entry
+Scenario: Manual Intake upload extracts structured findings via GPT-4o
+  Given a Quality Manager uploads an external audit report PDF to /intake
+  When the upload completes
+  Then a manual_audit_intake row is created with status='extracting'
+  And manual_audit_findings rows are populated with source_quote per finding
+
+Scenario: Finalising an intake promotes accepted findings to the spine
+  Given a manual_audit_intake has 5 findings with state ∈ {accepted, edited}
+  When the user clicks 'Finalize'
+  Then 5 grc_audit_findings rows are inserted with intake_id set
+
+Scenario: External Audit hero card reflects live state
+  Given external_audit_certificates contains 3 active certs, 1 expiring in 60 days
+  When I load /grc
+  Then the External Audits hero card shows Active=3, Expiring=1
+  And clicking the card navigates to /external-audits
 ```
 
 ---
 
-## 7 · Files changed in this release
+## 6 · Test cases
 
-| File | Change |
+| ID | Description |
 |---|---|
-| `dashboard/audits.html` | Title + H1 → "Internal Audits"; added tab strip; wrapped existing content in `#panel-iso`; added `#panel-quality` with iframe; added `setupInternalAuditsTabs` script |
-| `dashboard/qms.html` | Embed-mode detection (`?embed=1` hides nav, transparent body) |
-| `dashboard/js/navigation.js` | Removed standalone "Quality Audits (AI)" entry; renamed "ISO Internal Audits" → "Internal Audits" |
-
-**Lines of code:** ~85 net additions · **Breaking changes:** none · **Backend changes:** none
-
----
-
-## 8 · Enhancement roadmap (post-merge ideas)
-
-Sorted by effort × impact. Pick whatever your manager wants to pursue.
-
-### 8.1 — Cross-tab linking (high-impact, low-effort)
-- From an ISO finding, add a "Link to NC/CAPA" button that opens the relevant Quality tab item
-- From a Quality NC marked "ISO-relevant", surface a "Promote to ISO Finding" action
-- **Why:** Removes the manual copy-paste between the two registers
-
-### 8.2 — Unified audit timeline (medium effort)
-- New tab "Timeline" that merges ISO audits + AI audit runs + NCs + CAPAs into one chronological view
-- Filter by date range, audit type, status
-- **Why:** Gives auditors a single narrative for evidence requests
-
-### 8.3 — Single overview tile strip on top (low effort)
-- Add a thin metrics row above the tabs showing key numbers from BOTH worlds: Total Audits · Open Findings · Open CAPA · Open NC · Audit KPI Score
-- **Why:** Manager sees posture without switching tabs
-
-### 8.4 — Evidence pack auto-link (medium effort)
-- When an AI quality audit flags a high-severity issue, auto-attach the evidence (call recording, deal record snapshot) to the next planned ISO audit's evidence pack
-- **Why:** Closes the AI → audit evidence loop automatically
-
-### 8.5 — Trigger ISO audit from AI alert (medium-high effort)
-- When AI Quality Audit detects ≥ N high-severity issues in a quarter, auto-suggest an ad-hoc ISO audit
-- **Why:** Risk-based audit planning per ISO 9001 §9.2.2
-
-### 8.6 — Single export pack (low effort)
-- "Download Audit Pack" button that bundles: ISO audits + findings + evidence + AI audit recommendations into one ZIP
-- **Why:** External auditor handover in one click
-
-### 8.7 — Replace iframe with native merge (high effort)
-- Currently Quality Audits is embedded via iframe — works perfectly but is a layout boundary
-- Eventually rewrite QMS sub-tabs as native sections inside the same page for a more seamless UX
-- **Why:** Removes scrollbar quirks, allows shared header/filter state
-
-### 8.8 — Role-aware default tab (low effort)
-- ISO auditor role → land on ISO tab
-- Sales/Quality manager role → land on Quality tab
-- Reuses existing role-based landing infrastructure
-- **Why:** Each persona sees their primary view first
-
-### 8.9 — Cross-tab search (medium effort)
-- Single search bar above the tabs that finds findings, NCs, CAPAs, audits across both worlds
-- **Why:** "Where did I log that nonconformance about supplier X?" — answered in one box
-
-### 8.10 — In-page AI consultant for audits (medium effort)
-- Floating "Ask AI Auditor" button that knows context of the current tab/audit
-- "Suggest findings for this audit", "Draft a CAPA for this NC", "What ISO clause applies?"
-- **Why:** Turns this page into the place auditors actually do their thinking
+| T-IAP-01 | `POST /api/audit-programme` (draft) → 200, returns programme_id |
+| T-IAP-02 | `POST /api/audit-programme/:id/submit` → creates HITL ticket |
+| T-IAP-03 | Approve as non-HOQ user → 403 |
+| T-IAP-04 | Approve as `head_of_operations_quality` → status=signed_off |
+| T-TRG-01 | Dismiss trigger without reason → 400 |
+| T-TRG-02 | Dismiss with reason <10 chars → 400 |
+| T-TRG-03 | Critical trigger HITL proposal → ai_pending_actions row |
+| T-TRG-04 | Auto-escalate cron creates finding → bi-directional FK set |
+| T-INT-01 | `POST /api/manual-audit-intake` upload → 200, intake_code |
+| T-INT-02 | GPT-4o extraction populates manual_audit_findings |
+| T-INT-03 | Finalize intake → grc_audit_findings rows with intake_id |
+| T-EXT-01 | `GET /api/external-audits/summary` → 200 with next/active/expiring |
+| T-EXT-02 | `GET /api/external-audits` filtered by kind → 200 |
+| T-EXT-03 | `GET /api/external-audits/certificates` → 200 |
+| T-GRC-EXT | `/grc` hero card matches `/external-audits/summary` |
 
 ---
 
-## 9 · Risks & known limitations
+## 7 · Migration notes from v1.0
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Iframe adds a small layout boundary (no shared scroll) | Low | Acceptable for now; eventually replaced by 8.7 |
-| Two action button sets (parent header + iframe internal) could confuse | Low | Action bar hides on Quality tab; iframe has its own |
-| Old links to `/qms` still work but skip the new tab framing | Low — by design | Old links still resolve correctly to the standalone QMS view |
-| Browser back button between tabs uses history.replaceState, not pushState | Low | Intentional — tabs aren't "navigations", they're view toggles |
-
----
-
-## 10 · How to validate (manual smoke test)
-
-1. Sign in to the platform
-2. Click sidebar → confirm a single **Internal Audits** entry
-3. Land on `/audits` → confirm H1 = "Internal Audits", default tab = ISO Audits, KPI tiles & schedule visible
-4. Click **Quality Audits** tab → confirm QMS dashboard loads inside the page (no global nav inside the embed)
-5. Confirm URL changed to `/audits?tab=quality`
-6. Click **ISO Audits** tab → confirm action bar (`+ Finding`, `+ New Audit`) reappears, URL drops the `?tab=quality`
-7. Open `/audits?tab=quality` in a fresh tab → confirm Quality tab opens directly
-8. Open `/qms` directly → confirm it still works as a standalone page (back-compat)
-
-**Automated coverage:** existing `scripts/run-platform-tests.sh` continues to pass 66/66 — no contracts broken.
+| v1.0 claim | v2.0 reality |
+|---|---|
+| "Primary URL `/audits` with iframe to `/qms`" | `/audits` is now native; the `/qms` iframe was retired |
+| "Two sub-tabs: ISO + Quality Audits (AI)" | `/audits` no longer has tabs; AI surface remains at `/qms` |
+| "0 backend changes, ~85 LOC net additions" | ~2,500 LOC added (8 tables, 3 route files, cron, RBAC role) |
+| "§8.7 Replace iframe with native merge — high effort" | Done in v4.5; this is the work this v2.0 doc describes |
+| Acceptance criteria reference "two-tab iframe" | Replaced by Programme / Trigger HITL / Intake / External criteria above |
 
 ---
 
-*This document is the source of truth for the Internal Audits feature. Update as enhancements ship.*
+## 8 · Open items
+
+- Seed the 2026 Annual Audit Programme (currently 0 rows).
+- Seed initial `external_audits` rows from the certification calendar.
+- Quality Manager training session on the `/intake` workflow.
+
+---
+
+*This document is a living specification. v3.0 will be cut when the next set of audit-cycle features lands (anticipated: deviation tracking, supplier-audit follow-up, ISO 19011 §6 conformance evidence pack auto-assembly).*

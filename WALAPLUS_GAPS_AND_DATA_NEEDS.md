@@ -55,6 +55,14 @@ Listed in **priority order** (highest business impact first).
 | Nonconformances (parent table) | 4 | All 4 are test/sample. Replace with real NC log |
 | CAPAs (parent table) | 4 | Same — test data. Replace |
 
+### 3a · New v4.5 modules awaiting first-time data (P1)
+
+| Module | Table(s) | Rows | Why empty | What to upload |
+|---|---|---|---|---|
+| **Annual Audit Programme** | `audit_programmes`, `audit_programme_audits` | 0 / 0 | Newly shipped in v4.5 — needs the 2026 programme drafted | One programme record for FY 2026: title, planned audits with scope/dates/auditors. Will then route through HITL sign-off (`head_of_operations_quality`). |
+| **Manual Audit Intake** | `manual_audit_intake`, `manual_audit_findings` | 0 / 0 | Newly shipped — Quality Manager has not yet uploaded any off-platform reports | Backlog of recent off-platform reports (HR supplier audits, KPMG assessments, vendor audit PDFs) to upload via `/intake`. |
+| **External Audits** | `external_audits`, `external_audit_certificates`, `external_audit_checklist` | 0 / 0 / 0 | Newly shipped — 2026 certification audit calendar not yet seeded | 2026 calendar: scheduled certification / surveillance / customer audits (kind, body, standard, planned dates) + active certificate inventory (issuing body, standard, valid_from, valid_to). |
+
 ---
 
 ## 4 · Modules that ARE working with real data (no action needed)
@@ -69,7 +77,8 @@ So the manager doesn't think nothing works — these are humming:
 | KPI Library | ✅ 35 KPIs defined (ISO-aligned) |
 | Compliance Framework | ✅ 6 regulations × 18 obligations mapped |
 | Infographic Generator | ✅ All 6 sections rendering, Slack + Email sharing live |
-| Authentication & 33 dashboards | ✅ All accessible, role-based landing working |
+| Authentication & 35 dashboards | ✅ All accessible, role-based landing working (35 = 33 + `/intake` + `/external-audits` shipped in v4.5) |
+| Migration Templates | ✅ 9 templates total (CAPA, Nonconformity, Training, Audit Findings, Deal Evaluations + original 4: Risks, Vendors, Policies, Calls) — AI column-mapper + duplicate pre-check |
 | Page-view telemetry | ✅ Recording (8 events captured this week) |
 
 ---
@@ -103,6 +112,9 @@ If we can only do one batch a week, suggested order:
 4. Are there real NCs/CAPAs from the past year, or is this a greenfield log?
 5. Who is the owner for compliance assessments per regulation (PDPL, ISO 9001, etc.)?
 6. Confirm: are there any data incidents to log, or is `data_incidents` legitimately zero?
+7. **Do we have the 2026 certification audit calendar to seed `external_audits`?** (Need: scheduled certification / surveillance / customer audits with kind, body, standard, planned dates.)
+8. **Who will be assigned the `head_of_operations_quality` role?** Annual Audit Programme sign-off cannot complete until at least one user holds this role.
+9. **Backlog of off-platform audit reports for `/intake`?** GPT-4o extraction is ready — needs the first batch (HR supplier audits, KPMG assessments, vendor audit PDFs) to validate the workflow.
 
 ---
 
