@@ -247,73 +247,16 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
   );
 }
 
+// Body lives in src/utils/scheduledJobs.ts so the in-process interval
+// fallback (registered in src/mastra/index.ts) and any future manual trigger
+// share one implementation.
 const kpiAutoCalcFunction = inngest.createFunction(
   { id: "kpi-auto-calculation" },
   { cron: process.env.KPI_AUTO_CALC_CRON || "0 2 * * *" },
   async ({ step }) => {
     return await step.run("run-kpi-auto-calc", async () => {
-      console.log("[KPI Auto] Daily KPI calculation triggered");
-      const results: any[] = [];
-      try {
-        const {
-          calculateKPI1_GovernanceDocLifecycle,
-          calculateKPI2_ComplianceObligationTracking,
-          calculateKPI3_AuditEvidencePackReadiness,
-          calculateKPI4_QualityGRCHandoff,
-          calculateKPI5_RiskRegisterHygiene,
-          calculateKPI6_ExecutiveReportingReadiness,
-        } = await import("../../utils/scorecardDatabase");
-        // FIX: was importing non-existent getKPIDefinitions and reading
-        // k.name (column is kpi_name). Resulted in zero rows ever recorded.
-        const { recordKPIValue, getAllKPIDefinitions } = await import("../../utils/kpiDatabase");
-
-        const calculators = [
-          { keywords: ['governance', 'lifecycle', 'doc'], fn: calculateKPI1_GovernanceDocLifecycle, label: 'Governance Doc Lifecycle' },
-          { keywords: ['compliance', 'obligation'], fn: calculateKPI2_ComplianceObligationTracking, label: 'Compliance Obligation Tracking' },
-          { keywords: ['audit', 'evidence', 'readiness'], fn: calculateKPI3_AuditEvidencePackReadiness, label: 'Audit Evidence Pack Readiness' },
-          { keywords: ['handoff', 'quality'], fn: calculateKPI4_QualityGRCHandoff, label: 'Quality-GRC Handoff' },
-          { keywords: ['risk', 'register', 'hygiene'], fn: calculateKPI5_RiskRegisterHygiene, label: 'Risk Register Hygiene' },
-          { keywords: ['executive', 'reporting'], fn: calculateKPI6_ExecutiveReportingReadiness, label: 'Executive Reporting Readiness' },
-        ];
-
-        const kpiDefs = await getAllKPIDefinitions();
-        const now = new Date();
-        const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-        for (const calc of calculators) {
-          try {
-            const { value } = await calc.fn();
-            const matchingKpi = kpiDefs.find((k: any) => {
-              const name = (k.kpi_name || '').toLowerCase();
-              return calc.keywords.every((kw) => name.includes(kw));
-            }) || kpiDefs.find((k: any) => {
-              const name = (k.kpi_name || '').toLowerCase();
-              return calc.keywords.some((kw) => name.includes(kw));
-            });
-            if (matchingKpi) {
-              await recordKPIValue({
-                kpi_id: matchingKpi.id!,
-                actual_value: value,
-                period_start: periodStart,
-                period_end: periodEnd,
-                status: 'green', // recordKPIValue recomputes from thresholds
-                calculated_by: 'system',
-                override_reason: `Auto-calculated by scheduled job`,
-              } as any);
-              results.push({ kpi: calc.label, matched: matchingKpi.kpi_name, value, status: 'recorded' });
-            } else {
-              results.push({ kpi: calc.label, value, status: 'no_matching_definition' });
-            }
-          } catch (err) {
-            results.push({ kpi: calc.label, error: String(err), status: 'failed' });
-          }
-        }
-      } catch (err) {
-        console.error("[KPI Auto] Fatal error:", err);
-      }
-      console.log("[KPI Auto] Completed:", results);
-      return { calculated: results.length, results };
+      const { runKPIAutoCalc } = await import("../../utils/scheduledJobs");
+      return await runKPIAutoCalc();
     });
   },
 );

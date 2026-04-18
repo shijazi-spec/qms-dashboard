@@ -66,6 +66,29 @@ setTimeout(() => {
   }).then((r) => console.log(`🔥 [PreWarm] Warmup HTTP ${r.status}`))
     .catch((e) => console.warn('🔥 [PreWarm] Warmup failed:', String(e)));
 }, 20_000);
+
+// In-process interval fallback for the Inngest crons. Inngest's cron driver
+// has occasionally gone quiet (e.g. duplicate radar went 5+ days without a
+// scan), so we belt-and-braces these two jobs at the app process level. They
+// no-op when Inngest has already done the work recently.
+//   - Duplicate radar: ensure a scan within the last 6h.
+//   - KPI auto-calc: ensure values within the last 24h.
+// First check fires 60s after boot to give Inngest a chance to handle it.
+setTimeout(() => {
+  const tick = async () => {
+    try {
+      const { runDuplicateScanIfStale, runKPIAutoCalcIfStale } = await import('../utils/scheduledJobs');
+      const dup = await runDuplicateScanIfStale(6);
+      if (dup.ran) console.log(`⏰ [Fallback] Duplicate scan executed (was ${dup.ageHours.toFixed(1)}h stale)`);
+      const kpi = await runKPIAutoCalcIfStale(24);
+      if (kpi.ran) console.log(`⏰ [Fallback] KPI auto-calc executed (recorded ${kpi.result?.calculated || 0})`);
+    } catch (err) {
+      console.error('⏰ [Fallback] Tick failed:', err);
+    }
+  };
+  void tick();
+  setInterval(() => { void tick(); }, 60 * 60 * 1000); // hourly check; jobs gate themselves on staleness
+}, 60_000);
 import { consultantRoutes } from "./routes/consultantRoutes";
 import { aiApprovalRoutes } from "./routes/aiApprovalRoutes";
 import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
