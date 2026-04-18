@@ -10,6 +10,7 @@
  */
 
 import { pool as kpiPool } from "./kpiDatabase";
+import { sharedPool } from "./sharedPool";
 
 export interface KPIAutoCalcResult {
   calculated: number;
@@ -177,6 +178,55 @@ export async function runQualityAuditIfStale(maxAgeHours = 6): Promise<{ ran: bo
     return { ran: true, ageHours, result };
   } catch (err) {
     console.error("[QualityAudit Fallback] Audit failed:", err);
+    return { ran: false, ageHours };
+  }
+}
+
+/**
+ * Run the AI Consultant background scanner if the last run is older than
+ * `maxAgeHours`. This is the in-process safety net for the
+ * `ai-background-scanner` Inngest cron when Inngest dispatch is unreachable
+ * (mirrors the same pattern used for the quality audit).
+ *
+ * "Last run" is tracked in a tiny `scanner_run_log` table that the function
+ * creates on first call so we don't depend on alerts existing (alerts only
+ * fire when issues are found, which would mask a successful clean scan).
+ */
+export async function runConsultantScannerIfStale(maxAgeHours = 6): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+     FROM scanner_run_log WHERE scanner_name='ai-background-scanner' AND success=true`
+  );
+  const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+  console.log(`[AIScanner Fallback] Last scan was ${ageHours === Infinity ? 'never' : ageHours.toFixed(1) + 'h ago'} (>= ${maxAgeHours}h); running scan.`);
+  try {
+    const { runBackgroundScan } = await import("./aiBackgroundScanner");
+    const result = await runBackgroundScan();
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, true, $2)`,
+      ['ai-background-scanner', JSON.stringify(result || {})]
+    );
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    console.error("[AIScanner Fallback] Scan failed:", err);
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+      ['ai-background-scanner', JSON.stringify({ error: String(err) })]
+    );
     return { ran: false, ageHours };
   }
 }
