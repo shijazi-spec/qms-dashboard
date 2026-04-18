@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infographic Generator – WalaPlus</title>
+  <link rel="stylesheet" href="/dashboard/tailwind.css" />
+  <style>
+    body { background: #f8fafc; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    .section-card { transition: all .2s; cursor: pointer; }
+    .section-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.08); }
+    .section-card.selected { ring: 4px; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.4); }
+    .preview-frame { background: #0f172a; border-radius: 12px; min-height: 600px; }
+    .spinner { border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; width: 32px; height: 32px; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <header class="mb-8">
+      <div class="flex items-start justify-between gap-6 flex-wrap">
+        <div>
+          <h1 class="text-3xl font-bold text-slate-900 flex items-center gap-3">
+            <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+            Infographic Generator
+          </h1>
+          <p class="text-slate-600 mt-2 max-w-2xl">
+            Create polished, shareable visual snapshots of any platform area — perfect for sending to the CEO, CCO or board.
+            Pick a section below, generate, then download as <strong>SVG</strong> or <strong>PNG</strong>.
+          </p>
+        </div>
+        <div class="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 text-sm">
+          <div class="font-semibold text-purple-900">Live data</div>
+          <div class="text-purple-700">Every infographic is generated from production data at the moment you click Generate.</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Section picker -->
+    <section class="mb-10">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">1 · Choose a section</h2>
+      <div id="section-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="text-slate-400 col-span-full text-center py-12">Loading available sections…</div>
+      </div>
+    </section>
+
+    <!-- Action bar -->
+    <section id="action-bar" class="hidden mb-6">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">2 · Generate &amp; share</h2>
+      <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
+        <div class="flex-1 min-w-[200px]">
+          <div class="text-sm font-semibold text-slate-900">Selected: <span id="selected-title" class="text-purple-700">—</span></div>
+          <div class="text-xs text-slate-500" id="selected-desc"></div>
+        </div>
+        <button id="btn-generate" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Generate
+        </button>
+        <button id="btn-svg" disabled class="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Download SVG
+        </button>
+        <button id="btn-png" disabled class="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Download PNG
+        </button>
+        <button id="btn-print" disabled class="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Print
+        </button>
+      </div>
+    </section>
+
+    <!-- Preview -->
+    <section id="preview-section" class="hidden">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">3 · Preview</h2>
+      <div class="preview-frame p-6 flex items-center justify-center" id="preview-container">
+        <div class="text-slate-400 text-sm">Click <strong class="text-white">Generate</strong> to preview the infographic here.</div>
+      </div>
+    </section>
+
+    <!-- Empty state when nothing selected -->
+    <section id="empty-state" class="text-center py-16 text-slate-400 text-sm">
+      Pick a section above to get started.
+    </section>
+  </main>
+
+  <script src="/dashboard/js/navigation.js"></script>
+  <script>
+    let selected = null;
+    let lastSvg = null;
+    const grid = document.getElementById('section-grid');
+    const actionBar = document.getElementById('action-bar');
+    const previewSection = document.getElementById('preview-section');
+    const previewContainer = document.getElementById('preview-container');
+    const emptyState = document.getElementById('empty-state');
+    const selTitle = document.getElementById('selected-title');
+    const selDesc = document.getElementById('selected-desc');
+    const btnGenerate = document.getElementById('btn-generate');
+    const btnSvg = document.getElementById('btn-svg');
+    const btnPng = document.getElementById('btn-png');
+    const btnPrint = document.getElementById('btn-print');
+
+    function colorTints(hex) {
+      // Map hex accent → light tailwind-like tints
+      const map = {
+        '#10b981': { bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+        '#3b82f6': { bg: 'bg-blue-50',    border: 'border-blue-300',    text: 'text-blue-700',    dot: 'bg-blue-500' },
+        '#ef4444': { bg: 'bg-red-50',     border: 'border-red-300',     text: 'text-red-700',     dot: 'bg-red-500' },
+        '#f59e0b': { bg: 'bg-amber-50',   border: 'border-amber-300',   text: 'text-amber-700',   dot: 'bg-amber-500' },
+        '#8b5cf6': { bg: 'bg-purple-50',  border: 'border-purple-300',  text: 'text-purple-700',  dot: 'bg-purple-500' },
+        '#06b6d4': { bg: 'bg-cyan-50',    border: 'border-cyan-300',    text: 'text-cyan-700',    dot: 'bg-cyan-500' }
+      };
+      return map[hex] || map['#3b82f6'];
+    }
+
+    async function loadSections() {
+      try {
+        const r = await fetch('/api/infographic/sections');
+        const { sections } = await r.json();
+        grid.innerHTML = sections.map(s => {
+          const t = colorTints(s.accent);
+          return `
+            <div data-id="${s.id}" class="section-card ${t.bg} border-2 ${t.border} rounded-xl p-5">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 ${t.dot} bg-opacity-20 rounded-lg flex items-center justify-center">
+                  <svg class="w-5 h-5 ${t.text}" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="${s.icon}"/></svg>
+                </div>
+                <div class="font-bold text-slate-900">${s.title}</div>
+              </div>
+              <div class="text-sm font-medium text-slate-700 mb-1">${s.subtitle}</div>
+              <div class="text-xs text-slate-500">${s.description}</div>
+            </div>`;
+        }).join('');
+
+        grid.querySelectorAll('.section-card').forEach(card => {
+          card.addEventListener('click', () => {
+            grid.querySelectorAll('.section-card').forEach(c => c.classList.remove('ring-4', 'ring-purple-400'));
+            card.classList.add('ring-4', 'ring-purple-400');
+            const id = card.getAttribute('data-id');
+            selected = sections.find(s => s.id === id);
+            selTitle.textContent = selected.title;
+            selDesc.textContent = selected.description;
+            actionBar.classList.remove('hidden');
+            previewSection.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+            // Reset preview
+            previewContainer.innerHTML = '<div class="text-slate-400 text-sm">Click <strong class="text-white">Generate</strong> to preview the infographic here.</div>';
+            btnSvg.disabled = btnPng.disabled = btnPrint.disabled = true;
+          });
+        });
+      } catch (e) {
+        grid.innerHTML = '<div class="text-red-600 col-span-full text-center py-12">Failed to load sections: ' + e.message + '</div>';
+      }
+    }
+
+    async function generate() {
+      if (!selected) return;
+      previewContainer.innerHTML = '<div class="text-center"><div class="spinner mx-auto mb-3"></div><div class="text-white text-sm">Pulling live data and rendering…</div></div>';
+      btnGenerate.disabled = true;
+      btnSvg.disabled = btnPng.disabled = btnPrint.disabled = true;
+      try {
+        const r = await fetch('/api/infographic/' + selected.id);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        lastSvg = await r.text();
+        previewContainer.innerHTML = lastSvg;
+        // Make the SVG responsive in the preview
+        const svg = previewContainer.querySelector('svg');
+        if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = 'auto'; svg.style.maxHeight = '85vh'; }
+        btnSvg.disabled = btnPng.disabled = btnPrint.disabled = false;
+      } catch (e) {
+        previewContainer.innerHTML = '<div class="text-red-300 text-sm">Render failed: ' + e.message + '</div>';
+      } finally {
+        btnGenerate.disabled = false;
+      }
+    }
+
+    function download(format) {
+      if (!selected) return;
+      const url = '/api/infographic/' + selected.id + '?format=' + format + '&download=1';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'walaplus-' + selected.id + '-' + new Date().toISOString().slice(0,10) + '.' + format;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function printGraphic() {
+      if (!lastSvg) return;
+      const w = window.open('', '_blank');
+      if (!w) return alert('Please allow pop-ups to print.');
+      w.document.write(`<!doctype html><html><head><title>${selected.title} – WalaPlus</title>
+        <style>html,body{margin:0;padding:0;background:#0f172a}svg{width:100%;height:auto;display:block}@media print{@page{size:A4 portrait;margin:0}body{background:#0f172a}}</style>
+        </head><body>${lastSvg}<script>setTimeout(()=>window.print(),400);<\/script></body></html>`);
+      w.document.close();
+    }
+
+    btnGenerate.addEventListener('click', generate);
+    btnSvg.addEventListener('click', () => download('svg'));
+    btnPng.addEventListener('click', () => download('png'));
+    btnPrint.addEventListener('click', printGraphic);
+
+    // Mount nav (defensive — WalaPlusNav may not exist on every install)
+    try {
+      if (window.WalaPlusNav && typeof window.WalaPlusNav.render === 'function') {
+        document.getElementById('nav-mount').innerHTML = window.WalaPlusNav.render('infographic');
+      }
+    } catch (e) { console.warn('Nav mount failed:', e); }
+
+    loadSections();
+  </script>
+</body>
+</html>

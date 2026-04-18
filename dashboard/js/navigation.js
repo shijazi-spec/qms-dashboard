@@ -75,6 +75,7 @@ const WalaPlusNav = {
       color: 'purple',
       items: [
         { label: 'AI Consultant', href: '/consultant', icon: 'brain', id: 'consultant' },
+        { label: 'Infographic Generator', href: '/infographic', icon: 'sparkles', id: 'infographic' },
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
         { label: 'Platform SOP', href: '/sop', icon: 'document-text', id: 'sop' },
         { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
