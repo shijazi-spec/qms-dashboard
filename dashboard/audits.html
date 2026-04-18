@@ -35,7 +35,7 @@
         <div class="flex justify-between items-center mb-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">Internal Audits</h1>
-                <p class="text-sm text-gray-500 mt-1">ISO audit readiness, findings, evidence packs, and AI-powered Quality Audits in one place</p>
+                <p class="text-sm text-gray-500 mt-1">Audit readiness, findings, evidence packs, and AI-powered record-level audits in one place</p>
             </div>
             <div id="auditsActionBar" class="flex gap-3">
                 <button onclick="openAddFindingModal()" data-testid="button-add-finding" class="px-4 py-2 border border-purple-700 text-purple-700 rounded-lg hover:bg-purple-50 font-medium">
@@ -50,16 +50,16 @@
             </div>
         </div>
 
-        <!-- Sub-tab navigation: ISO Audits | Quality Audits (AI) -->
+        <!-- Sub-tab navigation: Internal Audits Dashboard | Internal Audits -->
         <div class="border-b border-gray-200 mb-6">
             <nav class="-mb-px flex gap-6" role="tablist" aria-label="Internal Audits tabs">
                 <button id="tab-iso" data-testid="tab-iso-audits" role="tab" aria-selected="true"
                         class="py-3 px-1 border-b-2 border-purple-700 text-purple-700 font-semibold text-sm">
-                    ISO Audits
+                    Internal Audits Dashboard
                 </button>
                 <button id="tab-quality" data-testid="tab-quality-audits" role="tab" aria-selected="false"
                         class="py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm flex items-center gap-2">
-                    Quality Audits
+                    Internal Audits
                     <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800">AI</span>
                 </button>
             </nav>
