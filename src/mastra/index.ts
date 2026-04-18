@@ -1262,7 +1262,7 @@ export const mastra = new Mastra({
                 "\u0631\u064A\u0627\u0646 \u0627\u0644\u0633\u0645\u0627\u0643": { team: "SDR", status: "Inactive" },
                 "\u0634\u0647\u062F \u0627\u0644\u0632\u064A\u062F": { team: "SDR", status: "Inactive" },
                 "\u0635\u0627\u0644\u062D \u0627\u0644\u062D\u0645\u062F\u0651\u064A": { team: "CS", status: "Active" },
-                "\u0639\u0628\u062F\u0627\u0644\u0645\u062C\u064A\u062F \u0627\u0644\u0634\u0628\u064A\u0644\u064A": { team: "", status: "Inactive" },
+                "\u0639\u0628\u062F\u0627\u0644\u0645\u062C\u064A\u062F \u0627\u0644\u0634\u0628\u064A\u0644\u064A": { team: "WP Sales", status: "Inactive" },
                 "\u0641\u0627\u064A\u0632 \u0627\u0644\u0623\u0633\u0645\u0631\u064A": { team: "WP Sales", status: "Active" },
                 "\u0641\u0627\u064A\u0632\u0629 \u0627\u0644\u0639\u062A\u064A\u0628\u064A": { team: "SDR", status: "Active" },
                 "\u0646\u0648\u0641 \u0627\u0644\u0639\u0627\u0635\u0645\u064A": { team: "SDR", status: "Inactive" },
@@ -1317,6 +1317,12 @@ export const mastra = new Mastra({
                 "Muhammad Ghanem": "Mohammed Ghanem",
                 "M Ghanem": "Mohammed Ghanem",
                 "Ghanem": "Mohammed Ghanem",
+                "Abdulmajed Alshabili": "Abdulmajeed Alshabili",
+                "Abdulmajid Alshabili": "Abdulmajeed Alshabili",
+                "Abdul Majeed Alshabili": "Abdulmajeed Alshabili",
+                "Abdulmajeed Al Shabili": "Abdulmajeed Alshabili",
+                "Alshabili": "Abdulmajeed Alshabili",
+                "\u0639\u0628\u062F\u0627\u0644\u0645\u062C\u064A\u062F \u0627\u0644\u0634\u0628\u064A\u0644\u064A": "Abdulmajeed Alshabili",
               };
 
               // Normalized override map: lowercase + collapsed whitespace.
