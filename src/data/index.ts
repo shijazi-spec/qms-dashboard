@@ -519,3 +519,9 @@ export async function deleteDeal(id: string): Promise<boolean> {
   await deleteZohoRecord('Deals', id);
   return true;
 }
+
+export type DataMode = 'REAL' | 'MOCK';
+
+export function getDataMode(): DataMode {
+  return (process.env.DATA_MODE || '').toUpperCase() === 'MOCK' ? 'MOCK' : 'REAL';
+}
