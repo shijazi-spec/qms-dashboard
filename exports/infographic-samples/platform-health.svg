@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1500" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="c1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#047857"/></linearGradient><linearGradient id="c2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#1d4ed8"/></linearGradient><linearGradient id="c3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6d28d9"/></linearGradient><linearGradient id="c4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient><linearGradient id="c5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ec4899"/><stop offset="100%" stop-color="#be185d"/></linearGradient><linearGradient id="c6" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#0e7490"/></linearGradient><linearGradient id="c7" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#84cc16"/><stop offset="100%" stop-color="#4d7c0f"/></linearGradient><linearGradient id="c8" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#c2410c"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/></filter>
+  </defs>
+
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+
+  <text x="600" y="80" text-anchor="middle" font-size="44" font-weight="800" fill="#ffffff" letter-spacing="-1">WalaPlus Platform Health</text>
+  <text x="600" y="120" text-anchor="middle" font-size="18" fill="#94a3b8" font-weight="500">Enterprise GRC &amp; Quality Platform · 2026-04-18 16:52 UTC</text>
+
+  <rect x="120" y="160" width="960" height="120" rx="16" fill="url(#hero)" filter="url(#shadow)"/>
+  <circle cx="200" cy="220" r="32" fill="#ffffff" opacity="0.2"/>
+  <path d="M 184 220 L 196 232 L 220 208" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="260" y="210" font-size="32" font-weight="800" fill="#ffffff">ALL SYSTEMS HEALTHY</text>
+  <text x="260" y="250" font-size="16" fill="#ffffff" opacity="0.85" font-weight="500">0 failed checks · all critical paths monitored</text>
+  <text x="980" y="200" text-anchor="end" font-size="14" fill="#ffffff" opacity="0.9" font-weight="600">CHECKS</text>
+  <text x="980" y="240" text-anchor="end" font-size="36" font-weight="800" fill="#ffffff">0/10</text>
+  <text x="980" y="262" text-anchor="end" font-size="12" fill="#ffffff" opacity="0.85">pass</text>
+
+  <text x="120" y="340" font-size="20" font-weight="700" fill="#e2e8f0" letter-spacing="2">KEY METRICS</text>
+  <line x1="120" y1="350" x2="1080" y2="350" stroke="#334155" stroke-width="1"/>
+  
+  <g filter="url(#shadow)">
+    <rect x="120" y="380" width="220" height="220" rx="14" fill="url(#c1)"/>
+    <text x="142" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">PULSE MONITOR</text>
+    <text x="142" y="500" font-size="64" font-weight="800" fill="#ffffff">0/10</text>
+    <text x="142" y="540" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">SYNTHETIC CHECKS</text>
+    <text x="142" y="565" font-size="11" fill="#ffffff" opacity="0.78">DB · audits · duplicates</text>
+    <text x="142" y="582" font-size="11" fill="#ffffff" opacity="0.78">KPIs · HITL · endpoints</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="364" y="380" width="220" height="220" rx="14" fill="url(#c2)"/>
+    <text x="386" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">DASHBOARDS</text>
+    <text x="386" y="500" font-size="64" font-weight="800" fill="#ffffff">23/23</text>
+    <text x="386" y="540" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">UI ROUTES HEALTHY</text>
+    <text x="386" y="565" font-size="11" fill="#ffffff" opacity="0.78">audits · risks · KPIs · QMS</text>
+    <text x="386" y="582" font-size="11" fill="#ffffff" opacity="0.78">GRC · vendors · training</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="608" y="380" width="220" height="220" rx="14" fill="url(#c3)"/>
+    <text x="630" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">XLSX EXPORTS</text>
+    <text x="630" y="500" font-size="64" font-weight="800" fill="#ffffff">8/8</text>
+    <text x="630" y="540" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">NATIVE SPREADSHEETS</text>
+    <text x="630" y="565" font-size="11" fill="#ffffff" opacity="0.78">audits · KPIs · NC · CAPA</text>
+    <text x="630" y="582" font-size="11" fill="#ffffff" opacity="0.78">vendors · risks · duplicates</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="852" y="380" width="220" height="220" rx="14" fill="url(#c4)"/>
+    <text x="874" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">RBAC GATES</text>
+    <text x="874" y="500" font-size="64" font-weight="800" fill="#ffffff">4/4</text>
+    <text x="874" y="540" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">ADMIN-ONLY</text>
+    <text x="874" y="565" font-size="11" fill="#ffffff" opacity="0.78">401 without key · 200 with</text>
+    <text x="874" y="582" font-size="11" fill="#ffffff" opacity="0.78">NC · CAPA · vendors · risks</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="120" y="624" width="220" height="220" rx="14" fill="url(#c5)"/>
+    <text x="142" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">ERROR LOG</text>
+    <text x="142" y="744" font-size="64" font-weight="800" fill="#ffffff">0</text>
+    <text x="142" y="784" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">NO ERRORS</text>
+    <text x="142" y="809" font-size="11" fill="#ffffff" opacity="0.78">clean error stream</text>
+    <text x="142" y="826" font-size="11" fill="#ffffff" opacity="0.78"></text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="364" y="624" width="220" height="220" rx="14" fill="url(#c6)"/>
+    <text x="386" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">AUDITS LIVE</text>
+    <text x="386" y="744" font-size="64" font-weight="800" fill="#ffffff">5</text>
+    <text x="386" y="784" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">TRACKED IN SYSTEM</text>
+    <text x="386" y="809" font-size="11" fill="#ffffff" opacity="0.78">planned + in-progress + closed</text>
+    <text x="386" y="826" font-size="11" fill="#ffffff" opacity="0.78"></text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="608" y="624" width="220" height="220" rx="14" fill="url(#c7)"/>
+    <text x="630" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">GOVERNANCE</text>
+    <text x="630" y="744" font-size="64" font-weight="800" fill="#ffffff">147</text>
+    <text x="630" y="784" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">CONTROLLED DOCS</text>
+    <text x="630" y="809" font-size="11" fill="#ffffff" opacity="0.78">policies + SOPs</text>
+    <text x="630" y="826" font-size="11" fill="#ffffff" opacity="0.78">260 AI consultant alerts</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="852" y="624" width="220" height="220" rx="14" fill="url(#c8)"/>
+    <text x="874" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.92">DATA QUALITY</text>
+    <text x="874" y="744" font-size="48" font-weight="800" fill="#ffffff">22,271</text>
+    <text x="874" y="784" font-size="12" fill="#ffffff" opacity="0.85" font-weight="600">DUPLICATE CLUSTERS</text>
+    <text x="874" y="809" font-size="11" fill="#ffffff" opacity="0.78">detected across CRM</text>
+    <text x="874" y="826" font-size="11" fill="#ffffff" opacity="0.78">leads · deals · contacts · accounts</text>
+  </g>
+
+  <text x="120" y="910" font-size="20" font-weight="700" fill="#e2e8f0" letter-spacing="2">DATA SCALE</text>
+  <line x1="120" y1="920" x2="1080" y2="920" stroke="#334155" stroke-width="1"/>
+  
+  <g filter="url(#shadow)">
+    <rect x="120" y="950" width="305" height="130" rx="12" fill="#1e293b" stroke="#334155"/>
+    <text x="140" y="985" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="1">DUPLICATE CLUSTERS</text>
+    <text x="140" y="1040" font-size="42" font-weight="800" fill="#22d3ee">22,271</text>
+    <text x="140" y="1062" font-size="11" fill="#64748b">detected across CRM</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="447" y="950" width="305" height="130" rx="12" fill="#1e293b" stroke="#334155"/>
+    <text x="467" y="985" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="1">CONTROLLED DOCUMENTS</text>
+    <text x="467" y="1040" font-size="42" font-weight="800" fill="#a78bfa">147</text>
+    <text x="467" y="1062" font-size="11" fill="#64748b">policies + SOPs</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="774" y="950" width="305" height="130" rx="12" fill="#1e293b" stroke="#334155"/>
+    <text x="794" y="985" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="1">AI CONSULTANT ALERTS</text>
+    <text x="794" y="1040" font-size="42" font-weight="800" fill="#fb7185">260</text>
+    <text x="794" y="1062" font-size="11" fill="#64748b">tracked with HITL approval</text>
+  </g>
+
+  
+  <text x="120" y="1130" font-size="20" font-weight="700" fill="#e2e8f0" letter-spacing="2">STATUS BREAKDOWN</text>
+  <line x1="120" y1="1140" x2="1080" y2="1140" stroke="#334155" stroke-width="1"/>
+  
+    <g transform="translate(120, 1170)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 1</text>
+    </g>
+    <g transform="translate(315, 1170)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 2</text>
+    </g>
+    <g transform="translate(510, 1170)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 3</text>
+    </g>
+    <g transform="translate(705, 1170)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 4</text>
+    </g>
+    <g transform="translate(900, 1170)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 5</text>
+    </g>
+    <g transform="translate(120, 1225)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 6</text>
+    </g>
+    <g transform="translate(315, 1225)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 7</text>
+    </g>
+    <g transform="translate(510, 1225)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 8</text>
+    </g>
+    <g transform="translate(705, 1225)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 9</text>
+    </g>
+    <g transform="translate(900, 1225)">
+      <rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/>
+      <circle cx="20" cy="20" r="6" fill="#10b981"/>
+      <text x="36" y="25" font-size="12" font-weight="600" fill="#d1fae5">Check 10</text>
+    </g>
+
+  <line x1="120" y1="1340" x2="1080" y2="1340" stroke="#334155" stroke-width="1"/>
+  <text x="120" y="1380" font-size="14" font-weight="600" fill="#94a3b8">Source: Pulse synthetic monitor + database scan</text>
+  <text x="120" y="1404" font-size="12" fill="#64748b">7 native XLSX endpoints · 4 admin-gated · live data feeds</text>
+  <text x="120" y="1424" font-size="12" fill="#64748b">Verified across 32 dashboards · ready to deploy</text>
+  <text x="1080" y="1404" text-anchor="end" font-size="14" font-weight="700" fill="#10b981">READY TO DEPLOY</text>
+  <text x="1080" y="1424" text-anchor="end" font-size="11" fill="#64748b">all signals green</text>
+</svg>
