@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WalaPlus — External Audits</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/navigation.css">
+  <style>
+    html, body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+    .kind-regulatory      { background:#DBEAFE; color:#1E40AF; }
+    .kind-certification   { background:#D1FAE5; color:#065F46; }
+    .kind-surveillance    { background:#FEF3C7; color:#92400E; }
+    .kind-recertification { background:#E0E7FF; color:#3730A3; }
+    .kind-customer        { background:#FCE7F3; color:#9F1239; }
+    .kind-other           { background:#E5E7EB; color:#374151; }
+    .status-scheduled    { background:#DBEAFE; color:#1E40AF; }
+    .status-preparation  { background:#FEF3C7; color:#92400E; }
+    .status-in_progress  { background:#FFEDD5; color:#9A3412; }
+    .status-closed       { background:#D1FAE5; color:#065F46; }
+    .status-cancelled    { background:#FEE2E2; color:#991B1B; }
+    .cert-active  { background:#D1FAE5; color:#065F46; }
+    .cert-expired { background:#FEE2E2; color:#991B1B; }
+    .cert-suspended { background:#FEF3C7; color:#92400E; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="walaplus-nav"></div>
+  <script src="/js/navigation.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      WalaPlusNav.init('external-audits');
+    });
+  </script>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="mb-6 flex items-start justify-between flex-wrap gap-3">
+      <div>
+        <div class="text-xs text-gray-400 mb-1">
+          <a href="/grc" class="hover:underline">GRC</a>
+          <span class="mx-1">/</span>
+          <span class="text-gray-600">External Audits</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">External Audits</h1>
+        <p class="text-sm text-gray-500 mt-1 max-w-3xl">
+          Regulatory, certification, surveillance, recertification, and customer
+          audits — plus the certificate register and readiness checklists used
+          to prepare each one. Ref:
+          <a href="/policies" class="text-purple-700 hover:underline">WP-SOP-042</a>.
+        </p>
+      </div>
+      <button onclick="openNewExternalModal()"
+              class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 font-medium">
+        + New External Audit
+      </button>
+    </div>
+
+    <!-- ============================== SUMMARY CARDS =========================== -->
+    <div id="summaryCards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs text-gray-500 uppercase">Upcoming</div>
+        <div id="sumUpcoming" class="text-2xl font-bold text-blue-600">—</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs text-gray-500 uppercase">In Progress</div>
+        <div id="sumInProgress" class="text-2xl font-bold text-amber-600">—</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs text-gray-500 uppercase">Active Certificates</div>
+        <div id="sumCertsActive" class="text-2xl font-bold text-green-600">—</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+        <div class="text-xs text-gray-500 uppercase">Expiring ≤ 90d</div>
+        <div id="sumCertsExpiring" class="text-2xl font-bold text-red-600">—</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500 col-span-2 md:col-span-1">
+        <div class="text-xs text-gray-500 uppercase">Next Audit</div>
+        <div id="sumNextAudit" class="text-sm font-semibold text-gray-900 mt-1">—</div>
+      </div>
+    </div>
+
+    <!-- ============================== TABS =================================== -->
+    <div class="flex gap-2 border-b border-gray-200 mb-4">
+      <button onclick="switchTab('calendar')" id="tab-calendar"
+              class="tab-btn px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 border-purple-600 text-purple-700">
+        Calendar / Audits
+      </button>
+      <button onclick="switchTab('certs')" id="tab-certs"
+              class="tab-btn px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-600 hover:text-gray-900">
+        Certificate Register
+      </button>
+      <button onclick="switchTab('readiness')" id="tab-readiness"
+              class="tab-btn px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-600 hover:text-gray-900">
+        Readiness Checklist
+      </button>
+    </div>
+
+    <!-- ============================== CALENDAR TAB =========================== -->
+    <div id="pane-calendar" class="tab-pane bg-white rounded-lg shadow">
+      <div class="p-4 border-b border-gray-200 flex items-center gap-2 flex-wrap">
+        <select id="filterKind" onchange="loadAudits()"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">All kinds</option>
+          <option value="regulatory">Regulatory</option>
+          <option value="certification">Certification</option>
+          <option value="surveillance">Surveillance</option>
+          <option value="recertification">Recertification</option>
+          <option value="customer">Customer</option>
+          <option value="other">Other</option>
+        </select>
+        <select id="filterStatus" onchange="loadAudits()"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">All statuses</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="preparation">Preparation</option>
+          <option value="in_progress">In Progress</option>
+          <option value="closed">Closed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Code</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Title</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Kind</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Standard / Body</th>
+              <th class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase">Planned</th>
+              <th class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="auditsTbody" class="divide-y divide-gray-100">
+            <tr><td colspan="7" class="text-center text-gray-400 py-8">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================== CERTIFICATES TAB ======================= -->
+    <div id="pane-certs" class="tab-pane hidden bg-white rounded-lg shadow">
+      <div class="p-4 border-b border-gray-200 flex justify-between items-center flex-wrap gap-2">
+        <h2 class="font-semibold text-gray-900">Certificate Register</h2>
+        <button onclick="openNewCertModal()"
+                class="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">
+          + Register Certificate
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Cert #</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Standard</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Certification Body</th>
+              <th class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase">Issued</th>
+              <th class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase">Expires</th>
+              <th class="px-4 py-2 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody id="certsTbody" class="divide-y divide-gray-100">
+            <tr><td colspan="6" class="text-center text-gray-400 py-8">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================== READINESS TAB ========================== -->
+    <div id="pane-readiness" class="tab-pane hidden bg-white rounded-lg shadow">
+      <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+        <h2 class="font-semibold text-gray-900">Readiness Checklist</h2>
+        <select id="readinessAuditSelector" onchange="loadReadiness()"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">— Select an audit —</option>
+        </select>
+      </div>
+      <div id="readinessBody" class="p-4">
+        <p class="text-sm text-gray-500">Pick an audit above to see its readiness items. (WP-FORM-057)</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- =========================== NEW AUDIT MODAL ============================= -->
+  <div id="newExternalModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center"
+       style="display:none;">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-lg font-bold text-gray-900">New External Audit</h3>
+        <button onclick="closeModal('newExternalModal')" class="text-gray-400 hover:text-gray-600">&times;</button>
+      </div>
+      <form onsubmit="submitNewExternal(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div class="md:col-span-2">
+          <label class="block font-medium text-gray-700">Title *</label>
+          <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Kind *</label>
+          <select name="kind" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            <option value="certification">Certification</option>
+            <option value="surveillance">Surveillance</option>
+            <option value="recertification">Recertification</option>
+            <option value="regulatory">Regulatory</option>
+            <option value="customer">Customer</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Standard</label>
+          <input name="standard" placeholder="ISO/IEC 27001:2022" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Certification Body</label>
+          <input name="certification_body" placeholder="BSI, DNV, SGS, TÜV..." class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Auditor</label>
+          <input name="auditor_name" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Planned Start</label>
+          <input name="planned_start" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Planned End</label>
+          <input name="planned_end" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block font-medium text-gray-700">Scope</label>
+          <textarea name="scope_summary" rows="2" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+        </div>
+        <div class="md:col-span-2 flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('newExternalModal')"
+                  class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================== NEW CERT MODAL ============================== -->
+  <div id="newCertModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center"
+       style="display:none;">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-lg font-bold text-gray-900">Register Certificate</h3>
+        <button onclick="closeModal('newCertModal')" class="text-gray-400 hover:text-gray-600">&times;</button>
+      </div>
+      <form onsubmit="submitNewCert(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div>
+          <label class="block font-medium text-gray-700">Audit *</label>
+          <select name="external_audit_id" id="certAuditSelector" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Cert # *</label>
+          <input name="certificate_number" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Standard *</label>
+          <input name="standard" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Certification Body *</label>
+          <input name="certification_body" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Issued</label>
+          <input name="issue_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Expires</label>
+          <input name="expiry_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div class="md:col-span-2 flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('newCertModal')"
+                  class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Register</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+
+    function switchTab(name) {
+      ['calendar','certs','readiness'].forEach(t => {
+        document.getElementById('pane-' + t).classList.toggle('hidden', t !== name);
+        const btn = document.getElementById('tab-' + t);
+        if (t === name) {
+          btn.classList.add('border-purple-600','text-purple-700');
+          btn.classList.remove('border-transparent','text-gray-600');
+        } else {
+          btn.classList.remove('border-purple-600','text-purple-700');
+          btn.classList.add('border-transparent','text-gray-600');
+        }
+      });
+      if (name === 'certs') loadCertificates();
+      if (name === 'readiness') {
+        populateReadinessSelector();
+      }
+    }
+
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      if (m) { m.classList.add('hidden'); m.style.display = 'none'; }
+    }
+    function openModal(id) {
+      const m = document.getElementById(id);
+      if (m) { m.classList.remove('hidden'); m.style.display = 'flex'; }
+    }
+
+    async function loadSummary() {
+      try {
+        const res = await fetch('/api/external-audits/summary', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const d = await res.json();
+        document.getElementById('sumUpcoming').textContent      = d.upcoming ?? 0;
+        document.getElementById('sumInProgress').textContent    = d.in_progress ?? 0;
+        document.getElementById('sumCertsActive').textContent   = d.certs_active ?? 0;
+        document.getElementById('sumCertsExpiring').textContent = d.certs_expiring_90d ?? 0;
+        document.getElementById('sumNextAudit').textContent = d.next_audit
+          ? d.next_audit.title + ' · ' + (d.next_audit.planned_start ? new Date(d.next_audit.planned_start).toLocaleDateString() : 'TBD')
+          : 'None scheduled';
+      } catch (_) {}
+    }
+
+    async function loadAudits() {
+      const kind   = document.getElementById('filterKind').value;
+      const status = document.getElementById('filterStatus').value;
+      const qs = new URLSearchParams();
+      if (kind)   qs.set('kind', kind);
+      if (status) qs.set('status', status);
+      const tbody = document.getElementById('auditsTbody');
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">Loading...</td></tr>';
+      try {
+        const res = await fetch('/api/external-audits?' + qs.toString(), { credentials: 'same-origin' });
+        const data = await res.json();
+        const rows = data.rows || [];
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No external audits.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 font-mono text-xs">${esc(r.audit_code)}</td>
+            <td class="px-4 py-2">${esc(r.title)}</td>
+            <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs font-medium kind-${esc(r.kind)}">${esc(r.kind)}</span></td>
+            <td class="px-4 py-2 text-xs">${esc(r.standard || '')}${r.certification_body ? ' <span class="text-gray-400">·</span> ' + esc(r.certification_body) : ''}</td>
+            <td class="px-4 py-2 text-center text-xs">${r.planned_start ? new Date(r.planned_start).toLocaleDateString() : '—'}</td>
+            <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium status-${esc(r.status)}">${esc(r.status)}</span></td>
+            <td class="px-4 py-2 text-right">
+              <button onclick="openAudit(${r.id})" class="text-purple-700 hover:text-purple-900 text-sm">Open &rarr;</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-8">Failed to load.</td></tr>';
+      }
+    }
+
+    async function openAudit(id) {
+      // Minimal for P0 — open readiness view for this audit
+      switchTab('readiness');
+      const sel = document.getElementById('readinessAuditSelector');
+      sel.value = String(id);
+      loadReadiness();
+    }
+
+    async function loadCertificates() {
+      const tbody = document.getElementById('certsTbody');
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Loading...</td></tr>';
+      try {
+        const res = await fetch('/api/external-audits/certificates', { credentials: 'same-origin' });
+        const data = await res.json();
+        const rows = data.rows || [];
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No certificates registered.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 font-mono text-xs">${esc(r.certificate_number)}</td>
+            <td class="px-4 py-2">${esc(r.standard)}</td>
+            <td class="px-4 py-2">${esc(r.certification_body)}</td>
+            <td class="px-4 py-2 text-center text-xs">${r.issue_date ? new Date(r.issue_date).toLocaleDateString() : '—'}</td>
+            <td class="px-4 py-2 text-center text-xs ${r.expiry_date && new Date(r.expiry_date) < new Date() ? 'text-red-600 font-semibold' : ''}">${r.expiry_date ? new Date(r.expiry_date).toLocaleDateString() : '—'}</td>
+            <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium cert-${esc(r.status)}">${esc(r.status)}</span></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-red-500 py-8">Failed to load.</td></tr>';
+      }
+    }
+
+    async function populateReadinessSelector() {
+      const sel = document.getElementById('readinessAuditSelector');
+      const certSel = document.getElementById('certAuditSelector');
+      try {
+        const res = await fetch('/api/external-audits', { credentials: 'same-origin' });
+        const data = await res.json();
+        const rows = data.rows || [];
+        const opts = rows.map(r => `<option value="${r.id}">${esc(r.audit_code)} — ${esc(r.title)}</option>`).join('');
+        sel.innerHTML    = '<option value="">— Select an audit —</option>' + opts;
+        if (certSel) certSel.innerHTML = '<option value="">— Select an audit —</option>' + opts;
+      } catch (_) {}
+    }
+
+    async function loadReadiness() {
+      const id = document.getElementById('readinessAuditSelector').value;
+      const body = document.getElementById('readinessBody');
+      if (!id) {
+        body.innerHTML = '<p class="text-sm text-gray-500">Pick an audit above to see its readiness items.</p>';
+        return;
+      }
+      body.innerHTML = '<p class="text-center text-gray-400 py-8">Loading readiness...</p>';
+      try {
+        const res = await fetch('/api/external-audits/' + id, { credentials: 'same-origin' });
+        const data = await res.json();
+        const checklist = data.checklist || [];
+        const newItemForm = `
+          <form onsubmit="addChecklistItem(event, ${id})" class="flex gap-2 mb-4 text-sm flex-wrap">
+            <input name="requirement" placeholder="New readiness item (e.g. 'Evidence pack for A.5.1 — Information Security Policy')"
+                   required class="flex-1 min-w-[300px] border border-gray-300 rounded-lg px-3 py-2">
+            <select name="category" class="border border-gray-300 rounded-lg px-3 py-2">
+              <option value="evidence">Evidence</option>
+              <option value="policy">Policy</option>
+              <option value="training">Training</option>
+              <option value="technical">Technical</option>
+              <option value="other">Other</option>
+            </select>
+            <button type="submit" class="px-3 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Add</button>
+          </form>
+        `;
+        if (!checklist.length) {
+          body.innerHTML = newItemForm +
+            '<p class="text-sm text-gray-500 text-center py-6">No readiness items yet. Add the first one above.</p>';
+          return;
+        }
+        const done    = checklist.filter(i => i.status === 'done').length;
+        const total   = checklist.length;
+        const percent = total ? Math.round((done / total) * 100) : 0;
+        body.innerHTML =
+          newItemForm +
+          `<div class="mb-3 text-sm text-gray-700">Progress: <strong>${done}/${total}</strong> (${percent}%)</div>
+           <div class="h-2 bg-gray-200 rounded-full mb-4"><div class="h-2 bg-green-500 rounded-full" style="width:${percent}%"></div></div>
+           <div class="divide-y divide-gray-100">
+             ${checklist.map(i => `
+               <div class="py-2 flex items-center justify-between gap-2">
+                 <div class="flex-1">
+                   <div class="text-sm text-gray-900 ${i.status === 'done' ? 'line-through text-gray-400' : ''}">${esc(i.requirement)}</div>
+                   <div class="text-xs text-gray-500">${esc(i.category || '')}${i.owner_email ? ' · ' + esc(i.owner_email) : ''}</div>
+                 </div>
+                 <select onchange="updateChecklistItem(${i.id}, this.value, ${id})"
+                         class="border border-gray-300 rounded px-2 py-1 text-xs">
+                   <option value="open"        ${i.status === 'open' ? 'selected' : ''}>Open</option>
+                   <option value="in_progress" ${i.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                   <option value="done"        ${i.status === 'done' ? 'selected' : ''}>Done</option>
+                   <option value="waived"      ${i.status === 'waived' ? 'selected' : ''}>Waived</option>
+                 </select>
+               </div>
+             `).join('')}
+           </div>`;
+      } catch (err) {
+        body.innerHTML = '<p class="text-red-500 text-center py-6">Failed to load readiness.</p>';
+      }
+    }
+
+    async function addChecklistItem(ev, auditId) {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const res = await fetch('/api/external-audits/' + auditId + '/checklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          requirement: fd.get('requirement'),
+          category: fd.get('category'),
+        }),
+      });
+      if (res.ok) {
+        ev.target.reset();
+        loadReadiness();
+      } else {
+        alert('Failed to add item');
+      }
+    }
+
+    async function updateChecklistItem(itemId, status, auditId) {
+      const res = await fetch('/api/external-audits/checklist/' + itemId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        loadReadiness();
+      } else {
+        alert('Failed to update item');
+      }
+    }
+
+    function openNewExternalModal() {
+      openModal('newExternalModal');
+    }
+
+    async function submitNewExternal(ev) {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const payload = Object.fromEntries(fd.entries());
+      for (const k of Object.keys(payload)) if (payload[k] === '') payload[k] = null;
+      const res = await fetch('/api/external-audits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        ev.target.reset();
+        closeModal('newExternalModal');
+        await Promise.all([loadSummary(), loadAudits(), populateReadinessSelector()]);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Failed: ' + (err.error || res.statusText));
+      }
+    }
+
+    async function openNewCertModal() {
+      await populateReadinessSelector();
+      openModal('newCertModal');
+    }
+
+    async function submitNewCert(ev) {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const payload = Object.fromEntries(fd.entries());
+      for (const k of Object.keys(payload)) if (payload[k] === '') payload[k] = null;
+      const auditId = payload.external_audit_id;
+      if (!auditId) { alert('Pick an audit first'); return; }
+      const res = await fetch('/api/external-audits/' + auditId + '/certificates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        ev.target.reset();
+        closeModal('newCertModal');
+        loadCertificates();
+        loadSummary();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Failed: ' + (err.error || res.statusText));
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSummary();
+      loadAudits();
+      populateReadinessSelector();
+    });
+  </script>
+</body>
+</html>

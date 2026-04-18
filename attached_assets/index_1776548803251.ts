@@ -3758,6 +3758,10 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   );
 }
 
-/*  Sanity check 2: WalaPlus runs 2 agents (qualitySpecialistAgent + qmsConsultantAgent) by design.
-    The Mastra UI single-agent assumption does not apply here — agents are invoked via REST routes,
-    not the playground UI. Guard intentionally disabled. */
+/*  Sanity check 2: Throw an error if there are more than 1 agents.  */
+// !!!!!! Do not remove this check. !!!!!!
+if (Object.keys(mastra.getAgents()).length > 1) {
+  throw new Error(
+    "More than 1 agents found. Currently, more than 1 agents are not supported in the UI, since doing so will cause app state to be inconsistent.",
+  );
+}
