@@ -43,6 +43,25 @@ import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
 import { healthPulseRoutes } from "./routes/healthPulseRoutes";
+// FIX: tablef_* tables were referenced by inline /api/tablef/* routes below
+// but never created — every request returned 500. Fire schema init at module
+// load. Idempotent (CREATE TABLE IF NOT EXISTS).
+import { initTableFTables } from "./routes/tablefRoutes";
+initTableFTables().catch((err) => console.error('[TableF] init failed:', err));
+
+// FIX: pre-warm /api/agents/performance ~20s after boot so the first user
+// request after a restart hits a populated cache instead of paginating ~30k
+// Zoho records inline (which used to time out at >15s).
+setTimeout(() => {
+  const baseUrl = process.env.SELF_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+  const adminKey = process.env.ADMIN_API_KEY || 'WalaPlus-QMS-Admin-2026';
+  console.log('🔥 [PreWarm] Warming /api/agents/performance cache...');
+  fetch(`${baseUrl}/api/agents/performance`, {
+    headers: { 'X-Admin-Key': adminKey, 'X-PreWarm': '1' },
+    signal: AbortSignal.timeout(180_000),
+  }).then((r) => console.log(`🔥 [PreWarm] Warmup HTTP ${r.status}`))
+    .catch((e) => console.warn('🔥 [PreWarm] Warmup failed:', String(e)));
+}, 20_000);
 import { consultantRoutes } from "./routes/consultantRoutes";
 import { aiApprovalRoutes } from "./routes/aiApprovalRoutes";
 import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
@@ -844,9 +863,16 @@ export const mastra = new Mastra({
         method: "GET",
         createHandler: async () => {
           const { getLeadsWithSeparateFilters, getDealsWithSeparateFilters, getUsers } = await import("../data");
+          // FIX: stale-while-revalidate cache. Cold cache previously blocked
+          // for 30-60s while paginating ~30k Zoho records. Now stale data is
+          // returned immediately and a background refresh repopulates the
+          // cache. Combined with the startup pre-warm below, the user-facing
+          // path should never see a >1s response after the first warm.
           let cachedResult: any = null;
           let cacheTime = 0;
-          const CACHE_TTL_MS = 10 * 60 * 1000;
+          let inFlightRefresh: Promise<any> | null = null;
+          const CACHE_FRESH_MS = 10 * 60 * 1000;        // serve without refresh
+          const CACHE_HARD_MAX_MS = 6 * 60 * 60 * 1000; // beyond this, force fresh fetch
           return async (c: any) => {
             try {
               // Parse separate date filters from query params
@@ -891,10 +917,35 @@ export const mastra = new Mastra({
               }
               
               const hasDateFilters = !!(createdStart || createdEnd || modifiedStart || modifiedEnd);
+              // Bypass cache entirely for the internal SWR refresh — otherwise
+              // it would just see stale cache, return it, and never repopulate.
+              const isSwrRefresh = c.req.query('_swr') === '1' || c.req.header('X-SWR-Refresh') === '1';
               const cacheKey = hasDateFilters ? null : 'default';
-              if (cacheKey && cachedResult && (Date.now() - cacheTime) < CACHE_TTL_MS) {
-                console.log('📊 [API] Returning cached agent performance data');
-                return c.json(cachedResult);
+              if (cacheKey && cachedResult && !isSwrRefresh) {
+                const age = Date.now() - cacheTime;
+                if (age < CACHE_FRESH_MS) {
+                  console.log('📊 [API] Returning fresh cached agent performance data');
+                  return c.json(cachedResult);
+                }
+                if (age < CACHE_HARD_MAX_MS) {
+                  // Stale: serve immediately, refresh in background.
+                  console.log(`📊 [API] Returning stale cache (age=${Math.round(age/1000)}s); kicking off background refresh`);
+                  if (!inFlightRefresh) {
+                    const refreshUrl = new URL(c.req.url);
+                    inFlightRefresh = (async () => {
+                      try {
+                        const adminKey = process.env.ADMIN_API_KEY || 'WalaPlus-QMS-Admin-2026';
+                        await fetch(refreshUrl.toString() + (refreshUrl.search ? '&' : '?') + '_swr=1', {
+                          headers: { 'X-Admin-Key': adminKey, 'X-SWR-Refresh': '1' },
+                          signal: AbortSignal.timeout(120_000),
+                        });
+                      } catch (e) {
+                        console.warn('📊 [API] Background SWR refresh failed:', e);
+                      } finally { inFlightRefresh = null; }
+                    })();
+                  }
+                  return c.json(cachedResult);
+                }
               }
 
               console.log('📊 [API] Fetching agent performance from CRM Lead Owners...');
@@ -1041,29 +1092,44 @@ export const mastra = new Mastra({
                 "\u0647\u0627\u062C\u0631 \u0627\u0644\u062D\u0628\u0631\u062F\u064A": { team: "SDR", status: "Active" },
               };
 
+              // FIX: previously this nested loop ran 3 modules × up to 50 pages
+              // sequentially (up to 150 sequential Zoho calls), which made cold-
+              // cache responses time out at >15s. Parallelize across modules and
+              // fetch pages in concurrent batches per module.
               const { fetchZohoRecords: fetchZohoForOwners } = await import("../utils/zohoCRM");
               const activeOwnerNames = new Set<string>();
               const activeOwnerIdSet = new Set<string>();
               const modulesToCheck = ['Contacts', 'Accounts', 'Deals'];
-              
-              for (const mod of modulesToCheck) {
-                for (let pg = 1; pg <= 50; pg++) {
-                  try {
-                    const recs = await fetchZohoForOwners(mod, { page: pg, perPage: 200, fields: ['Owner'] });
-                    if (!recs || recs.length === 0) break;
+              const MAX_PAGES = 50;
+              const PAGE_BATCH = 5; // 5 concurrent page fetches per module
+
+              const ownerStartedAt = Date.now();
+              await Promise.all(modulesToCheck.map(async (mod) => {
+                let stop = false;
+                for (let start = 1; start <= MAX_PAGES && !stop; start += PAGE_BATCH) {
+                  const batch = Array.from({ length: PAGE_BATCH }, (_, i) => start + i)
+                    .filter(p => p <= MAX_PAGES);
+                  const results = await Promise.all(batch.map(async (pg) => {
+                    try {
+                      return await fetchZohoForOwners(mod, { page: pg, perPage: 200, fields: ['Owner'] });
+                    } catch (e) {
+                      console.error(`⚠️ [API] Error fetching ${mod} page ${pg} for owner status:`, e);
+                      return null;
+                    }
+                  }));
+                  for (const recs of results) {
+                    if (!recs || recs.length === 0) { stop = true; continue; }
                     for (const r of recs) {
                       const ownerName = r.data?.Owner?.name || r.owner;
                       const ownerId = r.data?.Owner?.id;
                       if (ownerName) activeOwnerNames.add(ownerName);
                       if (ownerId) activeOwnerIdSet.add(ownerId);
                     }
-                    if (recs.length < 200) break;
-                  } catch (e) {
-                    console.error(`⚠️ [API] Error fetching ${mod} page ${pg} for owner status:`, e);
-                    break;
+                    if (recs.length < 200) stop = true;
                   }
                 }
-              }
+              }));
+              console.log(`👥 [API] Owner enumeration finished in ${Date.now() - ownerStartedAt}ms`);
               console.log(`👥 [API] Found ${activeOwnerNames.size} active owner names, ${Object.keys(userOverrides).length} manual overrides`);
               
               const ownerNameAliases: Record<string, string> = {

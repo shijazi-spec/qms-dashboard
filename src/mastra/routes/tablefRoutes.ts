@@ -5,8 +5,147 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+// FIX: tablef_* tables were referenced by every endpoint in this router but
+// never created — every request returned 500. This idempotent initializer
+// creates the schema on first request (lazy, memoized) and seeds default
+// departments. Safe to call repeatedly thanks to IF NOT EXISTS.
+let initPromise: Promise<void> | null = null;
+export async function initTableFTables(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    console.log('📊 [TableF] Initializing TableF schema...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tablef_departments (
+        department_id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tablef_kpis (
+        kpi_id VARCHAR(50) PRIMARY KEY,
+        department_id VARCHAR(50) REFERENCES tablef_departments(department_id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(100),
+        unit VARCHAR(50),
+        target_annual NUMERIC(12,2),
+        target_monthly NUMERIC(12,2),
+        weight NUMERIC(5,2) DEFAULT 1.0,
+        owner_email VARCHAR(255),
+        data_source VARCHAR(255),
+        calculation_definition TEXT,
+        enabled BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tablef_performance (
+        id SERIAL PRIMARY KEY,
+        kpi_id VARCHAR(50) REFERENCES tablef_kpis(kpi_id) ON DELETE CASCADE,
+        department_id VARCHAR(50),
+        period_month VARCHAR(10) NOT NULL,
+        target NUMERIC(12,2),
+        achieved NUMERIC(12,2),
+        variance NUMERIC(12,2),
+        variance_percent NUMERIC(8,2),
+        status VARCHAR(20),
+        trend VARCHAR(10),
+        comment TEXT,
+        evidence_link TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (kpi_id, period_month)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tablef_snapshots (
+        id SERIAL PRIMARY KEY,
+        department_id VARCHAR(50),
+        period VARCHAR(20) NOT NULL,
+        total_kpis INTEGER,
+        kpis_met INTEGER,
+        kpis_improving INTEGER,
+        kpis_not_met INTEGER,
+        percent_met NUMERIC(5,2),
+        percent_met_or_improving NUMERIC(5,2),
+        copc_status VARCHAR(20),
+        ai_risk_level VARCHAR(20),
+        calculated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (department_id, period)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tablef_users (
+        user_id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        role VARCHAR(100),
+        departments TEXT[] DEFAULT '{}',
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tablef_ai_insights (
+        id SERIAL PRIMARY KEY,
+        department_id VARCHAR(50),
+        kpi_id VARCHAR(50),
+        insight_type VARCHAR(50),
+        title VARCHAR(255),
+        body TEXT,
+        severity VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'ACTIVE',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    // Seed canonical departments once.
+    const c = await pool.query('SELECT COUNT(*)::int AS n FROM tablef_departments');
+    if (c.rows[0].n === 0) {
+      const seed = [
+        ['SDR', 'Sales Development', 'Lead qualification and outreach'],
+        ['WP_SALES', 'WalaPlus Sales', 'WP product line sales team'],
+        ['WO_SALES', 'WalaOnline Sales', 'WO product line sales team'],
+        ['MP', 'Marketplace', 'Marketplace partner ops'],
+        ['CS', 'Customer Success', 'Account management and renewals'],
+        ['MGMT', 'Management', 'Executive and management'],
+        ['MRK', 'Marketing', 'Marketing and demand generation'],
+        ['BD', 'Business Development', 'Strategic partnerships'],
+      ];
+      for (const [id, name, desc] of seed) {
+        await pool.query(
+          'INSERT INTO tablef_departments (department_id, name, description, active) VALUES ($1,$2,$3,true) ON CONFLICT (department_id) DO NOTHING',
+          [id, name, desc]
+        );
+      }
+      console.log(`🌱 [TableF] Seeded ${seed.length} default departments`);
+    }
+    console.log('✅ [TableF] Schema ready');
+  })().catch((err) => {
+    initPromise = null; // allow retry on next request
+    throw err;
+  });
+  return initPromise;
+}
+
 export function createTableFRoutes() {
   const app = new Hono();
+
+  // Ensure tables exist before any handler runs.
+  app.use('*', async (c, next) => {
+    try {
+      await initTableFTables();
+    } catch (err) {
+      console.error('[TableF] Schema init failed:', err);
+      return c.json({ error: 'TableF schema initialization failed' }, 500);
+    }
+    return next();
+  });
 
   app.get('/departments', async (c) => {
     try {
