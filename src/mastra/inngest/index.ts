@@ -328,7 +328,7 @@ inngestFunctions.push(duplicateSyncFunction);
 // until someone manually triggers an audit.
 const qualityAuditFunction = inngest.createFunction(
   { id: "quality-audit-auto-run" },
-  { cron: process.env.QUALITY_AUDIT_CRON || "0 */6 * * *" }, // every 6 hours
+  { cron: process.env.QUALITY_AUDIT_CRON || "0 6 * * 1" }, // weekly: Monday 06:00 UTC (09:00 Riyadh)
   async ({ step }) => {
     return await step.run("run-quality-audit", async () => {
       const { runDirectAudit } = await import("../../utils/directAuditRunner");

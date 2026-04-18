@@ -166,7 +166,7 @@ export async function hoursSinceLastQualityAudit(): Promise<number> {
  * Without this, Zoho data changes (merges, edits, completed records) only
  * appear on the dashboard when someone manually triggers an audit.
  */
-export async function runQualityAuditIfStale(maxAgeHours = 6): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+export async function runQualityAuditIfStale(maxAgeHours = 168): Promise<{ ran: boolean; ageHours: number; result?: any }> {
   const ageHours = await hoursSinceLastQualityAudit();
   if (ageHours < maxAgeHours) {
     return { ran: false, ageHours };

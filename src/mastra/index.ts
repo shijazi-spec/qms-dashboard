@@ -83,8 +83,8 @@ setTimeout(() => {
       if (dup.ran) console.log(`⏰ [Fallback] Duplicate scan executed (was ${dup.ageHours.toFixed(1)}h stale)`);
       const kpi = await runKPIAutoCalcIfStale(24);
       if (kpi.ran) console.log(`⏰ [Fallback] KPI auto-calc executed (recorded ${kpi.result?.calculated || 0})`);
-      const audit = await runQualityAuditIfStale(6);
-      if (audit.ran) console.log(`⏰ [Fallback] Quality audit executed (was ${audit.ageHours === Infinity ? 'never' : audit.ageHours.toFixed(1) + 'h'} stale)`);
+      const audit = await runQualityAuditIfStale(168); // 7 days
+      if (audit.ran) console.log(`⏰ [Fallback] Quality audit executed (was ${audit.ageHours === Infinity ? 'never' : audit.ageHours.toFixed(1) + 'h'} stale, weekly cadence)`);
       const scan = await runConsultantScannerIfStale(6);
       if (scan.ran) console.log(`⏰ [Fallback] AI Consultant scanner executed (was ${scan.ageHours === Infinity ? 'never' : scan.ageHours.toFixed(1) + 'h'} stale)`);
     } catch (err) {
