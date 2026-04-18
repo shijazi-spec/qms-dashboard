@@ -434,16 +434,31 @@ async function buildRisks(): Promise<InfographicData> {
 
   const lvl = (k: string) => byLevel.find((r: any) => String(r.level).toLowerCase() === k)?.n || 0;
 
+  const empty = total === 0;
+
   return {
     title: 'Risk Management',
-    subtitle: `Enterprise risk register and treatment posture · ${TS()}`,
+    subtitle: empty
+      ? `Enterprise risk register · awaiting first entry · ${TS()}`
+      : `Enterprise risk register and treatment posture · ${TS()}`,
     hero: {
-      status: total === 0 ? 'RISK REGISTER READY' : 'RISK REGISTER LIVE',
-      detail: `${nf(total)} enterprise risks tracked · ${nf(treatments)} treatment actions`,
+      status: empty ? 'NO RISKS LOGGED YET' : 'RISK REGISTER LIVE',
+      detail: empty
+        ? 'Open /risks → "Add Risk" to start tracking. Categories, heat-map and AI scanner are ready.'
+        : `${nf(total)} enterprise risks tracked · ${nf(treatments)} treatment actions`,
       sideLabel: 'TOTAL', sideValue: nf(total), sideHint: 'risks',
-      color: lvl('critical') > 0 ? 'red' : lvl('high') > 0 ? 'amber' : 'green',
+      color: empty ? 'amber' : (lvl('critical') > 0 ? 'red' : lvl('high') > 0 ? 'amber' : 'green'),
     },
-    cards: [
+    cards: empty ? [
+      { label: 'STATUS', big: '—', sub: 'NO RISKS YET', line1: 'register is empty', color: 'c1' },
+      { label: 'NEXT STEP', big: '+', sub: 'ADD A RISK', line1: 'open /risks → New', color: 'c2' },
+      { label: 'CATEGORIES', big: '✓', sub: 'CONFIGURED', line1: 'taxonomy ready', color: 'c3' },
+      { label: 'HEAT-MAP', big: '✓', sub: 'READY', line1: 'will populate live', color: 'c4' },
+      { label: 'AI SCANNER', big: '✓', sub: 'ACTIVE', line1: 'auto-suggests risks', color: 'c5' },
+      { label: 'TREATMENT FLOW', big: '✓', sub: 'AVAILABLE', line1: 'plan + assign + track', color: 'c6' },
+      { label: 'PDPL ALIGNMENT', big: '✓', sub: 'BUILT-IN', line1: 'Article 26 ready', color: 'c7' },
+      { label: 'OWNER ASSIGN', big: '✓', sub: 'ENABLED', line1: 'role-based RBAC', color: 'c8' },
+    ] : [
       { label: 'CRITICAL', big: String(lvl('critical')), sub: 'RISKS', line1: 'immediate action', color: 'c5' },
       { label: 'HIGH', big: String(lvl('high')), sub: 'RISKS', line1: 'urgent treatment', color: 'c8' },
       { label: 'MEDIUM', big: String(lvl('medium')), sub: 'RISKS', line1: 'monitor & plan', color: 'c4' },
@@ -451,23 +466,33 @@ async function buildRisks(): Promise<InfographicData> {
       { label: 'TREATMENT ACTIONS', big: nf(treatments), sub: 'PLANNED / IN-FLIGHT', line1: 'mitigation work', color: 'c2' },
       { label: 'TOTAL ENTERPRISE', big: nf(total), sub: 'RISKS REGISTERED', line1: 'across the platform', color: 'c3' },
       { label: 'STATUSES', big: String(byStatus.length), sub: 'DISTINCT WORKFLOW STAGES', line1: '', color: 'c6' },
-      { label: 'COVERAGE', big: total > 0 ? '✓' : '—', sub: total > 0 ? 'ACTIVE TRACKING' : 'AWAITING DATA', line1: '', color: 'c7' },
+      { label: 'COVERAGE', big: '✓', sub: 'ACTIVE TRACKING', line1: '', color: 'c7' },
     ],
-    strip: [
+    strip: empty ? [
+      { label: 'RISKS LOGGED', value: '0', hint: 'add the first one in /risks', color: '#f59e0b' },
+      { label: 'CATEGORIES READY', value: '✓', hint: 'taxonomy configured', color: '#3b82f6' },
+      { label: 'AI SCANNER', value: 'ACTIVE', hint: 'will surface risks automatically', color: '#a78bfa' },
+    ] : [
       { label: 'CRITICAL + HIGH RISKS', value: nf(lvl('critical') + lvl('high')), hint: 'require treatment', color: '#ef4444' },
       { label: 'TOTAL TREATMENT ACTIONS', value: nf(treatments), hint: 'mitigation activities', color: '#3b82f6' },
       { label: 'RISK REGISTER SIZE', value: nf(total), hint: 'enterprise risks tracked', color: '#a78bfa' },
     ],
-    pills: byStatus.slice(0, 10).map(s => ({
-      label: `${s.status} (${s.n})`.slice(0, 22),
-      ok: !['overdue', 'breach', 'critical'].includes(String(s.status).toLowerCase()),
-    })),
+    pills: empty
+      ? [{ label: 'NO RISKS LOGGED YET', ok: false }, { label: 'AWAITING FIRST ENTRY', ok: false }]
+      : byStatus.slice(0, 10).map(s => ({
+          label: `${s.status} (${s.n})`.slice(0, 22),
+          ok: !['overdue', 'breach', 'critical'].includes(String(s.status).toLowerCase()),
+        })),
     footer: {
       source: 'Source: enterprise_risks + risk_treatment_actions',
-      line1: 'Heat-map, AI-detected risks, owner assignments and PDPL compliance live in /risks',
-      line2: 'Open /risks for the interactive heat-map',
-      rightLabel: total === 0 ? 'READY' : 'TRACKED',
-      rightHint: 'live from production DB',
+      line1: empty
+        ? 'No enterprise risks have been logged yet — the register, heat-map and AI scanner are all ready.'
+        : 'Heat-map, AI-detected risks, owner assignments and PDPL compliance live in /risks',
+      line2: empty
+        ? 'Get started: open /risks → "Add Risk" — the AI scanner can also auto-suggest risks from CRM data.'
+        : 'Open /risks for the interactive heat-map',
+      rightLabel: empty ? 'EMPTY' : 'TRACKED',
+      rightHint: empty ? 'awaiting first entry' : 'live from production DB',
     },
   };
 }

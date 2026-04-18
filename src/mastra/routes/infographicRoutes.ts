@@ -104,20 +104,56 @@ export const infographicRoutes = [
 
           const { WebClient } = await import('@slack/web-api');
           const client = new WebClient(token);
-          const result: any = await client.files.uploadV2({
-            channel_id: channel,
-            file: png,
-            filename,
-            title: `${meta.title} — WalaPlus`,
-            initial_comment: comment || `📊 *${meta.title}* — ${meta.subtitle}\nGenerated from live WalaPlus data.`,
-          });
+          const headerText = `📊 *${meta.title}* — ${meta.subtitle}`;
+          const userComment = comment || 'Generated from live WalaPlus data.';
 
-          return c.json({
-            success: true,
-            channel,
-            filename,
-            file_id: result?.files?.[0]?.id || result?.file?.id || null,
-          });
+          try {
+            const result: any = await client.files.uploadV2({
+              channel_id: channel,
+              file: png,
+              filename,
+              title: `${meta.title} — WalaPlus`,
+              initial_comment: `${headerText}\n${userComment}`,
+            });
+            return c.json({
+              success: true,
+              mode: 'file',
+              channel,
+              filename,
+              file_id: result?.files?.[0]?.id || result?.file?.id || null,
+            });
+          } catch (uploadErr: any) {
+            const slackError = uploadErr?.data?.error || uploadErr?.message || '';
+            // Graceful fallback: if the bot lacks files:write, post a rich text
+            // message instead so the channel is still notified.
+            if (slackError === 'missing_scope' || slackError === 'not_allowed_token_type') {
+              console.warn(`[Infographic] files.uploadV2 lacks scope (${slackError}); falling back to chat.postMessage`);
+              const blocks = [
+                { type: 'header', text: { type: 'plain_text', text: meta.title } },
+                { type: 'section', text: { type: 'mrkdwn', text: `*${meta.subtitle}*\n${userComment}` } },
+                {
+                  type: 'context',
+                  elements: [
+                    { type: 'mrkdwn', text: `📎 _A PNG attachment couldn't be uploaded — Slack bot is missing the *files:write* scope. Open the WalaPlus dashboard to view or download._` },
+                  ],
+                },
+                { type: 'divider' },
+                { type: 'context', elements: [{ type: 'mrkdwn', text: `🕒 Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · WalaPlus QMS` }] },
+              ];
+              await client.chat.postMessage({
+                channel,
+                text: `${meta.title} — ${meta.subtitle}`,
+                blocks,
+              });
+              return c.json({
+                success: true,
+                mode: 'message',
+                channel,
+                note: 'Posted as a chat message because the Slack bot lacks files:write scope. Add files:write in OAuth & Permissions and reinstall the app to enable PNG attachments.',
+              });
+            }
+            throw uploadErr;
+          }
         } catch (error: any) {
           console.error('[Infographic] Slack share failed:', error?.data || error);
           return c.json({
