@@ -1,5 +1,5 @@
 # WalaPlus Platform Test Report
-*Generated: 2026-04-18T17:39:41Z · Target: http://localhost:5000*
+*Generated: 2026-04-18T17:42:58Z · Target: http://localhost:5000*
 
 | Summary | Count |
 |---|---|
@@ -17,7 +17,7 @@
 | ai_alerts | 260 | T1 — workhorse |
 | kpi_definitions | 35 | T1 — partial |
 | enterprise_risks | 0 | empty (expected) |
-| access_audit_log | 6 | new (telemetry shipped this week) |
+| access_audit_log | 7 | new (telemetry shipped this week) |
 
 ---
 
@@ -48,7 +48,7 @@
 | T-INFO-audits | SVG renders for audits | `GET /api/infographic/audits` | 200 | 200 | ✅ |
 | T-INFO-duplicates | SVG renders for duplicates | `GET /api/infographic/duplicates` | 200 | 200 | ✅ |
 | T-INFO-consultant | SVG renders for consultant | `GET /api/infographic/consultant` | 200 | 200 | ✅ |
-| T-INFO-PNG | PNG render size for risks | `GET /api/infographic/risks?format=png` | ≥ 400000 B | 833921 B | ✅ |
+| T-INFO-PNG | PNG render size for risks | `GET /api/infographic/risks?format=png` | ≥ 400000 B | 833714 B | ✅ |
 | T-INFO-SLACK | Slack share (graceful) | `POST /api/infographic/risks/share/slack` | success:true | "mode":"message" | ✅ |
 
 ## Tier 2 — Capability features (target ≥ 95% green)
