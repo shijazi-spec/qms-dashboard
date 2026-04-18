@@ -10,13 +10,19 @@ import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
 
 const BATCH_SIZE = 500;
 const MAX_RECORDS_PER_MODULE = 50000;
-const MAX_DETAILED_ISSUES = 500;
+// Per-module cap on detailed (per-record) issues. Using a per-module quota
+// instead of a single global cap guarantees every audited module — including
+// Tasks and Accounts which are processed last — has real per-record entries
+// in `all_issues` so the drill-down modal never has to fall back to a
+// synthetic "summary_*" row. Total ceiling = MAX_DETAILED_PER_MODULE * 5 modules.
+const MAX_DETAILED_PER_MODULE = 200;
 
 function analyzeRecordBatch(
   records: ZohoCRMRecord[],
   governanceRules: any[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
-  detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>
+  detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
+  detailedCountsByModule?: Map<string, number>
 ): { issueCount: number; critical: number; high: number; medium: number; low: number } {
   let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0;
   for (const record of records) {
@@ -33,7 +39,8 @@ function analyzeRecordBatch(
       }
       issueTypeCounts[key].count++;
 
-      if (detailedIssues && detailedIssues.length < MAX_DETAILED_ISSUES) {
+      const moduleDetailedCount = detailedCountsByModule?.get(issue.module) ?? 0;
+      if (detailedIssues && moduleDetailedCount < MAX_DETAILED_PER_MODULE) {
         const ownerData = record.data?.Owner;
         const ownerName = record.owner || (ownerData ? (ownerData.name || ownerData.id || '-') : '-');
         const createdByData = record.data?.Created_By;
@@ -58,6 +65,9 @@ function analyzeRecordBatch(
           severity: issue.severity,
           suggestedFix: issue.suggestedFix || `Update the ${issue.fieldName || 'field'} in this record`,
         });
+        if (detailedCountsByModule) {
+          detailedCountsByModule.set(issue.module, moduleDetailedCount + 1);
+        }
       }
     }
   }
@@ -86,6 +96,10 @@ export async function runDirectAudit(logger?: any) {
   let auditSuccess = false;
   let skipReason = "";
   const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
+  // Per-module tally so each module gets its own quota of detailed (per-record)
+  // issues — prevents the first modules in the iteration order from starving
+  // later ones (e.g. Tasks, Accounts) of `all_issues` entries.
+  const detailedCountsByModule = new Map<string, number>();
 
   if (!hasZohoCredentials) {
     logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
@@ -134,7 +148,7 @@ export async function runDirectAudit(logger?: any) {
 
           for (let i = 0; i < recordCount; i += BATCH_SIZE) {
             const batch = allRecords.slice(i, i + BATCH_SIZE);
-            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues);
+            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues, detailedCountsByModule);
             moduleIssueCount += batchResult.issueCount;
             moduleCritical += batchResult.critical;
             moduleHigh += batchResult.high;
