@@ -1,7 +1,7 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 4.5.1
+**Version:** 4.5
 **Last Updated:** April 18, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
@@ -15,7 +15,7 @@
 | Field | Detail |
 |-------|--------|
 | **Document ID** | WP-SOP-001 |
-| **Version** | 4.5.1 |
+| **Version** | 4.4 |
 | **Status** | Approved |
 | **Author** | Platform Engineering Team |
 | **Approved By** | Quality Management Representative |
@@ -42,9 +42,8 @@
 | 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. 6-hourly duplicate auto-sync cron. KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination uncapped by default. Notification hub integration. Database expanded to 105+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
 | 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on zoho_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), Zoho record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
 | 4.2 | Apr 13, 2026 | Engineering | **AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: A1 – XSS-safe renderMarkdown with escapeHtml + placeholder tokens for code/tables + URL protocol sanitization; A2 – sla_breach added to createAlertTool Zod enum; A3 – 9 `if(true)` scanner bugs fixed (use createAlertIfNew return); A4 – Auto-NC status query `'active'` → `IN ('open','acknowledged')`; A5 – KPI join column `kpi_definition_id` → `kpi_id`; A6 – monitorRisksTool column `rta.description` → `rta.action_description`; A7 – Dead `checkAgainst` param removed from reviewDocumentTool; A8 – Scan prompt revised to report-only (no force-create). Phase 2 Performance: B1 – Shared pg.Pool in sharedPool.ts (max:20); B2 – AbortController timeouts on all agent calls (120s chat, 300s scan, configurable via env vars); B3 – 13 scanner checks parallelized via Promise.all; B4 – safeQuery error logging + errors[] in ScanResult. Phase 3 Features: C1 – Alert action buttons (ack/resolve/dismiss) + View All modal with status/severity filters; C2 – Chat history panel with localStorage persistence; C3 – File upload endpoint (PDF/DOCX/TXT, 10MB limit); C4 – Clickable knowledge docs; C5 – Citation CSS + sanitized markdown links; C6 – Scan SSE progress bar endpoint (/api/consultant/scan-stream); C7 – Agent upgraded to 23 tools (added updateCapa, addCapaAction, createTraining, getTrainingList, assignTraining, getTrainingAssignments, completeTraining); C8 – Auth guards (session or X-Admin-Key) on all consultant endpoints; C9 – Contextual welcome dashboard with KPI summary. Phase 4 UI: D1 – Consolidated alert polling (60s interval); D2 – Touch swipe gestures + sticky input; D3 – Severity icons + inline actions + relative time; D4 – Retry button on stream failure; D5 – Export chat as Markdown; D6 – Arabic RTL detection. |
-| 4.5.1 | Apr 18, 2026 | Engineering | **Audit drill-down fairness fix (both audit paths).** Two issues caused the per-module drill-down to show only synthetic `summary_*` rows for every module except Leads. **(1) `runDirectAudit` (the inngest-failure fallback path)** capped detailed per-record issues at a single global limit of 500 in module-iteration order (Leads → Deals → Contacts → Tasks → Accounts). Leads alone saturated the cap, leaving zero per-record entries for the other four modules. Replaced the global cap with a per-module cap (`MAX_DETAILED_PER_MODULE = 200`, total ceiling 1000) tracked via a `Map<string, number>` passed into `analyzeRecordBatch`. **(2) `qualityAuditWorkflow.ts` (the inngest cron + manual-trigger primary path)** already had a per-module sampler, but its `detailedIssues` mapping omitted the `layouts`, `products`, `createdBy`, and `createdTime` fields — so even the rows that did render showed `-` for those columns. Now extracts and persists those fields per-issue (matching the `runDirectAudit` shape exactly). All future audits — whether run via the weekly inngest cron, the manual "Run Audit" button (inngest path), or the direct fallback — will populate real per-record entries with full column data for every module. *(Audits saved before this fix retain the old truncated `all_issues` and will continue to show the synthetic summary row until re-run.)* |
-| 4.5 | Apr 18, 2026 | Engineering | **Human-in-the-Loop (HITL) AI Approval Gate (WP-DOC-005 alignment).** New module wraps every AI write-tool with a risk classifier and routes high-risk actions to a pending-approval queue before execution. (1) New utilities: `src/utils/aiApprovalDatabase.ts` (CRUD on `ai_pending_actions` with atomic `claimForApproval`), `src/utils/aiToolGovernance.ts` (per-tool risk classification + approver-role matrix), `src/utils/withApprovalGate.ts` (wrapper that intercepts AI tool calls via `AsyncLocalStorage` user context and queues high-risk actions), `src/utils/controlledDocumentRegistry.ts` (seeds 147 controlled documents into `policies` table on boot for citation linking). (2) New REST API at `/api/ai/approvals` (list, get-by-code, approve, reject, pending-count) — admins/quality_managers see all; users see their own. Segregation of duties enforced (a user cannot approve their own request). (3) New admin dashboard `/ai-approvals` for queue review. (4) Updated `qmsConsultantAgent` wraps write-tools with the gate; read-tools (e.g. `queryPlatformDataTool`) pass through unaffected. (5) New Inngest cron `ai-approval-expiry` (15-min interval) auto-expires stale pending actions. (6) `consultantRoutes` routes user identity through `withAgentUserContext` so the gate can attribute the requested action. Bootstrap log signature: `[ControlledDocSeeder] Inserted 147 coded documents`, `[AIApproval] ai_pending_actions table ready`, `[AI-Approval] Bootstrap complete`. |
 | 4.4 | Apr 17, 2026 | Engineering | **Duplicate Radar — cross-module intelligence, deletion sync, dashboard drill-downs.** (1) Module-aware recommendations: cluster decisions now distinguish MERGE (same module), LINK (cross-module — set `Account_Name`/`Contact_Name` instead of merging, per Zoho rule), CLOSE, and REVIEW. Account-first primary selection across cross-module clusters. Cluster API (`GET /api/duplicates/clusters/:id`) returns `primary_type`, `is_cross_module`, and `record_types`; cluster modal shows cross-module banner + per-record type tags, dynamic Resolve label, and post-merge sync hint. (2) Deletion detection: `fetchDeletedZohoRecords()` calls Zoho's `/deleted?type=all` with `If-Modified-Since`; `runDeletionDetection()` purges merged/deleted records on each scan. Removed unsafe `markStaleRecords()` from incremental sync to avoid false purges. Deletion detection is skipped on the very first scan (no `last_sync_at` baseline). (3) "View All" drill-down modals on the dashboard: new endpoints `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal` with DB helpers `getAllClustersByInflation` / `getClustersBySignal`. Generic `listModal` with "View all signals →" and "View all clusters →" links; inline signal rows are clickable. (4) Layout filter on Clusters tab: shared `buildClusterFilterClause()` helper used by both `getAllClusters` and `getClusterCount` (guarantees list/count parity); new `layouts` param uses an `EXISTS` subquery on `duplicate_records.layout_name` (uses existing `idx_duplicate_records_layout` index); Layout `<select>` populated once from `/api/duplicates/filters/options` with a live count hint. Resolved/ignored decisions are still LOST on full Rebuild Clusters (admin-only). |
+| 4.5 | Apr 18, 2026 | Engineering | **Internal Audits re-architecture + Admin & Tools dropdown + External Audits.** (1) Internal Audits Dashboard (§4.26) — Annual Audit Programme panel with HITL sign-off routed through `/ai-approvals` (new role `head_of_operations_quality` as sole approver, WP-CTL-007); triggers now require a written dismiss reason (≥10 chars) and auto-re-evaluate in 24 h; critical triggers expose "Propose via HITL"; new Inngest cron `trigger-auto-escalate` (daily @ 03:00) re-activates dismissed triggers when the re-eval window elapses and auto-opens a formal `grc_audit_findings` row for Critical @ 7 d / Minor @ 30 d stale pending triggers, with bi-directional link via `escalation_finding_id`. (2) Manual Audit Intake (§4.27) — new `/intake` workspace, Quality Manager as central intake owner, GPT-4o structured finding extraction with paste-fallback for un-parsed binaries, per-finding accept/edit/reject review, `source_quote` traceability, `Finalize` promotes accepted findings into `grc_audit_findings` with `intake_id` lineage; tables `manual_audit_intake`, `manual_audit_findings`. (3) External Audits (§4.28) — separated into `/external-audits` with Calendar/Audits + Certificate Register + Readiness Checklist tabs; hero summary card on `/grc` showing Next Audit / Active Certs / Expiring ≤ 90 d; tables `external_audits`, `external_audit_certificates`, `external_audit_checklist`. (4) Admin & Tools dropdown (§4.29) — new top-nav group consolidating Data Migration Engine (moved from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (moved from Analytics); role-gated. (5) Migration Engine expanded with 5 Quality templates: CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations (AI column-mapper + duplicate pre-check inherited). (6) 7 new controlled documents seeded: WP-SOP-040 (Audit Programme Governance), WP-SOP-041 (Manual Intake Control), WP-SOP-042 (External Audit Preparation), WP-FORM-055/056/057, WP-CTL-007 (Programme Sign-off Control). (7) `audits.source_party` + `audit_run_id`/`programme_id`/`intake_id` columns for full audit lineage. |
 | 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByZohoIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `zoho_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
 
 ### Document Control Procedure
@@ -669,7 +668,97 @@ Zoho does not allow merging records that live in different modules. The Resolve 
 | `/api/consultant/scan-stream` | POST | SSE-streamed scan with progress updates | Session / Admin Key |
 | `/api/knowledge/upload-file` | POST | Upload regulatory document (PDF/DOCX/TXT) | Session / Admin Key |
 
-**Backend Tables:** `ai_alerts`, `knowledge_documents`
+**Backend Tables:** `ai_alerts`, `knowledge_documents`, `ai_pending_actions` (HITL gate — see §4.21.1)
+
+### 4.21.1 AI Approval Queue — Human-in-the-Loop (HITL) Gate (`/ai-approvals`)
+
+**Purpose:** Prevents the AI Consultant from autonomously creating or modifying Quality Management records. Every AI-proposed write action (NC, CAPA, training, checklist) is queued for **Quality Manager** approval before execution. This is the primary compensating control for PDPL Art. 16 (human review of automated decisions) and the governance anchor for the platform's AI tools.
+
+**Governing documents (controlled):**
+- `WP-SOP-011` — Automated Decision and Processing Process *(primary)*
+- `WP-DOC-004` — AI Adoption Guidelines
+- `WP-DOC-005` — Segregation of Duties Guidelines
+- `WP-DOC-008` — Accountability Framework
+- `WP-FORM-013` — Automated Decision Risk Assessment Template
+- `WP-FORM-044` — AI Tool Approval Checklist
+- `WP-SOP-009` — Nonconformity, Violation and Corrective Action Process
+- `WP-SOP-017` — Information Security Competence Development Process
+- `WP-SOP-019` — Control of Documented Information Process
+
+**Gated AI tools and their risk classification:**
+
+| Tool | Risk | Controlled-doc anchor | What the gate prevents |
+|------|------|-----------------------|------------------------|
+| `create-nonconformance` | HIGH | WP-SOP-009, WP-SOP-011 | AI inventing a false NC |
+| `create-capa` | HIGH | WP-SOP-009, WP-DOC-008 | Unauthorized CAPA creation |
+| `update-capa` | HIGH | WP-SOP-019 | Silent CAPA state changes |
+| `complete-training` | HIGH | WP-SOP-017, WP-SOP-019 | False competence records |
+| `add-capa-action` | MED  | WP-SOP-009 | Action items without owner review |
+| `create-training` | MED  | WP-SOP-017 | Uncontrolled training records |
+| `assign-training` | MED  | WP-SOP-017 | Misassigned mandatory training |
+| `manage-checklist` | MED  | WP-SOP-019, WP-FORM-044 | Compliance checklist tampering |
+| `create-alert` | LOW | *(exempted)* | Internal alerts — no side-effect on quality records |
+
+**How it works (end-to-end):**
+1. User asks the AI Consultant to perform an action (e.g. "Create an NC for the SLA breach on deal #1234").
+2. The AI prepares the payload and calls the gated tool.
+3. The tool's wrapper (`withApprovalGate`) inserts a row into `ai_pending_actions` with status `pending`, a 24-hour `expires_at`, a PII-masked preview, risk level, and the controlled-doc references.
+4. The AI receives `{ queued: true, actionCode: "APR-YYYYMMDD-XXXXXX" }` and tells the user "Approval required — see card below" — it does not claim the record was created.
+5. An inline approval card appears below the AI message with **Approve ✓** / **Reject ✗** buttons. The card links every cited WP-code to the current controlled version of that document.
+6. A Quality Manager reviews the card (requester cannot approve their own proposal per WP-DOC-005) and clicks Approve.
+7. The backend atomically claims the row (pending → approved), then executes the original tool with the stored payload, and records the real NC/CAPA/etc. ID back into `ai_pending_actions.result_entity_id`.
+8. Every transition (queued, approved, rejected, executed, failed, expired) is written to `event_logs` with `correlation_id = action_code` — full immutable audit trail.
+
+**Authorization rules:**
+- **View own pending actions:** any authenticated user
+- **View all pending actions:** `quality_manager`, `admin`
+- **Approve ANY risk tier:** `quality_manager`, `admin` *(current policy — initial rollout)*
+- **Reject own draft:** the original requester may always cancel their own proposal
+- **Segregation of duties (WP-DOC-005):** non-admin users cannot approve their own AI proposals
+- **Break-glass:** set `AI_APPROVAL_GATE_ENABLED=false` to disable the gate during incidents — every bypassed action is logged to `event_logs` with severity=`WARNING` for after-action review
+
+**UI surfaces:**
+- `/consultant` — inline approval cards rendered below each assistant message containing an `APR-*` ticket (auto-detected from response text via `MutationObserver`)
+- `/ai-approvals` — dedicated queue page for Quality Manager with filters (status, risk, "only mine"), auto-refresh every 30s, and Approve/Reject inline actions
+- Each card links every WP-code to `/policies?policy_number=WP-XXX-YYY` so the approver reads the exact controlled document before approving
+
+**API Endpoints:**
+
+| Endpoint | Method | Purpose | Auth |
+|----------|--------|---------|------|
+| `/api/ai/approvals` | GET | List approvals (filters: status, risk_level, mine) | Session / Admin Key |
+| `/api/ai/approvals/pending-count` | GET | Badge count of pending approvals for current user | Session / Admin Key |
+| `/api/ai/approvals/:code` | GET | Approval detail + resolved WP-doc links + `can_approve` flag | Session / Admin Key |
+| `/api/ai/approvals/:code/approve` | POST | Claim + execute the gated tool | `quality_manager` or `admin` |
+| `/api/ai/approvals/:code/reject` | POST | Reject with required `reason` (min 3 chars) | Requester or approver role |
+
+**Data retention & expiry:**
+- Pending actions auto-expire 24 hours after creation (configurable via TTL in `enqueuePendingAction`)
+- An Inngest cron (`ai-approval-expiry`) runs every 15 minutes to flip expired rows from `pending` → `expired`
+- Rows are **never deleted** — expired and rejected rows remain for audit inspection (per WP-SOP-019 and WP-POL-013 Records Retention)
+
+**Controlled-Document Registry:** On first boot the platform seeds the existing `policies` table with all 140+ WP-coded documents (POL/DOC/SOP/FORM/CTL) using `seedControlledDocumentRegistry()`. Seeded rows have `status='draft'` and no file attached; the Quality Manager uploads the approved `.docx`/`.pdf` via `/policies` → **Upload** (`POST /api/documents/upload`). The existing `policy_versions` table handles version history. Approval cards resolve WP-codes via `resolveControlledDocuments()` so they always point at the *latest* uploaded revision.
+
+**Backend files:**
+- `src/utils/aiApprovalDatabase.ts` — `ai_pending_actions` schema + CRUD + immutable status machine
+- `src/utils/aiToolGovernance.ts` — per-tool risk + WP-code references + approver-role policy
+- `src/utils/withApprovalGate.ts` — higher-order wrapper + `AsyncLocalStorage` user-context isolation + `executeApprovedAction()`
+- `src/utils/controlledDocumentRegistry.ts` — seed data + resolver for all 140+ WP codes
+- `src/mastra/routes/aiApprovalRoutes.ts` — 5 API endpoints + `/ai-approvals` HTML page route
+- `dashboard/consultant.html` — inline approval-card renderer (MutationObserver on assistant bubbles)
+- `dashboard/ai-approvals.html` — approvals queue dashboard
+- `src/mastra/inngest/index.ts` — `ai-approval-expiry` cron (15-min interval)
+
+**Compliance traceability (ISO / PDPL / PCI):**
+
+| External requirement | Satisfied by |
+|----------------------|--------------|
+| PDPL Art. 16 (human review of automated decisions) | Every gated tool stores proposal, approval, and executor identities with timestamps |
+| PDPL Art. 19–20 (data subject rights, logging) | `event_logs` row per transition with `correlation_id = action_code` |
+| PCI DSS v4.0 §7.1 / §12.3.1 (restricted access, documented approval) | `APPROVER_ROLES_BY_RISK` + segregation-of-duties check |
+| ISO 27001:2022 A.5.37 (documented operating procedures) | Wrapper is itself the procedure; every decision is signed |
+| ISO 27001:2022 A.5.10 (authorized use of information assets) | Role gate rejects unauthorized approvers with HTTP 403 |
+| ISO 9001:2015 §8.5.1 / §7.5.3 | Quality records cannot be created or modified without authorized release |
 
 ### 4.22 Handoff & Control Mapping System
 **Purpose:** Automates data flow between QMS and GRC modules.
@@ -711,41 +800,119 @@ Zoho does not allow merging records that live in different modules. The Resolve 
 - Email notifications via Resend (with Replit mail fallback)
 - Triggered by 6-hourly duplicate auto-syncs, AI scanner findings, and audit completion
 
-### 4.26 Human-in-the-Loop AI Approval Gate (`/ai-approvals`)
-**Purpose:** Enforce human review on every AI-initiated write before it touches platform data, in alignment with controlled document **WP-DOC-005** (AI Governance & Segregation of Duties) and Saudi PDPL Article 26 (automated decision-making safeguards).
+---
 
-**How it works:**
-1. **Risk classification** — Every tool exposed to `qmsConsultantAgent` is classified by `src/utils/aiToolGovernance.ts` into one of: `READ_ONLY` (passes through), `LOW_RISK`, `MEDIUM_RISK`, `HIGH_RISK`. Each risk level maps to an approver-role matrix (e.g. HIGH_RISK → admin or quality_manager only).
-2. **Wrapper interception** — `src/utils/withApprovalGate.ts` wraps every write-tool. When the agent invokes a wrapped tool, the wrapper:
-   - Reads the requesting user from `AsyncLocalStorage` (set by `withAgentUserContext` in `consultantRoutes.ts`).
-   - If the action requires approval, inserts a row into `ai_pending_actions` with a human-readable `action_code` (e.g. `WP-AI-2026-04-18-A1B2`) and returns `{ success: false, queued: true, actionCode }` to the agent — **the underlying mutation is never executed**.
-   - If the action is read-only or under the risk threshold for the requester's role, the tool runs immediately.
-3. **Approval queue** — Admins and quality_managers see all pending actions at `/ai-approvals`; regular users see only their own. **Segregation of duties is enforced at the API layer**: a user cannot approve their own request (returns 403).
-4. **Atomic claim** — `claimForApproval()` uses an atomic `UPDATE ... WHERE status = 'pending' AND expires_at > NOW()` to prevent two approvers from acting on the same ticket and to block approval of expired or already-resolved tickets.
-5. **Auto-expiry** — Inngest cron `ai-approval-expiry` runs every 15 minutes and marks stale pending actions as `expired`.
+### 4.26 Internal Audits Dashboard (`/audits`) — Programme, Triggers & Finding Traceability
 
-**Bootstrap signature** (visible on every server start):
-- `[ControlledDocSeeder] Inserted 147 coded documents` (or `All 147 already present`)
-- `[AIApproval] ai_pending_actions table ready`
-- `[AI-Approval] Bootstrap complete (policies + ai_pending_actions + controlled-doc seed)`
+**Purpose:** Single control plane for every audit the company **runs itself** — platform-driven (AI) **and** manual audits conducted by the Quality team across other departments. Covers the full ISO 19011:2018 audit cycle: programme → plan → conduct → report → follow-up.
 
-**API surface (`/api/ai/approvals`):**
-| Endpoint | Method | Auth | Purpose |
-|---|---|---|---|
-| `/api/ai/approvals` | GET | session | List pending actions (filtered by role) |
-| `/api/ai/approvals/pending-count` | GET | session | Bell-badge count |
-| `/api/ai/approvals/:code` | GET | session | Full detail of one ticket |
-| `/api/ai/approvals/:code/approve` | POST | session + approver role + not requester | Atomic claim → execute the deferred tool call |
-| `/api/ai/approvals/:code/reject` | POST | session + approver role | Mark as rejected with reason |
+**Two Tabs:**
 
-**Files involved:**
-- `src/utils/aiApprovalDatabase.ts` — `ai_pending_actions` schema + CRUD (`createPendingAction`, `listPendingActions`, `getByCode`, `claimForApproval`, `markRejected`, `expireStale`)
-- `src/utils/aiToolGovernance.ts` — `RISK_BY_TOOL` registry + `APPROVER_ROLES_BY_RISK` matrix
-- `src/utils/withApprovalGate.ts` — `withApprovalGate(tool)` wrapper + `withAgentUserContext()` AsyncLocalStorage helper
-- `src/utils/controlledDocumentRegistry.ts` — seeds 147 controlled-doc rows into `policies` so approval citations resolve
-- `src/mastra/routes/aiApprovalRoutes.ts` — REST endpoints + page route
-- `dashboard/ai-approvals.html` — admin queue UI
-- `src/mastra/inngest/index.ts` — `ai-approval-expiry` cron (every 15 min)
+1. **Internal Audits Dashboard** — live operational view (programme panel, triggers, findings, CAPA SLA).
+2. **Internal Audits AI** — AI-driven audit runs (was "Quality Audits (AI)" — renamed in v3.9).
+
+**Key Features:**
+
+- **Annual Audit Programme Panel** (top of dashboard)
+  - Draft → **Submit for sign-off** → HITL ticket routed to `/ai-approvals` for the **Head of Operations & Quality** to approve/reject.
+  - Sign-off is captured with `approved_by_email`, `approved_at`, and `approval_action_code` for immutable traceability (WP-CTL-007).
+  - Controlled under **WP-SOP-040 — Audit Programme Governance**.
+- **Triggers (with HITL gate)**
+  - Triggers remain in place (ISO 19011 §6.7 follow-up signal).
+  - **Dismissal** now **requires** a written reason (≥10 chars) logged to `event_logs` and auto-re-evaluated in **24 h** (dismissed triggers flip back to `pending` via `trigger-auto-escalate` cron).
+  - **Critical** triggers expose a **"Propose via HITL"** button — routes the decision through the AI Approvals Queue for Quality Manager sign-off.
+  - **Auto-escalation cron (daily @ 03:00):**
+    - Critical trigger pending > **7 days** → auto-generates a formal `AuditFinding` in `grc_audit_findings` with severity `major`.
+    - Warning/Info pending > **30 days** → auto-generates finding with severity `minor`/`observation`.
+    - Trigger is marked `actioned` with `auto_escalated_at` + `escalation_finding_id` for bi-directional linking.
+- **Manual Audit Intake (button/link to `/intake`)** — see §4.27.
+- **Source-party separation:** All audits carry `source_party` (`internal_platform` / `internal_manual` / `external`) and `audit_run_id` / `programme_id` / `intake_id` for lineage.
+
+**New RBAC Role:** `head_of_operations_quality` — sole approver for annual audit programme sign-off.
+
+**Backend Tables:** `audits` (extended), `audit_triggers` (extended with `dismiss_reason`, `next_reevaluate_at`, `hitl_action_code`, `auto_escalated_at`, `escalation_finding_id`), `audit_programme`, `audit_programme_signoff`, `audit_runs`.
+
+**Controlling Documents:** WP-SOP-040, WP-SOP-041, WP-SOP-042, WP-FORM-055, WP-FORM-056, WP-FORM-057, WP-CTL-007.
+
+---
+
+### 4.27 Manual Audit Intake (`/intake`) — Off-Platform Audit Workspace
+
+**Purpose:** Centralise every audit report that is **conducted off-platform** (e.g., a Finance process audit done on paper by the Quality team, or an ad-hoc walk-through captured in Word/PDF) so the findings still enter the **same** `grc_audit_findings` register and inherit the same CAPA SLA rules.
+
+**Ownership:** The **Quality Manager** is the single-point intake owner (centralised to prevent shadow audit registers in each department).
+
+**Workflow:**
+
+1. **Upload** — Quality Manager uploads the report file (PDF/DOCX/XLSX/MD) with title, source department, audit date, auditor name.
+2. **AI extraction (GPT-4o)** — structured extraction of `findings[]` with `{ title, description, severity, category, source_quote, confidence }`. For binary files where native parsing isn't yet wired, a **paste-fallback** textarea accepts raw text and routes through the same prompt.
+3. **Review** — each extracted finding is reviewable: **Accept** / **Edit (title+description)** / **Reject (with reason)**. Every decision is logged.
+4. **Promote** — `Finalize` button promotes all `accepted` + `edited` findings into `grc_audit_findings` with a parent `audits` row (source_party = `internal_manual`, `intake_id` preserved).
+
+**Traceability (what makes auditors trust it):** every promoted finding carries `source_quote` (the exact paragraph the AI read it from) and a link back to the original uploaded file — so any statement can be traced to a primary document.
+
+**Backend Tables:** `manual_audit_intake`, `manual_audit_findings`.
+**Controlling Documents:** WP-SOP-041 — Manual / Off-Platform Audit Intake Control.
+
+---
+
+### 4.28 External Audits (`/external-audits`) — Regulatory, Certification & Surveillance
+
+**Purpose:** Dedicated workspace for audits conducted **on** the company by third parties — regulators, certification bodies (CBs), or surveillance visits. Deliberately separated from Internal Audits (§4.26) because the governance chain, evidence expectations, and accountability differ.
+
+**Surfaces:**
+
+- **Summary card on `/grc`** — shows *Next Audit*, *Active Certificates*, *Expiring ≤ 90 days* (hero card linking into `/external-audits`).
+- **Three tabs:**
+  1. **Calendar / Audits** — chronological register filterable by kind (regulatory / certification / surveillance / customer / other) and status (planned / in progress / closed / cancelled).
+  2. **Certificate Register** — all issued certificates with `certificate_number`, `standard`, `certification_body`, `issued_at`, `expires_at`, derived status (`active`/`expiring`/`expired`) and evidence link.
+  3. **Readiness Checklist** — per-audit checklist (item, category, owner, status, evidence link) so readiness isn't a chase in Excel the week before the audit.
+
+**Capabilities:**
+
+- Create a new external audit with planned dates, scope summary, and CB.
+- Register a new certificate against an external audit.
+- Add / update readiness checklist items with owner + evidence link.
+- Status is derived automatically (expires ≤ 90d = "expiring", past expiry = "expired") — no manual flag rot.
+
+**Backend Tables:** `external_audits`, `external_audit_certificates`, `external_audit_checklist`.
+**Controlling Documents:** WP-SOP-042 — External Audit Preparation & Surveillance Control, WP-FORM-055 (Annual Programme), WP-FORM-056 (Intake Review), WP-FORM-057 (External Audit Readiness).
+
+---
+
+### 4.29 Admin & Tools Dropdown — Operator Workspace
+
+**Purpose:** A single top-nav group consolidating operator / platform-wide tooling that is **not** part of day-to-day Quality/GRC work. Separated from business modules so Quality Managers don't see RBAC panels and System Logs in their main navigation.
+
+**Contents (role-gated):**
+
+| Item | Route | Purpose |
+|------|-------|---------|
+| Data Migration Engine | `/migration` | Bulk import of spreadsheets (previously under GRC, now here). See §4.29.1. |
+| User & Role Management | `/admin` | RBAC admin UI. |
+| Users & Access | `/users` | User directory / access review. |
+| AI Approvals Queue | `/ai-approvals` | HITL ticket queue (programme sign-off, trigger decisions, AI write-tools). |
+| System Logs | `/logs` | Append-only event log (moved from Analytics). |
+
+**Access:** `admin`, `head_of_operations_quality`, `grc_manager`, `quality_manager`, `ai_specialist`.
+
+#### 4.29.1 Data Migration Engine — Expanded Scope
+
+Templates now include **Quality modules** (previously only GRC):
+
+| Template | Target Module | Source Document |
+|----------|---------------|-----------------|
+| Compliance Obligations Import | `compliance` | (existing) |
+| Policy Library Import | `policies` | (existing) |
+| Risk Register Import | `risks` | (existing) |
+| Vendor Registry Import | `vendors` | (existing) |
+| **CAPA Register Import** | `capa` | WP-SOP-009 |
+| **Nonconformity (NC) Log Import** | `nonconformities` | WP-SOP-009 / ISO 9001 §10.2 |
+| **Training Records Import** | `training` | ISO 19011:2018 §7 (auditor competence) |
+| **Audit Findings Import** | `audit_findings` | WP-SOP-042 |
+| **Deal Evaluations Import** | `deal_evaluations` | Internal quality scoring |
+
+All imports run through the **same** AI column-mapper + duplicate pre-check + auditable migration job record.
 
 ---
 

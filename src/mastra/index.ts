@@ -3645,6 +3645,92 @@ export const mastra = new Mastra({
       // ======================================================================
       // Call Intelligence Routes
       // ======================================================================
+      // SOP Page & API
+      // ======================================================================
+      {
+        path: "/sop",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "sop.html"),
+                join(process.cwd(), "..", "dashboard", "sop.html"),
+                "/home/runner/workspace/dashboard/sop.html",
+              ];
+              for (const sopPath of possiblePaths) {
+                if (existsSync(sopPath)) {
+                  const html = readFileSync(sopPath, "utf-8");
+                  return c.html(html);
+                }
+              }
+              return c.text("SOP page not found", 404);
+            } catch (error) {
+              console.error("Error serving SOP page:", error);
+              return c.text("Error loading SOP", 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sop",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"),
+                join(process.cwd(), "..", "docs", "WalaPlus_Platform_SOP.md"),
+                "/home/runner/workspace/docs/WalaPlus_Platform_SOP.md",
+              ];
+              for (const sopPath of possiblePaths) {
+                if (existsSync(sopPath)) {
+                  const content = readFileSync(sopPath, "utf-8");
+                  const versionMatch = content.match(/\*\*Version:\*\*\s*(.+)/);
+                  const dateMatch = content.match(/\*\*Last Updated:\*\*\s*(.+)/);
+                  return c.json({
+                    content,
+                    version: versionMatch ? versionMatch[1].trim() : "Unknown",
+                    lastUpdated: dateMatch ? dateMatch[1].trim() : "Unknown",
+                  });
+                }
+              }
+              return c.json({ error: "SOP document not found" }, 404);
+            } catch (error) {
+              console.error("Error serving SOP API:", error);
+              return c.json({ error: "Failed to load SOP" }, 500);
+            }
+          };
+        },
+      },
+      {
+        path: "/api/sop/download",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"),
+                join(process.cwd(), "..", "docs", "WalaPlus_Platform_SOP.md"),
+                "/home/runner/workspace/docs/WalaPlus_Platform_SOP.md",
+              ];
+              for (const sopPath of possiblePaths) {
+                if (existsSync(sopPath)) {
+                  const content = readFileSync(sopPath, "utf-8");
+                  c.header("Content-Type", "text/markdown; charset=utf-8");
+                  c.header("Content-Disposition", "attachment; filename=\"WalaPlus_Platform_SOP.md\"");
+                  return c.body(content);
+                }
+              }
+              return c.text("SOP document not found", 404);
+            } catch (error) {
+              console.error("Error downloading SOP:", error);
+              return c.text("Error downloading SOP", 500);
+            }
+          };
+        },
+      },
+      // ======================================================================
       // Static Asset Routes for Navigation CSS and JS
       // ======================================================================
       {
