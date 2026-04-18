@@ -212,11 +212,133 @@ Scenario: External Audit hero card reflects live state
 
 ---
 
-## 8 · Open items
+## 8 · RBAC matrix
 
-- Seed the 2026 Annual Audit Programme (currently 0 rows).
-- Seed initial `external_audits` rows from the certification calendar.
+| Action | Quality Manager | GRC Manager | Head of Operations & Quality | Admin | Auditor (read) |
+|---|---|---|---|---|---|
+| View `/audits` Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Create / edit audit | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Draft Annual Programme | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Submit Programme for sign-off | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **Approve Programme sign-off (HITL)** | ❌ | ❌ | **✅ (sole)** | ❌ | ❌ |
+| Upload to `/intake` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Accept / edit / reject intake findings | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Finalize intake → spine | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Dismiss trigger (with reason) | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Propose Critical trigger via HITL | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Adjudicate trigger HITL | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Manage `/external-audits` | ❌ | ✅ | ✅ | ✅ | ❌ (read) |
+| Manage certificates | ❌ | ✅ | ✅ | ✅ | ❌ (read) |
+
+> The HOQ role is the **sole** approver for programme sign-off (WP-CTL-007). All other rows respect existing RBAC scopes.
+
+---
+
+## 9 · End-to-end user journeys
+
+### 9.1 Quality Manager — annual cycle kick-off
+1. 1 Jan 2026 — opens `/audits`, sees Programme panel showing "No 2026 programme — Draft now".
+2. Clicks *Draft programme*, fills in scope, audit list, target dates.
+3. Clicks *Submit for sign-off* → HITL ticket appears at `/ai-approvals`.
+4. Notifies Head of Operations & Quality.
+5. HOQ reviews and approves → Programme status flips to `signed_off`, audits become executable.
+
+### 9.2 Quality Manager — off-platform supplier audit report from HR
+1. HR emails a supplier audit PDF.
+2. QM goes to `/intake`, uploads the PDF.
+3. GPT-4o extracts findings; QM reviews each with the original `source_quote` visible.
+4. Edits one finding's severity, rejects two duplicates, accepts the rest.
+5. Clicks *Finalize* → 7 rows appear in `grc_audit_findings` with `intake_id` lineage; visible on `/audits` with an "Intake" provenance badge.
+
+### 9.3 Anyone — Critical trigger fires at 02:00
+1. `/qms` Triggers tab shows new Critical trigger.
+2. Quality Manager reviews; unsure whether to action immediately or wait for next standup.
+3. Clicks *Propose via HITL* → HITL ticket created.
+4. HOQ adjudicates within working hours.
+5. (If ignored for ≥7 days, the `trigger-auto-escalate` cron auto-opens a finding so nothing falls through.)
+
+### 9.4 GRC Manager — surveillance audit prep
+1. Opens `/grc`, sees hero card "Next audit: BSI surveillance — 12 days".
+2. Clicks card → lands on `/external-audits`.
+3. Calendar tab confirms the date; Readiness Checklist shows 14 of 20 items complete.
+4. Assigns the remaining 6 items; certificate register confirms current ISO 9001 cert valid through Dec 2027.
+
+---
+
+## 10 · File delta (v4.5)
+
+### 10.1 New backend files
+- `src/mastra/utils/auditProgrammeDatabase.ts`
+- `src/mastra/utils/manualAuditDatabase.ts`
+- `src/mastra/utils/externalAuditDatabase.ts`
+- `src/mastra/routes/auditProgrammeRoutes.ts`
+- `src/mastra/routes/manualAuditRoutes.ts`
+- `src/mastra/routes/externalAuditRoutes.ts`
+- `src/mastra/routes/triggerRoutes.ts`
+- `src/mastra/crons/triggerAutoEscalate.ts`
+
+### 10.2 New frontend pages
+- `dashboard/intake.html`
+- `dashboard/external-audits.html`
+- `dashboard/audits.html` *(rewrite — no longer iframe)*
+
+### 10.3 Modified files
+- `src/mastra/index.ts` — wires new routes + Inngest cron registration
+- `src/mastra/utils/aiToolGovernance.ts` — registers 2 new HITL action codes
+- `src/mastra/utils/qmsTriggerDatabase.ts` — `dismiss_reason`, `re_evaluate_at`, `escalation_finding_id` columns
+- `src/mastra/utils/grcAuditDatabase.ts` — `intake_id`, `external_audit_id`, `escalation_finding_id` FKs
+- `src/mastra/utils/rbacDatabase.ts` — `head_of_operations_quality` role registered
+- `dashboard/js/navigation.js` — Quality / GRC / Team Mgmt / Admin & Tools restructure
+- `dashboard/grc.html` — External Audits hero card
+- `dashboard/qms.html` — Triggers HITL UI
+- `dashboard/ai-approvals.html` — 2 new action codes rendered
+
+**Net delta**: ~2,500 backend LOC, ~1,400 frontend LOC, 8 new tables, 6 schema additions, 1 RBAC role, 2 HITL action codes.
+
+---
+
+## 11 · Manual smoke test (10 minutes)
+
+Run after every deployment. Each step should pass independently.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | `GET /audits` while logged in | 200, native HTML, Programme panel visible at top |
+| 2 | `POST /api/audit-programme` with `{year:2026, title:"Test"}` as Quality Manager | 200, `programme_id` returned, `status=draft` |
+| 3 | `POST /api/audit-programme/:id/submit` | 200, ai_pending_actions row created with action_code=`audit_programme_signoff` |
+| 4 | Approve as a non-HOQ user | 403 |
+| 5 | Approve as HOQ user | 200, programme status → `signed_off` |
+| 6 | `POST /api/manual-audit-intake` with a small PDF | 200, intake_code returned, status transitions to `ready_for_review` within 60 s |
+| 7 | Accept all findings, click Finalize | 200, N rows appear in `grc_audit_findings` with `intake_id` set |
+| 8 | `POST /api/qms/triggers/:id/dismiss` with reason="too short" | 400 |
+| 9 | Same call with reason ≥10 chars | 200, dismiss_reason persisted |
+| 10 | `GET /api/external-audits/summary` | 200, `{next_audit, active_certs, expiring_within_90_days}` |
+| 11 | `GET /grc` page render | 200, External Audits hero card present |
+| 12 | Trigger the cron manually via Inngest dev UI | Cron completes; if any stale Critical@7d trigger exists, a finding is created with bi-directional `escalation_finding_id` |
+
+---
+
+## 12 · Risks & limitations
+
+| # | Risk / limitation | Mitigation |
+|---|---|---|
+| R-1 | GPT-4o extraction quality is unproven on Arabic-only PDFs | Paste-text fallback always available; flag for monitoring after first 10 real intakes |
+| R-2 | Programme sign-off cannot complete until a user is assigned the HOQ role | Tracked in P1-3; admin to assign before first programme submission |
+| R-3 | Auto-escalation thresholds are hard-coded constants in v4.5 | P1-5 will move them to env vars (`TRIGGER_ESCALATE_CRITICAL_DAYS`, `TRIGGER_ESCALATE_MINOR_DAYS`) |
+| R-4 | Bi-directional `escalation_finding_id` linkage relies on cron success | Cron failures alert via existing Inngest failure handler; manual reconciliation script (`scripts/reconcile-escalations.ts`) available if needed |
+| R-5 | External Audits hero card on `/grc` adds one extra DB query per page load | Cached for 60 s in-memory; minimal impact |
+| R-6 | Programme is one record per calendar year — no support yet for fiscal-year programmes (e.g., Apr–Mar) | Backlog item; can be added by extending `audit_programmes.fiscal_year_start` |
+| R-7 | Manual intake supports only PDF/DOCX/TXT (max 10 MB) | Documented limitation; XLSX and image-OCR are backlog |
+
+---
+
+## 13 · Open items
+
+- Seed the 2026 Annual Audit Programme (currently 0 rows) — see P1-1.
+- Seed initial `external_audits` rows from the certification calendar — see P1-2.
+- Assign `head_of_operations_quality` role to at least one user — see P1-3.
 - Quality Manager training session on the `/intake` workflow.
+- First-run smoke of `/intake` with a real off-platform PDF — see P1-4.
 
 ---
 

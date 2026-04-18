@@ -190,7 +190,7 @@ WalaPlus QMS is an AI-powered enterprise Quality Management System that integrat
 
 **Key Features:**
 - **Summary Cards:** Active Risks, Active Policies, Compliance Score, Open Findings, Active Vendors, Controls Active
-- **External Audits hero card** *(v4.5)*: Next scheduled audit, active certificates, certificates expiring within 90 days; deep-links to `/external-audits` (see §4.28)
+- **External Audits hero card** *(v4.5)*: Next scheduled audit, active certificates, certificates expiring within 90 days; backed by `GET /api/external-audits/summary`; deep-links to `/external-audits` (see §4.28)
 - **Risk Heat Map:** Interactive likelihood x impact matrix showing risk distribution
 - **GRC Module Status:** Chart showing item counts across all GRC modules
 - **Compliance by Framework:** Per-regulation compliance breakdown

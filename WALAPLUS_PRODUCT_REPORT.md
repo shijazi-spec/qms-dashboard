@@ -195,6 +195,45 @@ Backlog item 2 ("Disambiguate Quality Audits vs. ISO Internal Audits") was marke
 - **External audit calendar is empty.** `external_audits` has 0 rows. Need the 2026 certification audit calendar to seed.
 - **HOQ role unassigned.** `head_of_operations_quality` exists in the role registry but no user is currently assigned. Programme sign-off cannot complete until at least one user holds this role.
 
+### 9.5 Backend / frontend LOC delta
+
+| Layer | LOC added | Files added | Files modified |
+|---|---|---|---|
+| Backend (TS) | ~2,500 | 3 route files + 3 utility files + 1 cron + 1 RBAC role | `src/mastra/index.ts`, `aiToolGovernance.ts`, `qmsTriggerDatabase.ts`, `grcAuditDatabase.ts` |
+| Frontend (HTML/JS/CSS) | ~1,400 | `intake.html`, `external-audits.html`, `audits.html` (rewrite), `dashboard/js/navigation.js` (rewrite) | `grc.html` (hero card), `qms.html` (Triggers tab HITL UI), `ai-approvals.html` (2 new action codes) |
+| Database | +8 tables | `audit_programmes`, `audit_programme_audits`, `manual_audit_intake`, `manual_audit_findings`, `external_audits`, `external_audit_certificates`, `external_audit_checklist`, `audit_triggers_decisions` | +3 columns on `qms_triggers` (`dismiss_reason`, `re_evaluate_at`, `escalation_finding_id`); +3 FKs on `grc_audit_findings` (`intake_id`, `external_audit_id`, `escalation_finding_id`); +1 enum value on `platform_users.role` |
+
+**Net database scale**: 105 → **113 tables**.
+
+### 9.6 Deployment story
+v4.5 deployment was clean except for one regression worth recording for posterity:
+- **Mastra agent-count guard fix** — the new code path that registers HITL action codes briefly tripped Mastra's agent-count guard during boot. Resolved by registering the codes inside the existing `aiToolGovernance.ts` initializer rather than at module top-level.
+- **Drop-in regression sweep** — when copying the new `src/mastra/index.ts` from the urgent-enhancements package, four public route handlers were silently dropped (`/dashboard/tailwind.css`, `/sop`, `/api/sop`, `/api/sop/download`). Restored in this session by diffing against the previous index. Pattern documented in scratchpad: always diff drop-in `index.ts` files against the prior version before deploying.
+- **Tailwind MIME fix** — the restored `/dashboard/tailwind.css` handler had an incorrect `text/plain` content-type from the prior copy; corrected to `text/css`.
+
+### 9.7 Decision log (for the record)
+
+| # | Decision | Rationale |
+|---|---|---|
+| D-1 | Retire the iframe-based "two-tab `/audits`" design (v1.0 of WALAPLUS_INTERNAL_AUDITS_FEATURE.md) | Iframe was an explicit P0 placeholder; v4.5 was the planned native-rebuild milestone |
+| D-2 | New role `head_of_operations_quality` (not "Quality Director") | Matches the org chart name; ISO 19011 §5.2 vests sign-off authority in this role specifically |
+| D-3 | Trigger HITL via `ai_pending_actions` (reusing existing queue) instead of a new approval table | Reuses the proven `/ai-approvals` UI, audit log, and reviewer workflow |
+| D-4 | `/intake` is its own dashboard, not a tab inside `/audits` | Keeps the intake workspace usable in parallel with reviewing the dashboard; intake is a multi-step workflow that needs full screen real estate |
+| D-5 | `/external-audits` is its own dashboard, not a tab inside `/audits` | External audits have a fundamentally different lifecycle (certificate body, certificate registry, calendar) and audience (often viewed by execs without a need to see internal findings) |
+| D-6 | Auto-escalation thresholds: Critical @ 7d, Minor @ 30d | Conservative; can be tuned via env after we observe real volumes. Defaults err toward "louder" rather than silent ignore |
+| D-7 | "Admin" → **"Admin & Tools"** rename | The dropdown now contains operator tooling beyond just user/role management; the new name better describes what's inside |
+
+### 9.8 P1 roadmap (week of 22 April 2026)
+
+| # | Item | Owner | Effort |
+|---|---|---|---|
+| P1-1 | Seed Annual Audit Programme 2026 (draft + submit for HITL sign-off) | Quality Manager | 2 h |
+| P1-2 | Seed 2026 external audit calendar + active certificate registry | GRC Manager | 4 h |
+| P1-3 | Assign `head_of_operations_quality` role to at least one user | Admin | 5 min |
+| P1-4 | First-run smoke of `/intake` with a real off-platform PDF | Quality Manager | 30 min |
+| P1-5 | Wire trigger-auto-escalate threshold env vars (`TRIGGER_ESCALATE_CRITICAL_DAYS`, `TRIGGER_ESCALATE_MINOR_DAYS`) for tunability | Eng | 1 h |
+| P1-6 | Telemetry read-out for the 5 new v4.5 dashboards (`/intake`, `/external-audits`, `/audits` rebuilt, `/qms` Triggers, `/ai-approvals`) | Product | 30 min |
+
 ---
 
 *This is a living document. Next update: Friday 25 April 2026.*

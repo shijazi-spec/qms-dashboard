@@ -5,7 +5,7 @@
 
 ## 1 · TL;DR (read this first)
 
-The platform itself is **technically healthy** — 66/66 system tests passing, no errors in logs, all dashboards render. The "not working" feeling is **not a code problem**; it is a **data problem**. Several modules display empty tables / zero metrics because the underlying data has not been entered yet.
+The platform itself is **technically healthy** (now **v4.5**: +8 new tables → 113 total, +9 migration templates, 35 dashboards). 66/66 system tests passing, no errors in logs, all dashboards render. The "not working" feeling is **not a code problem**; it is a **data problem**. Several modules display empty tables / zero metrics because the underlying data has not been entered yet.
 
 There are **3 buckets of work**:
 
@@ -91,20 +91,39 @@ So the manager doesn't think nothing works — these are humming:
 
 ---
 
-## 6 · Suggested data-upload sequence (for tomorrow's discussion)
+## 6 · Suggested data-upload sequence (for tomorrow's discussion) — *v4.5 reordered*
 
-If we can only do one batch a week, suggested order:
+If we can only do one batch a week, suggested order. v4.5 priorities (Programme, External Audits, Manual Intake) are interleaved with the original gaps based on ISO impact.
 
-1. **Week 1** — Risks + Vendors (highest ISO impact, easiest to source from existing Excel files)
-2. **Week 2** — Audit findings + evidence for the 5 existing audits (closes the loop on what's already in the system)
-3. **Week 3** — Real NC + CAPA log replacing test data
-4. **Week 4** — Compliance assessments + calendar (regulatory deadlines)
-5. **Week 5** — Vendor risk + team performance metrics
-6. **Ongoing** — Either connect call data feed (Zoho/3CX) or bulk-upload monthly
+1. **Week 1** — **Annual Audit Programme 2026** (one record + planned audits) → unblocks the entire internal audit cycle and routes through HITL sign-off (`head_of_operations_quality`). Pair with **Risks** import.
+2. **Week 2** — **Real audit findings + evidence** for the 5 existing audits (use the new "Audit Findings" migration template; closes the loop on what's already in the system).
+3. **Week 3** — **Real NC + CAPA log** replacing test data (use the new "Nonconformity" + "CAPA" migration templates).
+4. **Week 4** — **External Audits 2026 calendar + active certificates** (seed `external_audits` and `external_audit_certificates`; populates the GRC hero card).
+5. **Week 5** — **Compliance assessments + calendar** (regulatory deadlines per regulation).
+6. **Week 6** — **Vendor risk + team performance + Training Records** (use the new "Training Records" migration template).
+7. **Ongoing** — Either connect call data feed (Zoho/3CX) or bulk-upload monthly. Funnel any off-platform audit reports through `/intake`.
 
 ---
 
-## 7 · Questions to confirm with the manager
+## 7 · Migration templates available (9 in v4.5)
+
+The Migration Engine (under **Admin & Tools** in v4.5) ships with the following templates. Each includes an AI column-mapper and duplicate pre-check.
+
+| # | Template | Target table | Status | Notes |
+|---|---|---|---|---|
+| 1 | Risks | `enterprise_risks` | Original | Excel/CSV with title, owner, likelihood, impact, category, treatment |
+| 2 | Vendors | `vendors` | Original | Vendor master list |
+| 3 | Policies / Controlled Docs | `policies` | Original | Doc number, title, version, owner, content |
+| 4 | Calls | `call_records` | Original | Bulk telephony export |
+| 5 | **CAPA Register** | `capa_records` | **New v4.5** | Linked NC, action, owner, due date, status, root cause |
+| 6 | **Nonconformity Log** | `nonconformance_records` | **New v4.5** | Source, severity, type, description, status |
+| 7 | **Training Records** | `training_records` | **New v4.5** | Course, attendee, completion date, assessment score |
+| 8 | **Audit Findings** | `grc_audit_findings` | **New v4.5** | Audit, severity, clause, finding, evidence link |
+| 9 | **Deal Evaluations** | `deal_evaluations` | **New v4.5** | Deal ID, framework, dimension scores, overall |
+
+---
+
+## 8 · Questions to confirm with the manager
 
 1. Do we have an existing risk register Excel we can import directly?
 2. Where is the master vendor list maintained today?
@@ -112,9 +131,10 @@ If we can only do one batch a week, suggested order:
 4. Are there real NCs/CAPAs from the past year, or is this a greenfield log?
 5. Who is the owner for compliance assessments per regulation (PDPL, ISO 9001, etc.)?
 6. Confirm: are there any data incidents to log, or is `data_incidents` legitimately zero?
-7. **Do we have the 2026 certification audit calendar to seed `external_audits`?** (Need: scheduled certification / surveillance / customer audits with kind, body, standard, planned dates.)
-8. **Who will be assigned the `head_of_operations_quality` role?** Annual Audit Programme sign-off cannot complete until at least one user holds this role.
-9. **Backlog of off-platform audit reports for `/intake`?** GPT-4o extraction is ready — needs the first batch (HR supplier audits, KPMG assessments, vendor audit PDFs) to validate the workflow.
+7. **Annual Audit Programme 2026 — who drafts and who signs off?** The platform expects a Quality Manager to draft and the **Head of Operations & Quality** to sign off (HITL). Need both names confirmed.
+8. **Do we have the 2026 external audit calendar?** Scheduled certification / surveillance / regulatory / customer audits with body (BSI/DNV/SGS/TÜV), standard, planned date.
+9. **Active certificate inventory** — issuing body, standard, valid_from, valid_to, renewal owner. Anything expiring in the next 90 days?
+10. **Off-platform audit reports backlog** — HR supplier audits, KPMG assessments, vendor audit PDFs ready to upload via `/intake`? GPT-4o extraction is live and needs a first real batch to validate.
 
 ---
 

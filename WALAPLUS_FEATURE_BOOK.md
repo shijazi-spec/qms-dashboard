@@ -83,7 +83,22 @@ Scenario: Page views are logged for accountability
 
 ---
 
-# Module 2 — Internal Audits — AI Quality Audit Surface · *Tier 1 — workhorse*
+# Module 2 — Internal Audits Suite · *Tier 1 — workhorse*
+
+The Internal Audits Suite consolidates **everything that happens inside our four walls** — the dashboard, the annual programme, off-platform report intake, real-time triggers, and the AI Quality Audits engine. External-body audits (certification, surveillance, regulatory, customer) live in **Module 3**. All findings — regardless of origin — converge into `grc_audit_findings` for a single audit-trail spine.
+
+**Sub-modules**
+- **2.A** — Internal Audits Dashboard (`/audits`)
+- **2.B** — Annual Audit Programme + HITL sign-off
+- **2.C** — Manual Audit Intake (`/intake`)
+- **2.D** — Triggers (HITL gate + Auto-Escalation cron)
+- **2.E** — AI Quality Audits (`/qms` Quality Audits tab)
+
+Test ID namespaces: `T-IA-*` (dashboard), `T-PROG-*` (programme), `T-INTK-*` (intake), `T-TRIG-*` (triggers), `T-QA-*` (AI quality audits), and `T-EXT-*` for Module 3 External Audits.
+
+---
+
+## 2.E — AI Quality Audits Surface · *Tier 1 — workhorse*
 
 **Purpose**: Weekly automated quality scan across all CRM data — surfaces NCs, missing fields, stale records and policy violations without anyone needing to schedule it. Lives as the **Quality Audits (AI)** tab inside `/qms`. As of v4.5 the dashboard is no longer iframed into `/audits` — the AI surface and the Internal Audits Dashboard (Module 3) are now distinct first-class pages.
 
@@ -132,7 +147,7 @@ Scenario: Manual trigger bypasses schedule for ad-hoc audits
 
 ---
 
-# Module 3 — Internal Audits Dashboard · *Tier 1*
+## 2.A — Internal Audits Dashboard · *Tier 1*
 
 **Purpose**: Single native page for the internal audit lifecycle — Annual Programme, finding traceability, evidence, checklist, plus quick-links to Manual Intake and External Audits. Replaces the v1.0 iframe-based two-tab design under `/audits`.
 
@@ -178,7 +193,7 @@ Scenario: Finding provenance badges
 
 ---
 
-# Module 3b — Annual Audit Programme (HITL sign-off) · *Tier 1 — new in v4.5*
+## 2.B — Annual Audit Programme (HITL sign-off) · *Tier 1 — new in v4.5*
 
 **Purpose**: Govern the annual internal audit plan with a formal Head-of-Operations-&-Quality sign-off (ISO 19011 §5.2). One programme per calendar year, transitioning draft → pending_signoff → signed_off.
 
@@ -219,7 +234,7 @@ Scenario: Programme transitions through correct states
 
 ---
 
-# Module 3c — Manual Audit Intake · *Tier 1 — new in v4.5*
+## 2.C — Manual Audit Intake · *Tier 1 — new in v4.5*
 
 **Purpose**: Central single-point intake for off-platform audit reports (HR's supplier audits, KPMG external assessments, vendor audits). GPT-4o extracts structured findings with source-quote traceability; reviewer accepts/edits/rejects each before promotion to the finding spine.
 
@@ -257,7 +272,67 @@ Scenario: Finalize promotes accepted findings
 
 ---
 
-# Module 3d — External Audits · *Tier 1 — new in v4.5*
+## 2.D — Triggers (HITL gate + Auto-Escalation) · *Tier 1 — new in v4.5*
+
+**Purpose**: Real-time monitoring of QMS conditions (SLA breaches, missed thresholds, drift) that surfaces a finding the moment a rule fires; v4.5 adds an explicit human-in-the-loop gate on dismissals plus an auto-escalation safety net so nothing important falls through the cracks.
+
+**Primary user**: Quality Manager (review/dismiss), Head of Operations & Quality (HITL adjudication on Critical proposals).
+
+**Key surfaces**
+- `/qms` Triggers tab
+- `/ai-approvals` (HITL queue)
+- `/api/qms/triggers`, `/api/qms/triggers/:id/dismiss`, `/api/qms/triggers/:id/propose-hitl`
+- Inngest cron: `trigger-auto-escalate` (daily 03:00 UTC)
+
+**Data sources**: `qms_triggers` (with new columns `dismiss_reason`, `re_evaluate_at`, `escalation_finding_id`), `audit_triggers_decisions`, `ai_pending_actions` (action_code=`trigger_decision`), `grc_audit_findings`
+
+**Job stories**
+- *When* I want to dismiss a noisy trigger, *I want* the system to require a written reason, *so I can* maintain audit-trail integrity for any "we looked but moved on" decisions.
+- *When* a Critical trigger fires and I'm not sure what to do, *I want* to escalate to HITL, *so I can* get a second pair of eyes from the Head of Operations & Quality.
+- *When* I forget about a stale Critical trigger for 7 days, *I want* the platform to auto-open a finding, *so I can* be sure nothing critical is silently ignored.
+
+**Acceptance criteria**
+
+```
+Scenario: Dismiss requires a reason
+  Given a qms_triggers row with status='active'
+  When I POST /api/qms/triggers/:id/dismiss with reason length < 10
+  Then the API returns 400 with error 'dismiss_reason_required'
+
+Scenario: Dismissed triggers are auto-re-evaluated 24h later
+  Given a trigger dismissed at T0
+  When the trigger-auto-escalate cron runs after T0+24h
+  Then the trigger.status returns to 'active'
+
+Scenario: Critical-trigger HITL proposal
+  Given a qms_triggers row with severity='critical'
+  When the user clicks 'Propose via HITL'
+  Then a row appears in ai_pending_actions with action_code='trigger_decision'
+
+Scenario: Stale Critical trigger auto-opens a finding
+  Given a critical trigger pending ≥7 days
+  When the cron runs
+  Then a grc_audit_findings row is created
+  And the trigger.escalation_finding_id is set bi-directionally
+
+Scenario: Stale Minor trigger auto-opens a finding (30d)
+  Given a minor trigger pending ≥30 days
+  When the cron runs
+  Then a grc_audit_findings row is created
+```
+
+**Test cases**
+- T-TRIG-01 Dismiss without reason → 400
+- T-TRIG-02 Dismiss with reason ≥10 chars → 200, dismiss_reason persisted
+- T-TRIG-03 24h re-evaluation reactivates trigger
+- T-TRIG-04 Critical "Propose via HITL" creates ai_pending_actions row
+- T-TRIG-05 Cron auto-opens finding for stale Critical@7d
+- T-TRIG-06 Cron auto-opens finding for stale Minor@30d
+- T-TRIG-07 Bi-directional `escalation_finding_id` linkage verified
+
+---
+
+# Module 3 — External Audits · *Tier 1 — new in v4.5*
 
 **Purpose**: Track every external audit (certification, recertification, surveillance, regulatory, customer) with its certificate body, calendar, certificate register, and pre-audit readiness checklist.
 
@@ -370,7 +445,9 @@ Scenario: Deadline calendar shows next 30 days
 
 ---
 
-# Module 6 — Policies & Integrated QMS · *Tier 1 — workhorse*
+# Module 6 — Controlled Documents · *Tier 1 — workhorse*
+
+> Renamed in v4.5 from "Policies & Integrated QMS". Baseline expanded from 147 → **154 controlled documents** (147 originals + 7 v4.5 additions: WP-SOP-040 Audit Programme Governance, WP-SOP-041 Manual Intake Control, WP-SOP-042 External Audit Preparation, plus WP-FORM-055/056/057/058).
 
 **Purpose**: Single library for Policies, Procedures, Work Instructions, SOPs, Forms, Templates with versioning, acknowledgments, review cycles, file upload.
 
@@ -398,7 +475,7 @@ Scenario: File upload validation
 ```
 
 **Test cases**
-- T-POL-01 `GET /api/policies` → 200, ≥ 147 records
+- T-POL-01 `GET /api/policies` → 200, ≥ 154 records (147 + 7 v4.5)
 - T-POL-02 `GET /api/policies?type=SOP` → 200
 - T-POL-03 Policy ack endpoint exists
 
