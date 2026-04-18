@@ -7,6 +7,7 @@ const pool = new Pool({
 
 export interface EnterpriseRisk {
   id?: number;
+  public_id?: string;
   risk_title: string;
   risk_description: string;
   risk_category: 'operational' | 'legal' | 'financial' | 'data_privacy' | 'information_security' | 'fraud' | 'vendor';
@@ -49,6 +50,7 @@ export interface EnterpriseRisk {
 
 export interface RiskTreatmentAction {
   id?: number;
+  public_id?: string;
   risk_id: number;
   action_title: string;
   action_description: string;

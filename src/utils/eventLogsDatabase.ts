@@ -13,7 +13,7 @@ export interface EventLog {
   user_email?: string;
   user_role?: string;
   action_type: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE' | 'ASSIGN' | 'AI_ACTION' | 'LOGIN' | 'LOGOUT' | 'VIEW' | 'EXPORT' | 'CALCULATE';
-  entity_type: 'PROJECT' | 'TRAINING' | 'ROI' | 'USER' | 'ROLE' | 'CALL' | 'KPI' | 'CAPA' | 'DOCUMENT' | 'SYSTEM';
+  entity_type: 'PROJECT' | 'TRAINING' | 'ROI' | 'USER' | 'ROLE' | 'CALL' | 'KPI' | 'CAPA' | 'DOCUMENT' | 'SYSTEM' | 'SESSION';
   entity_id?: string;
   entity_name?: string;
   description?: string;

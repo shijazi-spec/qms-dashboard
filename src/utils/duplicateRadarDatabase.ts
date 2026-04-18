@@ -159,7 +159,7 @@ export interface DuplicateExportLog {
   export_type: 'cluster' | 'owner' | 'time_period' | 'all';
   filter_criteria?: any;
   total_records_exported: number;
-  file_format: 'excel' | 'csv';
+  file_format: 'excel' | 'csv' | 'xlsx';
   exported_by?: string;
   user_email?: string;
   created_at?: Date;
@@ -1967,11 +1967,11 @@ export function generateSmartRecommendations(records: DuplicateRecord[]): SmartR
     if (t === primaryType) {
       action = 'merge';
       recommendation = `MERGE into primary ${primaryType} (native Zoho merge — same module)`;
-    } else if (primaryType === 'account' && (t === 'contact' || t === 'deal' || t === 'task')) {
+    } else if (primaryType === 'account' && ((t as string) === 'contact' || (t as string) === 'deal' || (t as string) === 'task')) {
       action = 'link';
-      const field = t === 'contact' || t === 'deal' ? 'Account_Name' : 'What_Id';
+      const field = (t as string) === 'contact' || (t as string) === 'deal' ? 'Account_Name' : 'What_Id';
       recommendation = `LINK to primary account by setting ${field} on this ${t} (cross-module — do NOT merge)`;
-    } else if (primaryType === 'contact' && (t === 'deal' || t === 'task')) {
+    } else if (primaryType === 'contact' && ((t as string) === 'deal' || (t as string) === 'task')) {
       action = 'link';
       const field = t === 'deal' ? 'Contact_Name' : 'Who_Id';
       recommendation = `LINK to primary contact by setting ${field} on this ${t} (cross-module — do NOT merge)`;

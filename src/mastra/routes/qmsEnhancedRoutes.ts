@@ -790,7 +790,7 @@ export const qmsEnhancedRoutes = [
                   target_date: new Date(Date.now() + 30 * 86400000),
                   created_by: body.reviewedBy || 'System',
                 });
-                reCapaId = reCapa.id;
+                reCapaId = reCapa.id ?? null;
                 try {
                   const { logEvent } = await import("../../utils/eventLogsDatabase");
                   await logEvent({ actionType: 'CREATE', entityType: 'CAPA', entityId: String(reCapa.id), entityName: reCapa.capa_number, description: `Auto re-CAPA created from ineffective CAPA ${original.capa_number}`, module: 'qms', severity: 'WARNING' });
