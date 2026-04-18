@@ -24,8 +24,7 @@ const WalaPlusNav = {
       items: [
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
         { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
-        { label: 'Quality Audits (AI)', href: '/qms', icon: 'shield-check', id: 'qms', badge: 'AI' },
-        { label: 'ISO Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
+        { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
       ]

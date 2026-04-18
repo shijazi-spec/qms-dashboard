@@ -84,9 +84,24 @@
         <div id="walaplus-nav"></div>
         <script src="/js/navigation.js"></script>
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                WalaPlusNav.init('qms');
-            });
+            // When embedded inside Internal Audits (?embed=1), suppress the global
+            // navigation chrome — the parent page already provides it.
+            (function () {
+                const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
+                if (isEmbed) {
+                    document.documentElement.classList.add('embed-mode');
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .embed-mode #walaplus-nav { display: none !important; }
+                        .embed-mode body { background: transparent !important; }
+                        .embed-mode .max-w-7xl { padding-top: 0 !important; }
+                    `;
+                    document.head.appendChild(style);
+                }
+                document.addEventListener('DOMContentLoaded', function () {
+                    if (!isEmbed) WalaPlusNav.init('qms');
+                });
+            })();
         </script>
 
         <div class="max-w-7xl mx-auto px-4 py-6">

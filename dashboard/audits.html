@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WalaPlus - Audit Readiness</title>
+    <title>WalaPlus - Internal Audits</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -32,16 +32,16 @@
     </script>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-4">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">Audit Readiness Center</h1>
-                <p class="text-sm text-gray-500 mt-1">Manage audits, findings, and evidence packs for regulatory compliance</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">Internal Audits</h1>
+                <p class="text-sm text-gray-500 mt-1">ISO audit readiness, findings, evidence packs, and AI-powered Quality Audits in one place</p>
             </div>
-            <div class="flex gap-3">
-                <button onclick="openAddFindingModal()" class="px-4 py-2 border border-purple-700 text-purple-700 rounded-lg hover:bg-purple-50 font-medium">
+            <div id="auditsActionBar" class="flex gap-3">
+                <button onclick="openAddFindingModal()" data-testid="button-add-finding" class="px-4 py-2 border border-purple-700 text-purple-700 rounded-lg hover:bg-purple-50 font-medium">
                     + Finding
                 </button>
-                <button onclick="openAddAuditModal()" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 font-medium flex items-center gap-2">
+                <button onclick="openAddAuditModal()" data-testid="button-new-audit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 font-medium flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
@@ -49,6 +49,31 @@
                 </button>
             </div>
         </div>
+
+        <!-- Sub-tab navigation: ISO Audits | Quality Audits (AI) -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex gap-6" role="tablist" aria-label="Internal Audits tabs">
+                <button id="tab-iso" data-testid="tab-iso-audits" role="tab" aria-selected="true"
+                        class="py-3 px-1 border-b-2 border-purple-700 text-purple-700 font-semibold text-sm">
+                    ISO Audits
+                </button>
+                <button id="tab-quality" data-testid="tab-quality-audits" role="tab" aria-selected="false"
+                        class="py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm flex items-center gap-2">
+                    Quality Audits
+                    <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800">AI</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Quality Audits (AI) panel — embeds /qms?embed=1 -->
+        <section id="panel-quality" role="tabpanel" aria-labelledby="tab-quality" class="hidden" style="min-height: 80vh;">
+            <iframe id="qmsFrame" src="about:blank" data-testid="iframe-quality-audits"
+                    style="width:100%;height:80vh;border:0;background:transparent;"
+                    title="Quality Audits (AI)"></iframe>
+        </section>
+
+        <!-- ISO Audits panel — original Audit Readiness Center content below -->
+        <section id="panel-iso" role="tabpanel" aria-labelledby="tab-iso">
 
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
             <div class="bg-white rounded-lg shadow p-4">
@@ -166,7 +191,65 @@
                 </table>
             </div>
         </div>
+        </section>
+        <!-- end #panel-iso -->
     </main>
+
+    <script>
+        (function setupInternalAuditsTabs(){
+            const tabIso     = document.getElementById('tab-iso');
+            const tabQuality = document.getElementById('tab-quality');
+            const panelIso     = document.getElementById('panel-iso');
+            const panelQuality = document.getElementById('panel-quality');
+            const actionBar  = document.getElementById('auditsActionBar');
+            const qmsFrame   = document.getElementById('qmsFrame');
+            let qmsLoaded = false;
+
+            function setActive(tab) {
+                const isQuality = tab === 'quality';
+
+                // Tab pill styling
+                tabIso.setAttribute('aria-selected', isQuality ? 'false' : 'true');
+                tabQuality.setAttribute('aria-selected', isQuality ? 'true' : 'false');
+                tabIso.classList.toggle('border-purple-700', !isQuality);
+                tabIso.classList.toggle('text-purple-700', !isQuality);
+                tabIso.classList.toggle('font-semibold', !isQuality);
+                tabIso.classList.toggle('border-transparent', isQuality);
+                tabIso.classList.toggle('text-gray-500', isQuality);
+                tabQuality.classList.toggle('border-purple-700', isQuality);
+                tabQuality.classList.toggle('text-purple-700', isQuality);
+                tabQuality.classList.toggle('font-semibold', isQuality);
+                tabQuality.classList.toggle('border-transparent', !isQuality);
+                tabQuality.classList.toggle('text-gray-500', !isQuality);
+
+                // Panels
+                panelIso.classList.toggle('hidden', isQuality);
+                panelQuality.classList.toggle('hidden', !isQuality);
+
+                // Hide ISO action bar when on Quality tab (Quality has its own actions)
+                actionBar.classList.toggle('hidden', isQuality);
+
+                // Lazy-load iframe so QMS isn't fetched until needed
+                if (isQuality && !qmsLoaded) {
+                    qmsFrame.src = '/qms?embed=1';
+                    qmsLoaded = true;
+                }
+
+                // Persist tab selection to URL (no reload)
+                const url = new URL(window.location.href);
+                if (isQuality) url.searchParams.set('tab','quality');
+                else url.searchParams.delete('tab');
+                window.history.replaceState({}, '', url);
+            }
+
+            tabIso.addEventListener('click',     () => setActive('iso'));
+            tabQuality.addEventListener('click', () => setActive('quality'));
+
+            // Honor ?tab=quality on initial load
+            const initial = new URLSearchParams(window.location.search).get('tab');
+            if (initial === 'quality') setActive('quality');
+        })();
+    </script>
 
     <div id="addAuditModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
