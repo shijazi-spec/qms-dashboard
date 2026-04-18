@@ -483,7 +483,14 @@ async function buildAudits(): Promise<InfographicData> {
       `SELECT COALESCE(status,'unknown') status, COUNT(*)::int n FROM audits GROUP BY status`
     )).rows;
     try { findings = (await pool.query(`SELECT COUNT(*)::int n FROM audit_findings`)).rows[0]?.n || 0; } catch {}
-    latest = (await pool.query(`SELECT title, audit_date, status FROM audits ORDER BY audit_date DESC NULLS LAST LIMIT 1`)).rows[0] || null;
+    latest = (await pool.query(
+      `SELECT title,
+              COALESCE(completed_date, actual_end_date, scheduled_date) AS audit_date,
+              status
+         FROM audits
+        ORDER BY COALESCE(completed_date, actual_end_date, scheduled_date) DESC NULLS LAST
+        LIMIT 1`
+    )).rows[0] || null;
   } catch (e) { console.warn('[Infographic.audits]', (e as Error).message); }
 
   const statusCount = (k: string) => byStatus.find((r: any) => String(r.status).toLowerCase().includes(k))?.n || 0;
