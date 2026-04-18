@@ -382,6 +382,244 @@ export const qmsEnhancedRoutes = [
     },
   },
   {
+    path: "/api/qms/nc/export-xlsx",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getNonconformances } = await import("../../utils/qmsDatabase");
+          const { records } = await getNonconformances({ limit: 50000, offset: 0 });
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+
+          const bySeverity = (sev: string) => records.filter((r: any) => r.severity === sev).length;
+          const byStatus = (st: string) => records.filter((r: any) => r.status === st).length;
+
+          const buf = await buildWorkbook([
+            {
+              name: 'Summary',
+              columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
+              rows: [
+                { metric: 'Total nonconformances', value: records.length },
+                { metric: 'Open', value: byStatus('open') },
+                { metric: 'Acknowledged', value: byStatus('acknowledged') },
+                { metric: 'Closed', value: byStatus('closed') },
+                { metric: 'Critical', value: bySeverity('critical') },
+                { metric: 'Major', value: bySeverity('major') },
+                { metric: 'Minor', value: bySeverity('minor') },
+                { metric: 'Generated', value: new Date().toISOString() },
+              ],
+            },
+            {
+              name: 'Nonconformances',
+              columns: [
+                { header: 'NC #', key: 'nc_number', width: 14 },
+                { header: 'Title', key: 'title', width: 40 },
+                { header: 'Type', key: 'nc_type', width: 16 },
+                { header: 'Category', key: 'category', width: 16 },
+                { header: 'Severity', key: 'severity', width: 12 },
+                { header: 'Status', key: 'status', width: 14 },
+                { header: 'Disposition', key: 'disposition', width: 16 },
+                { header: 'Source', key: 'source_type', width: 16 },
+                { header: 'Source Ref', key: 'source_reference', width: 22 },
+                { header: 'Detected By', key: 'detected_by', width: 22 },
+                { header: 'Detected', key: 'detected_date_str', width: 14 },
+                { header: 'Reviewed By', key: 'reviewed_by', width: 22 },
+                { header: 'Closed By', key: 'closed_by', width: 22 },
+                { header: 'Closed', key: 'closed_date_str', width: 14 },
+                { header: 'Description', key: 'description', width: 50 },
+                { header: 'Disposition Notes', key: 'disposition_notes', width: 40 },
+              ],
+              rows: records.map((r: any) => ({
+                ...r,
+                detected_date_str: fmt(r.detected_date),
+                closed_date_str: fmt(r.closed_date),
+              })),
+            },
+          ], { title: 'Nonconformance Records Export' });
+
+          return c.body(buf, 200, xlsxResponseHeaders(`nonconformances_${Date.now()}.xlsx`));
+        } catch (error) {
+          console.error('Error exporting NC XLSX:', error);
+          return c.json({ error: "Export failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // NOTE: not "/api/qms/capa/export-xlsx" — that pattern is shadowed by the
+    // GET "/api/qms/capa/:id" handler defined in src/mastra/index.ts which would
+    // try to parseInt('export-xlsx') and 500. The hyphenated path avoids the param match.
+    path: "/api/qms/capa-export-xlsx",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { getCapaRecords } = await import("../../utils/qmsDatabase");
+          const { records } = await getCapaRecords({ limit: 50000, offset: 0 });
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+
+          const byStatus = (st: string) => records.filter((r: any) => r.status === st).length;
+          const overdue = records.filter((r: any) => r.target_date && r.status !== 'closed' && new Date(r.target_date) < new Date()).length;
+
+          const buf = await buildWorkbook([
+            {
+              name: 'Summary',
+              columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
+              rows: [
+                { metric: 'Total CAPAs', value: records.length },
+                { metric: 'Open', value: byStatus('open') },
+                { metric: 'Investigation', value: byStatus('investigation') },
+                { metric: 'Action Plan', value: byStatus('action_plan') },
+                { metric: 'Implementation', value: byStatus('implementation') },
+                { metric: 'Verification', value: byStatus('verification') },
+                { metric: 'Closed', value: byStatus('closed') },
+                { metric: 'Overdue (open + past target date)', value: overdue },
+                { metric: 'Generated', value: new Date().toISOString() },
+              ],
+            },
+            {
+              name: 'CAPAs',
+              columns: [
+                { header: 'CAPA #', key: 'capa_number', width: 14 },
+                { header: 'Title', key: 'title', width: 40 },
+                { header: 'Type', key: 'capa_type', width: 14 },
+                { header: 'Severity', key: 'severity', width: 12 },
+                { header: 'Priority', key: 'priority', width: 10 },
+                { header: 'Status', key: 'status', width: 16 },
+                { header: 'Assigned To', key: 'assigned_to', width: 22 },
+                { header: 'Target Date', key: 'target_date_str', width: 14 },
+                { header: 'Completion Date', key: 'completion_date_str', width: 16 },
+                { header: 'Verification Date', key: 'verification_date_str', width: 16 },
+                { header: 'Effectiveness', key: 'effectiveness_result', width: 16 },
+                { header: 'Closure Approved By', key: 'closure_approved_by', width: 22 },
+                { header: 'Source', key: 'source_type', width: 16 },
+                { header: 'Source Ref', key: 'source_reference', width: 22 },
+                { header: 'Root Cause', key: 'root_cause', width: 40 },
+                { header: 'Corrective Action', key: 'corrective_action', width: 40 },
+                { header: 'Preventive Action', key: 'preventive_action', width: 40 },
+              ],
+              rows: records.map((r: any) => ({
+                ...r,
+                target_date_str: fmt(r.target_date),
+                completion_date_str: fmt(r.completion_date),
+                verification_date_str: fmt(r.verification_date),
+              })),
+            },
+          ], { title: 'CAPA Records Export' });
+
+          return c.body(buf, 200, xlsxResponseHeaders(`capa_records_${Date.now()}.xlsx`));
+        } catch (error) {
+          console.error('Error exporting CAPA XLSX:', error);
+          return c.json({ error: "Export failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/vendors/export-xlsx",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const { initVendorTables } = await import("../../utils/vendorDatabase");
+          await initVendorTables();
+
+          const vendors = await pool.query(`
+            SELECT id, vendor_code, name, category, criticality, status,
+                   contract_start, contract_end, contract_value,
+                   primary_contact_name, primary_contact_email, primary_contact_phone,
+                   country, data_access_level, last_assessment_date
+            FROM vendors ORDER BY name LIMIT 10000
+          `);
+          const assessments = await pool.query(`
+            SELECT va.vendor_id, v.name AS vendor_name, va.assessment_type, va.assessment_date,
+                   va.assessed_by, va.status, va.security_score, va.financial_score,
+                   va.operational_score, va.compliance_score, va.overall_score, va.risk_level,
+                   va.recommendations
+            FROM vendor_assessments va LEFT JOIN vendors v ON v.id = va.vendor_id
+            ORDER BY va.assessment_date DESC LIMIT 50000
+          `);
+
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+
+          const byCrit = (c: string) => vendors.rows.filter((v: any) => v.criticality === c).length;
+          const byRisk = (l: string) => assessments.rows.filter((a: any) => a.risk_level === l).length;
+
+          const buf = await buildWorkbook([
+            {
+              name: 'Summary',
+              columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
+              rows: [
+                { metric: 'Total vendors', value: vendors.rows.length },
+                { metric: 'Critical criticality', value: byCrit('critical') },
+                { metric: 'High criticality', value: byCrit('high') },
+                { metric: 'Total assessments', value: assessments.rows.length },
+                { metric: 'High-risk assessments', value: byRisk('high') + byRisk('critical') },
+                { metric: 'Generated', value: new Date().toISOString() },
+              ],
+            },
+            {
+              name: 'Vendors',
+              columns: [
+                { header: 'Code', key: 'vendor_code', width: 12 },
+                { header: 'Name', key: 'name', width: 36 },
+                { header: 'Category', key: 'category', width: 18 },
+                { header: 'Criticality', key: 'criticality', width: 12 },
+                { header: 'Status', key: 'status', width: 18 },
+                { header: 'Country', key: 'country', width: 14 },
+                { header: 'Data Access', key: 'data_access_level', width: 14 },
+                { header: 'Contract Start', key: 'contract_start_str', width: 14 },
+                { header: 'Contract End', key: 'contract_end_str', width: 14 },
+                { header: 'Contract Value', key: 'contract_value', width: 14 },
+                { header: 'Primary Contact', key: 'primary_contact_name', width: 24 },
+                { header: 'Email', key: 'primary_contact_email', width: 28 },
+                { header: 'Phone', key: 'primary_contact_phone', width: 18 },
+                { header: 'Last Assessment', key: 'last_assessment_str', width: 16 },
+              ],
+              rows: vendors.rows.map((v: any) => ({
+                ...v,
+                contract_start_str: fmt(v.contract_start),
+                contract_end_str: fmt(v.contract_end),
+                last_assessment_str: fmt(v.last_assessment_date),
+              })),
+            },
+            {
+              name: 'Assessments',
+              columns: [
+                { header: 'Vendor', key: 'vendor_name', width: 30 },
+                { header: 'Type', key: 'assessment_type', width: 14 },
+                { header: 'Date', key: 'assessment_date_str', width: 14 },
+                { header: 'Status', key: 'status', width: 12 },
+                { header: 'Risk Level', key: 'risk_level', width: 12 },
+                { header: 'Overall', key: 'overall_score', width: 10 },
+                { header: 'Security', key: 'security_score', width: 10 },
+                { header: 'Financial', key: 'financial_score', width: 10 },
+                { header: 'Operational', key: 'operational_score', width: 12 },
+                { header: 'Compliance', key: 'compliance_score', width: 12 },
+                { header: 'Assessed By', key: 'assessed_by', width: 22 },
+                { header: 'Recommendations', key: 'recommendations', width: 40 },
+              ],
+              rows: assessments.rows.map((a: any) => ({
+                ...a,
+                assessment_date_str: fmt(a.assessment_date),
+              })),
+            },
+          ], { title: 'Vendor Risk Export' });
+
+          return c.body(buf, 200, xlsxResponseHeaders(`vendors_${Date.now()}.xlsx`));
+        } catch (error) {
+          console.error('Error exporting vendors XLSX:', error);
+          return c.json({ error: "Export failed" }, 500);
+        } finally { await pool.end(); }
+      };
+    },
+  },
+  {
     path: "/api/qms/nc/bulk-update",
     method: "POST" as const,
     createHandler: async () => {

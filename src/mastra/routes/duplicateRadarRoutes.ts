@@ -1081,6 +1081,20 @@ export const duplicateRadarRoutes = [
           // exceljs serialises ~40K rows in-process.
           const records = rawRecords.map(({ raw_data, cluster_domain, cluster_confidence, ...rest }: any) => rest);
 
+          // Parity with /api/duplicates/export (CSV): log every export so the audit trail
+          // captures who pulled what data and when. Failure to log must not block the export.
+          try {
+            await createExportLog({
+              export_type: 'all',
+              filter_criteria: { start_date, end_date, include_raw: includeRaw },
+              total_records_exported: records.length,
+              file_format: 'xlsx',
+              exported_by: 'User',
+            });
+          } catch (logErr) {
+            console.warn('[DuplicateRadar] export-xlsx log write failed (non-blocking):', logErr);
+          }
+
           const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
 
           // Group records by type so each module gets its own sheet

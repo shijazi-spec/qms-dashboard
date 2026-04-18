@@ -23,6 +23,127 @@ export const riskRoutes = [
     }
   },
   {
+    path: "/api/risks/export-xlsx",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const logger = mastra?.getLogger();
+          const { initRiskTables } = await import('../../utils/riskDatabase');
+          await initRiskTables();
+          logger?.info('📊 [RiskAPI] GET /api/risks/export-xlsx');
+
+          const risks = await pool.query(`
+            SELECT id, risk_title, risk_description, risk_category, risk_source,
+                   identified_date, identified_by, risk_owner, owner_department,
+                   impact_score, likelihood_score, risk_score, risk_level,
+                   treatment_strategy, treatment_owner, treatment_deadline,
+                   residual_impact, residual_likelihood, residual_risk_score
+            FROM enterprise_risks ORDER BY risk_score DESC, id LIMIT 10000
+          `);
+          const actions = await pool.query(`
+            SELECT rta.risk_id, er.risk_title, rta.action_title, rta.action_description,
+                   rta.action_type, rta.assigned_to, rta.due_date, rta.status,
+                   rta.completion_date, rta.percent_complete, rta.evidence_required, rta.evidence_attached
+            FROM risk_treatment_actions rta LEFT JOIN enterprise_risks er ON er.id = rta.risk_id
+            ORDER BY rta.due_date ASC LIMIT 50000
+          `);
+
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+
+          const byLevel = (l: string) => risks.rows.filter((r: any) => r.risk_level === l).length;
+          const byCategory: Record<string, any[]> = {};
+          for (const r of risks.rows) {
+            const cat = r.risk_category || 'Uncategorised';
+            (byCategory[cat] = byCategory[cat] || []).push(r);
+          }
+
+          const riskColumns = [
+            { header: 'ID', key: 'id', width: 6 },
+            { header: 'Title', key: 'risk_title', width: 40 },
+            { header: 'Category', key: 'risk_category', width: 16 },
+            { header: 'Source', key: 'risk_source', width: 20 },
+            { header: 'Owner', key: 'risk_owner', width: 22 },
+            { header: 'Department', key: 'owner_department', width: 18 },
+            { header: 'Identified', key: 'identified_str', width: 14 },
+            { header: 'Impact', key: 'impact_score', width: 8 },
+            { header: 'Likelihood', key: 'likelihood_score', width: 12 },
+            { header: 'Score', key: 'risk_score', width: 8 },
+            { header: 'Level', key: 'risk_level', width: 10 },
+            { header: 'Treatment', key: 'treatment_strategy', width: 14 },
+            { header: 'Treatment Owner', key: 'treatment_owner', width: 22 },
+            { header: 'Treatment Deadline', key: 'treatment_deadline_str', width: 18 },
+            { header: 'Residual Score', key: 'residual_risk_score', width: 14 },
+            { header: 'Description', key: 'risk_description', width: 50 },
+          ];
+
+          const enrich = (r: any) => ({
+            ...r,
+            identified_str: fmt(r.identified_date),
+            treatment_deadline_str: fmt(r.treatment_deadline),
+          });
+
+          const sheets: any[] = [
+            {
+              name: 'Summary',
+              columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
+              rows: [
+                { metric: 'Total enterprise risks', value: risks.rows.length },
+                { metric: 'Critical', value: byLevel('critical') },
+                { metric: 'High', value: byLevel('high') },
+                { metric: 'Medium', value: byLevel('medium') },
+                { metric: 'Low', value: byLevel('low') },
+                { metric: 'Treatment actions total', value: actions.rows.length },
+                { metric: 'Actions overdue', value: actions.rows.filter((a: any) => a.due_date && a.status !== 'completed' && new Date(a.due_date) < new Date()).length },
+                { metric: 'Categories', value: Object.keys(byCategory).length },
+                { metric: 'Generated', value: new Date().toISOString() },
+              ],
+            },
+            { name: 'All Risks', columns: riskColumns, rows: risks.rows.map(enrich) },
+          ];
+
+          for (const [cat, list] of Object.entries(byCategory)) {
+            sheets.push({ name: cat, columns: riskColumns, rows: list.map(enrich) });
+          }
+
+          sheets.push({
+            name: 'Treatment Actions',
+            columns: [
+              { header: 'Risk ID', key: 'risk_id', width: 8 },
+              { header: 'Risk Title', key: 'risk_title', width: 36 },
+              { header: 'Action Title', key: 'action_title', width: 36 },
+              { header: 'Type', key: 'action_type', width: 14 },
+              { header: 'Assigned To', key: 'assigned_to', width: 22 },
+              { header: 'Due Date', key: 'due_date_str', width: 14 },
+              { header: 'Status', key: 'status', width: 14 },
+              { header: '% Complete', key: 'percent_complete', width: 12 },
+              { header: 'Completion Date', key: 'completion_date_str', width: 16 },
+              { header: 'Evidence Required', key: 'evidence_required_str', width: 18 },
+              { header: 'Evidence Attached', key: 'evidence_attached_str', width: 18 },
+              { header: 'Description', key: 'action_description', width: 40 },
+            ],
+            rows: actions.rows.map((a: any) => ({
+              ...a,
+              due_date_str: fmt(a.due_date),
+              completion_date_str: fmt(a.completion_date),
+              evidence_required_str: a.evidence_required ? 'Yes' : 'No',
+              evidence_attached_str: a.evidence_attached ? 'Yes' : 'No',
+            })),
+          });
+
+          const buf = await buildWorkbook(sheets, { title: 'Enterprise Risk Register Export' });
+          return c.body(buf, 200, xlsxResponseHeaders(`risks_${Date.now()}.xlsx`));
+        } catch (error) {
+          console.error('❌ [RiskAPI] Error exporting risks XLSX:', error);
+          return c.json({ error: 'Failed to export risks XLSX' }, 500);
+        } finally { await pool.end(); }
+      };
+    }
+  },
+  {
     path: "/api/risks",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
