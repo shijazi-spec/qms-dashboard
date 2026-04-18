@@ -1312,6 +1312,11 @@ export const mastra = new Mastra({
               const ownerNameAliases: Record<string, string> = {
                 "Rayan": "Rayan Saleh",
                 "Khalil": "Khalil Aldadah",
+                "Mohammad Ghanem": "Mohammed Ghanem",
+                "Mohamed Ghanem": "Mohammed Ghanem",
+                "Muhammad Ghanem": "Mohammed Ghanem",
+                "M Ghanem": "Mohammed Ghanem",
+                "Ghanem": "Mohammed Ghanem",
               };
 
               // Normalized override map: lowercase + collapsed whitespace.
