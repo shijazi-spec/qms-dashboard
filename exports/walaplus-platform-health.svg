@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1500" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="c1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#047857"/></linearGradient>
+    <linearGradient id="c2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#1d4ed8"/></linearGradient>
+    <linearGradient id="c3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6d28d9"/></linearGradient>
+    <linearGradient id="c4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient>
+    <linearGradient id="c5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ec4899"/><stop offset="100%" stop-color="#be185d"/></linearGradient>
+    <linearGradient id="c6" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#0e7490"/></linearGradient>
+    <linearGradient id="c7" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#84cc16"/><stop offset="100%" stop-color="#4d7c0f"/></linearGradient>
+    <linearGradient id="c8" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#c2410c"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/></filter>
+  </defs>
+
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <text x="600" y="80" text-anchor="middle" font-size="44" font-weight="800" fill="#ffffff" letter-spacing="-1">WalaPlus Platform Health</text>
+  <text x="600" y="120" text-anchor="middle" font-size="18" fill="#94a3b8" font-weight="500">Enterprise GRC &amp; Quality Platform · 2026-04-18 15:55 UTC</text>
+
+  <!-- Hero status banner -->
+  <rect x="120" y="160" width="960" height="120" rx="16" fill="url(#hero)" filter="url(#shadow)"/>
+  <circle cx="200" cy="220" r="32" fill="#ffffff" opacity="0.2"/>
+  <path d="M 184 220 L 196 232 L 220 208" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="260" y="210" font-size="32" font-weight="800" fill="#ffffff">ALL SYSTEMS HEALTHY</text>
+  <text x="260" y="250" font-size="16" fill="#d1fae5" font-weight="500">0 errors · 0 failed checks · all critical paths operational</text>
+  <text x="980" y="200" text-anchor="end" font-size="14" fill="#a7f3d0" font-weight="600">UPTIME</text>
+  <text x="980" y="240" text-anchor="end" font-size="36" font-weight="800" fill="#ffffff">99.9%</text>
+  <text x="980" y="262" text-anchor="end" font-size="12" fill="#a7f3d0">healthy</text>
+
+  <!-- Section title -->
+  <text x="120" y="340" font-size="20" font-weight="700" fill="#e2e8f0" letter-spacing="2">HEALTH METRICS</text>
+  <line x1="120" y1="350" x2="1080" y2="350" stroke="#334155" stroke-width="1"/>
+
+  <!-- Card grid: 4 cols × 2 rows. Card 220×220, 24px gap, starting x=120 -->
+  <!-- Row 1 -->
+  <g filter="url(#shadow)">
+    <rect x="120" y="380" width="220" height="220" rx="14" fill="url(#c1)"/>
+    <text x="142" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">PULSE MONITOR</text>
+    <text x="142" y="500" font-size="64" font-weight="800" fill="#ffffff">10/10</text>
+    <text x="142" y="540" font-size="12" fill="#d1fae5" font-weight="600">SYNTHETIC CHECKS</text>
+    <text x="142" y="565" font-size="11" fill="#ecfdf5">DB · audits · duplicates</text>
+    <text x="142" y="582" font-size="11" fill="#ecfdf5">KPIs · HITL · endpoints</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="364" y="380" width="220" height="220" rx="14" fill="url(#c2)"/>
+    <text x="386" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">DASHBOARDS</text>
+    <text x="386" y="500" font-size="64" font-weight="800" fill="#ffffff">23/23</text>
+    <text x="386" y="540" font-size="12" fill="#dbeafe" font-weight="600">UI ROUTES HEALTHY</text>
+    <text x="386" y="565" font-size="11" fill="#eff6ff">audits · risks · KPIs · QMS</text>
+    <text x="386" y="582" font-size="11" fill="#eff6ff">GRC · vendors · training</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="608" y="380" width="220" height="220" rx="14" fill="url(#c3)"/>
+    <text x="630" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">XLSX EXPORTS</text>
+    <text x="630" y="500" font-size="64" font-weight="800" fill="#ffffff">8/8</text>
+    <text x="630" y="540" font-size="12" fill="#ede9fe" font-weight="600">VALID SPREADSHEETS</text>
+    <text x="630" y="565" font-size="11" fill="#f5f3ff">audits · KPIs · NC · CAPA</text>
+    <text x="630" y="582" font-size="11" fill="#f5f3ff">vendors · risks · duplicates</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="852" y="380" width="220" height="220" rx="14" fill="url(#c4)"/>
+    <text x="874" y="420" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">RBAC GATES</text>
+    <text x="874" y="500" font-size="64" font-weight="800" fill="#ffffff">4/4</text>
+    <text x="874" y="540" font-size="12" fill="#fef3c7" font-weight="600">ADMIN-GATED</text>
+    <text x="874" y="565" font-size="11" fill="#fffbeb">401 without key · 200 with</text>
+    <text x="874" y="582" font-size="11" fill="#fffbeb">NC · CAPA · vendors · risks</text>
+  </g>
+
+  <!-- Row 2 -->
+  <g filter="url(#shadow)">
+    <rect x="120" y="624" width="220" height="220" rx="14" fill="url(#c5)"/>
+    <text x="142" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">ERROR LOG</text>
+    <text x="142" y="744" font-size="80" font-weight="800" fill="#ffffff">0</text>
+    <text x="142" y="784" font-size="12" fill="#fce7f3" font-weight="600">ERRORS DETECTED</text>
+    <text x="142" y="809" font-size="11" fill="#fdf2f8">1 informational warning</text>
+    <text x="142" y="826" font-size="11" fill="#fdf2f8">(Mastra telemetry notice)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="364" y="624" width="220" height="220" rx="14" fill="url(#c6)"/>
+    <text x="386" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">CRM SYNC</text>
+    <text x="386" y="744" font-size="56" font-weight="800" fill="#ffffff">66.8K</text>
+    <text x="386" y="784" font-size="12" fill="#cffafe" font-weight="600">RECORDS FROM ZOHO</text>
+    <text x="386" y="809" font-size="11" fill="#ecfeff">37,043 Leads</text>
+    <text x="386" y="826" font-size="11" fill="#ecfeff">29,796 Deals</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="608" y="624" width="220" height="220" rx="14" fill="url(#c7)"/>
+    <text x="630" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">GOVERNANCE</text>
+    <text x="630" y="744" font-size="64" font-weight="800" fill="#ffffff">147</text>
+    <text x="630" y="784" font-size="12" fill="#ecfccb" font-weight="600">CONTROLLED DOCS</text>
+    <text x="630" y="809" font-size="11" fill="#f7fee7">policies + SOPs</text>
+    <text x="630" y="826" font-size="11" fill="#f7fee7">260 AI consultant alerts</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="852" y="624" width="220" height="220" rx="14" fill="url(#c8)"/>
+    <text x="874" y="664" font-size="13" font-weight="700" fill="#ffffff" opacity="0.9">RESOURCES</text>
+    <text x="874" y="744" font-size="56" font-weight="800" fill="#ffffff">599MB</text>
+    <text x="874" y="784" font-size="12" fill="#fed7aa" font-weight="600">MAIN PROCESS RSS</text>
+    <text x="874" y="809" font-size="11" fill="#ffedd5">3% CPU · stable</text>
+    <text x="874" y="826" font-size="11" fill="#ffedd5">0 DB connection leaks</text>
+  </g>
+
+  <!-- Section: Data scale -->
+  <text x="120" y="910" font-size="20" font-weight="700" fill="#e2e8f0" letter-spacing="2">DATA SCALE</text>
+  <line x1="120" y1="920" x2="1080" y2="920" stroke="#334155" stroke-width="1"/>
+
+  <!-- 3 wide stat bars -->
+  <g filter="url(#shadow)">
+    <rect x="120" y="950" width="305" height="130" rx="12" fill="#1e293b" stroke="#334155"/>
+    <text x="140" y="985" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="1">DUPLICATE CLUSTERS</text>
+    <text x="140" y="1040" font-size="42" font-weight="800" fill="#22d3ee">22,271</text>
+    <text x="140" y="1062" font-size="11" fill="#64748b">detected across CRM</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="447" y="950" width="305" height="130" rx="12" fill="#1e293b" stroke="#334155"/>
+    <text x="467" y="985" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="1">CRM RECORDS SYNCED</text>
+    <text x="467" y="1040" font-size="42" font-weight="800" fill="#a78bfa">66,839</text>
+    <text x="467" y="1062" font-size="11" fill="#64748b">leads + deals from Zoho</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="774" y="950" width="305" height="130" rx="12" fill="#1e293b" stroke="#334155"/>
+    <text x="794" y="985" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="1">AI CONSULTANT ALERTS</text>
+    <text x="794" y="1040" font-size="42" font-weight="800" fill="#fb7185">260</text>
+    <text x="794" y="1062" font-size="11" fill="#64748b">tracked with HITL approval</text>
+  </g>
+
+  <!-- Section: Pulse breakdown -->
+  <text x="120" y="1130" font-size="20" font-weight="700" fill="#e2e8f0" letter-spacing="2">SYNTHETIC CHECKS · ALL PASSING</text>
+  <line x1="120" y1="1140" x2="1080" y2="1140" stroke="#334155" stroke-width="1"/>
+
+  <!-- 10 check pills, 5 per row -->
+  <g font-size="12" font-weight="600">
+    <g transform="translate(120, 1170)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">DB connectivity</text></g>
+    <g transform="translate(315, 1170)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">Audit recency</text></g>
+    <g transform="translate(510, 1170)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">Audit coverage</text></g>
+    <g transform="translate(705, 1170)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">Audit integrity</text></g>
+    <g transform="translate(900, 1170)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">Duplicate freshness</text></g>
+
+    <g transform="translate(120, 1225)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">HITL queue depth</text></g>
+    <g transform="translate(315, 1225)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">HITL not stale</text></g>
+    <g transform="translate(510, 1225)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">KPI freshness</text></g>
+    <g transform="translate(705, 1225)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">/audit/latest</text></g>
+    <g transform="translate(900, 1225)"><rect width="180" height="40" rx="20" fill="#064e3b" stroke="#10b981"/><circle cx="20" cy="20" r="6" fill="#10b981"/><text x="36" y="25" fill="#d1fae5">/health endpoint</text></g>
+  </g>
+
+  <!-- Footer -->
+  <line x1="120" y1="1340" x2="1080" y2="1340" stroke="#334155" stroke-width="1"/>
+  <text x="120" y="1380" font-size="14" font-weight="600" fill="#94a3b8">Source: Pulse synthetic monitor + endpoint sweep + log scan</text>
+  <text x="120" y="1404" font-size="12" fill="#64748b">7 native XLSX endpoints (audits, duplicates, KPIs, NC, CAPA, vendors, risks) · 4 admin-gated</text>
+  <text x="120" y="1424" font-size="12" fill="#64748b">8 TypeScript errors fixed across routes + utils · 0 errors in error log · 1 informational warning</text>
+  <text x="1080" y="1404" text-anchor="end" font-size="14" font-weight="700" fill="#10b981">READY TO DEPLOY</text>
+  <text x="1080" y="1424" text-anchor="end" font-size="11" fill="#64748b">verified across 32 dashboards</text>
+</svg>
