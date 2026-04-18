@@ -440,6 +440,7 @@
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
@@ -463,6 +464,7 @@
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
@@ -486,6 +488,7 @@
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
@@ -509,6 +512,7 @@
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
@@ -822,40 +826,62 @@
             return `<a href="https://crm.zoho.com/crm/org766568398/tab/${module}/${id}" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${id}</a>`;
         }
 
+        // Render the "Created By" cell from the Zoho raw_data payload.
+        // Shows the creator's name on top and the formatted date/time below.
+        function createdByCell(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            const name = (raw.Created_By && raw.Created_By.name) || r.created_by_name || '-';
+            const ts = raw.Created_Time || r.created_date || r.created_at || null;
+            let when = '';
+            if (ts) {
+                const d = new Date(ts);
+                if (!isNaN(d.getTime())) {
+                    when = d.toLocaleString('en-GB', {
+                        year: 'numeric', month: 'short', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit', hour12: false
+                    });
+                }
+            }
+            return `<td class="px-4 py-3 text-sm">
+                <div class="text-gray-700 font-medium">${name}</div>
+                ${when ? `<div class="text-xs text-gray-400">${when}</div>` : ''}
+            </td>`;
+        }
+
         function renderLeadRows(groups) {
             const tbody = document.getElementById('leadsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.leads || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${r.status||'-'}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td><td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${r.status||'-'}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
-            tbody.innerHTML = rows || '<tr><td colspan="9" class="px-4 py-4 text-center text-gray-500">No duplicate leads found</td></tr>';
+            tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate leads found</td></tr>';
         }
 
         function renderDealRows(groups) {
             const tbody = document.getElementById('dealsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.deals || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${r.stage||'-'}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td><td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${r.stage||'-'}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
-            tbody.innerHTML = rows || '<tr><td colspan="9" class="px-4 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
+            tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
         }
 
         function renderContactRows(groups) {
             const tbody = document.getElementById('contactsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.contacts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.phone||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td><td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.phone||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
-            tbody.innerHTML = rows || '<tr><td colspan="9" class="px-4 py-4 text-center text-gray-500">No duplicate contacts found</td></tr>';
+            tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate contacts found</td></tr>';
         }
 
         function renderAccountRows(groups) {
             const tbody = document.getElementById('accountsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.accounts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.phone||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.source||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td><td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.phone||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.source||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
-            tbody.innerHTML = rows || '<tr><td colspan="9" class="px-4 py-4 text-center text-gray-500">No duplicate accounts found</td></tr>';
+            tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate accounts found</td></tr>';
         }
 
         // C3: Owner accountability with RAG status
