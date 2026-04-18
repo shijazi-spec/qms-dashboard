@@ -3835,6 +3835,33 @@ export const mastra = new Mastra({
           };
         },
       },
+      {
+        path: "/js/ai-consultant-widget.js",
+        method: "GET" as const,
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "js", "ai-consultant-widget.js"),
+                join(process.cwd(), "..", "dashboard", "js", "ai-consultant-widget.js"),
+                "/home/runner/workspace/dashboard/js/ai-consultant-widget.js",
+              ];
+
+              for (const jsPath of possiblePaths) {
+                if (existsSync(jsPath)) {
+                  const js = readFileSync(jsPath, "utf-8");
+                  return c.text(js, 200, { "Content-Type": "application/javascript" });
+                }
+              }
+
+              return c.text("// ai-consultant-widget.js not found", 404, { "Content-Type": "application/javascript" });
+            } catch (error) {
+              console.error("Error serving ai-consultant-widget.js:", error);
+              return c.text("// Error loading ai-consultant-widget.js", 500, { "Content-Type": "application/javascript" });
+            }
+          };
+        },
+      },
       // ======================================================================
       // Additional Module Routes (imported from route files)
       // ======================================================================
