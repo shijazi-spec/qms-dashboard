@@ -42,6 +42,7 @@ import { pdplRoutes } from "./routes/pdplRoutes";
 import { triggerRoutes } from "./routes/triggerRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
+import { healthPulseRoutes } from "./routes/healthPulseRoutes";
 import { consultantRoutes } from "./routes/consultantRoutes";
 import { aiApprovalRoutes } from "./routes/aiApprovalRoutes";
 import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
@@ -3903,6 +3904,7 @@ export const mastra = new Mastra({
       ...triggerRoutes,
       ...userAccessRoutes,
       ...smokeTestRoutes,
+      ...healthPulseRoutes,
       ...consultantRoutes,
       ...aiApprovalRoutes,
       ...notificationRoutes,

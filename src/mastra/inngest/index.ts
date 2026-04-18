@@ -391,6 +391,29 @@ const aiScannerFunction = inngest.createFunction(
 );
 inngestFunctions.push(aiScannerFunction);
 
+// Platform Health Pulse - 15-minute heartbeat
+// Catches silent regressions (e.g., audit only saving Leads) within minutes,
+// not days. See src/utils/platformHealthPulse.ts for the assertion list.
+const healthPulseFunction = inngest.createFunction(
+  { id: "platform-health-pulse" },
+  { cron: process.env.HEALTH_PULSE_CRON || "*/15 * * * *" },
+  async ({ step }) => {
+    return await step.run("run-health-pulse", async () => {
+      const { runHealthPulse, maybeNotifyOnPulse, initHealthPulseTables } = await import("../../utils/platformHealthPulse");
+      try { await initHealthPulseTables(); } catch {}
+      const run = await runHealthPulse();
+      if (run.overall_status !== "healthy") {
+        console.warn(`[HealthPulse] ${run.overall_status.toUpperCase()}: ${run.fail_count} fail, ${run.warn_count} warn`);
+        await maybeNotifyOnPulse(run);
+      } else {
+        console.log(`[HealthPulse] healthy (${run.pass_count}/${run.checks.length} checks pass, ${run.duration_ms}ms)`);
+      }
+      return { id: run.id, status: run.overall_status, pass: run.pass_count, warn: run.warn_count, fail: run.fail_count };
+    });
+  },
+);
+inngestFunctions.push(healthPulseFunction);
+
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },
   { cron: process.env.DIGEST_CRON || "0 7 * * 1" },
