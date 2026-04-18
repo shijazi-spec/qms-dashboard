@@ -1060,6 +1060,101 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    path: "/api/duplicates/export-xlsx",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const url = new URL(c.req.url);
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
+          const includeRaw = url.searchParams.get('include_raw') === '1';
+
+          const { getExportRecords, getEnhancedSummary } = await import('../../utils/duplicateRadarDatabase');
+          const [rawRecords, summary] = await Promise.all([
+            getExportRecords({ start_date, end_date }),
+            getEnhancedSummary(),
+          ]);
+          // getExportRecords returns dr.* which includes a large raw_data JSONB blob.
+          // We never write that column to Excel, so strip it eagerly to free heap before
+          // exceljs serialises ~40K rows in-process.
+          const records = rawRecords.map(({ raw_data, cluster_domain, cluster_confidence, ...rest }: any) => rest);
+
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+
+          // Group records by type so each module gets its own sheet
+          const byType: Record<string, any[]> = { lead: [], deal: [], contact: [], account: [] };
+          for (const r of records) (byType[r.record_type] || (byType[r.record_type] = [])).push(r);
+
+          const recordColumns = [
+            { header: 'Cluster ID', key: 'cluster_id', width: 12 },
+            { header: 'Zoho ID', key: 'zoho_record_id', width: 22 },
+            { header: 'Name', key: 'record_name', width: 30 },
+            { header: 'Company', key: 'company_name', width: 30 },
+            { header: 'Email', key: 'email', width: 28 },
+            { header: 'Domain', key: 'domain', width: 22 },
+            { header: 'Phone', key: 'phone', width: 18 },
+            { header: 'Owner', key: 'owner_name', width: 22 },
+            { header: 'Status / Stage', key: 'status_or_stage', width: 18 },
+            { header: 'Value', key: 'deal_value', width: 14 },
+            { header: 'Source', key: 'source', width: 18 },
+            { header: 'Confidence', key: 'confidence_score', width: 12 },
+            { header: 'Recommendation', key: 'ai_recommendation', width: 40 },
+            { header: 'Created', key: 'created_str', width: 14 },
+          ];
+
+          const buildRow = (r: any) => ({
+            ...r,
+            status_or_stage: r.status || r.stage || '',
+            created_str: r.created_date ? new Date(r.created_date).toISOString().substring(0, 10) : '',
+          });
+
+          const sheets = [
+            {
+              name: 'Summary',
+              columns: [
+                { header: 'Metric', key: 'metric', width: 32 },
+                { header: 'Value', key: 'value', width: 18 },
+              ],
+              rows: [
+                { metric: 'Total clusters', value: summary?.totalClusters ?? 0 },
+                { metric: 'Total duplicate records', value: summary?.totalDuplicates ?? records.length },
+                { metric: 'Singletons', value: summary?.singletonCount ?? 0 },
+                { metric: 'Resolution rate', value: summary?.resolutionRate ? `${summary.resolutionRate}%` : 'n/a' },
+                { metric: 'Low-confidence clusters', value: summary?.lowConfidenceCount ?? 0 },
+                { metric: 'Leads with duplicates', value: byType.lead?.length ?? 0 },
+                { metric: 'Deals with duplicates', value: byType.deal?.length ?? 0 },
+                { metric: 'Contacts with duplicates', value: byType.contact?.length ?? 0 },
+                { metric: 'Accounts with duplicates', value: byType.account?.length ?? 0 },
+                { metric: 'Date range start', value: start_date || '(all)' },
+                { metric: 'Date range end', value: end_date || '(all)' },
+                { metric: 'Generated', value: new Date().toISOString() },
+              ],
+            },
+            { name: 'Leads', columns: recordColumns, rows: (byType.lead || []).map(buildRow) },
+            { name: 'Deals', columns: recordColumns, rows: (byType.deal || []).map(buildRow) },
+            { name: 'Contacts', columns: recordColumns, rows: (byType.contact || []).map(buildRow) },
+            { name: 'Accounts', columns: recordColumns, rows: (byType.account || []).map(buildRow) },
+          ];
+
+          if (includeRaw) {
+            sheets.push({
+              name: 'All Records',
+              columns: recordColumns,
+              rows: records.map(buildRow),
+            });
+          }
+
+          const buf = await buildWorkbook(sheets, { title: 'Duplicate Radar Export' });
+          return c.body(buf, 200, xlsxResponseHeaders(`duplicate_radar_${Date.now()}.xlsx`));
+        } catch (error: any) {
+          console.error('Error exporting duplicates XLSX:', error);
+          return c.json({ error: 'An internal error occurred' }, 500);
+        }
+      };
+    },
+  },
   // B5: JOIN-based lead/deal/contact/account endpoints (no N+1)
   {
     path: "/api/duplicates/leads",

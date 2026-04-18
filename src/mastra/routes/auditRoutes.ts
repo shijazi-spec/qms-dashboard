@@ -650,5 +650,84 @@ export const auditRoutes = [
         }
       };
     }
-  }
+  },
+  {
+    path: "/api/audits/:id/export-xlsx",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { getAuditById, getFindingsByAudit, initAuditTables } = await import('../../utils/auditDatabase');
+          await initAuditTables();
+
+          const rawId = c.req.param('id');
+          const id: string | number = /^\d+$/.test(rawId) ? parseInt(rawId, 10) : rawId;
+          logger?.info('📊 [AuditAPI] GET /api/audits/:id/export-xlsx', { id });
+
+          const audit = await getAuditById(id);
+          if (!audit) return c.json({ error: 'Audit not found' }, 404);
+
+          const findings = await getFindingsByAudit(id);
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+
+          const formatDate = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+
+          const buf = await buildWorkbook([
+            {
+              name: 'Summary',
+              columns: [
+                { header: 'Field', key: 'field', width: 28 },
+                { header: 'Value', key: 'value', width: 60 },
+              ],
+              rows: [
+                { field: 'Audit Code', value: audit.audit_code || '(none)' },
+                { field: 'Title', value: audit.title || '' },
+                { field: 'Type', value: audit.audit_type || '' },
+                { field: 'Status', value: audit.status || '' },
+                { field: 'Lead Auditor', value: audit.lead_auditor || '' },
+                { field: 'Scope', value: audit.scope || '' },
+                { field: 'Start Date', value: formatDate(audit.start_date) },
+                { field: 'End Date', value: formatDate(audit.end_date) },
+                { field: 'Created', value: formatDate(audit.created_at) },
+                { field: 'Total Findings', value: findings.length },
+                { field: 'Critical Findings', value: findings.filter((f: any) => f.severity === 'critical').length },
+                { field: 'High Findings', value: findings.filter((f: any) => f.severity === 'high').length },
+                { field: 'CAPA Required', value: findings.filter((f: any) => f.capa_required).length },
+              ],
+            },
+            {
+              name: 'Findings',
+              columns: [
+                { header: 'No.', key: 'finding_number', width: 12 },
+                { header: 'Severity', key: 'severity', width: 10 },
+                { header: 'Status', key: 'status', width: 12 },
+                { header: 'Dimension', key: 'dimension', width: 14 },
+                { header: 'Criteria', key: 'criteria_name', width: 28 },
+                { header: 'Description', key: 'description', width: 50 },
+                { header: 'Evidence', key: 'evidence', width: 35 },
+                { header: 'Recommendation', key: 'recommendation', width: 40 },
+                { header: 'CAPA Required', key: 'capa_required_label', width: 14 },
+                { header: 'Owner', key: 'owner', width: 22 },
+                { header: 'Target Date', key: 'target_date_str', width: 14 },
+                { header: 'Resolution Date', key: 'resolution_date_str', width: 16 },
+              ],
+              rows: findings.map((f: any) => ({
+                ...f,
+                capa_required_label: f.capa_required ? 'Yes' : 'No',
+                target_date_str: formatDate(f.target_date),
+                resolution_date_str: formatDate(f.resolution_date),
+              })),
+            },
+          ], { title: `Audit Report ${audit.audit_code || id}` });
+
+          const safeCode = String(audit.audit_code || id).replace(/[^A-Za-z0-9._-]/g, '_');
+          return c.body(buf, 200, xlsxResponseHeaders(`${safeCode}_audit_report.xlsx`));
+        } catch (error) {
+          console.error('❌ [AuditAPI] Error exporting audit XLSX:', error);
+          return c.json({ error: 'Failed to export audit report to XLSX', details: String(error) }, 500);
+        }
+      };
+    },
+  },
 ];

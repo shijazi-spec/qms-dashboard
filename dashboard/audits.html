@@ -436,7 +436,13 @@
                     </td>
                     <td class="px-4 py-3 text-center">${formatStatus(a.status)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="exportAuditPDF(${a.id}, '${a.audit_code}', this)" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Export to PDF">
+                        <a href="/api/audits/${a.id}/export-xlsx" class="inline-flex items-center gap-1 px-2 py-1 mr-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors" title="Export to Excel (Summary + Findings)" data-testid="link-export-xlsx-${a.id}">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            XLSX
+                        </a>
+                        <button onclick="exportAuditPDF('${a.id}', '${a.audit_code}', this)" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Export to PDF">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>

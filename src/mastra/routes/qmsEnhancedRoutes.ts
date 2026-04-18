@@ -252,6 +252,115 @@ export const qmsEnhancedRoutes = [
     },
   },
   {
+    path: "/api/kpis/export-xlsx",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const defs = await pool.query(`
+            SELECT id, kpi_name, kpi_code, category, target_value, unit, owner_name AS owner, frequency, formula,
+                   threshold_green, threshold_amber, threshold_red, threshold_direction
+            FROM kpi_definitions WHERE is_active = true ORDER BY category, kpi_name
+          `);
+          const values = await pool.query(`
+            SELECT kpi_id, actual_value, target_value, period_start, period_end, calculated_by, created_at
+            FROM kpi_values ORDER BY period_end DESC, kpi_id LIMIT 50000
+          `);
+
+          // Group definitions by category, one sheet per category
+          const byCategory: Record<string, any[]> = {};
+          for (const d of defs.rows) {
+            const cat = d.category || 'Uncategorised';
+            (byCategory[cat] = byCategory[cat] || []).push(d);
+          }
+
+          // Pivot values per kpi for the per-category sheets
+          const valuesByKpi: Record<number, any[]> = {};
+          for (const v of values.rows) (valuesByKpi[v.kpi_id] = valuesByKpi[v.kpi_id] || []).push(v);
+
+          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+
+          const sheets: any[] = [
+            {
+              name: 'Summary',
+              columns: [
+                { header: 'Metric', key: 'metric', width: 32 },
+                { header: 'Value', key: 'value', width: 18 },
+              ],
+              rows: [
+                { metric: 'Total KPI definitions', value: defs.rows.length },
+                { metric: 'Total recorded values', value: values.rows.length },
+                { metric: 'Categories', value: Object.keys(byCategory).length },
+                { metric: 'Generated', value: new Date().toISOString() },
+              ],
+            },
+          ];
+
+          for (const [cat, list] of Object.entries(byCategory)) {
+            sheets.push({
+              name: cat,
+              columns: [
+                { header: 'Code', key: 'kpi_code', width: 12 },
+                { header: 'KPI Name', key: 'kpi_name', width: 36 },
+                { header: 'Target', key: 'target_value', width: 12 },
+                { header: 'Unit', key: 'unit', width: 8 },
+                { header: 'Green ≥', key: 'threshold_green', width: 10 },
+                { header: 'Amber ≥', key: 'threshold_amber', width: 10 },
+                { header: 'Red <', key: 'threshold_red', width: 10 },
+                { header: 'Direction', key: 'threshold_direction', width: 18 },
+                { header: 'Frequency', key: 'frequency', width: 12 },
+                { header: 'Owner', key: 'owner', width: 22 },
+                { header: 'Latest Actual', key: 'latest_actual', width: 14 },
+                { header: 'Latest Period End', key: 'latest_period', width: 16 },
+                { header: 'Formula', key: 'formula', width: 40 },
+              ],
+              rows: list.map((d: any) => {
+                const vs = (valuesByKpi[d.id] || []).sort((a, b) => new Date(b.period_end).getTime() - new Date(a.period_end).getTime());
+                const latest = vs[0];
+                return {
+                  ...d,
+                  latest_actual: latest?.actual_value ?? '',
+                  latest_period: fmt(latest?.period_end),
+                };
+              }),
+            });
+          }
+
+          sheets.push({
+            name: 'All Values',
+            columns: [
+              { header: 'KPI ID', key: 'kpi_id', width: 8 },
+              { header: 'KPI Name', key: 'kpi_name', width: 36 },
+              { header: 'Actual', key: 'actual_value', width: 12 },
+              { header: 'Target', key: 'target_value', width: 12 },
+              { header: 'Period Start', key: 'period_start_str', width: 14 },
+              { header: 'Period End', key: 'period_end_str', width: 14 },
+              { header: 'Calculated By', key: 'calculated_by', width: 22 },
+            ],
+            rows: values.rows.map((v: any) => {
+              const def = defs.rows.find((d: any) => d.id === v.kpi_id);
+              return {
+                ...v,
+                kpi_name: def?.kpi_name || '',
+                period_start_str: fmt(v.period_start),
+                period_end_str: fmt(v.period_end),
+              };
+            }),
+          });
+
+          const buf = await buildWorkbook(sheets, { title: 'KPI Scorecard Export' });
+          return c.body(buf, 200, xlsxResponseHeaders(`kpi_scorecard_${Date.now()}.xlsx`));
+        } catch (error) {
+          console.error('Error exporting KPIs XLSX:', error);
+          return c.json({ error: "Export failed" }, 500);
+        } finally { await pool.end(); }
+      };
+    },
+  },
+  {
     path: "/api/vendors/export",
     method: "GET" as const,
     createHandler: async () => {
