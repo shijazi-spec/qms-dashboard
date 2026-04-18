@@ -178,12 +178,15 @@
                             <option value="Leads">Leads</option>
                             <option value="Accounts">Accounts</option>
                         </select>
-                        <select id="modalSeverityFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
+                        <select id="modalSeverityFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-severity-filter">
                             <option value="all">All Severities</option>
                             <option value="critical">Critical</option>
                             <option value="high">High</option>
                             <option value="medium">Medium</option>
                             <option value="low">Low</option>
+                        </select>
+                        <select id="modalLayoutFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-layout-filter">
+                            <option value="all">All Layouts</option>
                         </select>
                         <button onclick="exportIssues('csv')" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 flex items-center space-x-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -794,6 +797,7 @@
                 : `Viewing issues for ${getFilterDescription()}`;
             document.getElementById('modalModuleFilter').value = 'all';
             document.getElementById('modalSeverityFilter').value = 'all';
+            const lf = document.getElementById('modalLayoutFilter'); if (lf) lf.value = 'all';
             loadIssuesForModal(category);
         }
 
@@ -866,6 +870,7 @@
             }
 
             currentIssues = issues;
+            populateLayoutFilter();
             renderIssuesTable(issues);
         }
 
@@ -936,12 +941,26 @@
             document.getElementById('modalFooter').textContent = `Showing ${grouped.length} records with ${totalIssues} issues`;
         }
 
+        function populateLayoutFilter() {
+            const sel = document.getElementById('modalLayoutFilter');
+            if (!sel) return;
+            const previous = sel.value || 'all';
+            const layouts = Array.from(new Set((currentIssues || [])
+                .map(i => (i.layouts || '').toString().trim())
+                .filter(l => l && l !== '-'))).sort((a, b) => a.localeCompare(b));
+            sel.innerHTML = '<option value="all">All Layouts</option>'
+                + layouts.map(l => `<option value="${l.replace(/"/g, '&quot;')}">${l}</option>`).join('');
+            sel.value = layouts.includes(previous) ? previous : 'all';
+        }
+
         function filterModalIssues() {
             const module = document.getElementById('modalModuleFilter').value;
             const severity = document.getElementById('modalSeverityFilter').value;
+            const layout = document.getElementById('modalLayoutFilter')?.value || 'all';
             let filtered = currentIssues;
             if (module !== 'all') filtered = filtered.filter(i => i.module === module);
             if (severity !== 'all') filtered = filtered.filter(i => i.severity === severity);
+            if (layout !== 'all') filtered = filtered.filter(i => (i.layouts || '').toString().trim() === layout);
             renderIssuesTable(filtered);
         }
 
@@ -953,9 +972,11 @@
         function exportIssues(format) {
             const module = document.getElementById('modalModuleFilter').value;
             const severity = document.getElementById('modalSeverityFilter').value;
+            const layout = document.getElementById('modalLayoutFilter')?.value || 'all';
             let issues = currentIssues;
             if (module !== 'all') issues = issues.filter(i => i.module === module);
             if (severity !== 'all') issues = issues.filter(i => i.severity === severity);
+            if (layout !== 'all') issues = issues.filter(i => (i.layouts || '').toString().trim() === layout);
             
             if (format === 'csv') {
                 const headers = ['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Created Time', 'Owner', 'Issue', 'Severity', 'Recommendation'];
@@ -1399,6 +1420,7 @@
             document.getElementById('modalSubtitle').textContent = `Viewing issues owned by ${ownerName} for ${getFilterDescription()}`;
             document.getElementById('modalModuleFilter').value = 'all';
             document.getElementById('modalSeverityFilter').value = 'all';
+            const lf2 = document.getElementById('modalLayoutFilter'); if (lf2) lf2.value = 'all';
 
             const ownerLower = ownerName.toLowerCase().trim();
             const ownerIssues = currentOwnerIssueDetails.filter(i => {
@@ -1420,6 +1442,7 @@
                 recommendation: issue.recommendation || ''
             }));
 
+            populateLayoutFilter();
             renderIssuesTable(currentIssues);
         }
 
