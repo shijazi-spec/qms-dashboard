@@ -1009,7 +1009,7 @@ export const mastra = new Mastra({
                 "Samar Mansour": { team: "MP", status: "Active" },
                 "Sarah Hijazi": { team: "MGMT", status: "Active" },
                 "Sultan Alrefaei": { team: "MP", status: "Active" },
-                "Sultan Banajah": { team: "MP", status: "Active" },
+                "Sultan Banajah": { team: "MP", status: "Inactive" },
                 "Tamim Alajlan": { team: "WP Sales", status: "Inactive" },
                 "Thamer  Alsuhaibani": { team: "WO Sales", status: "Inactive" },
                 "Wafaa Alqudaiy": { team: "WP Sales", status: "Active" },
