@@ -224,7 +224,7 @@ export const mastra = new Mastra({
 
         (c as any)._cspNonce = cspNonce;
 
-        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/', '/dashboard/tailwind.css', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/api/webhooks/slack', '/test/slack'];
+        const publicPaths = ['/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout', '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/', '/dashboard/tailwind.css', '/api/invitations/validate/', '/api/invitations/accept', '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack', '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview'];
         const isPublic = publicPaths.some(p => urlPath === p || urlPath.startsWith(p));
 
         if (urlPath.startsWith('/webhooks/') || urlPath.startsWith('/api/webhooks/') || urlPath.startsWith('/test/slack')) {
@@ -380,6 +380,45 @@ export const mastra = new Mastra({
         path: "/api/inngest",
         method: "ALL",
         createHandler: async ({ mastra }) => inngestServe({ mastra, inngest }),
+      },
+
+      // ======================================================================
+      // Lightweight page-view telemetry (writes to access_audit_log)
+      // ======================================================================
+      // Called from dashboard/js/navigation.js on every page load so we can
+      // see which dashboards are actually used and prioritize accordingly.
+      {
+        path: "/api/telemetry/pageview",
+        method: "POST",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const body = await c.req.json().catch(() => ({}));
+              const page = String(body.page || '').slice(0, 100);
+              const referrer = String(body.referrer || '').slice(0, 255);
+              if (!page) return c.json({ ok: false, error: 'page required' }, 400);
+
+              const session = getSessionFromCookie(c.req.header('Cookie'));
+              const userEmail = session?.email || 'anonymous';
+              const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+                      || c.req.header('x-real-ip')
+                      || null;
+
+              const { sharedPool } = await import('../utils/sharedPool');
+              await sharedPool.query(
+                `INSERT INTO access_audit_log
+                   (event_type, user_email, action, performed_by, ip_address, details)
+                 VALUES ('page_view', $1, $2, $1, $3, $4)`,
+                [userEmail, page, ip, JSON.stringify({ page, referrer, role: session?.role || null })]
+              );
+              return c.json({ ok: true });
+            } catch (e: any) {
+              // Telemetry must never break the user — swallow errors quietly.
+              console.warn('[telemetry] pageview failed:', e?.message);
+              return c.json({ ok: false }, 200);
+            }
+          };
+        },
       },
       
       // ======================================================================
@@ -1509,6 +1548,16 @@ export const mastra = new Mastra({
         createHandler: async () => {
           return async (c: any) => {
             try {
+              // Role-based landing: send executives straight to /executive
+              try {
+                const session = getSessionFromCookie(c.req.header('Cookie'));
+                const role = String(session?.role || '').toLowerCase();
+                const skip = c.req.query('home') === '1';
+                if (!skip && ['ceo', 'cco', 'executive', 'board', 'cfo'].includes(role)) {
+                  return c.redirect('/executive', 302);
+                }
+              } catch {}
+
               const possiblePaths = [
                 join(process.cwd(), "dashboard", "index.html"),
                 join(process.cwd(), "..", "dashboard", "index.html"),

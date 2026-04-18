@@ -24,8 +24,8 @@ const WalaPlusNav = {
       items: [
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
         { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
-        { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' },
-        { label: 'Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
+        { label: 'Quality Audits (AI)', href: '/qms', icon: 'shield-check', id: 'qms', badge: 'AI' },
+        { label: 'ISO Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicate Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
       ]
@@ -132,6 +132,22 @@ const WalaPlusNav = {
     this.bindEvents();
     this.loadUserInfo();
     this.pollAlertCount();
+    this.recordPageView(currentPageId);
+  },
+
+  recordPageView(pageId) {
+    try {
+      fetch('/api/telemetry/pageview', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          page: pageId || (location.pathname || '/').slice(0, 100),
+          referrer: (document.referrer || '').slice(0, 255),
+        }),
+      }).catch(() => {});
+    } catch {}
   },
 
   pollAlertCount() {
@@ -361,6 +377,7 @@ const WalaPlusNav = {
         ${isActive ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-700 hover:bg-gray-50'}">
         ${this.getItemIcon(item.icon)}
         <span>${this.escapeHtml(item.label)}</span>
+        ${item.badge ? `<span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide ${colors.lightBg} ${colors.text} border border-current/20">${this.escapeHtml(item.badge)}</span>` : ''}
         ${item.external ? '<svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
       </a>
     `;
@@ -390,6 +407,7 @@ const WalaPlusNav = {
                 ${item.id === this.currentPage ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-600 hover:bg-gray-50'}">
               ${this.getItemIcon(item.icon)}
               <span>${this.escapeHtml(item.label)}</span>
+              ${item.badge ? `<span class="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${colors.lightBg} ${colors.text}">${this.escapeHtml(item.badge)}</span>` : ''}
             </a>
           `).join('')}
         </div>

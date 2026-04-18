@@ -3,6 +3,13 @@
 ## Overview
 AI-powered enterprise Quality Management System integrating governance, risk, and compliance (GRC) with quality management. Built with Mastra (AI agent framework), Hono for HTTP, PostgreSQL, and Inngest for workflow orchestration. Serves HTML dashboards on port 5000 via Mastra dev server, designed for Autoscale deployment.
 
+## Product Quick-Wins (Apr 2026)
+- **Page-view telemetry**: `POST /api/telemetry/pageview` (public) writes to `access_audit_log` (event_type=`page_view`). Called from `dashboard/js/navigation.js` `init()` on every dashboard load. Use to identify which dashboards are actually consumed.
+- **Role-based landing**: `/` redirects to `/executive` for sessions with role `ceo|cco|cfo|executive|board`. Bypass via `?home=1`.
+- **Audit naming**: Nav labels disambiguated — `Quality Audits (AI)` (`/qms`, with AI badge) vs `ISO Internal Audits` (`/audits`).
+- **Slack scope fallback**: `/api/infographic/:section/share/slack` falls back to `chat.postMessage` (with rich blocks) when `files.uploadV2` returns `missing_scope`/`not_allowed_token_type`. Response shape now `{ success, mode: 'file' | 'message', note? }`. UI shows amber guidance banner for `mode: 'message'`.
+- **Manager-facing report**: `WALAPLUS_PRODUCT_REPORT.md` at project root — weekly product status doc.
+
 ## Architecture
 - **Framework**: Mastra (AI agent framework) with Hono HTTP server
 - **Frontend**: Static HTML dashboards served from `dashboard/` directory

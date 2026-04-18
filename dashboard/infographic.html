@@ -276,13 +276,14 @@
       const status = m.querySelector('[id$="-status"]');
       if (status) { status.className = 'text-sm mb-3 hidden'; status.textContent = ''; }
     }
-    function setStatus(id, kind, msg) {
+    function setStatus(id, kind, msg, allowHtml = false) {
       const el = document.getElementById(id);
       const cls = kind === 'ok' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
         : kind === 'err' ? 'text-red-700 bg-red-50 border border-red-200'
+        : kind === 'warn' ? 'text-amber-800 bg-amber-50 border border-amber-200'
         : 'text-slate-700 bg-slate-50 border border-slate-200';
       el.className = 'text-sm mb-3 px-3 py-2 rounded-lg ' + cls;
-      el.textContent = msg;
+      if (allowHtml || kind === 'warn') el.innerHTML = msg; else el.textContent = msg;
     }
     function setBusy(btn, label, spinner, busy) {
       document.getElementById(btn).disabled = busy;
@@ -318,8 +319,16 @@
         });
         const data = await r.json();
         if (!r.ok || !data.success) throw new Error(data.detail || data.error || ('HTTP ' + r.status));
-        setStatus('slack-status', 'ok', 'Posted to Slack channel ' + data.channel + ' as ' + data.filename);
-        setTimeout(() => closeModal('slack-modal'), 1800);
+        if (data.mode === 'message') {
+          setStatus('slack-status', 'warn',
+            'Posted to ' + data.channel + ' as a text message (no image attached). ' +
+            'To enable PNG attachments, add the <b>files:write</b> scope at <a href="https://api.slack.com/apps" target="_blank" class="underline font-semibold">api.slack.com/apps</a> → OAuth & Permissions, then reinstall the app.'
+          );
+          setTimeout(() => closeModal('slack-modal'), 6000);
+        } else {
+          setStatus('slack-status', 'ok', 'Posted to Slack channel ' + data.channel + ' as ' + (data.filename || 'PNG attachment'));
+          setTimeout(() => closeModal('slack-modal'), 1800);
+        }
       } catch (e) {
         setStatus('slack-status', 'err', 'Failed: ' + e.message);
       } finally {
