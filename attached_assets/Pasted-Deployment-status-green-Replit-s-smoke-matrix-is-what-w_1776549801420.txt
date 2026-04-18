@@ -1,0 +1,52 @@
+Deployment status: green
+Replit's smoke matrix is what we'd expect:
+
+Surface	Expected	Got
+/intake, /external-audits, /audits, /qms, /grc
+302 → /login
+✅ 302
+/api/audit-programme/list, /api/manual-audits/list, /api/external-audits/list, /api/triggers
+401 (auth-gated)
+✅ 401
+audit_triggers table auto-init
+On boot
+✅ logged
+audit_programme / manual_audit_intake / external_audits tables
+Lazy-init on first authenticated route hit
+Pending first request
+Lazy table init is intentional — initAuditProgrammeTables() is called inside each route handler (guarded by an ensure() helper) so cold boots stay fast and the table set is only created when a user with permission actually uses the feature.
+
+Walk-through checklist for you (authenticated browser)
+Three end-to-end flows worth validating yourself since they need a logged-in session:
+
+1. Annual Audit Programme → HITL sign-off
+
+/audits → Annual Audit Programme panel → Draft (creates programme_code PROG-YYYY-01)
+Click Submit for sign-off → should create an entry in /ai-approvals
+Sign in as head.ops.quality@walaplus.com → /ai-approvals → approve the ticket
+Return to /audits → programme status badge should flip to "Approved" with approver email + timestamp
+2. Manual Audit Intake → GPT-4o extraction → promote
+
+/intake → New Intake → upload a sample audit report (PDF/DOCX/MD). If you don't have one handy, use a .md file with a few "Finding 1: X because Y" paragraphs — easiest for first test.
+Click Run AI Extraction (requires OPENAI_API_KEY env)
+If the file is binary and not yet natively parsed, the paste-fallback textarea appears — paste the report text
+For each extracted finding: Accept / Edit / Reject
+Click Finalize → accepted findings appear in grc_audit_findings with intake_id set
+3. Trigger HITL + dismiss-reason + 24h re-eval
+
+/qms → Triggers tab → dismiss any trigger → reason modal should require ≥10 chars
+For a critical trigger → Propose via HITL → ticket appears in /ai-approvals
+To test auto-escalation without waiting: manually UPDATE audit_triggers SET created_at = NOW() - INTERVAL '8 days' WHERE severity='critical' AND status='pending' LIMIT 1; then trigger the Inngest cron manually (or wait for 03:00). Stale row should close with auto_escalated_at set and a new grc_audit_findings row with code AUTO-ESC-*.
+One small remaining alignment
+The Cursor workspace now matches Replit on the agent-count guard — so if you ever re-sync the other direction (Cursor → Replit), the guard won't come back. One line to add if you're cutting a new release:
+
+
+CHANGELOG.md
+Lines 1-10
+## v4.5 (2026-04-18)
+- Internal Audits re-architecture (§4.26): programme HITL sign-off, trigger dismiss-reason, auto-escalate cron
+- Manual Audit Intake at /intake (§4.27) with GPT-4o extraction
+- External Audits page at /external-audits (§4.28)
+- Admin & Tools nav dropdown (§4.29): Migration, RBAC, AI Approvals, System Logs
+- Migration templates: CAPA, NC, Training, Audit Findings, Deal Evaluations
+- Disabled Mastra template agent-count guard (WalaPlus runs 2 agents by design)
