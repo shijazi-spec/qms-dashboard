@@ -129,6 +129,24 @@ export async function initKPITables(): Promise<void> {
     )
   `);
 
+  // FIX: idempotency. Without this, the daily KPI cron silently inserted
+  // duplicate rows whenever it ran more than once for the same period.
+  // One-time dedup BEFORE the unique index, otherwise CREATE UNIQUE INDEX
+  // fails on existing duplicate (kpi_id, period_start, period_end) tuples.
+  // Keep the most recent row (highest id) per tuple.
+  await pool.query(`
+    DELETE FROM kpi_values v
+    USING kpi_values v2
+    WHERE v.kpi_id = v2.kpi_id
+      AND v.period_start = v2.period_start
+      AND v.period_end = v2.period_end
+      AND v.id < v2.id
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS kpi_values_kpi_period_uidx
+    ON kpi_values (kpi_id, period_start, period_end)
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS executive_reports (
       id SERIAL PRIMARY KEY,
@@ -597,9 +615,23 @@ export async function recordKPIValue(value: KPIValue): Promise<KPIValue> {
     }
   }
   
+  // Idempotent upsert keyed on (kpi_id, period_start, period_end). Re-runs of
+  // the daily cron for the same period now update the existing row instead of
+  // duplicating it (relies on the unique index added in initKPITables).
   const result = await pool.query(`
     INSERT INTO kpi_values (kpi_id, period_start, period_end, actual_value, target_value, status, trend, calculated_by, override_reason, evidence_ids, ai_confidence, ai_insights)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (kpi_id, period_start, period_end) DO UPDATE SET
+      actual_value = EXCLUDED.actual_value,
+      target_value = EXCLUDED.target_value,
+      status = EXCLUDED.status,
+      trend = EXCLUDED.trend,
+      calculated_by = EXCLUDED.calculated_by,
+      override_reason = EXCLUDED.override_reason,
+      evidence_ids = EXCLUDED.evidence_ids,
+      ai_confidence = EXCLUDED.ai_confidence,
+      ai_insights = EXCLUDED.ai_insights,
+      updated_at = NOW()
     RETURNING *
   `, [value.kpi_id, value.period_start, value.period_end, value.actual_value, value.target_value || kpi.target_value, status, trend, value.calculated_by || 'system', value.override_reason, value.evidence_ids, value.ai_confidence, JSON.stringify(value.ai_insights)]);
   

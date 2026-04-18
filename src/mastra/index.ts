@@ -53,8 +53,12 @@ initTableFTables().catch((err) => console.error('[TableF] init failed:', err));
 // request after a restart hits a populated cache instead of paginating ~30k
 // Zoho records inline (which used to time out at >15s).
 setTimeout(() => {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) {
+    console.warn('🔥 [PreWarm] ADMIN_API_KEY not set; skipping cache warm-up. First user request will pay the cold-fetch cost.');
+    return;
+  }
   const baseUrl = process.env.SELF_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
-  const adminKey = process.env.ADMIN_API_KEY || 'WalaPlus-QMS-Admin-2026';
   console.log('🔥 [PreWarm] Warming /api/agents/performance cache...');
   fetch(`${baseUrl}/api/agents/performance`, {
     headers: { 'X-Admin-Key': adminKey, 'X-PreWarm': '1' },
@@ -868,12 +872,22 @@ export const mastra = new Mastra({
           // returned immediately and a background refresh repopulates the
           // cache. Combined with the startup pre-warm below, the user-facing
           // path should never see a >1s response after the first warm.
-          let cachedResult: any = null;
-          let cacheTime = 0;
-          let inFlightRefresh: Promise<any> | null = null;
-          let inFlightCold: Promise<any> | null = null; // dedup concurrent cold requests
+          // Cache is now keyed by (date-filter signature) so filtered Pulse
+          // checks and dashboard queries with the same range share results.
+          // Capped at MAX_CACHE_KEYS LRU-style entries to prevent unbounded
+          // growth from arbitrary filter combinations.
+          interface CacheEntry { data: any; time: number; }
+          const cache = new Map<string, CacheEntry>();
+          const inFlightRefresh = new Map<string, Promise<any>>();
+          const inFlightCold = new Map<string, Promise<any>>();
+          const MAX_CACHE_KEYS = 32;
           const CACHE_FRESH_MS = 10 * 60 * 1000;        // serve without refresh
           const CACHE_HARD_MAX_MS = 6 * 60 * 60 * 1000; // beyond this, force fresh fetch
+          const evictOldest = () => {
+            if (cache.size <= MAX_CACHE_KEYS) return;
+            const firstKey = cache.keys().next().value;
+            if (firstKey !== undefined) cache.delete(firstKey);
+          };
           return async (c: any) => {
             try {
               // Parse separate date filters from query params
@@ -921,53 +935,67 @@ export const mastra = new Mastra({
               // Bypass cache entirely for the internal SWR refresh — otherwise
               // it would just see stale cache, return it, and never repopulate.
               const isSwrRefresh = c.req.query('_swr') === '1' || c.req.header('X-SWR-Refresh') === '1';
-              const cacheKey = hasDateFilters ? null : 'default';
-              if (cacheKey && cachedResult && !isSwrRefresh) {
-                const age = Date.now() - cacheTime;
+              // Stable per-filter cache key. `default` covers the no-filter case
+              // (used by prewarm and the unfiltered dashboard).
+              const cacheKey = hasDateFilters
+                ? `df:${createdStart || ''}|${createdEnd || ''}|${modifiedStart || ''}|${modifiedEnd || ''}`
+                : 'default';
+              const cached = cache.get(cacheKey);
+              if (cached && !isSwrRefresh) {
+                // True LRU: refresh recency on read so frequently-accessed
+                // keys aren't evicted before idle ones.
+                cache.delete(cacheKey);
+                cache.set(cacheKey, cached);
+                const age = Date.now() - cached.time;
                 if (age < CACHE_FRESH_MS) {
-                  console.log('📊 [API] Returning fresh cached agent performance data');
-                  return c.json(cachedResult);
+                  console.log(`📊 [API] Returning fresh cached agent performance data (key=${cacheKey})`);
+                  return c.json(cached.data);
                 }
                 if (age < CACHE_HARD_MAX_MS) {
                   // Stale: serve immediately, refresh in background.
-                  console.log(`📊 [API] Returning stale cache (age=${Math.round(age/1000)}s); kicking off background refresh`);
-                  if (!inFlightRefresh) {
-                    const refreshUrl = new URL(c.req.url);
-                    inFlightRefresh = (async () => {
-                      try {
-                        const adminKey = process.env.ADMIN_API_KEY || 'WalaPlus-QMS-Admin-2026';
-                        await fetch(refreshUrl.toString() + (refreshUrl.search ? '&' : '?') + '_swr=1', {
-                          headers: { 'X-Admin-Key': adminKey, 'X-SWR-Refresh': '1' },
-                          signal: AbortSignal.timeout(120_000),
-                        });
-                      } catch (e) {
-                        console.warn('📊 [API] Background SWR refresh failed:', e);
-                      } finally { inFlightRefresh = null; }
-                    })();
+                  console.log(`📊 [API] Returning stale cache key=${cacheKey} (age=${Math.round(age/1000)}s); kicking off background refresh`);
+                  if (!inFlightRefresh.has(cacheKey)) {
+                    const adminKey = process.env.ADMIN_API_KEY;
+                    if (!adminKey) {
+                      console.warn('📊 [API] ADMIN_API_KEY not set; cannot trigger background SWR refresh.');
+                    } else {
+                      const refreshUrl = new URL(c.req.url);
+                      const refreshPromise = (async () => {
+                        try {
+                          await fetch(refreshUrl.toString() + (refreshUrl.search ? '&' : '?') + '_swr=1', {
+                            headers: { 'X-Admin-Key': adminKey, 'X-SWR-Refresh': '1' },
+                            signal: AbortSignal.timeout(120_000),
+                          });
+                        } catch (e) {
+                          console.warn('📊 [API] Background SWR refresh failed:', e);
+                        } finally { inFlightRefresh.delete(cacheKey); }
+                      })();
+                      inFlightRefresh.set(cacheKey, refreshPromise);
+                    }
                   }
-                  return c.json(cachedResult);
+                  return c.json(cached.data);
                 }
               }
 
               // Cold-cache single-flight: if another request is already
-              // running the expensive Zoho fetch, just wait for it and serve
-              // the result it populates. Prevents stampedes (e.g. prewarm +
-              // user request hitting at the same time → 2× pagination).
-              if (cacheKey && inFlightCold) {
-                console.log('📊 [API] Awaiting in-flight cold fetch...');
-                try { await inFlightCold; } catch { /* fall through */ }
-                if (cachedResult) return c.json(cachedResult);
+              // running the expensive Zoho fetch for THIS key, wait for it
+              // and serve what it populates. Prevents stampedes per-filter.
+              const existingCold = inFlightCold.get(cacheKey);
+              if (existingCold) {
+                console.log(`📊 [API] Awaiting in-flight cold fetch for key=${cacheKey}...`);
+                try { await existingCold; } catch { /* fall through */ }
+                const after = cache.get(cacheKey);
+                if (after) return c.json(after.data);
               }
 
-              console.log('📊 [API] Fetching agent performance from CRM Lead Owners...');
+              console.log(`📊 [API] Fetching agent performance from CRM Lead Owners (key=${cacheKey})...`);
               if (hasDateFilters) {
                 console.log(`📅 [API] Date filters applied:`, dateFilters);
               }
               let resolveCold: (() => void) | null = null;
               let rejectCold: ((e: any) => void) | null = null;
-              if (cacheKey) {
-                inFlightCold = new Promise<void>((res, rej) => { resolveCold = res; rejectCold = rej; });
-              }
+              const coldPromise = new Promise<void>((res, rej) => { resolveCold = res; rejectCold = rej; });
+              inFlightCold.set(cacheKey, coldPromise);
               
               const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters);
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters);
@@ -1299,19 +1327,17 @@ export const mastra = new Mastra({
                   }
                 }
               };
-              if (cacheKey) {
-                cachedResult = responseData;
-                cacheTime = Date.now();
-              }
+              cache.set(cacheKey, { data: responseData, time: Date.now() });
+              evictOldest();
               if (resolveCold) resolveCold();
-              inFlightCold = null;
+              inFlightCold.delete(cacheKey);
               return c.json(responseData);
             } catch (error: any) {
               console.error('❌ [API] Error fetching agent performance:', error);
               // Always settle the in-flight promise so awaiters don't hang.
               if (rejectCold) rejectCold(error);
               else if (resolveCold) resolveCold();
-              inFlightCold = null;
+              inFlightCold.delete(cacheKey);
               return c.json({ 
                 success: false, 
                 error: 'Failed to fetch agent performance',
