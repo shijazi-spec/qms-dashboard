@@ -5,6 +5,68 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+let activityTablesReady: Promise<void> | null = null;
+async function ensureActivityTables(): Promise<void> {
+  if (activityTablesReady) return activityTablesReady;
+  activityTablesReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_activities (
+          id SERIAL PRIMARY KEY,
+          action_type TEXT NOT NULL,
+          action_description TEXT NOT NULL,
+          target_type TEXT,
+          target_id TEXT,
+          target_name TEXT,
+          actor_ip TEXT,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_admin_activities_created_at ON admin_activities(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_admin_activities_action_type ON admin_activities(action_type);
+
+        CREATE TABLE IF NOT EXISTS workflow_runs (
+          id SERIAL PRIMARY KEY,
+          workflow_id TEXT NOT NULL,
+          workflow_name TEXT NOT NULL,
+          run_id TEXT,
+          status TEXT NOT NULL,
+          trigger_type TEXT NOT NULL,
+          trigger_source TEXT,
+          input_data JSONB DEFAULT '{}'::jsonb,
+          output_data JSONB,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          started_at TIMESTAMPTZ DEFAULT NOW(),
+          completed_at TIMESTAMPTZ,
+          duration_ms INTEGER,
+          error_message TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_workflow_runs_started_at ON workflow_runs(started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);
+
+        CREATE TABLE IF NOT EXISTS system_events (
+          id SERIAL PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          event_category TEXT,
+          description TEXT NOT NULL,
+          severity TEXT NOT NULL DEFAULT 'info',
+          source TEXT,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_system_events_created_at ON system_events(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_system_events_severity ON system_events(severity);
+      `);
+      console.log('[ActivityDB] admin_activities, workflow_runs, system_events tables ready');
+    } catch (err) {
+      console.error('[ActivityDB] Failed to ensure activity tables:', err);
+      activityTablesReady = null;
+      throw err;
+    }
+  })();
+  return activityTablesReady;
+}
+
 export interface GovernanceDocument {
   id?: number;
   name: string;
@@ -598,22 +660,28 @@ export interface SystemEvent {
 }
 
 export async function logAdminActivity(activity: AdminActivity): Promise<AdminActivity> {
-  const result = await pool.query(
-    `INSERT INTO admin_activities 
-     (action_type, action_description, target_type, target_id, target_name, actor_ip, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING *`,
-    [
-      activity.action_type,
-      activity.action_description,
-      activity.target_type || null,
-      activity.target_id || null,
-      activity.target_name || null,
-      activity.actor_ip || null,
-      JSON.stringify(activity.metadata || {})
-    ]
-  );
-  return result.rows[0];
+  try {
+    await ensureActivityTables();
+    const result = await pool.query(
+      `INSERT INTO admin_activities 
+       (action_type, action_description, target_type, target_id, target_name, actor_ip, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        activity.action_type,
+        activity.action_description,
+        activity.target_type || null,
+        activity.target_id || null,
+        activity.target_name || null,
+        activity.actor_ip || null,
+        JSON.stringify(activity.metadata || {})
+      ]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[logAdminActivity] non-fatal write failure:', (err as Error).message);
+    return activity;
+  }
 }
 
 export async function getAdminActivities(options: {

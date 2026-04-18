@@ -1,5 +1,5 @@
 # WalaPlus Platform Test Report
-*Generated: 2026-04-18T17:42:58Z · Target: http://localhost:5000*
+*Generated: 2026-04-18T17:47:54Z · Target: http://localhost:5000*
 
 | Summary | Count |
 |---|---|
@@ -17,7 +17,7 @@
 | ai_alerts | 260 | T1 — workhorse |
 | kpi_definitions | 35 | T1 — partial |
 | enterprise_risks | 0 | empty (expected) |
-| access_audit_log | 7 | new (telemetry shipped this week) |
+| access_audit_log | 8 | new (telemetry shipped this week) |
 
 ---
 
@@ -26,7 +26,7 @@
 |---|---|---|---|---|---|
 | T-AUTH-01 | Unauth GET / redirects to login | `GET /` | 302 | 302 | ✅ |
 | T-AUTH-02 | /api/health returns 200 | `GET /api/health` | 200 | 200 | ✅ |
-| T-AUTH-04 | Telemetry endpoint accepts pageview | `POST /api/telemetry/pageview` | 200|429 | 200 | ✅ |
+| T-AUTH-04 | Telemetry endpoint accepts pageview | `POST /api/telemetry/pageview` | 200|429 | 429 | ✅ |
 | T-QA-01 | Latest audit endpoint | `GET /api/audit/latest` | 200 | 200 | ✅ |
 | T-QA-02 | Audit history endpoint | `GET /api/audit/history?limit=5` | 200 | 200 | ✅ |
 | T-QA-03 | Audit recommendations endpoint | `GET /api/audit/recommendations` | 200 | 200 | ✅ |
@@ -48,7 +48,7 @@
 | T-INFO-audits | SVG renders for audits | `GET /api/infographic/audits` | 200 | 200 | ✅ |
 | T-INFO-duplicates | SVG renders for duplicates | `GET /api/infographic/duplicates` | 200 | 200 | ✅ |
 | T-INFO-consultant | SVG renders for consultant | `GET /api/infographic/consultant` | 200 | 200 | ✅ |
-| T-INFO-PNG | PNG render size for risks | `GET /api/infographic/risks?format=png` | ≥ 400000 B | 833714 B | ✅ |
+| T-INFO-PNG | PNG render size for risks | `GET /api/infographic/risks?format=png` | ≥ 400000 B | 833495 B | ✅ |
 | T-INFO-SLACK | Slack share (graceful) | `POST /api/infographic/risks/share/slack` | success:true | "mode":"message" | ✅ |
 
 ## Tier 2 — Capability features (target ≥ 95% green)
