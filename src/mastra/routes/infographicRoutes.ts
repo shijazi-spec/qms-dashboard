@@ -6,6 +6,20 @@ import {
 
 const VALID_SECTIONS = new Set(SECTION_CATALOG.map(s => s.id));
 
+function sectionMeta(id: string) {
+  return SECTION_CATALOG.find(s => s.id === id);
+}
+
+function isEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function escapeHtml(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 async function svgToPng(svg: string): Promise<Buffer> {
   const { spawn } = await import('child_process');
   return new Promise((resolve, reject) => {
@@ -54,6 +68,138 @@ export const infographicRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         return c.json({ sections: SECTION_CATALOG });
+      };
+    },
+  },
+  {
+    path: '/api/infographic/:section/share/slack',
+    method: 'POST' as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const logger = mastra?.getLogger();
+        const section = c.req.param('section') as InfographicSection;
+        if (!VALID_SECTIONS.has(section)) {
+          return c.json({ error: 'Unknown section' }, 404);
+        }
+        let body: any = {};
+        try { body = await c.req.json(); } catch {}
+        const channelOverride: string | undefined = body?.channel?.trim() || undefined;
+        const comment: string | undefined = body?.comment?.trim() || undefined;
+
+        try {
+          const channel = channelOverride
+            || process.env.SLACK_CHANNEL_ID
+            || process.env.SLACK_QMS_CHANNEL;
+          if (!channel) return c.json({ error: 'No Slack channel configured. Provide a channel ID or set SLACK_CHANNEL_ID.' }, 400);
+          const token = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
+          if (!token) return c.json({ error: 'Slack is not configured (missing SLACK_BOT_TOKEN).' }, 400);
+
+          const meta = sectionMeta(section)!;
+          const stamp = new Date().toISOString().slice(0, 10);
+          const filename = `walaplus-${section}-${stamp}.png`;
+
+          logger?.info(`📤 [Infographic] Sharing ${section} to Slack channel ${channel}`);
+          const svg = await buildSectionInfographic(section);
+          const png = await svgToPng(svg);
+
+          const { WebClient } = await import('@slack/web-api');
+          const client = new WebClient(token);
+          const result: any = await client.files.uploadV2({
+            channel_id: channel,
+            file: png,
+            filename,
+            title: `${meta.title} — WalaPlus`,
+            initial_comment: comment || `📊 *${meta.title}* — ${meta.subtitle}\nGenerated from live WalaPlus data.`,
+          });
+
+          return c.json({
+            success: true,
+            channel,
+            filename,
+            file_id: result?.files?.[0]?.id || result?.file?.id || null,
+          });
+        } catch (error: any) {
+          console.error('[Infographic] Slack share failed:', error?.data || error);
+          return c.json({
+            error: 'Failed to share to Slack',
+            detail: error?.data?.error || error?.message || 'unknown',
+          }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: '/api/infographic/:section/share/email',
+    method: 'POST' as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const logger = mastra?.getLogger();
+        const section = c.req.param('section') as InfographicSection;
+        if (!VALID_SECTIONS.has(section)) {
+          return c.json({ error: 'Unknown section' }, 404);
+        }
+        let body: any = {};
+        try { body = await c.req.json(); } catch {}
+        const toRaw = body?.to;
+        const recipients: string[] = (Array.isArray(toRaw) ? toRaw : String(toRaw || '').split(/[,;\s]+/))
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        const invalid = recipients.filter(r => !isEmail(r));
+        if (recipients.length === 0) return c.json({ error: 'At least one recipient email is required' }, 400);
+        if (invalid.length) return c.json({ error: `Invalid email(s): ${invalid.join(', ')}` }, 400);
+        if (recipients.length > 20) return c.json({ error: 'Maximum 20 recipients per send' }, 400);
+
+        const subject: string | undefined = body?.subject?.trim() || undefined;
+        const message: string | undefined = body?.message?.trim() || undefined;
+
+        try {
+          if (!process.env.RESEND_API_KEY) {
+            return c.json({ error: 'Email is not configured (missing RESEND_API_KEY).' }, 400);
+          }
+          const meta = sectionMeta(section)!;
+          const stamp = new Date().toISOString().slice(0, 10);
+          const filename = `walaplus-${section}-${stamp}.png`;
+
+          logger?.info(`📧 [Infographic] Emailing ${section} to ${recipients.length} recipient(s)`);
+          const svg = await buildSectionInfographic(section);
+          const png = await svgToPng(svg);
+
+          const { sendResendEmail } = await import('../../utils/resendMail');
+          const subjectFinal = subject || `${meta.title} — WalaPlus snapshot (${stamp})`;
+          const intro = message ? `<p>${escapeHtml(message)}</p>` : '';
+          const html = `
+            <div style="font-family:-apple-system,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1e293b">
+              <h2 style="margin:0 0 8px;color:#0f172a">${escapeHtml(meta.title)}</h2>
+              <p style="margin:0 0 16px;color:#64748b">${escapeHtml(meta.subtitle)}</p>
+              ${intro}
+              <p style="margin:16px 0 8px">The infographic is attached as <strong>${escapeHtml(filename)}</strong>.</p>
+              <p style="margin:0;color:#64748b;font-size:12px">Generated from live WalaPlus production data on ${stamp}.</p>
+              <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+              <p style="margin:0;color:#94a3b8;font-size:11px">WalaPlus Enterprise GRC &amp; Quality Platform</p>
+            </div>`;
+
+          // Resend supports attachments — sendResendEmail wraps emails.send,
+          // but we need the lower-level call for attachments.
+          const { Resend } = await import('resend');
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'WalaPlus QMS <onboarding@resend.dev>';
+          const { data, error } = await resend.emails.send({
+            from: fromEmail,
+            to: recipients,
+            subject: subjectFinal,
+            html,
+            attachments: [{ filename, content: png }],
+          } as any);
+
+          if (error) {
+            console.error('[Infographic] Email failed:', error);
+            return c.json({ error: 'Failed to send email', detail: (error as any)?.message || error }, 500);
+          }
+          return c.json({ success: true, id: data?.id, recipients, filename });
+        } catch (error: any) {
+          console.error('[Infographic] Email share failed:', error);
+          return c.json({ error: 'Failed to send email', detail: error?.message || 'unknown' }, 500);
+        }
       };
     },
   },

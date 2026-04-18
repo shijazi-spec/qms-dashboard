@@ -70,8 +70,65 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
           Print
         </button>
+        <div class="w-full"></div>
+        <button id="btn-slack" disabled class="bg-[#4A154B] hover:bg-[#611f63] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
+          Send to Slack
+        </button>
+        <button id="btn-email" disabled class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          Send via Email
+        </button>
       </div>
     </section>
+
+    <!-- Slack modal -->
+    <div id="slack-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-slate-900">Send to Slack</h3>
+          <button data-close class="text-slate-400 hover:text-slate-600">&times;</button>
+        </div>
+        <p class="text-sm text-slate-600 mb-4">Posts the infographic as a PNG attachment in the configured Slack channel.</p>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Channel <span class="font-normal text-slate-400">(leave blank for default)</span></label>
+        <input id="slack-channel" type="text" placeholder="C0123ABCDEF or #general" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-3 text-sm" />
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Comment <span class="font-normal text-slate-400">(optional)</span></label>
+        <textarea id="slack-comment" rows="3" placeholder="A short note for the channel…" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 text-sm"></textarea>
+        <div id="slack-status" class="text-sm mb-3 hidden"></div>
+        <div class="flex justify-end gap-2">
+          <button data-close class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-semibold">Cancel</button>
+          <button id="slack-send" class="bg-[#4A154B] hover:bg-[#611f63] text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+            <span id="slack-send-label">Send</span>
+            <span id="slack-send-spinner" class="hidden spinner" style="width:16px;height:16px;border-width:2px"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email modal -->
+    <div id="email-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-slate-900">Send via Email</h3>
+          <button data-close class="text-slate-400 hover:text-slate-600">&times;</button>
+        </div>
+        <p class="text-sm text-slate-600 mb-4">Sends the infographic as a PNG attachment to one or more recipients.</p>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">To <span class="text-red-500">*</span> <span class="font-normal text-slate-400">(comma-separated)</span></label>
+        <input id="email-to" type="text" placeholder="ceo@walaplus.com, cco@walaplus.com" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-3 text-sm" />
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Subject <span class="font-normal text-slate-400">(optional)</span></label>
+        <input id="email-subject" type="text" placeholder="Auto-generated from section title" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-3 text-sm" />
+        <label class="block text-sm font-semibold text-slate-700 mb-1">Message <span class="font-normal text-slate-400">(optional)</span></label>
+        <textarea id="email-message" rows="3" placeholder="A short note for the recipients…" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 text-sm"></textarea>
+        <div id="email-status" class="text-sm mb-3 hidden"></div>
+        <div class="flex justify-end gap-2">
+          <button data-close class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-semibold">Cancel</button>
+          <button id="email-send" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+            <span id="email-send-label">Send</span>
+            <span id="email-send-spinner" class="hidden spinner" style="width:16px;height:16px;border-width:2px"></span>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Preview -->
     <section id="preview-section" class="hidden">
@@ -102,6 +159,8 @@
     const btnSvg = document.getElementById('btn-svg');
     const btnPng = document.getElementById('btn-png');
     const btnPrint = document.getElementById('btn-print');
+    const btnSlack = document.getElementById('btn-slack');
+    const btnEmail = document.getElementById('btn-email');
 
     function colorTints(hex) {
       // Map hex accent → light tailwind-like tints
@@ -149,6 +208,7 @@
             // Reset preview
             previewContainer.innerHTML = '<div class="text-slate-400 text-sm">Click <strong class="text-white">Generate</strong> to preview the infographic here.</div>';
             btnSvg.disabled = btnPng.disabled = btnPrint.disabled = true;
+            btnSlack.disabled = btnEmail.disabled = false;
           });
         });
       } catch (e) {
@@ -202,6 +262,95 @@
     btnSvg.addEventListener('click', () => download('svg'));
     btnPng.addEventListener('click', () => download('png'));
     btnPrint.addEventListener('click', printGraphic);
+
+    // ---- Modal helpers ----
+    function openModal(id) {
+      const m = document.getElementById(id);
+      m.classList.remove('hidden');
+      m.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeModal(id));
+      m.addEventListener('click', e => { if (e.target === m) closeModal(id); });
+    }
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      m.classList.add('hidden');
+      const status = m.querySelector('[id$="-status"]');
+      if (status) { status.className = 'text-sm mb-3 hidden'; status.textContent = ''; }
+    }
+    function setStatus(id, kind, msg) {
+      const el = document.getElementById(id);
+      const cls = kind === 'ok' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+        : kind === 'err' ? 'text-red-700 bg-red-50 border border-red-200'
+        : 'text-slate-700 bg-slate-50 border border-slate-200';
+      el.className = 'text-sm mb-3 px-3 py-2 rounded-lg ' + cls;
+      el.textContent = msg;
+    }
+    function setBusy(btn, label, spinner, busy) {
+      document.getElementById(btn).disabled = busy;
+      document.getElementById(label).classList.toggle('hidden', busy);
+      document.getElementById(spinner).classList.toggle('hidden', !busy);
+    }
+
+    btnSlack.addEventListener('click', () => {
+      if (!selected) return;
+      document.getElementById('slack-channel').value = '';
+      document.getElementById('slack-comment').value = '';
+      openModal('slack-modal');
+    });
+    btnEmail.addEventListener('click', () => {
+      if (!selected) return;
+      document.getElementById('email-to').value = '';
+      document.getElementById('email-subject').value = '';
+      document.getElementById('email-message').value = '';
+      openModal('email-modal');
+    });
+
+    document.getElementById('slack-send').addEventListener('click', async () => {
+      if (!selected) return;
+      const channel = document.getElementById('slack-channel').value.trim();
+      const comment = document.getElementById('slack-comment').value.trim();
+      setBusy('slack-send', 'slack-send-label', 'slack-send-spinner', true);
+      setStatus('slack-status', 'info', 'Rendering and uploading to Slack…');
+      try {
+        const r = await fetch('/api/infographic/' + selected.id + '/share/slack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: channel || undefined, comment: comment || undefined }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) throw new Error(data.detail || data.error || ('HTTP ' + r.status));
+        setStatus('slack-status', 'ok', 'Posted to Slack channel ' + data.channel + ' as ' + data.filename);
+        setTimeout(() => closeModal('slack-modal'), 1800);
+      } catch (e) {
+        setStatus('slack-status', 'err', 'Failed: ' + e.message);
+      } finally {
+        setBusy('slack-send', 'slack-send-label', 'slack-send-spinner', false);
+      }
+    });
+
+    document.getElementById('email-send').addEventListener('click', async () => {
+      if (!selected) return;
+      const to = document.getElementById('email-to').value.trim();
+      const subject = document.getElementById('email-subject').value.trim();
+      const message = document.getElementById('email-message').value.trim();
+      if (!to) { setStatus('email-status', 'err', 'At least one recipient is required.'); return; }
+      setBusy('email-send', 'email-send-label', 'email-send-spinner', true);
+      setStatus('email-status', 'info', 'Rendering and sending email…');
+      try {
+        const r = await fetch('/api/infographic/' + selected.id + '/share/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to, subject: subject || undefined, message: message || undefined }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) throw new Error(data.detail || data.error || ('HTTP ' + r.status));
+        setStatus('email-status', 'ok', 'Sent to ' + data.recipients.length + ' recipient(s) as ' + data.filename);
+        setTimeout(() => closeModal('email-modal'), 1800);
+      } catch (e) {
+        setStatus('email-status', 'err', 'Failed: ' + e.message);
+      } finally {
+        setBusy('email-send', 'email-send-label', 'email-send-spinner', false);
+      }
+    });
 
     // Mount nav (defensive — WalaPlusNav may not exist on every install)
     try {
