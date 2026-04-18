@@ -1314,6 +1314,18 @@ export const mastra = new Mastra({
                 "Khalil": "Khalil Aldadah",
               };
 
+              // Normalized override map: lowercase + collapsed whitespace.
+              // Ensures every owner whose display name matches (regardless of
+              // spelling/spacing/case differences across CRM owner IDs) gets
+              // the same team + status. Fixes the "Khalil Aldadah shows under
+              // both Sales and MP" duplicate-card issue.
+              const normalizeName = (s: string) =>
+                (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+              const userOverridesNormalized: Record<string, { team: string; status: string }> = {};
+              for (const [k, v] of Object.entries(userOverrides)) {
+                userOverridesNormalized[normalizeName(k)] = v;
+              }
+
               const userMap: Record<string, { name: string; team: string; role: string }> = {};
               for (const user of users) {
                 userMap[user.id] = { name: user.name, team: user.team, role: user.role };
@@ -1347,7 +1359,10 @@ export const mastra = new Mastra({
                 const rawOwnerId = lead.Owner || 'Unassigned';
                 const ownerId = ownerNameAliases[rawOwnerId] || rawOwnerId;
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'SDR', role: 'SDR Representative' };
-                const override = userOverrides[userInfo.name] || userOverrides[ownerId];
+                const override = userOverrides[userInfo.name]
+                  || userOverrides[ownerId]
+                  || userOverridesNormalized[normalizeName(userInfo.name)]
+                  || userOverridesNormalized[normalizeName(ownerId)];
                 
                 if (!ownerStats[ownerId]) {
                   ownerStats[ownerId] = {
@@ -1385,7 +1400,10 @@ export const mastra = new Mastra({
                 const rawDealOwnerId = deal.Owner || 'Unassigned';
                 const ownerId = ownerNameAliases[rawDealOwnerId] || rawDealOwnerId;
                 const userInfo = userMap[ownerId] || { name: ownerId, team: 'Sales', role: 'Account Executive' };
-                const dealOverride = userOverrides[userInfo.name] || userOverrides[ownerId];
+                const dealOverride = userOverrides[userInfo.name]
+                  || userOverrides[ownerId]
+                  || userOverridesNormalized[normalizeName(userInfo.name)]
+                  || userOverridesNormalized[normalizeName(ownerId)];
                 
                 if (!ownerStats[ownerId]) {
                   ownerStats[ownerId] = {
@@ -1434,7 +1452,9 @@ export const mastra = new Mastra({
                     score,
                     recordsAudited: agent.recordsAudited,
                     issues: agent.issues,
-                    status: userOverrides[agent.name]?.status || (activeOwnerNames.has(agent.name) || activeOwnerIdSet.has(agent.id) ? 'Active' : 'Inactive')
+                    status: userOverrides[agent.name]?.status
+                      || userOverridesNormalized[normalizeName(agent.name)]?.status
+                      || (activeOwnerNames.has(agent.name) || activeOwnerIdSet.has(agent.id) ? 'Active' : 'Inactive')
                   };
                 })
                 .sort((a, b) => a.score - b.score);
