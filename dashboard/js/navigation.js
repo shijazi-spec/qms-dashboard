@@ -23,12 +23,10 @@ const WalaPlusNav = {
       color: 'blue',
       items: [
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
-        { label: 'CRM Data Hub', href: '/crm', icon: 'database', id: 'crm' },
-        { label: 'QMS', href: '/qms', icon: 'shield-check', id: 'qms' },
-        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
-        { label: 'Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
+        { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
+        { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
-        { label: 'Sandbox', href: '/sandbox', icon: 'beaker', id: 'sandbox' }
+        { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
       ]
     },
     {
@@ -38,13 +36,13 @@ const WalaPlusNav = {
       color: 'slate',
       items: [
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
-        { label: 'Risks', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
-        { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
-        { label: 'Controlled Documents', href: '/policies', icon: 'document-text', id: 'policies' },
+        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
+        { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
+        { label: 'Integrated QMS', href: '/qms', icon: 'shield-check', id: 'qms' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
-        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' },
+        { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
-        { label: 'Duplicates', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
+        { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' }
       ]
     },
     {
