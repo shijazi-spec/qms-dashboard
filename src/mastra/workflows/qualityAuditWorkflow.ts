@@ -295,8 +295,21 @@ const auditCRMWithAgentStep = createStep({
               const issues = analyzeRecordHygiene(record, governanceRules);
               const ownerData = record.data?.Owner;
               const ownerName = record.owner || (ownerData ? (ownerData.name || ownerData.id || '-') : '-');
+              const createdByData = record.data?.Created_By;
+              const createdByName = createdByData ? (createdByData.name || createdByData.id || '') : '';
+              const layoutData = record.data?.Layout;
+              const layoutName = layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '';
+              const productsRaw = record.data?.Product_Details;
+              const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
+                ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
+                : (typeof record.data?.Products === 'object' ? record.data?.Products?.name : record.data?.Products) || record.data?.Product_Name || record.data?.Product || '';
+              const createdTime = record.data?.Created_Time || record.createdTime || '';
               for (const issue of issues) {
                 (issue as any).owner = ownerName;
+                (issue as any).layouts = layoutName;
+                (issue as any).products = productsName;
+                (issue as any).createdBy = createdByName;
+                (issue as any).createdTime = createdTime;
               }
               moduleIssues.push(...issues);
             }
@@ -359,6 +372,10 @@ const auditCRMWithAgentStep = createStep({
           recordId: issue.recordId,
           module: issue.module,
           owner: issue.owner || '-',
+          layouts: issue.layouts || '',
+          products: issue.products || '',
+          createdBy: issue.createdBy || '',
+          createdTime: issue.createdTime || '',
           fieldName: issue.fieldName || '',
           issueType: issue.issueType,
           description: issue.description,
