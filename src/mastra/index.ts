@@ -46,7 +46,7 @@ import { healthPulseRoutes } from "./routes/healthPulseRoutes";
 // FIX: tablef_* tables were referenced by inline /api/tablef/* routes below
 // but never created — every request returned 500. Fire schema init at module
 // load. Idempotent (CREATE TABLE IF NOT EXISTS).
-import { initTableFTables } from "./routes/tablefRoutes";
+import { initTableFTables, pool as tableFPool } from "./routes/tablefRoutes";
 initTableFTables().catch((err) => console.error('[TableF] init failed:', err));
 
 // FIX: pre-warm /api/agents/performance ~20s after boot so the first user
@@ -871,6 +871,7 @@ export const mastra = new Mastra({
           let cachedResult: any = null;
           let cacheTime = 0;
           let inFlightRefresh: Promise<any> | null = null;
+          let inFlightCold: Promise<any> | null = null; // dedup concurrent cold requests
           const CACHE_FRESH_MS = 10 * 60 * 1000;        // serve without refresh
           const CACHE_HARD_MAX_MS = 6 * 60 * 60 * 1000; // beyond this, force fresh fetch
           return async (c: any) => {
@@ -948,9 +949,24 @@ export const mastra = new Mastra({
                 }
               }
 
+              // Cold-cache single-flight: if another request is already
+              // running the expensive Zoho fetch, just wait for it and serve
+              // the result it populates. Prevents stampedes (e.g. prewarm +
+              // user request hitting at the same time → 2× pagination).
+              if (cacheKey && inFlightCold) {
+                console.log('📊 [API] Awaiting in-flight cold fetch...');
+                try { await inFlightCold; } catch { /* fall through */ }
+                if (cachedResult) return c.json(cachedResult);
+              }
+
               console.log('📊 [API] Fetching agent performance from CRM Lead Owners...');
               if (hasDateFilters) {
                 console.log(`📅 [API] Date filters applied:`, dateFilters);
+              }
+              let resolveCold: (() => void) | null = null;
+              let rejectCold: ((e: any) => void) | null = null;
+              if (cacheKey) {
+                inFlightCold = new Promise<void>((res, rej) => { resolveCold = res; rejectCold = rej; });
               }
               
               const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters);
@@ -1287,9 +1303,15 @@ export const mastra = new Mastra({
                 cachedResult = responseData;
                 cacheTime = Date.now();
               }
+              if (resolveCold) resolveCold();
+              inFlightCold = null;
               return c.json(responseData);
             } catch (error: any) {
               console.error('❌ [API] Error fetching agent performance:', error);
+              // Always settle the in-flight promise so awaiters don't hang.
+              if (rejectCold) rejectCold(error);
+              else if (resolveCold) resolveCold();
+              inFlightCold = null;
               return c.json({ 
                 success: false, 
                 error: 'Failed to fetch agent performance',
@@ -3641,10 +3663,8 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const { Pool } = await import("pg");
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const pool = tableFPool;
               const result = await pool.query('SELECT * FROM tablef_departments WHERE active = true ORDER BY name');
-              await pool.end();
               return c.json({ departments: result.rows });
             } catch (error) {
               console.error("Error fetching departments:", error);
@@ -3659,8 +3679,7 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const { Pool } = await import("pg");
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const pool = tableFPool;
               const deptId = c.req.query('department_id');
               let query = 'SELECT * FROM tablef_kpis WHERE enabled = true';
               const params: string[] = [];
@@ -3670,7 +3689,6 @@ export const mastra = new Mastra({
               }
               query += ' ORDER BY department_id, name';
               const result = await pool.query(query, params);
-              await pool.end();
               return c.json({ kpis: result.rows });
             } catch (error) {
               console.error("Error fetching KPIs:", error);
@@ -3685,8 +3703,7 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const { Pool } = await import("pg");
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const pool = tableFPool;
               const data = await c.req.json();
               
               if (data.kpi_id) {
@@ -3701,7 +3718,6 @@ export const mastra = new Mastra({
                    data.unit, data.target_annual, data.target_monthly, data.weight,
                    data.owner_email, data.data_source, data.calculation_definition, data.kpi_id]
                 );
-                await pool.end();
                 return c.json({ success: true, kpi: result.rows[0] });
               } else {
                 const kpiId = `KPI-${Date.now()}`;
@@ -3714,7 +3730,6 @@ export const mastra = new Mastra({
                    data.unit, data.target_annual, data.target_monthly, data.weight,
                    data.owner_email, data.data_source, data.calculation_definition]
                 );
-                await pool.end();
                 return c.json({ success: true, kpi: result.rows[0] });
               }
             } catch (error) {
@@ -3730,10 +3745,8 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const { Pool } = await import("pg");
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const pool = tableFPool;
               const result = await pool.query('SELECT * FROM tablef_performance ORDER BY period_month DESC');
-              await pool.end();
               return c.json({ performance: result.rows });
             } catch (error) {
               console.error("Error fetching performance:", error);
@@ -3748,8 +3761,7 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const { Pool } = await import("pg");
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const pool = tableFPool;
               const data = await c.req.json();
               
               const variance = data.achieved - data.target;
@@ -3800,7 +3812,6 @@ export const mastra = new Mastra({
                 );
               }
               
-              await pool.end();
               return c.json({ success: true, status, trend, variance, variancePercent });
             } catch (error) {
               console.error("Error saving performance:", error);
@@ -3815,10 +3826,8 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => {
           return async (c: any) => {
             try {
-              const { Pool } = await import("pg");
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              const pool = tableFPool;
               const result = await pool.query('SELECT * FROM tablef_users ORDER BY name');
-              await pool.end();
               return c.json({ users: result.rows });
             } catch (error) {
               console.error("Error fetching users:", error);
