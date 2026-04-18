@@ -90,7 +90,7 @@ export const consultantRoutes = [
                 },
                 threadId: resolvedThreadId,
               },
-              () => agent.generate(message, {
+              () => agent.generateLegacy(message, {
                 threadId: resolvedThreadId,
                 resourceId: "consultant-session",
                 abortSignal: controller.signal,
@@ -154,7 +154,7 @@ export const consultantRoutes = [
               },
               threadId: resolvedThreadId,
             },
-            () => agent.stream(message, {
+            () => agent.streamLegacy(message, {
               threadId: resolvedThreadId,
               resourceId: "consultant-session",
               abortSignal: controller.signal,
@@ -352,7 +352,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
 
           let response;
           try {
-            response = await agent.generate(scanPrompt, {
+            response = await agent.generateLegacy(scanPrompt, {
               threadId: `scan-${Date.now()}`,
               resourceId: "system-scanner",
               abortSignal: scanController.signal,
