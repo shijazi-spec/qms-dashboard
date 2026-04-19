@@ -77,6 +77,7 @@ const WalaPlusNav = {
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
         { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
         { label: 'Give Feedback', href: '/feedback', icon: 'chat-alt', id: 'feedback' },
+        { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
         { label: 'Scope of Work', href: '/docs/SCOPE_OF_WORK.html', icon: 'document', id: 'scope', external: true }
       ]
     },

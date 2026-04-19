@@ -33,6 +33,7 @@ import { migrationRoutes } from "./routes/migrationRoutes";
 import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
+import { infographicRoutes } from "./routes/infographicRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
 import { pdplRoutes } from "./routes/pdplRoutes";
@@ -3968,6 +3969,33 @@ export const mastra = new Mastra({
       ...policyRoutes,
       ...complianceRoutes,
       ...auditRoutes,
+      ...infographicRoutes,
+      // ======================================================================
+      // Infographic Generator Page (Support section) — restored after regression
+      // ======================================================================
+      {
+        path: "/infographic",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", "infographic.html"),
+                "/home/runner/workspace/dashboard/infographic.html",
+              ];
+              for (const p of possiblePaths) {
+                if (existsSync(p)) {
+                  return c.html(readFileSync(p, "utf-8"));
+                }
+              }
+              return c.text("Infographic Generator page not found", 404);
+            } catch (error) {
+              console.error("Error serving Infographic page:", error);
+              return c.text("Error loading Infographic Generator", 500);
+            }
+          };
+        },
+      },
       ...vendorRoutes,
       ...migrationRoutes,
       ...handoffRoutes,
