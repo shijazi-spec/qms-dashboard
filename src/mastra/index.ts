@@ -823,6 +823,26 @@ export const mastra = new Mastra({
                 issues: { critical: number; high: number; medium: number; low: number };
                 passCount: number;
               }> = {};
+
+              // Per-record failing-field rows feeding the dashboard's "View All Issues" modal.
+              // One entry per failing field per record (a lead missing both Email and Lead_Source
+              // produces two rows). Owner name is the resolved canonical name so alias merging
+              // (Rayan -> Rayan Saleh, etc.) keeps drill-down consistent with the agent cards.
+              type IssueRow = {
+                recordId: string;
+                module: 'Leads' | 'Deals';
+                owner: string;
+                createdTime: string;
+                createdBy: string;
+                layouts: string;
+                products: string;
+                issue: string;
+                severity: 'critical' | 'high' | 'medium' | 'low';
+                fieldName: string;
+                recommendation: string;
+              };
+              const ownerIssueDetails: IssueRow[] = [];
+              const pushIssue = (row: IssueRow) => ownerIssueDetails.push(row);
               
               for (const lead of leads) {
                 const ownerId = lead.Owner || 'Unassigned';
@@ -846,9 +866,30 @@ export const mastra = new Mastra({
                 
                 const hasIssue = !lead.Email || !lead.Lead_Source || !lead.Lead_Status;
                 if (hasIssue) {
-                  if (!lead.Email) ownerStats[key].issues.high++;
-                  if (!lead.Lead_Source) ownerStats[key].issues.medium++;
-                  if (!lead.Lead_Status) ownerStats[key].issues.low++;
+                  const recordId = (lead as any).id || (lead as any).Id || '';
+                  const createdTime = (lead as any).Created_Time || '';
+                  const createdBy = (lead as any).Created_By?.name || (lead as any).Created_By || '';
+                  const layouts = (lead as any).Layout?.name || (lead as any).Layout || '';
+                  const products = '';
+                  const ownerName = userInfo.name;
+                  if (!lead.Email) {
+                    ownerStats[key].issues.high++;
+                    pushIssue({ recordId, module: 'Leads', owner: ownerName, createdTime, createdBy, layouts, products,
+                      issue: 'Missing Email', severity: 'high', fieldName: 'Email',
+                      recommendation: 'Add a valid email address to enable outreach.' });
+                  }
+                  if (!lead.Lead_Source) {
+                    ownerStats[key].issues.medium++;
+                    pushIssue({ recordId, module: 'Leads', owner: ownerName, createdTime, createdBy, layouts, products,
+                      issue: 'Missing Lead Source', severity: 'medium', fieldName: 'Lead_Source',
+                      recommendation: 'Specify how the lead was acquired for attribution.' });
+                  }
+                  if (!lead.Lead_Status) {
+                    ownerStats[key].issues.low++;
+                    pushIssue({ recordId, module: 'Leads', owner: ownerName, createdTime, createdBy, layouts, products,
+                      issue: 'Missing Lead Status', severity: 'low', fieldName: 'Lead_Status',
+                      recommendation: 'Set the current lead status to track pipeline progress.' });
+                  }
                 } else {
                   ownerStats[key].passCount++;
                 }
@@ -876,9 +917,30 @@ export const mastra = new Mastra({
                 
                 const hasIssue = !deal.Deal_Name || !deal.Stage || !deal.Amount;
                 if (hasIssue) {
-                  if (!deal.Deal_Name) ownerStats[key].issues.critical++;
-                  if (!deal.Stage) ownerStats[key].issues.critical++;
-                  if (!deal.Amount) ownerStats[key].issues.high++;
+                  const recordId = (deal as any).id || (deal as any).Id || '';
+                  const createdTime = (deal as any).Created_Time || '';
+                  const createdBy = (deal as any).Created_By?.name || (deal as any).Created_By || '';
+                  const layouts = (deal as any).Layout?.name || (deal as any).Layout || '';
+                  const products = (deal as any).Product_Name || (deal as any).Products || '';
+                  const ownerName = userInfo.name;
+                  if (!deal.Deal_Name) {
+                    ownerStats[key].issues.critical++;
+                    pushIssue({ recordId, module: 'Deals', owner: ownerName, createdTime, createdBy, layouts, products,
+                      issue: 'Missing Deal Name', severity: 'critical', fieldName: 'Deal_Name',
+                      recommendation: 'Every deal must have a descriptive name for identification.' });
+                  }
+                  if (!deal.Stage) {
+                    ownerStats[key].issues.critical++;
+                    pushIssue({ recordId, module: 'Deals', owner: ownerName, createdTime, createdBy, layouts, products,
+                      issue: 'Missing Stage', severity: 'critical', fieldName: 'Stage',
+                      recommendation: 'Set the pipeline stage so forecasts and reports stay accurate.' });
+                  }
+                  if (!deal.Amount) {
+                    ownerStats[key].issues.high++;
+                    pushIssue({ recordId, module: 'Deals', owner: ownerName, createdTime, createdBy, layouts, products,
+                      issue: 'Missing Amount', severity: 'high', fieldName: 'Amount',
+                      recommendation: 'Enter the deal amount to enable revenue forecasting.' });
+                  }
                 } else {
                   ownerStats[key].passCount++;
                 }
@@ -907,9 +969,12 @@ export const mastra = new Mastra({
               console.log(`✅ [API] Found ${agents.length} agents from CRM Lead Owners`);
               console.log(`📊 [API] Coverage - Leads: ${leadsCoverage.recordsAudited}/${leadsCoverage.totalRecordsInCRM}, Deals: ${dealsCoverage.recordsAudited}/${dealsCoverage.totalRecordsInCRM}`);
               
+              console.log(`📋 [API] Built ${ownerIssueDetails.length} per-record issue rows for owner drill-down`);
+
               return c.json({
                 success: true,
                 agents,
+                ownerIssueDetails,
                 totalLeads: leads.length,
                 totalDeals: deals.length,
                 coverage: {
