@@ -113,7 +113,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="app">
         <div id="walaplus-nav"></div>
-        <script src="/js/navigation.js?v=4.5.4"></script>
+        <script src="/js/navigation.js?v=4.5.5"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 WalaPlusNav.init('dashboard');
@@ -518,17 +518,6 @@
                             </div>
                         </div>
 
-                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="opportunities" data-name="Areas of Opportunity">
-                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                                <span class="text-xs font-medium text-gray-500 uppercase">Areas of Opportunity</span>
-                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
-                                </svg>
-                            </div>
-                            <div class="p-6">
-                                <div id="opportunities" class="space-y-3 max-h-64 overflow-y-auto"></div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Row 4: Recommendations -->
@@ -1824,7 +1813,6 @@
             'issues-chart': { visible: true, order: 4 },
             'records-with-issues': { visible: true, order: 5 },
             'trend-chart': { visible: true, order: 6 },
-            'opportunities': { visible: true, order: 7 },
             'recommendations': { visible: true, order: 8 },
             'history': { visible: true, order: 9 },
             'agent-performance': { visible: true, order: 10 },
@@ -2043,7 +2031,6 @@
             updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
             updateTrendChart(data.auditHistory);
             loadQualityTrend();
-            updateOpportunities(audit);
             updateRecommendations(audit.recommendations);
             updateHistory(data.auditHistory);
             updateAgentPerformance(data);
@@ -2595,6 +2582,6 @@
         setInterval(refreshDashboard, 600000); // Auto-refresh every 10 minutes
     </script>
 
-    <script src="/js/ai-consultant-widget.js?v=4.5.4"></script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.5"></script>
 </body>
 </html>
