@@ -787,6 +787,7 @@ export const mastra = new Mastra({
               const { leads, coverage: leadsCoverage } = await getLeadsWithSeparateFilters(dateFilters);
               const { deals, coverage: dealsCoverage } = await getDealsWithSeparateFilters(dateFilters);
               const users = await getUsers();
+              const { NAME_ALIASES } = await import("../data/seedUsers");
               
               type ResolvedUser = { id: string; name: string; team: string; role: string; status: string };
               const userMap: Record<string, ResolvedUser> = {};
@@ -796,6 +797,12 @@ export const mastra = new Mastra({
                 const entry: ResolvedUser = { id: user.id, name: user.name, team: user.team, role: user.role, status: user.status };
                 userMap[user.id] = entry;
                 if (user.name) userMapByName[normName(user.name)] = entry;
+              }
+              // Wire CRM-name aliases into the lookup so different spellings of the same person
+              // (e.g. "Rayan" -> "Rayan Saleh") resolve to the canonical user entry.
+              for (const [aliasRaw, canonicalRaw] of Object.entries(NAME_ALIASES)) {
+                const canonical = userMapByName[normName(canonicalRaw)];
+                if (canonical) userMapByName[normName(aliasRaw)] = canonical;
               }
               const resolveOwner = (ownerId: string): ResolvedUser | null =>
                 userMap[ownerId] || userMapByName[normName(ownerId)] || null;
