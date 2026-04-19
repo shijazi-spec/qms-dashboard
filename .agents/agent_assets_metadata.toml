@@ -84,3 +84,9 @@ id = "8cc_RFKQ7HhH390Fl-7iE"
 uri = "file://exports/Missing_CRM_Owners_to_Add_2026-04-19.xlsx"
 type = "table"
 title = "Missing CRM Owners — 19 names to add (2026-04-19)"
+
+[[outputs]]
+id = "4JBNGNWueI5HXXI_hN8DO"
+uri = "file://exports/Missing_CRM_Owners_with_Activity_2026-04-19.xlsx"
+type = "table"
+title = "Missing CRM Owners with Activity Profile (2026-04-19)"
