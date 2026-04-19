@@ -84,3 +84,9 @@ id = "9fCJWtz1M--FkDpUHcF0e"
 uri = "file://exports/infographic-samples/consultant.jpg"
 type = "image"
 title = "AI Consultant — Alerts by severity + HITL queue"
+
+[[outputs]]
+id = "JaXuBDA24vfD5kBA8zSfj"
+uri = "file://attached_assets/CRM_Users_Complete_117_2026-04-19.xlsx"
+type = "table"
+title = "CRM Users — Complete (117) — 2026-04-19"
