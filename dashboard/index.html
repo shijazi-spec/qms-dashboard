@@ -113,7 +113,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="app">
         <div id="walaplus-nav"></div>
-        <script src="/js/navigation.js?v=4.5.2"></script>
+        <script src="/js/navigation.js?v=4.5.3"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 WalaPlusNav.init('dashboard');
@@ -172,11 +172,8 @@
                     <div class="flex items-center space-x-3">
                         <select id="modalModuleFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
                             <option value="all">All Modules</option>
-                            <option value="Deals">Deals</option>
-                            <option value="Tasks">Tasks</option>
-                            <option value="Contacts">Contacts</option>
                             <option value="Leads">Leads</option>
-                            <option value="Accounts">Accounts</option>
+                            <option value="Deals">Deals</option>
                         </select>
                         <select id="modalSeverityFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-severity-filter">
                             <option value="all">All Severities</option>
@@ -206,6 +203,30 @@
                             </svg>
                         </button>
                     </div>
+                </div>
+                <div class="bg-white px-6 py-3 border-b flex flex-wrap items-end gap-3">
+                    <div class="flex-1 min-w-[220px]">
+                        <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Search Record ID</label>
+                        <div class="relative">
+                            <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                            <input type="text" id="modalRecordIdSearch" oninput="filterModalIssues()" placeholder="Type record ID…" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
+                        </div>
+                    </div>
+                    <div class="min-w-[200px]">
+                        <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Owner</label>
+                        <select id="modalOwnerFilter" onchange="filterModalIssues()" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-owner-filter">
+                            <option value="all">All Owners</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Created From</label>
+                        <input type="date" id="modalCreatedFrom" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="input-created-from">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Created To</label>
+                        <input type="date" id="modalCreatedTo" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="input-created-to">
+                    </div>
+                    <button onclick="resetModalFilters()" class="text-sm text-gray-600 hover:text-indigo-600 px-3 py-1.5 border border-gray-200 rounded-lg hover:border-indigo-300" data-testid="button-reset-filters">Reset</button>
                 </div>
                 <div class="flex-1 overflow-auto p-6">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -1011,7 +1032,22 @@
             document.getElementById('modalModuleFilter').value = 'all';
             document.getElementById('modalSeverityFilter').value = 'all';
             const lf = document.getElementById('modalLayoutFilter'); if (lf) lf.value = 'all';
+            const ridf = document.getElementById('modalRecordIdSearch'); if (ridf) ridf.value = '';
+            const ofF = document.getElementById('modalOwnerFilter'); if (ofF) ofF.value = 'all';
+            const cf = document.getElementById('modalCreatedFrom'); if (cf) cf.value = '';
+            const ct = document.getElementById('modalCreatedTo'); if (ct) ct.value = '';
             loadIssuesForModal(category);
+        }
+
+        function resetModalFilters() {
+            document.getElementById('modalModuleFilter').value = 'all';
+            document.getElementById('modalSeverityFilter').value = 'all';
+            const lf = document.getElementById('modalLayoutFilter'); if (lf) lf.value = 'all';
+            const ridf = document.getElementById('modalRecordIdSearch'); if (ridf) ridf.value = '';
+            const ofF = document.getElementById('modalOwnerFilter'); if (ofF) ofF.value = 'all';
+            const cf = document.getElementById('modalCreatedFrom'); if (cf) cf.value = '';
+            const ct = document.getElementById('modalCreatedTo'); if (ct) ct.value = '';
+            filterModalIssues();
         }
 
         function closeIssuesModal() {
@@ -1084,6 +1120,7 @@
 
             currentIssues = issues;
             populateLayoutFilter();
+            populateOwnerFilter();
             renderIssuesTable(issues);
         }
 
@@ -1166,14 +1203,44 @@
             sel.value = layouts.includes(previous) ? previous : 'all';
         }
 
+        function populateOwnerFilter() {
+            const sel = document.getElementById('modalOwnerFilter');
+            if (!sel) return;
+            const previous = sel.value || 'all';
+            const owners = Array.from(new Set((currentIssues || [])
+                .map(i => (i.owner || '').toString().trim())
+                .filter(o => o && o !== '-'))).sort((a, b) => a.localeCompare(b));
+            sel.innerHTML = '<option value="all">All Owners</option>'
+                + owners.map(o => `<option value="${o.replace(/"/g, '&quot;')}">${o}</option>`).join('');
+            sel.value = owners.includes(previous) ? previous : 'all';
+        }
+
         function filterModalIssues() {
             const module = document.getElementById('modalModuleFilter').value;
             const severity = document.getElementById('modalSeverityFilter').value;
             const layout = document.getElementById('modalLayoutFilter')?.value || 'all';
+            const recordSearch = (document.getElementById('modalRecordIdSearch')?.value || '').trim().toLowerCase();
+            const owner = document.getElementById('modalOwnerFilter')?.value || 'all';
+            const fromStr = document.getElementById('modalCreatedFrom')?.value || '';
+            const toStr = document.getElementById('modalCreatedTo')?.value || '';
+            const fromTs = fromStr ? new Date(fromStr + 'T00:00:00').getTime() : null;
+            const toTs = toStr ? new Date(toStr + 'T23:59:59.999').getTime() : null;
             let filtered = currentIssues;
             if (module !== 'all') filtered = filtered.filter(i => i.module === module);
             if (severity !== 'all') filtered = filtered.filter(i => i.severity === severity);
             if (layout !== 'all') filtered = filtered.filter(i => (i.layouts || '').toString().trim() === layout);
+            if (recordSearch) filtered = filtered.filter(i => (i.id || '').toString().toLowerCase().includes(recordSearch));
+            if (owner !== 'all') filtered = filtered.filter(i => (i.owner || '').toString().trim() === owner);
+            if (fromTs || toTs) {
+                filtered = filtered.filter(i => {
+                    if (!i.createdTime) return false;
+                    const t = new Date(i.createdTime).getTime();
+                    if (isNaN(t)) return false;
+                    if (fromTs && t < fromTs) return false;
+                    if (toTs && t > toTs) return false;
+                    return true;
+                });
+            }
             renderIssuesTable(filtered);
         }
 
@@ -1642,6 +1709,10 @@
             document.getElementById('modalModuleFilter').value = 'all';
             document.getElementById('modalSeverityFilter').value = 'all';
             const lf2 = document.getElementById('modalLayoutFilter'); if (lf2) lf2.value = 'all';
+            const ridf2 = document.getElementById('modalRecordIdSearch'); if (ridf2) ridf2.value = '';
+            const ofF2 = document.getElementById('modalOwnerFilter'); if (ofF2) ofF2.value = 'all';
+            const cf2 = document.getElementById('modalCreatedFrom'); if (cf2) cf2.value = '';
+            const ct2 = document.getElementById('modalCreatedTo'); if (ct2) ct2.value = '';
 
             const ownerLower = ownerName.toLowerCase().trim();
             const ownerIssues = currentOwnerIssueDetails.filter(i => {
@@ -1664,6 +1735,7 @@
             }));
 
             populateLayoutFilter();
+            populateOwnerFilter();
             renderIssuesTable(currentIssues);
         }
 
@@ -2520,6 +2592,6 @@
         setInterval(refreshDashboard, 600000); // Auto-refresh every 10 minutes
     </script>
 
-    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.3"></script>
 </body>
 </html>
