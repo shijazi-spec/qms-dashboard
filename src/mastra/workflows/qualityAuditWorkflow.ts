@@ -258,7 +258,7 @@ const auditCRMWithAgentStep = createStep({
       logger?.info("📊 [Step 2] OpenAI API key not configured - performing direct CRM audit without AI agent...");
       
       try {
-        const modules = ["Leads", "Deals", "Contacts", "Tasks", "Accounts"];
+        const modules = ["Leads", "Deals"];
         const allIssues: any[] = [];
         const moduleBreakdown: Array<{ module: string; recordsAudited: number; issuesFound: number; recordsWithIssues?: number }> = [];
         const recordCountsByModule: Record<string, number> = {};
@@ -550,22 +550,10 @@ After getting the audit results, provide a summary of:
 Execute the audit now and report the findings.
 `;
 
-      const opsAuditPrompt = `
-You are performing a quality audit for Contacts, Tasks, and Accounts data.
+      // Ops audit (Contacts/Tasks/Accounts) intentionally disabled — platform
+      // is scoped to Deals & Leads only per business requirement (2026-04-19).
 
-Please use the auditCRMHygieneTool to audit the Contacts, Tasks, and Accounts modules.
-Pass modules: ["Contacts", "Tasks", "Accounts"] to the tool.
-
-After getting the audit results, provide a summary of:
-1. Total records audited per module
-2. Total issues found by severity (critical, high, medium, low)
-3. Top issues that need attention
-4. Quality scores (People, Process, Governance, Overall)
-
-Execute the audit now and report the findings.
-`;
-
-      const [sdrResponse, salesResponse, opsResponse] = await Promise.all([
+      const [sdrResponse, salesResponse] = await Promise.all([
         sdrQualityAgent.generateLegacy(
           [{ role: "user", content: sdrAuditPrompt }],
           { maxSteps: 5 }
@@ -579,20 +567,14 @@ Execute the audit now and report the findings.
         ).catch(err => {
           logger?.warn("⚠️ [Step 2] Sales audit failed", { error: err.message });
           return null;
-        }),
-        qualitySpecialistAgent.generateLegacy(
-          [{ role: "user", content: opsAuditPrompt }],
-          { maxSteps: 5 }
-        ).catch(err => {
-          logger?.warn("⚠️ [Step 2] Ops audit (Contacts/Tasks/Accounts) failed", { error: err.message });
-          return null;
         })
       ]);
+      const opsResponse: any = null;
 
       logger?.info("✅ [Step 2] Department agents completed audits", {
         sdrCompleted: !!sdrResponse,
         salesCompleted: !!salesResponse,
-        opsCompleted: !!opsResponse
+        opsCompleted: false
       });
 
       const extractAuditResult = (response: any) => {

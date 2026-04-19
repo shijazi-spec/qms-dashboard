@@ -26,18 +26,6 @@ type = "text"
 title = "WalaPlus Platform Hygiene Rules — All Modules"
 
 [[outputs]]
-id = "K8L4KA1H4K3t-IKxneG60"
-uri = "file://exports/CRM_Users_Status.xlsx"
-type = "table"
-title = "CRM Users Status List"
-
-[[outputs]]
-id = "XMKuJ-k92OEjAQXAbMTF5"
-uri = "file://exports/CRM_Users_Complete_117.xlsx"
-type = "table"
-title = "CRM Users - Complete List (117 Owners)"
-
-[[outputs]]
 id = "fxBEsH4Yq4tsmzrZNDYYy"
 uri = "file://exports/walaplus-platform-health.jpg"
 type = "image"

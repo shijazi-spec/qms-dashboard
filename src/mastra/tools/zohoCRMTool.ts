@@ -81,7 +81,7 @@ export const auditCRMHygieneTool = createTool({
       pageSize: context.pageSize,
     });
 
-    const modules = context.modules || ["Leads", "Deals", "Contacts", "Tasks", "Accounts"];
+    const modules = context.modules || ["Leads", "Deals"];
     const pageSize = context.pageSize || 100;
     
     const baseCustomRules = (context.customRules || []).map(rule => ({
