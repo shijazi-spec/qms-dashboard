@@ -77,7 +77,6 @@ const WalaPlusNav = {
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
         { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
         { label: 'Give Feedback', href: '/feedback', icon: 'chat-alt', id: 'feedback' },
-        { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
         { label: 'Scope of Work', href: '/docs/SCOPE_OF_WORK.html', icon: 'document', id: 'scope', external: true }
       ]
     },
@@ -95,6 +94,7 @@ const WalaPlusNav = {
         { label: 'User & Role Management', href: '/admin', icon: 'cog', id: 'admin' },
         { label: 'Users & Access', href: '/users', icon: 'users', id: 'users' },
         { label: 'AI Approvals Queue', href: '/ai-approvals', icon: 'check-circle', id: 'ai-approvals' },
+        { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
         { label: 'System Logs', href: '/logs', icon: 'document-report', id: 'logs' }
       ]
     }
