@@ -25,6 +25,15 @@ The platform is built on the Mastra AI agent framework with a Hono HTTP server.
     -   **Infographic Generator**: In-platform tool for generating shareable visual snapshots of platform areas, with Slack and email sharing capabilities.
     -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules (Audits, Duplicates, KPIs, NCs, CAPAs, Vendors, Risks).
 
+## Recent Changes (April 19, 2026)
+- **Data Quality Trend endpoint**: New `GET /api/dashboard/quality-trend` in `src/mastra/index.ts` combines `quality_audit_results` + `duplicate_detection_logs` history with a live `duplicate_clusters` snapshot (active-only, ignored excluded). Powers the four trend tiles + chart on `dashboard/index.html`.
+- **False-positive consistency sweep**: All duplicate-count surfaces now exclude `status != 'active'` clusters.
+  - `platformHealthPulse.ts` Duplicate Radar widget — added `COUNT(*) FILTER (WHERE status = 'active')`.
+  - `getAllClustersByInflation` and `getClustersBySignal` (`src/utils/duplicateRadarDatabase.ts`) — default to `status = 'active'`; opt out via `?include_inactive=true` on routes `/api/duplicates/clusters-by-inflation` and `/api/duplicates/clusters-by-signal/:signal`.
+  - Already correct (verified): `executiveDigest.ts`, `aiBackgroundScanner.ts`, `getDuplicateStats`, per-record-type tabs.
+- **Owner roster corrections**: `src/data/seedUsers.ts` — Abdalrzaq Alshamari → BD; عبدالمجيد الشبيلي → WP Sales. Five users still on "Unassigned" team pending business confirmation: Ahmed Alhusaynan, Faisal Alaskar, Mansoor Kadir, Mohammed Ridha, Noura AlMuneef. Latest export: `attached_assets/CRM_Users_Complete_117_2026-04-19.xlsx`.
+- **Dashboard JS cache-busting**: `?v=4.5.2` query string appended to `/js/navigation.js` and `/js/ai-consultant-widget.js` includes across all 32 dashboard HTMLs to force fresh JS after deploys.
+
 ## External Dependencies
 -   **PostgreSQL**: Primary database for all application data.
 -   **Replit AI Integrations / OpenAI**: Provides access to GPT-4o for AI functionalities.

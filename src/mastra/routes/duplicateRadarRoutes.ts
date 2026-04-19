@@ -608,7 +608,8 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '500');
           const offset = parseInt(url.searchParams.get('offset') || '0');
-          const rows = await getAllClustersByInflation({ limit, offset });
+          const includeInactive = new URL(c.req.url).searchParams.get('include_inactive') === 'true';
+          const rows = await getAllClustersByInflation({ limit, offset, includeInactive });
           return c.json({ clusters: rows, total: rows.length, limit, offset });
         } catch (error: any) {
           console.error('Error fetching clusters by inflation:', error);
@@ -628,7 +629,8 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '500');
           const offset = parseInt(url.searchParams.get('offset') || '0');
-          const rows = await getClustersBySignal(signal, { limit, offset });
+          const includeInactive = url.searchParams.get('include_inactive') === 'true';
+          const rows = await getClustersBySignal(signal, { limit, offset, includeInactive });
           return c.json({ signal, clusters: rows, total: rows.length, limit, offset });
         } catch (error: any) {
           console.error('Error fetching clusters by signal:', error);

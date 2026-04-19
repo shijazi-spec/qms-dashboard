@@ -377,13 +377,16 @@ export const mastra = new Mastra({
               const limit = Math.max(1, Math.min(parseInt(c.req.query("limit") || "30"), 90));
 
               const auditsRes = await pool.query(
-                `SELECT audit_date,
-                        overall_score        AS compliance_pct,
-                        total_issues_found   AS records_with_issues,
-                        total_records_audited
-                 FROM quality_audit_results
-                 ORDER BY audit_date ASC
-                 LIMIT $1`,
+                `SELECT * FROM (
+                   SELECT audit_date,
+                          overall_score        AS compliance_pct,
+                          total_issues_found   AS records_with_issues,
+                          total_records_audited
+                   FROM quality_audit_results
+                   ORDER BY audit_date DESC
+                   LIMIT $1
+                 ) latest
+                 ORDER BY audit_date ASC`,
                 [limit],
               );
               const audits = auditsRes.rows.map((r: any) => ({
@@ -396,13 +399,16 @@ export const mastra = new Mastra({
               let duplicates: any[] = [];
               try {
                 const scansRes = await pool.query(
-                  `SELECT completed_at,
-                          total_clusters_found,
-                          estimated_pipeline_inflation
-                   FROM duplicate_detection_logs
-                   WHERE status = 'completed' AND completed_at IS NOT NULL
-                   ORDER BY completed_at ASC
-                   LIMIT $1`,
+                  `SELECT * FROM (
+                     SELECT completed_at,
+                            total_clusters_found,
+                            estimated_pipeline_inflation
+                     FROM duplicate_detection_logs
+                     WHERE status = 'completed' AND completed_at IS NOT NULL
+                     ORDER BY completed_at DESC
+                     LIMIT $1
+                   ) latest
+                   ORDER BY completed_at ASC`,
                   [limit],
                 );
                 duplicates = scansRes.rows.map((r: any) => ({

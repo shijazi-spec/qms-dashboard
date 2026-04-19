@@ -172,10 +172,15 @@ const PUBLIC_DOMAINS = [
   'stc.com.sa', 'mobily.com.sa', 'zain.com.sa'
 ];
 
-// Full list (no LIMIT 5) for "View All" modals on the dashboard
-export async function getAllClustersByInflation(opts: { limit?: number; offset?: number } = {}): Promise<any[]> {
+// Full list (no LIMIT 5) for "View All" modals on the dashboard.
+// Defaults to active clusters only so resolved/ignored false-positives are excluded;
+// pass includeInactive=true to see all clusters regardless of status.
+export async function getAllClustersByInflation(
+  opts: { limit?: number; offset?: number; includeInactive?: boolean } = {},
+): Promise<any[]> {
   const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
   const offset = Math.max(0, opts.offset ?? 0);
+  const statusClause = opts.includeInactive ? '' : `AND status = 'active'`;
   const r = await pool.query(
     `SELECT id, domain, company_name, company_name_arabic,
             estimated_pipeline_value, total_records,
@@ -184,6 +189,7 @@ export async function getAllClustersByInflation(opts: { limit?: number; offset?:
        FROM duplicate_clusters
       WHERE estimated_pipeline_value > 0
         AND total_records > 1
+        ${statusClause}
       ORDER BY estimated_pipeline_value DESC, total_records DESC
       LIMIT $1 OFFSET $2`,
     [limit, offset],
@@ -191,13 +197,15 @@ export async function getAllClustersByInflation(opts: { limit?: number; offset?:
   return r.rows;
 }
 
-// All clusters that include a given match signal (e.g. exact_email, phone_match)
+// All clusters that include a given match signal (e.g. exact_email, phone_match).
+// Same active-by-default behavior as getAllClustersByInflation.
 export async function getClustersBySignal(
   signal: string,
-  opts: { limit?: number; offset?: number } = {},
+  opts: { limit?: number; offset?: number; includeInactive?: boolean } = {},
 ): Promise<any[]> {
   const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
   const offset = Math.max(0, opts.offset ?? 0);
+  const statusClause = opts.includeInactive ? '' : `AND status = 'active'`;
   const r = await pool.query(
     `SELECT id, domain, company_name, company_name_arabic,
             estimated_pipeline_value, total_records,
@@ -206,6 +214,7 @@ export async function getClustersBySignal(
        FROM duplicate_clusters
       WHERE total_records > 1
         AND match_signals @> to_jsonb(ARRAY[$1::text])
+        ${statusClause}
       ORDER BY confidence_score DESC, total_records DESC
       LIMIT $2 OFFSET $3`,
     [signal, limit, offset],
@@ -937,14 +946,16 @@ export async function getKPIMetrics(): Promise<{
     SELECT COUNT(*) as count FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     WHERE dr.record_type = 'lead' AND dc.total_leads > 1 AND dr.is_primary = false
+      AND dc.status = 'active'
   `);
   const duplicateDealsResult = await pool.query(`
     SELECT COUNT(*) as count FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     WHERE dr.record_type = 'deal' AND dc.total_deals > 1 AND dr.is_primary = false
+      AND dc.status = 'active'
   `);
   const multiDealDomainsResult = await pool.query(`
-    SELECT COUNT(*) as count FROM duplicate_clusters WHERE total_deals > 1
+    SELECT COUNT(*) as count FROM duplicate_clusters WHERE total_deals > 1 AND status = 'active'
   `);
 
   const totalLeads = parseInt(totalLeadsResult.rows[0].count) || 1;
@@ -1633,7 +1644,8 @@ export async function getEnhancedSummary(): Promise<{
   const dupDeals = parseInt(row.dup_deals) || 0;
 
   const signalResult = await pool.query(`
-    SELECT match_signals FROM duplicate_clusters WHERE total_records > 1 AND match_signals IS NOT NULL
+    SELECT match_signals FROM duplicate_clusters
+    WHERE total_records > 1 AND match_signals IS NOT NULL AND status = 'active'
   `);
   const topSignals: Record<string, number> = {};
   for (const r of signalResult.rows) {
@@ -1643,11 +1655,11 @@ export async function getEnhancedSummary(): Promise<{
     }
   }
 
-  // D4: Top 5 clusters by pipeline inflation
+  // D4: Top 5 clusters by pipeline inflation (active only — excludes resolved/ignored false positives)
   const topClustersResult = await pool.query(`
     SELECT id, domain, company_name, estimated_pipeline_value, total_records, confidence_score
     FROM duplicate_clusters
-    WHERE estimated_pipeline_value > 0 AND total_records > 1
+    WHERE estimated_pipeline_value > 0 AND total_records > 1 AND status = 'active'
     ORDER BY estimated_pipeline_value DESC
     LIMIT 5
   `);
