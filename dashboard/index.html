@@ -434,6 +434,7 @@
                                 <div class="text-xs text-gray-400 mt-2 text-center" id="qualityTrendEmpty" style="display:none;">
                                     Not enough audit history yet. Trend will populate as more audits run.
                                 </div>
+                                <div class="text-[11px] text-gray-400 mt-1 text-center" id="qualityTrendAsOf" data-testid="text-trend-asof"></div>
                             </div>
                         </div>
                     </div>
@@ -881,6 +882,17 @@
                     lastDup?.pipeline_inflation_sar, prevDup?.pipeline_inflation_sar,
                     v => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }), true);
 
+                // J2: "as of" timestamp — show whichever data point is freshest
+                const asOfEl = document.getElementById('qualityTrendAsOf');
+                if (asOfEl) {
+                    const auditTs = last?.date ? new Date(last.date).getTime() : 0;
+                    const dupTs = lastDup?.date ? new Date(lastDup.date).getTime() : 0;
+                    const fresh = Math.max(auditTs, dupTs);
+                    asOfEl.textContent = fresh
+                        ? `As of ${new Date(fresh).toLocaleString()}`
+                        : '';
+                }
+
                 if (audits.length < 2 && dups.length < 2) {
                     if (emptyEl) emptyEl.style.display = 'block';
                     return;
@@ -925,6 +937,18 @@
                                 pointRadius: 3,
                                 spanGaps: true,
                             },
+                            {
+                                label: 'Pipeline Inflation (SAR)',
+                                data: labelDates.map((_, i) => dups[i]?.pipeline_inflation_sar ?? null),
+                                borderColor: '#dc2626',
+                                backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                                borderDash: [4, 4],
+                                yAxisID: 'y2',
+                                tension: 0.3,
+                                pointRadius: 2,
+                                spanGaps: true,
+                                hidden: true,
+                            },
                         ],
                     },
                     options: {
@@ -945,8 +969,28 @@
                                 grid: { drawOnChartArea: false },
                                 beginAtZero: true,
                             },
+                            y2: {
+                                type: 'linear',
+                                position: 'right',
+                                title: { display: true, text: 'SAR' },
+                                grid: { drawOnChartArea: false },
+                                beginAtZero: true,
+                                display: false,
+                            },
                         },
-                        plugins: { legend: { position: 'bottom' } },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                onClick: (e, legendItem, legend) => {
+                                    const ci = legend.chart;
+                                    const idx = legendItem.datasetIndex;
+                                    const meta = ci.getDatasetMeta(idx);
+                                    meta.hidden = meta.hidden === null ? !ci.data.datasets[idx].hidden : null;
+                                    if (idx === 3) ci.options.scales.y2.display = !meta.hidden;
+                                    ci.update();
+                                },
+                            },
+                        },
                     },
                 });
             } catch (err) {

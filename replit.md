@@ -25,6 +25,9 @@ The platform is built on the Mastra AI agent framework with a Hono HTTP server.
     -   **Infographic Generator**: In-platform tool for generating shareable visual snapshots of platform areas, with Slack and email sharing capabilities.
     -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules (Audits, Duplicates, KPIs, NCs, CAPAs, Vendors, Risks).
 
+## Planned Migrations
+- **Mastra Telemetry → AI Tracing** *(deadline: Mastra Nov 4 release)*: dev-server boot logs `Mastra telemetry is deprecated and will be removed on the Nov 4th release`. Migration target: AI Tracing — see https://mastra.ai/en/docs/observability/ai-tracing/overview and tracking issue https://github.com/mastra-ai/mastra/issues/8577. Action items when scheduled: (1) audit all usages of `telemetry`/`logger` instrumentation that flow through Mastra, (2) wire AI Tracing exporter, (3) verify spans for the AI Consultant tool calls + Inngest workflows, (4) remove the legacy telemetry imports.
+
 ## Recent Changes (April 19, 2026)
 - **Data Quality Trend endpoint**: New `GET /api/dashboard/quality-trend` in `src/mastra/index.ts` combines `quality_audit_results` + `duplicate_detection_logs` history with a live `duplicate_clusters` snapshot (active-only, ignored excluded). Powers the four trend tiles + chart on `dashboard/index.html`.
 - **False-positive consistency sweep**: All duplicate-count surfaces now exclude `status != 'active'` clusters.
@@ -33,6 +36,11 @@ The platform is built on the Mastra AI agent framework with a Hono HTTP server.
   - Already correct (verified): `executiveDigest.ts`, `aiBackgroundScanner.ts`, `getDuplicateStats`, per-record-type tabs.
 - **Owner roster corrections**: `src/data/seedUsers.ts` — Abdalrzaq Alshamari → BD; عبدالمجيد الشبيلي → WP Sales. Five users still on "Unassigned" team pending business confirmation: Ahmed Alhusaynan, Faisal Alaskar, Mansoor Kadir, Mohammed Ridha, Noura AlMuneef. Latest export: `attached_assets/CRM_Users_Complete_117_2026-04-19.xlsx`.
 - **Dashboard JS cache-busting**: `?v=4.5.2` query string appended to `/js/navigation.js` and `/js/ai-consultant-widget.js` includes across all 32 dashboard HTMLs to force fresh JS after deploys.
+- **Trend endpoint regression fix (architect review)**: `/api/dashboard/quality-trend` was using `ORDER BY ... ASC LIMIT N` which returned the *oldest* N rows instead of the latest. Wrapped both audit and duplicate-scan history queries with an inner `ORDER BY DESC LIMIT N` + outer `ORDER BY ASC` so the chart shows the most recent N points in chronological order.
+- **Extended false-positive sweep**: added `status='active'` filter to `getKPIMetrics` (lead/deal duplicate rate + multi-deal domains) and `getEnhancedSummary` top-signals + top-clusters-by-inflation queries — so resolved/ignored clusters never inflate KPI rates or summary panels.
+- **Trend chart polish**: added 4th dataset (Pipeline Inflation, dashed, hidden by default — toggle on via legend) on a third hidden y-axis; "As of <timestamp>" line under the four trend tiles showing the freshest data point.
+- **Test coverage**: `tests/testQualityTrendEndpoint.ts` smoke-tests `/api/dashboard/quality-trend` shape + ascending-date regression guard. Run via `ADMIN_KEY=… npx tsx tests/testQualityTrendEndpoint.ts`.
+- **Cleanup**: removed stale duplicate `attached_assets/WalaPlus_Platform_SOP_1776546068523.md` (live SOP is `docs/WalaPlus_Platform_SOP.md`).
 
 ## External Dependencies
 -   **PostgreSQL**: Primary database for all application data.
