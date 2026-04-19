@@ -78,3 +78,9 @@ id = "JaXuBDA24vfD5kBA8zSfj"
 uri = "file://attached_assets/CRM_Users_Complete_117_2026-04-19.xlsx"
 type = "table"
 title = "CRM Users — Complete (117) — 2026-04-19"
+
+[[outputs]]
+id = "8cc_RFKQ7HhH390Fl-7iE"
+uri = "file://exports/Missing_CRM_Owners_to_Add_2026-04-19.xlsx"
+type = "table"
+title = "Missing CRM Owners — 19 names to add (2026-04-19)"
