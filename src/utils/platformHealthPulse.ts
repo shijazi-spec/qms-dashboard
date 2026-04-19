@@ -212,7 +212,8 @@ const CHECKS: Check[] = [
     category: "duplicates",
     run: async () => {
       const r = await pool.query(
-        `SELECT MAX(updated_at) AS last_run, COUNT(*) AS clusters
+        `SELECT MAX(updated_at) AS last_run,
+                COUNT(*) FILTER (WHERE status = 'active') AS clusters
          FROM duplicate_clusters`,
       );
       const lastRun: Date | null = r.rows[0]?.last_run;

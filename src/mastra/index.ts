@@ -368,6 +368,93 @@ export const mastra = new Mastra({
         },
       },
       {
+        path: "/api/dashboard/quality-trend",
+        method: "GET",
+        createHandler: async () => {
+          const { pool } = await import("../utils/database");
+          return async (c: any) => {
+            try {
+              const limit = Math.max(1, Math.min(parseInt(c.req.query("limit") || "30"), 90));
+
+              const auditsRes = await pool.query(
+                `SELECT audit_date,
+                        overall_score        AS compliance_pct,
+                        total_issues_found   AS records_with_issues,
+                        total_records_audited
+                 FROM quality_audit_results
+                 ORDER BY audit_date ASC
+                 LIMIT $1`,
+                [limit],
+              );
+              const audits = auditsRes.rows.map((r: any) => ({
+                date: r.audit_date,
+                compliance_pct: r.compliance_pct == null ? null : Number(r.compliance_pct),
+                records_with_issues: r.records_with_issues == null ? null : Number(r.records_with_issues),
+                total_records_audited: r.total_records_audited == null ? null : Number(r.total_records_audited),
+              }));
+
+              let duplicates: any[] = [];
+              try {
+                const scansRes = await pool.query(
+                  `SELECT completed_at,
+                          total_clusters_found,
+                          estimated_pipeline_inflation
+                   FROM duplicate_detection_logs
+                   WHERE status = 'completed' AND completed_at IS NOT NULL
+                   ORDER BY completed_at ASC
+                   LIMIT $1`,
+                  [limit],
+                );
+                duplicates = scansRes.rows.map((r: any) => ({
+                  date: r.completed_at,
+                  clusters: r.total_clusters_found == null ? null : Number(r.total_clusters_found),
+                  pipeline_inflation_sar:
+                    r.estimated_pipeline_inflation == null ? null : Number(r.estimated_pipeline_inflation),
+                }));
+              } catch (e) {
+                console.warn("[quality-trend] duplicate_detection_logs unavailable:", (e as Error).message);
+              }
+
+              try {
+                const liveRes = await pool.query(
+                  `SELECT COUNT(*) FILTER (WHERE status = 'active')                              AS clusters,
+                          COALESCE(SUM(estimated_pipeline_value) FILTER (WHERE status = 'active'), 0) AS pipeline,
+                          MAX(updated_at)                                                          AS last_seen
+                   FROM duplicate_clusters`,
+                );
+                const live = liveRes.rows[0];
+                if (live && live.last_seen) {
+                  const liveDate = new Date(live.last_seen);
+                  const liveClusters = Number(live.clusters) || 0;
+                  const livePipeline = Number(live.pipeline) || 0;
+                  const last = duplicates[duplicates.length - 1];
+                  const sameInstant =
+                    last && new Date(last.date).getTime() === liveDate.getTime();
+                  if (!sameInstant) {
+                    duplicates.push({
+                      date: liveDate,
+                      clusters: liveClusters,
+                      pipeline_inflation_sar: livePipeline,
+                    });
+                  }
+                }
+              } catch (e) {
+                console.warn("[quality-trend] live cluster snapshot failed:", (e as Error).message);
+              }
+
+              if (duplicates.length > limit) {
+                duplicates = duplicates.slice(duplicates.length - limit);
+              }
+
+              return c.json({ audits, duplicates });
+            } catch (error) {
+              console.error("Error fetching quality trend:", error);
+              return c.json({ error: "Failed to fetch quality trend" }, 500);
+            }
+          };
+        },
+      },
+      {
         path: "/api/scorecards",
         method: "GET",
         createHandler: async () => {
