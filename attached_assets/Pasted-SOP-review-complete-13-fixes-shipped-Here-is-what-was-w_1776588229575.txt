@@ -1,0 +1,49 @@
+SOP review complete — 13 fixes shipped
+Here is what was wrong and what is now fixed in WalaPlus_Platform_SOP.md:
+
+Fixed
+#	Section	Before → After
+1
+Document Control box
+Version 4.4 → Version 4.5
+2
+Revision History
+Removed duplicate v4.3 row I left at the bottom during the reorder
+3
+§4.26 Internal Audits Dashboard
+Removed the incorrect "Two Tabs" statement; replaced with accurate v4.5 single-page description (Programme panel + unified schedule + findings + Manual Intake button). AI-audits iframe is inside /qms, not /audits
+4
+§11 Database — Audit Programme & Intake group
+Wrong names audit_programmes, audit_programme_audits, audit_triggers_decisions → correct names audit_programme, audit_programme_signoff, audit_runs
+5
+§25 Apr 18 entry
+Same table-name corrections as #4; fixed qms_triggers → audit_triggers; fixed re_evaluate_at → next_reevaluate_at; expanded column lists to the real +9 on audit_triggers and +4 on audits
+6
+§8.5 Triggers + new §8.7
+Added HITL actions (dismiss with reason, propose_hitl); added the whole §8.7 documenting the trigger-auto-escalate Inngest cron pipeline (reactivate dismissed → auto-escalate stale pending at Critical@7d / Warning@30d / Info@30d)
+7
+§10.3 Configurable Cron Schedules
+Added TRIGGER_AUTO_ESCALATE_CRON (default 0 3 * * *)
+8
+§12.2 Module API Endpoints
+Added rows for Audit Programme, Manual Audit Intake, External Audits, AI Approvals, and enhanced Triggers
+9
+§12.3 Route Files
+Count 31 → 34; added auditProgrammeRoutes.ts, manualAuditRoutes.ts, externalAuditRoutes.ts
+10
+§12.4 Utility Modules
+Count 47 → 48; added auditProgrammeDatabase.ts
+11
+§13 Dashboard Pages
+Count 29 → 32; added intake.html, external-audits.html, ai-approvals.html; re-labelled audits.html, grc.html, logs.html, migration.html, admin.html to reflect v4.5 purpose
+12
+§25 Recent Changes Log
+Inserted missing v4.4 (Apr 17) row between v4.5 and v4.3; swapped v4.0 and v4.1 within the Apr 13 block so version order is descending (v4.2 → v4.1 → v4.0)
+13
+§18 Internal Audit Program
+Added scope note distinguishing platform-itself audits (§18) from the Internal Audits feature (§4.26–4.28) so readers don't confuse the two concepts
+Verification I ran
+rg sweep for every wrong identifier (audit_programmes, audit_programme_audits, audit_triggers_decisions, qms_triggers, re_evaluate_at) — zero hits
+Revision History (§Document Control) — ordered 4.0 → 4.1 → 4.2 → 4.3 → 4.4 → 4.5 ✓
+Recent Changes Log (§25) — newest-first: Apr 18 (v4.5) → Apr 17 (v4.4) → Apr 14 (v4.3) → Apr 13 (v4.2) → Apr 13 (v4.1) → Apr 13 (v4.0) ✓
+The SOP is now internally consistent and aligned with the v4.5 shipped platform. Nothing else worth flagging — the rest of the document (roles in §3.1, §4.26–4.29 body, §4.3 pointer, §4.11 Triggers bullet, §4.2 External hero card mention) already reflects v4.5 correctly from the prior pass.
