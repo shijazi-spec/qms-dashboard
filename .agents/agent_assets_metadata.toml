@@ -90,3 +90,9 @@ id = "4JBNGNWueI5HXXI_hN8DO"
 uri = "file://exports/Missing_CRM_Owners_with_Activity_2026-04-19.xlsx"
 type = "table"
 title = "Missing CRM Owners with Activity Profile (2026-04-19)"
+
+[[outputs]]
+id = "mw4UL5K_ST13cgaYyEQkh"
+uri = "file://exports/CRM_Users_Complete_134_modules_filled.xlsx"
+type = "table"
+title = "CRM Users Complete — modules filled (18 rows)"
