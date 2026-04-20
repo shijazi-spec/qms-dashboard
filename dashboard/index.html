@@ -107,6 +107,49 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
         .toggle-switch.active::after { transform: translateX(20px); }
+
+        /* Custom hover tooltip for widget info icons (no native title delay) */
+        .info-icon { position: relative; }
+        .info-icon::after {
+            content: attr(data-tip);
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: normal;
+            line-height: 1.45;
+            width: max-content;
+            max-width: 320px;
+            white-space: normal;
+            text-align: left;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 9999;
+        }
+        .info-icon::before {
+            content: '';
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: #1f2937;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 9999;
+        }
+        .info-icon:hover::after,
+        .info-icon:hover::before { opacity: 1; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
 </head>
@@ -429,7 +472,7 @@
                                 <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
                                     Score Trend
                                     <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
-                                          title="Tracks your headline composite scores (Overall, People, Process, Governance) from the audit history over time — strategic program-health view."
+                                          data-tip="Tracks your headline composite scores (Overall, People, Process, Governance) from audit history over time — a strategic program-health view."
                                           data-testid="info-score-trend">i</span>
                                 </span>
                                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -451,7 +494,7 @@
                                 <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
                                     Data Quality Trend
                                     <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
-                                          title="Tracks the actual health of your CRM records over the last 30 days — compliance %, records with issues, duplicate clusters, and pipeline at risk."
+                                          data-tip="Tracks the actual health of your CRM records over the last 30 days — compliance %, records with issues, duplicate clusters, and pipeline at risk."
                                           data-testid="info-quality-trend">i</span>
                                 </span>
                                 <span class="text-xs text-gray-400" id="qualityTrendSubtitle">Last 30 audits & duplicate scans</span>
