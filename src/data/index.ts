@@ -393,7 +393,18 @@ export async function getActivities(): Promise<Activity[]> {
   }));
 }
 
+// Module-level cache to avoid hammering the Zoho Users API (and to throttle
+// retries when the API is unavailable due to OAuth scope/auth issues).
+let _usersCache: { ts: number; data: User[] } | null = null;
+let _zohoUsersFailUntil = 0;
+const USERS_TTL_MS = 10 * 60 * 1000;        // success: 10 min
+const ZOHO_USERS_BACKOFF_MS = 5 * 60 * 1000; // failure: 5-min cool-down before retrying Zoho
+
 export async function getUsers(): Promise<User[]> {
+  if (_usersCache && Date.now() - _usersCache.ts < USERS_TTL_MS) {
+    return _usersCache.data;
+  }
+
   const { SEED_USERS, findSeedUser } = await import('./seedUsers');
   const out: User[] = [];
   const consumedSeedKeys = new Set<string>();
@@ -401,12 +412,15 @@ export async function getUsers(): Promise<User[]> {
 
   // 1. Pull live Zoho users (best-effort) so CRM record Owner IDs resolve to names.
   let zohoUsers: { id: string; full_name: string; email: string; status: string; role: string; profile: string }[] = [];
-  try {
-    const { fetchZohoUsers } = await import('../utils/zohoCRM');
-    zohoUsers = await fetchZohoUsers('AllUsers');
-    console.log(`👥 [Users] Fetched ${zohoUsers.length} users from Zoho`);
-  } catch (err: any) {
-    console.warn(`⚠️ [Users] Zoho Users API unavailable, falling back to seed only: ${err?.message || err}`);
+  if (Date.now() >= _zohoUsersFailUntil) {
+    try {
+      const { fetchZohoUsers } = await import('../utils/zohoCRM');
+      zohoUsers = await fetchZohoUsers('AllUsers');
+      console.log(`👥 [Users] Fetched ${zohoUsers.length} users from Zoho`);
+    } catch (err: any) {
+      _zohoUsersFailUntil = Date.now() + ZOHO_USERS_BACKOFF_MS;
+      console.warn(`⚠️ [Users] Zoho Users API unavailable (backing off ${ZOHO_USERS_BACKOFF_MS / 60000}m), falling back to seed only: ${err?.message || err}`);
+    }
   }
 
   // 2. For every Zoho user, prefer the seed entry by name; seed wins on team/status/modules.
@@ -439,6 +453,7 @@ export async function getUsers(): Promise<User[]> {
   }
 
   console.log(`👥 [Users] Final roster: ${out.length} (seed=${SEED_USERS.length}, zoho=${zohoUsers.length})`);
+  _usersCache = { ts: Date.now(), data: out };
   return out;
 }
 

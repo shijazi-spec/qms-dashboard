@@ -779,6 +779,10 @@ export const mastra = new Mastra({
         method: "GET",
         createHandler: async () => {
           const { getLeadsWithSeparateFilters, getDealsWithSeparateFilters, getUsers, getDataMode } = await import("../data");
+          // In-memory cache for the unfiltered (default) call — the underlying scan
+          // touches ~67k records and runs ~60-80s. Date-filtered calls bypass cache.
+          let cache: { ts: number; data: any } | null = null;
+          const TTL_MS = 15 * 60 * 1000; // 15 minutes
           return async (c: any) => {
             try {
               // Parse separate date filters from query params
@@ -786,6 +790,11 @@ export const mastra = new Mastra({
               const createdEnd = c.req.query("createdEnd");
               const modifiedStart = c.req.query("modifiedStart");
               const modifiedEnd = c.req.query("modifiedEnd");
+              const force = c.req.query("force") === "1";
+              const noFilters = !createdStart && !createdEnd && !modifiedStart && !modifiedEnd;
+              if (noFilters && !force && cache && Date.now() - cache.ts < TTL_MS) {
+                return c.json({ ...cache.data, cached: true, cachedAtMs: cache.ts });
+              }
               
               // Build separate date filters object
               const dateFilters = {
@@ -1015,7 +1024,7 @@ export const mastra = new Mastra({
               
               console.log(`📋 [API] Built ${ownerIssueDetails.length} per-record issue rows for owner drill-down`);
 
-              return c.json({
+              const responseBody = {
                 success: true,
                 agents,
                 ownerIssueDetails,
@@ -1031,7 +1040,12 @@ export const mastra = new Mastra({
                     separateFiltersApplied: dateFilters
                   }
                 }
-              });
+              };
+              if (noFilters) {
+                cache = { ts: Date.now(), data: responseBody };
+                return c.json({ ...responseBody, cached: false, cachedAtMs: cache.ts });
+              }
+              return c.json(responseBody);
             } catch (error: any) {
               console.error('❌ [API] Error fetching agent performance:', error);
               return c.json({ 

@@ -2275,9 +2275,10 @@
             return new Chart(ctx, config);
         }
 
-        async function loadLayoutsBreakdown(force) {
+        async function loadLayoutsBreakdown(force, _attempt) {
             const subtitle = document.getElementById('recordsLayoutSubtitle');
             const empty = document.getElementById('recordsLayoutEmpty');
+            const attempt = _attempt || 1;
             try {
                 if (subtitle) subtitle.textContent = force ? 'Refreshing from Zoho…' : 'Loading…';
                 if (empty) empty.style.display = 'none';
@@ -2298,6 +2299,11 @@
                     subtitle.textContent = (data.cached ? 'Cached · ' : 'Live · ') + when;
                 }
             } catch (err) {
+                // Silent retry once after 2s — first paint can race with auth cookie warm-up.
+                if (attempt < 2) {
+                    setTimeout(() => loadLayoutsBreakdown(force, attempt + 1), 2000);
+                    return;
+                }
                 console.error('Error loading layouts breakdown:', err);
                 if (subtitle) subtitle.textContent = 'Failed to load';
                 if (empty) empty.style.display = '';
