@@ -606,6 +606,51 @@
                         </div>
                     </div>
 
+                    <!-- Row 2b4: Records by Layout (full CRM coverage — Leads & Deals pies) -->
+                    <div class="widget-row" data-row="2b4">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="records-by-layout" data-name="Records by Layout">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Records by Layout (Full CRM)
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          data-tip="Total Lead and Deal records across the entire CRM, grouped by their assigned layout. Cached for 15 min — click ↻ to refresh."
+                                          data-testid="info-records-layout">i</span>
+                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-400" id="recordsLayoutSubtitle">Loading…</span>
+                                    <button onclick="loadLayoutsBreakdown(true)" class="text-xs text-gray-500 hover:text-gray-800" title="Force refresh from Zoho (~80s)" data-testid="button-refresh-layouts">↻</button>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <h4 class="text-sm font-semibold text-gray-700">Leads</h4>
+                                            <span class="text-xs text-gray-500" id="leadsLayoutTotal">—</span>
+                                        </div>
+                                        <div class="chart-container" style="height: 240px;">
+                                            <canvas id="leadsLayoutPie"></canvas>
+                                        </div>
+                                        <div class="mt-3 space-y-1 text-xs" id="leadsLayoutLegend"></div>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <h4 class="text-sm font-semibold text-gray-700">Deals</h4>
+                                            <span class="text-xs text-gray-500" id="dealsLayoutTotal">—</span>
+                                        </div>
+                                        <div class="chart-container" style="height: 240px;">
+                                            <canvas id="dealsLayoutPie"></canvas>
+                                        </div>
+                                        <div class="mt-3 space-y-1 text-xs" id="dealsLayoutLegend"></div>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-3 text-center" id="recordsLayoutEmpty" style="display:none;">
+                                    Couldn't load layout breakdown. Try the refresh button.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Row 4: Recommendations -->
                     <div class="widget-row" data-row="4">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="recommendations" data-name="AI Recommendations">
@@ -2117,6 +2162,7 @@
             updateIssuesTotalChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
             updateIssuesByLayout(audit);
+            loadLayoutsBreakdown(false);
             updateTrendChart(data.auditHistory);
             loadQualityTrend();
             updateRecommendations(audit.recommendations);
@@ -2176,6 +2222,88 @@
         // Aggregates per-record failing issues from the latest audit's raw payload by their
         // CRM Layout (Standard Lead, Partner Deal, etc.), then renders KPI cards + a doughnut.
         // Clicking a layout card opens the issues modal pre-filtered to that layout.
+        // ---- Records by Layout (full CRM pies) ----
+        let leadsLayoutPieChart = null;
+        let dealsLayoutPieChart = null;
+        const LAYOUT_PALETTE = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
+
+        function renderLayoutPie(canvasId, legendId, totalElId, breakdown, total) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return null;
+            const labels = breakdown.map(b => b.layout);
+            const data = breakdown.map(b => b.count);
+            const colors = labels.map((_, i) => LAYOUT_PALETTE[i % LAYOUT_PALETTE.length]);
+
+            const totalEl = document.getElementById(totalElId);
+            if (totalEl) totalEl.textContent = `${(total || 0).toLocaleString()} records`;
+
+            const legend = document.getElementById(legendId);
+            if (legend) {
+                legend.innerHTML = breakdown.map((b, i) => {
+                    const pct = total ? ((b.count / total) * 100).toFixed(1) : '0.0';
+                    return `<div class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2 truncate">
+                            <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${colors[i]}"></span>
+                            <span class="text-gray-700 truncate">${b.layout}</span>
+                        </span>
+                        <span class="text-gray-500 tabular-nums">${b.count.toLocaleString()} <span class="text-gray-400">(${pct}%)</span></span>
+                    </div>`;
+                }).join('');
+            }
+
+            const config = {
+                type: 'doughnut',
+                data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '55%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => {
+                                    const v = item.parsed;
+                                    const pct = total ? ((v / total) * 100).toFixed(1) : '0.0';
+                                    return `${item.label}: ${v.toLocaleString()} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            return new Chart(ctx, config);
+        }
+
+        async function loadLayoutsBreakdown(force) {
+            const subtitle = document.getElementById('recordsLayoutSubtitle');
+            const empty = document.getElementById('recordsLayoutEmpty');
+            try {
+                if (subtitle) subtitle.textContent = force ? 'Refreshing from Zoho…' : 'Loading…';
+                if (empty) empty.style.display = 'none';
+                const res = await fetch('/api/dashboard/layouts-breakdown' + (force ? '?force=1' : ''));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+
+                if (leadsLayoutPieChart) { leadsLayoutPieChart.destroy(); leadsLayoutPieChart = null; }
+                if (dealsLayoutPieChart) { dealsLayoutPieChart.destroy(); dealsLayoutPieChart = null; }
+
+                leadsLayoutPieChart = renderLayoutPie('leadsLayoutPie', 'leadsLayoutLegend', 'leadsLayoutTotal',
+                    data.leads?.breakdown || [], data.leads?.total || 0);
+                dealsLayoutPieChart = renderLayoutPie('dealsLayoutPie', 'dealsLayoutLegend', 'dealsLayoutTotal',
+                    data.deals?.breakdown || [], data.deals?.total || 0);
+
+                if (subtitle) {
+                    const when = data.cachedAtMs ? new Date(data.cachedAtMs).toLocaleTimeString() : '';
+                    subtitle.textContent = (data.cached ? 'Cached · ' : 'Live · ') + when;
+                }
+            } catch (err) {
+                console.error('Error loading layouts breakdown:', err);
+                if (subtitle) subtitle.textContent = 'Failed to load';
+                if (empty) empty.style.display = '';
+            }
+        }
+
         function updateIssuesByLayout(audit) {
             try {
                 const cardsEl = document.getElementById('layoutCategoryCards');

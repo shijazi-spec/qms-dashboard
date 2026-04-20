@@ -333,6 +333,50 @@ export const mastra = new Mastra({
         },
       },
       {
+        path: "/api/dashboard/layouts-breakdown",
+        method: "GET",
+        createHandler: async () => {
+          // In-memory cache: layout breakdown rarely changes minute-to-minute,
+          // and the underlying scan touches ~67k Zoho records (~80s).
+          let cache: { ts: number; data: any } | null = null;
+          const TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+          return async (c: any) => {
+            try {
+              const force = c.req.query("force") === "1";
+              if (!force && cache && Date.now() - cache.ts < TTL_MS) {
+                return c.json({ ...cache.data, cached: true, cachedAtMs: cache.ts });
+              }
+
+              const { getLeads, getDeals } = await import("../data/index");
+              const [leads, deals] = await Promise.all([getLeads(), getDeals()]);
+
+              const tally = (rows: any[]) => {
+                const counts: Record<string, number> = {};
+                for (const r of rows) {
+                  const key = ((r as any).Layouts || "").toString().trim() || "(No Layout)";
+                  counts[key] = (counts[key] || 0) + 1;
+                }
+                return Object.entries(counts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([layout, count]) => ({ layout, count }));
+              };
+
+              const data = {
+                leads: { total: leads.length, breakdown: tally(leads) },
+                deals: { total: deals.length, breakdown: tally(deals) },
+                generatedAt: new Date().toISOString(),
+              };
+              cache = { ts: Date.now(), data };
+              return c.json({ ...data, cached: false, cachedAtMs: cache.ts });
+            } catch (error) {
+              console.error("Error building layouts breakdown:", error);
+              return c.json({ error: "Failed to build layouts breakdown" }, 500);
+            }
+          };
+        },
+      },
+      {
         path: "/api/audit/latest",
         method: "GET",
         createHandler: async () => {
