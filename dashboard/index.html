@@ -2320,7 +2320,8 @@
                     // Older audits did not capture a Layout for Tasks records (Zoho doesn't
                     // return that field for Tasks). Fall back to "Standard" so the chart no
                     // longer shows a "(No Layout)" bucket for legacy audit data.
-                    const key = ((it.layouts || it.layout || '') + '').trim() || 'Standard Contacts';
+                    let key = ((it.layouts || it.layout || '') + '').trim() || 'Standard Contacts';
+                    if (key === 'Standard') key = 'Standard Contacts';
                     counts[key] = (counts[key] || 0) + 1;
                 }
                 const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
