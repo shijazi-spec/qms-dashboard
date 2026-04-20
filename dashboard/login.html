@@ -32,6 +32,29 @@
             </div>
             <h1 class="text-2xl font-bold text-gray-900">WalaPlus</h1>
             <p class="text-sm text-gray-500 mt-1">Enterprise Quality & GRC Platform</p>
+            <p class="text-xs text-emerald-600 mt-2 inline-flex items-center gap-1.5" data-testid="status-app-online">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                App is online &middot; Sign in to continue
+            </p>
+        </div>
+
+        <!-- Iframe banner (only shown when this page is loaded inside an iframe, e.g. the Replit preview pane).
+             Cross-site iframes can't share the admin_key cookie because of SameSite=Lax, so we offer a one-click
+             "open in new tab" path — that gives a top-level navigation where the cookie works normally. -->
+        <div id="iframe-banner" class="hidden mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z"/></svg>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-amber-900">Preview pane sign-in limited</p>
+                    <p class="text-xs text-amber-800 mt-1">Browsers block sign-in cookies inside embedded previews. Open the app in its own tab to sign in once and stay signed in.</p>
+                    <a id="open-in-new-tab" href="/" target="_blank" rel="noopener"
+                       data-testid="link-open-new-tab"
+                       class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg transition-colors">
+                        Open in new tab
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                    </a>
+                </div>
+            </div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
@@ -84,6 +107,31 @@
     </div>
 
     <script>
+        // Iframe detection: if this page is rendered inside an iframe (e.g. the Replit preview pane),
+        // surface the friendly explainer + "Open in new tab" CTA so users don't think the app is down.
+        (function detectIframe() {
+            let inIframe = false;
+            try { inIframe = window.self !== window.top; } catch (e) { inIframe = true; }
+            if (inIframe) {
+                const banner = document.getElementById('iframe-banner');
+                if (banner) banner.classList.remove('hidden');
+                // Make the new-tab link point at the absolute top-level URL so it opens correctly
+                // even when the iframe sandbox rewrites relative paths.
+                const link = document.getElementById('open-in-new-tab');
+                if (link) link.href = window.location.origin + '/';
+            }
+        })();
+
+        // Auto-focus the admin key field so users can start typing immediately without hunting for it.
+        // Skipped on touch devices to avoid forcing the on-screen keyboard open.
+        window.addEventListener('DOMContentLoaded', () => {
+            const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            if (!isTouch) {
+                const input = document.getElementById('admin-key-input');
+                if (input) input.focus();
+            }
+        });
+
         const params = new URLSearchParams(window.location.search);
         const error = params.get('error');
         if (error) {
