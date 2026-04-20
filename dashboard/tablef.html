@@ -1131,7 +1131,19 @@
         }
 
         async function generateAiInsights() {
-            alert('AI Insights generation triggered. This will analyze all KPIs and generate recommendations.');
+            const btn = event && event.target ? event.target : null;
+            const original = btn ? btn.textContent : '';
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = 'Refreshing...'; }
+                await loadData();
+                if (typeof loadInsights === 'function') loadInsights();
+                if (btn) btn.textContent = 'Insights Updated ✓';
+                setTimeout(() => { if (btn) { btn.textContent = original || 'Generate AI Insights'; btn.disabled = false; } }, 1500);
+            } catch (e) {
+                console.error('generateAiInsights error', e);
+                if (btn) { btn.textContent = original || 'Generate AI Insights'; btn.disabled = false; }
+                alert('Failed to refresh insights. Check console for details.');
+            }
         }
 
         document.addEventListener('DOMContentLoaded', loadData);

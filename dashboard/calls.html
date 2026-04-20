@@ -1159,12 +1159,48 @@
             }
         }
 
+        function csvCell(v) {
+            if (v === null || v === undefined) return '';
+            const s = String(v).replace(/"/g, '""');
+            return /[",\n]/.test(s) ? `"${s}"` : s;
+        }
+        function downloadCSV(rows, filename) {
+            const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename; a.click();
+            URL.revokeObjectURL(url);
+        }
+
         function exportCalls(format) {
-            alert('Export functionality coming soon');
+            if (!callRecords || callRecords.length === 0) {
+                alert('No call records to export. Load data first.');
+                return;
+            }
+            const headers = ['Call ID','Source','Agent Email','Contact Name','Direction','Duration (sec)','Call Date','Status','Lead ID','Deal ID'];
+            const rows = [headers, ...callRecords.map(c => [
+                c.call_id, c.source, c.agent_email || '', c.contact_name || '',
+                c.direction || '', c.duration_seconds || 0,
+                c.call_date ? new Date(c.call_date).toISOString() : '',
+                c.status || '', c.lead_id || '', c.deal_id || ''
+            ])];
+            downloadCSV(rows, `calls_${new Date().toISOString().slice(0,10)}.csv`);
         }
 
         function exportCompliance(format) {
-            alert('Export functionality coming soon');
+            if (!complianceRecords || complianceRecords.length === 0) {
+                alert('No compliance records to export. Load data first.');
+                return;
+            }
+            const headers = ['Call Record ID','Agent Email','Lead/Deal ID','Notes Updated','Call Logged','Task Created','Stage Updated','Score (%)','Overall Compliance'];
+            const rows = [headers, ...complianceRecords.map(r => [
+                r.call_record_id, r.agent_email || '', r.lead_id || r.deal_id || '',
+                r.notes_updated ? 'Yes' : 'No', r.call_logged ? 'Yes' : 'No',
+                r.task_created ? 'Yes' : 'No', r.stage_updated ? 'Yes' : 'No',
+                r.compliance_score || 0, r.overall_compliance ? 'Compliant' : 'Non-Compliant'
+            ])];
+            downloadCSV(rows, `call_compliance_${new Date().toISOString().slice(0,10)}.csv`);
         }
 
         function showIngestModal() {
