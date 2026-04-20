@@ -48,7 +48,7 @@ let lastRefreshAttempt: number = 0;
 const MIN_REFRESH_INTERVAL_MS = 5000;
 
 function getZohoOAuthConfig(): ZohoOAuthConfig | null {
-  const clientId = process.env.ZOHO_CLIENT_ID;
+  const clientId = process.env.ZOHO_CLIENT_ID_NEW || process.env.ZOHO_CLIENT_ID;
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
   const accountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
