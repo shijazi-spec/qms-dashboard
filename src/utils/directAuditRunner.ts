@@ -47,7 +47,10 @@ function analyzeRecordBatch(
         const createdByData = record.data?.Created_By;
         const createdByName = createdByData ? (createdByData.name || createdByData.id || '') : '';
         const layoutData = record.data?.Layout;
-        const layoutName = layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '';
+        // Zoho's REST API does not return a Layout field for Tasks records, so fall back
+        // to "Standard" (the default layout name in Zoho) whenever the value is missing.
+        // This keeps the dashboard's Issues by Layout view from showing a "(No Layout)" bucket.
+        const layoutName = (layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '') || 'Standard';
         const productsRaw = record.data?.Product_Details;
         const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
           ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
