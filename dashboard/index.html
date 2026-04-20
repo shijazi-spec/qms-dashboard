@@ -1601,9 +1601,11 @@
             try {
                 let url = '/api/agents/performance';
                 const filterParams = getDateFilterParams();
-                if (filterParams) {
-                    url += `?${filterParams}`;
-                }
+                // includeIssues=0 skips the 28k-row drill-down array (~9 MB → ~30 KB).
+                // The drill-down modal lazy-loads each owner's issues on demand below.
+                const params = ['includeIssues=0'];
+                if (filterParams) params.push(filterParams);
+                url += `?${params.join('&')}`;
                 
                 const container = document.getElementById('agentPerformanceGrid');
                 if (retryCount === 0 && container) {
@@ -1825,7 +1827,8 @@
             }
         }
 
-        function openIssuesModalWithOwnerData(ownerName) {
+        let _ownerIssuesRequestToken = 0;
+        async function openIssuesModalWithOwnerData(ownerName) {
             currentOwnerFilter = ownerName;
             document.getElementById('issuesDrilldownModal').classList.remove('hidden');
             document.getElementById('modalTitle').textContent = `Issues — ${ownerName}`;
@@ -1838,25 +1841,43 @@
             const cf2 = document.getElementById('modalCreatedFrom'); if (cf2) cf2.value = '';
             const ct2 = document.getElementById('modalCreatedTo'); if (ct2) ct2.value = '';
 
-            const ownerLower = ownerName.toLowerCase().trim();
-            const ownerIssues = currentOwnerIssueDetails.filter(i => {
-                const o = (i.owner || '').toLowerCase().trim();
-                return o === ownerLower || o.includes(ownerLower) || ownerLower.includes(o);
-            });
+            // Lazy-load this owner's issues from the cached backend (the initial page load
+            // skipped the 28k-row drill-down array via includeIssues=0). Backend filters
+            // by owner against the cached scan, so this is a fast cache-hit fetch.
+            // Token guard prevents a slow earlier click from overwriting a later click's data.
+            const myToken = ++_ownerIssuesRequestToken;
+            currentIssues = [];
+            renderIssuesTable(currentIssues);
+            try {
+                const filterParams = getDateFilterParams();
+                const params = [`owner=${encodeURIComponent(ownerName)}`];
+                if (filterParams) params.push(filterParams);
+                const url = `/api/agents/performance?${params.join('&')}`;
+                const response = await fetch(url, { credentials: 'include' });
+                const result = await response.json();
+                if (myToken !== _ownerIssuesRequestToken) return; // a newer click superseded this one
+                const ownerIssues = (result && result.ownerIssueDetails) || [];
 
-            currentIssues = ownerIssues.map((issue, idx) => ({
-                id: issue.recordId || `issue_${idx + 1}`,
-                module: issue.module,
-                layouts: issue.layouts || '',
-                products: issue.products || '',
-                createdBy: issue.createdBy || '',
-                createdTime: issue.createdTime || '',
-                owner: issue.owner || ownerName,
-                issue: issue.issue,
-                severity: issue.severity,
-                fieldName: issue.fieldName || '',
-                recommendation: issue.recommendation || ''
-            }));
+                currentIssues = ownerIssues.map((issue, idx) => ({
+                    id: issue.recordId || `issue_${idx + 1}`,
+                    module: issue.module,
+                    layouts: issue.layouts || '',
+                    products: issue.products || '',
+                    createdBy: issue.createdBy || '',
+                    createdTime: issue.createdTime || '',
+                    owner: issue.owner || ownerName,
+                    issue: issue.issue,
+                    severity: issue.severity,
+                    fieldName: issue.fieldName || '',
+                    recommendation: issue.recommendation || ''
+                }));
+
+                // Keep the legacy in-memory store warm for any other consumer (e.g. CSV exports).
+                currentOwnerIssueDetails = ownerIssues;
+            } catch (err) {
+                console.error('Failed to load owner issues', err);
+                currentIssues = [];
+            }
 
             populateLayoutFilter();
             populateOwnerFilter();

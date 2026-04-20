@@ -791,9 +791,28 @@ export const mastra = new Mastra({
               const modifiedStart = c.req.query("modifiedStart");
               const modifiedEnd = c.req.query("modifiedEnd");
               const force = c.req.query("force") === "1";
+              // Payload-trim controls (additive, default = full payload for backward-compat):
+              //   includeIssues=0  → omit the 28k-row ownerIssueDetails (drops payload from ~9 MB to ~30 KB)
+              //   owner=<name>     → return only that owner's drill-down rows (matches dashboard's filter logic)
+              const includeIssues = c.req.query("includeIssues") !== "0";
+              const ownerFilter = (c.req.query("owner") || "").trim().toLowerCase();
+              const shapeResponse = (full: any) => {
+                if (!includeIssues) {
+                  const { ownerIssueDetails: _omit, ...rest } = full;
+                  return rest;
+                }
+                if (ownerFilter) {
+                  const rows = (full.ownerIssueDetails || []).filter((i: any) => {
+                    const o = (i.owner || "").toLowerCase().trim();
+                    return o === ownerFilter || o.includes(ownerFilter) || ownerFilter.includes(o);
+                  });
+                  return { ...full, ownerIssueDetails: rows };
+                }
+                return full;
+              };
               const noFilters = !createdStart && !createdEnd && !modifiedStart && !modifiedEnd;
               if (noFilters && !force && cache && Date.now() - cache.ts < TTL_MS) {
-                return c.json({ ...cache.data, cached: true, cachedAtMs: cache.ts });
+                return c.json({ ...shapeResponse(cache.data), cached: true, cachedAtMs: cache.ts });
               }
               
               // Build separate date filters object
@@ -1043,9 +1062,9 @@ export const mastra = new Mastra({
               };
               if (noFilters) {
                 cache = { ts: Date.now(), data: responseBody };
-                return c.json({ ...responseBody, cached: false, cachedAtMs: cache.ts });
+                return c.json({ ...shapeResponse(responseBody), cached: false, cachedAtMs: cache.ts });
               }
-              return c.json(responseBody);
+              return c.json(shapeResponse(responseBody));
             } catch (error: any) {
               console.error('❌ [API] Error fetching agent performance:', error);
               return c.json({ 
