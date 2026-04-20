@@ -572,6 +572,30 @@
                         </div>
                     </div>
 
+                    <!-- Row 2b3: Issues by Layout (full-width — one card per layout) -->
+                    <div class="widget-row" data-row="2b3">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-by-layout" data-name="Issues by Layout">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Issues by Layout
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          data-tip="Failing records grouped by their CRM layout (e.g. Standard Lead, Partner Deal). Click a card to drill into that layout's issues."
+                                          data-testid="info-issues-layout">i</span>
+                                </span>
+                                <span class="text-xs text-gray-400" id="issuesLayoutSubtitle">Per-layout breakdown</span>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4" id="layoutCategoryCards"></div>
+                                <div class="chart-container" style="height: 240px;">
+                                    <canvas id="issuesChartLayout"></canvas>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-2 text-center" id="issuesLayoutEmpty" style="display:none;">
+                                    No layout data available yet. Run a fresh audit to populate this view.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Row 4: Recommendations -->
                     <div class="widget-row" data-row="4">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="recommendations" data-name="AI Recommendations">
@@ -763,6 +787,7 @@
     <script>
         const API_BASE = '/api';
         let issuesChart = null;
+        let issuesLayoutChart = null;
         let issuesTotalChart = null;
         let trendChart = null;
         let customizeMode = false;
@@ -2081,6 +2106,7 @@
             updateIssuesCategoryCards(audit.issues_by_category);
             updateIssuesTotalChart(hasRecordCounts ? recordCounts : audit.issues_by_category);
             updateRecordsCategoryCards(hasRecordCounts ? recordCounts : normalizeIssuesByCategory(audit.issues_by_category));
+            updateIssuesByLayout(audit);
             updateTrendChart(data.auditHistory);
             loadQualityTrend();
             updateRecommendations(audit.recommendations);
@@ -2135,6 +2161,88 @@
             }
             
             applyWidgetConfig();
+        }
+
+        // Aggregates per-record failing issues from the latest audit's raw payload by their
+        // CRM Layout (Standard Lead, Partner Deal, etc.), then renders KPI cards + a doughnut.
+        // Clicking a layout card opens the issues modal pre-filtered to that layout.
+        function updateIssuesByLayout(audit) {
+            try {
+                const cardsEl = document.getElementById('layoutCategoryCards');
+                const canvas = document.getElementById('issuesChartLayout');
+                const emptyEl = document.getElementById('issuesLayoutEmpty');
+                if (!cardsEl || !canvas) return;
+
+                let raw = audit?.raw_audit_data;
+                if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch (e) { raw = {}; } }
+                const allIssues = (raw && Array.isArray(raw.all_issues)) ? raw.all_issues : [];
+
+                const counts = {};
+                for (const it of allIssues) {
+                    const key = ((it.layouts || it.layout || '') + '').trim() || '(No Layout)';
+                    counts[key] = (counts[key] || 0) + 1;
+                }
+                const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+                if (entries.length === 0) {
+                    cardsEl.innerHTML = '';
+                    if (emptyEl) emptyEl.style.display = 'block';
+                    if (issuesLayoutChart) { issuesLayoutChart.destroy(); issuesLayoutChart = null; }
+                    return;
+                }
+                if (emptyEl) emptyEl.style.display = 'none';
+
+                const palette = ['#6366f1','#8b5cf6','#a855f7','#d946ef','#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#0ea5e9','#3b82f6','#ec4899'];
+                const colorFor = (i) => palette[i % palette.length];
+
+                cardsEl.innerHTML = entries.map(([name, count], i) => {
+                    const safe = name.replace(/'/g, "\\'");
+                    const c = colorFor(i);
+                    return `
+                        <div onclick="openIssuesModalByLayout('${safe}')" class="p-3 rounded-lg border cursor-pointer hover:shadow-md transition" style="background:${c}14;border-color:${c}40;" data-testid="card-layout-${i}">
+                            <div class="text-2xl font-bold" style="color:${c}">${count.toLocaleString()}</div>
+                            <div class="text-xs text-gray-600 truncate" title="${name}">${name}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                if (issuesLayoutChart) { issuesLayoutChart.destroy(); issuesLayoutChart = null; }
+                issuesLayoutChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: entries.map(e => e[0]),
+                        datasets: [{
+                            data: entries.map(e => e[1]),
+                            backgroundColor: entries.map((_, i) => colorFor(i)),
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 500 },
+                        plugins: { legend: { position: 'right' } }
+                    }
+                });
+            } catch (err) {
+                console.error('Error rendering Issues by Layout:', err);
+            }
+        }
+
+        // Open the issues modal pre-filtered to a given layout name.
+        function openIssuesModalByLayout(layoutName) {
+            openIssuesModal('all');
+            setTimeout(() => {
+                const sel = document.getElementById('modalLayoutFilter');
+                if (sel) {
+                    const opt = Array.from(sel.options).find(o => o.value === layoutName);
+                    if (opt) { sel.value = layoutName; }
+                    else if (layoutName === '(No Layout)') { sel.value = 'all'; }
+                    if (typeof filterModalIssues === 'function') filterModalIssues();
+                }
+            }, 250);
         }
 
         function updateIssuesChart(issuesByCategory) {
