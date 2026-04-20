@@ -1146,6 +1146,37 @@ export const mastra = new Mastra({
         },
       },
       {
+        path: "/dashboard/:name",
+        method: "GET",
+        createHandler: async () => {
+          return async (c: any) => {
+            try {
+              const rawName = c.req.param('name') || '';
+              const name = rawName.replace(/\.html$/i, '');
+              if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+                return c.text("Invalid dashboard name", 400);
+              }
+              const possiblePaths = [
+                join(process.cwd(), "dashboard", `${name}.html`),
+                join(process.cwd(), "..", "dashboard", `${name}.html`),
+                join(process.cwd(), "..", "..", "dashboard", `${name}.html`),
+                `/home/runner/workspace/dashboard/${name}.html`,
+              ];
+              for (const dashboardPath of possiblePaths) {
+                if (existsSync(dashboardPath)) {
+                  const html = readFileSync(dashboardPath, "utf-8");
+                  return c.html(html);
+                }
+              }
+              return c.text(`Dashboard "${name}" not found`, 404);
+            } catch (error) {
+              console.error("Error serving dashboard subpage:", error);
+              return c.text("Error loading dashboard", 500);
+            }
+          };
+        },
+      },
+      {
         path: "/admin",
         method: "GET",
         createHandler: async () => {
