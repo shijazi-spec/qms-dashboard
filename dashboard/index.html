@@ -537,7 +537,12 @@
                     <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2b">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-chart" data-name="Issues by Category">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                                <span class="text-xs font-medium text-gray-500 uppercase">Issues by Category</span>
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Issues by Category
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          data-tip="Total failing-field issues split across CRM modules (Deals, Tasks, Contacts, Leads, Accounts). One record can contribute several issues if multiple required fields are blank."
+                                          data-testid="info-issues-category">i</span>
+                                </span>
                                 <div class="flex items-center space-x-2">
                                     <button onclick="openIssuesModal('all')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Issues</button>
                                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -555,7 +560,12 @@
 
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="records-with-issues" data-name="Records with Issues">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                                <span class="text-xs font-medium text-gray-500 uppercase">Records with Issues</span>
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Records with Issues
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          data-tip="Distinct records (not issues) that have at least one data-quality problem, grouped by module. A record with three missing fields is counted once here."
+                                          data-testid="info-records-issues">i</span>
+                                </span>
                                 <div class="flex items-center space-x-2">
                                     <button onclick="openIssuesModal('all')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Records</button>
                                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
