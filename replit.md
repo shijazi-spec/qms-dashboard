@@ -28,6 +28,10 @@ The platform is built on the Mastra AI agent framework with a Hono HTTP server.
 ## Planned Migrations
 - **Mastra Telemetry → AI Tracing** *(deadline: Mastra Nov 4 release)*: dev-server boot logs `Mastra telemetry is deprecated and will be removed on the Nov 4th release`. Migration target: AI Tracing — see https://mastra.ai/en/docs/observability/ai-tracing/overview and tracking issue https://github.com/mastra-ai/mastra/issues/8577. Action items when scheduled: (1) audit all usages of `telemetry`/`logger` instrumentation that flow through Mastra, (2) wire AI Tracing exporter, (3) verify spans for the AI Consultant tool calls + Inngest workflows, (4) remove the legacy telemetry imports.
 
+## Recent Changes (April 20, 2026)
+
+- **Cache pre-warmer added** (`src/mastra/index.ts` ~line 4216): background IIFE warms `/api/agents/performance` (the 60-80s cold scan over ~67k Zoho records) and `/api/dashboard/layouts-breakdown` 30 seconds after boot, then re-warms every 13 minutes (just before the 15-minute closure cache TTL expires). Hardened with a `globalThis` HMR guard so Mastra dev hot-reloads can't spawn duplicate timers, an `AbortController` 5-min fetch timeout to prevent hung requests, and an `inflight` flag so a slow warm cycle never overlaps the next one. Sends `X-Admin-Key` header to authenticate. Result: first dashboard hit drops from ~67s to ~0.2s (cache hit).
+
 ## Recent Changes (April 19, 2026)
 - **Data Quality Trend endpoint**: New `GET /api/dashboard/quality-trend` in `src/mastra/index.ts` combines `quality_audit_results` + `duplicate_detection_logs` history with a live `duplicate_clusters` snapshot (active-only, ignored excluded). Powers the four trend tiles + chart on `dashboard/index.html`.
 - **False-positive consistency sweep**: All duplicate-count surfaces now exclude `status != 'active'` clusters.

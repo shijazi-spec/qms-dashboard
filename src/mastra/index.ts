@@ -4204,3 +4204,73 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
 /*  Sanity check 2: WalaPlus runs 2 agents (qualitySpecialistAgent + qmsConsultantAgent) by design.
     The Mastra UI single-agent assumption does not apply here — agents are invoked via REST routes,
     not the playground UI. Guard intentionally disabled. */
+
+/*  Cache pre-warmer
+    Eliminates the 60-80s cold-start wait on /api/agents/performance and /api/dashboard/layouts-breakdown
+    by hitting them in the background shortly after boot, then re-warming every 13 minutes
+    (just before the 15-minute TTL expires). Failures are logged but never crash the process.
+*/
+(function startCacheWarmer() {
+  const g = globalThis as any;
+  // HMR guard: Mastra dev hot-reloads this module on save. Without this guard
+  // every save would spawn another timer/interval, eventually hammering the
+  // expensive endpoint and starving CPU.
+  if (g.__walaplus_cacheWarmer) {
+    clearTimeout(g.__walaplus_cacheWarmer.startTimer);
+    clearInterval(g.__walaplus_cacheWarmer.refreshTimer);
+  }
+  const port = process.env.PORT || "5000";
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) {
+    console.log("⏭️  [CacheWarmer] ADMIN_API_KEY not set — skipping cache pre-warm");
+    return;
+  }
+  const endpoints = [
+    "/api/agents/performance",
+    "/api/dashboard/layouts-breakdown",
+  ];
+  const FETCH_TIMEOUT_MS = 5 * 60 * 1000; // 5 min — generous ceiling above the ~80s cold scan
+  let inflight = false;
+  const warm = async () => {
+    if (inflight) {
+      console.log("⏭️  [CacheWarmer] Previous warm still running — skipping this cycle");
+      return;
+    }
+    inflight = true;
+    try {
+      for (const ep of endpoints) {
+        const t0 = Date.now();
+        const ctrl = new AbortController();
+        const timeoutId = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+        try {
+          const res = await fetch(`http://localhost:${port}${ep}`, {
+            headers: { "X-Admin-Key": adminKey },
+            signal: ctrl.signal,
+          });
+          const dt = ((Date.now() - t0) / 1000).toFixed(1);
+          if (res.ok) {
+            console.log(`🔥 [CacheWarmer] Warmed ${ep} in ${dt}s (status ${res.status})`);
+          } else {
+            console.warn(`⚠️  [CacheWarmer] ${ep} returned ${res.status} in ${dt}s`);
+          }
+        } catch (err: any) {
+          const dt = ((Date.now() - t0) / 1000).toFixed(1);
+          const reason = err?.name === "AbortError" ? "timeout" : (err?.message || err);
+          console.warn(`⚠️  [CacheWarmer] Failed to warm ${ep} after ${dt}s:`, reason);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+    } finally {
+      inflight = false;
+    }
+  };
+  // Initial warm 30s after boot — gives the server time to finish startup tasks
+  const startTimer = setTimeout(() => {
+    console.log("🔥 [CacheWarmer] Starting initial cache warm...");
+    warm();
+  }, 30 * 1000);
+  // Re-warm every 13 minutes (cache TTL is 15 minutes — refresh before expiry)
+  const refreshTimer = setInterval(warm, 13 * 60 * 1000);
+  g.__walaplus_cacheWarmer = { startTimer, refreshTimer };
+})();
