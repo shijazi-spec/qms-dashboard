@@ -422,11 +422,38 @@
                         </div>
                     </div>
 
+                    <!-- Row 2b1: Score Trend (full-width, above Data Quality Trend) -->
+                    <div class="widget-row" data-row="2b1">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="trend-chart" data-name="Score Trend">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Score Trend
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          title="Tracks your headline composite scores (Overall, People, Process, Governance) from the audit history over time — strategic program-health view."
+                                          data-testid="info-score-trend">i</span>
+                                </span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="chart-container" style="height: 220px;">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Row 2c: Data Quality Trend -->
                     <div class="widget-row" data-row="2c">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="quality-trend" data-name="Data Quality Trend">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                                <span class="text-xs font-medium text-gray-500 uppercase">Data Quality Trend</span>
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Data Quality Trend
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          title="Tracks the actual health of your CRM records over the last 30 days — compliance %, records with issues, duplicate clusters, and pipeline at risk."
+                                          data-testid="info-quality-trend">i</span>
+                                </span>
                                 <span class="text-xs text-gray-400" id="qualityTrendSubtitle">Last 30 audits & duplicate scans</span>
                             </div>
                             <div class="p-6">
@@ -500,24 +527,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Row 3: Trends & Opportunities -->
-                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="3">
-                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="trend-chart" data-name="Score Trend">
-                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                                <span class="text-xs font-medium text-gray-500 uppercase">Score Trend</span>
-                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
-                                </svg>
-                            </div>
-                            <div class="p-6">
-                                <div class="chart-container" style="height: 220px;">
-                                    <canvas id="trendChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
 
                     <!-- Row 4: Recommendations -->
