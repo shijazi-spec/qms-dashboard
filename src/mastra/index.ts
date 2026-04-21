@@ -52,6 +52,7 @@ import { knowledgeRoutes } from "./routes/knowledgeRoutes";
 import { reportRoutes } from "./routes/reportRoutes";
 import { managementReviewRoutes } from "./routes/managementReviewRoutes";
 import { analyticsRoutes } from "./routes/analyticsRoutes";
+import { healthPulseRoutes } from "./routes/healthPulseRoutes";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { sanitizeRequestBody } from "../utils/inputSanitizer";
 import { checkRateLimit } from "../utils/rateLimiter";
@@ -4266,6 +4267,7 @@ export const mastra = new Mastra({
       ...reportRoutes,
       ...managementReviewRoutes,
       ...analyticsRoutes,
+      ...healthPulseRoutes,
     ],
   },
   logger:
