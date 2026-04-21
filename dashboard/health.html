@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Health Pulse - WalaPlus Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <style>
+        .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(255,255,255,0.6) inset; }
+        .dot-pass { background: #10B981; }
+        .dot-warn { background: #F59E0B; }
+        .dot-fail { background: #EF4444; }
+        .dot-skipped { background: #9CA3AF; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .check-row { transition: background-color 0.15s; }
+        .check-row:hover { background-color: #F9FAFB; }
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 9999px;
+            font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+        }
+        .badge-pass { background: #D1FAE5; color: #065F46; }
+        .badge-warn { background: #FEF3C7; color: #92400E; }
+        .badge-fail { background: #FEE2E2; color: #991B1B; }
+        .badge-skipped { background: #F3F4F6; color: #4B5563; }
+        details summary { cursor: pointer; user-select: none; list-style: none; }
+        details summary::-webkit-details-marker { display: none; }
+        details[open] summary .chev { transform: rotate(90deg); }
+        .chev { transition: transform 0.15s; display: inline-block; }
+        pre.json {
+            background: #0F172A; color: #E2E8F0; font-size: 11px;
+            padding: 10px 14px; border-radius: 6px; overflow-x: auto;
+            margin-top: 8px; max-height: 240px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/navigation.js?v=4.5.2"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.WalaPlusNav) WalaPlusNav.init('health');
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">Platform Health Pulse</h1>
+                <p class="text-gray-600 text-sm mt-1">Continuous platform-wide health checks. Each run executes the full battery of assertions; degraded or failing runs trigger notifications automatically.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="btn-refresh" data-testid="button-refresh" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-50">
+                    Refresh
+                </button>
+                <button id="btn-run" data-testid="button-run-now" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
+                    Run now
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading-state" class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
+            Loading latest pulse...
+        </div>
+
+        <!-- Empty state (never run) -->
+        <div id="empty-state" class="hidden bg-white rounded-xl shadow p-8 text-center">
+            <div class="text-gray-400 text-lg mb-2">No pulse runs yet</div>
+            <p class="text-gray-600 text-sm mb-4">Click <strong>Run now</strong> above to execute the first health pulse.</p>
+        </div>
+
+        <!-- Error state -->
+        <div id="error-state" class="hidden bg-red-50 border border-red-200 text-red-800 rounded-xl p-4">
+            <div class="font-semibold">Couldn't load Health Pulse data</div>
+            <div id="error-message" class="text-sm mt-1"></div>
+        </div>
+
+        <!-- Main content -->
+        <div id="main-content" class="hidden">
+            <!-- Top summary cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div id="overall-card" class="rounded-xl shadow-lg p-6 text-white">
+                    <div class="text-sm opacity-80 uppercase tracking-wider">Overall Status</div>
+                    <div class="text-3xl font-bold mt-2" id="overall-status" data-testid="text-overall-status">--</div>
+                    <div class="text-sm opacity-80 mt-2" id="overall-time">Last run --</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="text-sm text-gray-500 uppercase tracking-wider">Passing</div>
+                    <div class="text-3xl font-bold text-emerald-600 mt-2" id="count-pass" data-testid="text-pass-count">0</div>
+                    <div class="text-sm text-gray-500 mt-2">checks healthy</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="text-sm text-gray-500 uppercase tracking-wider">Warnings</div>
+                    <div class="text-3xl font-bold text-amber-600 mt-2" id="count-warn" data-testid="text-warn-count">0</div>
+                    <div class="text-sm text-gray-500 mt-2">need attention</div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="text-sm text-gray-500 uppercase tracking-wider">Failures</div>
+                    <div class="text-3xl font-bold text-red-600 mt-2" id="count-fail" data-testid="text-fail-count">0</div>
+                    <div class="text-sm text-gray-500 mt-2" id="count-skipped">0 skipped</div>
+                </div>
+            </div>
+
+            <!-- History trend -->
+            <div class="bg-white rounded-xl shadow p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Run history</h2>
+                        <p class="text-sm text-gray-500">Last 50 runs · pass / warn / fail counts over time</p>
+                    </div>
+                    <div class="text-sm text-gray-500" id="history-meta"></div>
+                </div>
+                <div style="position: relative; height: 220px;">
+                    <canvas id="historyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Per-check breakdown -->
+            <div class="bg-white rounded-xl shadow">
+                <div class="px-6 py-4 border-b">
+                    <h2 class="text-lg font-semibold text-gray-900">Latest run · per-check breakdown</h2>
+                    <p class="text-sm text-gray-500">Click a row to inspect details</p>
+                </div>
+                <div id="checks-list" data-testid="list-checks">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STATUS_COLOR = {
+            healthy:  { card: 'linear-gradient(135deg, #047857, #10B981)', label: 'Healthy' },
+            degraded: { card: 'linear-gradient(135deg, #D97706, #F59E0B)', label: 'Degraded' },
+            critical: { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', label: 'Critical' },
+            down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', label: 'Down' },
+        };
+
+        const CATEGORY_LABELS = {
+            infrastructure: 'Infrastructure',
+            audits: 'Audits',
+            data: 'Data',
+            integrations: 'Integrations',
+            scheduler: 'Scheduler',
+        };
+
+        let historyChart = null;
+
+        function el(id) { return document.getElementById(id); }
+
+        function show(id) { el(id).classList.remove('hidden'); }
+        function hide(id) { el(id).classList.add('hidden'); }
+
+        function fmtTime(iso) {
+            if (!iso) return '--';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString();
+            } catch { return iso; }
+        }
+
+        function fmtRelative(iso) {
+            if (!iso) return '--';
+            const ms = Date.now() - new Date(iso).getTime();
+            const min = Math.floor(ms / 60000);
+            if (min < 1) return 'just now';
+            if (min < 60) return `${min} min ago`;
+            const hr = Math.floor(min / 60);
+            if (hr < 24) return `${hr}h ago`;
+            const d = Math.floor(hr / 24);
+            return `${d}d ago`;
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function renderLatest(latest) {
+            const status = latest.overall_status || 'healthy';
+            const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
+            el('overall-card').style.background = meta.card;
+            el('overall-status').textContent = meta.label;
+            el('overall-time').textContent = `Last run · ${fmtRelative(latest.run_at)} · ${latest.duration_ms}ms`;
+
+            el('count-pass').textContent = latest.pass_count ?? 0;
+            el('count-warn').textContent = latest.warn_count ?? 0;
+            el('count-fail').textContent = latest.fail_count ?? 0;
+            el('count-skipped').textContent = `${latest.skipped_count ?? 0} skipped`;
+
+            // Per-check rows
+            const grouped = {};
+            for (const c of (latest.checks || [])) {
+                const cat = c.category || 'other';
+                (grouped[cat] = grouped[cat] || []).push(c);
+            }
+
+            const html = Object.keys(grouped).sort().map(cat => {
+                const rows = grouped[cat].map(c => {
+                    const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
+                    const message = c.message ? `<div class="text-sm text-gray-600 mt-1">${escapeHtml(c.message)}</div>` : '';
+                    return `
+                        <details class="check-row border-t border-gray-100" data-testid="row-check-${escapeHtml(c.id)}">
+                            <summary class="flex items-center gap-3 px-6 py-3">
+                                <span class="chev text-gray-400">▸</span>
+                                <span class="dot dot-${c.status}"></span>
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-gray-900">${escapeHtml(c.label || c.id)}</div>
+                                    <div class="text-xs text-gray-500">${escapeHtml(c.id)} · ${c.duration_ms}ms</div>
+                                </div>
+                                <span class="badge badge-${c.status}">${c.status.toUpperCase()}</span>
+                            </summary>
+                            <div class="px-6 pb-4 pl-16">
+                                ${message}
+                                ${detailJson}
+                            </div>
+                        </details>
+                    `;
+                }).join('');
+                return `
+                    <div>
+                        <div class="px-6 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            ${escapeHtml(CATEGORY_LABELS[cat] || cat)}
+                        </div>
+                        ${rows}
+                    </div>
+                `;
+            }).join('');
+
+            el('checks-list').innerHTML = html || '<div class="px-6 py-8 text-center text-gray-500 text-sm">No checks in this run</div>';
+        }
+
+        function renderHistory(history) {
+            // history comes newest-first; reverse for left-to-right time order
+            const ordered = [...history].reverse();
+            const labels = ordered.map(r => {
+                const d = new Date(r.run_at);
+                return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            });
+
+            const passData = ordered.map(r => r.pass_count || 0);
+            const warnData = ordered.map(r => r.warn_count || 0);
+            const failData = ordered.map(r => r.fail_count || 0);
+
+            el('history-meta').textContent = `${ordered.length} run${ordered.length === 1 ? '' : 's'}`;
+
+            const ctx = el('historyChart').getContext('2d');
+            if (historyChart) historyChart.destroy();
+            historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Pass', data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: 'Warn', data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: 'Fail', data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }
+                    },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        async function loadPulse() {
+            hide('error-state');
+            try {
+                const res = await fetch('/api/health/pulse', { credentials: 'include' });
+                if (res.status === 401) {
+                    window.location.href = '/login?next=' + encodeURIComponent('/dashboard/health');
+                    return;
+                }
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+                }
+                const data = await res.json();
+
+                hide('loading-state');
+
+                if (!data.latest) {
+                    hide('main-content');
+                    show('empty-state');
+                    return;
+                }
+
+                hide('empty-state');
+                show('main-content');
+
+                renderLatest(data.latest);
+                renderHistory(data.history || []);
+            } catch (err) {
+                hide('loading-state');
+                hide('main-content');
+                el('error-message').textContent = err.message || String(err);
+                show('error-state');
+            }
+        }
+
+        async function runNow() {
+            const btn = el('btn-run');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            btn.classList.add('pulse');
+            try {
+                const res = await fetch('/api/health/pulse/run', { method: 'POST', credentials: 'include' });
+                if (res.status === 429) {
+                    alert("Rate limit hit — please wait a moment before running again.");
+                    return;
+                }
+                if (!res.ok) {
+                    const text = await res.text();
+                    alert(`Run failed: ${text.slice(0, 200)}`);
+                    return;
+                }
+                await loadPulse();
+            } catch (err) {
+                alert(`Run failed: ${err.message || err}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+                btn.classList.remove('pulse');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            el('btn-refresh').addEventListener('click', loadPulse);
+            el('btn-run').addEventListener('click', runNow);
+            loadPulse();
+            // light auto-refresh every 60s while the page is open
+            setInterval(loadPulse, 60000);
+        });
+    </script>
+</body>
+</html>

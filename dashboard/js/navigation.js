@@ -95,7 +95,8 @@ const WalaPlusNav = {
         { label: 'Users & Access', href: '/users', icon: 'users', id: 'users' },
         { label: 'AI Approvals Queue', href: '/ai-approvals', icon: 'check-circle', id: 'ai-approvals' },
         { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
-        { label: 'System Logs', href: '/logs', icon: 'document-report', id: 'logs' }
+        { label: 'System Logs', href: '/logs', icon: 'document-report', id: 'logs' },
+        { label: 'Health Pulse', href: '/health', icon: 'shield-check', id: 'health' }
       ]
     }
   ],
