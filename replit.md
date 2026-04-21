@@ -1,72 +1,42 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 
 ## Overview
-WalaPlus is an AI-powered enterprise Quality Management System designed to integrate governance, risk, and compliance (GRC) with quality management. It leverages the Mastra AI agent framework, Hono for HTTP services, PostgreSQL for data storage, and Inngest for workflow orchestration. The platform provides HTML dashboards and is built for Autoscale deployment, aiming to offer a comprehensive solution for quality, risk, and compliance management. Key features include page-view telemetry for user engagement analysis, role-based landing pages, AI-powered quality audits, and a robust duplicate detection system.
+WalaPlus is an AI-powered enterprise Quality Management System integrating governance, risk, and compliance (GRC) with quality management. It provides HTML dashboards, supports autoscale deployment, and offers comprehensive solutions for quality, risk, and compliance. Key capabilities include AI-powered quality audits, robust duplicate detection, and page-view telemetry for user engagement. The platform aims to be a holistic solution for modern enterprise quality and compliance needs.
 
 ## User Preferences
 I prefer clear and concise communication. For development, I favor iterative progress with regular updates. Before implementing major architectural changes or introducing new external dependencies, please ask for my approval. I expect the agent to prioritize security best practices and ensure all changes are thoroughly tested.
 
+## Recent Changes
+
+### April 21, 2026 — Side rail navigation
+Replaced the horizontal top-bar nav (`dashboard/js/navigation.js`) with a fixed left side rail (256px ↔ 64px collapsible, persisted in `localStorage['walaplus-nav-collapsed']`) plus a 48px top strip that retains the WalaPlus logo, refresh button, notification bell, and user menu. Single-file change picked up by all 36 dashboards via the existing `<div id="walaplus-nav">` mount point. Includes a menu search filter, mobile off-canvas rail with backdrop + Esc-to-close + focus management, and `aria-expanded`/`aria-controls` on toggles. Layout offsets injected via `#walaplus-nav-layout-style` style block; responsive visibility uses custom CSS classes (`.wp-rail-toggle-btn`, `.wp-mobile-menu-btn`, `.wp-desktop-only`, `.wp-tagline`) because the precompiled `dashboard/tailwind.css` does not ship `sm:`/`md:` variants. All preserved IDs/contracts: `#nav-alert-badge`, `#nav-notifications-list`, `#nav-user-info`, `#lastUpdated`, `navigationGroups`, `getColorClasses`, `getItemIcon`. e2e verified: auth → policies → toggle collapse/expand → search "audit" filter → click Health Pulse → navigate with active highlight.
+
 ## System Architecture
-The platform is built on the Mastra AI agent framework with a Hono HTTP server.
--   **Frontend**: Static HTML dashboards are served from the `dashboard/` directory, utilizing a compiled local `tailwind.css` for styling. Dashboards include an Executive Dashboard with a Quality Health Index, GRC Control Tower, QMS Dashboard with CAPA management, Audit Readiness, Compliance Tracking, Risk Register, and an AI Consultant interface.
+The platform is built on the Mastra AI agent framework and Hono HTTP server.
+-   **Frontend**: Static HTML dashboards, styled with compiled Tailwind CSS, offer views like Executive Dashboard, GRC Control Tower, QMS Dashboard, and an AI Consultant interface.
 -   **Backend**: Mastra API routes are handled by Hono.
--   **Database**: PostgreSQL is used for persistence, with over 103 tables organized across 21 module groups. A shared `pg.Pool` (`sharedPool.ts`) is used for efficient database connections.
--   **AI**: GPT-4o is integrated via Replit AI Integrations/OpenAI for AI agent capabilities.
--   **Workflows**: Inngest orchestrates event-driven workflows, including a 14-check background scanner, KPI auto-calculation, and AI approval expiry.
--   **Authentication**: Replit OIDC is the primary authentication method, supporting Google, GitHub, Apple, and email login. Session management uses HMAC-SHA256 signed cookies. An Admin API key (`X-Admin-Key`) provides alternative API access.
--   **Authorization**: Role-Based Access Control (RBAC) with 11 unified roles is enforced via `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`, ensuring granular access to API endpoints and dashboards.
--   **Security**: The system implements nonce-based Content Security Policy (CSP), tiered rate limiting, input sanitization (XSS/injection prevention, CSV formula injection prevention), UUID resource ID obfuscation, strong password policies, and generic error messages to prevent information leakage. A human-in-the-loop (HITL) AI Approval Gate enforces human review for AI-initiated write actions, aligned with controlled documents and PDPL.
+-   **Database**: PostgreSQL manages over 103 tables across 21 module groups using a shared connection pool.
+-   **AI**: GPT-4o integration via Replit AI/OpenAI powers AI agent functionalities.
+-   **Workflows**: Inngest orchestrates event-driven processes, including background scanning, KPI auto-calculation, and AI approval expiry.
+-   **Authentication**: Replit OIDC supports Google, GitHub, Apple, and email login, with HMAC-SHA256 signed cookies for session management. An Admin API key provides alternative access.
+-   **Authorization**: Role-Based Access Control (RBAC) with 11 roles ensures granular access to API endpoints and dashboards through `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
+-   **Security**: Features include nonce-based Content Security Policy (CSP), tiered rate limiting, input sanitization (XSS/injection prevention), UUID resource ID obfuscation, strong password policies, generic error messages, and a Human-In-The-Loop (HITL) AI Approval Gate for AI-initiated write actions.
 -   **Key Features**:
-    -   **AI Consultant**: A GPT-4o powered QMS consultant with 23 tools for querying platform data, analyzing nonconformities, suggesting improvements, and managing various QMS aspects. It includes a chat interface, streaming SSE, and integrates with a knowledge base and compliance checklist engine.
-    -   **Duplicate Radar**: A multi-signal duplicate detection system for CRM data with cross-module clustering, RAG owner accountability, AI recommendations, and an auto-resolve engine.
-    -   **Evidence Management**: Structured upload and retrieval of evidence documents across QMS modules.
+    -   **AI Consultant**: A GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration.
+    -   **Duplicate Radar**: A multi-signal duplicate detection system for CRM data with cross-module clustering, AI recommendations, and auto-resolution.
+    -   **Evidence Management**: Structured upload and retrieval of evidence documents.
     -   **Compliance Checklist Engine**: Create and run structured compliance checklists with automated data verification.
-    -   **Executive Digest**: Weekly quality digest emails summarizing key QMS metrics.
-    -   **Infographic Generator**: In-platform tool for generating shareable visual snapshots of platform areas, with Slack and email sharing capabilities.
-    -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules (Audits, Duplicates, KPIs, NCs, CAPAs, Vendors, Risks).
-
-## Planned Migrations
-- **Mastra Telemetry → AI Tracing** *(deadline: Mastra Nov 4 release)*: dev-server boot logs `Mastra telemetry is deprecated and will be removed on the Nov 4th release`. Migration target: AI Tracing — see https://mastra.ai/en/docs/observability/ai-tracing/overview and tracking issue https://github.com/mastra-ai/mastra/issues/8577. Action items when scheduled: (1) audit all usages of `telemetry`/`logger` instrumentation that flow through Mastra, (2) wire AI Tracing exporter, (3) verify spans for the AI Consultant tool calls + Inngest workflows, (4) remove the legacy telemetry imports.
-
-## Recent Changes (April 21, 2026)
-
-- **Health Pulse UI page** (`dashboard/health.html` new file + `dashboard/js/navigation.js` line ~102 nav item): added a read-only operator dashboard at `/dashboard/health` that surfaces the existing Health Pulse engine to non-engineer users (auditors, quality managers, ops). Renders three layers — (1) summary cards: overall status banner with status-coloured gradient (healthy=green, degraded=amber, critical/down=red), pass/warn/fail counts; (2) Chart.js line chart of last 50 runs showing pass/warn/fail counts over time; (3) per-check breakdown grouped by category with collapsible `<details>` rows showing dot status, label, duration, badge, and JSON detail payload on expand. UX: "Run now" button POSTs to `/api/health/pulse/run` (handles 429 gracefully), "Refresh" button re-fetches, auto-refresh every 60s while page is open, 401 → redirect to `/login?next=/dashboard/health`, empty state when no runs exist yet. Added a "Health Pulse" entry under the existing "Admin & Tools" nav group (already role-gated to admin/head_of_operations_quality/grc_manager/quality_manager/ai_specialist — same gating as System Logs and AI Approvals Queue). Pure additive — no engine, schema, or route logic touched. Verified locally: `/dashboard/health` returns 200/16.5 KB authenticated, 302 to login anonymously; page has correct title + tailwind + chart.js + nav script.
-
-- **Re-wired Platform Health Pulse routes** (`src/mastra/index.ts` line ~58 import + line ~4273 spread): the Health Pulse engine (`src/utils/platformHealthPulse.ts`, ~520 lines) and its route module (`src/mastra/routes/healthPulseRoutes.ts`, exposing `GET /api/health/pulse`, `GET /api/health/pulse/latest`, `POST /api/health/pulse/run`) were both built and merged previously, but the route module was never imported into the main app — every other module under `src/mastra/routes/*` was registered (lines 20–57 imports + 4210–4272 spread) but `healthPulseRoutes` had been skipped, so all three endpoints returned 404 in production. Fix: added the standard one-line import and one-line spread, matching the existing pattern exactly. No engine, schema, or route logic was rewritten — purely additive wire-up. Verified locally: anonymous → 401, authenticated cookie → 200 with the latest run (`overall_status: "healthy"`, 10/10 checks, 64 ms duration); auth gate uses the same `X-Admin-Key` header / `admin_key` cookie pattern as the rest of `/api/admin/*`.
-
-- **HOTFIX: dashboard CSS broken in production** (`src/mastra/index.ts` ~line 1170): the `/dashboard/:name` catch-all I added earlier had a regex (`/^[a-zA-Z0-9_-]+$/`) that rejected any filename containing a dot. That meant `GET /dashboard/tailwind.css` returned `HTTP 400 "Invalid dashboard name"` instead of the actual CSS file — every dashboard page in production rendered as raw unstyled HTML, with the Mastra brand mark expanding to fill the viewport because nothing was constraining its size. Fix: the route now distinguishes (CASE 1) HTML pages — no extension or `.html` → serve the matching `dashboard/<name>.html` — from (CASE 2) static assets (`.css`, `.js`, `.svg`, fonts, images, etc.) → serve the raw bytes from `dashboard/<name>` with the correct `Content-Type` plus a `Cache-Control: public, max-age=3600` so the edge can cache them. Path-traversal is still blocked by a strict `^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$` regex (single optional extension, no `..`, no leading dot, no slashes). Verified locally: `/dashboard/tailwind.css` returns 620 KB of `text/css; charset=utf-8`, `/dashboard/grc` still serves the GRC HTML page, `/dashboard/..%2F..%2Fetc%2Fpasswd` returns 400, unknown extensions return 404 (never masquerade as HTML). This was a regression from this round — must redeploy to fix the live site.
-
-- **Iframe-friendly auth cookie — `SameSite=None; Secure`** (`src/mastra/index.ts` lines ~1337 set & ~1364 logout): the `admin_key` session cookie now travels into cross-site iframe contexts (the Replit preview pane, embeds, etc.) so the dashboard can stay signed in there once the user signs in once in a new tab. Implementation: detect HTTPS via either `c.req.url` *or* the `X-Forwarded-Proto` header (Replit's edge terminates TLS and forwards HTTP to localhost, so the URL alone isn't enough). On HTTPS → emit `SameSite=None; Secure`; on plain HTTP (local dev only) → fall back to `SameSite=Lax` (browsers reject `SameSite=None` without `Secure`). Logout mirrors the same proto detection so the clear-cookie matches the original attributes. Verified across all four combinations (HTTP/HTTPS × set/logout) plus a full e2e (login → cookie-only `/api/agents/performance` → 8.9 MB / 0.18 s warm hit). **Trade-off (deliberate, user-acknowledged):** the cookie can now be sent with cross-site requests, weakening built-in CSRF protection. Mitigations already in place: (a) `/api/admin/*` write endpoints additionally honor the `X-Admin-Key` header which malicious cross-origin pages cannot set, and (b) the RBAC middleware (`src/mastra/index.ts` ~line 232) enforces per-role permissions on cookie-only writes. Login banner copy updated to "Sign in once in a new tab — once you do, this preview pane will load your dashboard automatically next time."
-
-## Recent Changes (April 20, 2026)
-
-- **Login page UX upgrade for iframe contexts** (`dashboard/login.html`): the page no longer looks like an "outage" when shown inside the Replit preview pane. Added: (1) a green "App is online · Sign in to continue" status pulse under the brand mark so users immediately understand it's a sign-in screen, not a server failure; (2) an iframe-only amber banner ("Preview pane sign-in limited") with a one-click "Open in new tab" CTA, shown only when `window.self !== window.top` and pointing at the absolute top-level origin so the cookie can be set by a real top-level navigation; (3) auto-focus on the admin-key input on non-touch devices for instant typing. Zero security trade-offs (cookie still `SameSite=Lax`).
-
-- **`/api/agents/performance` payload trimmed 325×** (`src/mastra/index.ts` ~line 796 & dashboard/index.html ~line 1605, 1833): added two backward-compatible query params — `includeIssues=0` (omits the 28k-row `ownerIssueDetails` array) and `owner=<name>` (returns only that owner's drill-down rows, with the same case-insensitive match the dashboard already used). Cache stores the full data; `shapeResponse` filters at response time. Dashboard now fetches the slim 27 KB payload on initial load and lazy-fetches one owner's rows when the issues drill-down modal opens. A request-token guard (`_ownerIssuesRequestToken`) prevents a slow earlier click from overwriting the modal of a newer click. Live verified: slim 27 KB / 5 ms, owner filter (incl. Arabic name "فايزة العتيبي") 158 KB / 11 ms / 399 rows, legacy no-params still serves the full 8.9 MB.
-
-- **Cache pre-warmer added** (`src/mastra/index.ts` ~line 4216): background IIFE warms `/api/agents/performance` (the 60-80s cold scan over ~67k Zoho records) and `/api/dashboard/layouts-breakdown` 30 seconds after boot, then re-warms every 13 minutes (just before the 15-minute closure cache TTL expires). Hardened with a `globalThis` HMR guard so Mastra dev hot-reloads can't spawn duplicate timers, an `AbortController` 5-min fetch timeout to prevent hung requests, and an `inflight` flag so a slow warm cycle never overlaps the next one. Sends `X-Admin-Key` header to authenticate. Result: first dashboard hit drops from ~67s to ~0.2s (cache hit).
-
-## Recent Changes (April 19, 2026)
-- **Data Quality Trend endpoint**: New `GET /api/dashboard/quality-trend` in `src/mastra/index.ts` combines `quality_audit_results` + `duplicate_detection_logs` history with a live `duplicate_clusters` snapshot (active-only, ignored excluded). Powers the four trend tiles + chart on `dashboard/index.html`.
-- **False-positive consistency sweep**: All duplicate-count surfaces now exclude `status != 'active'` clusters.
-  - `platformHealthPulse.ts` Duplicate Radar widget — added `COUNT(*) FILTER (WHERE status = 'active')`.
-  - `getAllClustersByInflation` and `getClustersBySignal` (`src/utils/duplicateRadarDatabase.ts`) — default to `status = 'active'`; opt out via `?include_inactive=true` on routes `/api/duplicates/clusters-by-inflation` and `/api/duplicates/clusters-by-signal/:signal`.
-  - Already correct (verified): `executiveDigest.ts`, `aiBackgroundScanner.ts`, `getDuplicateStats`, per-record-type tabs.
-- **Owner roster corrections**: `src/data/seedUsers.ts` — Abdalrzaq Alshamari → BD; عبدالمجيد الشبيلي → WP Sales. Five users still on "Unassigned" team pending business confirmation: Ahmed Alhusaynan, Faisal Alaskar, Mansoor Kadir, Mohammed Ridha, Noura AlMuneef. Latest export: `attached_assets/CRM_Users_Complete_117_2026-04-19.xlsx`.
-- **Dashboard JS cache-busting**: `?v=4.5.2` query string appended to `/js/navigation.js` and `/js/ai-consultant-widget.js` includes across all 32 dashboard HTMLs to force fresh JS after deploys.
-- **Trend endpoint regression fix (architect review)**: `/api/dashboard/quality-trend` was using `ORDER BY ... ASC LIMIT N` which returned the *oldest* N rows instead of the latest. Wrapped both audit and duplicate-scan history queries with an inner `ORDER BY DESC LIMIT N` + outer `ORDER BY ASC` so the chart shows the most recent N points in chronological order.
-- **Extended false-positive sweep**: added `status='active'` filter to `getKPIMetrics` (lead/deal duplicate rate + multi-deal domains) and `getEnhancedSummary` top-signals + top-clusters-by-inflation queries — so resolved/ignored clusters never inflate KPI rates or summary panels.
-- **Trend chart polish**: added 4th dataset (Pipeline Inflation, dashed, hidden by default — toggle on via legend) on a third hidden y-axis; "As of <timestamp>" line under the four trend tiles showing the freshest data point.
-- **Test coverage**: `tests/testQualityTrendEndpoint.ts` smoke-tests `/api/dashboard/quality-trend` shape + ascending-date regression guard. Run via `ADMIN_KEY=… npx tsx tests/testQualityTrendEndpoint.ts`.
-- **Cleanup**: removed stale duplicate `attached_assets/WalaPlus_Platform_SOP_1776546068523.md` (live SOP is `docs/WalaPlus_Platform_SOP.md`).
+    -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
+    -   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
+    -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
 
 ## External Dependencies
--   **PostgreSQL**: Primary database for all application data.
--   **Replit AI Integrations / OpenAI**: Provides access to GPT-4o for AI functionalities.
+-   **PostgreSQL**: Primary data store.
+-   **Replit AI Integrations / OpenAI**: For GPT-4o AI capabilities.
 -   **Inngest**: Event-driven workflow orchestration.
--   **Resend**: Used for sending outgoing emails.
--   **Zoho CRM**: Integrated for live CRM data, including enrichment and duplicate detection. Read-only production access is configured.
--   **Slack**: Used for notifications and sharing infographics, utilizing `@slack/web-api`.
--   **exceljs**: Library for generating native XLSX files for data exports.
--   **ImageMagick**: Utilized for converting SVG infographics to PNG format.
--   **Chart.js**: Used for rendering charts in dashboards.
+-   **Resend**: For outgoing email services.
+-   **Zoho CRM**: Integrated for live CRM data, enrichment, and duplicate detection.
+-   **Slack**: For notifications and infographic sharing.
+-   **exceljs**: Library for generating XLSX data exports.
+-   **ImageMagick**: Used for converting SVG infographics to PNG.
+-   **Chart.js**: For rendering charts within dashboards.

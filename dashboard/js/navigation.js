@@ -282,127 +282,138 @@ const WalaPlusNav = {
       return;
     }
 
+    if (!document.getElementById('walaplus-nav-layout-style')) {
+      const style = document.createElement('style');
+      style.id = 'walaplus-nav-layout-style';
+      style.textContent = `
+        body { padding-top: 48px; padding-left: 256px; transition: padding-left .2s ease; }
+        body.wp-rail-collapsed { padding-left: 64px; }
+        @media (max-width: 767px) {
+          body, body.wp-rail-collapsed { padding-left: 0 !important; }
+        }
+        .wp-topstrip { position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 30; }
+        .wp-rail { position: fixed; top: 48px; bottom: 0; left: 0; width: 256px; z-index: 30;
+                   transition: width .2s ease, transform .2s ease; overflow: hidden; }
+        body.wp-rail-collapsed .wp-rail { width: 64px; }
+        body.wp-rail-collapsed .wp-rail .wp-label { display: none; }
+        body.wp-rail-collapsed .wp-rail .wp-search-wrap { display: none; }
+        body.wp-rail-collapsed .wp-rail .wp-rail-item { justify-content: center; }
+        @media (max-width: 767px) {
+          .wp-rail { transform: translateX(-100%); width: 256px !important; box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+          body.wp-mobile-open .wp-rail { transform: translateX(0); }
+          body.wp-rail-collapsed .wp-rail .wp-label,
+          body.wp-rail-collapsed .wp-rail .wp-search-wrap { display: block; }
+          body.wp-rail-collapsed .wp-rail .wp-rail-item { justify-content: flex-start; }
+        }
+        .wp-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20; display: none; }
+        body.wp-mobile-open .wp-backdrop { display: block; }
+        @media (min-width: 768px) { .wp-backdrop { display: none !important; } }
+        /* Precompiled tailwind in this project does not ship sm:/md: variants,
+           so handle responsive visibility with explicit classes here. */
+        .wp-rail-toggle-btn { display: inline-flex; }
+        .wp-mobile-menu-btn { display: none; }
+        .wp-desktop-only    { display: inline-flex; }
+        .wp-tagline         { display: inline; }
+        @media (max-width: 767px) {
+          .wp-rail-toggle-btn { display: none; }
+          .wp-mobile-menu-btn { display: inline-flex; }
+          .wp-desktop-only,
+          .wp-tagline         { display: none; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    if (localStorage.getItem('walaplus-nav-collapsed') === '1') {
+      document.body.classList.add('wp-rail-collapsed');
+    }
+
     navContainer.innerHTML = `
-      <nav class="bg-white shadow-sm border-b border-gray-200 walaplus-nav">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div class="flex justify-between h-16 items-center">
-            <a href="/" class="flex items-center flex-shrink-0">
-              <div class="flex flex-col whitespace-nowrap">
-                <span class="text-2xl font-bold text-indigo-600">WalaPlus</span>
-                <span class="text-xs text-gray-500 -mt-1">Enterprise GRC & Quality Platform</span>
+      <div class="wp-topstrip bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-3">
+        <div class="flex items-center space-x-2">
+          <button id="wp-rail-toggle" class="wp-rail-toggle-btn p-2 rounded-lg text-gray-600 hover:bg-gray-100 items-center" title="Toggle menu" aria-label="Toggle navigation menu" aria-controls="walaplus-nav" aria-expanded="true" data-testid="button-rail-toggle">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <button id="mobile-menu-btn" class="wp-mobile-menu-btn p-2 rounded-lg text-gray-600 hover:bg-gray-100 items-center" title="Open menu" aria-label="Open navigation menu" aria-controls="walaplus-nav" aria-expanded="false" data-testid="button-mobile-menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <a href="/" class="flex items-center" data-testid="link-home">
+            <span class="text-lg font-bold text-indigo-600 leading-none">WalaPlus</span>
+            <span class="wp-tagline ml-2 text-xs text-gray-500">Enterprise GRC &amp; Quality</span>
+          </a>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span id="lastUpdated" class="wp-tagline text-xs text-gray-400"></span>
+          <button onclick="typeof refreshDashboard === 'function' && refreshDashboard()" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" data-testid="button-refresh">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>Refresh</span>
+          </button>
+          <div class="relative nav-dropdown" data-group="notifications">
+            <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" title="Notifications" data-testid="button-notifications">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold" style="font-size:10px"></span>
+            </button>
+            <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
+              <div class="p-3 border-b border-gray-100 flex justify-between items-center">
+                <span class="font-semibold text-sm text-gray-900">Notifications</span>
+                <a href="/consultant" class="text-xs text-indigo-600 hover:text-indigo-800">View All</a>
               </div>
-            </a>
-            
-            <div class="flex items-center space-x-1">
-              ${this.navigationGroups.map(group => this.renderDropdown(group)).join('')}
-              
-              <div class="hidden sm:flex items-center space-x-2 border-l border-gray-200 pl-3 ml-2">
-                <span id="lastUpdated" class="text-xs text-gray-400"></span>
-                <button onclick="typeof refreshDashboard === 'function' && refreshDashboard()" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-1 text-sm">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                  </svg>
-                  <span>Refresh</span>
-                </button>
-                <div class="relative nav-dropdown" data-group="notifications">
-                  <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" title="Notifications">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                    <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold" style="font-size:10px"></span>
-                  </button>
-                  <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
-                    <div class="p-3 border-b border-gray-100 flex justify-between items-center">
-                      <span class="font-semibold text-sm text-gray-900">Notifications</span>
-                      <a href="/consultant" class="text-xs text-indigo-600 hover:text-indigo-800">View All</a>
-                    </div>
-                    <div id="nav-notifications-list" class="overflow-y-auto max-h-72 p-2 space-y-1">
-                      <p class="text-center text-sm text-gray-400 py-4">Loading...</p>
-                    </div>
-                  </div>
-                </div>
-                <div id="nav-user-info" class="flex items-center space-x-2 border-l border-gray-200 pl-3 ml-1"></div>
+              <div id="nav-notifications-list" class="overflow-y-auto max-h-72 p-2 space-y-1">
+                <p class="text-center text-sm text-gray-400 py-4">Loading...</p>
               </div>
             </div>
-            
-            <button id="mobile-menu-btn" class="sm:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-              </svg>
-            </button>
+          </div>
+          <div id="nav-user-info" class="flex items-center"></div>
+        </div>
+      </div>
+
+      <div class="wp-backdrop" id="wp-backdrop"></div>
+
+      <aside class="wp-rail bg-white border-r border-gray-200 flex flex-col" aria-label="Primary navigation">
+        <div class="wp-search-wrap p-3 border-b border-gray-100">
+          <div class="relative">
+            <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>
+            <input id="wp-rail-search" type="search" placeholder="Search menu..." aria-label="Search menu" data-testid="input-nav-search" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
           </div>
         </div>
-        
-        <div id="mobile-menu" class="sm:hidden hidden bg-white border-t border-gray-200">
-          <div class="px-4 py-3 space-y-2">
-            ${this.navigationGroups.map(group => this.renderMobileGroup(group)).join('')}
-          </div>
-        </div>
-      </nav>
+        <nav class="flex-1 overflow-y-auto py-2" id="wp-rail-nav">
+          ${this.navigationGroups.map(group => this.renderRailGroup(group)).join('')}
+        </nav>
+      </aside>
     `;
   },
 
-  renderDropdown(group) {
+  renderRailGroup(group) {
     const colors = this.getColorClasses(group.color);
-    const isActive = this.isInGroup(group.id);
-    
+    const groupActive = this.isInGroup(group.id);
     return `
-      <div class="relative nav-dropdown" data-group="${this.escapeHtml(group.id)}">
-        <button class="flex items-center space-x-1 px-3 py-2 rounded-lg transition text-sm font-medium
-          ${isActive ? `${colors.bg} text-white` : `text-gray-600 hover:bg-gray-100`}">
-          ${group.icon}
-          <span>${this.escapeHtml(group.label)}</span>
-          <svg class="w-3 h-3 transition-transform dropdown-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-          </svg>
-        </button>
-        <div class="dropdown-menu absolute left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 hidden">
-          ${group.items.map(item => this.renderDropdownItem(item, colors)).join('')}
+      <div class="wp-rail-group px-2 mb-3" data-group="${this.escapeHtml(group.id)}">
+        <div class="flex items-center px-2 mb-1" title="${this.escapeHtml(group.label)}">
+          <span class="${colors.text} mr-2 flex-shrink-0">${group.icon}</span>
+          <span class="wp-label text-xs font-semibold uppercase tracking-wide ${groupActive ? colors.text : 'text-gray-500'}">${this.escapeHtml(group.label)}</span>
+        </div>
+        <div class="space-y-0.5">
+          ${group.items.map(item => this.renderRailItem(item, colors)).join('')}
         </div>
       </div>
     `;
   },
 
-  renderDropdownItem(item, colors) {
+  renderRailItem(item, colors) {
     const isActive = item.id === this.currentPage;
     const target = item.external ? 'target="_blank"' : '';
-    
     return `
-      <a href="${this.escapeHtml(item.href)}" ${target} class="flex items-center space-x-2 px-4 py-2 text-sm transition
-        ${isActive ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-700 hover:bg-gray-50'}">
-        ${this.getItemIcon(item.icon)}
-        <span>${this.escapeHtml(item.label)}</span>
-        ${item.external ? '<svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
+      <a href="${this.escapeHtml(item.href)}" ${target}
+         class="wp-rail-item flex items-center space-x-2 px-2 py-2 rounded-lg text-sm transition
+           ${isActive ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-700 hover:bg-gray-50'}"
+         title="${this.escapeHtml(item.label)}"
+         data-nav-item
+         data-label="${this.escapeHtml(item.label.toLowerCase())}"
+         data-testid="link-nav-${this.escapeHtml(item.id)}">
+        <span class="flex-shrink-0">${this.getItemIcon(item.icon)}</span>
+        <span class="wp-label truncate">${this.escapeHtml(item.label)}</span>
+        ${item.external ? '<svg class="wp-label w-3 h-3 text-gray-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
       </a>
-    `;
-  },
-
-  renderMobileGroup(group) {
-    const colors = this.getColorClasses(group.color);
-    const isActive = this.isInGroup(group.id);
-    
-    return `
-      <div class="mobile-nav-group">
-        <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium
-          ${isActive ? `${colors.lightBg} ${colors.text}` : 'text-gray-700 hover:bg-gray-50'}"
-          onclick="WalaPlusNav.toggleMobileGroup(this)">
-          <div class="flex items-center space-x-2">
-            ${group.icon}
-            <span>${this.escapeHtml(group.label)}</span>
-          </div>
-          <svg class="w-4 h-4 transition-transform mobile-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-          </svg>
-        </button>
-        <div class="mobile-submenu hidden pl-4 mt-1 space-y-1">
-          ${group.items.map(item => `
-            <a href="${this.escapeHtml(item.href)}" ${item.external ? 'target="_blank"' : ''} 
-              class="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm
-                ${item.id === this.currentPage ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-600 hover:bg-gray-50'}">
-              ${this.getItemIcon(item.icon)}
-              <span>${this.escapeHtml(item.label)}</span>
-            </a>
-          `).join('')}
-        </div>
-      </div>
     `;
   },
 
@@ -411,7 +422,7 @@ const WalaPlusNav = {
       const btn = dropdown.querySelector('button');
       const menu = dropdown.querySelector('.dropdown-menu');
       const arrow = dropdown.querySelector('.dropdown-arrow');
-      
+      if (!btn || !menu) return;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
@@ -421,47 +432,74 @@ const WalaPlusNav = {
           if (arrow) arrow.classList.add('rotate-180');
         }
       });
-      
-      dropdown.addEventListener('mouseenter', () => {
-        if (window.innerWidth >= 640) {
-          menu.classList.remove('hidden');
-          if (arrow) arrow.classList.add('rotate-180');
-        }
-      });
-      
-      dropdown.addEventListener('mouseleave', () => {
-        if (window.innerWidth >= 640) {
-          menu.classList.add('hidden');
-          if (arrow) arrow.classList.remove('rotate-180');
-        }
-      });
     });
-    
     document.addEventListener('click', () => this.closeAllDropdowns());
-    
+
+    const railToggle = document.getElementById('wp-rail-toggle');
+    if (railToggle) {
+      // Reflect current state on first paint
+      railToggle.setAttribute('aria-expanded', document.body.classList.contains('wp-rail-collapsed') ? 'false' : 'true');
+      railToggle.addEventListener('click', () => {
+        document.body.classList.toggle('wp-rail-collapsed');
+        const collapsed = document.body.classList.contains('wp-rail-collapsed');
+        railToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        try { localStorage.setItem('walaplus-nav-collapsed', collapsed ? '1' : '0'); } catch(_) {}
+      });
+    }
+
     const mobileBtn = document.getElementById('mobile-menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    if (mobileBtn && mobileMenu) {
-      mobileBtn.addEventListener('click', () => {
-        mobileMenu.classList.toggle('hidden');
+    const backdrop = document.getElementById('wp-backdrop');
+    const closeMobileRail = () => {
+      if (!document.body.classList.contains('wp-mobile-open')) return;
+      document.body.classList.remove('wp-mobile-open');
+      if (mobileBtn) {
+        mobileBtn.setAttribute('aria-expanded', 'false');
+        mobileBtn.focus();
+      }
+    };
+    const openMobileRail = () => {
+      document.body.classList.add('wp-mobile-open');
+      if (mobileBtn) mobileBtn.setAttribute('aria-expanded', 'true');
+      const searchInput = document.getElementById('wp-rail-search');
+      if (searchInput) setTimeout(() => searchInput.focus(), 50);
+    };
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (document.body.classList.contains('wp-mobile-open')) closeMobileRail();
+        else openMobileRail();
+      });
+    }
+    if (backdrop) {
+      backdrop.addEventListener('click', closeMobileRail);
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('wp-mobile-open')) {
+        closeMobileRail();
+      }
+    });
+
+    const searchInput = document.getElementById('wp-rail-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const q = (e.target.value || '').trim().toLowerCase();
+        document.querySelectorAll('.wp-rail-group').forEach(group => {
+          let visibleCount = 0;
+          group.querySelectorAll('[data-nav-item]').forEach(item => {
+            const label = item.getAttribute('data-label') || '';
+            const match = !q || label.includes(q);
+            item.style.display = match ? '' : 'none';
+            if (match) visibleCount++;
+          });
+          group.style.display = visibleCount === 0 ? 'none' : '';
+        });
       });
     }
   },
 
   closeAllDropdowns() {
-    document.querySelectorAll('.nav-dropdown .dropdown-menu').forEach(menu => {
-      menu.classList.add('hidden');
-    });
-    document.querySelectorAll('.nav-dropdown .dropdown-arrow').forEach(arrow => {
-      arrow.classList.remove('rotate-180');
-    });
-  },
-
-  toggleMobileGroup(btn) {
-    const submenu = btn.nextElementSibling;
-    const arrow = btn.querySelector('.mobile-arrow');
-    submenu.classList.toggle('hidden');
-    arrow.classList.toggle('rotate-180');
+    document.querySelectorAll('.nav-dropdown .dropdown-menu').forEach(menu => menu.classList.add('hidden'));
+    document.querySelectorAll('.nav-dropdown .dropdown-arrow').forEach(arrow => arrow.classList.remove('rotate-180'));
   }
 };
 
