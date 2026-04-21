@@ -462,6 +462,10 @@
             }
         }
 
+        function escAttr(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
         function renderPoliciesTable(policies) {
             const tbody = document.getElementById('policiesTableBody');
             if (!policies || policies.length === 0) {
@@ -490,7 +494,7 @@
                     <td class="px-4 py-3 text-center">
                         <div class="flex items-center justify-center gap-2">
                             <button onclick="viewPolicyDetail('${policy.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-document-${policy.id}">View</button>
-                            ${policy.status !== 'published' ? `<button onclick="deleteDocument('${policy.id}', '${policy.title.replace(/'/g, "\\'")}')" class="text-red-400 hover:text-red-600 text-sm" data-testid="button-delete-document-${policy.id}">Del</button>` : ''}
+                            ${policy.status !== 'published' ? `<button data-title="${escAttr(policy.title)}" onclick="deleteDocument('${policy.id}', this.dataset.title)" class="text-red-400 hover:text-red-600 text-sm" data-testid="button-delete-document-${policy.id}">Del</button>` : ''}
                         </div>
                     </td>
                 </tr>`;

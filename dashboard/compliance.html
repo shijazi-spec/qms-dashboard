@@ -484,6 +484,10 @@
             }
         }
 
+        function escAttr(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
         function renderObligations(obligations) {
             const tbody = document.getElementById('obligationsTableBody');
             if (!obligations || obligations.length === 0) {
@@ -508,7 +512,7 @@
                         <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(o.status)}">${formatStatus(o.status)}</span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="openAssessmentModal(${o.id}, '${o.title}')" class="text-green-600 hover:text-green-800 text-sm font-medium">Assess</button>
+                        <button data-title="${escAttr(o.title)}" onclick="openAssessmentModal(${o.id}, this.dataset.title)" class="text-green-600 hover:text-green-800 text-sm font-medium">Assess</button>
                     </td>
                 </tr>
             `).join('');
@@ -565,7 +569,12 @@
 
         function openAssessmentModal(obligationId, title) {
             document.getElementById('assessmentObligationId').value = obligationId;
-            document.getElementById('assessmentObligationInfo').innerHTML = `<strong>Obligation:</strong> ${title}`;
+            const infoEl = document.getElementById('assessmentObligationInfo');
+            infoEl.innerHTML = '';
+            const strong = document.createElement('strong');
+            strong.textContent = 'Obligation:';
+            infoEl.appendChild(strong);
+            infoEl.appendChild(document.createTextNode(' ' + title));
             document.getElementById('assessmentForm').reset();
             document.getElementById('assessmentObligationId').value = obligationId;
             document.getElementById('assessmentModal').classList.add('active');
