@@ -1,6 +1,6 @@
 import { requireAdminOrKey, getSessionUser, unauthorizedResponse, type SessionUser } from '../../utils/rbacMiddleware';
 
-function verifyAdminKey(c: any): SessionUser | null {
+async function verifyAdminKey(c: any): Promise<SessionUser | null> {
   return requireAdminOrKey(c);
 }
 
@@ -11,7 +11,7 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -66,7 +66,7 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -211,7 +211,7 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -727,7 +727,7 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -812,7 +812,7 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1009,7 +1009,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1093,7 +1093,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1123,7 +1123,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           
@@ -1177,7 +1177,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           
@@ -1219,7 +1219,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1266,7 +1266,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1609,7 +1609,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1687,7 +1687,7 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = verifyAdminKey(c);
+          const admin = await verifyAdminKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();

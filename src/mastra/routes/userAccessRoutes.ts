@@ -3,14 +3,14 @@ import { sendResendEmail } from '../../utils/resendMail';
 import { requireAdminOrKey, requireAuthOrKey, getSessionUser, requireRole, unauthorizedResponse, forbiddenResponse, type SessionUser } from '../../utils/rbacMiddleware';
 import type { UserRole } from '../../utils/rbacDatabase';
 
-function verifyAdminKey(c: any): SessionUser | null {
+async function verifyAdminKey(c: any): Promise<SessionUser | null> {
   return requireAdminOrKey(c);
 }
 
-function verifyAdminOrQualityManager(c: any): SessionUser | null {
-  const byKey = requireAdminOrKey(c);
+async function verifyAdminOrQualityManager(c: any): Promise<SessionUser | null> {
+  const byKey = await requireAdminOrKey(c);
   if (byKey) return byKey;
-  return requireRole(c, ['admin', 'quality_manager'] as UserRole[]);
+  return await requireRole(c, ['admin', 'quality_manager'] as UserRole[]);
 }
 
 export const userAccessRoutes = [
@@ -20,7 +20,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -41,7 +41,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const caller = verifyAdminOrQualityManager(c);
+          const caller = await verifyAdminOrQualityManager(c);
           if (!caller) {
             return c.json({ error: 'Insufficient permissions' }, 403);
           }
@@ -87,7 +87,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -116,7 +116,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -141,7 +141,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const sessionUser = verifyAdminOrQualityManager(c);
+          const sessionUser = await verifyAdminOrQualityManager(c);
           if (!sessionUser) {
             return c.json({ error: 'Admin or Quality Manager access required' }, 403);
           }
@@ -322,7 +322,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -331,7 +331,7 @@ export const userAccessRoutes = [
           
           logger?.info('✅ [UserAccess] Approving user', { id });
 
-          const approver = verifyAdminKey(c);
+          const approver = await verifyAdminKey(c);
           const user = await userDb.approveAccessRequest(id, approver?.email || 'unknown', body.permission_overrides);
           
           if (!user) {
@@ -378,7 +378,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -387,7 +387,7 @@ export const userAccessRoutes = [
           
           logger?.info('❌ [UserAccess] Denying user', { id });
 
-          const denier = verifyAdminKey(c);
+          const denier = await verifyAdminKey(c);
           const user = await userDb.denyAccessRequest(id, denier?.email || 'unknown', body.reason);
           
           if (!user) {
@@ -430,7 +430,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -438,7 +438,7 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           logger?.info('🚫 [UserAccess] Disabling user', { id });
-          const disabler = verifyAdminKey(c);
+          const disabler = await verifyAdminKey(c);
           const user = await userDb.disableUser(id, disabler?.email || 'unknown');
           
           if (!user) {
@@ -459,7 +459,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -467,7 +467,7 @@ export const userAccessRoutes = [
           const body = await c.req.json();
           
           logger?.info('✅ [UserAccess] Enabling user', { id });
-          const enabler = verifyAdminKey(c);
+          const enabler = await verifyAdminKey(c);
           const user = await userDb.enableUser(id, enabler?.email || 'unknown');
           
           if (!user) {
@@ -488,7 +488,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -504,7 +504,7 @@ export const userAccessRoutes = [
             return c.json({ error: 'Invalid role specified' }, 400);
           }
 
-          const adminUser = verifyAdminKey(c);
+          const adminUser = await verifyAdminKey(c);
           if (adminUser && adminUser.userId === id) {
             return c.json({ error: 'Cannot change your own role' }, 403);
           }
@@ -530,7 +530,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -542,7 +542,7 @@ export const userAccessRoutes = [
           }
           
           logger?.info('🔐 [UserAccess] Updating user permissions', { id });
-          const permAdmin = verifyAdminKey(c);
+          const permAdmin = await verifyAdminKey(c);
           await userDb.updateUserPermissions(id, body.permissions, permAdmin?.email || 'unknown');
           
           const permissions = await userDb.getUserPermissions(id);
@@ -560,7 +560,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -586,7 +586,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();
@@ -605,7 +605,7 @@ export const userAccessRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!verifyAdminKey(c)) {
+          if (!await verifyAdminKey(c)) {
             return c.json({ error: 'Authentication required' }, 401);
           }
           const logger = mastra?.getLogger();

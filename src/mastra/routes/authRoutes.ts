@@ -107,19 +107,23 @@ async function upsertOidcUser(profile: { sub: string; email: string; name: strin
   const existing = await pool.query('SELECT * FROM platform_users WHERE email = $1', [profile.email]);
 
   if (existing.rows.length > 0) {
+    const existingUser = existing.rows[0];
+    if (existingUser.status !== 'active') {
+      return existingUser;
+    }
     const result = await pool.query(
       `UPDATE platform_users
        SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
            last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
-       WHERE email = $4
+       WHERE email = $4 AND status = 'active'
        RETURNING *`,
       [profile.sub, profile.name, profile.picture, profile.email]
     );
-    return result.rows[0];
+    return result.rows[0] || existingUser;
   } else {
     const result = await pool.query(
       `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
-       VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'active', false, 1, NOW())
+       VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'pending_approval', false, 0, NOW())
        RETURNING *`,
       [profile.email, profile.name, profile.sub, profile.picture]
     );
@@ -272,6 +276,15 @@ export const authRoutes = [
             name: fullName,
             picture,
           });
+
+          if (!user || user.status !== 'active') {
+            const statusParam = user?.status === 'pending_approval' ? 'pending_approval'
+              : user?.status === 'denied' ? 'access_denied'
+              : user?.status === 'disabled' ? 'account_disabled'
+              : 'access_denied';
+            console.warn('[Auth] Login blocked for non-active user:', profile.email, 'status:', user?.status);
+            return c.redirect(`/login?error=${statusParam}`);
+          }
 
           const sessionToken = signSession({
             userId: user.id,

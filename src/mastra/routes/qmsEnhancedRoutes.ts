@@ -388,7 +388,7 @@ export const qmsEnhancedRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          if (!requireAdminOrKey(c)) return unauthorizedResponse(c);
+          if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
           const { getNonconformances } = await import("../../utils/qmsDatabase");
           const { records } = await getNonconformances({ limit: 50000, offset: 0 });
           const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
@@ -458,7 +458,7 @@ export const qmsEnhancedRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          if (!requireAdminOrKey(c)) return unauthorizedResponse(c);
+          if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
           const { getCapaRecords } = await import("../../utils/qmsDatabase");
           const { records } = await getCapaRecords({ limit: 50000, offset: 0 });
           const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
@@ -527,7 +527,7 @@ export const qmsEnhancedRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-        if (!requireAdminOrKey(c)) return unauthorizedResponse(c);
+        if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {

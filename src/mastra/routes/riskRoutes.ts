@@ -28,7 +28,7 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-        if (!requireAdminOrKey(c)) return unauthorizedResponse(c);
+        if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {

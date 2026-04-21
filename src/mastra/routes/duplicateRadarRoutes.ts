@@ -848,7 +848,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           if (scanState.status === 'scanning') {
@@ -887,7 +887,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           if (scanState.status === 'scanning') {
@@ -1003,7 +1003,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           await clearMockData();
@@ -1422,7 +1422,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const id = parseInt(c.req.param('id'));
@@ -1451,7 +1451,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const clusterId = parseInt(c.req.param('id'));
@@ -1474,7 +1474,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const { cluster_ids, action } = await c.req.json();
@@ -1681,7 +1681,7 @@ export const duplicateRadarRoutes = [
       return async (c: any) => {
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = requireAdminOrKey(c);
+          const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const result = await autoResolveClusters();

@@ -1,5 +1,9 @@
+import pg from 'pg';
+const { Pool } = pg;
 import { getSessionFromCookie } from '../mastra/routes/authRoutes';
 import { getUserByEmail, checkPermission, type UserRole, type RolePermission } from './rbacDatabase';
+
+const platformPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export interface SessionUser {
   userId: number;
@@ -12,12 +16,51 @@ export interface SessionUser {
 const dbRoleCache = new Map<string, { role: string; fetchedAt: number }>();
 const DB_ROLE_CACHE_TTL = 60_000;
 
+const platformStatusCache = new Map<string, { status: string; role: string; fetchedAt: number }>();
+const PLATFORM_STATUS_CACHE_TTL = 30_000;
+
+export async function getPlatformUser(email: string): Promise<{ status: string; role: string } | null> {
+  const cached = platformStatusCache.get(email);
+  if (cached && (Date.now() - cached.fetchedAt) < PLATFORM_STATUS_CACHE_TTL) {
+    return { status: cached.status, role: cached.role };
+  }
+  try {
+    const result = await platformPool.query(
+      'SELECT status, role FROM platform_users WHERE email = $1',
+      [email]
+    );
+    if (result.rows.length > 0) {
+      const { status, role } = result.rows[0];
+      platformStatusCache.set(email, { status, role, fetchedAt: Date.now() });
+      return { status, role };
+    }
+  } catch {
+  }
+  return null;
+}
+
+export async function checkPlatformUserActive(email: string): Promise<boolean> {
+  const user = await getPlatformUser(email);
+  if (!user) return false;
+  return user.status === 'active';
+}
+
+export function invalidatePlatformUserCache(email: string): void {
+  platformStatusCache.delete(email);
+  dbRoleCache.delete(email);
+}
+
 export async function getVerifiedRole(email: string, tokenRole: string): Promise<string> {
   const cached = dbRoleCache.get(email);
   if (cached && (Date.now() - cached.fetchedAt) < DB_ROLE_CACHE_TTL) {
     return cached.role;
   }
   try {
+    const platformUser = await getPlatformUser(email);
+    if (platformUser) {
+      dbRoleCache.set(email, { role: platformUser.role, fetchedAt: Date.now() });
+      return platformUser.role;
+    }
     const dbUser = await getUserByEmail(email);
     if (dbUser) {
       dbRoleCache.set(email, { role: dbUser.role, fetchedAt: Date.now() });
@@ -58,9 +101,16 @@ export function requireAuth(c: any): SessionUser | null {
   return user;
 }
 
-export function requireRole(c: any, allowedRoles: UserRole[]): SessionUser | null {
+export async function requireRole(c: any, allowedRoles: UserRole[]): Promise<SessionUser | null> {
   const user = getSessionUser(c);
   if (!user) return null;
+  const adminKey = getAdminKey(c);
+  const expectedKey = process.env.ADMIN_API_KEY;
+  if (!(expectedKey && adminKey === expectedKey)) {
+    const platformUser = await getPlatformUser(user.email);
+    if (!platformUser || platformUser.status !== 'active') return null;
+    user.role = platformUser.role;
+  }
   if (!allowedRoles.includes(user.role as UserRole)) return null;
   return user;
 }
@@ -109,7 +159,7 @@ function getAdminKey(c: any): string | null {
   return null;
 }
 
-export function requireAdminOrKey(c: any): SessionUser | null {
+export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
   const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
   if (expectedKey && adminKey === expectedKey) {
@@ -117,7 +167,10 @@ export function requireAdminOrKey(c: any): SessionUser | null {
   }
   const user = getSessionUser(c);
   if (!user) return null;
-  if (user.role !== 'admin') return null;
+  const platformUser = await getPlatformUser(user.email);
+  if (!platformUser || platformUser.status !== 'active') return null;
+  if (platformUser.role !== 'admin') return null;
+  user.role = platformUser.role;
   return user;
 }
 

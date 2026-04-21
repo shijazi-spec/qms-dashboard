@@ -8,7 +8,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -36,7 +36,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -61,7 +61,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -83,7 +83,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -106,7 +106,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -131,7 +131,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -156,7 +156,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -180,7 +180,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -202,7 +202,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -225,7 +225,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -246,7 +246,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -267,7 +267,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -291,7 +291,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -314,7 +314,7 @@ export const rbacRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = requireAdminOrKey(c);
+          const admin = await requireAdminOrKey(c);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();

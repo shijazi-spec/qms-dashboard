@@ -448,6 +448,11 @@ export async function disableUser(userId: number, disabledBy: string): Promise<P
   const user = result.rows[0];
   if (!user) return null;
 
+  try {
+    const { invalidatePlatformUserCache } = await import('./rbacMiddleware');
+    invalidatePlatformUserCache(user.email);
+  } catch {}
+
   await logAccessEvent({
     event_type: 'USER_DISABLED',
     user_email: disabledBy,
@@ -470,6 +475,11 @@ export async function enableUser(userId: number, enabledBy: string): Promise<Pla
   const user = result.rows[0];
   if (!user) return null;
 
+  try {
+    const { invalidatePlatformUserCache } = await import('./rbacMiddleware');
+    invalidatePlatformUserCache(user.email);
+  } catch {}
+
   await logAccessEvent({
     event_type: 'USER_ENABLED',
     user_email: enabledBy,
@@ -490,6 +500,11 @@ export async function updateUserRole(userId: number, newRole: UserRole, updatedB
 
   const user = result.rows[0];
   if (!user) return null;
+
+  try {
+    const { invalidatePlatformUserCache } = await import('./rbacMiddleware');
+    invalidatePlatformUserCache(user.email);
+  } catch {}
 
   await createDefaultPermissions(userId, newRole);
 

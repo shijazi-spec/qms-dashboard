@@ -224,6 +224,14 @@ export const mastra = new Mastra({
             return c.json({ error: 'Authentication required' }, 401);
           }
 
+          if (session && !hasAdminKey) {
+            const { checkPlatformUserActive } = await import('../utils/rbacMiddleware');
+            const isActive = await checkPlatformUserActive(session.email);
+            if (!isActive) {
+              return c.json({ error: 'Account is not active or has been disabled' }, 403);
+            }
+          }
+
           if (urlPath.startsWith('/api/admin/') || urlPath === '/api/admin') {
             if (!hasAdminKey) {
               return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
@@ -1395,14 +1403,7 @@ export const mastra = new Mastra({
               // forwarded-proto header is the reliable signal in that setup.
               const fwdProto = (c.req.header('x-forwarded-proto') || '').toLowerCase();
               const isSecure = c.req.url.startsWith('https') || fwdProto === 'https';
-              // Cross-site iframe support: use SameSite=None;Secure on HTTPS so the cookie travels into
-              // the Replit preview pane (and any other cross-site iframe embed). Browsers reject
-              // SameSite=None without Secure, so on plain HTTP (local dev only) we fall back to Lax.
-              // Trade-off: weakens cross-site CSRF protection for cookie-authed writes. Mitigations:
-              //   (a) /api/admin/* and most write endpoints can also require X-Admin-Key header,
-              //       which malicious cross-origin pages cannot set;
-              //   (b) RBAC middleware (~line 232) enforces per-role write permissions on cookie-only writes.
-              const sameSite = isSecure ? 'None' : 'Lax';
+              const sameSite = 'Lax';
               const secureFlag = isSecure ? '; Secure' : '';
               c.header('Set-Cookie', `admin_key=${key}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=28800${secureFlag}`);
               return c.json({ success: true });
@@ -1417,12 +1418,9 @@ export const mastra = new Mastra({
         method: "POST",
         createHandler: async () => {
           return async (c: any) => {
-            // Logout must mirror the attributes used when the cookie was set, otherwise some browsers
-            // refuse to clear the original SameSite=None;Secure cookie. Mirror the same proto detection
-            // (URL scheme OR X-Forwarded-Proto) used at login time.
             const fwdProtoLogout = (c.req.header('x-forwarded-proto') || '').toLowerCase();
             const isSecureLogout = c.req.url.startsWith('https') || fwdProtoLogout === 'https';
-            const sameSiteLogout = isSecureLogout ? 'None' : 'Lax';
+            const sameSiteLogout = 'Lax';
             const secureFlagLogout = isSecureLogout ? '; Secure' : '';
             c.header('Set-Cookie', `admin_key=; Path=/; HttpOnly; SameSite=${sameSiteLogout}; Max-Age=0${secureFlagLogout}`);
             return c.json({ success: true });
@@ -1464,7 +1462,7 @@ export const mastra = new Mastra({
           return async (c: any) => {
             try {
               const { requireAdminOrKey: rak } = await import("../utils/rbacMiddleware");
-              const adminUser = rak(c);
+              const adminUser = await rak(c);
               if (!adminUser) {
                 return c.json({ error: "Admin access required" }, 403);
               }
