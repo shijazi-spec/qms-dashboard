@@ -249,14 +249,24 @@ export const mastra = new Mastra({
 
         if (isApi && ['POST', 'PUT', 'PATCH'].includes(method)) {
           try {
-            const contentType = c.req.header('Content-Type') || '';
-            if (contentType.includes('application/json')) {
-              const rawBody = await c.req.json();
-              const sanitized = sanitizeRequestBody(rawBody, urlPath);
+            const cloned = c.req.raw.clone();
+            const bodyText = await cloned.text();
+            let parsedBody: any;
+            let isJson = false;
+            try {
+              parsedBody = JSON.parse(bodyText);
+              isJson = true;
+            } catch (_) {
+              // body is not JSON — leave original request completely untouched
+            }
+            if (isJson) {
+              const sanitized = sanitizeRequestBody(parsedBody, urlPath);
               const sanitizedJson = JSON.stringify(sanitized);
+              const newHeaders = new Headers(c.req.raw.headers);
+              newHeaders.set('Content-Type', 'application/json');
               const newRequest = new Request(c.req.url, {
                 method: c.req.method,
-                headers: c.req.raw.headers,
+                headers: newHeaders,
                 body: sanitizedJson,
               });
               (c.req as any).raw = newRequest;

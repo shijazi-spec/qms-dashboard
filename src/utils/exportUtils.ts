@@ -49,6 +49,13 @@ export function buildFilterClauses(filters: FilterParams, dateColumn: string = '
   return { conditions, params, paramIdx };
 }
 
+function sanitizeCsvCell(value: string): string {
+  if (/^[=+\-@\t\r]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 export function toCSV(rows: any[], columns?: string[]): string {
   if (rows.length === 0) return '';
   const cols = columns || Object.keys(rows[0]);
@@ -57,7 +64,7 @@ export function toCSV(rows: any[], columns?: string[]): string {
     cols.map(col => {
       const val = row[col];
       if (val == null) return '';
-      const str = String(val);
+      const str = sanitizeCsvCell(String(val));
       if (str.includes(',') || str.includes('"') || str.includes('\n')) {
         return `"${str.replace(/"/g, '""')}"`;
       }
