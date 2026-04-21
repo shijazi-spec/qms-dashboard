@@ -1168,26 +1168,74 @@ export const mastra = new Mastra({
         path: "/dashboard/:name",
         method: "GET",
         createHandler: async () => {
+          // Mime types for static assets served from the dashboard/ directory.
+          // Anything not in this map falls through to application/octet-stream.
+          const STATIC_MIME: Record<string, string> = {
+            css: 'text/css; charset=utf-8',
+            js: 'application/javascript; charset=utf-8',
+            mjs: 'application/javascript; charset=utf-8',
+            json: 'application/json; charset=utf-8',
+            map: 'application/json; charset=utf-8',
+            svg: 'image/svg+xml',
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            gif: 'image/gif',
+            webp: 'image/webp',
+            ico: 'image/x-icon',
+            woff: 'font/woff',
+            woff2: 'font/woff2',
+            ttf: 'font/ttf',
+            otf: 'font/otf',
+            txt: 'text/plain; charset=utf-8',
+          };
+          const resolveDashboardFile = (relPath: string) => {
+            const candidates = [
+              join(process.cwd(), "dashboard", relPath),
+              join(process.cwd(), "..", "dashboard", relPath),
+              join(process.cwd(), "..", "..", "dashboard", relPath),
+              `/home/runner/workspace/dashboard/${relPath}`,
+            ];
+            for (const p of candidates) if (existsSync(p)) return p;
+            return null;
+          };
           return async (c: any) => {
             try {
               const rawName = c.req.param('name') || '';
-              const name = rawName.replace(/\.html$/i, '');
-              if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+              // Reject any traversal or weird chars early. We allow letters/digits/dash/underscore/dot.
+              // Dot is required so "tailwind.css" is accepted, but ".." is still rejected because we
+              // disallow consecutive dots and a leading dot.
+              if (!/^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(rawName)) {
                 return c.text("Invalid dashboard name", 400);
               }
-              const possiblePaths = [
-                join(process.cwd(), "dashboard", `${name}.html`),
-                join(process.cwd(), "..", "dashboard", `${name}.html`),
-                join(process.cwd(), "..", "..", "dashboard", `${name}.html`),
-                `/home/runner/workspace/dashboard/${name}.html`,
-              ];
-              for (const dashboardPath of possiblePaths) {
-                if (existsSync(dashboardPath)) {
-                  const html = readFileSync(dashboardPath, "utf-8");
-                  return c.html(html);
+              const dotIdx = rawName.lastIndexOf('.');
+              const ext = dotIdx > 0 ? rawName.slice(dotIdx + 1).toLowerCase() : '';
+
+              // CASE 1: HTML page (no extension, or .html). Strip .html and serve the matching file.
+              if (!ext || ext === 'html') {
+                const baseName = rawName.replace(/\.html$/i, '');
+                const htmlPath = resolveDashboardFile(`${baseName}.html`);
+                if (htmlPath) {
+                  return c.html(readFileSync(htmlPath, "utf-8"));
                 }
+                return c.text(`Dashboard "${baseName}" not found`, 404);
               }
-              return c.text(`Dashboard "${name}" not found`, 404);
+
+              // CASE 2: Static asset (tailwind.css, some.js, image.png, etc.). Serve the raw file with
+              // the right Content-Type so browsers actually apply the styles instead of treating the
+              // response as text/html. This case is the reason the live site looked unstyled.
+              const assetPath = resolveDashboardFile(rawName);
+              if (!assetPath) {
+                return c.text(`Asset "${rawName}" not found`, 404);
+              }
+              const mime = STATIC_MIME[ext] || 'application/octet-stream';
+              const isText = mime.startsWith('text/') || mime.includes('json') || mime.includes('javascript') || mime.includes('svg');
+              const body = isText ? readFileSync(assetPath, 'utf-8') : readFileSync(assetPath);
+              return c.body(body as any, 200, {
+                'Content-Type': mime,
+                // Cache static assets for an hour at the edge; safe because filenames are stable.
+                'Cache-Control': 'public, max-age=3600',
+              });
             } catch (error) {
               console.error("Error serving dashboard subpage:", error);
               return c.text("Error loading dashboard", 500);
