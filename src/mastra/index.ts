@@ -1331,8 +1331,21 @@ export const mastra = new Mastra({
               if (!expectedKey || !key || key !== expectedKey) {
                 return c.json({ error: 'Authentication required' }, 401);
               }
-              const isSecure = c.req.url.startsWith('https');
-              c.header('Set-Cookie', `admin_key=${key}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${isSecure ? '; Secure' : ''}`);
+              // Detect HTTPS via either the request URL OR the X-Forwarded-Proto header. Replit's
+              // edge proxy forwards HTTPS to localhost HTTP, so c.req.url alone shows http://; the
+              // forwarded-proto header is the reliable signal in that setup.
+              const fwdProto = (c.req.header('x-forwarded-proto') || '').toLowerCase();
+              const isSecure = c.req.url.startsWith('https') || fwdProto === 'https';
+              // Cross-site iframe support: use SameSite=None;Secure on HTTPS so the cookie travels into
+              // the Replit preview pane (and any other cross-site iframe embed). Browsers reject
+              // SameSite=None without Secure, so on plain HTTP (local dev only) we fall back to Lax.
+              // Trade-off: weakens cross-site CSRF protection for cookie-authed writes. Mitigations:
+              //   (a) /api/admin/* and most write endpoints can also require X-Admin-Key header,
+              //       which malicious cross-origin pages cannot set;
+              //   (b) RBAC middleware (~line 232) enforces per-role write permissions on cookie-only writes.
+              const sameSite = isSecure ? 'None' : 'Lax';
+              const secureFlag = isSecure ? '; Secure' : '';
+              c.header('Set-Cookie', `admin_key=${key}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=28800${secureFlag}`);
               return c.json({ success: true });
             } catch (error) {
               return c.json({ error: 'Authentication failed' }, 500);
@@ -1345,7 +1358,14 @@ export const mastra = new Mastra({
         method: "POST",
         createHandler: async () => {
           return async (c: any) => {
-            c.header('Set-Cookie', 'admin_key=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+            // Logout must mirror the attributes used when the cookie was set, otherwise some browsers
+            // refuse to clear the original SameSite=None;Secure cookie. Mirror the same proto detection
+            // (URL scheme OR X-Forwarded-Proto) used at login time.
+            const fwdProtoLogout = (c.req.header('x-forwarded-proto') || '').toLowerCase();
+            const isSecureLogout = c.req.url.startsWith('https') || fwdProtoLogout === 'https';
+            const sameSiteLogout = isSecureLogout ? 'None' : 'Lax';
+            const secureFlagLogout = isSecureLogout ? '; Secure' : '';
+            c.header('Set-Cookie', `admin_key=; Path=/; HttpOnly; SameSite=${sameSiteLogout}; Max-Age=0${secureFlagLogout}`);
             return c.json({ success: true });
           };
         },
