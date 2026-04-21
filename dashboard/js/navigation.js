@@ -308,6 +308,15 @@ const WalaPlusNav = {
         .wp-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20; display: none; }
         body.wp-mobile-open .wp-backdrop { display: block; }
         @media (min-width: 768px) { .wp-backdrop { display: none !important; } }
+        /* Accordion sections */
+        .wp-rail-group .wp-group-chevron { transition: transform .15s ease; }
+        .wp-rail-group[data-open="true"] .wp-group-chevron { transform: rotate(180deg); }
+        .wp-rail-group:not([data-open="true"]) .wp-group-items { display: none; }
+        /* When the rail is collapsed to icons, show all items (no accordion) and hide chevrons */
+        body.wp-rail-collapsed .wp-rail .wp-rail-group .wp-group-items { display: block !important; }
+        body.wp-rail-collapsed .wp-rail .wp-group-chevron { display: none; }
+        /* When search is active, force every (still-visible) group open so matches are reachable */
+        body.wp-nav-search-active .wp-rail .wp-rail-group .wp-group-items { display: block !important; }
         /* Precompiled tailwind in this project does not ship sm:/md: variants,
            so handle responsive visibility with explicit classes here. */
         .wp-rail-toggle-btn { display: inline-flex; }
@@ -327,6 +336,11 @@ const WalaPlusNav = {
     if (localStorage.getItem('walaplus-nav-collapsed') === '1') {
       document.body.classList.add('wp-rail-collapsed');
     }
+
+    // Determine which group to auto-open: the one containing the current page.
+    // If the current page isn't represented in the menu, fall back to the first group.
+    const activeGroup = this.navigationGroups.find(g => this.isInGroup(g.id));
+    this._defaultOpenGroupId = activeGroup ? activeGroup.id : (this.navigationGroups[0] && this.navigationGroups[0].id);
 
     navContainer.innerHTML = `
       <div class="wp-topstrip bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-3">
@@ -386,13 +400,15 @@ const WalaPlusNav = {
   renderRailGroup(group) {
     const colors = this.getColorClasses(group.color);
     const groupActive = this.isInGroup(group.id);
+    const open = group.id === this._defaultOpenGroupId; // current page's group, else first group
     return `
-      <div class="wp-rail-group px-2 mb-3" data-group="${this.escapeHtml(group.id)}">
-        <div class="flex items-center px-2 mb-1" title="${this.escapeHtml(group.label)}">
+      <div class="wp-rail-group px-2 mb-1" data-group="${this.escapeHtml(group.id)}" data-open="${open ? 'true' : 'false'}">
+        <button type="button" class="wp-group-toggle w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 transition" aria-expanded="${open ? 'true' : 'false'}" title="${this.escapeHtml(group.label)}" data-testid="button-group-${this.escapeHtml(group.id)}">
           <span class="${colors.text} mr-2 flex-shrink-0">${group.icon}</span>
-          <span class="wp-label text-xs font-semibold uppercase tracking-wide ${groupActive ? colors.text : 'text-gray-500'}">${this.escapeHtml(group.label)}</span>
-        </div>
-        <div class="space-y-0.5">
+          <span class="wp-label flex-1 text-left text-xs font-semibold uppercase tracking-wide ${groupActive ? colors.text : 'text-gray-500'}">${this.escapeHtml(group.label)}</span>
+          <svg class="wp-label wp-group-chevron w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="wp-group-items mt-0.5 space-y-0.5 pl-1">
           ${group.items.map(item => this.renderRailItem(item, colors)).join('')}
         </div>
       </div>
@@ -479,10 +495,23 @@ const WalaPlusNav = {
       }
     });
 
+    // Accordion: click a group header to expand/collapse
+    document.querySelectorAll('.wp-group-toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const group = btn.closest('.wp-rail-group');
+        if (!group) return;
+        const isOpen = group.getAttribute('data-open') === 'true';
+        group.setAttribute('data-open', isOpen ? 'false' : 'true');
+        btn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      });
+    });
+
     const searchInput = document.getElementById('wp-rail-search');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         const q = (e.target.value || '').trim().toLowerCase();
+        document.body.classList.toggle('wp-nav-search-active', q.length > 0);
         document.querySelectorAll('.wp-rail-group').forEach(group => {
           let visibleCount = 0;
           group.querySelectorAll('[data-nav-item]').forEach(item => {
