@@ -525,6 +525,59 @@ export const mastra = new Mastra({
         },
       },
       {
+        path: "/api/dashboard/issues-category-trend",
+        method: "GET",
+        createHandler: async () => {
+          const { pool } = await import("../utils/database");
+          return async (c: any) => {
+            try {
+              const limit = Math.max(1, Math.min(parseInt(c.req.query("limit") || "30"), 90));
+              const res = await pool.query(
+                `SELECT * FROM (
+                   SELECT audit_date, issues_by_category
+                   FROM quality_audit_results
+                   ORDER BY audit_date DESC
+                   LIMIT $1
+                 ) latest
+                 ORDER BY audit_date ASC`,
+                [limit],
+              );
+              const modules = ["Deals", "Tasks", "Contacts", "Leads", "Accounts"];
+              const dates: string[] = [];
+              const series: Record<string, number[]> = {};
+              modules.forEach((m) => (series[m] = []));
+              for (const row of res.rows) {
+                dates.push(row.audit_date);
+                let raw: any = row.issues_by_category;
+                if (typeof raw === "string") {
+                  try { raw = JSON.parse(raw); } catch { raw = {}; }
+                }
+                const map: Record<string, number> = {};
+                if (Array.isArray(raw)) {
+                  for (const item of raw) {
+                    if (item && typeof item === "object") {
+                      const key = item.module || item.category || item.issueType || "Other";
+                      map[key] = (map[key] || 0) + (Number(item.count) || 1);
+                    }
+                  }
+                } else if (raw && typeof raw === "object") {
+                  for (const k of Object.keys(raw)) {
+                    map[k] = Number(raw[k]) || 0;
+                  }
+                }
+                for (const m of modules) {
+                  series[m].push(map[m] || 0);
+                }
+              }
+              return c.json({ dates, series });
+            } catch (error) {
+              console.error("Error fetching issues-category-trend:", error);
+              return c.json({ error: "Failed to fetch category trend" }, 500);
+            }
+          };
+        },
+      },
+      {
         path: "/api/scorecards",
         method: "GET",
         createHandler: async () => {

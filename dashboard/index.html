@@ -1911,6 +1911,68 @@
             return {};
         }
 
+        // ── Trend cache + sparkline helpers (additive, used by category cards) ──
+        let _categoryTrendCache = null;
+        let _categoryTrendLoading = false;
+        async function getCategoryTrend() {
+            if (_categoryTrendCache) return _categoryTrendCache;
+            if (_categoryTrendLoading) return null;
+            _categoryTrendLoading = true;
+            try {
+                const res = await fetch('/api/dashboard/issues-category-trend?limit=30', { credentials: 'same-origin' });
+                if (!res.ok) return null;
+                const data = await res.json();
+                _categoryTrendCache = data;
+                return data;
+            } catch (e) {
+                console.warn('[trend] failed:', e);
+                return null;
+            } finally {
+                _categoryTrendLoading = false;
+            }
+        }
+
+        // Inline SVG sparkline (additive — no chart libs needed). Auto-colors by trend direction.
+        function renderSparkline(values, opts) {
+            opts = opts || {};
+            const w = opts.width || 80, h = opts.height || 20;
+            const valid = (values || []).filter(v => typeof v === 'number' && !isNaN(v));
+            if (valid.length < 2) return '';
+            const first = valid[0], last = valid[valid.length - 1];
+            const improving = last < first; // fewer issues = better
+            const flat = last === first;
+            const stroke = flat ? '#9CA3AF' : (improving ? '#10B981' : '#EF4444');
+            const fill = flat ? 'rgba(156,163,175,0.12)' : (improving ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)');
+            const min = Math.min(...valid), max = Math.max(...valid);
+            const range = max - min || 1;
+            const step = w / (valid.length - 1);
+            const pts = valid.map((v, i) => {
+                const x = (i * step).toFixed(1);
+                const y = (h - ((v - min) / range) * (h - 2) - 1).toFixed(1);
+                return `${x},${y}`;
+            });
+            const area = `M0,${h} L${pts.join(' L')} L${w},${h} Z`;
+            const line = `M${pts.join(' L')}`;
+            return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="block" aria-hidden="true">
+                <path d="${area}" fill="${fill}" stroke="none"/>
+                <path d="${line}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+            </svg>`;
+        }
+
+        function renderDelta(values) {
+            const valid = (values || []).filter(v => typeof v === 'number' && !isNaN(v));
+            if (valid.length < 2) return '';
+            const last = valid[valid.length - 1];
+            const prev = valid[valid.length - 2];
+            const diff = last - prev;
+            if (diff === 0) return `<span class="text-[10px] text-gray-400" title="No change since last audit">— no change</span>`;
+            const improving = diff < 0;
+            const arrow = improving ? '▼' : '▲';
+            const cls = improving ? 'text-green-600' : 'text-red-500';
+            const sign = improving ? '' : '+';
+            return `<span class="text-[10px] font-semibold ${cls}" title="vs previous audit">${arrow} ${sign}${diff.toLocaleString()}</span>`;
+        }
+
         function updateIssuesCategoryCards(issuesByCategory) {
             const container = document.getElementById('issuesCategoryCards');
             const normalized = normalizeIssuesByCategory(issuesByCategory);
@@ -1923,16 +1985,31 @@
                 'Accounts': { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' }
             };
 
-            container.innerHTML = allModules.map(cat => {
-                const count = normalized[cat] || 0;
-                const color = colors[cat];
-                return `
-                    <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
-                        <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
-                        <div class="text-xs text-gray-600">${cat} Issues</div>
-                    </div>
-                `;
-            }).join('');
+            const renderCards = (trend) => {
+                container.innerHTML = allModules.map(cat => {
+                    const count = normalized[cat] || 0;
+                    const color = colors[cat];
+                    const series = trend && trend.series && trend.series[cat] ? trend.series[cat] : [];
+                    const spark = renderSparkline(series);
+                    const delta = renderDelta(series);
+                    return `
+                        <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition" data-testid="card-issues-${cat.toLowerCase()}">
+                            <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
+                            <div class="text-xs text-gray-600">${cat} Issues</div>
+                            ${spark ? `<div class="mt-1.5 flex items-end justify-between gap-1">
+                                <div data-testid="sparkline-issues-${cat.toLowerCase()}">${spark}</div>
+                                <div data-testid="delta-issues-${cat.toLowerCase()}">${delta}</div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            // Render immediately with current data, then enrich with trend when it arrives
+            renderCards(_categoryTrendCache);
+            if (!_categoryTrendCache) {
+                getCategoryTrend().then(trend => { if (trend) renderCards(trend); });
+            }
         }
 
         // Widget configuration

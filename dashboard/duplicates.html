@@ -215,6 +215,10 @@
                     <div class="text-xs text-gray-500">True Duplicates</div>
                     <div id="totalClusters" data-testid="text-total-clusters" class="text-xl font-bold text-blue-600">-</div>
                     <div class="text-xs text-gray-400">clusters</div>
+                    <div class="mt-1.5 flex items-end justify-between gap-1 min-h-[20px]">
+                        <div id="clustersSparkline" data-testid="sparkline-clusters"></div>
+                        <div id="clustersDelta" data-testid="delta-clusters"></div>
+                    </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-amber-500">
                     <div class="text-xs text-gray-500">Dup Leads</div>
@@ -640,6 +644,61 @@
                 loadRecordTab('accounts');
             } catch (error) {
                 console.error('Error refreshing data:', error);
+            }
+            // Load sparkline outside the try so it still renders even if summary calls fail
+            loadClustersTrendSparkline();
+        }
+
+        // ── Inline SVG sparkline + delta for True Duplicates trend (additive) ──
+        function _renderSparklineSVG(values, w, h) {
+            const valid = (values || []).filter(v => typeof v === 'number' && !isNaN(v));
+            if (valid.length < 2) return '';
+            const first = valid[0], last = valid[valid.length - 1];
+            const improving = last < first;
+            const flat = last === first;
+            const stroke = flat ? '#9CA3AF' : (improving ? '#10B981' : '#EF4444');
+            const fill = flat ? 'rgba(156,163,175,0.12)' : (improving ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)');
+            const min = Math.min(...valid), max = Math.max(...valid);
+            const range = max - min || 1;
+            const step = w / (valid.length - 1);
+            const pts = valid.map((v, i) => {
+                const x = (i * step).toFixed(1);
+                const y = (h - ((v - min) / range) * (h - 2) - 1).toFixed(1);
+                return `${x},${y}`;
+            });
+            const area = `M0,${h} L${pts.join(' L')} L${w},${h} Z`;
+            const line = `M${pts.join(' L')}`;
+            return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="block" aria-hidden="true">
+                <path d="${area}" fill="${fill}" stroke="none"/>
+                <path d="${line}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+            </svg>`;
+        }
+        function _renderDelta(values) {
+            const valid = (values || []).filter(v => typeof v === 'number' && !isNaN(v));
+            if (valid.length < 2) return '';
+            const last = valid[valid.length - 1];
+            const prev = valid[valid.length - 2];
+            const diff = last - prev;
+            if (diff === 0) return `<span class="text-[10px] text-gray-400" title="No change since last scan">— no change</span>`;
+            const improving = diff < 0;
+            const arrow = improving ? '▼' : '▲';
+            const cls = improving ? 'text-green-600' : 'text-red-500';
+            const sign = improving ? '' : '+';
+            return `<span class="text-[10px] font-semibold ${cls}" title="vs previous scan">${arrow} ${sign}${diff.toLocaleString()}</span>`;
+        }
+        async function loadClustersTrendSparkline() {
+            try {
+                const sparkEl = document.getElementById('clustersSparkline');
+                const deltaEl = document.getElementById('clustersDelta');
+                if (!sparkEl || !deltaEl) return;
+                const res = await fetch('/api/dashboard/quality-trend?limit=30', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const values = (data.duplicates || []).map(d => Number(d.clusters)).filter(v => !isNaN(v));
+                sparkEl.innerHTML = _renderSparklineSVG(values, 80, 20);
+                deltaEl.innerHTML = _renderDelta(values);
+            } catch (e) {
+                console.warn('[trend] cluster sparkline failed:', e);
             }
         }
 
