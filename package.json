@@ -37,7 +37,7 @@
     "exa-js": "^2.4.0",
     "exceljs": "^4.4.0",
     "express-session": "^1.19.0",
-    "inngest": "^3.52.0",
+    "inngest": "^3.54.0",
     "inngest-cli": "^1.17.0",
     "mastra": "^0.18.9",
     "memoizee": "^0.4.17",
