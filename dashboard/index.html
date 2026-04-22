@@ -533,8 +533,8 @@
                         </div>
                     </div>
 
-                    <!-- Row 2b: Pie Charts side by side -->
-                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2b">
+                    <!-- Row 2b: Issues by Category — full width on its own line -->
+                    <div class="widget-row" data-row="2b">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-chart" data-name="Issues by Category">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
@@ -552,8 +552,32 @@
                             </div>
                             <div class="p-6">
                                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="issuesCategoryCards"></div>
-                                <div class="chart-container" style="height: 180px;">
+                                <div class="chart-container" style="height: 240px;">
                                     <canvas id="issuesChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2b3: Issues by Layout + Records with Issues side by side -->
+                    <div class="widget-row grid grid-cols-1 lg:grid-cols-2 gap-6" data-row="2b3">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-by-layout" data-name="Issues by Layout">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Issues by Layout
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          data-tip="Failing records grouped by their CRM layout (e.g. Standard Lead, Partner Deal). Click a card to drill into that layout's issues."
+                                          data-testid="info-issues-layout">i</span>
+                                </span>
+                                <span class="text-xs text-gray-400" id="issuesLayoutSubtitle">Per-layout breakdown</span>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4" id="layoutCategoryCards"></div>
+                                <div class="chart-container" style="height: 240px;">
+                                    <canvas id="issuesChartLayout"></canvas>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-2 text-center" id="issuesLayoutEmpty" style="display:none;">
+                                    No layout data available yet. Run a fresh audit to populate this view.
                                 </div>
                             </div>
                         </div>
@@ -574,33 +598,9 @@
                                 </div>
                             </div>
                             <div class="p-6">
-                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="recordsCategoryCards"></div>
-                                <div class="chart-container" style="height: 180px;">
-                                    <canvas id="issuesChartTotal"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Row 2b3: Issues by Layout (full-width — one card per layout) -->
-                    <div class="widget-row" data-row="2b3">
-                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="issues-by-layout" data-name="Issues by Layout">
-                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
-                                    Issues by Layout
-                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
-                                          data-tip="Failing records grouped by their CRM layout (e.g. Standard Lead, Partner Deal). Click a card to drill into that layout's issues."
-                                          data-testid="info-issues-layout">i</span>
-                                </span>
-                                <span class="text-xs text-gray-400" id="issuesLayoutSubtitle">Per-layout breakdown</span>
-                            </div>
-                            <div class="p-6">
-                                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4" id="layoutCategoryCards"></div>
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4" id="recordsCategoryCards"></div>
                                 <div class="chart-container" style="height: 240px;">
-                                    <canvas id="issuesChartLayout"></canvas>
-                                </div>
-                                <div class="text-xs text-gray-400 mt-2 text-center" id="issuesLayoutEmpty" style="display:none;">
-                                    No layout data available yet. Run a fresh audit to populate this view.
+                                    <canvas id="issuesChartTotal"></canvas>
                                 </div>
                             </div>
                         </div>
