@@ -243,6 +243,69 @@ export async function runDirectAudit(logger?: any) {
     const savedResult = await saveAuditResult(auditData);
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 
+    // Slack notification — audit completed. Posts to SLACK_CHANNEL_ID using
+    // SLACK_BOT_TOKEN. Failures are swallowed so a Slack outage never blocks
+    // the audit pipeline. This is in addition to the internal audit_notifications
+    // table updated by fireAuditCompletedTrigger below.
+    try {
+      const slackToken = process.env.SLACK_BOT_TOKEN;
+      const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
+      if (slackToken && slackChannel) {
+        const { WebClient } = await import("@slack/web-api");
+        const slack = new WebClient(slackToken);
+        const score = qualityScores.overallScore || 0;
+        const scoreEmoji = score >= 90 ? "🟢" : score >= 80 ? "🟡" : score >= 70 ? "🟠" : "🔴";
+        const sevSummary = `Critical: ${criticalIssues} · High: ${highIssues} · Medium: ${mediumIssues} · Low: ${lowIssues}`;
+        const moduleSummary = moduleBreakdown
+          .filter((m: any) => m.recordsAudited > 0)
+          .map((m: any) => `• *${m.module}*: ${m.recordsAudited.toLocaleString()} records, ${m.issuesFound.toLocaleString()} issues`)
+          .join("\n");
+        const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://qms-dashboard.replit.app/";
+        await slack.chat.postMessage({
+          channel: slackChannel,
+          text: `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
+          blocks: [
+            {
+              type: "header",
+              text: { type: "plain_text", text: `${scoreEmoji} Quality Audit Completed` },
+            },
+            {
+              type: "section",
+              fields: [
+                { type: "mrkdwn", text: `*Overall Score:*\n${score.toFixed(1)}%` },
+                { type: "mrkdwn", text: `*Records Audited:*\n${totalRecordsAudited.toLocaleString()}` },
+                { type: "mrkdwn", text: `*Issues Found:*\n${totalIssuesFound.toLocaleString()}` },
+                { type: "mrkdwn", text: `*Severity:*\n${sevSummary}` },
+                { type: "mrkdwn", text: `*People:* ${qualityScores.peopleScore.toFixed(1)}%` },
+                { type: "mrkdwn", text: `*Process:* ${qualityScores.processScore.toFixed(1)}%` },
+                { type: "mrkdwn", text: `*Governance:* ${qualityScores.governanceScore.toFixed(1)}%` },
+              ],
+            },
+            ...(moduleSummary
+              ? [{ type: "section" as const, text: { type: "mrkdwn" as const, text: `*Module Breakdown:*\n${moduleSummary}` } }]
+              : []),
+            {
+              type: "actions",
+              elements: [
+                {
+                  type: "button",
+                  text: { type: "plain_text", text: "Open Dashboard" },
+                  url: dashUrl,
+                },
+              ],
+            },
+          ],
+        });
+        logger?.info("✅ [DirectAudit] Slack notification sent");
+      } else {
+        logger?.info("ℹ️ [DirectAudit] Slack not configured (SLACK_BOT_TOKEN / SLACK_CHANNEL_ID missing) — skipping Slack notification");
+      }
+    } catch (slackErr) {
+      logger?.warn("⚠️ [DirectAudit] Slack notification failed (audit data was saved)", {
+        error: slackErr instanceof Error ? slackErr.message : String(slackErr),
+      });
+    }
+
     try {
       const { fireAuditCompletedTrigger, fireNonconformanceDetectedTrigger, fireCAPARequiredTrigger } = await import("./auditTriggerDatabase");
       
