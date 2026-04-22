@@ -796,7 +796,12 @@ export const mastra = new Mastra({
               const userEmail = session?.email || 'admin-key';
               logger?.info("🚀 [API] Manual audit trigger requested", { by: userEmail });
               lastTriggerTime.value = now;
-              
+
+              // Best-effort Inngest dispatch for observability in production.
+              // We do NOT depend on it: in this environment the queued event is
+              // not reliably picked up by the cron handler when triggered manually,
+              // which previously caused the UI to report success while no audit
+              // row was ever inserted (Audit History stayed stale).
               try {
                 await inngest.send({
                   name: "replit/cron.trigger",
@@ -807,31 +812,32 @@ export const mastra = new Mastra({
                     triggeredAt: new Date().toISOString()
                   }
                 });
-                logger?.info("✅ [API] Audit trigger event sent via Inngest");
-                return c.json({ 
-                  success: true, 
-                  message: "Quality audit triggered successfully. Results will be available shortly." 
-                });
+                logger?.info("✅ [API] Audit trigger event sent via Inngest (best-effort)");
               } catch (inngestError) {
-                logger?.warn("⚠️ [API] Inngest dispatch failed, falling back to direct execution", {
+                logger?.warn("⚠️ [API] Inngest dispatch failed (continuing with direct execution)", {
                   error: inngestError instanceof Error ? inngestError.message : String(inngestError)
                 });
               }
 
+              // Always run the direct audit so the result is guaranteed to be
+              // persisted to quality_audit_results and surfaced in Audit History.
+              // Rate limit (MIN_INTERVAL_MS above) prevents duplicate concurrent runs.
               (async () => {
                 try {
                   const { runDirectAudit } = await import("../utils/directAuditRunner");
                   await runDirectAudit(logger);
-                  logger?.info("✅ [API] Direct audit completed");
+                  logger?.info("✅ [API] Direct audit completed and saved to history");
                 } catch (err) {
                   console.error("Direct audit execution error:", err);
+                  logger?.error("❌ [API] Direct audit failed", {
+                    error: err instanceof Error ? err.message : String(err)
+                  });
                 }
               })();
-              logger?.info("✅ [API] Audit triggered via direct execution (fallback)");
 
               return c.json({ 
                 success: true, 
-                message: "Quality audit triggered successfully. Results will be available shortly." 
+                message: "Quality audit triggered successfully. Results will appear in Audit History shortly." 
               });
             } catch (error) {
               console.error("Error triggering audit:", error);
