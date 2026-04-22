@@ -130,7 +130,25 @@ export async function runDirectAudit(logger?: any) {
       for (const moduleName of modules) {
         logger?.info(`📊 [DirectAudit] Auditing ${moduleName} (paginated, up to ${MAX_RECORDS_PER_MODULE} records)...`);
         try {
-          const allRecords = await fetchAllZohoRecords(moduleName, { maxRecords: MAX_RECORDS_PER_MODULE });
+          // Transient Zoho/network failures (e.g. "fetch failed" mid-pagination)
+          // were previously fatal for an entire module — the module silently
+          // dropped out of recordCountsByModule and the dashboard rendered "0"
+          // for it. Retry up to 2 extra times with a short backoff before
+          // giving up so a single flaky request no longer zeroes a module.
+          let allRecords: ZohoCRMRecord[] | null = null;
+          let lastErr: any = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              allRecords = await fetchAllZohoRecords(moduleName, { maxRecords: MAX_RECORDS_PER_MODULE });
+              break;
+            } catch (e) {
+              lastErr = e;
+              const msg = e instanceof Error ? e.message : String(e);
+              logger?.warn(`⚠️ [DirectAudit] ${moduleName} fetch attempt ${attempt}/3 failed: ${msg}`);
+              if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+            }
+          }
+          if (!allRecords) throw lastErr || new Error(`Failed to fetch ${moduleName}`);
           const recordCount = allRecords.length;
           totalRecordsAudited += recordCount;
 

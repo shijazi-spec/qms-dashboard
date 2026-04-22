@@ -932,11 +932,19 @@
             return Object.values(map);
         }
 
-        function computeRecordCountsByModule(rawData, issuesByCategory) {
+        function computeRecordCountsByModule(rawData, issuesByCategory, dimensionDetails) {
             let parsed = rawData;
             if (typeof rawData === 'string') {
                 try { parsed = JSON.parse(rawData); } catch(e) { parsed = {}; }
             }
+            // Pull moduleBreakdown if available — it carries per-module
+            // recordsWithIssues even when an individual Zoho fetch failed
+            // (recordCountsByModule may be missing that module entirely).
+            let dim = dimensionDetails;
+            if (typeof dim === 'string') {
+                try { dim = JSON.parse(dim); } catch(e) { dim = null; }
+            }
+            const moduleBreakdown = Array.isArray(dim?.moduleBreakdown) ? dim.moduleBreakdown : [];
             // Preferred path: the audit runner now writes truthful per-module
             // unique-records-with-issues counts based on every record it audited
             // (not the 200-row sample). Use them when available.
@@ -945,7 +953,28 @@
                 Object.entries(parsed.recordCountsByModule).forEach(([mod, n]) => {
                     truthful[mod] = Number(n) || 0;
                 });
+                // Safety net: if a module is missing from recordCountsByModule
+                // (e.g. its Zoho fetch failed mid-audit), fall back to the
+                // moduleBreakdown row so the dashboard doesn't render "0".
+                moduleBreakdown.forEach(mb => {
+                    const name = mb?.module;
+                    if (!name) return;
+                    if (truthful[name] == null || truthful[name] === 0) {
+                        const rwi = Number(mb?.recordsWithIssues);
+                        if (rwi > 0) truthful[name] = rwi;
+                    }
+                });
                 if (Object.keys(truthful).length > 0) return truthful;
+            }
+            // No recordCountsByModule at all → use moduleBreakdown directly when present.
+            if (moduleBreakdown.length > 0) {
+                const fromBreakdown = {};
+                moduleBreakdown.forEach(mb => {
+                    if (!mb?.module) return;
+                    const rwi = Number(mb?.recordsWithIssues);
+                    if (rwi > 0) fromBreakdown[mb.module] = rwi;
+                });
+                if (Object.keys(fromBreakdown).length > 0) return fromBreakdown;
             }
             const allIssues = parsed?.all_issues || [];
             const moduleSets = {};
@@ -1489,7 +1518,7 @@
                     doc.text(`Records Audited: ${pdfRecords}`, margin, yPos);
                     doc.text(`Issues Found: ${pdfIssues}`, margin + 60, yPos);
                     // Use unique records-with-issues so the rate stays in 0-100%.
-                    const pdfRecordCounts = computeRecordCountsByModule(pdfAudit?.raw_audit_data, pdfAudit?.issues_by_category);
+                    const pdfRecordCounts = computeRecordCountsByModule(pdfAudit?.raw_audit_data, pdfAudit?.issues_by_category, pdfAudit?.dimension_details);
                     const pdfRecordsWithIssues = Object.values(pdfRecordCounts).reduce((s, n) => s + (Number(n) || 0), 0);
                     let pdfComplianceText = '--';
                     if (pdfRecords > 0 && pdfRecordsWithIssues >= 0 && Object.keys(pdfRecordCounts).length > 0) {
@@ -2238,7 +2267,7 @@
             // panel) instead of raw issue instances. The previous formula
             // divided issue instances by records, which produced negative
             // percentages whenever records had multiple issues each.
-            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data, audit.issues_by_category);
+            const recordCounts = computeRecordCountsByModule(audit.raw_audit_data, audit.issues_by_category, audit.dimension_details);
             const hasRecordCounts = Object.keys(recordCounts).length > 0;
             const totalRecordsWithIssues = hasRecordCounts
                 ? Object.values(recordCounts).reduce((sum, n) => sum + (Number(n) || 0), 0)
