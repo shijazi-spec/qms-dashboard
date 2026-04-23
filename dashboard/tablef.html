@@ -543,6 +543,16 @@
     </div>
 
     <script>
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         let departments = [];
         let kpis = [];
         let performance = [];
@@ -624,7 +634,7 @@
                 const hasAll = id === 'kpiDeptFilter';
                 sel.innerHTML = hasAll ? '<option value="">All Departments</option>' : '<option value="">-- Select --</option>';
                 departments.forEach(d => {
-                    sel.innerHTML += `<option value="${d.department_id}">${d.name}</option>`;
+                    sel.innerHTML += `<option value="${escapeHtml(d.department_id)}">${escapeHtml(d.name)}</option>`;
                 });
             });
         }
@@ -710,7 +720,7 @@
                                    s.copc_status === 'AT_RISK' ? 'status-at-risk' : 'status-non-compliant';
                 return `
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="showDeptDetail('${s.department_id}')">
-                        <td class="px-6 py-4 font-medium text-gray-900">${s.name}</td>
+                        <td class="px-6 py-4 font-medium text-gray-900">${escapeHtml(s.name)}</td>
                         <td class="px-6 py-4 text-center">${s.total_kpis}</td>
                         <td class="px-6 py-4 text-center text-green-600 font-medium">${s.kpis_met}</td>
                         <td class="px-6 py-4 text-center text-blue-600">${s.kpis_improving}</td>
@@ -854,10 +864,10 @@
                 
                 return `
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3 font-medium text-gray-900">${kpi.name}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${kpi.category}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${kpi.owner_email?.split('@')[0] || '--'}</td>
-                        <td class="px-4 py-3 text-center text-sm">${kpi.unit}</td>
+                        <td class="px-4 py-3 font-medium text-gray-900">${escapeHtml(kpi.name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(kpi.category)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(kpi.owner_email?.split('@')[0] || '--')}</td>
+                        <td class="px-4 py-3 text-center text-sm">${escapeHtml(kpi.unit)}</td>
                         <td class="px-4 py-3 text-center text-sm">${kpi.weight}%</td>
                         <td class="px-4 py-3 text-center font-medium">${kpi.target_monthly?.toLocaleString() || '--'}</td>
                         <td class="px-4 py-3 text-center font-medium">${typeof achieved === 'number' ? achieved.toLocaleString() : achieved}</td>
@@ -884,11 +894,11 @@
                 const dept = departments.find(d => d.department_id === kpi.department_id);
                 return `
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3 text-sm font-mono text-gray-500">${kpi.kpi_id}</td>
-                        <td class="px-4 py-3 font-medium text-gray-900">${kpi.name}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${dept?.name || kpi.department_id}</td>
-                        <td class="px-4 py-3 text-sm">${kpi.category}</td>
-                        <td class="px-4 py-3 text-center text-sm">${kpi.unit}</td>
+                        <td class="px-4 py-3 text-sm font-mono text-gray-500">${escapeHtml(kpi.kpi_id)}</td>
+                        <td class="px-4 py-3 font-medium text-gray-900">${escapeHtml(kpi.name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(dept?.name || kpi.department_id)}</td>
+                        <td class="px-4 py-3 text-sm">${escapeHtml(kpi.category)}</td>
+                        <td class="px-4 py-3 text-center text-sm">${escapeHtml(kpi.unit)}</td>
                         <td class="px-4 py-3 text-center">${kpi.target_annual?.toLocaleString() || '--'}</td>
                         <td class="px-4 py-3 text-center font-medium">${kpi.target_monthly?.toLocaleString() || '--'}</td>
                         <td class="px-4 py-3 text-center">${kpi.weight}%</td>
@@ -930,8 +940,8 @@
                 return `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                            <div class="font-medium text-gray-900">${kpi.name}</div>
-                            <div class="text-sm text-gray-500">${dept?.name || kpi.department_id}</div>
+                            <div class="font-medium text-gray-900">${escapeHtml(kpi.name)}</div>
+                            <div class="text-sm text-gray-500">${escapeHtml(dept?.name || kpi.department_id)}</div>
                         </div>
                         <div class="text-right">
                             <div class="text-lg font-bold ${variance < -20 ? 'text-red-600' : 'text-amber-600'}">${variance.toFixed(1)}%</div>
@@ -946,7 +956,7 @@
                 const rca = rcaCategories[Math.floor(Math.random() * rcaCategories.length)];
                 return `
                     <div class="border-l-4 border-indigo-500 pl-4 py-2">
-                        <div class="font-medium text-gray-900">${kpi.name}</div>
+                        <div class="font-medium text-gray-900">${escapeHtml(kpi.name)}</div>
                         <div class="text-sm text-indigo-600 mt-1">RCA: ${rca}</div>
                         <div class="text-sm text-gray-600 mt-1">Review ${rca.toLowerCase()} processes and implement corrective actions</div>
                     </div>
@@ -961,7 +971,7 @@
                 const rca = rcaCategories[Math.floor(Math.random() * rcaCategories.length)];
                 return `
                     <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 font-medium text-gray-900">${s.name}</td>
+                        <td class="px-6 py-4 font-medium text-gray-900">${escapeHtml(s.name)}</td>
                         <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${riskClass}">${riskLevel}</span></td>
                         <td class="px-6 py-4 text-sm text-gray-600">${s.kpis_not_met} KPIs not meeting target</td>
                         <td class="px-6 py-4 text-sm text-gray-600">${rca}</td>
@@ -991,10 +1001,10 @@
             
             document.getElementById('usersTable').innerHTML = users.map(u => `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 font-medium text-gray-900">${u.name}</td>
-                    <td class="px-6 py-4 text-sm text-gray-600">${u.email}</td>
-                    <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${roleColors[u.role]}">${u.role}</span></td>
-                    <td class="px-6 py-4 text-sm text-gray-600">${(u.departments || []).join(', ') || 'All'}</td>
+                    <td class="px-6 py-4 font-medium text-gray-900">${escapeHtml(u.name)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(u.email)}</td>
+                    <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${roleColors[u.role]}">${escapeHtml(u.role)}</span></td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml((u.departments || []).join(', ') || 'All')}</td>
                     <td class="px-6 py-4 text-center"><span class="px-2 py-1 text-xs font-medium rounded-full ${u.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${u.active ? 'Active' : 'Inactive'}</span></td>
                     <td class="px-6 py-4 text-center">
                         <button class="text-indigo-600 hover:text-indigo-800 text-sm font-medium mr-2">Edit</button>
