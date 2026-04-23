@@ -1,3 +1,14 @@
+import type { UserRole } from '../../utils/rbacDatabase';
+
+const TEAM_MGMT_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'];
+
+async function requireTeamAccess(c: any) {
+  const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+  const user = await requireRole(c, TEAM_MGMT_ROLES);
+  if (!user) return { user: null, response: forbiddenResponse(c) };
+  return { user, response: null };
+}
+
 export const teamRoutes = [
   {
     path: "/api/team/members",
@@ -6,6 +17,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("👥 [Team API] Fetching team members");
 
           const { initTeamTables, listTeamMembers } = await import("../../utils/teamDatabase");
@@ -58,6 +72,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           const memberId = c.req.param("memberId");
           logger?.info("👤 [Team API] Fetching team member", { memberId });
 
@@ -140,6 +157,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📊 [Team API] Fetching team analytics");
 
           const { initTeamTables, getTeamAnalytics } = await import("../../utils/teamDatabase");
@@ -162,6 +182,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📈 [Team API] Fetching performance metrics");
 
           const { initTeamTables, getPerformanceMetrics } = await import("../../utils/teamDatabase");
@@ -213,6 +236,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📋 [Team API] Fetching project assignments");
 
           const { initTeamTables, listProjectAssignments } = await import("../../utils/teamDatabase");
@@ -321,6 +347,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📚 [Team API] Fetching training matrix");
 
           const { initTeamTables, getTrainingMatrix } = await import("../../utils/teamDatabase");
@@ -343,6 +372,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📚 [Team API] Fetching training courses");
 
           const { initTeamTables, listTrainingCourses } = await import("../../utils/teamDatabase");
@@ -407,6 +439,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           const courseId = c.req.param("courseId");
           logger?.info("📖 [Team API] Fetching training course", { courseId });
 
@@ -512,6 +547,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📚 [Team API] Fetching course assignments");
 
           const { initTeamTables, listCourseAssignments } = await import("../../utils/teamDatabase");
@@ -649,6 +687,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📋 [Team API] Fetching Kanban board");
 
           const { initTeamTables, getProjectsByKanbanStatus } = await import("../../utils/teamDatabase");
@@ -671,6 +712,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📚 [Team API] Fetching course training matrix");
 
           const { initTeamTables, getCourseTrainingMatrix } = await import("../../utils/teamDatabase");
@@ -693,6 +737,9 @@ export const teamRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { response: authError } = await requireTeamAccess(c);
+          if (authError) return authError;
+
           logger?.info("📝 [Audit API] Fetching audit logs");
 
           const { initTeamTables, listAuditLogs } = await import("../../utils/teamDatabase");

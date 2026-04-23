@@ -250,6 +250,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/event-logs/, methods: ['DELETE'], roles: ['admin'] },
 
   { pattern: /^\/api\/audit\/trigger$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'team_lead', 'auditor', 'quality_specialist', 'department_viewer', 'ai_specialist', 'bu_owner', 'executive'] },
+
+  { pattern: /^\/api\/team\//, methods: ['POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/team$/, methods: ['POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/audit-trail/, methods: ['POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+
+  { pattern: /^\/api\/onboarding\/stats$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/onboarding\/demo-links$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/onboarding\/demo-link/, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {

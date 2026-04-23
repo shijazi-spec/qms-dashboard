@@ -1,5 +1,15 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import type { UserRole } from '../../utils/rbacDatabase';
+
+const ONBOARDING_ADMIN_ROLES: UserRole[] = ['admin', 'head_of_operations_quality'];
+
+async function requireOnboardingAdmin(c: any) {
+  const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+  const user = await requireRole(c, ONBOARDING_ADMIN_ROLES);
+  if (!user) return { user: null, response: forbiddenResponse(c) };
+  return { user, response: null };
+}
 
 export const onboardingRoutes = [
   {
@@ -39,10 +49,24 @@ export const onboardingRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("📋 [Onboarding API] Fetching user onboarding status");
 
+          const { getSessionUser, getVerifiedRole } = await import("../../utils/rbacMiddleware");
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+
+          const verifiedRole = await getVerifiedRole(sessionUser.email, sessionUser.role);
+
           const { initOnboardingTables, getUserOnboardingStatus } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
 
-          const userId = c.req.query("userId") || "default_user";
+          let userId: string;
+          if (verifiedRole === 'admin') {
+            userId = c.req.query("userId") || sessionUser.email;
+          } else {
+            userId = sessionUser.email;
+          }
+
           const status = await getUserOnboardingStatus(userId);
 
           if (status) {
@@ -67,7 +91,19 @@ export const onboardingRoutes = [
         try {
           const logger = mastra?.getLogger();
           const body = await c.req.json();
-          logger?.info("📝 [Onboarding API] Updating onboarding status", body);
+
+          const { getSessionUser, getVerifiedRole } = await import("../../utils/rbacMiddleware");
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+
+          const verifiedRole = await getVerifiedRole(sessionUser.email, sessionUser.role);
+          if (verifiedRole !== 'admin') {
+            body.user_id = sessionUser.email;
+          }
+
+          logger?.info("📝 [Onboarding API] Updating onboarding status", { userId: body.user_id });
 
           const { initOnboardingTables, createOrUpdateOnboardingStatus } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
@@ -89,7 +125,10 @@ export const onboardingRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          logger?.info("📊 [Onboarding API] Fetching onboarding statistics");
+          const { user: adminUser, response: authError } = await requireOnboardingAdmin(c);
+          if (authError) return authError;
+
+          logger?.info("📊 [Onboarding API] Fetching onboarding statistics", { requestedBy: adminUser?.email });
 
           const { initOnboardingTables, getOnboardingStats, getAllOnboardingStatuses } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
@@ -184,8 +223,11 @@ export const onboardingRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
+          const { user: adminUser, response: authError } = await requireOnboardingAdmin(c);
+          if (authError) return authError;
+
           const body = await c.req.json();
-          logger?.info("🔗 [Onboarding API] Creating demo link", body);
+          logger?.info("🔗 [Onboarding API] Creating demo link", { requestedBy: adminUser?.email });
 
           const { initOnboardingTables, createDemoLink } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
@@ -211,7 +253,10 @@ export const onboardingRoutes = [
         try {
           const linkCode = c.req.param("linkCode");
           const logger = mastra?.getLogger();
-          logger?.info("🔗 [Onboarding API] Validating demo link", { linkCode });
+          const { user: adminUser, response: authError } = await requireOnboardingAdmin(c);
+          if (authError) return authError;
+
+          logger?.info("🔗 [Onboarding API] Validating demo link", { linkCode, requestedBy: adminUser?.email });
 
           const { initOnboardingTables, validateDemoLink, getDemoLink } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
@@ -238,7 +283,10 @@ export const onboardingRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          logger?.info("🔗 [Onboarding API] Listing demo links");
+          const { user: adminUser, response: authError } = await requireOnboardingAdmin(c);
+          if (authError) return authError;
+
+          logger?.info("🔗 [Onboarding API] Listing demo links", { requestedBy: adminUser?.email });
 
           const { initOnboardingTables, listDemoLinks } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
@@ -261,7 +309,10 @@ export const onboardingRoutes = [
         try {
           const linkCode = c.req.param("linkCode");
           const logger = mastra?.getLogger();
-          logger?.info("🔗 [Onboarding API] Deactivating demo link", { linkCode });
+          const { user: adminUser, response: authError } = await requireOnboardingAdmin(c);
+          if (authError) return authError;
+
+          logger?.info("🔗 [Onboarding API] Deactivating demo link", { linkCode, requestedBy: adminUser?.email });
 
           const { initOnboardingTables, deactivateDemoLink } = await import("../../utils/onboardingDatabase");
           await initOnboardingTables();
