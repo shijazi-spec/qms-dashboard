@@ -112,7 +112,7 @@ function isTokenExpired(): boolean {
   return Date.now() >= tokenExpiresAt;
 }
 
-async function getValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(): Promise<string> {
   const oauthConfig = getZohoOAuthConfig();
   
   if (oauthConfig) {
