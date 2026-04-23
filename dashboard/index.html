@@ -216,7 +216,6 @@
                         <select id="modalModuleFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
                             <option value="all">All Modules</option>
                             <option value="Deals">Deals</option>
-                            <option value="Tasks">Tasks</option>
                             <option value="Contacts">Contacts</option>
                             <option value="Leads">Leads</option>
                             <option value="Accounts">Accounts</option>
@@ -988,7 +987,7 @@
             Object.keys(moduleSets).forEach(mod => { counts[mod] = moduleSets[mod].size; });
 
             const normalized = normalizeIssuesByCategory(issuesByCategory);
-            const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+            const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
             allModules.forEach(mod => {
                 if (!counts[mod] && normalized[mod]) {
                     const totalIssues = normalized[mod];
@@ -2045,12 +2044,11 @@
         function updateRecordsCategoryCards(recordCounts) {
             const container = document.getElementById('recordsCategoryCards');
             if (!container) return;
-            const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+            const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
             const colors = {
                 'Leads': { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
                 'Deals': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
                 'Contacts': { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200' },
-                'Tasks': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
                 'Accounts': { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' }
             };
             container.innerHTML = allModules.map(cat => {
@@ -2540,7 +2538,7 @@
                 }
 
                 const normalized = normalizeIssuesByCategory(issuesByCategory);
-                const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+                const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const categories = allModules;
                 const values = allModules.map(m => normalized[m] || 0);
                 issuesChart = new Chart(ctx, {
@@ -2549,7 +2547,7 @@
                         labels: categories,
                         datasets: [{
                             data: values,
-                            backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#f43f5e'],
+                            backgroundColor: ['#6366f1', '#a855f7', '#d946ef', '#f43f5e'],
                             borderWidth: 0
                         }]
                     },
@@ -2580,7 +2578,7 @@
                     issuesTotalChart = null;
                 }
                 const normalized = normalizeIssuesByCategory(issuesByCategory);
-                const allModules = ['Deals', 'Tasks', 'Contacts', 'Leads', 'Accounts'];
+                const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const values = allModules.map(m => normalized[m] || 0);
                 issuesTotalChart = new Chart(ctx, {
                     type: 'doughnut',
@@ -2588,7 +2586,7 @@
                         labels: allModules,
                         datasets: [{
                             data: values,
-                            backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#f43f5e'],
+                            backgroundColor: ['#6366f1', '#a855f7', '#d946ef', '#f43f5e'],
                             borderWidth: 0
                         }]
                     },

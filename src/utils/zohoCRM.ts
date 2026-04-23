@@ -764,14 +764,6 @@ export const DEFAULT_GOVERNANCE_RULES: GovernanceRule[] = [
   { module: 'Contacts', fieldName: 'Title', ruleType: 'required', description: 'Contact must have a job title', severity: 'low' },
 
   // ═══════════════════════════════════════════════════════════
-  //  TASKS
-  // ═══════════════════════════════════════════════════════════
-  { module: 'Tasks', fieldName: 'Subject', ruleType: 'required', description: 'Task must have a subject', severity: 'high' },
-  { module: 'Tasks', fieldName: 'Due_Date', ruleType: 'required', description: 'Task must have a due date', severity: 'medium' },
-  { module: 'Tasks', fieldName: 'Status', ruleType: 'required', description: 'Task must have a status', severity: 'medium' },
-  { module: 'Tasks', fieldName: 'Priority', ruleType: 'required', description: 'Task must have a priority assigned', severity: 'low' },
-
-  // ═══════════════════════════════════════════════════════════
   //  ACCOUNTS — 20 Account Hygiene Rules (New)
   // ═══════════════════════════════════════════════════════════
   { module: 'Accounts', fieldName: 'Account_Name', ruleType: 'required', description: 'Account must have a name', severity: 'critical' },

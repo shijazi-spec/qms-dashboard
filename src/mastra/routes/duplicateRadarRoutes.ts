@@ -398,35 +398,7 @@ async function scanZohoCRMForDuplicates(detectionType: 'manual' | 'scheduled' = 
       })
     ]);
 
-    scanState.percentage = 55;
-    broadcastSSE('progress', { percentage: 55, message: 'Syncing Tasks from Zoho...' });
-    scanState.progress = 'Syncing Tasks from Zoho CRM...';
-
-    try {
-      const tasks = await fetchAllZohoRecords('Tasks', { maxRecords: SCAN_MAX_PER_MODULE });
-      let tasksSynced = 0;
-      for (const task of tasks) {
-        const td = task.data;
-        const relatedId = td.What_Id?.id || td.Who_Id?.id || '';
-        if (!relatedId) continue;
-        await upsertTask({
-          zoho_task_id: task.id,
-          related_record_id: relatedId,
-          subject: td.Subject || '',
-          due_date: td.Due_Date ? new Date(td.Due_Date) : undefined,
-          status: td.Status || '',
-          owner_name: td.Owner?.name || '',
-          description: td.Description || '',
-        });
-        tasksSynced++;
-      }
-      console.log(`📋 [DuplicateRadar] Synced ${tasksSynced} Tasks from Zoho`);
-      await upsertSyncState('Tasks', tasksSynced, 'completed');
-    } catch (e) {
-      console.warn('⚠️ [DuplicateRadar] Tasks sync failed (non-fatal):', e);
-      await upsertSyncState('Tasks', 0, 'failed');
-    }
-
+    // Tasks pagination removed per platform-wide Tasks data removal.
     totalRecords = leadsResult.count + dealsResult.count + contactsResult.count + accountsResult.count;
     moduleBreakdown.push(
       { module: 'Leads', count: leadsResult.count },

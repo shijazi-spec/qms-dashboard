@@ -131,7 +131,7 @@ const CHECKS: Check[] = [
     run: async () => {
       // The exact bug we lived with for 5 days: audit had 1000 rows but
       // 100% Leads. This check would have caught it on day 1.
-      const expected = ["Leads", "Deals", "Contacts", "Accounts", "Tasks"];
+      const expected = ["Leads", "Deals", "Contacts", "Accounts"];
       const r = await pool.query(
         `SELECT id, raw_audit_data FROM quality_audit_results
          ORDER BY created_at DESC LIMIT 1`,

@@ -17,10 +17,10 @@ export const auditCRMHygieneTool = createTool({
   id: "audit-crm-hygiene",
 
   description:
-    "Performs a comprehensive data hygiene audit on Zoho CRM records. Checks for missing fields, invalid formats, and governance violations across Leads, Deals, Contacts, and Tasks modules.",
+    "Performs a comprehensive data hygiene audit on Zoho CRM records. Checks for missing fields, invalid formats, and governance violations across Leads, Deals, Contacts, and Accounts modules.",
 
   inputSchema: z.object({
-    modules: z.array(z.enum(["Leads", "Deals", "Contacts", "Tasks", "Accounts"]))
+    modules: z.array(z.enum(["Leads", "Deals", "Contacts", "Accounts"]))
       .optional()
       .describe("CRM modules to audit (defaults to all main modules)"),
     pageSize: z.number().optional().describe("Number of records to fetch per module (default: 100)"),

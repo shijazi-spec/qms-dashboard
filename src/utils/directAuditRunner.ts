@@ -124,7 +124,7 @@ export async function runDirectAudit(logger?: any) {
     auditSuccess = true;
   } else {
     try {
-      const modules = ["Leads", "Deals", "Contacts", "Tasks", "Accounts"];
+      const modules = ["Leads", "Deals", "Contacts", "Accounts"];
       const issueTypeCounts: Record<string, { count: number; severity: string; module: string }> = {};
 
       for (const moduleName of modules) {

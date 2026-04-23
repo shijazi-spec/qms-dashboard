@@ -542,7 +542,7 @@ export const mastra = new Mastra({
                  ORDER BY audit_date ASC`,
                 [limit],
               );
-              const modules = ["Deals", "Tasks", "Contacts", "Leads", "Accounts"];
+              const modules = ["Deals", "Contacts", "Leads", "Accounts"];
               const dates: string[] = [];
               const series: Record<string, number[]> = {};
               modules.forEach((m) => (series[m] = []));

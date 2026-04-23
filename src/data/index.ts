@@ -377,20 +377,9 @@ export async function getDeals(maxRecords?: number): Promise<Deal[]> {
 }
 
 export async function getActivities(): Promise<Activity[]> {
-  const { fetchZohoRecords } = await import('../utils/zohoCRM');
-  const records = await fetchZohoRecords('Tasks');
-  return records.map((r: any) => ({
-    id: r.id,
-    Subject: r.Subject || '',
-    Activity_Type: r.Activity_Type || 'Task',
-    Related_To: r.What_Id?.id || '',
-    Module: r.What_Id?.module || '',
-    Owner: r.Owner?.id || '',
-    Due_Date: r.Due_Date || '',
-    Status: r.Status || '',
-    Description: r.Description || '',
-    Created_Time: r.Created_Time || '',
-  }));
+  // Tasks data has been removed platform-wide — no Zoho Tasks pagination.
+  // Returning an empty list so callers continue to work without breaking.
+  return [];
 }
 
 // Module-level cache to avoid hammering the Zoho Users API (and to throttle
