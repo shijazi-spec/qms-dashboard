@@ -369,6 +369,59 @@ export async function fetchAllZohoRecords(
   return allRecords;
 }
 
+// ─── Attachments (related list) ──────────────────────────────────────────────
+export interface ZohoAttachmentMeta {
+  id: string;
+  fileName: string;
+  fileSizeBytes: number | null;
+  attachmentType: string | null;
+  linkUrl: string | null;
+  createdByName: string | null;
+  createdByEmail: string | null;
+  createdTime: string | null;
+  modifiedTime: string | null;
+}
+
+export async function fetchRecordAttachments(
+  module: string,
+  recordId: string
+): Promise<ZohoAttachmentMeta[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${module}/${recordId}/Attachments?per_page=200`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      if (response.status === 204) return [];
+      if (!response.ok) {
+        const txt = await response.text().catch(() => '');
+        throw new Error(`Zoho Attachments API error: ${response.status} - ${txt.slice(0, 200)}`);
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      let data: any;
+      try { data = JSON.parse(text); } catch { return []; }
+      return ((data.data || []) as any[]).map((a) => ({
+        id: a.id,
+        fileName: a.File_Name || '',
+        fileSizeBytes: a.Size != null ? Number(a.Size) : null,
+        attachmentType: a.$type || a.$attachment_type || null,
+        linkUrl: a.$link_url || null,
+        createdByName: a.Created_By?.name || null,
+        createdByEmail: a.Created_By?.email || null,
+        createdTime: a.Created_Time || null,
+        modifiedTime: a.Modified_Time || null,
+      }));
+    }
+  );
+}
+
 // Records that Zoho has deleted, recycled, or merged. type=all covers
 // recycle-bin, permanent deletions, AND merges (returns type='merged' with
 // merged_into.id). This is the only way to detect a Zoho-side merge: a

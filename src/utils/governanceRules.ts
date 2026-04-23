@@ -488,3 +488,44 @@ export const qualityScorecardConfig = {
     contacts: ["First_Name", "Last_Name", "Email", "Phone", "Account_Name", "Title"]
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Attachment audit rules — Deals only.
+// Audited stages: "Proposal" and "Agreement Signed" (Agreement Sent is implicitly
+// covered by the Signed stage check since the same artifact moves between them).
+// Keywords are matched case-insensitively against the file_name. Arabic keywords
+// are matched as substrings on the original (non-normalized) filename.
+// Edit these arrays to tune what counts as a valid document — no code change needed.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface AttachmentStageRule {
+  keywords: string[];                   // any one keyword in filename = valid
+  severityIfMissing: 'critical' | 'high' | 'medium' | 'low';
+  severityIfWrongType: 'critical' | 'high' | 'medium' | 'low';
+  description: string;
+}
+
+export const walaPlusAttachmentAuditRules = {
+  module: 'Deals' as const,
+  stageField: 'Stage',
+  // Keys MUST match Zoho Stage values exactly (case-insensitive comparison handled by code).
+  stages: {
+    'Proposal': {
+      keywords: ['proposal', 'offer', 'quotation', 'عرض'],
+      severityIfMissing: 'high',
+      severityIfWrongType: 'medium',
+      description: 'Deals in Proposal stage must have a commercial offer / proposal document attached.',
+    },
+    'Agreement Signed': {
+      keywords: ['agreement', 'contract', 'signed', 'موقع', 'اتفاقية'],
+      severityIfMissing: 'critical',
+      severityIfWrongType: 'high',
+      description: 'Deals in Agreement Signed stage must have a signed agreement / contract document attached.',
+    },
+  } as Record<string, AttachmentStageRule>,
+  // Universal checks — applied to every attachment regardless of stage.
+  dangerousExtensions: ['.exe', '.bat', '.scr', '.cmd', '.com', '.pif'],
+  // 0-byte files always flagged Critical.
+  // Concurrency for fetching attachments per record.
+  fetchConcurrency: 6,
+};
+

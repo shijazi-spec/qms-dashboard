@@ -1,11 +1,14 @@
 import {
   fetchAllZohoRecords,
+  fetchRecordAttachments,
   analyzeRecordHygiene,
   calculateQualityScores,
   DEFAULT_GOVERNANCE_RULES,
   type ZohoCRMRecord,
   type HygieneIssue,
+  type ZohoAttachmentMeta,
 } from "./zohoCRM";
+import { walaPlusAttachmentAuditRules } from "./governanceRules";
 import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
 
 const BATCH_SIZE = 500;
@@ -22,13 +25,17 @@ function analyzeRecordBatch(
   governanceRules: any[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
   detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
-  detailedCountsByModule?: Map<string, number>
+  detailedCountsByModule?: Map<string, number>,
+  recordIdsWithIssues?: Set<string>
 ): { issueCount: number; critical: number; high: number; medium: number; low: number; recordsWithIssues: number } {
   let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0, recordsWithIssues = 0;
   for (const record of records) {
     const issues = analyzeRecordHygiene(record, governanceRules);
     issueCount += issues.length;
-    if (issues.length > 0) recordsWithIssues++;
+    if (issues.length > 0) {
+      recordsWithIssues++;
+      if (recordIdsWithIssues) recordIdsWithIssues.add(record.id);
+    }
     for (const issue of issues) {
       if (issue.severity === 'critical') critical++;
       else if (issue.severity === 'high') high++;
@@ -76,6 +83,190 @@ function analyzeRecordBatch(
     }
   }
   return { issueCount, critical, high, medium, low, recordsWithIssues };
+}
+
+// ─── Attachment audit helper ────────────────────────────────────────────────
+// Returns aggregate counts and pushes per-record issues into the same data
+// structures used by the field-rule pass (issueTypeCounts, detailedIssues).
+async function runAttachmentAudit(
+  records: ZohoCRMRecord[],
+  issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
+  detailedIssues: Array<any>,
+  detailedCountsByModule: Map<string, number>,
+  alreadyFlaggedRecordIds: Set<string>,
+  logger?: any,
+): Promise<{ issueCount: number; critical: number; high: number; medium: number; low: number; recordsScanned: number; newRecordsWithIssues: number }> {
+  const cfg = walaPlusAttachmentAuditRules;
+  const stageField = cfg.stageField;
+
+  // Filter to records in audited stages (case-insensitive match against keys).
+  const stageKeys = Object.keys(cfg.stages);
+  const stageKeysLower = stageKeys.map(s => s.toLowerCase());
+  const targets = records.filter(r => {
+    const stage = String(r.data?.[stageField] || '').trim();
+    return stage && stageKeysLower.includes(stage.toLowerCase());
+  });
+
+  if (targets.length === 0) {
+    return { issueCount: 0, critical: 0, high: 0, medium: 0, low: 0, recordsScanned: 0, newRecordsWithIssues: 0 };
+  }
+
+  logger?.info(`📎 [DirectAudit] Attachment audit: ${targets.length} Deals in stages [${stageKeys.join(', ')}]`);
+
+  const sevToBucket = (s: string) => (s === 'critical' ? 'critical' : s === 'high' ? 'high' : s === 'medium' ? 'medium' : 'low');
+  let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0;
+  const recordsWithAttachmentIssues = new Set<string>();
+
+  // Bounded parallel fetch.
+  let cursor = 0;
+  const concurrency = Math.max(1, cfg.fetchConcurrency || 6);
+  const failed: string[] = [];
+
+  async function worker() {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= targets.length) return;
+      const rec = targets[idx];
+      const rawStage = String(rec.data?.[stageField] || '').trim();
+      const stageKey = stageKeys.find(k => k.toLowerCase() === rawStage.toLowerCase());
+      if (!stageKey) continue;
+      const stageRule = cfg.stages[stageKey];
+
+      let attachments: ZohoAttachmentMeta[] = [];
+      try {
+        attachments = await fetchRecordAttachments(cfg.module, rec.id);
+      } catch (e) {
+        failed.push(rec.id);
+        continue;
+      }
+
+      const recordIssues: HygieneIssue[] = [];
+
+      // Rule 1: presence — no attachments at all.
+      if (attachments.length === 0) {
+        recordIssues.push({
+          recordId: rec.id,
+          module: cfg.module,
+          issueType: 'missing_required_document',
+          fieldName: 'Attachments',
+          description: `${stageRule.description} No attachments found on this record.`,
+          severity: stageRule.severityIfMissing,
+          suggestedFix: `Upload a document whose filename contains one of: ${stageRule.keywords.join(', ')}`,
+        });
+      } else {
+        // Rule 2: type — at least one attachment must match keywords.
+        const lowerNames = attachments.map(a => (a.fileName || '').toLowerCase());
+        const matchesKeyword = stageRule.keywords.some(kw => {
+          const kwLower = kw.toLowerCase();
+          return lowerNames.some(n => n.includes(kwLower));
+        });
+        if (!matchesKeyword) {
+          recordIssues.push({
+            recordId: rec.id,
+            module: cfg.module,
+            issueType: 'wrong_document_type',
+            fieldName: 'Attachments',
+            description: `${stageRule.description} ${attachments.length} file(s) attached but none match the required document type.`,
+            severity: stageRule.severityIfWrongType,
+            suggestedFix: `Upload a document whose filename contains one of: ${stageRule.keywords.join(', ')}`,
+          });
+        }
+      }
+
+      // Rule 3 (universal): empty / dangerous extensions on any attachment.
+      for (const a of attachments) {
+        const fnLower = (a.fileName || '').toLowerCase();
+        if (a.fileSizeBytes === 0) {
+          recordIssues.push({
+            recordId: rec.id,
+            module: cfg.module,
+            issueType: 'empty_attachment_file',
+            fieldName: 'Attachments',
+            description: `Attachment "${a.fileName}" is 0 bytes (corrupt or empty upload).`,
+            severity: 'critical',
+            suggestedFix: `Delete the empty file and re-upload the correct document.`,
+          });
+        }
+        if (cfg.dangerousExtensions.some(ext => fnLower.endsWith(ext))) {
+          recordIssues.push({
+            recordId: rec.id,
+            module: cfg.module,
+            issueType: 'dangerous_attachment_extension',
+            fieldName: 'Attachments',
+            description: `Attachment "${a.fileName}" has a disallowed/executable extension.`,
+            severity: 'critical',
+            suggestedFix: `Remove the file. Only document formats (pdf, docx, xlsx) should be attached.`,
+          });
+        }
+      }
+
+      // Only count this record toward newRecordsWithIssues if it wasn't already
+      // flagged by the field-rule pass — prevents double-counting in moduleRecordsWithIssues.
+      if (recordIssues.length > 0 && !alreadyFlaggedRecordIds.has(rec.id)) {
+        recordsWithAttachmentIssues.add(rec.id);
+      }
+
+      for (const issue of recordIssues) {
+        issueCount++;
+        const bucket = sevToBucket(issue.severity);
+        if (bucket === 'critical') critical++;
+        else if (bucket === 'high') high++;
+        else if (bucket === 'medium') medium++;
+        else low++;
+
+        const key = `${issue.module}-${issue.issueType}`;
+        if (!issueTypeCounts[key]) {
+          issueTypeCounts[key] = { count: 0, severity: issue.severity, module: issue.module };
+        }
+        issueTypeCounts[key].count++;
+
+        const moduleDetailedCount = detailedCountsByModule.get(issue.module) ?? 0;
+        if (detailedIssues && moduleDetailedCount < MAX_DETAILED_PER_MODULE) {
+          const ownerData = rec.data?.Owner;
+          const ownerName = rec.owner || (ownerData ? (ownerData.name || ownerData.id || '-') : '-');
+          const createdByData = rec.data?.Created_By;
+          const createdByName = createdByData ? (createdByData.name || createdByData.id || '') : '';
+          const layoutData = rec.data?.Layout;
+          const layoutName = (layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '') || 'Standard';
+          const productsRaw = rec.data?.Product_Details;
+          const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
+            ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
+            : (typeof rec.data?.Products === 'object' ? rec.data?.Products?.name : rec.data?.Products) || rec.data?.Product_Name || rec.data?.Product || '';
+          detailedIssues.push({
+            recordId: issue.recordId,
+            module: issue.module,
+            owner: ownerName,
+            layouts: layoutName,
+            products: productsName,
+            createdBy: createdByName,
+            createdTime: rec.data?.Created_Time || rec.createdTime || '',
+            fieldName: issue.fieldName || 'Attachments',
+            issueType: issue.issueType,
+            description: issue.description,
+            severity: issue.severity,
+            suggestedFix: issue.suggestedFix || 'Review the attachments on this Deal.',
+          });
+          detailedCountsByModule.set(issue.module, moduleDetailedCount + 1);
+        }
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  if (failed.length > 0) {
+    logger?.warn(`⚠️ [DirectAudit] Attachment fetch failed for ${failed.length} Deal(s) — they were skipped.`);
+  }
+
+  return {
+    issueCount,
+    critical,
+    high,
+    medium,
+    low,
+    recordsScanned: targets.length,
+    newRecordsWithIssues: recordsWithAttachmentIssues.size,
+  };
 }
 
 export async function runDirectAudit(logger?: any) {
@@ -173,10 +364,13 @@ export async function runDirectAudit(logger?: any) {
           let moduleIssueCount = 0;
           let moduleCritical = 0, moduleHigh = 0, moduleMedium = 0, moduleLow = 0;
           let moduleRecordsWithIssues = 0;
+          // Tracks record IDs flagged by the field-rule pass so the attachment
+          // pass below can avoid double-counting them in moduleRecordsWithIssues.
+          const recordIdsWithFieldIssues = new Set<string>();
 
           for (let i = 0; i < recordCount; i += BATCH_SIZE) {
             const batch = allRecords.slice(i, i + BATCH_SIZE);
-            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues, detailedCountsByModule);
+            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues, detailedCountsByModule, recordIdsWithFieldIssues);
             moduleIssueCount += batchResult.issueCount;
             moduleCritical += batchResult.critical;
             moduleHigh += batchResult.high;
@@ -186,6 +380,35 @@ export async function runDirectAudit(logger?: any) {
 
             if (i > 0 && i % 5000 === 0) {
               logger?.info(`  📊 [DirectAudit] ${moduleName}: processed ${i}/${recordCount} records...`);
+            }
+          }
+
+          // ─── Attachment audit (additive — Deals only, specific stages) ───
+          // Runs ONLY for Deals in the stages defined in walaPlusAttachmentAuditRules.
+          // Fetches the Attachments related list per record (parallel, bounded).
+          // Adds new issue types: missing_required_document, wrong_document_type,
+          // empty_attachment_file, dangerous_attachment_extension.
+          if (moduleName === walaPlusAttachmentAuditRules.module) {
+            try {
+              const attachmentResult = await runAttachmentAudit(
+                allRecords,
+                issueTypeCounts,
+                detailedIssues,
+                detailedCountsByModule,
+                recordIdsWithFieldIssues,
+                logger,
+              );
+              moduleIssueCount += attachmentResult.issueCount;
+              moduleCritical += attachmentResult.critical;
+              moduleHigh += attachmentResult.high;
+              moduleMedium += attachmentResult.medium;
+              moduleLow += attachmentResult.low;
+              // recordsWithIssues already counted by field-rule pass; we add only
+              // records that had ZERO field issues but DO have attachment issues.
+              moduleRecordsWithIssues += attachmentResult.newRecordsWithIssues;
+              logger?.info(`📎 [DirectAudit] Attachment audit: scanned ${attachmentResult.recordsScanned} Deals, ${attachmentResult.issueCount} attachment issues found`);
+            } catch (attErr) {
+              logger?.warn(`⚠️ [DirectAudit] Attachment audit failed (non-fatal): ${attErr instanceof Error ? attErr.message : String(attErr)}`);
             }
           }
 
