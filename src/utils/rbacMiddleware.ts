@@ -205,6 +205,8 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/policies\/\d+\/publish$/, methods: ['POST'], permission: 'can_approve_policy' },
   { pattern: /^\/api\/policies\/\d+\/set-owners$/, methods: ['POST'], roles: ['admin', 'grc_manager'] },
   { pattern: /^\/api\/policies\/\d+\/acknowledge$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager', 'bu_owner'] },
+  { pattern: /^\/api\/policies\/\d+\/upload$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/policies\/review-cycles\/\d+$/, methods: ['PUT'], roles: ['admin', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/policies(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 
   { pattern: /^\/api\/audits\/findings(\/\d+)?$/, methods: ['POST', 'PUT'], permission: 'can_close_finding' },

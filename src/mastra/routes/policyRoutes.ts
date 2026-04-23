@@ -769,9 +769,13 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
-          if (!sessionUser) return unauthorizedResponse(c);
+          const { requireRole, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = await requireRole(c, ['admin', 'grc_manager', 'quality_manager']);
+          if (!sessionUser) {
+            const { getSessionUser } = await import('../../utils/rbacMiddleware');
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, 'Permission denied: only policy management roles can update review cycles');
+          }
 
           const { updateReviewCycle, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
@@ -792,9 +796,13 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
-          const sessionUser = getSessionUser(c);
-          if (!sessionUser) return unauthorizedResponse(c);
+          const { requireRole, unauthorizedResponse, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+          const sessionUser = await requireRole(c, ['admin', 'grc_manager', 'quality_manager']);
+          if (!sessionUser) {
+            const { getSessionUser } = await import('../../utils/rbacMiddleware');
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, 'Permission denied: only policy management roles can upload policy documents');
+          }
 
           const { updatePolicy, getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { validateFile, saveUploadedFile } = await import('../../utils/fileUpload');
