@@ -72,3 +72,15 @@ id = "9fCJWtz1M--FkDpUHcF0e"
 uri = "file://exports/infographic-samples/consultant.jpg"
 type = "image"
 title = "AI Consultant — Alerts by severity + HITL queue"
+
+[[outputs]]
+id = "k8vJE_P1dOfztwBNbUp-Q"
+uri = "file://reports/attachments-2026-04-23T09-21-18.csv"
+type = "table"
+title = "Sample Attachments (50 Deals + 50 Accounts) — CSV"
+
+[[outputs]]
+id = "7k53bI3kSKxNrubjtZxKf"
+uri = "file://reports/attachments-2026-04-23T09-21-18.json"
+type = "unspecified"
+title = "Sample Attachments — JSON"
