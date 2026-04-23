@@ -258,6 +258,15 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/onboarding\/stats$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality'] },
   { pattern: /^\/api\/onboarding\/demo-links$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality'] },
   { pattern: /^\/api\/onboarding\/demo-link/, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality'] },
+
+  // Trigger workflow actions: only reviewer-capable roles may action triggers.
+  // The handler additionally verifies that the caller's role matches the
+  // trigger's assigned_role (or is an admin-level role).
+  { pattern: /^\/api\/triggers\/\d+\/action$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'team_lead', 'executive', 'bu_owner', 'ai_specialist'] },
+
+  // Notification read: only reviewer-capable roles may mark notifications read.
+  // The handler additionally verifies the notification belongs to the caller's role.
+  { pattern: /^\/api\/notifications\/\d+\/read$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'team_lead', 'executive', 'bu_owner', 'ai_specialist'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {

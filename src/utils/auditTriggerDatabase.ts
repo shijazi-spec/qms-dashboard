@@ -378,11 +378,18 @@ export async function getPendingTriggers(filters?: { type?: TriggerType; role?: 
   return result.rows;
 }
 
-export async function getTriggersByAudit(auditId: number): Promise<AuditTrigger[]> {
-  const result = await pool.query(
-    'SELECT * FROM audit_triggers WHERE audit_id = $1 ORDER BY created_at DESC',
-    [auditId]
-  );
+export async function getTriggersByAudit(auditId: number, role?: string): Promise<AuditTrigger[]> {
+  let query = 'SELECT * FROM audit_triggers WHERE audit_id = $1';
+  const params: any[] = [auditId];
+
+  if (role) {
+    query += ' AND assigned_role = $2';
+    params.push(role);
+  }
+
+  query += ' ORDER BY created_at DESC';
+
+  const result = await pool.query(query, params);
   return result.rows;
 }
 
