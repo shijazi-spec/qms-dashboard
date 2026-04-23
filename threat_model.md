@@ -27,16 +27,18 @@ Production assumptions for this scan: only production-reachable code is in scope
 ## Scan Anchors
 
 - **Production entry points:** `src/mastra/index.ts`, `src/mastra/routes/*.ts`, `dashboard/*.html`, `dashboard/js/*.js`
-- **Highest-risk code areas:** `src/utils/rbacMiddleware.ts`, `src/mastra/routes/authRoutes.ts`, `src/utils/fileUpload.ts`, consultant/AI routes, admin and user-access routes, pages with heavy `innerHTML` usage
+- **Highest-risk code areas:** `src/utils/rbacMiddleware.ts`, `src/mastra/routes/authRoutes.ts`, `src/utils/fileUpload.ts`, consultant/AI routes, onboarding and team routes, trigger/notification routes, report and event-log routes, pages with heavy `innerHTML` usage
 - **Surface split:** public (`/api/login`, `/api/callback`, invitation validation/acceptance, selected webhook/health paths), authenticated (`/api/*` broadly), privileged/admin (`/api/admin/*`, RBAC/user-management flows, admin-key trust paths)
 - **Usually dev-only / ignore unless proven reachable:** `attached_assets/**`, tests, docs, scripts
 
 ## Current Scan Notes
 
-- **Read-side authorization needs explicit review.** The current production middleware pattern authenticates most non-public `GET` requests but only invokes route-permission enforcement on write verbs. For sensitive read surfaces such as call intelligence, policy governance, and duplicate-radar CRM data, future scans should assume routes are broadly reachable to any active session unless the route adds its own stricter authorization.
-- **Multipart inputs cross a sanitizer boundary.** The global request sanitizer is meaningful for JSON bodies, but multipart/form-data routes can bypass that normalization path. File metadata such as uploaded filenames should be treated as attacker-controlled content unless the upload handler explicitly normalizes or escapes it.
-- **Dashboard rendering remains a primary XSS sink.** Static dashboard pages still rely heavily on `innerHTML` to render database-backed content and AI output. Combined with the current CSP allowing `'unsafe-inline'`, stored HTML injection should be treated as production-relevant wherever attacker-influenced fields reach those templates.
-- **High-value production surfaces for repeated scans:** `src/mastra/routes/callIntelligenceRoutes.ts`, `src/mastra/routes/policyRoutes.ts`, `src/mastra/routes/duplicateRadarRoutes.ts`, `dashboard/calls.html`, `dashboard/policies.html`, and `dashboard/duplicates.html`.
+- **Repository-wide authz gap remains the main scan hypothesis.** `src/mastra/index.ts` authenticates most non-public APIs but only invokes route-permission enforcement on write verbs. Treat sensitive authenticated `GET` routes as exposed unless the route adds a stronger local check such as `requireAdminOrKey()`, `requireRole()`, or `requirePermission()`.
+- **Unlisted write routes remain a recurring privilege-escalation sink.** When a write path is absent from `ROUTE_PERMISSION_MAP`, broad generic write roles can reach it. This scan confirmed that pattern on policy, team, knowledge, consultant alert, and audit-trigger surfaces.
+- **Consultant and knowledge surfaces must be reviewed together.** The consultant can query live platform tables directly, and the knowledge base is treated as trusted source material for AI answers. Unauthorized knowledge uploads or deletions can therefore become both data disclosure and AI-poisoning issues.
+- **Several previously reported anchors are now fixed.** Call-intelligence reads and duplicate-radar reads now use `requireAdminOrKey()`, and the policies, calls, and duplicates dashboard sinks reviewed during this scan now escape the relevant stored fields before inserting them into `innerHTML`.
+- **Dashboard rendering remains a primary XSS sink.** `dashboard/feedback.html` and `dashboard/tablef.html` still render attacker-controlled stored content with `innerHTML`, and the production CSP continues to allow `'unsafe-inline'`, so stored HTML injection remains production-relevant wherever lower-trust users can plant data.
+- **High-value production surfaces for repeated scans:** `src/mastra/routes/policyRoutes.ts`, `src/mastra/routes/teamRoutes.ts`, `src/mastra/routes/managementReviewRoutes.ts`, `src/mastra/routes/reportRoutes.ts`, `src/mastra/routes/eventLogsRoutes.ts`, `src/mastra/routes/consultantRoutes.ts`, `src/mastra/routes/knowledgeRoutes.ts`, `src/mastra/routes/onboardingRoutes.ts`, `src/mastra/routes/triggerRoutes.ts`, `dashboard/feedback.html`, and `dashboard/tablef.html`.
 
 ## Threat Categories
 
