@@ -1,3 +1,5 @@
+import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+
 export const policyRoutes = [
   {
     path: "/api/policies",
@@ -5,6 +7,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { getAllPolicies, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
@@ -38,6 +43,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { getPolicySummaryStats, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
@@ -58,6 +66,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { getOverduePolicies, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
@@ -78,6 +89,9 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const { getDocumentsByTypeSummary, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
           const summary = await getDocumentsByTypeSummary();
@@ -95,6 +109,9 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const { getReviewCycles, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
           const url = new URL(c.req.url);
@@ -137,6 +154,9 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const { getAllPolicies, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
 
@@ -177,6 +197,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { getPendingAcknowledgments, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
@@ -200,6 +223,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const { getPolicyById, getPolicyVersions, getPolicyAcknowledgments, getAcknowledgmentStats, initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
@@ -809,6 +835,9 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const { getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');
           const { getUploadedFile } = await import('../../utils/fileUpload');
           await initPolicyTables();

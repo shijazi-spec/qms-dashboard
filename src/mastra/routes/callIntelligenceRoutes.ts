@@ -108,6 +108,9 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           
           logger?.info("📊 [API] Fetching call analytics");
@@ -142,6 +145,9 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           
           logger?.info("📊 [API] Fetching compliance records");
@@ -178,6 +184,9 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           
@@ -443,6 +452,9 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           
@@ -470,6 +482,9 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           
@@ -497,6 +512,9 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const email = c.req.param("email");
           const limit = parseInt(c.req.query("limit") || "50");
@@ -524,6 +542,9 @@ Respond with JSON only:
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const leadId = c.req.param("leadId");
           const limit = parseInt(c.req.query("limit") || "50");
@@ -1444,6 +1465,9 @@ ${transcriptText}
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param('id'));
           

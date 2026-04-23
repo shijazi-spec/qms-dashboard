@@ -1,5 +1,6 @@
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
+import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
 
 import {
   initDuplicateRadarTables,
@@ -557,6 +558,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const summary = await getEnhancedSummary();
           const kpis = await getKPIMetrics();
           const lastScan = await getLastScanDate();
@@ -577,6 +581,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '500');
           const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -596,6 +603,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const signal = c.req.param('signal');
           if (!signal) return c.json({ error: 'signal is required' }, 400);
           const url = new URL(c.req.url);
@@ -618,6 +628,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const status = url.searchParams.get('status');
           const confidence_level = url.searchParams.get('confidence_level');
@@ -661,6 +674,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param('id'));
           if (isNaN(id)) return c.json({ error: 'Invalid cluster ID' }, 400);
           const cluster = await getClusterById(id);
@@ -718,6 +734,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const data = await getDuplicatesByOwner();
           return c.json({ owners: data });
         } catch (error: any) {
@@ -733,6 +752,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const data = await getDuplicatesBySource();
           return c.json({ sources: data });
         } catch (error: any) {
@@ -748,6 +770,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const kpis = await getKPIMetrics();
           return c.json(kpis);
         } catch (error: any) {
@@ -763,6 +788,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const logs = await getDetectionLogs(limit);
@@ -780,6 +808,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const query = url.searchParams.get('query') || '';
           const record_type = url.searchParams.get('type') as 'lead' | 'deal' | 'all' || 'all';
@@ -898,6 +929,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const elapsed = scanState.startedAt ? Date.now() - scanState.startedAt : 0;
           return c.json({
             status: scanState.status,
@@ -994,6 +1028,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const exportType = url.searchParams.get('type') || 'all';
           const owner = url.searchParams.get('owner') || undefined;
@@ -1039,6 +1076,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const start_date = url.searchParams.get('start_date') || undefined;
           const end_date = url.searchParams.get('end_date') || undefined;
@@ -1149,6 +1189,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -1176,6 +1219,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -1204,6 +1250,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -1231,6 +1280,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get('limit') || '50');
           const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -1469,6 +1521,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const clusterId = url.searchParams.get('cluster_id');
           const limit = parseInt(url.searchParams.get('limit') || '50');
@@ -1508,6 +1563,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const data = await getOwnerAccountability();
           return c.json({ owners: data });
         } catch (error: any) {
@@ -1523,6 +1581,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const summary = await getEnhancedSummary();
           const lastScan = await getLastScanDate();
           return c.json({ ...summary, lastScanDate: lastScan });
@@ -1554,6 +1615,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const [owners, layouts, domains, pipelines, products] = await Promise.all([
             getDistinctOwners(),
             getDistinctLayouts(),
@@ -1575,6 +1639,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const rawLimit = parseInt(url.searchParams.get('limit') || '30');
           const rawOffset = parseInt(url.searchParams.get('offset') || '0');
@@ -1608,6 +1675,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const url = new URL(c.req.url);
           const filters: DuplicateFilters = {
             modules: url.searchParams.get('modules') ? url.searchParams.get('modules')!.split(',') : undefined,
@@ -1629,6 +1699,9 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const admin = await requireAdminOrKey(c);
+          if (!admin) return unauthorizedResponse(c);
+
           const clusterId = parseInt(c.req.param('id'));
           if (isNaN(clusterId)) return c.json({ error: 'Invalid cluster ID' }, 400);
 
