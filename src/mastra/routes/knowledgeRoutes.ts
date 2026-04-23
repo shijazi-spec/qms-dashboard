@@ -1,3 +1,10 @@
+import { requireRole } from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacDatabase";
+
+const KNOWLEDGE_READ_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality', 'quality_manager'];
+const KNOWLEDGE_WRITE_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager'];
+const KNOWLEDGE_DELETE_ROLES: UserRole[] = ['admin', 'grc_manager'];
+
 export const knowledgeRoutes = [
   {
     path: "/api/knowledge/documents",
@@ -5,6 +12,9 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, KNOWLEDGE_READ_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const { getDocuments, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const documentType = c.req.query("type");
@@ -22,6 +32,9 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, KNOWLEDGE_WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const { ingestDocument, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const body = await c.req.json();
@@ -37,7 +50,7 @@ export const knowledgeRoutes = [
             source: body.source,
             file_type: body.fileType || 'text',
             file_size: body.content.length,
-            uploaded_by: body.uploadedBy || 'admin',
+            uploaded_by: user.email,
             tags: body.tags || [],
           }, body.content);
 
@@ -73,6 +86,9 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, KNOWLEDGE_READ_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const { searchKnowledge, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const query = c.req.query("q");
@@ -105,6 +121,9 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, KNOWLEDGE_DELETE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { deleteDocument, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");

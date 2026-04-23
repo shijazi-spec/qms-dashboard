@@ -288,6 +288,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // Notification read: only reviewer-capable roles may mark notifications read.
   // The handler additionally verifies the notification belongs to the caller's role.
   { pattern: /^\/api\/notifications\/\d+\/read$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'team_lead', 'executive', 'bu_owner', 'ai_specialist'] },
+
+  { pattern: /^\/api\/consultant\/chat(\/stream)?$/, methods: ['POST'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/consultant\/scan$/, methods: ['POST'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/consultant\/alerts\/\d+\/(acknowledge|resolve|dismiss)$/, methods: ['POST'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+
+  { pattern: /^\/api\/knowledge\/upload$/, methods: ['POST'], roles: ['admin', 'ai_specialist', 'grc_manager'] },
+  { pattern: /^\/api\/knowledge\/documents\/\d+$/, methods: ['DELETE'], roles: ['admin', 'grc_manager'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {

@@ -11,9 +11,12 @@ import {
   type AlertSeverity,
   type AlertType,
 } from "../../utils/aiAlertsDatabase";
-import { requireAuthOrKey } from "../../utils/rbacMiddleware";
+import { requireRole } from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
 import type { AutoApproveTier } from "../../utils/aiToolGovernance";
+
+const CONSULTANT_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
 
 initAIAlertsTable().catch(console.error);
 
@@ -54,8 +57,8 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = requireAuthOrKey(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const mastra = c.get("mastra");
           const body = await c.req.json();
@@ -122,8 +125,8 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = requireAuthOrKey(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const mastra = c.get("mastra");
           const body = await c.req.json();
@@ -211,6 +214,9 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const status = c.req.query("status") as AlertStatus | undefined;
           const severity = c.req.query("severity") as AlertSeverity | undefined;
           const alertType = c.req.query("type") as AlertType | undefined;
@@ -240,6 +246,9 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const count = await getUnreadAlertCount();
           return c.json({ count });
         } catch (error) {
@@ -255,14 +264,13 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = requireAuthOrKey(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
 
-          const body = await c.req.json().catch(() => ({}));
-          const acknowledgedBy = body.acknowledgedBy || "user";
+          const acknowledgedBy = user.name || user.email;
 
           const alert = await acknowledgeAlert(id, acknowledgedBy);
           if (!alert) return c.json({ error: "Alert not found" }, 404);
@@ -281,8 +289,8 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = requireAuthOrKey(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
@@ -304,8 +312,8 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = requireAuthOrKey(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
@@ -327,8 +335,8 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = requireAuthOrKey(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const mastra = c.get("mastra");
           const agent = mastra?.getAgent("qmsConsultantAgent");
@@ -378,6 +386,11 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        const user = await requireRole(c, CONSULTANT_ROLES);
+        if (!user) {
+          return c.json({ error: "Insufficient permissions" }, 403);
+        }
+
         c.header("Content-Type", "text/event-stream");
         c.header("Cache-Control", "no-cache");
         c.header("Connection", "keep-alive");
