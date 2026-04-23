@@ -1093,12 +1093,12 @@
                             <h4 class="font-semibold text-gray-900 mb-3">Analysis</h4>
                             ${data.analysis ? `
                                 <dl class="space-y-2">
-                                    <div class="flex justify-between"><dt class="text-gray-500">Sentiment:</dt><dd class="font-medium">${data.analysis.sentiment || '--'} (${((data.analysis.sentiment_score || 0) * 100).toFixed(0)}%)</dd></div>
-                                    <div class="flex justify-between"><dt class="text-gray-500">Topics:</dt><dd class="font-medium">${(data.analysis.key_topics || []).join(', ') || '--'}</dd></div>
+                                    <div class="flex justify-between"><dt class="text-gray-500">Sentiment:</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment || '--')} (${((data.analysis.sentiment_score || 0) * 100).toFixed(0)}%)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-gray-500">Topics:</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
                                 </dl>
                                 <div class="mt-4">
                                     <h5 class="text-sm font-medium text-gray-700 mb-2">Summary</h5>
-                                    <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">${data.analysis.call_summary || 'No summary available'}</p>
+                                    <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">${escapeHtml(data.analysis.call_summary || 'No summary available')}</p>
                                 </div>
                             ` : '<p class="text-gray-500">Not analyzed yet</p>'}
                         </div>
@@ -1888,13 +1888,13 @@
                         <div class="bg-green-50 border border-green-200 rounded-xl p-4">
                             <h4 class="font-semibold text-green-800 mb-2">💪 Top Strengths</h4>
                             <ul class="space-y-1 text-sm text-green-700">
-                                ${(evaluation.top_strengths || []).map(s => `<li>• ${s}</li>`).join('') || '<li class="text-gray-400">No strengths identified</li>'}
+                                ${(evaluation.top_strengths || []).map(s => `<li>• ${escapeHtml(s)}</li>`).join('') || '<li class="text-gray-400">No strengths identified</li>'}
                             </ul>
                         </div>
                         <div class="bg-red-50 border border-red-200 rounded-xl p-4">
                             <h4 class="font-semibold text-red-800 mb-2">📉 Top Gaps</h4>
                             <ul class="space-y-1 text-sm text-red-700">
-                                ${(evaluation.top_gaps || []).map(g => `<li>• ${g}</li>`).join('') || '<li class="text-gray-400">No gaps identified</li>'}
+                                ${(evaluation.top_gaps || []).map(g => `<li>• ${escapeHtml(g)}</li>`).join('') || '<li class="text-gray-400">No gaps identified</li>'}
                             </ul>
                         </div>
                     </div>
@@ -1910,16 +1910,16 @@
                                     <div class="flex items-start justify-between">
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2">
-                                                <span class="px-2 py-0.5 text-xs rounded ${attr.status === 'PASS' ? 'bg-green-100 text-green-700' : attr.status === 'FAIL' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}">${attr.status}</span>
-                                                <span class="font-medium">${attr.attribute_name}</span>
-                                                <span class="text-xs text-gray-400 capitalize">(${attr.dimension})</span>
+                                                <span class="px-2 py-0.5 text-xs rounded ${attr.status === 'PASS' ? 'bg-green-100 text-green-700' : attr.status === 'FAIL' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}">${escapeHtml(attr.status)}</span>
+                                                <span class="font-medium">${escapeHtml(attr.attribute_name)}</span>
+                                                <span class="text-xs text-gray-400 capitalize">(${escapeHtml(attr.dimension)})</span>
                                             </div>
-                                            ${attr.comment ? `<p class="text-sm text-gray-600 mt-1">${attr.comment}</p>` : ''}
-                                            ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic">"${attr.evidence_quotes[0]}"</p>` : ''}
+                                            ${attr.comment ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(attr.comment)}</p>` : ''}
+                                            ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic">"${escapeHtml(attr.evidence_quotes[0])}"</p>` : ''}
                                         </div>
                                         ${attr.score !== null ? `<div class="text-right"><span class="text-lg font-bold ${attr.score >= 7 ? 'text-green-600' : attr.score >= 5 ? 'text-amber-600' : 'text-red-600'}">${attr.score}</span><span class="text-gray-400">/10</span></div>` : ''}
                                     </div>
-                                    ${attr.improvement_tip ? `<div class="mt-2 text-xs bg-blue-50 text-blue-700 p-2 rounded">💡 ${attr.improvement_tip}</div>` : ''}
+                                    ${attr.improvement_tip ? `<div class="mt-2 text-xs bg-blue-50 text-blue-700 p-2 rounded">💡 ${escapeHtml(attr.improvement_tip)}</div>` : ''}
                                 </div>
                             `).join('') || '<div class="p-4 text-gray-400">No attribute evaluations available</div>'}
                         </div>
@@ -1929,8 +1929,8 @@
                     ${evaluation.coaching_message_ar ? `
                     <div class="bg-purple-50 border border-purple-200 rounded-xl p-4">
                         <h4 class="font-semibold text-purple-800 mb-2">🎯 Coaching Recommendation</h4>
-                        <p class="text-sm text-purple-700" dir="rtl">${evaluation.coaching_message_ar}</p>
-                        ${evaluation.coaching_message_en ? `<p class="text-sm text-purple-600 mt-2">${evaluation.coaching_message_en}</p>` : ''}
+                        <p class="text-sm text-purple-700" dir="rtl">${escapeHtml(evaluation.coaching_message_ar)}</p>
+                        ${evaluation.coaching_message_en ? `<p class="text-sm text-purple-600 mt-2">${escapeHtml(evaluation.coaching_message_en)}</p>` : ''}
                     </div>
                     ` : ''}
 
@@ -1939,7 +1939,7 @@
                     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <h4 class="font-semibold text-amber-800 mb-2">📋 Coaching Actions</h4>
                         <ol class="space-y-1 text-sm text-amber-700 list-decimal list-inside">
-                            ${evaluation.coaching_actions.map(a => `<li>${a}</li>`).join('')}
+                            ${evaluation.coaching_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
                         </ol>
                     </div>
                     ` : ''}
@@ -1949,7 +1949,7 @@
                     <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
                         <h4 class="font-semibold text-indigo-800 mb-2">📚 Suggested Training Topics</h4>
                         <div class="flex flex-wrap gap-2">
-                            ${evaluation.micro_training_topics.map(t => `<span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">${t}</span>`).join('')}
+                            ${evaluation.micro_training_topics.map(t => `<span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">${escapeHtml(t)}</span>`).join('')}
                         </div>
                     </div>
                     ` : ''}

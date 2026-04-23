@@ -749,13 +749,13 @@
             const signalColors = { exact_email: 'bg-blue-100 text-blue-800', domain_match: 'bg-green-100 text-green-800', phone_match: 'bg-purple-100 text-purple-800', company_exact: 'bg-amber-100 text-amber-800', company_fuzzy: 'bg-orange-100 text-orange-800' };
             const sortedSignals = Object.entries(signals).sort((a, b) => b[1] - a[1]);
             topSignalsEl.innerHTML = sortedSignals.length === 0 ? '<p class="text-sm text-gray-400">No signal data yet</p>' :
-                sortedSignals.map(([key, count]) => `<div class="flex justify-between items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded" onclick="openClustersBySignalModal('${key}', '${(signalLabels[key] || key).replace(/'/g, "\\'")}')" data-testid="row-signal-${key}" title="Click to see all clusters with this signal"><span class="px-2 py-1 rounded text-xs font-medium ${signalColors[key] || 'bg-gray-100 text-gray-700'}">${signalLabels[key] || key}</span><span class="text-sm font-bold text-gray-700">${count} →</span></div>`).join('');
+                sortedSignals.map(([key, count]) => `<div class="flex justify-between items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded" onclick="openClustersBySignalModal('${key}', '${(signalLabels[key] || key).replace(/'/g, "\\'")}')" data-testid="row-signal-${key}" title="Click to see all clusters with this signal"><span class="px-2 py-1 rounded text-xs font-medium ${signalColors[key] || 'bg-gray-100 text-gray-700'}">${escapeHtml(signalLabels[key] || key)}</span><span class="text-sm font-bold text-gray-700">${count} →</span></div>`).join('');
 
             // D4: Top clusters by inflation
             const topClustersEl = document.getElementById('topClustersInflation');
             const topC = data.topClustersByInflation || [];
             topClustersEl.innerHTML = topC.length === 0 ? '<p class="text-sm text-gray-400">No pipeline inflation detected</p>' :
-                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" onclick="showClusterDetails(${c.id})"><div><span class="font-medium text-sm">${c.company_name || c.domain}</span><span class="text-xs text-gray-400 ml-2">${c.total_records} records</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
+                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" onclick="showClusterDetails(${c.id})"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ml-2">${c.total_records} records</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
 
             updateCharts(data);
         }
@@ -807,7 +807,7 @@
                 const data = await res.json();
                 const current = sel.value;
                 const opts = ['<option value="">All Layouts</option>']
-                    .concat((data.layouts || []).map(l => `<option value="${l}">${l}</option>`));
+                    .concat((data.layouts || []).map(l => `<option value="${escAttr(l)}">${escapeHtml(l)}</option>`));
                 sel.innerHTML = opts.join('');
                 if (current) sel.value = current;
                 sel.dataset.loaded = '1';
@@ -821,8 +821,8 @@
                 <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" onclick="showClusterDetails(${c.id})" data-testid="card-cluster-${c.id}">
                     <div class="flex justify-between items-start mb-3">
                         <div>
-                            <h4 class="font-semibold text-gray-900">${c.domain}</h4>
-                            <p class="text-sm text-gray-500">${c.company_name || ''}</p>
+                            <h4 class="font-semibold text-gray-900">${escapeHtml(c.domain)}</h4>
+                            <p class="text-sm text-gray-500">${escapeHtml(c.company_name || '')}</p>
                         </div>
                         <span class="confidence-${c.confidence_level} px-2 py-1 rounded text-xs font-medium">${c.confidence_score}%</span>
                     </div>
@@ -831,7 +831,7 @@
                         <div><span class="text-gray-500">Deals:</span> <span class="font-medium text-red-600">${c.total_deals}</span></div>
                         <div><span class="text-gray-500">Contacts:</span> <span class="font-medium text-teal-600">${c.total_contacts||0}</span></div>
                         <div><span class="text-gray-500">Accounts:</span> <span class="font-medium text-indigo-600">${c.total_accounts||0}</span></div>
-                        <div><span class="text-gray-500">Status:</span> <span class="font-medium capitalize">${c.status}</span></div>
+                        <div><span class="text-gray-500">Status:</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
                         <div><span class="text-gray-500">Value:</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
                     </div>
                 </div>
@@ -892,7 +892,7 @@
                 }
             }
             return `<td class="px-4 py-3 text-sm">
-                <div class="text-gray-700 font-medium">${name}</div>
+                <div class="text-gray-700 font-medium">${escapeHtml(name)}</div>
                 ${when ? `<div class="text-xs text-gray-400">${when}</div>` : ''}
             </td>`;
         }
@@ -901,7 +901,7 @@
             const tbody = document.getElementById('leadsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.leads || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${r.status||'-'}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
             tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate leads found</td></tr>';
         }
@@ -910,7 +910,7 @@
             const tbody = document.getElementById('dealsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.deals || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${r.stage||'-'}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage||'-')}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
             tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate deals found</td></tr>';
         }
@@ -919,7 +919,7 @@
             const tbody = document.getElementById('contactsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.contacts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.phone||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
             tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate contacts found</td></tr>';
         }
@@ -928,7 +928,7 @@
             const tbody = document.getElementById('accountsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.accounts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${r.cluster_domain||r.domain||'-'}</td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.phone||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.source||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.source||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?'<span class="text-green-600 font-medium">Primary</span>':'<span class="text-gray-400">Dup</span>'}</td></tr>`;
             }
             tbody.innerHTML = rows || '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">No duplicate accounts found</td></tr>';
         }
@@ -937,16 +937,16 @@
         function renderOwners(owners) {
             const tbody = document.getElementById('ownersTable');
             tbody.innerHTML = owners.map(o => `
-                <tr data-testid="row-owner-${o.owner_name}">
-                    <td class="px-6 py-3 text-sm font-medium">${o.owner_name}</td>
-                    <td class="px-6 py-3 text-sm text-gray-500">${o.owner_email || '-'}</td>
+                <tr data-testid="row-owner-${escAttr(o.owner_name)}">
+                    <td class="px-6 py-3 text-sm font-medium">${escapeHtml(o.owner_name)}</td>
+                    <td class="px-6 py-3 text-sm text-gray-500">${escapeHtml(o.owner_email || '-')}</td>
                     <td class="px-6 py-3 text-sm">${o.total_records}</td>
                     <td class="px-6 py-3 text-sm font-medium">${o.duplicate_records}</td>
                     <td class="px-6 py-3 text-sm font-bold">${o.duplicate_rate}%</td>
                     <td class="px-6 py-3 text-sm"><span class="rag-${o.rag_status} px-2 py-1 rounded text-xs font-medium">${o.rag_status === 'green' ? '≤2% ✓' : o.rag_status === 'amber' ? '2-5% ⚠' : '>5% ✗'}</span></td>
                     <td class="px-6 py-3 text-sm">${o.high_confidence_duplicates}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
-                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${o.owner_name}">Export</a></td>
+                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">Export</a></td>
                 </tr>
             `).join('') || '<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">No owner data</td></tr>';
         }
@@ -985,8 +985,8 @@
                 <span class="confidence-${cluster.confidence_level} px-3 py-1 rounded-full text-sm font-medium">${cluster.confidence_score}% match</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${records.length} records</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${formatCurrency(cluster.estimated_pipeline_value||0)} inflation</span>
-                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">Primary: ${primary_type}</span>` : ''}
-                ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).join(' + ')})</span>` : ''}
+                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">Primary: ${escapeHtml(primary_type)}</span>` : ''}
+                ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).map(t => escapeHtml(t)).join(' + ')})</span>` : ''}
             </div>`;
 
             if (is_cross_module) {
@@ -1038,7 +1038,7 @@
             fields.forEach(f => {
                 html += `<tr class="border-t"><td class="px-3 py-2 font-medium text-gray-600">${f.label}</td>`;
                 records.forEach(r => {
-                    const val = f.render ? f.render(r[f.key], r) : (r[f.key] || '-');
+                    const val = f.render ? f.render(r[f.key], r) : escapeHtml(r[f.key] || '-');
                     html += `<td class="px-3 py-2 border-l">${val}</td>`;
                 });
                 html += '</tr>';
@@ -1051,10 +1051,10 @@
                 if (rec) {
                     const actionClass = `action-${rec.action_type}`;
                     const typeTag = r.record_type
-                        ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">${r.record_type}</span>`
+                        ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">${escapeHtml(r.record_type)}</span>`
                         : '';
-                    html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${rec.action_type.toUpperCase()}</span>${typeTag}<div class="text-xs text-gray-500 mt-1">${rec.recommendation}</div>`;
-                    if (rec.reasons?.length) html += `<div class="text-xs text-gray-400 mt-1">${rec.reasons.join(', ')}</div>`;
+                    html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${rec.action_type.toUpperCase()}</span>${typeTag}<div class="text-xs text-gray-500 mt-1">${escapeHtml(rec.recommendation)}</div>`;
+                    if (rec.reasons?.length) html += `<div class="text-xs text-gray-400 mt-1">${rec.reasons.map(reason => escapeHtml(reason)).join(', ')}</div>`;
                     html += '</td>';
                 } else {
                     html += '<td class="px-3 py-2 border-l text-gray-400">-</td>';
@@ -1130,9 +1130,9 @@
                     : 'bg-blue-100 text-blue-800';
                 return `<tr class="border-t hover:bg-gray-50 cursor-pointer" onclick="closeListModal(); showClusterDetails(${c.id})" data-testid="row-list-cluster-${c.id}">
                     <td class="px-3 py-2 text-xs text-gray-400 text-right">${i + 1}</td>
-                    <td class="px-3 py-2 text-sm font-medium text-gray-800">${name}<div class="text-xs text-gray-400">${c.domain || ''}</div></td>
+                    <td class="px-3 py-2 text-sm font-medium text-gray-800">${escapeHtml(name)}<div class="text-xs text-gray-400">${escapeHtml(c.domain || '')}</div></td>
                     <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${c.total_records} records${breakdown ? ` <span class="text-gray-400">(${breakdown})</span>` : ''}</td>
-                    <td class="px-3 py-2 text-xs text-center"><span class="px-2 py-0.5 rounded ${statusClr}">${status}</span></td>
+                    <td class="px-3 py-2 text-xs text-center"><span class="px-2 py-0.5 rounded ${statusClr}">${escapeHtml(status)}</span></td>
                     <td class="px-3 py-2 text-xs text-center font-semibold text-gray-700">${conf}</td>
                     ${showInflation ? `<td class="px-3 py-2 text-sm font-bold text-purple-600 text-right whitespace-nowrap">${formatCurrency(c.estimated_pipeline_value || 0)}</td>` : ''}
                 </tr>`;
@@ -1388,13 +1388,13 @@
 
                 document.getElementById('searchClustersGrid').innerHTML = (data.clusters || []).map(c => `
                     <div class="bg-gray-50 border rounded-lg p-3 cursor-pointer hover:bg-gray-100" onclick="showClusterDetails(${c.id})">
-                        <div class="font-medium">${c.domain}</div>
+                        <div class="font-medium">${escapeHtml(c.domain)}</div>
                         <div class="text-xs text-gray-500">${c.total_records} records | ${c.confidence_score}% confidence</div>
                     </div>
                 `).join('');
 
                 document.getElementById('searchResultsTable').innerHTML = data.records.map(r => `
-                    <tr><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${r.record_type}</span></td><td class="px-4 py-3 text-sm">${r.record_name}</td><td class="px-4 py-3 text-sm text-gray-500">${r.company_name||'-'}</td><td class="px-4 py-3 text-sm text-blue-600">${r.domain||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.email||'-'}</td><td class="px-4 py-3 text-sm text-gray-500">${r.owner_name||'-'}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score)} px-2 py-1 rounded text-xs">${r.confidence_score}%</span></td></tr>
+                    <tr><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.record_type)}</span></td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-blue-600">${escapeHtml(r.domain||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score)} px-2 py-1 rounded text-xs">${r.confidence_score}%</span></td></tr>
                 `).join('');
             } else {
                 document.getElementById('searchResults').classList.add('hidden');
@@ -1414,6 +1414,17 @@
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.remove('tab-inactive');
             document.getElementById('tab-' + tab).classList.add('tab-active');
+        }
+
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(s);
+            return div.innerHTML;
+        }
+        function escAttr(s) {
+            if (s === null || s === undefined) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         function formatDate(d) {
@@ -1449,13 +1460,13 @@
                 filterOptionsLoaded = true;
 
                 const ownerSelect = document.getElementById('filterOwner');
-                ownerSelect.innerHTML = (data.owners || []).map(o => `<option value="${o}">${o}</option>`).join('');
+                ownerSelect.innerHTML = (data.owners || []).map(o => `<option value="${escAttr(o)}">${escapeHtml(o)}</option>`).join('');
 
                 const layoutSelect = document.getElementById('filterLayout');
-                layoutSelect.innerHTML = (data.layouts || []).map(l => `<option value="${l}">${l}</option>`).join('');
+                layoutSelect.innerHTML = (data.layouts || []).map(l => `<option value="${escAttr(l)}">${escapeHtml(l)}</option>`).join('');
 
                 const pipelineSelect = document.getElementById('filterPipeline');
-                pipelineSelect.innerHTML = (data.pipelines || []).map(p => `<option value="${p}">${p}</option>`).join('');
+                pipelineSelect.innerHTML = (data.pipelines || []).map(p => `<option value="${escAttr(p)}">${escapeHtml(p)}</option>`).join('');
             } catch (e) {
                 console.error('Error loading filter options:', e);
             }
