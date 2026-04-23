@@ -31,6 +31,13 @@ Production assumptions for this scan: only production-reachable code is in scope
 - **Surface split:** public (`/api/login`, `/api/callback`, invitation validation/acceptance, selected webhook/health paths), authenticated (`/api/*` broadly), privileged/admin (`/api/admin/*`, RBAC/user-management flows, admin-key trust paths)
 - **Usually dev-only / ignore unless proven reachable:** `attached_assets/**`, tests, docs, scripts
 
+## Current Scan Notes
+
+- **Read-side authorization needs explicit review.** The current production middleware pattern authenticates most non-public `GET` requests but only invokes route-permission enforcement on write verbs. For sensitive read surfaces such as call intelligence, policy governance, and duplicate-radar CRM data, future scans should assume routes are broadly reachable to any active session unless the route adds its own stricter authorization.
+- **Multipart inputs cross a sanitizer boundary.** The global request sanitizer is meaningful for JSON bodies, but multipart/form-data routes can bypass that normalization path. File metadata such as uploaded filenames should be treated as attacker-controlled content unless the upload handler explicitly normalizes or escapes it.
+- **Dashboard rendering remains a primary XSS sink.** Static dashboard pages still rely heavily on `innerHTML` to render database-backed content and AI output. Combined with the current CSP allowing `'unsafe-inline'`, stored HTML injection should be treated as production-relevant wherever attacker-influenced fields reach those templates.
+- **High-value production surfaces for repeated scans:** `src/mastra/routes/callIntelligenceRoutes.ts`, `src/mastra/routes/policyRoutes.ts`, `src/mastra/routes/duplicateRadarRoutes.ts`, `dashboard/calls.html`, `dashboard/policies.html`, and `dashboard/duplicates.html`.
+
 ## Threat Categories
 
 ### Spoofing
