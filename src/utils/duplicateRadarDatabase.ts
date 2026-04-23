@@ -104,6 +104,7 @@ export interface DuplicateFilters {
   owners?: string[];
   layouts?: string[];
   pipelines?: string[];
+  stages?: string[];
   domain?: string;
   start_date?: string;
   end_date?: string;
@@ -2087,6 +2088,17 @@ export async function getDistinctPipelines(): Promise<string[]> {
   return result.rows.map(r => r.pipeline);
 }
 
+// Distinct Deal stages — restricted to the Deals module since stage only
+// applies to Deal records. Used to populate the Stage filter dropdown.
+export async function getDistinctStages(): Promise<string[]> {
+  const result = await pool.query(
+    `SELECT DISTINCT stage FROM duplicate_records
+       WHERE zoho_module = 'Deals' AND stage IS NOT NULL AND stage != ''
+       ORDER BY stage`
+  );
+  return result.rows.map(r => r.stage);
+}
+
 export async function getFilteredClusters(filters: DuplicateFilters, limit = 30, offset = 0): Promise<{ clusters: DuplicateCluster[]; total: number }> {
   let whereConditions = ['c.status = $1'];
   let params: any[] = [filters.status || 'active'];
@@ -2138,6 +2150,13 @@ export async function getFilteredClusters(filters: DuplicateFilters, limit = 30,
     paramIdx += filters.pipelines.length;
   }
 
+  if (filters.stages && filters.stages.length > 0) {
+    joinNeeded = true;
+    recordConditions.push(`r.stage IN (${filters.stages.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    params.push(...filters.stages);
+    paramIdx += filters.stages.length;
+  }
+
   if (filters.domain) {
     joinNeeded = true;
     recordConditions.push(`r.domain ILIKE $${paramIdx++}`);
@@ -2178,6 +2197,13 @@ export async function getFilteredSummary(filters: DuplicateFilters): Promise<any
     recordConditions.push(`r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(',')})`);
     params.push(...filters.owners);
     paramIdx += filters.owners.length;
+  }
+
+  if (filters.stages && filters.stages.length > 0) {
+    joinNeeded = true;
+    recordConditions.push(`r.stage IN (${filters.stages.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    params.push(...filters.stages);
+    paramIdx += filters.stages.length;
   }
 
   if (filters.domain) {

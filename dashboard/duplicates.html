@@ -163,7 +163,7 @@
                 </div>
             </div>
             <div id="filterPanelBody" class="hidden">
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Module</label>
                         <select id="filterModule" data-testid="select-filter-module" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4">
@@ -184,6 +184,10 @@
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Pipeline</label>
                         <select id="filterPipeline" data-testid="select-filter-pipeline" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Stage <span class="text-gray-400 font-normal">(Deals)</span></label>
+                        <select id="filterStage" data-testid="select-filter-stage" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Confidence</label>
@@ -1467,6 +1471,9 @@
 
                 const pipelineSelect = document.getElementById('filterPipeline');
                 pipelineSelect.innerHTML = (data.pipelines || []).map(p => `<option value="${escAttr(p)}">${escapeHtml(p)}</option>`).join('');
+
+                const stageSelect = document.getElementById('filterStage');
+                stageSelect.innerHTML = (data.stages || []).map(s => `<option value="${escAttr(s)}">${escapeHtml(s)}</option>`).join('');
             } catch (e) {
                 console.error('Error loading filter options:', e);
             }
@@ -1487,6 +1494,8 @@
             if (layouts.length) params.set('layouts', layouts.join(','));
             const pipelines = getSelectedValues('filterPipeline');
             if (pipelines.length) params.set('pipelines', pipelines.join(','));
+            const stages = getSelectedValues('filterStage');
+            if (stages.length) params.set('stages', stages.join(','));
             const confidence = document.getElementById('filterConfidence').value;
             if (confidence) params.set('confidence_level', confidence);
             const domain = document.getElementById('filterDomain').value;
@@ -1504,6 +1513,7 @@
             if (getSelectedValues('filterOwner').length) count++;
             if (getSelectedValues('filterLayout').length) count++;
             if (getSelectedValues('filterPipeline').length) count++;
+            if (getSelectedValues('filterStage').length) count++;
             if (document.getElementById('filterConfidence').value) count++;
             if (document.getElementById('filterDomain').value) count++;
             if (document.getElementById('filterDateFrom').value) count++;
@@ -1557,6 +1567,7 @@
             document.getElementById('filterOwner').selectedIndex = -1;
             document.getElementById('filterLayout').selectedIndex = -1;
             document.getElementById('filterPipeline').selectedIndex = -1;
+            document.getElementById('filterStage').selectedIndex = -1;
             document.getElementById('filterConfidence').value = '';
             document.getElementById('filterDomain').value = '';
             document.getElementById('filterDateFrom').value = '';

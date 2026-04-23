@@ -59,6 +59,7 @@ import {
   getDistinctLayouts,
   getDistinctDomains,
   getDistinctPipelines,
+  getDistinctStages,
   getDistinctProducts,
   getFilteredClusters,
   getFilteredSummary,
@@ -1624,14 +1625,15 @@ export const duplicateRadarRoutes = [
           const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
-          const [owners, layouts, domains, pipelines, products] = await Promise.all([
+          const [owners, layouts, domains, pipelines, products, stages] = await Promise.all([
             getDistinctOwners(),
             getDistinctLayouts(),
             getDistinctDomains(),
             getDistinctPipelines(),
             getDistinctProducts(),
+            getDistinctStages(),
           ]);
-          return c.json({ owners, layouts, domains, pipelines, products, modules: ['Leads', 'Deals', 'Contacts', 'Accounts'] });
+          return c.json({ owners, layouts, domains, pipelines, products, stages, modules: ['Leads', 'Deals', 'Contacts', 'Accounts'] });
         } catch (error: any) {
           console.error('Error fetching filter options:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
@@ -1659,6 +1661,7 @@ export const duplicateRadarRoutes = [
             owners: url.searchParams.get('owners') ? url.searchParams.get('owners')!.split(',') : undefined,
             layouts: url.searchParams.get('layouts') ? url.searchParams.get('layouts')!.split(',') : undefined,
             pipelines: url.searchParams.get('pipelines') ? url.searchParams.get('pipelines')!.split(',') : undefined,
+            stages: url.searchParams.get('stages') ? url.searchParams.get('stages')!.split(',') : undefined,
             domain: url.searchParams.get('domain') || undefined,
             start_date: url.searchParams.get('start_date') || undefined,
             end_date: url.searchParams.get('end_date') || undefined,
@@ -1688,6 +1691,7 @@ export const duplicateRadarRoutes = [
           const filters: DuplicateFilters = {
             modules: url.searchParams.get('modules') ? url.searchParams.get('modules')!.split(',') : undefined,
             owners: url.searchParams.get('owners') ? url.searchParams.get('owners')!.split(',') : undefined,
+            stages: url.searchParams.get('stages') ? url.searchParams.get('stages')!.split(',') : undefined,
             domain: url.searchParams.get('domain') || undefined,
           };
           const summary = await getFilteredSummary(filters);
