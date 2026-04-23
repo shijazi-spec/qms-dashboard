@@ -1,4 +1,6 @@
-import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+import { requireRoleOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+
+const POLICY_READ_ROLES = ['admin', 'grc_manager', 'quality_manager', 'head_of_operations_quality', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead', 'ai_specialist'] as const;
 
 export const policyRoutes = [
   {
@@ -7,7 +9,7 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -43,7 +45,7 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -66,7 +68,7 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -89,7 +91,7 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const { getDocumentsByTypeSummary, initPolicyTables } = await import('../../utils/policyDatabase');
@@ -109,7 +111,7 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const { getReviewCycles, initPolicyTables } = await import('../../utils/policyDatabase');
@@ -154,7 +156,7 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const { getAllPolicies, initPolicyTables } = await import('../../utils/policyDatabase');
@@ -197,7 +199,7 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -223,7 +225,7 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -843,7 +845,7 @@ export const policyRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
           const { getPolicyById, initPolicyTables } = await import('../../utils/policyDatabase');

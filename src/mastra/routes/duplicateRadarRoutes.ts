@@ -1,6 +1,12 @@
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
-import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+import { requireRoleOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+
+const DUPLICATE_RADAR_READ_ROLES = ['admin', 'grc_manager', 'ai_specialist', 'head_of_operations_quality', 'quality_manager', 'bu_owner', 'executive'] as const;
+
+async function requireDuplicateRadarAccess(c: any) {
+  return requireRoleOrKey(c, [...DUPLICATE_RADAR_READ_ROLES]);
+}
 
 import {
   initDuplicateRadarTables,
@@ -558,7 +564,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const summary = await getEnhancedSummary();
@@ -581,7 +587,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -603,7 +609,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const signal = c.req.param('signal');
@@ -628,7 +634,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -674,7 +680,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const id = parseInt(c.req.param('id'));
@@ -734,7 +740,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const data = await getDuplicatesByOwner();
@@ -752,7 +758,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const data = await getDuplicatesBySource();
@@ -770,7 +776,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const kpis = await getKPIMetrics();
@@ -788,7 +794,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -808,7 +814,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -929,7 +935,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const elapsed = scanState.startedAt ? Date.now() - scanState.startedAt : 0;
@@ -1028,7 +1034,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1076,7 +1082,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1189,7 +1195,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1219,7 +1225,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1250,7 +1256,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1280,7 +1286,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1521,7 +1527,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1563,7 +1569,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const data = await getOwnerAccountability();
@@ -1581,7 +1587,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const summary = await getEnhancedSummary();
@@ -1615,7 +1621,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const [owners, layouts, domains, pipelines, products] = await Promise.all([
@@ -1639,7 +1645,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1675,7 +1681,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
@@ -1699,7 +1705,7 @@ export const duplicateRadarRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const admin = await requireAdminOrKey(c);
+          const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
 
           const clusterId = parseInt(c.req.param('id'));

@@ -174,6 +174,15 @@ export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
   return user;
 }
 
+export async function requireRoleOrKey(c: any, allowedRoles: UserRole[]): Promise<SessionUser | null> {
+  const adminKey = getAdminKey(c);
+  const expectedKey = process.env.ADMIN_API_KEY;
+  if (expectedKey && adminKey === expectedKey) {
+    return { userId: 0, email: 'api-key@system', name: 'API Key Access', role: 'admin' };
+  }
+  return requireRole(c, allowedRoles);
+}
+
 export function requireAuthOrKey(c: any): SessionUser | null {
   const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
@@ -295,6 +304,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   { pattern: /^\/api\/knowledge\/upload$/, methods: ['POST'], roles: ['admin', 'ai_specialist', 'grc_manager'] },
   { pattern: /^\/api\/knowledge\/documents\/\d+$/, methods: ['DELETE'], roles: ['admin', 'grc_manager'] },
+
+  // Sensitive GET read restrictions — enforce role boundaries on reads that expose CRM,
+  // call intelligence, and governance data. department_viewer and custom roles are excluded.
+  { pattern: /^\/api\/duplicates/, methods: ['GET'], roles: ['admin', 'grc_manager', 'ai_specialist', 'head_of_operations_quality', 'quality_manager', 'bu_owner', 'executive'] },
+  { pattern: /^\/api\/policies/, methods: ['GET'], roles: ['admin', 'grc_manager', 'quality_manager', 'head_of_operations_quality', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead', 'ai_specialist'] },
+  { pattern: /^\/api\/calls/, methods: ['GET'], roles: ['admin', 'ai_specialist', 'head_of_operations_quality', 'quality_manager', 'team_lead', 'grc_manager'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {
