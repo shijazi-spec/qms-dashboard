@@ -193,12 +193,18 @@ interface RoutePermissionRule {
 }
 
 const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
+  // Event logs — admin-only read (cross-module audit trail with PII and sensitive diffs)
+  { pattern: /^\/api\/logs/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/event-logs/, methods: ['GET'], roles: ['admin'] },
+
   { pattern: /^\/api\/risks\/\d+\/close$/, methods: ['POST'], permission: 'can_close_finding' },
   { pattern: /^\/api\/risks\/\d+\/accept$/, methods: ['POST'], permission: 'can_accept_risk' },
   { pattern: /^\/api\/risks\/\d+\/escalate$/, methods: ['POST'], permission: 'can_accept_risk' },
   { pattern: /^\/api\/risks\/\d+\/treatment$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/risks\/treatment\/\d+$/, methods: ['PUT'], roles: ['admin', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/risks(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  // Risk register reads — governance roles and senior leadership only
+  { pattern: /^\/api\/risks/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
 
   { pattern: /^\/api\/policies\/\d+\/transition$/, methods: ['POST'], permission: 'can_approve_policy' },
   { pattern: /^\/api\/policies\/\d+\/grc-approval$/, methods: ['POST'], permission: 'can_approve_policy' },
@@ -214,6 +220,8 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/audits\/\d+\/checklist$/, methods: ['PUT'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/audits\/checklist\/\d+$/, methods: ['PUT'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/audits(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+  // Audit reads — governance roles and senior leadership only
+  { pattern: /^\/api\/audits/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
 
   // Audit Programme (ISO 19011 §5.2). Quality Manager can draft; only
   // Head of Operations & Quality (or admin) can approve via the HITL sign-off.
@@ -221,6 +229,8 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/audit-programme\/\d+\/approve$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality'] },
   { pattern: /^\/api\/audit-programme\/\d+\/reject$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality'] },
   { pattern: /^\/api\/audit-programme(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'quality_manager'] },
+  // Audit programme reads — governance roles and senior leadership only
+  { pattern: /^\/api\/audit-programme/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
 
   // Manual Audit Intake (off-platform audits) — Quality Manager is single-point intake.
   { pattern: /^\/api\/manual-audit-intake/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'quality_manager'] },
@@ -231,8 +241,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/compliance\/controls/, methods: ['POST', 'PUT', 'DELETE'], permission: 'can_edit_controls' },
   { pattern: /^\/api\/compliance\/capa/, methods: ['POST', 'PUT'], permission: 'can_create_capa' },
   { pattern: /^\/api\/compliance/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  // Compliance reads — governance roles and senior leadership only
+  { pattern: /^\/api\/compliance/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
 
   { pattern: /^\/api\/vendors/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  // Vendor reads — governance roles only (contract values, assessment findings, PII)
+  { pattern: /^\/api\/vendors/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+
+  // Management reviews — senior governance records (minutes, decisions, action items)
+  { pattern: /^\/api\/management-reviews/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
+  { pattern: /^\/api\/management-reviews/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+
+  // PDPL reports — admin-only (privacy inventory, incident history, security posture)
+  { pattern: /^\/api\/reports\/pdpl-inventory/, methods: ['GET'], roles: ['admin'] },
 
   { pattern: /^\/api\/handoff\//, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
 

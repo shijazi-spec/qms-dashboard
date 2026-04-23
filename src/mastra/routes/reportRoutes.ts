@@ -35,6 +35,9 @@ export const reportRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireAdminOrKey } = await import("../../utils/rbacMiddleware");
+          const user = await requireAdminOrKey(c);
+          if (!user) return c.json({ error: "Admin access required" }, 403);
           const { generatePDPLInventoryReport } = await import("../../utils/reportGenerator");
           const html = await generatePDPLInventoryReport();
           return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });

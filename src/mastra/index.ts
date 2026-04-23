@@ -238,7 +238,7 @@ export const mastra = new Mastra({
             }
           }
 
-          if (!hasAdminKey && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+          if (!hasAdminKey) {
             const { enforceRoutePermission } = await import('../utils/rbacMiddleware');
             const result = await enforceRoutePermission(c, urlPath, method);
             if (!result.allowed) {
