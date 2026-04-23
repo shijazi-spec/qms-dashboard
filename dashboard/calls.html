@@ -930,20 +930,20 @@
 
             tbody.innerHTML = pageData.map(call => `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-medium text-indigo-600 cursor-pointer" onclick="viewCall(${call.id})">${call.call_id}</td>
-                    <td class="px-4 py-3 text-sm text-gray-900">${call.source}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${call.agent_email || '--'}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${call.contact_name || '--'}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-indigo-600 cursor-pointer" onclick="viewCall(${call.id})">${escapeHtml(call.call_id)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${escapeHtml(call.source)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(call.agent_email || '--')}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(call.contact_name || '--')}</td>
                     <td class="px-4 py-3 text-center">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${call.direction === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
-                            ${call.direction || '--'}
+                            ${escapeHtml(call.direction || '--')}
                         </span>
                     </td>
                     <td class="px-4 py-3 text-sm text-center text-gray-600">${formatDuration(call.duration_seconds)}</td>
                     <td class="px-4 py-3 text-sm text-center text-gray-600">${new Date(call.call_date).toLocaleDateString()}</td>
                     <td class="px-4 py-3 text-center">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium status-${call.status}">
-                            ${call.status}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(call.status)}">
+                            ${escapeHtml(call.status)}
                         </span>
                     </td>
                     <td class="px-4 py-3 text-center">
@@ -965,9 +965,9 @@
 
             tbody.innerHTML = complianceRecords.map(rec => `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${rec.call_record_id}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${rec.agent_email || '--'}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${rec.lead_id || rec.deal_id || '--'}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(rec.call_record_id)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(rec.agent_email || '--')}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(rec.lead_id || rec.deal_id || '--')}</td>
                     <td class="px-4 py-3 text-center">${renderCheckmark(rec.notes_updated)}</td>
                     <td class="px-4 py-3 text-center">${renderCheckmark(rec.call_logged)}</td>
                     <td class="px-4 py-3 text-center">${renderCheckmark(rec.task_created)}</td>
@@ -1029,7 +1029,7 @@
             const agentData = analytics.callsByAgent || [];
             agentTable.innerHTML = agentData.slice(0, 10).map(agent => `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${agent.agent_email || 'Unknown'}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(agent.agent_email || 'Unknown')}</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">${agent.count}</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
@@ -1082,11 +1082,11 @@
                         <div>
                             <h4 class="font-semibold text-gray-900 mb-3">Call Information</h4>
                             <dl class="space-y-2">
-                                <div class="flex justify-between"><dt class="text-gray-500">Source:</dt><dd class="font-medium">${data.record?.source || '--'}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">Direction:</dt><dd class="font-medium">${data.record?.direction || '--'}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">Source:</dt><dd class="font-medium">${escapeHtml(data.record?.source || '--')}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">Direction:</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
                                 <div class="flex justify-between"><dt class="text-gray-500">Duration:</dt><dd class="font-medium">${formatDuration(data.record?.duration_seconds)}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">Lead ID:</dt><dd class="font-medium">${data.record?.lead_id || '--'}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">Status:</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${data.record?.status}">${data.record?.status}</span></dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">Lead ID:</dt><dd class="font-medium">${escapeHtml(data.record?.lead_id || '--')}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">Status:</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
                             </dl>
                         </div>
                         <div>
@@ -1286,7 +1286,7 @@
                         <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
                         </svg>
-                        <span class="text-sm font-medium text-blue-800">${file.name}</span>
+                        <span class="text-sm font-medium text-blue-800">${escapeHtml(file.name)}</span>
                         <span class="text-xs text-blue-600">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
                     <button onclick="removeBulkAudioFile(${idx})" class="text-gray-400 hover:text-red-600">
@@ -1382,7 +1382,7 @@
             if (results.length > 0) {
                 html += `<div class="text-xs text-green-700 space-y-1">`;
                 results.forEach(r => {
-                    html += `<p>${r.file} - ${r.status}</p>`;
+                    html += `<p>${escapeHtml(r.file)} - ${escapeHtml(r.status)}</p>`;
                 });
                 html += `</div>`;
             }
@@ -1390,7 +1390,7 @@
             if (errors.length > 0) {
                 html += `<div class="mt-2 text-xs text-red-600 space-y-1">`;
                 errors.forEach(e => {
-                    html += `<p>${e.file}: ${e.error}</p>`;
+                    html += `<p>${escapeHtml(e.file)}: ${escapeHtml(e.error)}</p>`;
                 });
                 html += `</div>`;
             }
@@ -1474,11 +1474,11 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <div class="text-sm font-medium">${call.agent_name || call.agent_email}</div>
-                                    <div class="text-xs text-gray-500">${call.contact_name || 'Unknown Contact'} - ${new Date(call.call_date).toLocaleDateString()}</div>
+                                    <div class="text-sm font-medium">${escapeHtml(call.agent_name || call.agent_email)}</div>
+                                    <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || 'Unknown Contact')} - ${new Date(call.call_date).toLocaleDateString()}</div>
                                 </div>
                             </div>
-                            <span class="px-2 py-1 text-xs rounded-full ${call.status === 'analyzed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${call.status}</span>
+                            <span class="px-2 py-1 text-xs rounded-full ${call.status === 'analyzed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${escapeHtml(call.status)}</span>
                         </div>
                     `).join('');
                 } else {
@@ -1611,12 +1611,12 @@
                 <div class="p-3 rounded-lg border cursor-pointer hover:bg-blue-50 transition ${selectedEvalCall?.id === call.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}" onclick="selectCallForEval(${call.id})">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="font-medium text-sm">${call.agent_name || call.agent_email}</div>
-                            <div class="text-xs text-gray-500">${call.contact_name || 'Unknown'}</div>
+                            <div class="font-medium text-sm">${escapeHtml(call.agent_name || call.agent_email)}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || 'Unknown')}</div>
                         </div>
                         <div class="text-right">
                             <div class="text-xs text-gray-400">${new Date(call.call_date).toLocaleDateString()}</div>
-                            <span class="px-1.5 py-0.5 text-xs rounded ${call.source === 'manual' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">${call.source}</span>
+                            <span class="px-1.5 py-0.5 text-xs rounded ${call.source === 'manual' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">${escapeHtml(call.source)}</span>
                         </div>
                     </div>
                 </div>
@@ -1660,10 +1660,10 @@
             container.innerHTML = `
                 <div class="bg-blue-50 rounded-lg p-4 mb-6">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div><span class="text-gray-500">Call ID:</span> <span class="font-medium">${call.call_id}</span></div>
+                        <div><span class="text-gray-500">Call ID:</span> <span class="font-medium">${escapeHtml(call.call_id)}</span></div>
                         <div><span class="text-gray-500">Duration:</span> <span class="font-medium">${formatDuration(call.duration_seconds)}</span></div>
-                        <div><span class="text-gray-500">Direction:</span> <span class="font-medium">${call.direction}</span></div>
-                        <div><span class="text-gray-500">Source:</span> <span class="font-medium">${call.source}</span></div>
+                        <div><span class="text-gray-500">Direction:</span> <span class="font-medium">${escapeHtml(call.direction)}</span></div>
+                        <div><span class="text-gray-500">Source:</span> <span class="font-medium">${escapeHtml(call.source)}</span></div>
                     </div>
                 </div>
                 
@@ -1761,7 +1761,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Coaching Notes</label>
                             <textarea id="eval-coaching-notes" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                      placeholder="Enter coaching feedback and improvement suggestions...">${existingScore?.coaching_notes || ''}</textarea>
+                                      placeholder="Enter coaching feedback and improvement suggestions...">${escapeHtml(existingScore?.coaching_notes || '')}</textarea>
                         </div>
                         
                         <div class="flex gap-3">
@@ -1858,7 +1858,7 @@
                             <div>
                                 <p class="text-blue-100 text-sm">Overall Score</p>
                                 <p class="text-4xl font-bold">${Math.round(evaluation.overall_score || 0)}%</p>
-                                <p class="text-sm text-blue-200 mt-1">${evaluation.scorecard_name || 'SDR Scorecard'}</p>
+                                <p class="text-sm text-blue-200 mt-1">${escapeHtml(evaluation.scorecard_name || 'SDR Scorecard')}</p>
                             </div>
                             <div class="text-right">
                                 <div class="text-sm space-y-1">
@@ -2129,11 +2129,11 @@
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center gap-2">
-                                    <h4 class="font-medium">${sc.name}</h4>
+                                    <h4 class="font-medium">${escapeHtml(sc.name)}</h4>
                                     ${sc.is_active ? '<span class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">Active</span>' : '<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded-full">Inactive</span>'}
-                                    ${sc.team_name ? `<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">${sc.team_name}</span>` : ''}
+                                    ${sc.team_name ? `<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">${escapeHtml(sc.team_name)}</span>` : ''}
                                 </div>
-                                <p class="text-sm text-gray-500 mt-1">${sc.description || 'No description'}</p>
+                                <p class="text-sm text-gray-500 mt-1">${escapeHtml(sc.description || 'No description')}</p>
                                 <div class="flex gap-4 mt-2 text-xs text-gray-400">
                                     <span>${attrCount} attributes</span>
                                     <span>v${sc.version || '1.0'}</span>
@@ -2293,9 +2293,9 @@
             let attrsHtml = '';
             Object.entries(dims).forEach(([dimKey, dim]) => {
                 if (dim.attributes?.length) {
-                    attrsHtml += `<div class="mb-4"><h5 class="font-medium text-sm text-gray-700 mb-2 capitalize">${dimKey}</h5>`;
+                    attrsHtml += `<div class="mb-4"><h5 class="font-medium text-sm text-gray-700 mb-2 capitalize">${escapeHtml(dimKey)}</h5>`;
                     dim.attributes.forEach(a => {
-                        attrsHtml += `<div class="text-sm p-2 bg-gray-50 rounded mb-1"><strong>${a.name}</strong> (${a.severityIfFailed || 'minor'}) - ${a.description || a.passingCriteria || 'No description'}</div>`;
+                        attrsHtml += `<div class="text-sm p-2 bg-gray-50 rounded mb-1"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.severityIfFailed || 'minor')}) - ${escapeHtml(a.description || a.passingCriteria || 'No description')}</div>`;
                     });
                     attrsHtml += '</div>';
                 }
