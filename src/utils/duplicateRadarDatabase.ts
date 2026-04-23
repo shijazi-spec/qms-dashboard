@@ -2035,7 +2035,11 @@ export async function getSyncState(module: string): Promise<ZohoSyncState | null
 }
 
 export async function getAllSyncStates(): Promise<ZohoSyncState[]> {
-  const result = await pool.query('SELECT * FROM zoho_sync_state ORDER BY module');
+  // Tasks module was removed platform-wide; filter out any stale rows so the
+  // Sync Status badges only reflect modules we actively sync.
+  const result = await pool.query(
+    "SELECT * FROM zoho_sync_state WHERE module NOT IN ('Tasks') ORDER BY module"
+  );
   return result.rows;
 }
 
