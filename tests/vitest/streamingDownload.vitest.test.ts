@@ -1398,6 +1398,130 @@ describe('streamingDownload (browser helper)', () => {
     expect(dismiss?.getAttribute('aria-label')).toBe('Dismiss notification');
   });
 
+  it('shows an unread-count badge on the collapsed tray header for newly-finished attempts and clears it once the tray is opened', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([new Uint8Array([1, 2, 3])]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="first.csv"',
+        },
+      })
+    );
+
+    // First completed download — tray starts collapsed, so a badge with "1"
+    // should appear immediately on the collapsed header.
+    await env.win.streamingDownload('/api/exports/first.csv');
+
+    const tray = env.win.document.getElementById('streaming-download-history-tray');
+    expect(tray).not.toBeNull();
+
+    let badge = tray.querySelector('[data-testid="badge-recent-downloads-unread"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toBe('1');
+    expect(badge!.getAttribute('aria-label')).toMatch(/1 new download update/i);
+
+    // Expanding the tray must clear the badge.
+    const toggle = tray.querySelector('[data-testid="button-recent-downloads-toggle"]') as HTMLButtonElement;
+    toggle.click();
+    expect(tray.querySelector('[data-testid="badge-recent-downloads-unread"]')).toBeNull();
+
+    // Collapse again — still no badge because the user has now seen the entry.
+    toggle.click();
+    expect(tray.querySelector('[data-testid="badge-recent-downloads-unread"]')).toBeNull();
+
+    // A second download finishes while the tray is collapsed → badge reappears
+    // showing only the count of *new* changes since the last open.
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([new Uint8Array([4, 5])]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="second.csv"',
+        },
+      })
+    );
+    await env.win.streamingDownload('/api/exports/second.csv');
+
+    badge = tray.querySelector('[data-testid="badge-recent-downloads-unread"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toBe('1');
+
+    // While the badge is showing, the duplicate "needs retry" subtext must not
+    // also fire (the two cues should be merged so the user sees one signal).
+    // No failures here, so nothing should appear; sanity-check by asserting
+    // the summary element is absent in the no-active-work case.
+    expect(
+      tray.querySelector('[data-testid="text-recent-downloads-summary"]')
+    ).toBeNull();
+  });
+
+  it('does not show the unread badge for downloads still in progress', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    // Stalled fetch keeps the entry in the "in-progress" state.
+    env.win.fetch = vi.fn(
+      () =>
+        new Promise(() => {
+          /* never resolves */
+        })
+    );
+
+    env.win
+      .streamingDownload('/api/exports/slow.csv', {
+        filename: 'slow.csv',
+        skipEstimate: true,
+      })
+      .catch(() => {
+        /* swallowed — the test does not await completion */
+      });
+
+    // Allow the in-progress history entry + tray render to settle.
+    await new Promise((r) => setTimeout(r, 10));
+
+    const tray = env.win.document.getElementById('streaming-download-history-tray');
+    expect(tray).not.toBeNull();
+
+    // No badge yet: the entry is still running, only the "1 in progress"
+    // subtext should advertise it.
+    expect(tray.querySelector('[data-testid="badge-recent-downloads-unread"]')).toBeNull();
+    const summary = tray.querySelector(
+      '[data-testid="text-recent-downloads-summary"]'
+    );
+    expect(summary).not.toBeNull();
+    expect(summary!.textContent).toMatch(/in progress/i);
+  });
+
+  it('suppresses the "needs retry" subtext when the unread badge already covers the failure', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response('boom', {
+        status: 500,
+        headers: { 'content-type': 'text/plain' },
+      })
+    );
+
+    await expect(
+      env.win.streamingDownload('/api/exports/bad.csv', { filename: 'bad.csv' })
+    ).rejects.toThrow();
+
+    const tray = env.win.document.getElementById('streaming-download-history-tray');
+    expect(tray).not.toBeNull();
+
+    // Failure should light up the unread badge…
+    const badge = tray.querySelector('[data-testid="badge-recent-downloads-unread"]');
+    expect(badge).not.toBeNull();
+
+    // …and suppress the duplicate "X need retry" subtext so the user sees a
+    // single, clear cue rather than two competing ones.
+    expect(
+      tray.querySelector('[data-testid="text-recent-downloads-summary"]')
+    ).toBeNull();
+  });
+
   it('honours useServiceWorker=false to skip the SW path entirely', async () => {
     env = setupBrowserEnv({
       enableShowSaveFilePicker: false,

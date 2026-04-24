@@ -408,6 +408,7 @@
     var HISTORY_STORAGE_KEY = 'walaplus.recentDownloads.v1';
     var HISTORY_STORAGE_KEY_PREFIX = 'walaplus.recentDownloads.v2';
     var TRAY_OPEN_STORAGE_KEY = 'walaplus.recentDownloads.trayOpen';
+    var TRAY_LAST_SEEN_STORAGE_KEY = 'walaplus.recentDownloads.lastSeen.v1';
     var HISTORY_LIMIT = 5;
     // Default expiry window for stored entries (30 days). Override on the
     // host page with `window.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS = …`.
@@ -841,6 +842,60 @@
         try { renderHistoryTray(); } catch (_) { /* ignore */ }
     }
 
+    // Snapshot of `{ entryId: status }` taken whenever the user opens the
+    // tray. Used to compute the unread-changes badge so the collapsed header
+    // can flag attempts that finished (or flipped state) since the user last
+    // looked. We only store final statuses we've actually shown to the user.
+    function loadLastSeen() {
+        var store = safeSessionStorage();
+        if (!store) return {};
+        try {
+            var raw = store.getItem(TRAY_LAST_SEEN_STORAGE_KEY);
+            if (!raw) return {};
+            var obj = JSON.parse(raw);
+            return (obj && typeof obj === 'object') ? obj : {};
+        } catch (_) { return {}; }
+    }
+
+    function saveLastSeen(map) {
+        var store = safeSessionStorage();
+        if (!store) return;
+        try { store.setItem(TRAY_LAST_SEEN_STORAGE_KEY, JSON.stringify(map || {})); }
+        catch (_) { /* ignore */ }
+    }
+
+    // Build a fresh snapshot scoped to the current set of entry ids so stale
+    // ids (already evicted past HISTORY_LIMIT) don't accumulate forever.
+    function snapshotSeenStatuses(entries) {
+        var map = {};
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            if (!e || !e.id) continue;
+            map[e.id] = e.status || '';
+        }
+        return map;
+    }
+
+    // An entry counts as "unread" if it has reached a final state (done /
+    // failed / cancelled) AND its current status differs from what was
+    // recorded the last time the user opened the tray. New entries that have
+    // never been seen also count as unread once they finish. Entries still
+    // in progress are never counted — they're advertised separately via the
+    // "X in progress" subtext.
+    function computeUnreadCount(entries, lastSeen) {
+        if (!entries || !entries.length) return 0;
+        var seen = lastSeen || {};
+        var count = 0;
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            if (!e || !e.id) continue;
+            if (e.status === 'in-progress') continue;
+            var prev = Object.prototype.hasOwnProperty.call(seen, e.id) ? seen[e.id] : null;
+            if (prev !== e.status) count++;
+        }
+        return count;
+    }
+
     function makeHistoryId() {
         return 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     }
@@ -913,6 +968,9 @@
 
     function clearHistory() {
         saveHistory([]);
+        // Drop the unread snapshot too so a fresh download after clearing
+        // doesn't reference stale ids and can light up the badge correctly.
+        saveLastSeen({});
         renderHistoryTray();
     }
 
@@ -980,10 +1038,25 @@
             else if (entries[i].status === 'failed' || entries[i].status === 'cancelled') failed++;
         }
 
+        // Compute unread changes vs. last-seen snapshot, then refresh the
+        // snapshot when the tray is open so the badge clears as soon as the
+        // user expands the tray (and stays cleared while it remains open).
+        var lastSeen = loadLastSeen();
+        var unreadCount = open ? 0 : computeUnreadCount(entries, lastSeen);
+        if (open) {
+            saveLastSeen(snapshotSeenStatuses(entries));
+        }
+
         var headerLabel = 'Recent downloads (' + entries.length + ')';
         var headerSub = '';
-        if (inProgress > 0) headerSub = inProgress + ' in progress';
-        else if (failed > 0) headerSub = failed + ' need retry';
+        if (inProgress > 0) {
+            headerSub = inProgress + ' in progress';
+        } else if (failed > 0 && unreadCount === 0) {
+            // When the unread badge is showing it already covers the
+            // "needs retry" cue (failures bump the unread count too), so
+            // suppress the duplicate subtext to avoid two competing signals.
+            headerSub = failed + ' need retry';
+        }
 
         // Build header.
         container.innerHTML = '';
@@ -999,10 +1072,28 @@
         headerBtn.setAttribute('data-testid', 'button-recent-downloads-toggle');
 
         var hLeft = document.createElement('span');
-        hLeft.className = 'flex items-center gap-2 min-w-0';
-        var iconSvg = '<svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
+        hLeft.className = 'flex items-center gap-2 min-w-0 relative';
+        var iconWrap = document.createElement('span');
+        iconWrap.className = 'relative flex-shrink-0';
+        iconWrap.innerHTML = '<svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
             '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>';
-        hLeft.innerHTML = iconSvg;
+        // Render the unread badge as a small pill anchored to the icon. It
+        // shows a count when small, or "9+" beyond that, and is fully
+        // suppressed once unreadCount drops to zero (i.e. tray was opened).
+        if (unreadCount > 0) {
+            var badge = document.createElement('span');
+            badge.className = 'absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] leading-4 font-semibold text-center shadow ring-1 ring-white';
+            badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+            badge.setAttribute('data-testid', 'badge-recent-downloads-unread');
+            badge.setAttribute(
+                'aria-label',
+                unreadCount === 1
+                    ? '1 new download update'
+                    : unreadCount + ' new download updates'
+            );
+            iconWrap.appendChild(badge);
+        }
+        hLeft.appendChild(iconWrap);
         var hLabel = document.createElement('span');
         hLabel.className = 'font-medium truncate';
         hLabel.textContent = headerLabel;
