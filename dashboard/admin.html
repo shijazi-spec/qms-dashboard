@@ -115,6 +115,14 @@
                     >
                         Audit Trail
                     </button>
+                    <button
+                        onclick="switchTab('rate-limits')"
+                        id="tab-rate-limits"
+                        class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
+                        data-testid="button-tab-rate-limits"
+                    >
+                        Rate Limits
+                    </button>
                 </nav>
             </div>
 
@@ -641,6 +649,75 @@
                     </div>
                 </div>
             </div>
+
+            <div id="content-rate-limits" class="hidden fade-in">
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">Rate Limit Monitor</h2>
+                            <p class="text-sm text-gray-500">Live view of the distributed rate limiter — top offenders, fail-open events, and recent 429s.</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <label class="flex items-center space-x-2 text-sm text-gray-600">
+                                <input type="checkbox" id="rate-limits-autorefresh" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" data-testid="input-rate-limits-autorefresh"/>
+                                <span>Auto-refresh (10s)</span>
+                            </label>
+                            <button onclick="loadRateLimitStats()" class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm" data-testid="button-refresh-rate-limits">
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="ml-1">Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="rate-limits-error" class="hidden mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700" data-testid="text-rate-limits-error"></div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Top key (current window)</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-top-count" data-testid="text-rate-limits-top-count">—</p>
+                            <p class="text-xs text-gray-500 mt-1 truncate" id="rate-limits-top-key" data-testid="text-rate-limits-top-key">No traffic in window</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">429s (last 5 min)</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-429-count" data-testid="text-rate-limits-429-count">—</p>
+                            <p class="text-xs text-gray-500 mt-1">From system_events</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Fail-open count</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-failopen" data-testid="text-rate-limits-failopen">—</p>
+                            <p class="text-xs text-gray-500 mt-1">Cumulative since last process start</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Bucket rows total</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-rows" data-testid="text-rate-limits-rows">—</p>
+                            <p class="text-xs text-gray-500 mt-1">All windows in rate_limit_buckets</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-gray-700">Top 10 keys this window</h3>
+                        <p class="text-xs text-gray-500" id="rate-limits-window">Window: —</p>
+                    </div>
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
+                                    <th scope="col" class="px-4 py-2 text-left font-medium">Key</th>
+                                    <th scope="col" class="px-4 py-2 text-right font-medium">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rate-limits-top-keys" data-testid="table-rate-limits-top-keys">
+                                <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="text-xs text-gray-400 mt-3" id="rate-limits-updated" data-testid="text-rate-limits-updated">Not yet refreshed</p>
+                </div>
+            </div>
         </div>
 
         <div
@@ -1053,7 +1130,7 @@
             let currentAuditOffset = 0;
 
             function switchTab(tab) {
-                ["documents", "scorecard", "settings", "audit"].forEach((t) => {
+                ["documents", "scorecard", "settings", "audit", "rate-limits"].forEach((t) => {
                     document
                         .getElementById(`content-${t}`)
                         .classList.add("hidden");
@@ -1073,6 +1150,11 @@
                 document
                     .getElementById(`tab-${tab}`)
                     .classList.remove("text-gray-500");
+                if (tab === "rate-limits") {
+                    startRateLimitAutoRefresh();
+                } else {
+                    stopRateLimitAutoRefresh();
+                }
             }
 
             function showToast(message, type = "success") {
@@ -2103,7 +2185,107 @@
                 loadScorecardsList();
                 loadGovDocsForScorecard();
                 checkIntegrationStatus();
+                const autorefreshEl = document.getElementById("rate-limits-autorefresh");
+                if (autorefreshEl) {
+                    autorefreshEl.addEventListener("change", () => {
+                        if (autorefreshEl.checked) {
+                            startRateLimitAutoRefresh();
+                        } else {
+                            stopRateLimitAutoRefresh();
+                        }
+                    });
+                }
             });
+
+            let rateLimitRefreshTimer = null;
+
+            function startRateLimitAutoRefresh() {
+                loadRateLimitStats();
+                const autorefreshEl = document.getElementById("rate-limits-autorefresh");
+                if (autorefreshEl && !autorefreshEl.checked) return;
+                if (rateLimitRefreshTimer) return;
+                rateLimitRefreshTimer = setInterval(loadRateLimitStats, 10000);
+            }
+
+            function stopRateLimitAutoRefresh() {
+                if (rateLimitRefreshTimer) {
+                    clearInterval(rateLimitRefreshTimer);
+                    rateLimitRefreshTimer = null;
+                }
+            }
+
+            function escapeHtml(s) {
+                return String(s == null ? "" : s)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            async function loadRateLimitStats() {
+                const errEl = document.getElementById("rate-limits-error");
+                try {
+                    const res = await fetch("/api/admin/rate-limit-stats", {
+                        headers: getAdminHeaders(),
+                    });
+                    if (handleUnauthorized(res)) return;
+                    if (!res.ok) {
+                        throw new Error(`Request failed (${res.status})`);
+                    }
+                    const data = await res.json();
+                    renderRateLimitStats(data);
+                    errEl.classList.add("hidden");
+                    errEl.textContent = "";
+                } catch (err) {
+                    console.error("Error loading rate limit stats:", err);
+                    errEl.textContent = "Failed to load rate limit stats: " + (err && err.message ? err.message : err);
+                    errEl.classList.remove("hidden");
+                }
+            }
+
+            function renderRateLimitStats(data) {
+                const top = (data.topKeys && data.topKeys[0]) || null;
+                document.getElementById("rate-limits-top-count").textContent =
+                    top ? String(top.count) : "0";
+                document.getElementById("rate-limits-top-key").textContent =
+                    top ? top.key : "No traffic in window";
+                document.getElementById("rate-limits-429-count").textContent =
+                    String(data.recent429Count ?? 0);
+                document.getElementById("rate-limits-failopen").textContent =
+                    String(data.failOpenCount ?? 0);
+                document.getElementById("rate-limits-rows").textContent =
+                    String(data.totalRows ?? 0);
+
+                const windowStartTxt = data.windowStart
+                    ? new Date(data.windowStart).toLocaleTimeString()
+                    : "—";
+                document.getElementById("rate-limits-window").textContent =
+                    "Window started at " + windowStartTxt + (data.windowMs ? " (" + Math.round(data.windowMs / 1000) + "s)" : "");
+
+                const tbody = document.getElementById("rate-limits-top-keys");
+                if (!data.topKeys || data.topKeys.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">No rate-limited keys in current window</td></tr>';
+                } else {
+                    tbody.innerHTML = data.topKeys
+                        .map((row, i) =>
+                            '<tr class="border-t" data-testid="row-rate-limit-key-' + i + '">' +
+                                '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
+                                '<td class="px-4 py-2 font-mono text-xs text-gray-800">' + escapeHtml(row.key) + '</td>' +
+                                '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.count)) + '</td>' +
+                            '</tr>'
+                        )
+                        .join("");
+                }
+
+                const updatedEl = document.getElementById("rate-limits-updated");
+                const updatedAt = new Date().toLocaleTimeString();
+                let suffix = "";
+                if (data.dbReachable === false) {
+                    suffix = " — DB unreachable: " + (data.dbError || "unknown error");
+                }
+                updatedEl.textContent = "Updated at " + updatedAt + suffix;
+            }
         </script>
         <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
 </body>

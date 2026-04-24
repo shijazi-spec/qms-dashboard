@@ -7,6 +7,22 @@ import { sanitizeRequestBody } from "../../utils/inputSanitizer";
 import { checkRateLimit, parseClientIp } from "../../utils/rateLimiter";
 import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
+function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter?: number): void {
+  // Fire-and-forget — never block the request or surface DB errors back to clients.
+  import("../../utils/database")
+    .then(({ logSystemEvent }) =>
+      logSystemEvent({
+        event_type: 'rate_limit_429',
+        event_category: 'security',
+        description: `429 Too Many Requests on ${method} ${urlPath}`,
+        severity: 'warning',
+        source: 'rateLimiter',
+        metadata: { path: urlPath, method, ip, retry_after: retryAfter ?? null },
+      }),
+    )
+    .catch(() => { /* swallow — observability must never break the request path */ });
+}
+
 const PUBLIC_PATHS = [
   '/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout',
   '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/',
@@ -91,6 +107,7 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   const rateCheck = await checkRateLimit(ip, isWrite, urlPath, isAuthenticated, session?.userId ? String(session.userId) : undefined);
   if (!rateCheck.allowed) {
     c.header('Retry-After', String(rateCheck.retryAfter || 60));
+    logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
     return c.json({ error: 'Too many requests' }, 429);
   }
 
@@ -204,6 +221,7 @@ export const globalMiddleware = [
       const rateCheck = await checkRateLimit(ip, isWrite, urlPath, false);
       if (!rateCheck.allowed) {
         c.header('Retry-After', String(rateCheck.retryAfter || 60));
+        logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
         return c.json({ error: 'Too many requests' }, 429);
       }
     }

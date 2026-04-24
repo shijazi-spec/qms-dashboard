@@ -517,4 +517,21 @@ export const adminApiRoutes = [
       };
     },
   },
+  {
+    path: "/api/admin/rate-limit-stats",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) return c.json({ error: 'Insufficient permissions' }, 403);
+          const { getRateLimitStats } = await import("../../utils/rateLimiter");
+          const stats = await getRateLimitStats();
+          return c.json(stats);
+        } catch (error) {
+          console.error("Error fetching rate limit stats:", error);
+          return c.json({ error: "Failed to fetch rate limit stats" }, 500);
+        }
+      };
+    },
+  },
 ];

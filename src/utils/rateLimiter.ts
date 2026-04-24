@@ -211,3 +211,98 @@ export async function checkRateLimit(
 export function getFailOpenCount(): number {
   return failOpenCount;
 }
+
+export interface RateLimitTopKey {
+  key: string;
+  count: number;
+  window_start: string;
+}
+
+export interface RateLimitStats {
+  windowMs: number;
+  windowStart: string;
+  topKeys: RateLimitTopKey[];
+  totalRows: number;
+  failOpenCount: number;
+  recent429Count: number;
+  dbReachable: boolean;
+  dbError?: string;
+}
+
+export async function getRateLimitStats(): Promise<RateLimitStats> {
+  // The rolling window starts ~60s ago in DB time. We expose an approximate
+  // wall-clock anchor for the dashboard but the actual cutoff used by the
+  // SQL query is `NOW() - INTERVAL '1 minute' - INTERVAL '1 second'`, which
+  // matches the enforcement query in checkRateLimit() exactly.
+  const now = Date.now();
+  const rollingWindowStart = new Date(now - WINDOW_MS);
+
+  const baseStats: RateLimitStats = {
+    windowMs: WINDOW_MS,
+    windowStart: rollingWindowStart.toISOString(),
+    topKeys: [],
+    totalRows: 0,
+    failOpenCount,
+    recent429Count: 0,
+    dbReachable: true,
+  };
+
+  try {
+    await ensureTable();
+    const pool = getPool();
+    const recent429Promise: Promise<number> = pool
+      .query<{ count: string }>(
+        `SELECT COUNT(*)::bigint AS count
+           FROM system_events
+          WHERE event_type = 'rate_limit_429'
+            AND created_at > NOW() - INTERVAL '5 minutes'`,
+      )
+      .then(r => parseInt(r.rows[0]?.count ?? '0', 10))
+      .catch((err: Error) => {
+        rlLogger.warn(
+          { err: err.message, component: 'rateLimiter' },
+          'system_events query failed in getRateLimitStats — defaulting recent429Count to 0',
+        );
+        return 0;
+      });
+
+    // Rolling 1-minute window aggregated by key.
+    // Buckets are written at second granularity by checkRateLimit()
+    // (`INSERT ... date_trunc('second', NOW())`), so we mirror its
+    // enforcement cutoff `NOW() - INTERVAL '1 minute' - INTERVAL '1 second'`
+    // exactly. The extra second matches the limiter's conservative bound
+    // and avoids a 1-second blind spot at the trailing edge.
+    const [topRes, totalRes, recent429Count] = await Promise.all([
+      pool.query<{ key: string; total: string; latest_window_start: Date }>(
+        `SELECT key,
+                SUM(count)::bigint AS total,
+                MAX(window_start)  AS latest_window_start
+           FROM rate_limit_buckets
+          WHERE window_start > NOW() - INTERVAL '1 minute' - INTERVAL '1 second'
+          GROUP BY key
+          ORDER BY total DESC
+          LIMIT 10`,
+      ),
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*)::bigint AS count FROM rate_limit_buckets`,
+      ),
+      recent429Promise,
+    ]);
+
+    baseStats.topKeys = topRes.rows.map(r => ({
+      key: r.key,
+      count: parseInt(r.total, 10),
+      window_start:
+        r.latest_window_start instanceof Date
+          ? r.latest_window_start.toISOString()
+          : String(r.latest_window_start),
+    }));
+    baseStats.totalRows = parseInt(totalRes.rows[0]?.count ?? '0', 10);
+    baseStats.recent429Count = recent429Count;
+    return baseStats;
+  } catch (err) {
+    baseStats.dbReachable = false;
+    baseStats.dbError = (err as Error).message;
+    return baseStats;
+  }
+}
