@@ -15,10 +15,34 @@ import {
   FEEDBACK_COMMENT_MAX_LEN,
   MODEL_PRICE_TABLE,
 } from "../../utils/aiTelemetry";
+import {
+  getAIAlerts,
+  acknowledgeAlert,
+  resolveAlert,
+  type AIAlert,
+} from "../../utils/aiAlertsDatabase";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 
 const AI_OPS_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
+
+/**
+ * Parse the `related_record_id` written by toolHealthAlertsCron, which uses
+ * a stable `<tool_name>:<reason>` composite (see maybeCreateBreachAlert).
+ * Tool names can themselves contain ':' (rare, but possible), so we split
+ * on the LAST colon and validate the suffix.
+ */
+function parseToolHealthRelatedId(
+  rid: string | undefined | null,
+): { tool_name: string; reason: 'error_rate' | 'p95_latency' } | null {
+  if (!rid || typeof rid !== 'string') return null;
+  const idx = rid.lastIndexOf(':');
+  if (idx <= 0 || idx === rid.length - 1) return null;
+  const tool_name = rid.slice(0, idx);
+  const reason = rid.slice(idx + 1);
+  if (reason !== 'error_rate' && reason !== 'p95_latency') return null;
+  return { tool_name, reason };
+}
 
 function safeInt(value: string | undefined, defaultVal: number, min: number, max: number): number {
   const n = parseInt(value ?? '', 10);
@@ -273,6 +297,110 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] recent-issues error:", error);
           return c.json({ error: "Failed to fetch recent issues" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Open `tool_health` alerts written by the toolHealthAlertsCron, with the
+   * `<tool_name>:<reason>` composite key parsed out so the frontend can link
+   * each alert to the matching row in the per-tool error/latency table.
+   *
+   * Returns alerts with status='open' only — acknowledged alerts have already
+   * been triaged and shouldn't re-pin to the top of the panel. Resolved /
+   * dismissed alerts are excluded for the same reason.
+   */
+  {
+    path: "/api/ai-ops/tool-health-alerts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 20, 1, 100);
+          const { alerts, total } = await getAIAlerts({
+            alert_type: 'tool_health',
+            status: 'open',
+            limit,
+          });
+          const data = alerts.map((a: AIAlert) => {
+            const parsed = parseToolHealthRelatedId(a.related_record_id);
+            return {
+              id: a.id,
+              severity: a.severity,
+              title: a.title,
+              description: a.description,
+              suggestion: a.suggestion,
+              status: a.status,
+              related_record_id: a.related_record_id,
+              tool_name: parsed?.tool_name ?? null,
+              reason: parsed?.reason ?? null,
+              created_at: a.created_at,
+            };
+          });
+          return c.json({ data, total });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-alerts error:", error);
+          return c.json({ error: "Failed to fetch tool-health alerts" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Acknowledge a tool-health alert from the AI Ops panel. Thin wrapper
+   * around acknowledgeAlert() scoped to AI_OPS_ROLES so the panel doesn't
+   * need to call cross-namespace consultant endpoints.
+   */
+  {
+    path: "/api/ai-ops/alerts/:id/acknowledge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const id = parseInt(String(c.req.param("id") ?? ''), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "Invalid alert id" }, 400);
+          }
+          const acknowledgedBy = user.name || user.email;
+          const alert = await acknowledgeAlert(id, acknowledgedBy);
+          if (!alert) return c.json({ error: "Alert not found" }, 404);
+          return c.json({ success: true, alert });
+        } catch (error) {
+          console.error("[AI-Ops] alert acknowledge error:", error);
+          return c.json({ error: "Failed to acknowledge alert" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Resolve a tool-health alert from the AI Ops panel. See
+   * /api/ai-ops/alerts/:id/acknowledge for the rationale on keeping this
+   * separate from the consultant alert routes.
+   */
+  {
+    path: "/api/ai-ops/alerts/:id/resolve",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const id = parseInt(String(c.req.param("id") ?? ''), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "Invalid alert id" }, 400);
+          }
+          const alert = await resolveAlert(id);
+          if (!alert) return c.json({ error: "Alert not found" }, 404);
+          return c.json({ success: true, alert });
+        } catch (error) {
+          console.error("[AI-Ops] alert resolve error:", error);
+          return c.json({ error: "Failed to resolve alert" }, 500);
         }
       };
     },

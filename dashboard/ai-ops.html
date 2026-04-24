@@ -42,6 +42,28 @@
       </button>
     </div>
 
+    <!-- Tool Health Alerts banner: surfaces open `tool_health` alerts at the
+         very top of the panel so ops doesn't have to scroll into the tools
+         table to notice a degraded tool. Hidden when there are zero open
+         alerts. Each card jumps to the matching row in the Top Tools table. -->
+    <section id="tool-health-alerts-section" class="hidden mb-6" data-testid="section-tool-health-alerts" aria-live="polite">
+      <div class="bg-red-50 border border-red-200 rounded-xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/>
+            </svg>
+            <h2 class="text-lg font-semibold text-red-800" data-testid="text-tool-health-alerts-heading">
+              Tool health alerts
+              <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white" id="tool-health-alerts-count" data-testid="badge-tool-health-alerts-count">0</span>
+            </h2>
+          </div>
+          <p class="text-xs text-red-700">Open alerts from the per-tool error/latency monitor. Acknowledge to triage, resolve once fixed.</p>
+        </div>
+        <div id="tool-health-alerts-list" class="space-y-2" data-testid="list-tool-health-alerts"></div>
+      </div>
+    </section>
+
     <!-- Summary KPI cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="summary-cards">
       <div class="stat-card" data-testid="card-24h-cost">
@@ -354,6 +376,193 @@
       }
     }
 
+    // ── Tool-health alerts ────────────────────────────────────────────────
+    // Renders the open `tool_health` alerts pinned at the top of the panel.
+    // Section is hidden when there are zero open alerts so it doesn't
+    // permanently consume screen real estate when everything is healthy.
+    const SEVERITY_BADGE = {
+      critical: 'bg-red-600 text-white',
+      high:     'bg-orange-500 text-white',
+      medium:   'bg-yellow-400 text-yellow-900',
+      low:      'bg-blue-400 text-white',
+      info:     'bg-gray-300 text-gray-800',
+    };
+    const REASON_LABEL = {
+      error_rate:  'Error rate',
+      p95_latency: 'p95 latency',
+    };
+
+    async function loadToolHealthAlerts() {
+      const section = document.getElementById('tool-health-alerts-section');
+      const list = document.getElementById('tool-health-alerts-list');
+      const countBadge = document.getElementById('tool-health-alerts-count');
+      if (!section || !list || !countBadge) return;
+      try {
+        const { data } = await apiFetch('/api/ai-ops/tool-health-alerts?limit=20');
+        const alerts = Array.isArray(data) ? data : [];
+        if (alerts.length === 0) {
+          section.classList.add('hidden');
+          list.innerHTML = '';
+          countBadge.textContent = '0';
+          return;
+        }
+        section.classList.remove('hidden');
+        countBadge.textContent = String(alerts.length);
+        list.innerHTML = alerts.map(a => {
+          const sevClass = SEVERITY_BADGE[a.severity] || SEVERITY_BADGE.info;
+          const reasonText = REASON_LABEL[a.reason] || 'Tool health';
+          // Link to the per-tool table row when we know the tool name.
+          // When tool_name is missing (legacy alert with malformed key),
+          // fall back to a disabled "no link" affordance.
+          // Tool names can contain arbitrary characters (quotes, backslashes,
+          // …). Reading the value from the card's data-tool-name attribute
+          // avoids unsafe inline-JS string interpolation here.
+          const linkBtn = a.tool_name
+            ? `<button type="button"
+                 class="text-xs px-2 py-1 rounded border border-red-300 bg-white text-red-700 hover:bg-red-100"
+                 onclick="jumpToToolRowFromAlert(${a.id})"
+                 data-testid="button-jump-tool-${a.id}">
+                 View tool row →
+               </button>`
+            : `<span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-500" data-testid="text-no-tool-link-${a.id}">No linked tool row</span>`;
+          return `
+          <div class="bg-white border border-red-200 rounded-lg p-3" data-testid="card-tool-health-alert-${a.id}" data-alert-id="${a.id}" data-tool-name="${esc(a.tool_name || '')}">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${sevClass}" data-testid="badge-severity-${a.id}">${esc(a.severity)}</span>
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-red-700" data-testid="text-reason-${a.id}">${esc(reasonText)}</span>
+                  ${a.tool_name ? `<code class="text-xs font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded" data-testid="text-alert-tool-${a.id}">${esc(a.tool_name)}</code>` : ''}
+                </div>
+                <p class="text-sm font-semibold text-gray-900" data-testid="text-alert-title-${a.id}">${esc(a.title)}</p>
+                <p class="text-xs text-gray-600 mt-1" data-testid="text-alert-description-${a.id}">${esc(a.description)}</p>
+                ${a.suggestion ? `<p class="text-xs text-gray-500 italic mt-1" data-testid="text-alert-suggestion-${a.id}">${esc(a.suggestion)}</p>` : ''}
+              </div>
+              <div class="flex flex-col gap-1.5 shrink-0">
+                ${linkBtn}
+                <button type="button"
+                  class="text-xs px-2 py-1 rounded border border-yellow-300 bg-white text-yellow-800 hover:bg-yellow-50"
+                  onclick="acknowledgeToolHealthAlert(${a.id}, this)"
+                  data-testid="button-acknowledge-alert-${a.id}">
+                  Acknowledge
+                </button>
+                <button type="button"
+                  class="text-xs px-2 py-1 rounded border border-green-300 bg-white text-green-800 hover:bg-green-50"
+                  onclick="resolveToolHealthAlert(${a.id}, this)"
+                  data-testid="button-resolve-alert-${a.id}">
+                  Resolve
+                </button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Tool-health alerts load error', e);
+        section.classList.remove('hidden');
+        list.innerHTML = '<p class="text-sm text-red-700" data-testid="text-tool-health-alerts-error">Failed to load tool-health alerts.</p>';
+      }
+    }
+
+    async function postToolHealthAlertAction(id, action) {
+      const r = await fetch(`/api/ai-ops/alerts/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function disableAlertButtons(card) {
+      if (!card) return;
+      card.querySelectorAll('button').forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+    }
+
+    async function acknowledgeToolHealthAlert(id, btn) {
+      const card = btn?.closest('[data-alert-id]');
+      disableAlertButtons(card);
+      try {
+        await postToolHealthAlertAction(id, 'acknowledge');
+        // Acknowledged alerts shouldn't keep blocking ops attention at the
+        // top of the panel — drop them from this banner and reload the list
+        // so the count badge stays accurate.
+        await loadToolHealthAlerts();
+      } catch (e) {
+        console.error('Acknowledge alert error', e);
+        if (card) {
+          card.querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+        }
+      }
+    }
+
+    async function resolveToolHealthAlert(id, btn) {
+      const card = btn?.closest('[data-alert-id]');
+      disableAlertButtons(card);
+      try {
+        await postToolHealthAlertAction(id, 'resolve');
+        await loadToolHealthAlerts();
+      } catch (e) {
+        console.error('Resolve alert error', e);
+        if (card) {
+          card.querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+        }
+      }
+    }
+
+    // Jumps to the matching row in the Top Tools tab. Switches to that tab
+    // first (which lazily loads the table), then waits for the row to render
+    // before scrolling/highlighting it.
+    //
+    // Resets the agent filter to "All agents" before reloading so the row
+    // lookup isn't defeated by a stale per-agent filter chosen earlier.
+    // Surfaces an inline notice when the tool isn't in the current top-N
+    // list, so operators understand why nothing scrolled.
+    async function jumpToToolRow(toolName) {
+      switchTab('tools');
+      const filterSel = document.getElementById('tools-agent-filter');
+      if (filterSel && filterSel.value !== '') filterSel.value = '';
+      await loadTools();
+      // Defer to next frame to let the table commit to the DOM.
+      requestAnimationFrame(() => {
+        const safe = String(toolName || '');
+        const row = document.querySelector(
+          `#tools-table tr[data-tool-name="${(window.CSS && CSS.escape) ? CSS.escape(safe) : safe.replace(/"/g, '\\"')}"]`
+        );
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.classList.add('ring-2', 'ring-red-400');
+          setTimeout(() => row.classList.remove('ring-2', 'ring-red-400'), 2500);
+        } else {
+          showToolRowMissingNotice(safe);
+        }
+      });
+    }
+
+    function showToolRowMissingNotice(toolName) {
+      const container = document.getElementById('tools-table');
+      if (!container) return;
+      const existing = document.getElementById('tool-row-missing-notice');
+      if (existing) existing.remove();
+      const notice = document.createElement('div');
+      notice.id = 'tool-row-missing-notice';
+      notice.className = 'mb-3 px-3 py-2 text-xs rounded border border-yellow-300 bg-yellow-50 text-yellow-800';
+      notice.setAttribute('data-testid', 'text-tool-row-missing');
+      notice.textContent =
+        `Tool "${toolName}" isn't in the current top tools list ` +
+        `(no qualifying calls in the last 7 days). The alert may reference ` +
+        `a tool whose recent traffic falls below the listing threshold.`;
+      container.parentElement?.insertBefore(notice, container);
+      setTimeout(() => notice.remove(), 8000);
+    }
+
+    // Variant called from the alert card: looks up tool_name on the card
+    // (avoids unsafe inline-JS string interpolation of free-form names).
+    function jumpToToolRowFromAlert(alertId) {
+      const card = document.querySelector(`[data-alert-id="${alertId}"]`);
+      const toolName = card?.getAttribute('data-tool-name') || '';
+      if (toolName) jumpToToolRow(toolName);
+    }
+
     function renderPriceTable(pt) {
       const rows = Object.entries(pt).map(([model, p]) =>
         `<tr class="border-t">
@@ -569,7 +778,7 @@
               <th class="px-3 py-2 text-right">Total Cost</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
-              <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-tool-${i}">
+              <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-tool-${i}" data-tool-name="${esc(r.tool_name)}">
                 <td class="px-3 py-2 font-medium text-gray-900 font-mono text-xs">${esc(r.tool_name)}</td>
                 <td class="px-3 py-2 text-gray-600 text-xs">${esc(r.agent_name)}</td>
                 <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
@@ -835,6 +1044,7 @@
 
     function refreshAll() {
       loadSummary();
+      loadToolHealthAlerts();
       loadCostTrend();
       const active = TABS.find(t => !document.getElementById(`content-${t}`).classList.contains('hidden'));
       if (active === 'latency')  loadLatency();
@@ -859,6 +1069,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       loadSummary();
+      loadToolHealthAlerts();
       loadCostTrend();
     });
   </script>
