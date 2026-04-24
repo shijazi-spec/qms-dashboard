@@ -1071,6 +1071,15 @@
       loadSummary();
       loadToolHealthAlerts();
       loadCostTrend();
+      // Honor a deep-link like /ai-ops?tab=prompts so notifications can
+      // jump the admin straight to the regression view (Task #121).
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const requested = params.get('tab');
+        if (requested && TABS.includes(requested)) {
+          switchTab(requested);
+        }
+      } catch (_e) { /* no-op: SSR / older browsers */ }
     });
   </script>
 </body>

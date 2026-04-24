@@ -12,7 +12,8 @@ export type AlertType =
   | 'policy_expiry'
   | 'audit_decline'
   | 'sla_breach'
-  | 'tool_health';
+  | 'tool_health'
+  | 'prompt_regression';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved' | 'dismissed';

@@ -4,6 +4,7 @@ import { registerApiRoute as originalRegisterApiRoute } from "@mastra/core/serve
 import { type Mastra } from "@mastra/core";
 import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
 import { toolHealthAlertsCronFunction } from "../workflows/toolHealthAlertsCron";
+import { promptRegressionAlertsCronFunction } from "../workflows/promptRegressionAlertsCron";
 
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
 const {
@@ -675,6 +676,15 @@ inngestFunctions.push(rateLimit429EventsPrunerFunction);
 // (kept there so all the threshold config + evaluation logic live together).
 // ──────────────────────────────────────────────────────────────────────────────
 inngestFunctions.push(toolHealthAlertsCronFunction);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Prompt-regression alert cron — defined in workflows/promptRegressionAlertsCron.ts
+// (Task #121: warns admins when a newer prompt version of an agent is at
+// least 10pp worse than the best version for the same agent in the rolling
+// window, so a bad prompt edit is caught even if no one opens the AI Ops
+// dashboard).
+// ──────────────────────────────────────────────────────────────────────────────
+inngestFunctions.push(promptRegressionAlertsCronFunction);
 
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },

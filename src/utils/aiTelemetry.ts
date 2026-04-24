@@ -938,8 +938,13 @@ export async function insertCallFeedback(
  *
  * Calls without a recorded prompt_version are bucketed as "(unknown)" so
  * legacy rows recorded before this column existed do not silently disappear.
+ *
+ * The row shape is exported as `PromptVersionAggregate` so the
+ * prompt-regression cron (src/mastra/workflows/promptRegressionAlertsCron.ts)
+ * and its tests share the exact shape and cannot drift from this query's
+ * output.
  */
-export async function getFeedbackRateByPromptVersion(days = 30): Promise<{
+export interface PromptVersionAggregate {
   agent_name: string;
   prompt_version: string;
   call_count: number;
@@ -952,7 +957,11 @@ export async function getFeedbackRateByPromptVersion(days = 30): Promise<{
   error_rate_pct: number;
   first_seen: string;
   last_seen: string;
-}[]> {
+}
+
+export async function getFeedbackRateByPromptVersion(
+  days = 30,
+): Promise<PromptVersionAggregate[]> {
   try {
     await ensureAiMetricsTable();
     await ensureFeedbackTable();
