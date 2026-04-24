@@ -12,6 +12,27 @@
     var DEFAULT_CONFIRM_CANCEL_MS = 30 * 1000;
     var CONFIRM_CANCEL_MESSAGE = "Cancel this download? You'll lose progress.";
 
+    function tr(key, defaultText, vars) {
+        var i18n = global.WalaPlusI18n;
+        if (i18n && typeof i18n.t === 'function') {
+            var translated = i18n.t(key, vars);
+            var lastSegment = key.split('.').pop();
+            // WalaPlusI18n.t falls back to the last key segment when the
+            // string is missing — treat that as "not translated" and use the
+            // English default below so we never render a bare key fragment.
+            if (translated && translated !== lastSegment) {
+                return translated;
+            }
+        }
+        var s = String(defaultText);
+        if (vars && typeof vars === 'object') {
+            Object.keys(vars).forEach(function (k) {
+                s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+            });
+        }
+        return s;
+    }
+
     function parseContentDispositionFilename(header) {
         if (!header) return null;
         var starMatch = /filename\*\s*=\s*([^;]+)/i.exec(header);
@@ -143,10 +164,13 @@
 
     function progressLabel(received, totalLength) {
         var sizeText = formatBytes(received);
-        var pctText = totalLength
-            ? ' (' + Math.min(99, Math.round((received / totalLength) * 100)) + '%)'
-            : '';
-        return 'Downloading ' + sizeText + pctText;
+        if (totalLength) {
+            var pct = Math.min(99, Math.round((received / totalLength) * 100));
+            return tr('downloads.downloading_with_progress',
+                'Downloading {size} ({pct}%)',
+                { size: sizeText, pct: pct });
+        }
+        return tr('downloads.downloading', 'Downloading {size}', { size: sizeText });
     }
 
     function supportsFileSystemAccess() {
@@ -368,7 +392,7 @@
         var mime = (contentType || 'application/octet-stream').split(';')[0].trim() || 'application/octet-stream';
         var accept = {};
         accept[mime] = [ext];
-        return [{ description: 'Export file', accept: accept }];
+        return [{ description: tr('downloads.export_file', 'Export file'), accept: accept }];
     }
 
     // --- Progress UI / Toast helpers --------------------------------------
@@ -390,7 +414,7 @@
         c.id = PROGRESS_CONTAINER_ID;
         c.className = 'fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]';
         c.setAttribute('aria-live', 'polite');
-        c.setAttribute('aria-label', 'Downloads in progress');
+        c.setAttribute('aria-label', tr('downloads.in_progress_aria', 'Downloads in progress'));
         document.body.appendChild(c);
         return c;
     }
@@ -432,10 +456,14 @@
         spinner.className = 'flex-shrink-0';
         nameWrap.appendChild(spinner);
 
+        var defaultLabel = tr('downloads.download', 'Download');
+        var defaultFile = tr('downloads.default_file', 'file');
+
         var nameText = document.createElement('span');
         nameText.className = 'font-medium truncate';
-        nameText.textContent = filename || 'Download';
-        nameText.title = filename || 'Download';
+        nameText.textContent = filename || defaultLabel;
+        nameText.title = filename || defaultLabel;
+        nameText.setAttribute('dir', 'auto');
         nameText.setAttribute('data-testid', 'text-download-filename');
         nameWrap.appendChild(nameText);
 
@@ -444,8 +472,9 @@
         var cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'text-xs font-medium text-red-600 hover:text-red-800 hover:underline focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded px-2 py-1 flex-shrink-0';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.setAttribute('aria-label', 'Cancel download of ' + (filename || 'file'));
+        cancelBtn.textContent = tr('downloads.cancel', 'Cancel');
+        cancelBtn.setAttribute('aria-label', tr('downloads.cancel_aria',
+            'Cancel download of {filename}', { filename: filename || defaultFile }));
         cancelBtn.setAttribute('data-testid', 'button-cancel-download');
         cancelBtn.addEventListener('click', function () {
             // The owner's onCancel may pop a confirm() and return false if
@@ -457,7 +486,7 @@
             } catch (_) { triggered = undefined; }
             if (triggered === false) return;
             cancelBtn.disabled = true;
-            cancelBtn.textContent = 'Cancelling…';
+            cancelBtn.textContent = tr('downloads.cancelling', 'Cancelling…');
         });
         header.appendChild(cancelBtn);
 
@@ -468,7 +497,8 @@
         barWrap.setAttribute('role', 'progressbar');
         barWrap.setAttribute('aria-valuemin', '0');
         barWrap.setAttribute('aria-valuemax', '100');
-        barWrap.setAttribute('aria-label', 'Download progress for ' + (filename || 'file'));
+        barWrap.setAttribute('aria-label', tr('downloads.progress_aria',
+            'Download progress for {filename}', { filename: filename || defaultFile }));
         var bar = document.createElement('div');
         bar.className = 'h-full bg-blue-600 transition-all duration-150';
         bar.style.width = '0%';
@@ -479,7 +509,7 @@
         var statusEl = document.createElement('div');
         statusEl.className = 'mt-1 text-xs text-gray-500 truncate';
         statusEl.setAttribute('data-testid', 'text-download-status');
-        statusEl.textContent = 'Preparing…';
+        statusEl.textContent = tr('downloads.preparing', 'Preparing…');
         card.appendChild(statusEl);
 
         container.appendChild(card);
@@ -487,8 +517,10 @@
         function setLabel(name) {
             nameText.textContent = name;
             nameText.title = name;
-            barWrap.setAttribute('aria-label', 'Download progress for ' + name);
-            cancelBtn.setAttribute('aria-label', 'Cancel download of ' + name);
+            barWrap.setAttribute('aria-label', tr('downloads.progress_aria',
+                'Download progress for {filename}', { filename: name }));
+            cancelBtn.setAttribute('aria-label', tr('downloads.cancel_aria',
+                'Cancel download of {filename}', { filename: name }));
         }
 
         function update(received, total) {
@@ -497,13 +529,16 @@
                 var pct = Math.min(100, Math.round((received / total) * 100));
                 bar.style.width = pct + '%';
                 barWrap.setAttribute('aria-valuenow', String(pct));
-                statusEl.textContent = sizeText + ' / ' + formatBytes(total) + ' (' + pct + '%)';
+                statusEl.textContent = tr('downloads.status_with_total',
+                    '{received} / {total} ({pct}%)',
+                    { received: sizeText, total: formatBytes(total), pct: pct });
             } else {
                 // Indeterminate — approach 95% asymptotically as more bytes arrive.
                 var visualPct = Math.min(95, Math.round((received / (received + 2 * 1024 * 1024)) * 100));
                 bar.style.width = visualPct + '%';
                 barWrap.removeAttribute('aria-valuenow');
-                statusEl.textContent = sizeText + ' downloaded';
+                statusEl.textContent = tr('downloads.status_indeterminate',
+                    '{size} downloaded', { size: sizeText });
             }
         }
 
@@ -568,6 +603,7 @@
         var msg = document.createElement('span');
         msg.className = 'flex-1 break-words';
         msg.textContent = message;
+        msg.setAttribute('dir', 'auto');
         toast.appendChild(msg);
 
         var dismissed = false;
@@ -601,7 +637,7 @@
         close.type = 'button';
         close.className = 'text-white/80 hover:text-white text-lg leading-none focus:outline-none focus:ring-2 focus:ring-white/60 rounded';
         close.innerHTML = '&times;';
-        close.setAttribute('aria-label', 'Dismiss notification');
+        close.setAttribute('aria-label', tr('downloads.dismiss_notification', 'Dismiss notification'));
         close.setAttribute('data-testid', 'button-dismiss-toast');
         close.addEventListener('click', dismiss);
         toast.appendChild(close);
@@ -1147,7 +1183,7 @@
         if (!el || !estimate) return;
         var label;
         if (!estimate.bytes || estimate.bytes <= 0 || estimate.rows === 0) {
-            label = 'empty';
+            label = tr('downloads.size_empty', 'empty');
         } else {
             label = '≈ ' + formatBytes(estimate.bytes);
         }
@@ -1159,8 +1195,11 @@
             el.appendChild(hint);
         }
         hint.textContent = '(' + label + ')';
-        var rowText = estimate.rows ? estimate.rows.toLocaleString() + ' rows' : 'no rows';
-        var titleSuffix = 'Estimated ' + label + ' · ' + rowText;
+        var rowText = estimate.rows
+            ? tr('downloads.rows', '{count} rows', { count: estimate.rows.toLocaleString() })
+            : tr('downloads.no_rows', 'no rows');
+        var titleSuffix = tr('downloads.estimate_title',
+            'Estimated {label} · {rows}', { label: label, rows: rowText });
         var existingTitle = el.getAttribute('data-original-title') || el.getAttribute('title') || '';
         if (!el.getAttribute('data-original-title') && existingTitle) {
             el.setAttribute('data-original-title', existingTitle);
@@ -1251,17 +1290,20 @@
         text.className = 'flex-1';
         var strong = document.createElement('strong');
         strong.className = 'block font-semibold';
-        strong.textContent = "This browser can't stream exports directly to disk.";
+        strong.textContent = tr('downloads.fallback_notice_title',
+            "This browser can't stream exports directly to disk.");
         var detail = document.createElement('span');
         detail.className = 'block mt-0.5';
-        detail.textContent = 'Exports over ~200 MB will be buffered in memory and may be slow ' +
-            'or fail. For large downloads, use a recent Chrome, Firefox, or Safari.';
+        detail.textContent = tr('downloads.fallback_notice_detail',
+            'Exports over ~200 MB will be buffered in memory and may be slow ' +
+            'or fail. For large downloads, use a recent Chrome, Firefox, or Safari.');
         text.appendChild(strong);
         text.appendChild(detail);
 
         var dismiss = document.createElement('button');
         dismiss.type = 'button';
-        dismiss.setAttribute('aria-label', 'Dismiss browser export advisory');
+        dismiss.setAttribute('aria-label', tr('downloads.fallback_notice_dismiss',
+            'Dismiss browser export advisory'));
         dismiss.setAttribute('data-testid', 'button-dismiss-streaming-fallback');
         dismiss.className = 'flex-shrink-0 rounded p-1 text-amber-900 hover:bg-amber-100 ' +
             'focus:outline-none focus:ring-2 focus:ring-amber-500 ' +
@@ -1346,7 +1388,7 @@
         var cancellable = options.cancellable !== false;
         var trackHistory = options.trackHistory !== false;
 
-        var initialFilename = options.filename || 'Preparing download…';
+        var initialFilename = options.filename || tr('downloads.preparing_download', 'Preparing download…');
         var card = null;
         var cancelled = false;
         var originalContent = null;
@@ -1455,7 +1497,7 @@
                         : null);
                 if (prompter) {
                     var ok;
-                    try { ok = prompter(CONFIRM_CANCEL_MESSAGE); }
+                    try { ok = prompter(tr('downloads.confirm_cancel_message', CONFIRM_CANCEL_MESSAGE)); }
                     catch (_) { ok = true; }
                     if (!ok) return false;
                 }
@@ -1496,8 +1538,9 @@
         if (button) {
             originalContent = button.innerHTML;
             cancelable = setupCancelableButton(button, requestCancel);
-            if (cancelable) cancelable.updateLabel('Preparing…');
-            else setBusy(button, 'Preparing…');
+            var preparingLabel = tr('downloads.preparing', 'Preparing…');
+            if (cancelable) cancelable.updateLabel(preparingLabel);
+            else setBusy(button, preparingLabel);
         }
 
         if (showProgressUI) {
@@ -1527,7 +1570,8 @@
             var response = await fetch(url, fetchInit);
 
             if (!response.ok) {
-                var msg = 'Export failed (HTTP ' + response.status + ')';
+                var msg = tr('downloads.export_failed_http',
+                    'Export failed (HTTP {status})', { status: response.status });
                 try {
                     var ct = response.headers.get('content-type') || '';
                     if (ct.indexOf('application/json') !== -1) {
@@ -1602,13 +1646,16 @@
             if (card) {
                 card.setBarColor('bg-green-600');
                 card.update(result.bytes, totalLength || result.bytes);
-                card.setStatus('Done — ' + formatBytes(result.bytes));
+                card.setStatus(tr('downloads.done', 'Done — {size}',
+                    { size: formatBytes(result.bytes) }));
                 card.disableCancel();
                 card.remove(2500);
             }
 
             if (showToastUI) {
-                showToast('Downloaded ' + filename + ' (' + formatBytes(result.bytes) + ')', 'success');
+                showToast(tr('downloads.downloaded_toast',
+                    'Downloaded {filename} ({size})',
+                    { filename: filename, size: formatBytes(result.bytes) }), 'success');
             }
 
             if (historyId) {
@@ -1655,13 +1702,13 @@
                 && err && err.name === 'AbortError';
             // Prefer the parsed filename so the interrupted toast keeps the
             // file context even after the floating card has gone away.
-            var displayName = options.filename || resolvedFilename || (card ? null : 'file');
+            var displayName = options.filename || resolvedFilename || (card ? null : tr('downloads.default_file', 'file'));
 
             if (isUserCancel) {
                 console.info('streamingDownload cancelled by user for', url);
                 if (card) {
                     card.setBarColor('bg-gray-400');
-                    card.setStatus('Cancelled');
+                    card.setStatus(tr('downloads.cancelled', 'Cancelled'));
                     card.disableCancel();
                     card.remove(2500);
                 }
@@ -1686,7 +1733,7 @@
                 console.warn('streamingDownload interrupted by environment for', url, err);
                 if (card) {
                     card.setBarColor('bg-amber-500');
-                    card.setStatus('Interrupted — browser stopped the download');
+                    card.setStatus(tr('downloads.interrupted_status', 'Interrupted — browser stopped the download'));
                     card.disableCancel();
                     card.remove(8000);
                 }
@@ -1694,15 +1741,18 @@
                     var retryUrl = url;
                     var retryOptions = options;
                     showToast(
-                        'Download interrupted' +
-                            (displayName ? ' (' + displayName + ')' : '') +
-                            ' — your browser stopped the download (tab inactive, sleep, or network drop).',
+                        displayName
+                            ? tr('downloads.interrupted_toast_with_name',
+                                'Download interrupted ({filename}) — your browser stopped the download (tab inactive, sleep, or network drop).',
+                                { filename: displayName })
+                            : tr('downloads.interrupted_toast',
+                                'Download interrupted — your browser stopped the download (tab inactive, sleep, or network drop).'),
                         'warn',
                         {
                             testId: 'toast-download-interrupted',
                             autoDismissMs: 12000,
                             action: {
-                                label: 'Retry',
+                                label: tr('downloads.retry', 'Retry'),
                                 testId: 'button-retry-download',
                                 onClick: function () {
                                     try {
@@ -1735,14 +1785,15 @@
             }
 
             console.error('streamingDownload failed for', url, err);
+            var errMsg = (err && err.message) ? err.message : tr('downloads.unknown_error', 'Unknown error');
             if (card) {
                 card.setBarColor('bg-red-600');
-                card.setStatus('Failed: ' + ((err && err.message) ? err.message : 'Unknown error'));
+                card.setStatus(tr('downloads.failed_status', 'Failed: {message}', { message: errMsg }));
                 card.disableCancel();
                 card.remove(6000);
             }
             if (showToastUI) {
-                showToast('Download failed: ' + ((err && err.message) ? err.message : 'Unknown error'), 'error');
+                showToast(tr('downloads.failed_toast', 'Download failed: {message}', { message: errMsg }), 'error');
             }
             if (historyId) {
                 updateHistoryEntry(historyId, {

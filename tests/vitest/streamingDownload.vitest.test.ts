@@ -1292,6 +1292,108 @@ describe('streamingDownload (browser helper)', () => {
     });
   });
 
+  function installI18nShim(win: any, dictionary: any) {
+    function get(obj: any, path: string) {
+      return path.split('.').reduce((acc: any, k: string) => (acc == null ? acc : acc[k]), obj);
+    }
+    win.WalaPlusI18n = {
+      t: (key: string, vars?: Record<string, any>) => {
+        const v = get(dictionary, key);
+        if (v == null) return key.split('.').pop();
+        let s = String(v);
+        if (vars) {
+          for (const k of Object.keys(vars)) {
+            s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), String(vars[k]));
+          }
+        }
+        return s;
+      },
+    };
+  }
+
+  it('renders Arabic translations for the progress card and toast when WalaPlusI18n is loaded', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    const ar = JSON.parse(
+      readFileSync(resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'ar.json'), 'utf8')
+    );
+    installI18nShim(env.win, ar);
+
+    const payload = new Uint8Array(1024).fill(7);
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([payload]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="report.csv"',
+          'content-length': String(payload.byteLength),
+        },
+      })
+    );
+
+    await env.win.streamingDownload('/api/exports/report.csv');
+
+    // The success toast should now be in Arabic.
+    const toast = env.win.document.querySelector('[data-testid="toast-download-success"]');
+    expect(toast).not.toBeNull();
+    expect(toast!.textContent || '').toContain('تم تنزيل');
+    expect(toast!.textContent || '').toContain('report.csv');
+
+    // The dismiss button label switches to Arabic too.
+    const dismiss = toast!.querySelector('[data-testid="button-dismiss-toast"]');
+    expect(dismiss?.getAttribute('aria-label')).toBe('إغلاق الإشعار');
+  });
+
+  it('renders the streaming-fallback advisory in Arabic when WalaPlusI18n is loaded', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    const ar = JSON.parse(
+      readFileSync(resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'ar.json'), 'utf8')
+    );
+    installI18nShim(env.win, ar);
+
+    const main = env.win.document.createElement('main');
+    const button = env.win.document.createElement('button');
+    button.setAttribute('data-on-click', 'streamDownload');
+    button.textContent = 'Export';
+    main.appendChild(button);
+    env.win.document.body.appendChild(main);
+
+    env.win.streamingDownload.attachStreamingFallbackNotice(env.win.document);
+
+    const notice = env.win.document.querySelector('[data-testid="notice-streaming-fallback"]');
+    expect(notice).not.toBeNull();
+    expect(notice!.textContent || '').toContain('هذا المتصفح');
+    expect(notice!.textContent || '').toContain('200 ميجابايت');
+
+    const dismissBtn = notice!.querySelector('[data-testid="button-dismiss-streaming-fallback"]');
+    expect(dismissBtn?.getAttribute('aria-label')).toBe('إغلاق إشعار تصدير المتصفح');
+  });
+
+  it('falls back to English defaults when WalaPlusI18n is not loaded', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    const payload = new Uint8Array([1, 2, 3]);
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([payload]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="plain.csv"',
+          'content-length': String(payload.byteLength),
+        },
+      })
+    );
+
+    await env.win.streamingDownload('/api/exports/plain.csv');
+
+    const toast = env.win.document.querySelector('[data-testid="toast-download-success"]');
+    expect(toast?.textContent || '').toContain('Downloaded');
+    expect(toast?.textContent || '').toContain('plain.csv');
+    const dismiss = toast?.querySelector('[data-testid="button-dismiss-toast"]');
+    expect(dismiss?.getAttribute('aria-label')).toBe('Dismiss notification');
+  });
+
   it('honours useServiceWorker=false to skip the SW path entirely', async () => {
     env = setupBrowserEnv({
       enableShowSaveFilePicker: false,
