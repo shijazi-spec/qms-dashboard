@@ -92,6 +92,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -126,23 +127,23 @@
             <div id="healthBar" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                 <div class="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
                     <div id="stat-total" class="text-xl font-bold text-gray-800" data-testid="text-health-total">--</div>
-                    <div class="text-xs text-gray-500">Records Shown</div>
+                    <div class="text-xs text-gray-500" data-i18n="crm.records_shown">Records Shown</div>
                 </div>
                 <div class="bg-green-50 rounded-lg p-3 text-center border border-green-200">
                     <div id="stat-clean" class="text-xl font-bold text-green-700" data-testid="text-health-clean">--</div>
-                    <div class="text-xs text-green-600">Clean Records</div>
+                    <div class="text-xs text-green-600" data-i18n="crm.clean_records">Clean Records</div>
                 </div>
                 <div class="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
                     <div id="stat-issues" class="text-xl font-bold text-amber-700" data-testid="text-health-issues">--</div>
-                    <div class="text-xs text-amber-600">With Issues</div>
+                    <div class="text-xs text-amber-600" data-i18n="crm.with_issues">With Issues</div>
                 </div>
                 <div class="bg-red-50 rounded-lg p-3 text-center border border-red-200">
                     <div id="stat-junk" class="text-xl font-bold text-red-700" data-testid="text-health-junk">--</div>
-                    <div class="text-xs text-red-600">Junk / Spam</div>
+                    <div class="text-xs text-red-600" data-i18n="crm.junk_spam">Junk / Spam</div>
                 </div>
                 <div class="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
                     <div id="stat-duplicates" class="text-xl font-bold text-purple-700" data-testid="text-health-duplicates">--</div>
-                    <div class="text-xs text-purple-600">In Dup. Clusters</div>
+                    <div class="text-xs text-purple-600" data-i18n="crm.in_dup_clusters">In Dup. Clusters</div>
                 </div>
             </div>
 
@@ -664,5 +665,10 @@
         });
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

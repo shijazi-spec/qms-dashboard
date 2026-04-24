@@ -43,6 +43,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -61,7 +62,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Total Logs</p>
+                        <p class="text-sm text-gray-500" data-i18n="logs.total_logs">Total Logs</p>
                         <p id="totalLogs" class="text-3xl font-bold text-gray-900">0</p>
                     </div>
                     <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -74,7 +75,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Last 24 Hours</p>
+                        <p class="text-sm text-gray-500" data-i18n="logs.last_24h">Last 24 Hours</p>
                         <p id="last24Hours" class="text-3xl font-bold text-green-600">0</p>
                     </div>
                     <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -87,7 +88,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Critical Events</p>
+                        <p class="text-sm text-gray-500" data-i18n="logs.critical_events">Critical Events</p>
                         <p id="criticalEvents" class="text-3xl font-bold text-red-600">0</p>
                     </div>
                     <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
@@ -100,7 +101,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">AI Actions</p>
+                        <p class="text-sm text-gray-500" data-i18n="logs.ai_actions">AI Actions</p>
                         <p id="aiActions" class="text-3xl font-bold text-purple-600">0</p>
                     </div>
                     <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -585,5 +586,10 @@
         });
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

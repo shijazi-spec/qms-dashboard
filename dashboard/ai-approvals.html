@@ -23,6 +23,7 @@
         .prose-compact { font-size: 0.8125rem; line-height: 1.35; }
         .prose-compact p { margin: 0.2rem 0; }
     </style>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50">
     <div id="walaplus-nav"></div>
@@ -38,7 +39,7 @@
     <main class="max-w-7xl mx-auto p-6">
         <div class="flex items-start justify-between mb-4">
             <div>
-                <h1 class="text-2xl font-semibold text-gray-900">AI Approvals Queue</h1>
+                <h1 class="text-2xl font-semibold text-gray-900" data-i18n="ai_approvals.title">AI Approvals Queue</h1>
                 <p class="text-sm text-gray-600 mt-1">
                     Human-in-the-loop gate for AI-proposed QMS actions.
                     Governed by <a href="/policies?policy_number=WP-SOP-011" class="text-indigo-700 underline">WP-SOP-011</a>
@@ -239,5 +240,10 @@
     setInterval(load, 30000);
 })();
 </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

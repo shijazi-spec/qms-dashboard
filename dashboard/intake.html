@@ -23,6 +23,7 @@
     .confidence-bar  { height:4px; background:#E5E7EB; border-radius:2px; overflow:hidden; }
     .confidence-fill { height:100%; background:linear-gradient(90deg,#EF4444,#F59E0B 50%,#10B981); }
   </style>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50">
   <div id="walaplus-nav"></div>
@@ -43,7 +44,7 @@
           <span class="mx-1">/</span>
           <span class="text-gray-600">Manual Intake</span>
         </div>
-        <h1 class="text-2xl font-bold text-gray-900">Manual Audit Intake Workspace</h1>
+        <h1 class="text-2xl font-bold text-gray-900" data-i18n="intake.title">Manual Audit Intake Workspace</h1>
         <p class="text-sm text-gray-500 mt-1 max-w-3xl">
           Central single-point intake for off-platform audit reports (ISO 19011 §6.6).
           Uploads go to GPT-4o for structured extraction; every finding is reviewed
@@ -431,5 +432,10 @@
 
     document.addEventListener('DOMContentLoaded', loadIntakes);
   </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

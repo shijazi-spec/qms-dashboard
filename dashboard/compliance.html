@@ -30,6 +30,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -45,8 +46,8 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">Regulatory Compliance</h1>
-                <p class="text-sm text-gray-500 mt-1">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title">Regulatory Compliance</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.subtitle">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
             </div>
             <div class="flex gap-3">
                 <select id="statusFilter" class="border rounded-lg px-3 py-2 text-sm" data-on-change="loadObligations" data-testid="select-status-filter">
@@ -87,19 +88,19 @@
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
-                <div class="text-sm text-gray-500">Active Regulations</div>
+                <div class="text-sm text-gray-500" data-i18n="compliance.active_regulations">Active Regulations</div>
                 <div id="activeRegulations" class="text-3xl font-bold text-blue-600 mt-2">-</div>
                 <div class="text-xs text-gray-400 mt-1">Frameworks tracked</div>
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
-                <div class="text-sm text-gray-500">Total Obligations</div>
+                <div class="text-sm text-gray-500" data-i18n="compliance.total_obligations">Total Obligations</div>
                 <div id="totalObligations" class="text-3xl font-bold text-gray-900 mt-2">-</div>
                 <div class="text-xs text-gray-400 mt-1">Compliance requirements</div>
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
-                <div class="text-sm text-gray-500">Pending Remediations</div>
+                <div class="text-sm text-gray-500" data-i18n="compliance.pending_remediations">Pending Remediations</div>
                 <div id="pendingRemediations" class="text-3xl font-bold text-amber-600 mt-2">-</div>
                 <div class="text-xs text-red-500 mt-1"><span id="overdueRemediations">0</span> overdue</div>
             </div>
@@ -128,7 +129,7 @@
             <div class="lg:col-span-2 space-y-6">
                 <div class="bg-white rounded-lg shadow">
                     <div class="p-4 border-b border-gray-200">
-                        <h2 class="text-lg font-semibold text-gray-900">Regulation Library</h2>
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
                     </div>
                     <div id="regulationsList" class="divide-y divide-gray-200">
                         <div class="p-4 text-center text-gray-400">Loading regulations...</div>
@@ -137,7 +138,7 @@
 
                 <div class="bg-white rounded-lg shadow">
                     <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                        <h2 class="text-lg font-semibold text-gray-900">Obligations Register</h2>
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.obligations_register">Obligations Register</h2>
                         <select id="filterRegulation" data-on-change="loadObligations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Regulations</option>
                         </select>
@@ -163,21 +164,21 @@
 
             <div class="space-y-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">By Regulation</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="compliance.by_regulation">By Regulation</h2>
                     <div id="byRegulationChart" class="space-y-2">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">By Priority</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="compliance.by_priority">By Priority</h2>
                     <div id="byPriorityChart" class="space-y-2">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Upcoming Deadlines</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="compliance.upcoming_deadlines">Upcoming Deadlines</h2>
                     <div id="upcomingDeadlines" class="space-y-3">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
@@ -187,7 +188,7 @@
 
         <div class="bg-white rounded-lg shadow mt-6">
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-900">Gap Analysis</h2>
+                <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.gap_analysis">Gap Analysis</h2>
                 <select id="gapRegulationFilter" data-on-change="loadGapAnalysis" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-gap-regulation">
                     <option value="">All Regulations</option>
                 </select>
@@ -708,5 +709,10 @@
         document.addEventListener('DOMContentLoaded', loadAll);
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

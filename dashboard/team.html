@@ -46,6 +46,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -60,22 +61,22 @@
 
     <main class="max-w-7xl mx-auto px-4 py-6">
         <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
-            <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active">
+            <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active" data-i18n="team.tab_overview">
                 Overview
             </button>
-            <button data-on-click="showTab" data-args="[&quot;members&quot;]" id="tab-members" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;members&quot;]" id="tab-members" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200" data-i18n="team.tab_members">
                 Team Members
             </button>
-            <button data-on-click="showTab" data-args="[&quot;courses&quot;]" id="tab-courses" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;courses&quot;]" id="tab-courses" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200" data-i18n="team.tab_courses">
                 Training Courses
             </button>
-            <button data-on-click="showTab" data-args="[&quot;training&quot;]" id="tab-training" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;training&quot;]" id="tab-training" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200" data-i18n="team.tab_matrix">
                 Training Matrix
             </button>
-            <button data-on-click="showTab" data-args="[&quot;projects&quot;]" id="tab-projects" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;projects&quot;]" id="tab-projects" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200" data-i18n="team.tab_projects">
                 Projects
             </button>
-            <button data-on-click="showTab" data-args="[&quot;analytics&quot;]" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;analytics&quot;]" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200" data-i18n="team.tab_analytics">
                 Analytics
             </button>
         </div>
@@ -85,7 +86,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm text-gray-500">Total Team Members</p>
+                            <p class="text-sm text-gray-500" data-i18n="team.total_members">Total Team Members</p>
                             <p id="totalMembers" class="text-3xl font-bold text-gray-900">0</p>
                         </div>
                         <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -98,7 +99,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm text-gray-500">Avg Performance</p>
+                            <p class="text-sm text-gray-500" data-i18n="team.avg_performance">Avg Performance</p>
                             <p id="avgPerformance" class="text-3xl font-bold text-green-600">0%</p>
                         </div>
                         <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -111,7 +112,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm text-gray-500">Training Compliance</p>
+                            <p class="text-sm text-gray-500" data-i18n="team.training_compliance">Training Compliance</p>
                             <p id="trainingCompliance" class="text-3xl font-bold text-indigo-600">0%</p>
                         </div>
                         <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -124,7 +125,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm text-gray-500">Active Projects</p>
+                            <p class="text-sm text-gray-500" data-i18n="team.active_projects">Active Projects</p>
                             <p id="activeProjects" class="text-3xl font-bold text-amber-600">0</p>
                         </div>
                         <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
@@ -1179,5 +1180,10 @@
         }
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

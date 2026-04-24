@@ -81,7 +81,8 @@
         <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    </head>
+        <script src="/js/i18n.js?v=1.0"></script>
+</head>
     <body class="bg-gray-50 min-h-screen">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
@@ -190,7 +191,7 @@
                     <div class="bg-white rounded-xl shadow p-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-gray-500">Open CAPA</p>
+                                <p class="text-sm text-gray-500" data-i18n="qms.kpi_open_capa">Open CAPA</p>
                                 <p
                                     class="text-3xl font-bold text-orange-600"
                                     id="stat-capa-open"
@@ -228,7 +229,7 @@
                     <div class="bg-white rounded-xl shadow p-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-gray-500">Open NC</p>
+                                <p class="text-sm text-gray-500" data-i18n="qms.kpi_open_nc">Open NC</p>
                                 <p
                                     class="text-3xl font-bold text-red-600"
                                     id="stat-nc-open"
@@ -321,12 +322,12 @@
                         <p class="text-sm text-blue-100 mt-2">Target: <span class="font-semibold text-white">95%</span></p>
                     </div>
                     <div class="bg-white rounded-xl shadow p-6 border-l-4 border-green-500">
-                        <p class="text-sm text-gray-500">First Pass Yield</p>
+                        <p class="text-sm text-gray-500" data-i18n="qms.kpi_fpy">First Pass Yield</p>
                         <p class="text-3xl font-bold text-green-600" id="stat-fpy">-</p>
                         <p class="text-sm text-gray-500 mt-2">Process effectiveness rate</p>
                     </div>
                     <div class="bg-white rounded-xl shadow p-6 border-l-4 border-purple-500">
-                        <p class="text-sm text-gray-500">CAPA Effectiveness</p>
+                        <p class="text-sm text-gray-500" data-i18n="qms.kpi_capa_eff">CAPA Effectiveness</p>
                         <p class="text-3xl font-bold text-purple-600" id="stat-capa-effectiveness">-</p>
                         <p class="text-sm text-gray-500 mt-2">Closed within target</p>
                     </div>
@@ -1840,5 +1841,10 @@
                 </div>
             </div>
         </div>
-    </body>
+        <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
 </html>

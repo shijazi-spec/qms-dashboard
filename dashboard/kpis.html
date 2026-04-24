@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -37,8 +38,8 @@
     <div class="max-w-7xl mx-auto px-4 py-6">
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">KPI Engine</h1>
-                <p class="text-gray-600">Role-based KPI tracking with automated calculations</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="kpis.title">KPI Engine</h1>
+                <p class="text-gray-600" data-i18n="kpis.subtitle">Role-based KPI tracking with automated calculations</p>
                 <span id="lastCalcTimestamp" class="text-xs text-gray-400"></span>
             </div>
             <div class="flex space-x-2">
@@ -70,40 +71,40 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-gray-900" id="totalKPIs">0</div>
-                <div class="text-sm text-gray-600">Total KPIs</div>
+                <div class="text-sm text-gray-600" data-i18n="kpis.total_kpis">Total KPIs</div>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-green-700" id="greenCount">0</div>
-                <div class="text-sm text-gray-600">On Target</div>
+                <div class="text-sm text-gray-600" data-i18n="kpis.on_target">On Target</div>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-amber-600" id="amberCount">0</div>
-                <div class="text-sm text-gray-600">At Risk</div>
+                <div class="text-sm text-gray-600" data-i18n="kpis.at_risk">At Risk</div>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-red-700" id="redCount">0</div>
-                <div class="text-sm text-gray-600">Off Target</div>
+                <div class="text-sm text-gray-600" data-i18n="kpis.off_target">Off Target</div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="bg-white rounded-xl shadow p-4">
-                <h3 class="font-semibold text-gray-900 mb-3">KPIs by Owner</h3>
+                <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.kpis_by_owner">KPIs by Owner</h3>
                 <canvas id="ownerChart" height="200"></canvas>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
-                <h3 class="font-semibold text-gray-900 mb-3">Status Distribution</h3>
+                <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.status_distribution">Status Distribution</h3>
                 <canvas id="statusChart" height="200"></canvas>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
-                <h3 class="font-semibold text-gray-900 mb-3">KPIs by Category</h3>
+                <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.kpis_by_category">KPIs by Category</h3>
                 <canvas id="categoryChart" height="200"></canvas>
             </div>
         </div>
 
         <div class="bg-white rounded-xl shadow">
             <div class="p-4 border-b flex justify-between items-center">
-                <h2 class="font-semibold text-gray-900">KPI Catalog</h2>
+                <h2 class="font-semibold text-gray-900" data-i18n="kpis.kpi_catalog">KPI Catalog</h2>
                 <div class="flex space-x-2">
                     <input type="text" id="searchInput" placeholder="Search KPIs..." class="border rounded px-3 py-1 text-sm" data-on-input="filterKPIs">
                 </div>
@@ -622,5 +623,10 @@
         loadKPIs();
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

@@ -43,6 +43,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-100">
     <div id="walaplus-nav"></div>
@@ -221,7 +222,7 @@
         <div id="content-summary" class="tab-content">
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-blue-600">
-                    <div class="text-xs text-gray-500">True Duplicates</div>
+                    <div class="text-xs text-gray-500" data-i18n="duplicates.true_duplicates">True Duplicates</div>
                     <div id="totalClusters" data-testid="text-total-clusters" class="text-xl font-bold text-blue-600">-</div>
                     <div class="text-xs text-gray-600">clusters</div>
                     <div class="mt-1.5 flex items-end justify-between gap-1 min-h-[20px]">
@@ -230,21 +231,21 @@
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-amber-500">
-                    <div class="text-xs text-gray-500">Dup Leads</div>
+                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_leads">Dup Leads</div>
                     <div id="totalLeads" data-testid="text-total-leads" class="text-xl font-bold text-amber-600">-</div>
                     <div id="leadRate" class="text-xs text-amber-700">-% rate</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
-                    <div class="text-xs text-gray-500">Dup Deals</div>
+                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_deals">Dup Deals</div>
                     <div id="totalDeals" data-testid="text-total-deals" class="text-xl font-bold text-red-600">-</div>
                     <div id="dealRate" class="text-xs text-red-600">-% rate</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-teal-500">
-                    <div class="text-xs text-gray-500">Dup Contacts</div>
+                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_contacts">Dup Contacts</div>
                     <div id="totalContacts" data-testid="text-total-contacts" class="text-xl font-bold text-teal-600">-</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-indigo-500">
-                    <div class="text-xs text-gray-500">Dup Accounts</div>
+                    <div class="text-xs text-gray-500" data-i18n="duplicates.dup_accounts">Dup Accounts</div>
                     <div id="totalAccounts" data-testid="text-total-accounts" class="text-xl font-bold text-indigo-600">-</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
@@ -258,7 +259,7 @@
                     <div class="text-xs text-yellow-700">60-89%</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-purple-500">
-                    <div class="text-xs text-gray-500">Pipeline Inflation</div>
+                    <div class="text-xs text-gray-500" data-i18n="duplicates.pipeline_inflation">Pipeline Inflation</div>
                     <div id="pipelineInflation" data-testid="text-pipeline-inflation" class="text-xl font-bold text-purple-600">-</div>
                 </div>
             </div>
@@ -266,7 +267,7 @@
             <!-- D4: Resolution Rate + KPI Gauge + Last Scan -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-sm font-medium text-gray-500 mb-2">Resolution Rate</div>
+                    <div class="text-sm font-medium text-gray-500 mb-2" data-i18n="duplicates.resolution_rate">Resolution Rate</div>
                     <div id="resolutionRate" data-testid="text-resolution-rate" class="text-3xl font-bold text-green-600">-</div>
                     <div class="text-xs text-gray-400 mt-1"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> ignored</div>
                 </div>
@@ -1710,5 +1711,10 @@
         setInterval(loadSyncStatus, 60000);
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

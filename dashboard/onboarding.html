@@ -42,6 +42,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -57,7 +58,7 @@
     <div id="welcomeModal" class="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
         <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 overflow-hidden fade-in">
             <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white">
-                <h1 class="text-3xl font-bold mb-2">Welcome to WalaPlus Quality & Investment System</h1>
+                <h1 class="text-3xl font-bold mb-2" data-i18n="onboarding.title">Welcome to WalaPlus Quality & Investment System</h1>
                 <p class="text-indigo-100">Your guided introduction to quality management and ROI evaluation</p>
             </div>
             <div class="p-8">
@@ -232,19 +233,19 @@
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Onboarding Statistics (Admin View)</h3>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <p class="text-sm text-gray-500">Total Users</p>
+                    <p class="text-sm text-gray-500" data-i18n="onboarding.total_users">Total Users</p>
                     <p id="statTotalUsers" class="text-2xl font-bold text-gray-900">-</p>
                 </div>
                 <div class="bg-green-50 rounded-lg p-4">
-                    <p class="text-sm text-gray-500">Video Watched</p>
+                    <p class="text-sm text-gray-500" data-i18n="onboarding.video_watched">Video Watched</p>
                     <p id="statVideoWatched" class="text-2xl font-bold text-green-600">-</p>
                 </div>
                 <div class="bg-blue-50 rounded-lg p-4">
-                    <p class="text-sm text-gray-500">Tour Completed</p>
+                    <p class="text-sm text-gray-500" data-i18n="onboarding.tour_completed">Tour Completed</p>
                     <p id="statTourCompleted" class="text-2xl font-bold text-blue-600">-</p>
                 </div>
                 <div class="bg-amber-50 rounded-lg p-4">
-                    <p class="text-sm text-gray-500">Skipped</p>
+                    <p class="text-sm text-gray-500" data-i18n="onboarding.skipped">Skipped</p>
                     <p id="statSkipped" class="text-2xl font-bold text-amber-600">-</p>
                 </div>
             </div>
@@ -514,5 +515,10 @@
         }
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

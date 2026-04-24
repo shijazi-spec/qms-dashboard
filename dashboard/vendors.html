@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -40,8 +41,8 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">Vendor Risk Management</h1>
-                <p class="text-sm text-gray-500 mt-1">Manage third-party vendors, risk assessments, and remediation tracking</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="vendors.title">Vendor Risk Management</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="vendors.subtitle">Manage third-party vendors, risk assessments, and remediation tracking</p>
             </div>
             <div class="flex gap-3">
                 <button data-on-click="streamDownload" data-args="[&quot;/api/vendors/export-xlsx&quot;,&quot;vendors.xlsx&quot;]" data-pass-event="true" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-export-xlsx" title="Multi-sheet workbook (Summary, Vendors, Assessments)">
@@ -66,7 +67,7 @@
 
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm text-gray-500">Total Vendors</div>
+                <div class="text-sm text-gray-500" data-i18n="vendors.total_vendors">Total Vendors</div>
                 <div id="totalVendors" class="text-2xl font-bold text-gray-900">-</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
@@ -74,23 +75,23 @@
                 <div id="activeVendors" class="text-2xl font-bold text-green-600">-</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
-                <div class="text-sm text-gray-500">Pending Approval</div>
+                <div class="text-sm text-gray-500" data-i18n="vendors.pending_approval">Pending Approval</div>
                 <div id="pendingVendors" class="text-2xl font-bold text-amber-600">-</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
-                <div class="text-sm text-gray-500">On Probation</div>
+                <div class="text-sm text-gray-500" data-i18n="vendors.on_probation">On Probation</div>
                 <div id="probationVendors" class="text-2xl font-bold text-red-600">-</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
-                <div class="text-sm text-gray-500">Critical Vendors</div>
+                <div class="text-sm text-gray-500" data-i18n="vendors.critical_vendors">Critical Vendors</div>
                 <div id="criticalVendors" class="text-2xl font-bold text-purple-600">-</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
-                <div class="text-sm text-gray-500">High Data Access</div>
+                <div class="text-sm text-gray-500" data-i18n="vendors.high_data_access">High Data Access</div>
                 <div id="highDataAccess" class="text-2xl font-bold text-blue-600">-</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4 border-l-4 border-rose-500">
-                <div class="text-sm text-gray-500">Open Remediations</div>
+                <div class="text-sm text-gray-500" data-i18n="vendors.open_remediations">Open Remediations</div>
                 <div id="openRemediations" class="text-2xl font-bold text-rose-600">-</div>
             </div>
         </div>
@@ -98,7 +99,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="lg:col-span-2 bg-white rounded-lg shadow">
                 <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-900">Vendor Registry</h2>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="vendors.vendor_registry">Vendor Registry</h2>
                     <div class="flex gap-3">
                         <input type="text" id="searchVendor" placeholder="Search vendors..." 
                                data-on-keyup="loadVendors" class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48">
@@ -138,21 +139,21 @@
 
             <div class="space-y-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Vendors by Criticality</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="vendors.by_criticality">Vendors by Criticality</h2>
                     <div id="byCriticalityChart" class="space-y-2">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Expiring Contracts</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="vendors.expiring_contracts">Expiring Contracts</h2>
                     <div id="expiringContracts" class="space-y-3">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Overdue Assessments</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="vendors.overdue_assessments">Overdue Assessments</h2>
                     <div id="overdueAssessments" class="space-y-3">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
@@ -162,7 +163,7 @@
 
         <div class="bg-white rounded-lg shadow">
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-900">Remediation Tracker</h2>
+                <h2 class="text-lg font-semibold text-gray-900" data-i18n="vendors.remediation_tracker">Remediation Tracker</h2>
                 <div class="flex gap-3">
                     <select id="filterRemediationPriority" data-on-change="loadRemediations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">All Priority</option>
@@ -679,5 +680,10 @@
         loadRemediations();
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

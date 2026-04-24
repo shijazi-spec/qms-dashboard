@@ -22,11 +22,12 @@
         }
     </style>
     <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white text-center">
-            <h1 class="text-2xl font-bold">WalaPlus Platform</h1>
+            <h1 class="text-2xl font-bold" data-i18n="accept_invite.title">WalaPlus Platform</h1>
             <p class="text-blue-100 mt-1">Enterprise GRC & Quality Management</p>
         </div>
         
@@ -41,7 +42,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </div>
-            <h2 class="text-xl font-bold text-gray-900 mb-2">Invalid Invitation</h2>
+            <h2 class="text-xl font-bold text-gray-900 mb-2" data-i18n="accept_invite.invalid">Invalid Invitation</h2>
             <p id="error-message" class="text-gray-600 mb-4">This invitation link is invalid or has expired.</p>
             <a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a>
         </div>
@@ -53,7 +54,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
-                <h2 class="text-xl font-bold text-gray-900">Welcome!</h2>
+                <h2 class="text-xl font-bold text-gray-900" data-i18n="accept_invite.welcome">Welcome!</h2>
                 <p class="text-gray-600 mt-1">Complete your registration to access WalaPlus</p>
             </div>
             
@@ -224,6 +225,11 @@
         });
         
         validateToken();
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
     </script>
 </body>
 </html>

@@ -20,6 +20,7 @@
     .status-partial { background: #fef3c7; color: #92400e; }
     .status-aa { background: #d1fae5; color: #065f46; }
   </style>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <div id="nav-root"></div>
@@ -36,7 +37,7 @@
         </nav>
         <div class="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <h1 class="text-2xl font-bold text-gray-900">Accessibility Statement</h1>
+            <h1 class="text-2xl font-bold text-gray-900" data-i18n="a11y.title">Accessibility Statement</h1>
             <p class="text-gray-500 mt-1 text-sm">WalaPlus Quality Management System</p>
           </div>
           <span class="status-badge status-partial" role="img" aria-label="Conformance status: Partially conformant">Partially Conformant &mdash; WCAG 2.1 AA</span>
@@ -106,5 +107,10 @@
 
   <script src="/js/a11y.js" defer></script>
   <script src="/js/navigation.js?v=4.5.5"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

@@ -17,6 +17,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
     <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body>
   <div id="nav-mount"></div>
@@ -27,7 +28,7 @@
         <div>
           <h1 class="text-3xl font-bold text-slate-900 flex items-center gap-3">
             <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-            Infographic Generator
+            <span data-i18n="infographic.title">Infographic Generator</span>
           </h1>
           <p class="text-slate-600 mt-2 max-w-2xl">
             Create polished, shareable visual snapshots of any platform area — perfect for sending to the CEO, CCO or board.
@@ -373,5 +374,10 @@
 
     loadSections();
   </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

@@ -32,6 +32,7 @@
         .category-business { background: #D1FAE5; color: #065F46; }
         .category-public { background: #E5E7EB; color: #374151; }
     </style>
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -43,8 +44,8 @@
     <div class="max-w-7xl mx-auto px-4 py-6">
         <div class="flex items-center justify-between mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">PDPL Compliance Dashboard</h1>
-                <p class="text-gray-500">Personal Data Protection Law - Privacy by Design</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="pdpl.title">PDPL Compliance Dashboard</h1>
+                <p class="text-gray-500" data-i18n="pdpl.subtitle">Personal Data Protection Law - Privacy by Design</p>
             </div>
             <div class="flex items-center gap-4">
                 <button data-on-click="navigateTo" data-args="[&quot;/api/pdpl/export&quot;]" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2 text-sm" data-testid="button-export-csv">
@@ -606,5 +607,10 @@
         loadInventory();
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>
