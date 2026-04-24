@@ -58,7 +58,7 @@ function makeStub(opts: {
 }
 
 function makeRow(over: Partial<PromptVersionAggregate>): PromptVersionAggregate {
-  return {
+  const base: PromptVersionAggregate = {
     agent_name: "TestAgent",
     prompt_version: "v1",
     call_count: 100,
@@ -71,8 +71,21 @@ function makeRow(over: Partial<PromptVersionAggregate>): PromptVersionAggregate 
     error_rate_pct: 0,
     first_seen: "2026-04-01T00:00:00Z",
     last_seen: "2026-04-20T00:00:00Z",
-    ...over,
+    // The aggregate now echoes the small-sample floor and per-row
+    // eligibility flag so the dashboard can hide best/regression badges
+    // for brand-new versions. Default to "comparable" here so existing
+    // cron tests keep their semantics; tests that want to exercise the
+    // small-sample path can override these in `over`.
+    min_feedback: 5,
+    meets_min_feedback: true,
   };
+  const merged = { ...base, ...over };
+  // Keep meets_min_feedback consistent with whatever total_feedback the
+  // caller specified unless they explicitly overrode the flag.
+  if (over.meets_min_feedback === undefined) {
+    merged.meets_min_feedback = Number(merged.total_feedback) >= merged.min_feedback;
+  }
+  return merged;
 }
 
 async function run(): Promise<void> {

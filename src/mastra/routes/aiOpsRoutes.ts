@@ -14,6 +14,7 @@ import {
   getKnownAgentNames,
   FEEDBACK_COMMENT_MAX_LEN,
   MODEL_PRICE_TABLE,
+  DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
 } from "../../utils/aiTelemetry";
 import {
   getAIAlerts,
@@ -183,8 +184,20 @@ export const aiOpsRoutes = [
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const days = safeInt(c.req.query("days"), 30, 1, 90);
-          const data = await getFeedbackRateByPromptVersion(days);
-          return c.json({ data });
+          // Minimum number of feedback votes a prompt version needs before
+          // we let the dashboard flag it as "best" or "regressed". Defaults
+          // to DEFAULT_PROMPT_VERSION_MIN_FEEDBACK so the floor stays in
+          // one place (single source of truth in aiTelemetry.ts). Capped
+          // at 1000 so the param can't be used to silently disable the
+          // protection on the API side.
+          const minFeedback = safeInt(
+            c.req.query("minFeedback"),
+            DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
+            0,
+            1000,
+          );
+          const data = await getFeedbackRateByPromptVersion(days, minFeedback);
+          return c.json({ data, min_feedback: minFeedback });
         } catch (error) {
           console.error("[AI-Ops] prompt-versions error:", error);
           return c.json({ error: "Failed to fetch prompt-version comparison" }, 500);

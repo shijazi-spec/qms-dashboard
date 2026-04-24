@@ -957,11 +957,44 @@ export interface PromptVersionAggregate {
   error_rate_pct: number;
   first_seen: string;
   last_seen: string;
+  /**
+   * Echoes back the minimum-sample floor that was applied when computing
+   * `meets_min_feedback` so API consumers (the AI Ops dashboard, the
+   * regression cron, etc.) can render the same threshold to the user.
+   */
+  min_feedback: number;
+  /**
+   * True when this row has at least `min_feedback` ratings — i.e. the
+   * sample is large enough to be compared to other versions of the same
+   * agent. Rows where this is false should not be flagged as "best" or
+   * "regressed" by downstream consumers.
+   */
+  meets_min_feedback: boolean;
 }
+
+/**
+ * Default minimum-sample floor for the per-prompt-version aggregate.
+ *
+ * A brand-new prompt version with a single thumbs-down can otherwise be
+ * flagged as a "regression" against a mature version with hundreds of
+ * votes, which is statistically meaningless and noisy on the dashboard
+ * during a rollout. Five votes is the smallest sample where a 0%-vs-100%
+ * gap can plausibly reflect real signal rather than the first reviewer's
+ * mood. Callers can override per request (e.g. via the
+ * `minFeedback` query string on `/api/ai-ops/prompt-versions`).
+ */
+export const DEFAULT_PROMPT_VERSION_MIN_FEEDBACK = 5;
 
 export async function getFeedbackRateByPromptVersion(
   days = 30,
+  minFeedback: number = DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
 ): Promise<PromptVersionAggregate[]> {
+  // Guard against negative/NaN floors — a zero floor effectively disables
+  // the small-sample protection, which is a valid (if discouraged) choice
+  // we should still honour for callers that want raw aggregates.
+  const floor = Number.isFinite(minFeedback) && minFeedback >= 0
+    ? Math.floor(minFeedback)
+    : DEFAULT_PROMPT_VERSION_MIN_FEEDBACK;
   try {
     await ensureAiMetricsTable();
     await ensureFeedbackTable();
@@ -986,14 +1019,16 @@ export async function getFeedbackRateByPromptVersion(
             / NULLIF(COUNT(*), 0) * 100)::NUMERIC, 1
          )                                                                   AS error_rate_pct,
          MIN(m.started_at)                                                   AS first_seen,
-         MAX(m.started_at)                                                   AS last_seen
+         MAX(m.started_at)                                                   AS last_seen,
+         $2::INTEGER                                                         AS min_feedback,
+         (COUNT(f.id) >= $2)                                                 AS meets_min_feedback
        FROM ai_call_metrics m
        LEFT JOIN ai_call_feedback f ON f.call_id = m.id
        WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
          AND m.tool_name IS NULL
        GROUP BY m.agent_name, COALESCE(m.metadata ->> 'prompt_version', '(unknown)')
        ORDER BY m.agent_name, last_seen DESC`,
-      [days]
+      [days, floor]
     );
     return result.rows;
   } catch (err) {

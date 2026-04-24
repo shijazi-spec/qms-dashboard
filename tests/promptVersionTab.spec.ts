@@ -15,8 +15,10 @@
  *      load and its AJAX calls are admin-authorized).
  *   2. Seeds two prompt-version cohorts for one synthetic agent in
  *      ai_call_metrics + ai_call_feedback:
- *        - "v_best_e2e"      → 3 calls, all thumbs_up   (rate 100%)
- *        - "v_regressed_e2e" → 3 calls, all thumbs_down (rate 0%)
+ *        - "v_best_e2e"      → 5 calls, all thumbs_up   (rate 100%)
+ *        - "v_regressed_e2e" → 5 calls, all thumbs_down (rate 0%)
+ *      Five votes per cohort meets the dashboard's small-sample floor
+ *      (DEFAULT_PROMPT_VERSION_MIN_FEEDBACK = 5 in src/utils/aiTelemetry.ts).
  *      That gap (100 vs 0) is comfortably above the 10pp regression
  *      threshold the dashboard uses, and forces a "best" highlight on
  *      one row and a "regressed" highlight on the other.
@@ -59,17 +61,25 @@ const seededCallIds: number[] = [];
 async function seedPromptVersionRows(): Promise<void> {
   if (!pool) throw new Error('pool not initialized');
 
-  // Three "good" calls under v_best_e2e, all thumbs-up → 100% feedback rate.
-  // Three "bad"  calls under v_regressed_e2e, all thumbs-down → 0% rate.
+  // Five "good" calls under v_best_e2e, all thumbs-up → 100% feedback rate.
+  // Five "bad"  calls under v_regressed_e2e, all thumbs-down → 0% rate.
+  // We seed five (not three) per cohort so each version clears the
+  // small-sample floor (default 5 votes) the dashboard now requires
+  // before it will flag a row as "best ★" or as a regression — see
+  // DEFAULT_PROMPT_VERSION_MIN_FEEDBACK in src/utils/aiTelemetry.ts.
   // tool_name MUST be NULL because getFeedbackRateByPromptVersion filters
   // tool-call children out of the aggregate.
   const cohorts: Array<{ version: string; rating: 'thumbs_up' | 'thumbs_down'; latencyMs: number }> = [
     { version: VERSION_BEST,      rating: 'thumbs_up',   latencyMs: 800 },
     { version: VERSION_BEST,      rating: 'thumbs_up',   latencyMs: 900 },
     { version: VERSION_BEST,      rating: 'thumbs_up',   latencyMs: 1000 },
+    { version: VERSION_BEST,      rating: 'thumbs_up',   latencyMs: 1050 },
+    { version: VERSION_BEST,      rating: 'thumbs_up',   latencyMs: 1100 },
     { version: VERSION_REGRESSED, rating: 'thumbs_down', latencyMs: 1200 },
     { version: VERSION_REGRESSED, rating: 'thumbs_down', latencyMs: 1300 },
     { version: VERSION_REGRESSED, rating: 'thumbs_down', latencyMs: 1400 },
+    { version: VERSION_REGRESSED, rating: 'thumbs_down', latencyMs: 1450 },
+    { version: VERSION_REGRESSED, rating: 'thumbs_down', latencyMs: 1500 },
   ];
 
   for (let i = 0; i < cohorts.length; i++) {
