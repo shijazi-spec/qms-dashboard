@@ -59,19 +59,31 @@ export const TOOL_HEALTH_THRESHOLDS = {
   errorRatePct: envInt("TOOL_HEALTH_ERROR_RATE_PCT", 25),
   /** p95 latency (ms) at or above which a tool is considered slow. */
   p95LatencyMs: envInt("TOOL_HEALTH_P95_LATENCY_MS", 15000),
+  /**
+   * Severity-band cutoffs — at or above which a breach escalates from
+   * 'medium' → 'high' or 'high' → 'critical'. Defaults match the
+   * historic hard-coded constants so behavior is unchanged unless an
+   * operator opts in. Operators tightening the breach floor (e.g.
+   * errorRatePct=10) typically want to drop these too so the
+   * 'high'/'critical' rungs stay proportional.
+   */
+  errorRateHighPct: envInt("TOOL_HEALTH_ERROR_RATE_HIGH_PCT", 50),
+  errorRateCriticalPct: envInt("TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT", 75),
+  latencyHighMs: envInt("TOOL_HEALTH_P95_LATENCY_HIGH_MS", 30_000),
+  latencyCriticalMs: envInt("TOOL_HEALTH_P95_LATENCY_CRITICAL_MS", 60_000),
   /** Cron expression — every 15 min by default. */
   cron: process.env.TOOL_HEALTH_ALERT_CRON || "*/15 * * * *",
 } as const;
 
 function severityForErrorRate(pct: number): AlertSeverity {
-  if (pct >= 75) return "critical";
-  if (pct >= 50) return "high";
+  if (pct >= TOOL_HEALTH_THRESHOLDS.errorRateCriticalPct) return "critical";
+  if (pct >= TOOL_HEALTH_THRESHOLDS.errorRateHighPct) return "high";
   return "medium";
 }
 
 function severityForLatency(p95Ms: number): AlertSeverity {
-  if (p95Ms >= 60_000) return "critical";
-  if (p95Ms >= 30_000) return "high";
+  if (p95Ms >= TOOL_HEALTH_THRESHOLDS.latencyCriticalMs) return "critical";
+  if (p95Ms >= TOOL_HEALTH_THRESHOLDS.latencyHighMs) return "high";
   return "medium";
 }
 

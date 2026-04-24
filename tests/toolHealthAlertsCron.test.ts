@@ -703,18 +703,32 @@ async function severityForLatencyBreach(p95Ms: number): Promise<string | undefin
 }
 
 await suite.test(
-  "(e) severityForErrorRate boundaries — 25/49/50/74/75/100 map to medium/high/critical",
+  "(e) severityForErrorRate boundaries — breach-floor / high / critical map to medium/high/critical",
   // Pinning each rung at and around its boundary catches a future
-  // `>=` → `>` slip (or vice versa) in `severityForErrorRate`. Inputs at
-  // and just above the breach floor (25%) stay 'medium'; the high band
-  // opens at exactly 50% and the critical band opens at exactly 75%.
+  // `>=` → `>` slip (or vice versa) in `severityForErrorRate`. The
+  // boundaries are read from `TOOL_HEALTH_THRESHOLDS` (Task #152) so
+  // operators that override the env vars can still rely on this
+  // contract: inputs at and just above the breach floor stay 'medium',
+  // the high band opens at exactly `errorRateHighPct`, and the critical
+  // band opens at exactly `errorRateCriticalPct`.
   async () => {
+    const floor = TOOL_HEALTH_THRESHOLDS.errorRatePct;
+    const high = TOOL_HEALTH_THRESHOLDS.errorRateHighPct;
+    const critical = TOOL_HEALTH_THRESHOLDS.errorRateCriticalPct;
+    // Sanity guard: the test only makes sense when the cutoffs are
+    // strictly ordered. If an operator misconfigures them, that's a
+    // separate failure mode — flag it loudly here rather than producing
+    // confusing per-rung assertion errors.
+    suite.expect(
+      floor < high && high < critical,
+      `severity cutoffs must satisfy floor (${floor}) < high (${high}) < critical (${critical})`,
+    );
     const cases: Array<[number, "medium" | "high" | "critical"]> = [
-      [25, "medium"],   // breach floor — lowest input that ever reaches the helper
-      [49, "medium"],   // just below the high boundary
-      [50, "high"],     // exact high boundary
-      [74, "high"],     // just below the critical boundary
-      [75, "critical"], // exact critical boundary
+      [floor, "medium"],         // breach floor — lowest input that ever reaches the helper
+      [high - 1, "medium"],      // just below the high boundary
+      [high, "high"],            // exact high boundary
+      [critical - 1, "high"],    // just below the critical boundary
+      [critical, "critical"],    // exact critical boundary
       [100, "critical"],
     ];
     for (const [pct, expected] of cases) {
@@ -729,18 +743,27 @@ await suite.test(
 );
 
 await suite.test(
-  "(f) severityForLatency boundaries — 15000/29999/30000/59999/60000 map to medium/high/critical",
-  // Same idea as (e) but for the p95 latency ladder. The high band opens
-  // at exactly 30000ms and the critical band at exactly 60000ms; values
-  // one ms below each boundary must stay in the lower band.
+  "(f) severityForLatency boundaries — breach-floor / high / critical map to medium/high/critical",
+  // Same idea as (e) but for the p95 latency ladder. Cutoffs are loaded
+  // from `TOOL_HEALTH_THRESHOLDS` (Task #152): the high band opens at
+  // exactly `latencyHighMs` and the critical band at exactly
+  // `latencyCriticalMs`; values one ms below each boundary must stay in
+  // the lower band.
   async () => {
+    const floor = TOOL_HEALTH_THRESHOLDS.p95LatencyMs;
+    const high = TOOL_HEALTH_THRESHOLDS.latencyHighMs;
+    const critical = TOOL_HEALTH_THRESHOLDS.latencyCriticalMs;
+    suite.expect(
+      floor < high && high < critical,
+      `latency cutoffs must satisfy floor (${floor}) < high (${high}) < critical (${critical})`,
+    );
     const cases: Array<[number, "medium" | "high" | "critical"]> = [
-      [15000, "medium"],   // breach floor
-      [29999, "medium"],   // just below the high boundary
-      [30000, "high"],     // exact high boundary
-      [59999, "high"],     // just below the critical boundary
-      [60000, "critical"], // exact critical boundary
-      [120000, "critical"],
+      [floor, "medium"],         // breach floor
+      [high - 1, "medium"],      // just below the high boundary
+      [high, "high"],            // exact high boundary
+      [critical - 1, "high"],    // just below the critical boundary
+      [critical, "critical"],    // exact critical boundary
+      [critical * 2, "critical"],
     ];
     for (const [p95Ms, expected] of cases) {
       const sev = await severityForLatencyBreach(p95Ms);
