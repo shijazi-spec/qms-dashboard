@@ -329,6 +329,119 @@ function checkTreeParity(en, ar) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Check 4 — Streaming-download SW dictionary parity (Task #200)
+ *
+ * `dashboard/streaming-download-sw.js` carries its own EN/AR string dictionary
+ * because service workers can't easily fetch i18n JSON at runtime. To prevent
+ * silent drift, we mirror those strings under `downloads.sw_expired_*` in
+ * en.json / ar.json and require:
+ *   - every (lang, key) the SW dictionary defines also exists as a string in
+ *     the matching i18n JSON file, and
+ *   - the SW string and the JSON string match exactly.
+ *
+ * The SW file is parsed structurally (not eval'd) to keep this guardrail safe
+ * to run in CI without a service-worker runtime.
+ * ------------------------------------------------------------------------ */
+
+const SW_PATH = path.join(DASHBOARD_DIR, 'streaming-download-sw.js');
+// Map of SW dictionary key -> i18n JSON key. Translator-facing names live
+// under `downloads.sw_expired_*`; `dir` is layout metadata, not a string the
+// translator needs to localise, so it's intentionally excluded.
+const SW_KEY_TO_I18N_KEY = {
+  title: 'downloads.sw_expired_title',
+  heading: 'downloads.sw_expired_heading',
+  body: 'downloads.sw_expired_body',
+  retry_hint: 'downloads.sw_expired_retry_hint',
+};
+
+function parseSwStrings(swSource) {
+  // SW_STRINGS = { en: { dir: 'ltr', title: '...', ... }, ar: { ... } }
+  // We extract each lang block and then each `key: '...'` pair. The values
+  // are single-quoted strings without embedded single-quotes in this file —
+  // if that ever stops being true, this parser will throw and the guardrail
+  // will fail loudly, which is the desired behaviour.
+  const out = {};
+  const langRe = /(en|ar)\s*:\s*\{([\s\S]*?)\}\s*[,}]/g;
+  // Anchor the search to the SW_STRINGS declaration so we don't pick up
+  // unrelated object literals that happen to have an `en:` / `ar:` key.
+  const startIdx = swSource.indexOf('var SW_STRINGS');
+  if (startIdx === -1) {
+    throw new Error('Could not find `var SW_STRINGS` in ' + SW_PATH);
+  }
+  const region = swSource.slice(startIdx, swSource.indexOf('};', startIdx) + 2);
+  let match;
+  while ((match = langRe.exec(region)) !== null) {
+    const lang = match[1];
+    const body = match[2];
+    const fields = {};
+    const fieldRe = /(\w+)\s*:\s*'((?:[^'\\]|\\.)*)'/g;
+    let f;
+    while ((f = fieldRe.exec(body)) !== null) {
+      fields[f[1]] = f[2].replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+    }
+    out[lang] = fields;
+  }
+  if (!out.en || !out.ar) {
+    throw new Error('SW_STRINGS must define both `en` and `ar` blocks');
+  }
+  return out;
+}
+
+function lookupKey(tree, dotted) {
+  return dotted.split('.').reduce(function (node, segment) {
+    return node && typeof node === 'object' ? node[segment] : undefined;
+  }, tree);
+}
+
+function checkSwDictionaryParity(en, ar) {
+  console.log('\nStreaming-download SW dictionary parity:');
+  let swSource;
+  try {
+    swSource = fs.readFileSync(SW_PATH, 'utf8');
+  } catch (err) {
+    console.error(`  ✗ Could not read ${path.relative(ROOT, SW_PATH)}: ${err.message}`);
+    return false;
+  }
+  let swStrings;
+  try {
+    swStrings = parseSwStrings(swSource);
+  } catch (err) {
+    console.error(`  ✗ Could not parse SW_STRINGS in ${path.relative(ROOT, SW_PATH)}: ${err.message}`);
+    return false;
+  }
+  const trees = { en, ar };
+  const problems = [];
+  ['en', 'ar'].forEach(function (lang) {
+    Object.keys(SW_KEY_TO_I18N_KEY).forEach(function (swKey) {
+      const i18nKey = SW_KEY_TO_I18N_KEY[swKey];
+      const swValue = swStrings[lang][swKey];
+      if (typeof swValue !== 'string') {
+        problems.push(`SW dictionary missing string for ${lang}.${swKey} (expected to mirror ${i18nKey})`);
+        return;
+      }
+      const jsonValue = lookupKey(trees[lang], i18nKey);
+      if (typeof jsonValue !== 'string') {
+        problems.push(`${lang === 'en' ? 'en.json' : 'ar.json'} is missing string at \`${i18nKey}\` (mirrors SW ${lang}.${swKey})`);
+        return;
+      }
+      if (jsonValue !== swValue) {
+        problems.push(`${lang === 'en' ? 'en.json' : 'ar.json'} \`${i18nKey}\` does not match SW ${lang}.${swKey}\n        SW:   ${JSON.stringify(swValue)}\n        JSON: ${JSON.stringify(jsonValue)}`);
+      }
+    });
+  });
+  if (problems.length === 0) {
+    console.log(`  ✓ SW_STRINGS in streaming-download-sw.js matches downloads.sw_expired_* in en.json + ar.json`);
+    return true;
+  }
+  console.error(`  ✗ SW dictionary drift detected (${problems.length} issue${problems.length === 1 ? '' : 's'}):`);
+  problems.forEach(function (p) { console.error('      • ' + p); });
+  console.error('');
+  console.error('    Fix: keep SW_STRINGS in dashboard/streaming-download-sw.js byte-identical');
+  console.error('    to the matching downloads.sw_expired_* keys in dashboard/i18n/{en,ar}.json.');
+  return false;
+}
+
+/* ---------------------------------------------------------------------------
  * Main
  * ------------------------------------------------------------------------ */
 
@@ -346,9 +459,10 @@ function main() {
   const ok1 = checkPageWiring(pages);
   const ok2 = checkReferenceCoverage(pages, en, ar);
   const ok3 = checkTreeParity(en, ar);
+  const ok4 = checkSwDictionaryParity(en, ar);
 
-  if (ok1 && ok2 && ok3) {
-    console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, and en/ar key trees are all in sync.');
+  if (ok1 && ok2 && ok3 && ok4) {
+    console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, and SW dictionary are all in sync.');
     process.exit(0);
   }
   console.error('\n✗ i18n guardrail FAILED — see diagnostics above. Re-run with `npm run check:i18n` after fixing.');

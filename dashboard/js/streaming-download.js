@@ -256,7 +256,16 @@
                         sw.addEventListener('statechange', onState);
                     });
                 }
-                return reg.active || (navigator.serviceWorker.controller || null);
+                var activeSw = reg.active || (navigator.serviceWorker.controller || null);
+                // Best-effort: push the current UI language so the SW's
+                // fallback page (rendered when /_stream-download/<id> hits
+                // an expired registration) shows up in the right language
+                // even when no register has happened yet this session.
+                if (activeSw) {
+                    try { activeSw.postMessage({ type: 'set-language', lang: currentUiLang() }); }
+                    catch (_) { /* ignore */ }
+                }
+                return activeSw;
             } catch (err) {
                 console.warn('[streamingDownload] service-worker registration failed:', err);
                 swReadyPromise = null; // allow retry on next call
@@ -269,6 +278,32 @@
     function generateStreamId() {
         var rand = Math.random().toString(36).slice(2, 10);
         return Date.now().toString(36) + '-' + rand;
+    }
+
+    // Resolve the current UI language ('en' | 'ar') so the SW's fallback
+    // pages (e.g. "download link expired") render in the user's language.
+    // Falls back to <html lang>/navigator/'en' when WalaPlusI18n isn't ready.
+    function currentUiLang() {
+        try {
+            var i18n = global.WalaPlusI18n;
+            if (i18n && typeof i18n.currentLang === 'function') {
+                var lang = String(i18n.currentLang() || '').toLowerCase().split('-')[0];
+                if (lang === 'en' || lang === 'ar') return lang;
+            }
+        } catch (_) { /* ignore */ }
+        try {
+            if (typeof document !== 'undefined') {
+                var htmlLang = String(document.documentElement.lang || '').toLowerCase().split('-')[0];
+                if (htmlLang === 'en' || htmlLang === 'ar') return htmlLang;
+            }
+        } catch (_) { /* ignore */ }
+        try {
+            if (typeof navigator !== 'undefined') {
+                var navLang = String(navigator.language || '').toLowerCase().split('-')[0];
+                if (navLang === 'en' || navLang === 'ar') return navLang;
+            }
+        } catch (_) { /* ignore */ }
+        return 'en';
     }
 
     // True streaming path for Firefox / Safari: hand a ReadableStream off to a
@@ -328,6 +363,7 @@
                 filename: filename,
                 contentType: contentType,
                 totalLength: totalLength,
+                lang: currentUiLang(),
                 stream: transform.readable
             }, [transform.readable, channel.port2]);
         } catch (err) {
