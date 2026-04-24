@@ -73,6 +73,29 @@ export function redactPromptPreview(prompt: string, maxLen = 300): string {
   return preview.slice(0, maxLen);
 }
 
+/**
+ * Stringify-and-redact arbitrary tool input/output payloads for the
+ * `tool_input_preview` / `tool_output_preview` columns. Reuses the same
+ * PII rules as redactPromptPreview() so secrets, emails, phone numbers
+ * and card numbers never reach `ai_call_metrics`. Returns undefined for
+ * null/undefined so we don't store an empty string.
+ */
+export function redactToolPayloadPreview(payload: unknown, maxLen = 300): string | undefined {
+  if (payload === undefined || payload === null) return undefined;
+  let asString: string;
+  if (typeof payload === 'string') {
+    asString = payload;
+  } else {
+    try {
+      asString = JSON.stringify(payload);
+    } catch {
+      asString = String(payload);
+    }
+  }
+  if (!asString) return undefined;
+  return redactPromptPreview(asString, maxLen);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Table bootstrap (idempotent — called lazily before every write)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -98,6 +121,8 @@ export async function ensureAiMetricsTable(): Promise<void> {
           error_class        TEXT,
           error_message      TEXT,
           prompt_preview     TEXT,
+          tool_input_preview TEXT,
+          tool_output_preview TEXT,
           user_hash          TEXT,
           session_hash       TEXT,
           started_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -106,6 +131,10 @@ export async function ensureAiMetricsTable(): Promise<void> {
 
         ALTER TABLE ai_call_metrics
           ADD COLUMN IF NOT EXISTS prompt_preview TEXT;
+        ALTER TABLE ai_call_metrics
+          ADD COLUMN IF NOT EXISTS tool_input_preview TEXT;
+        ALTER TABLE ai_call_metrics
+          ADD COLUMN IF NOT EXISTS tool_output_preview TEXT;
 
         CREATE INDEX IF NOT EXISTS idx_ai_call_metrics_agent_started
           ON ai_call_metrics (agent_name, started_at DESC);
@@ -149,6 +178,8 @@ export interface AiCallMetricRow {
   error_class?: string;
   error_message?: string;
   prompt_preview?: string;
+  tool_input_preview?: string;
+  tool_output_preview?: string;
   user_hash?: string;
   session_hash?: string;
   metadata?: Record<string, unknown>;
@@ -170,8 +201,9 @@ export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number |
           prompt_tokens, completion_tokens, total_tokens,
           latency_ms, estimated_cost_usd,
           success, error_class, error_message,
-          prompt_preview, user_hash, session_hash, metadata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          prompt_preview, tool_input_preview, tool_output_preview,
+          user_hash, session_hash, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING id`,
       [
         row.agent_name,
@@ -187,6 +219,8 @@ export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number |
         row.error_class ?? null,
         row.error_message ? row.error_message.slice(0, 500) : null,
         row.prompt_preview ?? null,
+        row.tool_input_preview ?? null,
+        row.tool_output_preview ?? null,
         row.user_hash ?? null,
         row.session_hash ?? null,
         JSON.stringify(row.metadata ?? {}),
@@ -442,9 +476,16 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
     let success = true;
     let errorClass: string | undefined;
     let errorMessage: string | undefined;
+    // Capture sanitized previews of the LLM-provided input and (truncated)
+    // output so ops teams can reproduce a failing tool call without us
+    // ever persisting raw secrets / PII. Both are ≤300 chars after the
+    // same PII redaction rules used for prompt_preview.
+    const toolInputPreview = redactToolPayloadPreview(args);
+    let toolOutputPreview: string | undefined;
 
     try {
       const result = await originalExecute(args);
+      toolOutputPreview = redactToolPayloadPreview(result);
 
       // Tools standardize on { success: boolean, ...}.
       // Treat soft-fail returns as errors UNLESS they are HITL-gated queues
@@ -460,6 +501,9 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
       success = false;
       errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
       errorMessage = err instanceof Error ? err.message : String(err);
+      // Even on hard failures we still want the redacted error string in
+      // tool_output_preview so the dashboard can show what came back.
+      toolOutputPreview = redactToolPayloadPreview(errorMessage);
       throw err;
     } finally {
       const latencyMs = Date.now() - startedAt;
@@ -473,6 +517,8 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
         success,
         error_class: errorClass,
         error_message: errorMessage,
+        tool_input_preview: toolInputPreview,
+        tool_output_preview: toolOutputPreview,
       }).catch(() => { /* non-fatal */ });
     }
   };
@@ -748,6 +794,8 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<{
   error_class: string | null;
   error_message: string | null;
   prompt_preview: string | null;
+  tool_input_preview: string | null;
+  tool_output_preview: string | null;
   started_at: string;
   prompt_tokens: number | null;
   completion_tokens: number | null;
@@ -758,7 +806,7 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<{
        id, agent_name, tool_name, model,
        latency_ms, estimated_cost_usd,
        success, error_class, error_message,
-       prompt_preview,
+       prompt_preview, tool_input_preview, tool_output_preview,
        started_at, prompt_tokens, completion_tokens
      FROM ai_call_metrics
      WHERE (NOT success OR latency_ms > 30000)

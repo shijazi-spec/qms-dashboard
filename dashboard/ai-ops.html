@@ -583,7 +583,7 @@
               <th class="px-3 py-2">Tool</th>
               <th class="px-3 py-2 text-right">Latency</th>
               <th class="px-3 py-2">Status</th>
-              <th class="px-3 py-2">Error / Prompt preview</th>
+              <th class="px-3 py-2">Error / Prompt / Tool I/O preview</th>
             </tr></thead>
             <tbody>${data.map((r, i) => {
               const isParent = !r.tool_name;
@@ -617,6 +617,12 @@
                     : ''}
                   ${r.prompt_preview
                     ? `<div class="mt-0.5 truncate text-gray-400 italic" title="${esc(r.prompt_preview)}" data-testid="text-prompt-preview-${r.id}">&ldquo;${esc(r.prompt_preview.slice(0,120))}&rdquo;</div>`
+                    : ''}
+                  ${r.tool_input_preview
+                    ? `<div class="mt-0.5 truncate text-gray-500" title="${esc(r.tool_input_preview)}" data-testid="text-tool-input-preview-${r.id}"><span class="font-mono text-gray-400">in:</span> ${esc(r.tool_input_preview.slice(0,120))}</div>`
+                    : ''}
+                  ${r.tool_output_preview
+                    ? `<div class="mt-0.5 truncate text-gray-500" title="${esc(r.tool_output_preview)}" data-testid="text-tool-output-preview-${r.id}"><span class="font-mono text-gray-400">out:</span> ${esc(r.tool_output_preview.slice(0,120))}</div>`
                     : ''}
                 </td>
               </tr>
