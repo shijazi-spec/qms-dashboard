@@ -835,9 +835,13 @@ describe('streamingDownload (browser helper)', () => {
     ).toBeNull();
   });
 
-  // === Recent-downloads history tests (sessionStorage tray, from main) ===
+  // === Recent-downloads history tests (anonymous fallback) ===
+  // Anonymous visitors keep the legacy per-tab sessionStorage tray. Signed-in
+  // users get per-user localStorage persistence — see the
+  // "recent-downloads history persistence (signed-in user)" describe block
+  // further down.
 
-  it('records each successful download in the recent-downloads history (sessionStorage)', async () => {
+  it('records each successful download in the recent-downloads history (anonymous → sessionStorage)', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
     const payload = new Uint8Array([10, 11, 12]);
 
@@ -1414,6 +1418,331 @@ describe('streamingDownload (browser helper)', () => {
     // No SW register message should have been sent.
     expect(env.swCalls.filter((c) => c.msg && c.msg.type === 'register')).toHaveLength(0);
     expect(result.streamedToDisk).toBe(false);
+  });
+
+  describe('recent-downloads history persistence (signed-in user)', () => {
+    it('persists per-user history into localStorage so it survives a tab close', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1, 2, 3])]), {
+          status: 200,
+          headers: {
+            'content-type': 'text/csv',
+            'content-disposition': 'attachment; filename="payroll.csv"',
+          },
+        })
+      );
+
+      // Simulate navigation.js wiring up the signed-in user identity.
+      env.win.streamingDownload.history.setUser(42);
+
+      await env.win.streamingDownload('/api/exports/payroll.csv');
+
+      // The list-API still shows the entry…
+      const list = env.win.streamingDownload.history.list();
+      expect(list).toHaveLength(1);
+      expect(list[0]).toMatchObject({
+        filename: 'payroll.csv',
+        url: '/api/exports/payroll.csv',
+        status: 'done',
+      });
+
+      // …and it lives in localStorage under the per-user key, NOT
+      // sessionStorage. This is what makes it survive a tab close.
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-42';
+      const persisted = JSON.parse(env.win.localStorage.getItem(userKey) || '[]');
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0].filename).toBe('payroll.csv');
+
+      // The legacy v1 sessionStorage key must NOT be holding a duplicate.
+      expect(
+        env.win.sessionStorage.getItem(
+          env.win.streamingDownload.history.STORAGE_KEY
+        )
+      ).toBeNull();
+    });
+
+    it('does not leak history between two different signed-in users', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([9])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+
+      // User A kicks off an export.
+      env.win.streamingDownload.history.setUser('alice-1');
+      await env.win.streamingDownload('/api/exports/alice.csv', {
+        filename: 'alice.csv',
+      });
+      expect(env.win.streamingDownload.history.list()).toHaveLength(1);
+
+      // User B logs in (e.g. shared workstation). They must NOT see Alice's
+      // download in their tray — different localStorage namespace.
+      env.win.streamingDownload.history.setUser('bob-2');
+      expect(env.win.streamingDownload.history.list()).toEqual([]);
+
+      // And switching back surfaces Alice's history again.
+      env.win.streamingDownload.history.setUser('alice-1');
+      const list = env.win.streamingDownload.history.list();
+      expect(list).toHaveLength(1);
+      expect(list[0].filename).toBe('alice.csv');
+    });
+
+    it('migrates anonymous (sessionStorage) history into the user namespace on setUser()', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1, 2])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+
+      // Download started while still anonymous (e.g. before /api/auth/me
+      // came back) — recorded in sessionStorage under the legacy key.
+      await env.win.streamingDownload('/api/exports/early.csv', {
+        filename: 'early.csv',
+      });
+      expect(
+        env.win.sessionStorage.getItem(
+          env.win.streamingDownload.history.STORAGE_KEY
+        )
+      ).not.toBeNull();
+
+      // Identity arrives — anonymous list should be promoted to per-user
+      // localStorage and the sessionStorage copy cleared so the two stores
+      // can never drift.
+      env.win.streamingDownload.history.setUser(7);
+
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-7';
+      const persisted = JSON.parse(env.win.localStorage.getItem(userKey) || '[]');
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0].filename).toBe('early.csv');
+
+      expect(
+        env.win.sessionStorage.getItem(
+          env.win.streamingDownload.history.STORAGE_KEY
+        )
+      ).toBeNull();
+    });
+
+    it('rehydrates the tray from localStorage on a fresh page load (simulated tab restart)', async () => {
+      // First "session": user 99 records a download.
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([5])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(99);
+      await env.win.streamingDownload('/api/exports/yearly.csv', {
+        filename: 'yearly.csv',
+      });
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-99';
+      const stored = env.win.localStorage.getItem(userKey);
+      expect(stored).not.toBeNull();
+      env.cleanup();
+
+      // New tab — sessionStorage starts empty, but localStorage carries
+      // the previous session. After re-wiring the user, the tray sees
+      // the historical download.
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.localStorage.setItem(userKey, stored as string);
+      env.win.streamingDownload.history.setUser(99);
+
+      const list = env.win.streamingDownload.history.list();
+      expect(list).toHaveLength(1);
+      expect(list[0].filename).toBe('yearly.csv');
+
+      // Tray DOM should also be auto-rendered.
+      const tray = env.win.document.getElementById(
+        'streaming-download-history-tray'
+      );
+      expect(tray).not.toBeNull();
+    });
+
+    it('prunes entries older than the configured max-age window', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+      env.win.streamingDownload.history.setUser(123);
+
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-123';
+      const now = Date.now();
+      const entries = [
+        {
+          id: 'fresh',
+          filename: 'fresh.csv',
+          url: '/api/exports/fresh.csv',
+          status: 'done',
+          startedAt: new Date(now - 60_000).toISOString(),
+          finishedAt: new Date(now - 60_000).toISOString(),
+          bytes: 10,
+        },
+        {
+          id: 'stale',
+          filename: 'stale.csv',
+          url: '/api/exports/stale.csv',
+          status: 'done',
+          startedAt: new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString(),
+          finishedAt: new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString(),
+          bytes: 10,
+        },
+      ];
+      env.win.localStorage.setItem(userKey, JSON.stringify(entries));
+
+      // Default max-age is 30 days → only the fresh entry survives.
+      const list = env.win.streamingDownload.history.list();
+      expect(list.map((e: any) => e.id)).toEqual(['fresh']);
+    });
+
+    it('honours window.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS override', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.streamingDownload.history.setUser(7);
+
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-7';
+      const now = Date.now();
+      env.win.localStorage.setItem(
+        userKey,
+        JSON.stringify([
+          {
+            id: 'two-hours-old',
+            filename: 'old.csv',
+            status: 'done',
+            startedAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+            finishedAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+            bytes: 1,
+          },
+        ])
+      );
+
+      // Tighten the window to 1 hour — the entry above must be pruned.
+      env.win.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS = 60 * 60 * 1000;
+      expect(env.win.streamingDownload.history.list()).toEqual([]);
+
+      // Setting it to 0 disables expiration entirely.
+      env.win.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS = 0;
+      env.win.localStorage.setItem(
+        userKey,
+        JSON.stringify([
+          {
+            id: 'ancient',
+            filename: 'ancient.csv',
+            status: 'done',
+            startedAt: new Date(now - 365 * 24 * 60 * 60 * 1000).toISOString(),
+            finishedAt: new Date(now - 365 * 24 * 60 * 60 * 1000).toISOString(),
+            bytes: 1,
+          },
+        ])
+      );
+      expect(env.win.streamingDownload.history.list()).toHaveLength(1);
+    });
+
+    it('retry button still works after a fresh login (entry persisted via localStorage)', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+      let realCallCount = 0;
+      env.win.fetch = vi.fn(async (url: string) => {
+        if (typeof url === 'string' && url.indexOf('/estimate') !== -1) {
+          return new (globalThis as any).Response('not found', {
+            status: 404,
+            headers: { 'content-type': 'text/plain' },
+          });
+        }
+        realCallCount++;
+        if (realCallCount === 1) {
+          return new (globalThis as any).Response('boom', {
+            status: 500,
+            headers: { 'content-type': 'text/plain' },
+          });
+        }
+        return new (globalThis as any).Response(
+          streamFromChunks([new Uint8Array([1])]),
+          { status: 200, headers: { 'content-type': 'text/csv' } }
+        );
+      });
+
+      // Original session — fail and persist.
+      env.win.streamingDownload.history.setUser(55);
+      await expect(
+        env.win.streamingDownload('/api/exports/quarterly.csv', {
+          filename: 'quarterly.csv',
+        })
+      ).rejects.toThrow();
+
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-55';
+      const stored = env.win.localStorage.getItem(userKey);
+      expect(stored).not.toBeNull();
+      env.cleanup();
+
+      // Brand-new tab + fresh login: same user, new sessionStorage,
+      // but localStorage still holds the failed entry.
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.localStorage.setItem(userKey, stored as string);
+
+      let retryCallCount = 0;
+      env.win.fetch = vi.fn(async (url: string) => {
+        if (typeof url === 'string' && url.indexOf('/estimate') !== -1) {
+          return new (globalThis as any).Response('not found', {
+            status: 404,
+            headers: { 'content-type': 'text/plain' },
+          });
+        }
+        retryCallCount++;
+        return new (globalThis as any).Response(
+          streamFromChunks([new Uint8Array([1])]),
+          { status: 200, headers: { 'content-type': 'text/csv' } }
+        );
+      });
+      env.win.streamingDownload.history.setUser(55);
+
+      const list = env.win.streamingDownload.history.list();
+      expect(list).toHaveLength(1);
+      expect(list[0].filename).toBe('quarterly.csv');
+      expect(list[0].status).toBe('failed');
+
+      env.win.streamingDownload.history.retry(list[0].id);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const after = env.win.streamingDownload.history.list();
+      const done = after.find((e: any) => e.status === 'done');
+      expect(done).toBeTruthy();
+      expect(done.filename).toBe('quarterly.csv');
+      expect(retryCallCount).toBe(1);
+    });
+
+    it('clear() wipes the per-user localStorage entries', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(11);
+      await env.win.streamingDownload('/api/exports/will-clear.csv', {
+        filename: 'will-clear.csv',
+      });
+
+      const userKey =
+        env.win.streamingDownload.history.STORAGE_KEY_PREFIX + '.u-11';
+      expect(env.win.localStorage.getItem(userKey)).not.toBeNull();
+
+      env.win.streamingDownload.history.clear();
+      expect(env.win.streamingDownload.history.list()).toEqual([]);
+      const after = env.win.localStorage.getItem(userKey);
+      expect(after === null || after === '[]').toBe(true);
+    });
   });
 
   describe('streaming-fallback advisory notice', () => {

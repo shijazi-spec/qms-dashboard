@@ -307,6 +307,20 @@ const WalaPlusNav = {
       .then(r => (r.ok ? r.json() : { authenticated: false }))
       .then(data => (data.authenticated ? data : tryAdminFallback()))
       .then(data => {
+        // Wire the recent-downloads tray to a per-user localStorage
+        // namespace so long-running exports survive a tab close, browser
+        // restart, or fresh login. Anonymous/unauthenticated visitors keep
+        // the legacy per-tab sessionStorage behaviour.
+        try {
+          const sd = window.streamingDownload;
+          if (sd && sd.history && typeof sd.history.setUser === 'function') {
+            if (data && data.authenticated && data.user && data.user.id) {
+              sd.history.setUser(data.user.id);
+            } else {
+              sd.history.setUser(null);
+            }
+          }
+        } catch (_) { /* tray wiring is best-effort */ }
         const container = document.getElementById('nav-user-info');
         if (!container) return;
         if (data.authenticated && data.user) {

@@ -400,11 +400,25 @@
     var PROGRESS_CONTAINER_ID = 'streaming-download-progress-container';
     var TOAST_CONTAINER_ID = 'streaming-download-toast-container';
     var TRAY_CONTAINER_ID = 'streaming-download-history-tray';
+    // v1 is the legacy sessionStorage key — kept around so anonymous users
+    // (and one-shot tabs whose user identity hasn't been wired up yet) still
+    // see the same per-tab tray they got before. Authenticated callers get a
+    // per-user localStorage namespace under HISTORY_STORAGE_KEY_PREFIX so
+    // the tray survives a tab close / browser restart / fresh login.
     var HISTORY_STORAGE_KEY = 'walaplus.recentDownloads.v1';
+    var HISTORY_STORAGE_KEY_PREFIX = 'walaplus.recentDownloads.v2';
     var TRAY_OPEN_STORAGE_KEY = 'walaplus.recentDownloads.trayOpen';
     var HISTORY_LIMIT = 5;
+    // Default expiry window for stored entries (30 days). Override on the
+    // host page with `window.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS = …`.
+    var HISTORY_DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
     var cardCounter = 0;
     var trayHydrated = false;
+    // null = no signed-in identity wired up yet → behave like before (per-tab
+    // sessionStorage). A non-empty string switches the tray over to
+    // per-user localStorage so the list persists across browser sessions.
+    var currentHistoryUserKey = null;
+    var crossTabListenerInstalled = false;
 
     function ensureProgressContainer() {
         if (typeof document === 'undefined' || !document.body) return null;
@@ -650,11 +664,21 @@
 
     // --- Recent downloads history & tray ---------------------------------
     //
-    // Tracks the last N download attempts in sessionStorage so the tray
-    // persists across page navigations within the dashboard for the lifetime
-    // of the session. Each entry records the URL, filename, status, byte
-    // count, error message, and a sanitised fetch init so failed/cancelled
-    // entries can be re-issued via a Retry button.
+    // Tracks the last N download attempts so the tray persists across page
+    // navigations. Storage location depends on identity:
+    //   • Anonymous (no user wired up): sessionStorage under
+    //     HISTORY_STORAGE_KEY — per-tab list, wiped when the tab closes.
+    //     Matches the legacy behaviour for unauthenticated/unknown callers.
+    //   • Signed-in (setHistoryUser was called): localStorage under
+    //     `${HISTORY_STORAGE_KEY_PREFIX}.u-${userKey}` — survives tab close,
+    //     browser restart, and re-login so users can resume long-running
+    //     exports the next day. Entries are pruned by HISTORY_LIMIT and by
+    //     HISTORY_DEFAULT_MAX_AGE_MS (configurable via
+    //     window.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS).
+    //
+    // Each entry records the URL, filename, status, byte count, error
+    // message, and a sanitised fetch init so failed/cancelled entries can
+    // be re-issued via a Retry button (works after a fresh login).
 
     function safeSessionStorage() {
         try {
@@ -663,11 +687,56 @@
         } catch (_) { return null; }
     }
 
-    function loadHistory() {
-        var store = safeSessionStorage();
+    function safeLocalStorage() {
+        try {
+            if (typeof window === 'undefined') return null;
+            return window.localStorage || null;
+        } catch (_) { return null; }
+    }
+
+    function historyStorage() {
+        if (currentHistoryUserKey) {
+            return safeLocalStorage() || safeSessionStorage();
+        }
+        return safeSessionStorage();
+    }
+
+    function historyKey() {
+        if (currentHistoryUserKey) {
+            return HISTORY_STORAGE_KEY_PREFIX + '.u-' + currentHistoryUserKey;
+        }
+        return HISTORY_STORAGE_KEY;
+    }
+
+    function historyMaxAgeMs() {
+        var override = global.STREAMING_DOWNLOAD_HISTORY_MAX_AGE_MS;
+        if (typeof override === 'number' && override >= 0) return override;
+        return HISTORY_DEFAULT_MAX_AGE_MS;
+    }
+
+    function pruneEntries(arr) {
+        if (!Array.isArray(arr)) return [];
+        var maxAge = historyMaxAgeMs();
+        var cutoff = (maxAge && maxAge > 0) ? (Date.now() - maxAge) : 0;
+        var out = [];
+        for (var i = 0; i < arr.length; i++) {
+            var e = arr[i];
+            if (!e) continue;
+            // Drop entries older than the configured window. Keep entries
+            // missing both timestamps (defensive — should not happen).
+            if (cutoff > 0) {
+                var ts = Date.parse(e.finishedAt || e.startedAt || '');
+                if (Number.isFinite(ts) && ts < cutoff) continue;
+            }
+            out.push(e);
+        }
+        return out;
+    }
+
+    function loadHistoryFrom(store, key) {
         if (!store) return [];
         try {
-            var raw = store.getItem(HISTORY_STORAGE_KEY);
+            var raw = store.getItem(key);
             if (!raw) return [];
             var arr = JSON.parse(raw);
             if (!Array.isArray(arr)) return [];
@@ -675,11 +744,16 @@
         } catch (_) { return []; }
     }
 
+    function loadHistory() {
+        return pruneEntries(loadHistoryFrom(historyStorage(), historyKey()));
+    }
+
     function saveHistory(arr) {
-        var store = safeSessionStorage();
+        var store = historyStorage();
         if (!store) return;
         try {
-            store.setItem(HISTORY_STORAGE_KEY, JSON.stringify(arr.slice(0, HISTORY_LIMIT)));
+            var pruned = pruneEntries(arr).slice(0, HISTORY_LIMIT);
+            store.setItem(historyKey(), JSON.stringify(pruned));
         } catch (_) { /* quota/etc — ignore */ }
     }
 
@@ -695,6 +769,76 @@
         if (!store) return;
         try { store.setItem(TRAY_OPEN_STORAGE_KEY, open ? '1' : '0'); }
         catch (_) { /* ignore */ }
+    }
+
+    // Re-render whenever another tab in the same browser writes to the
+    // active per-user history key. Lets the tray stay in sync when, e.g.,
+    // a user kicks off an export in a second tab.
+    function ensureCrossTabListener() {
+        if (crossTabListenerInstalled) return;
+        if (typeof window === 'undefined' || !window.addEventListener) return;
+        crossTabListenerInstalled = true;
+        try {
+            window.addEventListener('storage', function (ev) {
+                if (!ev) return;
+                if (ev.key === null || ev.key === historyKey()) {
+                    try { renderHistoryTray(); } catch (_) { /* ignore */ }
+                }
+            });
+        } catch (_) { /* ignore — best effort */ }
+    }
+
+    // Promote anonymous (sessionStorage) and any leftover v1 entries into
+    // the now-known user's localStorage namespace, then drop the legacy
+    // copies so two stores can't drift apart.
+    function migrateAnonymousHistoryToUser() {
+        if (!currentHistoryUserKey) return;
+        var loc = safeLocalStorage();
+        if (!loc) return;
+        var sess = safeSessionStorage();
+        var userKey = HISTORY_STORAGE_KEY_PREFIX + '.u-' + currentHistoryUserKey;
+        var existing = loadHistoryFrom(loc, userKey);
+        var sessAnon = sess ? loadHistoryFrom(sess, HISTORY_STORAGE_KEY) : [];
+        var localLegacy = loadHistoryFrom(loc, HISTORY_STORAGE_KEY);
+        if (!sessAnon.length && !localLegacy.length) return;
+        var seen = Object.create(null);
+        existing.forEach(function (e) { if (e && e.id) seen[e.id] = true; });
+        var merged = existing.slice();
+        sessAnon.concat(localLegacy).forEach(function (e) {
+            if (e && e.id && !seen[e.id]) {
+                merged.push(e);
+                seen[e.id] = true;
+            }
+        });
+        merged.sort(function (a, b) {
+            var aT = Date.parse((a && (a.startedAt || a.finishedAt)) || '') || 0;
+            var bT = Date.parse((b && (b.startedAt || b.finishedAt)) || '') || 0;
+            return bT - aT;
+        });
+        try {
+            var pruned = pruneEntries(merged).slice(0, HISTORY_LIMIT);
+            loc.setItem(userKey, JSON.stringify(pruned));
+        } catch (_) { /* ignore */ }
+        try { if (sess) sess.removeItem(HISTORY_STORAGE_KEY); } catch (_) { /* ignore */ }
+        try { loc.removeItem(HISTORY_STORAGE_KEY); } catch (_) { /* ignore */ }
+    }
+
+    // Public hook called by navigation.js (or any caller that knows who is
+    // signed in) to switch the tray over to a per-user localStorage
+    // namespace. Pass null/undefined/'' to revert to the anonymous tab-only
+    // behaviour (e.g. on logout).
+    function setHistoryUser(userId) {
+        var key = (userId === null || userId === undefined || userId === '')
+            ? null
+            : String(userId);
+        if (key === currentHistoryUserKey) return;
+        currentHistoryUserKey = key;
+        if (key) {
+            try { migrateAnonymousHistoryToUser(); } catch (_) { /* ignore */ }
+            try { ensureCrossTabListener(); } catch (_) { /* ignore */ }
+        }
+        try { reconcileHistoryOnLoad(); } catch (_) { /* ignore */ }
+        try { renderHistoryTray(); } catch (_) { /* ignore */ }
     }
 
     function makeHistoryId() {
@@ -1857,9 +2001,17 @@
         clear: clearHistory,
         retry: retryHistoryEntry,
         renderTray: renderHistoryTray,
+        // Wire up the signed-in user so the tray persists across browser
+        // sessions in localStorage instead of per-tab sessionStorage. Pass
+        // a stable identifier (e.g. numeric user id) — pass null on logout
+        // to revert to the anonymous tab-only behaviour.
+        setUser: setHistoryUser,
+        getUserKey: function () { return currentHistoryUserKey; },
         STORAGE_KEY: HISTORY_STORAGE_KEY,
+        STORAGE_KEY_PREFIX: HISTORY_STORAGE_KEY_PREFIX,
         TRAY_OPEN_KEY: TRAY_OPEN_STORAGE_KEY,
-        LIMIT: HISTORY_LIMIT
+        LIMIT: HISTORY_LIMIT,
+        DEFAULT_MAX_AGE_MS: HISTORY_DEFAULT_MAX_AGE_MS
     };
 
     global.streamingDownload = streamingDownload;
