@@ -384,6 +384,17 @@ const WalaPlusNav = {
             initials.textContent = (u.name || u.email || '?')[0].toUpperCase();
             avatarSlot.replaceWith(initials);
           }
+
+          // The user-menu dropdown was just injected into #nav-user-info,
+          // AFTER the initial bindEvents() pass. Re-run only the dropdown
+          // binder so the opener button gets a real click-to-toggle handler
+          // instead of relying solely on the CSS :hover fallback (which
+          // closes the menu the moment the cursor crosses the gap between
+          // the avatar trigger and the menu, making the language buttons
+          // unreachable). bindDropdownEvents() is idempotent and does NOT
+          // re-bind the static handlers (rail toggle, mobile menu, Escape,
+          // group accordions, search input) wired by bindEvents().
+          this.bindDropdownEvents();
         }
       })
       .catch(() => {});
@@ -609,12 +620,18 @@ const WalaPlusNav = {
     `;
   },
 
-  bindEvents() {
+  // Idempotent: safe to call any time new .nav-dropdown elements are
+  // added to the DOM (e.g. after loadUserInfo() injects the user-menu).
+  // The per-button data-nav-bound flag and the single-shot doc closer
+  // guard prevent duplicate handlers on re-runs.
+  bindDropdownEvents() {
     document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
       const btn = dropdown.querySelector('button');
       const menu = dropdown.querySelector('.dropdown-menu');
       const arrow = dropdown.querySelector('.dropdown-arrow');
       if (!btn || !menu) return;
+      if (btn.dataset.navBound === '1') return;
+      btn.dataset.navBound = '1';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
@@ -626,7 +643,18 @@ const WalaPlusNav = {
         }
       });
     });
-    document.addEventListener('click', () => this.closeAllDropdowns());
+    if (!this._docClosersBound) {
+      this._docClosersBound = true;
+      document.addEventListener('click', () => this.closeAllDropdowns());
+    }
+  },
+
+  bindEvents() {
+    // Dropdown wiring is split out so loadUserInfo() can re-run only the
+    // dropdown binder after injecting the user-menu, without duplicating
+    // the static handlers below (rail toggle, mobile menu, Escape, group
+    // accordions, search input).
+    this.bindDropdownEvents();
 
     const railToggle = document.getElementById('wp-rail-toggle');
     if (railToggle) {
