@@ -16,6 +16,7 @@ function getPool(): InstanceType<typeof Pool> {
 }
 
 const WINDOW_MS = 60 * 1000;
+const SUB_BUCKET_MS = 1000;
 const READ_LIMIT = 100;
 const WRITE_LIMIT = 10;
 const AUTH_LIMIT = 5;
@@ -149,24 +150,51 @@ export async function checkRateLimit(
     limit = isWrite ? WRITE_LIMIT : READ_LIMIT;
   }
 
-  const now = Date.now();
-  const windowStart = new Date(Math.floor(now / WINDOW_MS) * WINDOW_MS);
-  const windowEnd = new Date(windowStart.getTime() + WINDOW_MS);
-  const retryAfter = Math.ceil((windowEnd.getTime() - now) / 1000);
-
   try {
     await ensureTable();
-    const result = await getPool().query<{ count: string }>(
+    const pool = getPool();
+
+    // Sliding-window enforcement, all bound to DB time so multi-instance
+    // clock skew can't shift the window. Sub-bucket = 1s. Requests live in
+    // their second-aligned bucket; the SELECT predicate keeps any bucket
+    // whose latest possible request might still fall inside the trailing
+    // 60s window. Conservative bound: window_start > NOW() - 61s admits
+    // any sub-bucket [T, T+1s) whose tail (T+1s) is still ≥ NOW()-60s.
+    // This errs on the side of strictness — we never undercount in-window
+    // requests due to bucket-start truncation.
+    await pool.query(
       `INSERT INTO rate_limit_buckets (key, window_start, count)
-       VALUES ($1, $2, 1)
+       VALUES ($1, date_trunc('second', NOW()), 1)
        ON CONFLICT (key, window_start)
-       DO UPDATE SET count = rate_limit_buckets.count + 1
-       RETURNING count`,
-      [key, windowStart.toISOString()],
+       DO UPDATE SET count = rate_limit_buckets.count + 1`,
+      [key],
     );
 
-    const count = parseInt(result.rows[0].count, 10);
-    if (count > limit) {
+    const sumResult = await pool.query<{
+      total: string;
+      oldest_epoch: string | null;
+      now_epoch: string;
+    }>(
+      `SELECT COALESCE(SUM(count), 0)::text AS total,
+              EXTRACT(EPOCH FROM MIN(window_start))::float8::text AS oldest_epoch,
+              EXTRACT(EPOCH FROM NOW())::float8::text AS now_epoch
+       FROM rate_limit_buckets
+       WHERE key = $1
+         AND window_start > NOW() - INTERVAL '1 minute' - INTERVAL '1 second'`,
+      [key],
+    );
+
+    const row = sumResult.rows[0];
+    const total = parseInt(row.total, 10);
+    if (total > limit) {
+      const nowMs = parseFloat(row.now_epoch) * 1000;
+      const oldestMs = row.oldest_epoch ? parseFloat(row.oldest_epoch) * 1000 : nowMs;
+      // The oldest sub-bucket [T, T+1s) ages fully out of the rolling
+      // window once NOW() ≥ T + 1s + 60s. Wait at least that long.
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((oldestMs + WINDOW_MS + SUB_BUCKET_MS - nowMs) / 1000),
+      );
       return { allowed: false, retryAfter };
     }
     return { allowed: true };

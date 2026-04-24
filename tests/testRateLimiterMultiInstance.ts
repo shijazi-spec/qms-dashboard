@@ -10,13 +10,17 @@
  * Run: npx tsx tests/testRateLimiterMultiInstance.ts
  */
 
+import pg from 'pg';
 import { checkRateLimit, parseClientIp } from '../src/utils/rateLimiter';
+
+const { Pool } = pg;
 
 const LIMIT = 10;
 const INSTANCES = 3;
 const REQUESTS_PER_INSTANCE = 6;
 const SHARED_IP = `test-sim-${Date.now()}`;
 const SHARED_PATH = '/api/test-endpoint';
+const AUTH_LIMIT = 5;
 
 async function runInstance(instanceId: number): Promise<{ allowed: number; denied: number }> {
   let allowed = 0;
@@ -123,11 +127,130 @@ function testParseClientIp(): boolean {
   return allPassed;
 }
 
+/**
+ * Boundary-spanning sliding-window tests.
+ *
+ * Three scenarios, each provably exercising AUTH_LIMIT (5/min):
+ *
+ *   1. "30s-old quota": fill the quota, backdate every sub-bucket 30s, then
+ *      fire one more request. With the old fixed-minute bucket those rows
+ *      would have rolled into a stale window and the new request would be
+ *      allowed — i.e. ≥ 6 in 30s. The sliding window must deny it.
+ *
+ *   2. "Oldest-sub-bucket edge case (~59s)": pre-seed AUTH_LIMIT prior
+ *      requests in a sub-bucket whose start is ~59s ago (i.e. the requests
+ *      themselves are 59.x seconds old, still inside the 60s window). A
+ *      naive predicate of `window_start > NOW() - 60s` would drop this
+ *      bucket because its START is older than 60s, even though the requests
+ *      it represents are not. Our conservative `> NOW() - 61s` predicate
+ *      must include it — so the next request must be denied.
+ *
+ *   3. "Fully-aged 61s-old quota": pre-seed AUTH_LIMIT prior requests in a
+ *      sub-bucket whose start is 62s ago. Those rows are guaranteed to be
+ *      out of the trailing 60s window. The next request must be allowed.
+ */
+async function testBoundarySpan(): Promise<boolean> {
+  console.log('\n[RateLimiterTest] === Boundary-spanning sliding window tests ===\n');
+
+  const path = '/api/auth/login';
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  let allPassed = true;
+
+  try {
+    // -------- Scenario 1: backdate by 30s --------
+    {
+      const ip = `boundary-30s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const key = `ip:${ip}:authflow`;
+      console.log(`  [1] 30s-backdated quota — key=${key}`);
+
+      for (let i = 0; i < AUTH_LIMIT; i++) {
+        const r = await checkRateLimit(ip, false, path, false);
+        if (!r.allowed) {
+          console.error(`      ❌ Request ${i + 1}/${AUTH_LIMIT} unexpectedly denied`);
+          allPassed = false;
+        }
+      }
+      const shifted = await pool.query(
+        `UPDATE rate_limit_buckets
+         SET window_start = window_start - INTERVAL '30 seconds'
+         WHERE key = $1`,
+        [key],
+      );
+      console.log(`      Backdated ${shifted.rowCount} sub-bucket row(s) by 30s`);
+
+      const next = await checkRateLimit(ip, false, path, false);
+      if (next.allowed) {
+        console.error('      ❌ Request after 30s-shift was ALLOWED — sliding window broken');
+        allPassed = false;
+      } else {
+        console.log(`      ✅ Denied (retryAfter=${next.retryAfter}s)`);
+      }
+    }
+
+    // -------- Scenario 2: oldest-sub-bucket edge case (~59s) --------
+    // This is the case the code reviewer specifically called out: a request
+    // 59.x seconds old whose sub-bucket-start has just crossed the 60s mark.
+    {
+      const ip = `boundary-59s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const key = `ip:${ip}:authflow`;
+      console.log(`\n  [2] Oldest-bucket edge (~59s) — key=${key}`);
+
+      // Seed AUTH_LIMIT prior requests in one sub-bucket aged exactly 59s.
+      // The requests they represent are at most ~59s old (well within window).
+      await pool.query(
+        `INSERT INTO rate_limit_buckets (key, window_start, count)
+         VALUES ($1, date_trunc('second', NOW() - INTERVAL '59 seconds'), $2)
+         ON CONFLICT (key, window_start)
+         DO UPDATE SET count = rate_limit_buckets.count + EXCLUDED.count`,
+        [key, AUTH_LIMIT],
+      );
+      console.log(`      Seeded ${AUTH_LIMIT} prior requests at -59s`);
+
+      const next = await checkRateLimit(ip, false, path, false);
+      if (next.allowed) {
+        console.error('      ❌ Request was ALLOWED — bucket-start truncation undercounted in-window requests');
+        allPassed = false;
+      } else {
+        console.log(`      ✅ Denied (retryAfter=${next.retryAfter}s) — strict sliding bound holds at the edge`);
+      }
+    }
+
+    // -------- Scenario 3: fully-aged-out (~62s) — must be allowed --------
+    {
+      const ip = `boundary-62s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const key = `ip:${ip}:authflow`;
+      console.log(`\n  [3] Fully-aged quota (~62s) — key=${key}`);
+
+      await pool.query(
+        `INSERT INTO rate_limit_buckets (key, window_start, count)
+         VALUES ($1, date_trunc('second', NOW() - INTERVAL '62 seconds'), $2)
+         ON CONFLICT (key, window_start)
+         DO UPDATE SET count = rate_limit_buckets.count + EXCLUDED.count`,
+        [key, AUTH_LIMIT],
+      );
+      console.log(`      Seeded ${AUTH_LIMIT} prior requests at -62s (outside window)`);
+
+      const next = await checkRateLimit(ip, false, path, false);
+      if (!next.allowed) {
+        console.error('      ❌ Request was DENIED — sliding window is over-counting aged-out requests');
+        allPassed = false;
+      } else {
+        console.log('      ✅ Allowed — aged-out bucket correctly excluded');
+      }
+    }
+  } finally {
+    await pool.end();
+  }
+
+  return allPassed;
+}
+
 // Runs in one process; validates Postgres counter under concurrent access.
 // True cross-process validation: run this script in 2+ separate processes
 // with the same SHARED_IP env var and assert combined allowed <= WRITE_LIMIT.
 async function main() {
   const ipTestsPassed = testParseClientIp();
+  const boundaryPassed = await testBoundarySpan();
 
   console.log('\n[RateLimiterTest] === Multi-instance distributed limit simulation ===\n');
   console.log(`  Instances: ${INSTANCES}`);
@@ -163,7 +286,7 @@ async function main() {
     console.error('   This indicates rate limit state is NOT shared (in-memory leak).');
   }
 
-  const overallPassed = ipTestsPassed && simPassed;
+  const overallPassed = ipTestsPassed && boundaryPassed && simPassed;
   if (!overallPassed) {
     process.exit(1);
   }
