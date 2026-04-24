@@ -1136,6 +1136,265 @@ describe('streamingDownload (browser helper)', () => {
     expect(Array.from(merged)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90]);
   });
 
+  // ---- Resume auto-retry with backoff (network still down at Resume time) -
+
+  it('auto-retries the Range fetch with exponential backoff when the network is still down at Resume time, then stitches the bytes once the retry succeeds', async () => {
+    env = setupBrowserEnv();
+    // Make the backoff delays effectively zero so the test runs in ms, not s.
+    env.win.STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS = 3;
+    env.win.STREAMING_DOWNLOAD_RESUME_BASE_DELAY_MS = 1;
+
+    const HEAD = new Uint8Array([1, 2, 3, 4]);
+    const TAIL = new Uint8Array([5, 6, 7, 8]);
+    const TOTAL = HEAD.byteLength + TAIL.byteLength;
+    const ETAG = 'W/"flaky"';
+
+    let firstBodyController: any;
+    const firstBody = new (globalThis as any).ReadableStream({
+      start(c: any) { firstBodyController = c; },
+    });
+
+    // call#1: initial 200 (interrupts mid-stream)
+    // call#2: Resume click → simulated DNS/network failure
+    // call#3: backoff retry → STILL fails
+    // call#4: backoff retry #2 → succeeds with 206 Partial Content.
+    const fetchSpy = vi.fn(async (_url: string, init: any = {}) => {
+      const headers = (init && init.headers) || {};
+      const range =
+        (typeof headers.get === 'function' && headers.get('Range')) ||
+        headers['Range'] || headers['range'];
+
+      if (!range) {
+        return new (globalThis as any).Response(firstBody, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-disposition': 'attachment; filename="flaky.bin"',
+            'content-length': String(TOTAL),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        });
+      }
+
+      // Reject the first two Range fetches as if the network was still down.
+      const rangeAttempt = fetchSpy.mock.calls.filter(
+        (c: any[]) => {
+          const h = (c[1] && c[1].headers) || {};
+          return (typeof h.get === 'function' ? h.get('Range') : (h['Range'] || h['range']));
+        }
+      ).length;
+      if (rangeAttempt <= 2) {
+        const err: any = new TypeError('Failed to fetch');
+        throw err;
+      }
+
+      // Third Range attempt → succeed.
+      return new (globalThis as any).Response(
+        new (globalThis as any).Response(TAIL).body,
+        {
+          status: 206,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-range': 'bytes ' + HEAD.byteLength + '-' + (TOTAL - 1) + '/' + TOTAL,
+            'content-length': String(TAIL.byteLength),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        }
+      );
+    });
+    env.win.fetch = fetchSpy;
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/flaky.bin', {
+      streamToDisk: true,
+      skipEstimate: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.error(Object.assign(new Error('drop'), { name: 'TypeError' }));
+
+    // Wait for the Resume prompt and click it.
+    let resumeBtn: any = null;
+    for (let i = 0; i < 80; i++) {
+      resumeBtn = env.win.document.querySelector('[data-testid="button-resume-download"]');
+      if (resumeBtn) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(resumeBtn).not.toBeNull();
+    resumeBtn.click();
+
+    // Watch the retry attempt counter climb on the status element. The
+    // first attempt fires immediately and looks like a normal in-progress
+    // pipe; only attempts 2..N flip the data-retry-attempt attribute.
+    let sawRetryStatus = false;
+    let lastAttemptValue = '';
+    let lastReason = '';
+    for (let i = 0; i < 200; i++) {
+      const status = env.win.document.querySelector('[data-testid="text-download-status"]');
+      const a = status && status.getAttribute('data-retry-attempt');
+      if (a) {
+        sawRetryStatus = true;
+        lastAttemptValue = a;
+        lastReason = status.getAttribute('data-resume-reason') || '';
+      }
+      // Bail early once we see attempt 2 (the second retry the user did NOT click).
+      if (a && Number(a) >= 2) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(sawRetryStatus).toBe(true);
+    expect(Number(lastAttemptValue)).toBeGreaterThanOrEqual(2);
+    // The status copy should explain WHY we're retrying so the user can
+    // tell a flaky network from a permanent failure.
+    expect(lastReason).toMatch(/Failed to fetch|drop|network/i);
+
+    const result = await downloadPromise;
+
+    expect(result.streamedToDisk).toBe(true);
+    expect(result.bytes).toBe(TOTAL);
+    // Same writable handle reused across the original pipe + auto-retries.
+    expect(env.fileHandle.createWritable).toHaveBeenCalledTimes(1);
+
+    // 1 initial GET + 3 Range retries (2 failures + 1 success) = 4 total.
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+
+    // Stitched file must be HEAD followed by TAIL — no overlap, no gap.
+    const merged = new Uint8Array(result.bytes);
+    let off = 0;
+    for (const w of env.writes) {
+      merged.set(w, off);
+      off += w.byteLength;
+    }
+    expect(Array.from(merged)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('re-opens the Resume prompt with the failure reason after the auto-retry budget is exhausted, preserving the partial bytes for another attempt', async () => {
+    env = setupBrowserEnv();
+    env.win.STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS = 2;
+    env.win.STREAMING_DOWNLOAD_RESUME_BASE_DELAY_MS = 1;
+
+    const HEAD = new Uint8Array([9, 9, 9, 9]);
+    const TAIL = new Uint8Array([7, 7, 7, 7]);
+    const TOTAL = HEAD.byteLength + TAIL.byteLength;
+    const ETAG = 'W/"exhaust"';
+
+    let firstBodyController: any;
+    const firstBody = new (globalThis as any).ReadableStream({
+      start(c: any) { firstBodyController = c; },
+    });
+
+    // Track Range-fetch attempts so we can fail the first three (initial
+    // click + 2 backoff retries = exhausted budget) and succeed on the
+    // *second* Resume click's first attempt.
+    let rangeAttempts = 0;
+    const fetchSpy = vi.fn(async (_url: string, init: any = {}) => {
+      const headers = (init && init.headers) || {};
+      const range =
+        (typeof headers.get === 'function' && headers.get('Range')) ||
+        headers['Range'] || headers['range'];
+
+      if (!range) {
+        return new (globalThis as any).Response(firstBody, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-disposition': 'attachment; filename="exhaust.bin"',
+            'content-length': String(TOTAL),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        });
+      }
+
+      rangeAttempts += 1;
+      if (rangeAttempts <= 2) {
+        // First Resume cycle: fail twice (1 click + 1 backoff retry, since
+        // STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS=2). User must re-prompt.
+        throw new TypeError('Failed to fetch (still down)');
+      }
+      // Second Resume cycle's first attempt: succeed.
+      return new (globalThis as any).Response(
+        new (globalThis as any).Response(TAIL).body,
+        {
+          status: 206,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-range': 'bytes ' + HEAD.byteLength + '-' + (TOTAL - 1) + '/' + TOTAL,
+            'content-length': String(TAIL.byteLength),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        }
+      );
+    });
+    env.win.fetch = fetchSpy;
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/exhaust.bin', {
+      streamToDisk: true,
+      skipEstimate: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.error(Object.assign(new Error('drop'), { name: 'TypeError' }));
+
+    // First Resume click — exhausts the auto-retry budget.
+    let resumeBtn: any = null;
+    for (let i = 0; i < 80; i++) {
+      resumeBtn = env.win.document.querySelector('[data-testid="button-resume-download"]');
+      if (resumeBtn) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(resumeBtn).not.toBeNull();
+    resumeBtn.click();
+
+    // After both retries fail, the Resume prompt must reappear with the
+    // failure reason surfaced in the status copy / data attribute.
+    let secondPrompt: any = null;
+    let promptReason = '';
+    for (let i = 0; i < 200; i++) {
+      // Wait until BOTH the Resume button is back AND the reason has been
+      // populated (the prompt is rendered in two paint cycles).
+      const btn = env.win.document.querySelector('[data-testid="button-resume-download"]');
+      const status = env.win.document.querySelector('[data-testid="text-download-status"]');
+      const reason = status && status.getAttribute('data-resume-reason');
+      if (btn && reason && rangeAttempts >= 2) {
+        secondPrompt = btn;
+        promptReason = reason;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(secondPrompt).not.toBeNull();
+    expect(promptReason).toMatch(/Failed to fetch|still down/i);
+    // We've burned through exactly the configured retry budget — no more,
+    // no less — before handing control back to the user.
+    expect(rangeAttempts).toBe(2);
+    // No fresh writable was opened — the partial bytes on disk are still
+    // valid for the next Resume click.
+    expect(env.fileHandle.createWritable).toHaveBeenCalledTimes(1);
+
+    // Second Resume click — this time the network is back.
+    secondPrompt.click();
+
+    const result = await downloadPromise;
+    expect(result.streamedToDisk).toBe(true);
+    expect(result.bytes).toBe(TOTAL);
+    // 1 initial GET + 2 failed Range fetches + 1 successful Range fetch = 4
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+
+    const merged = new Uint8Array(result.bytes);
+    let off = 0;
+    for (const w of env.writes) {
+      merged.set(w, off);
+      off += w.byteLength;
+    }
+    expect(Array.from(merged)).toEqual([9, 9, 9, 9, 7, 7, 7, 7]);
+  });
+
   it('aborts the writable when the user dismisses the Resume prompt', async () => {
     env = setupBrowserEnv();
 

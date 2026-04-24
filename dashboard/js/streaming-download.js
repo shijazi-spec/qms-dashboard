@@ -620,8 +620,13 @@
         // Replaces the cancel button area with two buttons; resolves the
         // returned promise with `true` when the user clicks Resume and
         // `false` when they click Cancel (or dismiss the card).
+        //
+        // `reason` (optional) is appended to the status line so the user can
+        // tell *why* a previous Resume attempt failed (e.g. when the network
+        // is still down after the auto-retries exhausted) instead of just
+        // seeing the same generic "Interrupted at X" copy on every loop.
         var resumeRow = null;
-        function setResumePrompt(received, total) {
+        function setResumePrompt(received, total, reason) {
             return new Promise(function (resolve) {
                 if (resumeRow && resumeRow.parentNode) {
                     resumeRow.parentNode.removeChild(resumeRow);
@@ -635,10 +640,15 @@
                     '3.86a2 2 0 00-3.42 0z"/></svg>';
                 bar.className = 'h-full bg-amber-500 transition-all duration-150';
                 var sizeText = formatBytes(received);
-                statusEl.textContent = total
+                var baseLine = total
                     ? 'Interrupted at ' + sizeText + ' / ' + formatBytes(total) +
                       ' — click Resume to continue from where it stopped.'
                     : 'Interrupted at ' + sizeText + ' — click Resume to continue.';
+                if (reason) {
+                    baseLine += ' (' + reason + ')';
+                }
+                statusEl.textContent = baseLine;
+                statusEl.setAttribute('data-resume-reason', reason ? String(reason) : '');
 
                 // Hide the existing cancel button while we own the prompt.
                 cancelBtn.style.display = 'none';
@@ -701,6 +711,48 @@
             cancelBtn.style.display = '';
             cancelBtn.disabled = false;
             cancelBtn.textContent = 'Cancel';
+            statusEl.removeAttribute('data-retry-attempt');
+            statusEl.removeAttribute('data-retry-max');
+            statusEl.removeAttribute('data-resume-reason');
+        }
+
+        // Render a "Retrying download (attempt X of N)…" status while the
+        // resume loop is auto-retrying the Range fetch. Keeps the Cancel
+        // affordance live so the user can give up during the backoff wait,
+        // and writes the attempt counter onto data-* attributes so tests
+        // (and screen-reader hooks) can observe progress without scraping
+        // copy. `info.retryingIn` (ms) renders a "waiting Ns" suffix while
+        // we're sleeping between attempts.
+        function setRetryStatus(info) {
+            info = info || {};
+            var attempt = info.attempt || 1;
+            var maxAttempts = info.maxAttempts || attempt;
+            var reason = info.reason || '';
+            var retryingIn = info.retryingIn || 0;
+
+            spinner.innerHTML = '<svg class="w-4 h-4 text-amber-600 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">' +
+                '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+            bar.className = 'h-full bg-amber-500 transition-all duration-150';
+            cancelBtn.style.display = '';
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = 'Cancel';
+
+            var text = 'Retrying download (attempt ' + attempt + ' of ' + maxAttempts + ')';
+            if (retryingIn && retryingIn > 0) {
+                text += ' — waiting ' + Math.max(1, Math.ceil(retryingIn / 1000)) + 's';
+            } else {
+                text += '…';
+            }
+            if (reason) text += ' — ' + reason;
+            statusEl.textContent = text;
+            statusEl.setAttribute('data-retry-attempt', String(attempt));
+            statusEl.setAttribute('data-retry-max', String(maxAttempts));
+            if (reason) {
+                statusEl.setAttribute('data-resume-reason', String(reason));
+            } else {
+                statusEl.removeAttribute('data-resume-reason');
+            }
         }
 
         return {
@@ -713,6 +765,7 @@
             setBarColor: setBarColor,
             setResumePrompt: setResumePrompt,
             clearResumePrompt: clearResumePrompt,
+            setRetryStatus: setRetryStatus,
             remove: remove
         };
     }
@@ -1395,6 +1448,54 @@
         }
     }
 
+    // Resume retry tuning (auto-retry the Range fetch a few times with
+    // exponential backoff before falling back to the manual prompt).
+    // Overridable per-page via `window.STREAMING_DOWNLOAD_RESUME_*` so
+    // tests / power users can shorten or lengthen the retry budget.
+    var DEFAULT_RESUME_MAX_ATTEMPTS = 3;
+    var DEFAULT_RESUME_BASE_DELAY_MS = 1000;
+
+    function resumeMaxAttempts() {
+        var v = global.STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS;
+        if (typeof v === 'number' && isFinite(v) && v >= 1) return Math.floor(v);
+        return DEFAULT_RESUME_MAX_ATTEMPTS;
+    }
+
+    function resumeBaseDelayMs() {
+        var v = global.STREAMING_DOWNLOAD_RESUME_BASE_DELAY_MS;
+        if (typeof v === 'number' && isFinite(v) && v >= 0) return v;
+        return DEFAULT_RESUME_BASE_DELAY_MS;
+    }
+
+    // Promise-based sleep that resolves early when the caller flips
+    // `streamCtx.cancelled` to true (e.g. the user clicks Cancel mid-backoff).
+    // Keeps the granularity small so cancellation feels immediate without
+    // burning CPU on a tight poll.
+    function delayWithCancel(ms, streamCtx) {
+        return new Promise(function (resolve) {
+            if (!ms || ms <= 0) return resolve();
+            if (streamCtx && streamCtx.cancelled) return resolve();
+            var step = Math.min(ms, 50);
+            var elapsed = 0;
+            (function tick() {
+                if (streamCtx && streamCtx.cancelled) return resolve();
+                elapsed += step;
+                if (elapsed >= ms) return resolve();
+                setTimeout(tick, step);
+            })();
+        });
+    }
+
+    // Strip transient error noise (DOMExceptions, AbortError frames, …)
+    // down to a one-liner suitable for the progress card status copy.
+    function describeFetchError(err) {
+        if (!err) return 'network error';
+        var msg = err.message || err.name || 'network error';
+        msg = String(msg).split('\n')[0].trim();
+        if (msg.length > 120) msg = msg.substring(0, 117) + '…';
+        return msg || 'network error';
+    }
+
     // True streaming path: pipe response.body directly to a file handle so
     // the browser never holds the full document in memory.
     //
@@ -1475,9 +1576,15 @@
             // Ask the user whether to resume. The card prompt resolves
             // true (Resume) or false (Cancel/give up). Either way we
             // do not propagate a "Failed" state to streamingDownload.
+            // `lastFetchReason` carries the reason from a previous
+            // exhausted-retries cycle so the prompt can show *why* the
+            // last attempt(s) failed rather than the original pipe error.
+            var promptReason = pendingError ? describeFetchError(pendingError) : '';
             var wantResume = false;
             try {
-                wantResume = await card.setResumePrompt(receivedRef.value, totalLength);
+                wantResume = await card.setResumePrompt(
+                    receivedRef.value, totalLength, promptReason
+                );
             } catch (_) {
                 wantResume = false;
             }
@@ -1515,14 +1622,86 @@
             if (etag) mergedHeaders['If-Range'] = etag;
             resumeFetchInit.headers = mergedHeaders;
 
-            var resumed;
-            try {
-                resumed = await fetch(url, resumeFetchInit);
-            } catch (fetchErr) {
-                // Network still down (or DNS failed, or the user navigated,
-                // …). Stash the new error and re-loop so the prompt re-opens
-                // on the next iteration without entering pipeBodyToWritable.
-                pendingError = fetchErr;
+            // Auto-retry the Range fetch with exponential backoff before
+            // giving up. The user already opted in by clicking Resume; if
+            // the network is still flapping we'd rather try a couple more
+            // times (with a visible attempt counter and reason) than make
+            // them re-click on every transient failure. After the budget
+            // is exhausted we hand control back to the prompt with the
+            // most recent error reason — preserving the partial bytes on
+            // disk so the next click still resumes from the same offset.
+            var maxAttempts = resumeMaxAttempts();
+            var baseDelay = resumeBaseDelayMs();
+            var resumed = null;
+            var attemptErr = pendingError;
+            var attempt = 0;
+            while (attempt < maxAttempts) {
+                if (streamCtx && streamCtx.cancelled) break;
+                attempt += 1;
+
+                // Backoff *before* attempts 2..N so the first attempt fires
+                // immediately (the user just clicked Resume — no delay).
+                if (attempt > 1 && baseDelay > 0) {
+                    var waitMs = baseDelay * Math.pow(2, attempt - 2);
+                    if (card && typeof card.setRetryStatus === 'function') {
+                        try {
+                            card.setRetryStatus({
+                                attempt: attempt,
+                                maxAttempts: maxAttempts,
+                                reason: describeFetchError(attemptErr),
+                                retryingIn: waitMs
+                            });
+                        } catch (_) { /* ignore */ }
+                    }
+                    await delayWithCancel(waitMs, streamCtx);
+                    if (streamCtx && streamCtx.cancelled) break;
+                }
+
+                // Only flip the card into the "Retrying…" look once we're
+                // past the user's first click (attempt 1 should look like a
+                // normal in-progress download — the user clicked Resume and
+                // hasn't seen any failure yet).
+                if (attempt > 1 && card && typeof card.setRetryStatus === 'function') {
+                    try {
+                        card.setRetryStatus({
+                            attempt: attempt,
+                            maxAttempts: maxAttempts,
+                            reason: describeFetchError(attemptErr)
+                        });
+                    } catch (_) { /* ignore */ }
+                }
+
+                try {
+                    resumed = await fetch(url, resumeFetchInit);
+                    break;
+                } catch (fetchErr) {
+                    attemptErr = fetchErr;
+                    resumed = null;
+                    // If the user cancelled mid-fetch (AbortController fired)
+                    // there's no point retrying — break out and let the
+                    // shared cancellation handler below tear things down.
+                    if (fetchErr && (fetchErr.name === 'AbortError' ||
+                        fetchErr.cancelled === true ||
+                        (streamCtx && streamCtx.cancelled))) {
+                        break;
+                    }
+                }
+            }
+
+            if (streamCtx && streamCtx.cancelled) {
+                try { await writable.abort(attemptErr || pendingError); } catch (_) { /* ignore */ }
+                var ce = new Error('Download cancelled');
+                ce.name = 'AbortError';
+                ce.cancelled = true;
+                throw ce;
+            }
+
+            if (!resumed) {
+                // Network still down after the auto-retries. Stash the most
+                // recent error and re-loop so setResumePrompt re-opens with
+                // the reason instead of throwing a generic failure — the
+                // partial file on disk is still valid for another attempt.
+                pendingError = attemptErr || pendingError;
                 continue;
             }
 
@@ -1915,6 +2094,12 @@
 
         var initialFilename = options.filename || tr('downloads.preparing_download', 'Preparing download…');
         var card = null;
+        // Local "user pressed Cancel on this download" flag. Declared
+        // explicitly so strict-mode mode evaluation doesn't ReferenceError
+        // when the catch block reads it before requestCancel() has run
+        // (e.g. when the user dismisses the Resume prompt — that path
+        // does not flip cancelled, but the catch still inspects it).
+        var cancelled = false;
         // Wrapped in an object so streamResponseToDisk's resume loop can see
         // the live value (cancellation may flip while it's mid-pipe).
         var cancelState = { cancelled: false };
@@ -2030,6 +2215,11 @@
                 }
             }
             cancelled = true;
+            // Mirror the cancel flag onto cancelState so streamResponseToDisk
+            // (which only sees the shared streamCtx, not this closure) can
+            // bail out of the auto-retry loop / mid-backoff sleep without
+            // waiting for the AbortController plumbing to surface.
+            cancelState.cancelled = true;
             cancelDownload();
             return true;
         }
