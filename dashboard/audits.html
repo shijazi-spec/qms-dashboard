@@ -576,9 +576,20 @@
                 'pending_verification': 'bg-blue-100 text-blue-800',
                 'verified_closed': 'bg-green-100 text-green-800'
             };
-            const fallback = status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            const translated = _t('dyn.audits.status.' + status);
-            const displayText = translated && translated !== status ? translated : fallback;
+            const _at = (k, fb) => (window.WalaPlusI18n && window.WalaPlusI18n.t)
+                ? (window.WalaPlusI18n.t(k) || fb) : fb;
+            const labelMap = {
+                'planned':              _at('dyn.audits.status.planned',              'Planned'),
+                'in_progress':          _at('dyn.audits.status.in_progress',          'In Progress'),
+                'fieldwork_complete':   _at('dyn.audits.status.fieldwork_complete',   'Fieldwork Complete'),
+                'report_draft':         _at('dyn.audits.status.report_draft',         'Report Draft'),
+                'report_final':         _at('dyn.audits.status.report_final',         'Report Final'),
+                'closed':               _at('dyn.audits.status.closed',               'Closed'),
+                'open':                 _at('dyn.audits.status.open',                 'Open'),
+                'pending_verification': _at('dyn.audits.status.pending_verification', 'Pending Verification'),
+                'verified_closed':      _at('dyn.audits.status.verified_closed',      'Verified Closed')
+            };
+            const displayText = labelMap[status] || String(status || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             return `<span class="px-2 py-1 text-xs rounded-full ${statusClasses[status] || 'bg-gray-100'}">${displayText}</span>`;
         }
 

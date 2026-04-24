@@ -332,6 +332,7 @@
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
         function _rlbl(group, key) { const t = _t('dyn.risks.' + group + '.' + key); return (t && t !== key) ? t : String(key).replace(/_/g, ' '); }
+        const _rct = (k, fb) => (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb;
 
         async function loadSummary() {
             try {
@@ -425,7 +426,16 @@
         }
 
         function formatCategory(cat) {
-            return _rlbl('category', cat);
+            const map = {
+                'operational':          _rct('dyn.risks.category.operational',          'Operational'),
+                'legal':                _rct('dyn.risks.category.legal',                'Legal'),
+                'financial':            _rct('dyn.risks.category.financial',            'Financial'),
+                'data_privacy':         _rct('dyn.risks.category.data_privacy',         'Data Privacy'),
+                'information_security': _rct('dyn.risks.category.information_security', 'Info Security'),
+                'fraud':                _rct('dyn.risks.category.fraud',                'Fraud'),
+                'vendor':               _rct('dyn.risks.category.vendor',               'Vendor')
+            };
+            return map[cat] || String(cat || '').replace(/_/g, ' ');
         }
 
         function formatStatus(status) {

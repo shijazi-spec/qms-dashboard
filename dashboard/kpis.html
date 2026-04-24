@@ -284,7 +284,12 @@
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Sara (Quality)', 'Maram (GRC)', 'Mohammed (Governance)', 'Shared'],
+                    labels: [
+                        _t('kpis.o_quality_manager', 'Sara (Quality)'),
+                        _t('kpis.o_grc_manager', 'Maram (GRC)'),
+                        _t('kpis.o_governance_officer', 'Mohammed (Governance)'),
+                        _t('kpis.o_shared', 'Shared')
+                    ],
                     datasets: [{
                         data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.governance_officer || 0, data.byOwner?.shared || 0],
                         backgroundColor: ['#1E3A8A', '#1E293B', '#0891B2', '#6D28D9']
@@ -296,7 +301,12 @@
             charts.status = new Chart(document.getElementById('statusChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['On Target', 'At Risk', 'Off Target', 'No Data'],
+                    labels: [
+                        _t('kpis.on_target', 'On Target'),
+                        _t('kpis.at_risk', 'At Risk'),
+                        _t('kpis.off_target', 'Off Target'),
+                        _t('dyn.kpis.no_data_status', 'No Data')
+                    ],
                     datasets: [{
                         data: [data.byStatus?.green || 0, data.byStatus?.amber || 0, data.byStatus?.red || 0, data.byStatus?.no_data || 0],
                         backgroundColor: ['#047857', '#D97706', '#B91C1C', '#6B7280']
@@ -309,7 +319,7 @@
             charts.category = new Chart(document.getElementById('categoryChart'), {
                 type: 'bar',
                 data: {
-                    labels: cats.map(c => c[0].charAt(0).toUpperCase() + c[0].slice(1)),
+                    labels: cats.map(c => _t('kpis.c_' + c[0], c[0].charAt(0).toUpperCase() + c[0].slice(1))),
                     datasets: [{
                         label: _t('dyn.kpis.chart_kpis'),
                         data: cats.map(c => c[1]),

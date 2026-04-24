@@ -1533,7 +1533,8 @@
     "btn_submit_assessment": "تقديم التقييم",
     "s_pending_approval": "بانتظار الموافقة",
     "s_under_review": "قيد المراجعة",
-    "s_draft": "مسودة"
+    "s_draft": "مسودة",
+    "s_suspended": "موقوف"
   },
   "reviews": {
     "title": "مراجعة الإدارة",

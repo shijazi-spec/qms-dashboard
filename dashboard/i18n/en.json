@@ -1533,7 +1533,8 @@
     "btn_submit_assessment": "Submit Assessment",
     "s_pending_approval": "Pending Approval",
     "s_under_review": "Under Review",
-    "s_draft": "Draft"
+    "s_draft": "Draft",
+    "s_suspended": "Suspended"
   },
   "reviews": {
     "title": "Management Review",

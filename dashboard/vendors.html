@@ -436,7 +436,7 @@
             
             container.innerHTML = data.map(item => `
                 <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium capitalize ${colors[item.criticality] ? 'text-gray-700' : 'text-gray-500'}">${_t('dyn.vendors.criticality.' + item.criticality)}</span>
+                    <span class="text-sm font-medium capitalize ${colors[item.criticality] ? 'text-gray-700' : 'text-gray-500'}">${formatCriticality(item.criticality)}</span>
                     <div class="flex items-center gap-2">
                         <div class="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div class="${colors[item.criticality] || 'bg-gray-400'} h-full rounded-full" data-style="width: ${(parseInt(item.count) / total) * 100}%"></div>
@@ -461,7 +461,7 @@
                     </div>
                     <div class="text-end">
                         <div class="text-sm text-amber-600 font-medium">${_fd(c.contract_end)}</div>
-                        <span class="text-xs px-2 py-0.5 rounded-full criticality-${c.criticality}">${_t('dyn.vendors.criticality.' + c.criticality)}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full criticality-${c.criticality}">${formatCriticality(c.criticality)}</span>
                     </div>
                 </div>
             `).join('');
@@ -481,7 +481,7 @@
                     </div>
                     <div class="text-end">
                         <div class="text-sm text-red-600 font-medium">${_t('dyn.vendors.due_label', { date: _fd(v.next_assessment_date) })}</div>
-                        <span class="text-xs px-2 py-0.5 rounded-full criticality-${v.criticality}">${_t('dyn.vendors.criticality.' + v.criticality)}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full criticality-${v.criticality}">${formatCriticality(v.criticality)}</span>
                     </div>
                 </div>
             `).join('');
