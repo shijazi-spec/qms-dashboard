@@ -364,6 +364,8 @@ export async function runPromptRegressionCheck(
       })),
       recoveries: out.recoveries.map((r) => r.related_record_id),
     });
+
+    await sendPromptRegressionNotifications(out.breaches);
   } else {
     console.log(
       `[PromptRegression] Check complete — ${out.agentsEvaluated} agents, ` +
@@ -373,6 +375,99 @@ export async function runPromptRegressionCheck(
     );
   }
   return out;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// External notification fan-out (Slack + email)
+// Called only when at least one new alert row was created so Slack/email
+// never fire on the duplicate-skip path. Each channel is caught independently
+// so a Slack outage cannot silence the email and vice-versa.
+// ──────────────────────────────────────────────────────────────────────────────
+async function sendPromptRegressionNotifications(
+  breaches: RegressionBreach[],
+): Promise<void> {
+  const cfg = PROMPT_REGRESSION_THRESHOLDS;
+  const count = breaches.length;
+  const plural = count === 1 ? "regression" : "regressions";
+
+  // ── Slack ──────────────────────────────────────────────────────────────────
+  if (process.env.SLACK_WEBHOOK_URL) {
+    try {
+      const lines = breaches.map(
+        (b) =>
+          `• *${b.agent_name}* — version \`${b.regressed_version}\` at ` +
+          `${b.regressed_rate_pct.toFixed(0)}% vs best \`${b.best_version}\` ` +
+          `at ${b.best_rate_pct.toFixed(0)}% (↓${Math.round(b.drop_pp)}pp, ` +
+          `severity: ${b.severity})`,
+      );
+      const slackMsg =
+        `⚠️ *Prompt Regression Alert* — ${count} new ${plural} detected.\n` +
+        lines.join("\n") +
+        `\n_Window: ${cfg.windowDays} days | <${cfg.link}|View in AI Ops>_`;
+
+      await fetch(process.env.SLACK_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: slackMsg }),
+      });
+    } catch (slackErr) {
+      console.warn("[PromptRegression] Slack notification failed:", slackErr);
+    }
+  }
+
+  // ── Email ──────────────────────────────────────────────────────────────────
+  const emailRecipients = process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL
+    ? process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL.split(",")
+        .map((e) => e.trim())
+        .filter(Boolean)
+    : [];
+  if (emailRecipients.length > 0) {
+    try {
+      const { sendResendEmail } = await import("../../utils/resendMail");
+      const rows = breaches
+        .map(
+          (b) =>
+            `<tr>
+              <td style="padding:4px 8px">${b.agent_name}</td>
+              <td style="padding:4px 8px;font-family:monospace">${b.regressed_version}</td>
+              <td style="padding:4px 8px">${b.regressed_rate_pct.toFixed(0)}%</td>
+              <td style="padding:4px 8px;font-family:monospace">${b.best_version}</td>
+              <td style="padding:4px 8px">${b.best_rate_pct.toFixed(0)}%</td>
+              <td style="padding:4px 8px">↓${Math.round(b.drop_pp)}pp</td>
+              <td style="padding:4px 8px">${b.severity}</td>
+            </tr>`,
+        )
+        .join("\n");
+
+      await sendResendEmail({
+        to: emailRecipients,
+        subject: `⚠️ WalaPlus Prompt Regression — ${count} new ${plural} detected`,
+        html: `<h2>Prompt Regression Alert</h2>
+<p>${count} new prompt ${plural} detected in the last ${cfg.windowDays}-day window
+(threshold: ≥${cfg.dropPctPoints}pp drop, min sample: ${cfg.minFeedback} ratings).</p>
+<table border="1" cellspacing="0" cellpadding="0"
+       style="border-collapse:collapse;font-size:13px">
+  <thead style="background:#f5f5f5">
+    <tr>
+      <th style="padding:4px 8px">Agent</th>
+      <th style="padding:4px 8px">Regressed version</th>
+      <th style="padding:4px 8px">Rate</th>
+      <th style="padding:4px 8px">Best version</th>
+      <th style="padding:4px 8px">Best rate</th>
+      <th style="padding:4px 8px">Drop</th>
+      <th style="padding:4px 8px">Severity</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rows}
+  </tbody>
+</table>
+<p><a href="${cfg.link}">View in AI Operations panel</a></p>`,
+      });
+    } catch (emailErr) {
+      console.warn("[PromptRegression] Email alert failed:", emailErr);
+    }
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
