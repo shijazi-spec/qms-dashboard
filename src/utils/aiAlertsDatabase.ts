@@ -11,7 +11,8 @@ export type AlertType =
   | 'doc_review'
   | 'policy_expiry'
   | 'audit_decline'
-  | 'sla_breach';
+  | 'sla_breach'
+  | 'tool_health';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved' | 'dismissed';
@@ -149,6 +150,28 @@ export async function alertExists(title: string, alertType: AlertType): Promise<
   const result = await pool.query(
     `SELECT 1 FROM ai_alerts WHERE title = $1 AND alert_type = $2 AND status IN ('open', 'acknowledged') LIMIT 1`,
     [title, alertType]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Returns true when an open or acknowledged alert already exists for the
+ * given (alert_type, related_record_id) pair. Use this for deduping
+ * recurring alerts whose titles include live metric values that would
+ * otherwise defeat the title-based alertExists() check.
+ */
+export async function openAlertExistsByKey(
+  alertType: AlertType,
+  relatedRecordId: string,
+): Promise<boolean> {
+  const result = await pool.query(
+    `SELECT 1
+       FROM ai_alerts
+      WHERE alert_type = $1
+        AND related_record_id = $2
+        AND status IN ('open', 'acknowledged')
+      LIMIT 1`,
+    [alertType, relatedRecordId],
   );
   return result.rows.length > 0;
 }

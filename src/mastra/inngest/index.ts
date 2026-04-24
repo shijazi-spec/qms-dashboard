@@ -3,6 +3,7 @@ import { init, serve as originalInngestServe } from "@mastra/inngest";
 import { registerApiRoute as originalRegisterApiRoute } from "@mastra/core/server";
 import { type Mastra } from "@mastra/core";
 import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
+import { toolHealthAlertsCronFunction } from "../workflows/toolHealthAlertsCron";
 
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
 const {
@@ -648,6 +649,12 @@ const rateLimitJanitorFunction = inngest.createFunction(
   },
 );
 inngestFunctions.push(rateLimitJanitorFunction);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Per-tool health alert cron — defined in workflows/toolHealthAlertsCron.ts
+// (kept there so all the threshold config + evaluation logic live together).
+// ──────────────────────────────────────────────────────────────────────────────
+inngestFunctions.push(toolHealthAlertsCronFunction);
 
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },

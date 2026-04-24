@@ -671,6 +671,63 @@ export async function getChildToolCallsForParent(parentId: number): Promise<{
   return result.rows;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Per-tool rolling-window aggregates — used by the tool-health alert cron
+// (src/mastra/workflows/toolHealthAlertsCron.ts) to detect tools whose
+// error_rate or p95 latency has degraded over the last `windowMinutes`.
+// ──────────────────────────────────────────────────────────────────────────────
+export interface ToolWindowAggregate {
+  tool_name: string;
+  agent_name: string | null;
+  call_count: number;
+  error_count: number;
+  error_rate_pct: number;
+  p95_latency_ms: number;
+  avg_latency_ms: number;
+  max_latency_ms: number;
+}
+
+export async function getToolWindowAggregates(
+  windowMinutes = 60,
+  minCalls = 1,
+): Promise<ToolWindowAggregate[]> {
+  await ensureAiMetricsTable();
+  const result = await pool.query(
+    `SELECT
+       tool_name,
+       MAX(agent_name)                                                       AS agent_name,
+       COUNT(*)                                                              AS call_count,
+       COUNT(*) FILTER (WHERE NOT success)                                   AS error_count,
+       ROUND(
+         (COUNT(*) FILTER (WHERE NOT success)::FLOAT
+          / NULLIF(COUNT(*), 0) * 100)::NUMERIC, 1
+       )                                                                     AS error_rate_pct,
+       COALESCE(
+         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms),
+         0
+       )                                                                     AS p95_latency_ms,
+       ROUND(AVG(latency_ms)::NUMERIC, 0)                                    AS avg_latency_ms,
+       MAX(latency_ms)                                                       AS max_latency_ms
+     FROM ai_call_metrics
+     WHERE tool_name IS NOT NULL
+       AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)
+     GROUP BY tool_name
+     HAVING COUNT(*) >= $2
+     ORDER BY tool_name`,
+    [windowMinutes, minCalls],
+  );
+  return result.rows.map((r: any) => ({
+    tool_name: r.tool_name,
+    agent_name: r.agent_name,
+    call_count: Number(r.call_count),
+    error_count: Number(r.error_count),
+    error_rate_pct: Number(r.error_rate_pct ?? 0),
+    p95_latency_ms: Math.round(Number(r.p95_latency_ms ?? 0)),
+    avg_latency_ms: Number(r.avg_latency_ms ?? 0),
+    max_latency_ms: Number(r.max_latency_ms ?? 0),
+  }));
+}
+
 export async function getRecentSlowFailedCalls(limit = 20): Promise<{
   id: string;
   agent_name: string;
