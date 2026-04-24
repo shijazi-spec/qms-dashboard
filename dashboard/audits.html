@@ -100,23 +100,23 @@
                 <div class="text-sm text-gray-500" data-i18n="audits.total_audits">Total Audits</div>
                 <div id="totalAudits" class="text-2xl font-bold text-gray-900">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-blue-500">
                 <div class="text-sm text-gray-500" data-i18n="audits.planned">Planned</div>
                 <div id="plannedAudits" class="text-2xl font-bold text-blue-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
                 <div class="text-sm text-gray-500">In Progress</div>
                 <div id="inProgressAudits" class="text-2xl font-bold text-amber-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-green-500">
                 <div class="text-sm text-gray-500">Closed</div>
                 <div id="closedAudits" class="text-2xl font-bold text-green-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-500">
                 <div class="text-sm text-gray-500" data-i18n="audits.open_findings">Open Findings</div>
                 <div id="openFindings" class="text-2xl font-bold text-red-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-purple-500">
                 <div class="text-sm text-gray-500" data-i18n="audits.overdue_findings">Overdue Findings</div>
                 <div id="overdueFindings" class="text-2xl font-bold text-purple-600">-</div>
             </div>
@@ -139,8 +139,8 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_code">Code</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_audit">Audit</th>
+                                <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_code">Code</th>
+                                <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_audit">Audit</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_type">Type</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_start_date">Start Date</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_findings">Findings</th>
@@ -196,10 +196,10 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_finding">Finding</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_audit">Audit</th>
+                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_finding">Finding</th>
+                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_audit">Audit</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_severity">Severity</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_responsible">Responsible</th>
+                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_responsible">Responsible</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_due_date">Due Date</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_status">Status</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_actions">Actions</th>
@@ -729,7 +729,7 @@
                 if (!latest) {
                     subtitle.innerHTML =
                         _t('dyn.audits.no_programme_html', { year: year }) +
-                        '<button data-on-click="draftProgramme" data-args="[&quot; + year + &quot;]" class="text-indigo-700 underline ml-2">' + _t('dyn.audits.draft_one_now') + '</button>';
+                        '<button data-on-click="draftProgramme" data-args="[&quot; + year + &quot;]" class="text-indigo-700 underline ms-2">' + _t('dyn.audits.draft_one_now') + '</button>';
                     badge.className = 'hidden';
                     return;
                 }
@@ -754,7 +754,7 @@
                 if (latest.status === 'draft') {
                     subtitle.innerHTML =
                         _t('dyn.audits.draft_ready_html') +
-                        '<button data-on-click="submitProgramme" data-args="[&quot; + latest.id + &quot;]" class="text-indigo-700 underline ml-2">' + _t('dyn.audits.submit_for_signoff') + '</button>';
+                        '<button data-on-click="submitProgramme" data-args="[&quot; + latest.id + &quot;]" class="text-indigo-700 underline ms-2">' + _t('dyn.audits.submit_for_signoff') + '</button>';
                 } else if (latest.status === 'pending_signoff') {
                     subtitle.innerHTML =
                         _t('dyn.audits.awaiting_signoff_html') +

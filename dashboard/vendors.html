@@ -70,27 +70,27 @@
                 <div class="text-sm text-gray-500" data-i18n="vendors.total_vendors">Total Vendors</div>
                 <div id="totalVendors" class="text-2xl font-bold text-gray-900">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-green-500">
                 <div class="text-sm text-gray-500">Active</div>
                 <div id="activeVendors" class="text-2xl font-bold text-green-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
                 <div class="text-sm text-gray-500" data-i18n="vendors.pending_approval">Pending Approval</div>
                 <div id="pendingVendors" class="text-2xl font-bold text-amber-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-500">
                 <div class="text-sm text-gray-500" data-i18n="vendors.on_probation">On Probation</div>
                 <div id="probationVendors" class="text-2xl font-bold text-red-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-purple-500">
                 <div class="text-sm text-gray-500" data-i18n="vendors.critical_vendors">Critical Vendors</div>
                 <div id="criticalVendors" class="text-2xl font-bold text-purple-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-blue-500">
                 <div class="text-sm text-gray-500" data-i18n="vendors.high_data_access">High Data Access</div>
                 <div id="highDataAccess" class="text-2xl font-bold text-blue-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-rose-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-rose-500">
                 <div class="text-sm text-gray-500" data-i18n="vendors.open_remediations">Open Remediations</div>
                 <div id="openRemediations" class="text-2xl font-bold text-rose-600">-</div>
             </div>
@@ -122,8 +122,8 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_code">Code</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
+                                <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_code">Code</th>
+                                <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_category">Category</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_criticality">Criticality</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_risk_score">Risk Score</th>
@@ -185,11 +185,11 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_remediation">Remediation</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
+                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_remediation">Remediation</th>
+                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_category">Category</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_priority">Priority</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_assigned_to">Assigned To</th>
+                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_assigned_to">Assigned To</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_due_date">Due Date</th>
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_status">Status</th>
                         </tr>
@@ -441,7 +441,7 @@
                         <div class="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div class="${colors[item.criticality] || 'bg-gray-400'} h-full rounded-full" data-style="width: ${(parseInt(item.count) / total) * 100}%"></div>
                         </div>
-                        <span class="text-sm font-semibold w-6 text-right">${_fn(item.count)}</span>
+                        <span class="text-sm font-semibold w-6 text-end">${_fn(item.count)}</span>
                     </div>
                 </div>
             `).join('');
@@ -459,7 +459,7 @@
                         <div class="text-sm font-medium text-gray-900">${c.name}</div>
                         <div class="text-xs text-gray-500">${c.vendor_code}</div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-end">
                         <div class="text-sm text-amber-600 font-medium">${_fd(c.contract_end)}</div>
                         <span class="text-xs px-2 py-0.5 rounded-full criticality-${c.criticality}">${_t('dyn.vendors.criticality.' + c.criticality)}</span>
                     </div>
@@ -479,7 +479,7 @@
                         <div class="text-sm font-medium text-gray-900">${v.name}</div>
                         <div class="text-xs text-gray-500">${v.vendor_code}</div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-end">
                         <div class="text-sm text-red-600 font-medium">${_t('dyn.vendors.due_label', { date: _fd(v.next_assessment_date) })}</div>
                         <span class="text-xs px-2 py-0.5 rounded-full criticality-${v.criticality}">${_t('dyn.vendors.criticality.' + v.criticality)}</span>
                     </div>
