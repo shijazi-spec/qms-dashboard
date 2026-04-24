@@ -159,6 +159,14 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   await initAIApprovalTable();
 
   const ttlHours = input.ttlHours ?? 24;
+
+  // SECURITY (PDPL Art. 16 / PCI DSS §3.5 / ISO 27001 A.5.34):
+  // The tool-invocation context can contain credentials (e.g. an API-key
+  // rotation tool whose payload is the new key, a refresh-token swap, etc.).
+  // Strip every deny-listed field BEFORE the value reaches the JSONB column,
+  // BEFORE it is checksummed, and BEFORE it is returned to any caller — so
+  // that no downstream consumer (audit dashboard, /approvals API, audit log
+  // backfill) can re-leak the original secret.
   const safePayload = redactSensitiveFields(input.payload);
   const checksum = checksumPayload(safePayload);
 
@@ -332,6 +340,16 @@ export async function recordExecutionResult(
     error?: string;
   }
 ): Promise<PendingAction | null> {
+  // SECURITY: the tool's return value is just as sensitive as its input —
+  // a "rotate API key" tool will hand back the freshly-minted key, an
+  // OAuth-refresh tool returns access/refresh token pairs, etc.  Run
+  // result.data through the same deny-list helper used for `payload` and
+  // the audit log so the JSONB column never stores raw credentials.
+  const safeExecutionResult = JSON.stringify({
+    data: redactSensitiveFields(result.data),
+    error: result.error,
+  });
+
   const res = await pool.query<PendingAction>(
     `UPDATE ai_pending_actions
         SET status             = CASE WHEN $2 THEN 'executed' ELSE 'failed' END,
@@ -344,7 +362,7 @@ export async function recordExecutionResult(
     [
       code,
       result.success,
-      JSON.stringify({ data: redactSensitiveFields(result.data), error: result.error }),
+      safeExecutionResult,
       result.entityType || null,
       result.entityId || null,
     ]
