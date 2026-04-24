@@ -9,6 +9,14 @@ const SCRIPT_SOURCE = readFileSync(SCRIPT_PATH, 'utf8');
 interface SetupOptions {
   enableShowSaveFilePicker?: boolean;
   showSaveFilePickerImpl?: (...args: any[]) => any;
+  installServiceWorker?: boolean;
+  serviceWorkerImpl?: FakeServiceWorkerSetup;
+}
+
+interface FakeServiceWorkerSetup {
+  registerImpl?: (path: string, opts?: any) => Promise<any> | any;
+  postMessageImpl?: (msg: any, transfer: any[]) => void;
+  ackOk?: boolean;
 }
 
 interface SetupResult {
@@ -16,6 +24,7 @@ interface SetupResult {
   writes: Uint8Array[];
   fileHandle: any;
   pickerCalls: any[][];
+  swCalls: { msg: any; transfer: any[] }[];
   cleanup: () => void;
 }
 
@@ -34,6 +43,9 @@ function setupBrowserEnv(opts: SetupOptions = {}): SetupResult {
   win.TransformStream = (globalThis as any).TransformStream;
   win.fetch = (globalThis as any).fetch;
   win.Response = (globalThis as any).Response;
+  // jsdom's MessageChannel does not transfer ReadableStreams; use Node's so
+  // the SW-streaming code path is exercisable in tests.
+  win.MessageChannel = (globalThis as any).MessageChannel;
 
   // jsdom does not implement URL.createObjectURL / revokeObjectURL but the
   // legacy Blob fallback uses them — stub them so we can exercise that path.
@@ -74,6 +86,60 @@ function setupBrowserEnv(opts: SetupOptions = {}): SetupResult {
   // alert is invoked on errors; suppress it.
   win.alert = vi.fn();
 
+  const swCalls: { msg: any; transfer: any[] }[] = [];
+  if (opts.installServiceWorker) {
+    const ackOk = opts.serviceWorkerImpl?.ackOk !== false;
+    const fakeSw = {
+      scriptURL: 'http://localhost/streaming-download-sw.js',
+      postMessage: opts.serviceWorkerImpl?.postMessageImpl
+        ? (msg: any, transfer: any[]) => {
+            swCalls.push({ msg, transfer });
+            opts.serviceWorkerImpl!.postMessageImpl!(msg, transfer);
+          }
+        : (msg: any, transfer: any[]) => {
+            swCalls.push({ msg, transfer });
+            // Drain any transferred ReadableStream so pipeTo() can settle.
+            if (msg && msg.type === 'register' && msg.stream) {
+              const reader = (msg.stream as ReadableStream<Uint8Array>).getReader();
+              (async () => {
+                try {
+                  // eslint-disable-next-line no-constant-condition
+                  while (true) {
+                    const step = await reader.read();
+                    if (step.done) break;
+                  }
+                } catch (_) {
+                  /* ignore */
+                }
+              })();
+            }
+            const port = (transfer || []).find((t) => t && typeof t.postMessage === 'function');
+            if (port) {
+              setTimeout(() => {
+                try {
+                  port.postMessage(ackOk ? { ok: true } : { ok: false });
+                } catch (_) {
+                  /* ignore */
+                }
+              }, 0);
+            }
+          },
+    };
+    const fakeRegistration = { active: fakeSw, installing: null, waiting: null };
+    win.isSecureContext = true;
+    Object.defineProperty(win.navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        controller: fakeSw,
+        getRegistration: vi.fn(async () => fakeRegistration),
+        register: opts.serviceWorkerImpl?.registerImpl
+          ? vi.fn(opts.serviceWorkerImpl.registerImpl)
+          : vi.fn(async () => fakeRegistration),
+        ready: Promise.resolve(fakeRegistration),
+      },
+    });
+  }
+
   // Evaluate the script inside the jsdom window context.
   win.eval(SCRIPT_SOURCE);
 
@@ -82,6 +148,7 @@ function setupBrowserEnv(opts: SetupOptions = {}): SetupResult {
     writes,
     fileHandle,
     pickerCalls,
+    swCalls,
     cleanup: () => dom.window.close(),
   };
 }
@@ -248,5 +315,88 @@ describe('streamingDownload (browser helper)', () => {
     // Button gets restored after completion.
     expect(button.disabled).toBe(false);
     expect(button.innerHTML).toBe(originalHTML);
+  });
+
+  it('streams via service worker (Firefox/Safari path) when File System Access is unavailable', async () => {
+    env = setupBrowserEnv({
+      enableShowSaveFilePicker: false,
+      installServiceWorker: true,
+    });
+    const chunkA = new Uint8Array(2048).fill(3);
+    const chunkB = new Uint8Array(1024).fill(4);
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([chunkA, chunkB]), {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': 'attachment; filename="big-export.bin"',
+          // No content-length so streaming is preferred.
+        },
+      })
+    );
+
+    const result = await env.win.streamingDownload('/api/exports/big-export.bin');
+
+    // SW must have received exactly one register message with the readable
+    // transferred, and an iframe must have been created to trigger download.
+    const registerCalls = env.swCalls.filter((c) => c.msg && c.msg.type === 'register');
+    expect(registerCalls).toHaveLength(1);
+    expect(registerCalls[0].msg.filename).toBe('big-export.bin');
+    expect(registerCalls[0].msg.contentType).toBe('application/octet-stream');
+    expect(registerCalls[0].transfer).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ getReader: expect.any(Function) }),
+      ])
+    );
+    const iframes = env.win.document.querySelectorAll('iframe');
+    expect(iframes.length).toBeGreaterThanOrEqual(1);
+    expect(iframes[0].src).toMatch(/\/_stream-download\//);
+
+    expect(result.streamedToDisk).toBe(true);
+    expect(result.bytes).toBe(chunkA.byteLength + chunkB.byteLength);
+  });
+
+  it('falls back to the Blob path when the service worker fails to ack registration', async () => {
+    env = setupBrowserEnv({
+      enableShowSaveFilePicker: false,
+      installServiceWorker: true,
+      serviceWorkerImpl: { ackOk: false },
+    });
+    const payload = new Uint8Array([9, 9, 9, 9]);
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([payload]), {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      })
+    );
+
+    const result = await env.win.streamingDownload('/api/exports/sw-fail.csv');
+    // SW path attempted but rejected — Blob fallback ran instead.
+    expect(result.streamedToDisk).toBe(false);
+    expect(result.bytes).toBe(payload.byteLength);
+  });
+
+  it('honours useServiceWorker=false to skip the SW path entirely', async () => {
+    env = setupBrowserEnv({
+      enableShowSaveFilePicker: false,
+      installServiceWorker: true,
+    });
+    const payload = new Uint8Array([1, 2, 3, 4]);
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([payload]), {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      })
+    );
+
+    const result = await env.win.streamingDownload('/api/exports/no-sw.csv', {
+      useServiceWorker: false,
+    });
+    // No SW register message should have been sent.
+    expect(env.swCalls.filter((c) => c.msg && c.msg.type === 'register')).toHaveLength(0);
+    expect(result.streamedToDisk).toBe(false);
   });
 });

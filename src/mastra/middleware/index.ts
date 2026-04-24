@@ -107,6 +107,12 @@ const PUBLIC_PATHS = [
   '/dashboard/tailwind.css', '/dashboard/i18n/', '/api/invitations/validate/', '/api/invitations/accept',
   '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack',
   '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview', '/a11y',
+  // Streaming-download service worker + its iframe-trigger URL pattern.
+  // The SW file must load without an auth redirect (browsers fetch it
+  // independently of cookies). The trigger URL is intercepted by the SW
+  // before reaching the network, so the public allowlist is just defensive
+  // 404 plumbing for browsers without SW support.
+  '/streaming-download-sw.js', '/_stream-download/',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];

@@ -91,6 +91,196 @@
             typeof TransformStream !== 'undefined';
     }
 
+    // ── Service-worker streaming shim ──────────────────────────────────────
+    // For Firefox & Safari (no File System Access API). Uses a same-origin
+    // service worker that intercepts /_stream-download/<id> and replies with
+    // a transferred ReadableStream as `attachment`. Memory stays flat because
+    // the browser pulls bytes from the network through the SW to disk.
+
+    var SW_PATH = '/streaming-download-sw.js';
+    var SW_SCOPE = '/';
+    var SW_TRIGGER_PREFIX = '/_stream-download/';
+    var swReadyPromise = null;
+    var transferableStreamSupport = null;
+
+    function canTransferReadableStream() {
+        if (transferableStreamSupport !== null) return transferableStreamSupport;
+        if (typeof ReadableStream === 'undefined' ||
+            typeof MessageChannel === 'undefined') {
+            transferableStreamSupport = false;
+            return false;
+        }
+        try {
+            var rs = new ReadableStream();
+            var ch = new MessageChannel();
+            ch.port1.postMessage(rs, [rs]);
+            ch.port1.close();
+            ch.port2.close();
+            transferableStreamSupport = true;
+        } catch (_) {
+            transferableStreamSupport = false;
+        }
+        return transferableStreamSupport;
+    }
+
+    function supportsServiceWorkerStreaming() {
+        if (typeof navigator === 'undefined') return false;
+        if (!('serviceWorker' in navigator)) return false;
+        if (typeof TransformStream === 'undefined') return false;
+        if (typeof ReadableStream === 'undefined') return false;
+        if (typeof MessageChannel === 'undefined') return false;
+        // SW registration is only allowed in secure contexts (HTTPS or localhost).
+        if (typeof window !== 'undefined' && window.isSecureContext === false) return false;
+        return canTransferReadableStream();
+    }
+
+    function ensureServiceWorker() {
+        if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+            return Promise.resolve(null);
+        }
+        if (swReadyPromise) return swReadyPromise;
+        swReadyPromise = (async function () {
+            try {
+                var wantedURL = new URL(SW_PATH, window.location.origin).href;
+                var reg = await navigator.serviceWorker.getRegistration(SW_SCOPE);
+                var hasMatching = reg && (
+                    (reg.active && reg.active.scriptURL === wantedURL) ||
+                    (reg.waiting && reg.waiting.scriptURL === wantedURL) ||
+                    (reg.installing && reg.installing.scriptURL === wantedURL)
+                );
+                if (!hasMatching) {
+                    reg = await navigator.serviceWorker.register(SW_PATH, { scope: SW_SCOPE });
+                }
+                if (!reg.active) {
+                    await new Promise(function (resolve, reject) {
+                        var sw = reg.installing || reg.waiting;
+                        if (!sw) return resolve();
+                        var onState = function () {
+                            if (sw.state === 'activated') {
+                                sw.removeEventListener('statechange', onState);
+                                resolve();
+                            } else if (sw.state === 'redundant') {
+                                sw.removeEventListener('statechange', onState);
+                                reject(new Error('Streaming-download SW became redundant'));
+                            }
+                        };
+                        sw.addEventListener('statechange', onState);
+                    });
+                }
+                return reg.active || (navigator.serviceWorker.controller || null);
+            } catch (err) {
+                console.warn('[streamingDownload] service-worker registration failed:', err);
+                swReadyPromise = null; // allow retry on next call
+                return null;
+            }
+        })();
+        return swReadyPromise;
+    }
+
+    function generateStreamId() {
+        var rand = Math.random().toString(36).slice(2, 10);
+        return Date.now().toString(36) + '-' + rand;
+    }
+
+    // True streaming path for Firefox / Safari: hand a ReadableStream off to a
+    // service worker that returns it as an `attachment` Response. Returns null
+    // (without consuming response.body) when the SW path is unavailable so the
+    // caller can still fall back to the in-memory Blob path.
+    async function streamResponseViaServiceWorker(response, filename, contentType, totalLength, button, onProgress) {
+        if (!supportsServiceWorkerStreaming()) return null;
+
+        var sw = await ensureServiceWorker();
+        if (!sw) return null;
+
+        var id = generateStreamId();
+        var received = 0;
+        var transform;
+        try {
+            transform = new TransformStream({
+                transform: function (chunk, controller) {
+                    received += chunk.byteLength || 0;
+                    if (button) {
+                        setBusy(button, progressLabel(received, totalLength));
+                    }
+                    if (onProgress) {
+                        try { onProgress(received, totalLength); } catch (_) { /* ignore */ }
+                    }
+                    controller.enqueue(chunk);
+                }
+            });
+        } catch (_) {
+            return null;
+        }
+
+        // Register with the SW (transfer the readable side). Wait for ack
+        // BEFORE we start piping or trigger the iframe — if registration
+        // fails we want response.body still intact for the Blob fallback.
+        var channel = new MessageChannel();
+        var ackPromise = new Promise(function (resolve, reject) {
+            var to = setTimeout(function () {
+                reject(new Error('Streaming-download SW register ack timeout'));
+            }, 5000);
+            channel.port1.onmessage = function (ev) {
+                clearTimeout(to);
+                if (ev.data && ev.data.ok) resolve();
+                else reject(new Error('Streaming-download SW register failed'));
+            };
+        });
+
+        try {
+            sw.postMessage({
+                type: 'register',
+                id: id,
+                filename: filename,
+                contentType: contentType,
+                totalLength: totalLength,
+                stream: transform.readable
+            }, [transform.readable, channel.port2]);
+        } catch (err) {
+            console.warn('[streamingDownload] SW postMessage(stream) failed:', err);
+            try { channel.port1.close(); } catch (_) { /* ignore */ }
+            return null;
+        }
+
+        try {
+            await ackPromise;
+        } catch (err) {
+            console.warn('[streamingDownload] SW register ack failed:', err);
+            try { channel.port1.close(); } catch (_) { /* ignore */ }
+            // Best-effort: tell the SW to drop the registration.
+            try { sw.postMessage({ type: 'cancel', id: id }); } catch (_) { /* ignore */ }
+            return null;
+        }
+        try { channel.port1.close(); } catch (_) { /* ignore */ }
+
+        // Trigger the download via a hidden iframe. The SW intercepts the
+        // navigation and returns a streamed `attachment` response.
+        var iframe = document.createElement('iframe');
+        iframe.hidden = true;
+        iframe.style.display = 'none';
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.src = SW_TRIGGER_PREFIX + encodeURIComponent(id);
+        document.body.appendChild(iframe);
+
+        try {
+            await response.body.pipeTo(transform.writable);
+        } catch (err) {
+            // The browser/user may have aborted the download; treat that
+            // like a normal cancellation rather than a hard failure.
+            try { sw.postMessage({ type: 'cancel', id: id }); } catch (_) { /* ignore */ }
+            setTimeout(function () { try { iframe.remove(); } catch (_) { /* ignore */ } }, 1000);
+            var aborted = new Error((err && err.message) || 'Streaming download cancelled');
+            aborted.name = 'AbortError';
+            throw aborted;
+        }
+
+        // Keep the iframe alive briefly so the browser can finalise the
+        // download response, then clean it up.
+        setTimeout(function () { try { iframe.remove(); } catch (_) { /* ignore */ } }, 10000);
+
+        return { bytes: received, streamedToDisk: true };
+    }
+
     function pickerTypesFor(filename, contentType) {
         var ext = '';
         var dot = filename.lastIndexOf('.');
@@ -400,13 +590,25 @@
 
             var result = null;
 
-            if (supportsFileSystemAccess() && shouldStreamToDisk(options, totalLength)) {
+            var wantStream = shouldStreamToDisk(options, totalLength);
+            var allowServiceWorker = options.useServiceWorker !== false;
+
+            if (supportsFileSystemAccess() && wantStream) {
                 result = await streamResponseToDisk(
                     response, filename, contentType, button, onProgress, totalLength
                 );
                 // result === null means the picker call failed in a recoverable
                 // way (e.g. lost user activation) and the body is still intact,
-                // so we transparently fall through to the in-memory path.
+                // so we transparently fall through to the next path.
+            }
+
+            if (!result && allowServiceWorker && wantStream && supportsServiceWorkerStreaming()) {
+                // Firefox / Safari path. Returns null without consuming the
+                // body if the SW can't be registered or transferable streams
+                // aren't available, so the Blob fallback below still works.
+                result = await streamResponseViaServiceWorker(
+                    response, filename, contentType, totalLength, button, onProgress
+                );
             }
 
             if (!result) {

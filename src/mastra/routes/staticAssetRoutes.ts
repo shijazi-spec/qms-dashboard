@@ -144,4 +144,42 @@ export const staticAssetRoutes = [
       };
     },
   },
+  {
+    // Served from origin root so its default scope ('/') covers the
+    // `/_stream-download/<id>` trigger URLs the client navigates to.
+    // Adds Service-Worker-Allowed defensively in case anyone moves the file
+    // into a subdirectory later.
+    path: "/streaming-download-sw.js",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const candidates = [
+            join(process.cwd(), "dashboard", "streaming-download-sw.js"),
+            join(process.cwd(), "..", "dashboard", "streaming-download-sw.js"),
+            "/home/runner/workspace/dashboard/streaming-download-sw.js",
+          ];
+          const filePath = resolveFile(candidates);
+          if (!filePath) {
+            return c.text("/* streaming-download-sw.js not found */", 404, {
+              "Content-Type": "application/javascript",
+            });
+          }
+          const content = readFileSync(filePath, "utf-8");
+          c.header("Content-Type", "application/javascript; charset=utf-8");
+          c.header("Service-Worker-Allowed", "/");
+          // Service workers should never be aggressively cached — browsers
+          // already revalidate on every navigation, but this keeps proxies
+          // honest too.
+          c.header("Cache-Control", "no-cache, max-age=0, must-revalidate");
+          return c.body(content);
+        } catch (error) {
+          console.error("Error serving streaming-download-sw.js:", error);
+          return c.text("/* Error loading streaming-download-sw.js */", 500, {
+            "Content-Type": "application/javascript",
+          });
+        }
+      };
+    },
+  },
 ];
