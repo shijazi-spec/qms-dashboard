@@ -67,6 +67,76 @@ const SENSITIVE_PREFIXES = [
   'token_',
 ];
 
+/* -------------------------------------------------------------------------
+ * String-aware secret redaction
+ * -------------------------------------------------------------------------
+ * The deny-list above operates on object KEYS — it only protects payloads
+ * whose author thought to name a field `password`, `api_key`, etc.  Several
+ * of our write paths (notably `ai_pending_actions.payload_preview`, which is
+ * a free-form human-readable description built by each tool's `buildPreview`
+ * callback in `withApprovalGate.ts`) persist arbitrary STRINGS.  If a tool
+ * author ever interpolates a credential into that preview string, the
+ * key-based helper above is blind to it.
+ *
+ * `redactSecretLikeStrings()` runs a regex deny-list against the raw text to
+ * catch credential-shaped substrings before they reach the database.  The
+ * patterns are conservative — they target token formats with distinctive
+ * structure (vendor prefix + length + alphabet) so they should not match
+ * ordinary prose, IDs, or UUIDs.
+ *
+ * New patterns must be added here AND covered by a test in
+ * `redactSensitiveFields.test.ts` / `aiApprovalRedaction.test.ts`.
+ * -------------------------------------------------------------------------*/
+
+interface SecretPattern {
+  name: string;
+  regex: RegExp;
+}
+
+const SECRET_LIKE_PATTERNS: SecretPattern[] = [
+  // bcrypt hash:  $2a$ / $2b$ / $2y$  + cost + 53-char salt+hash (base64-ish)
+  // Match this BEFORE the generic patterns because the literal `$` chars are
+  // distinctive and we don't want some other rule to consume part of it.
+  { name: 'bcrypt', regex: /\$2[aby]\$\d{1,2}\$[./A-Za-z0-9]{53}/g },
+  // JSON Web Token:  three base64url segments separated by dots, header
+  // always starts `eyJ` (base64 of `{"`).
+  { name: 'jwt', regex: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.+/=-]{8,}/g },
+  // Stripe / OpenAI / Anthropic style:  sk-…, sk_live_…, sk_test_…
+  // Also covers `sk-ant-…` (Anthropic) and `sk-proj-…` (OpenAI project keys).
+  { name: 'sk-key', regex: /\bsk[-_](?:live|test|proj|ant)?[-_]?[A-Za-z0-9_-]{20,}\b/g },
+  // Stripe publishable / restricted keys
+  { name: 'stripe-pk', regex: /\b(?:pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
+  // GitHub tokens:  ghp_ (PAT), gho_ (OAuth), ghu_ (user-to-server),
+  // ghs_ (server-to-server), ghr_ (refresh)
+  { name: 'github', regex: /\bgh[porsu]_[A-Za-z0-9]{30,}\b/g },
+  // GitLab personal access token
+  { name: 'gitlab', regex: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
+  // Slack tokens (bot, user, app, workspace, refresh)
+  { name: 'slack', regex: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g },
+  // Google API key
+  { name: 'google-api', regex: /\bAIza[0-9A-Za-z_-]{35}\b/g },
+  // Google OAuth token
+  { name: 'google-oauth', regex: /\bya29\.[0-9A-Za-z_-]{20,}\b/g },
+  // AWS Access Key ID (also matches the temporary ASIA prefix)
+  { name: 'aws-akid', regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
+  // HTTP "Authorization: Bearer …" header style
+  { name: 'bearer', regex: /\bBearer\s+[A-Za-z0-9_\-.=+/]{20,}/gi },
+];
+
+/**
+ * Replaces credential-shaped substrings inside a free-form string with
+ * REDACTED_SENTINEL.  Non-string inputs (and null/undefined) are returned
+ * unchanged so callers can pipe optional values through unconditionally.
+ */
+export function redactSecretLikeStrings(input: unknown): unknown {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  let out = input;
+  for (const { regex } of SECRET_LIKE_PATTERNS) {
+    out = out.replace(regex, REDACTED_SENTINEL);
+  }
+  return out;
+}
+
 export function isSensitiveField(key: string): boolean {
   const lower = key.toLowerCase();
   if (SENSITIVE_EXACT_FIELDS.has(lower)) return true;

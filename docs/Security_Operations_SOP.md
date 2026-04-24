@@ -388,11 +388,12 @@ Prior to this enhancement, the `event_logs` and `change_history` tables stored `
 A central `redactSensitiveFields(payload, fieldName?)` helper was implemented in `src/utils/eventLogsDatabase.ts` and wired into every write path that records `old_value`/`new_value`. The helper uses a three-level deny list and replaces matching values with the sentinel string `***REDACTED***` before any data reaches the database.
 
 **Files Modified:**
-- `src/utils/eventLogsDatabase.ts` — helper implementation + wired into `logEvent()`
+- `src/utils/eventLogsDatabase.ts` — helper implementation + wired into `logEvent()`; also hosts `redactSecretLikeStrings()` for free-form text
 - `src/utils/changeHistoryDatabase.ts` — wired into `logNCChange()` and `logCAPAChange()`
-- `src/utils/aiApprovalDatabase.ts` — wired into `enqueuePendingAction()` and `recordExecutionResult()`
+- `src/utils/aiApprovalDatabase.ts` — wired into `enqueuePendingAction()` (both the JSONB `payload` and the TEXT `payload_preview`) and `recordExecutionResult()`
 - `src/utils/redactHistoricalLogs.ts` — one-off sweep script for historical rows (includes ai_pending_actions)
 - `src/utils/redactSensitiveFields.test.ts` — automated regression tests
+- `tests/aiApprovalRedaction.test.ts` — verifies both the JSONB columns AND the `payload_preview` TEXT column are sanitised
 
 #### Deny-List Rules (matched case-insensitively against the key name)
 
@@ -425,6 +426,30 @@ A central `redactSensitiveFields(payload, fieldName?)` helper was implemented in
 - Redaction is recursive — nested objects and arrays are walked fully.
 - The `description` field (human-readable event summary) is **not** affected; it must already describe the action in plain English without embedding secrets (e.g. "password updated", not the hash value).
 - The `change_history` tables store values as plain strings. When `field_changed` matches the deny list, both `old_value` and `new_value` are set to `***REDACTED***`.
+
+#### Free-Form Text Sanitisation (`payload_preview`)
+
+The `ai_pending_actions.payload_preview` column is a TEXT field built by each AI tool's `policy.buildPreview()` callback in `src/utils/withApprovalGate.ts`. Because the value is free-form prose authored per-tool, the key-based deny list above cannot see secrets embedded by a careless tool author (for example, a future "rotate API key" tool that writes the freshly-minted key into the preview line shown to the human reviewer).
+
+A second helper, `redactSecretLikeStrings(input)` in `src/utils/eventLogsDatabase.ts`, runs a regex deny-list against the raw text and replaces credential-shaped substrings with `***REDACTED***` before `enqueuePendingAction()` writes the row. The patterns target token formats with distinctive structure so they should not match ordinary prose, IDs, or UUIDs:
+
+| Pattern | Example match |
+|---------|---------------|
+| `bcrypt` | `$2a$…` / `$2b$…` / `$2y$…` 60-char hash |
+| `JWT` | three base64url segments separated by dots, header begins `eyJ` |
+| `sk-key` | OpenAI / Anthropic / Stripe `sk-…`, `sk_live_…`, `sk-ant-…`, `sk-proj-…` |
+| `stripe-pk` | Stripe publishable / restricted `pk_live_…`, `pk_test_…`, `rk_live_…` |
+| `github` | GitHub `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…` |
+| `gitlab` | GitLab `glpat-…` |
+| `slack` | Slack `xoxb-…`, `xoxa-…`, `xoxp-…`, `xoxr-…`, `xoxs-…` |
+| `google-api` | Google API key `AIza…` |
+| `google-oauth` | Google OAuth `ya29.…` |
+| `aws-akid` | AWS Access Key ID `AKIA…` / `ASIA…` |
+| `bearer` | HTTP `Authorization: Bearer …` header value |
+
+The sanitiser is applied to the preview string (and to it alone — the JSONB `payload` and `execution_result` columns continue to use the key-based redactor described above). It is also defence-in-depth: the structured payload is already redacted, so the preview helper exists specifically to catch credentials that a tool author interpolated into the human-readable description string.
+
+To extend the regex deny list, edit `SECRET_LIKE_PATTERNS` in `src/utils/eventLogsDatabase.ts` and add a corresponding assertion in `tests/aiApprovalRedaction.test.ts`.
 
 #### Historical Data Sweep
 
@@ -818,6 +843,7 @@ When reviewing any PR that touches dashboard JavaScript:
 | 3.0 | March 24, 2026 | WalaPlus Security Team | Pentest v3.0 full remediation (39 findings), comprehensive SOP |
 | 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes; Added section 4.8: Audit Log Sensitive Field Masking. Implemented `redactSensitiveFields()` deny-list helper, wired into all event_logs and change_history write paths, retroactive sweep script, regression tests. In-handler requireRole() defense-in-depth; updated §5.1 Report Route Access Control table. |
 | 4.0 | April 24, 2026 | WalaPlus Security Team | Stored XSS remediation: shared safe-render helper, innerHTML escaping fixes (navigation.js, duplicates.html), CSP nonce enforcement (removed unsafe-inline from script-src), Safe Rendering Rules (§5.9) |
+| 4.1 | April 24, 2026 | WalaPlus Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, Google, Slack, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.

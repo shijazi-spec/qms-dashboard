@@ -118,10 +118,14 @@ async function run(): Promise<void> {
   console.log("\n[aiApprovalDatabase] sensitive-field redaction");
 
   const SECRET_KEY = "sk-live-NEVER_PERSIST_ME_1234567890";
-  const SECRET_TOKEN = "ghp_topsecretrefreshtoken_abcdef";
+  const SECRET_TOKEN = "ghp_topsecretrefreshtokenabcdefghijklmnoXYZ";
   const SECRET_PASSWORD = "P@ssw0rd!_plaintext";
+  const SECRET_BCRYPT = "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU";
+  const SECRET_JWT =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
   const SAFE_TOOL = "rotate_api_key";
   const SAFE_DESCRIPTION = "Rotate Zoho API key for the books integration";
+  const PREVIEW_PROSE_PREFIX = "Rotate API key for zoho_books — new key=";
 
   const enqueued = await enqueuePendingAction({
     toolId: SAFE_TOOL,
@@ -136,7 +140,9 @@ async function run(): Promise<void> {
       },
       reason: SAFE_DESCRIPTION,
     },
-    payloadPreview: "Rotate API key for zoho_books",
+    payloadPreview:
+      `${PREVIEW_PROSE_PREFIX}${SECRET_KEY}, refresh=${SECRET_TOKEN}, ` +
+      `legacy_hash=${SECRET_BCRYPT}, session=${SECRET_JWT}`,
     riskLevel: "high",
     complianceRefs: ["PCI-DSS-12.3.1"],
     requestedByUserId: 7,
@@ -171,6 +177,45 @@ async function run(): Promise<void> {
     insertedPayloadJson.includes("zoho_books") &&
       insertedPayloadJson.includes(SAFE_DESCRIPTION),
     "INSERT payload column preserves non-sensitive fields",
+  );
+
+  // -----------------------------------------------------------------------
+  // payload_preview is the human-readable TEXT column built by each tool's
+  // policy.buildPreview() callback. A careless tool author can interpolate a
+  // credential into that string; verify the regex-based string redactor
+  // strips secret-shaped substrings before they reach the database.
+  // -----------------------------------------------------------------------
+  const insertedPreview = String(insertCall!.params[4]);
+
+  assert(
+    !insertedPreview.includes(SECRET_KEY),
+    "INSERT payload_preview does not contain the sk-… API key",
+  );
+  assert(
+    !insertedPreview.includes(SECRET_TOKEN),
+    "INSERT payload_preview does not contain the ghp_… GitHub token",
+  );
+  assert(
+    !insertedPreview.includes(SECRET_BCRYPT) && !insertedPreview.includes("$2b$12$"),
+    "INSERT payload_preview does not contain the bcrypt hash",
+  );
+  assert(
+    !insertedPreview.includes(SECRET_JWT),
+    "INSERT payload_preview does not contain the JWT",
+  );
+  assert(
+    insertedPreview.includes(REDACTED_SENTINEL),
+    "INSERT payload_preview contains the redaction sentinel",
+  );
+  assert(
+    insertedPreview.includes(PREVIEW_PROSE_PREFIX.trim().split(" ")[0]) &&
+      insertedPreview.includes("zoho_books"),
+    "INSERT payload_preview preserves the surrounding human-readable prose",
+  );
+
+  assert(
+    enqueued.payload_preview === insertedPreview,
+    "Returned PendingAction.payload_preview matches what was persisted",
   );
 
   const returnedPayload = enqueued.payload as {

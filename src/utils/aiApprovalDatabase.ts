@@ -21,7 +21,7 @@
 
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
-import { redactSensitiveFields } from './eventLogsDatabase';
+import { redactSensitiveFields, redactSecretLikeStrings } from './eventLogsDatabase';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -170,6 +170,14 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   const safePayload = redactSensitiveFields(input.payload);
   const checksum = checksumPayload(safePayload);
 
+  // SECURITY: payload_preview is a free-form TEXT column built by each tool's
+  // policy.buildPreview() callback in withApprovalGate.ts. The key-based
+  // redactor above cannot see secrets that a tool author interpolated into
+  // that human-readable string. Run the preview through the regex deny-list
+  // so credential-shaped substrings (sk-…, ghp_…, JWT, bcrypt, AWS, etc.)
+  // are replaced with the sentinel before they hit the database.
+  const safePayloadPreview = redactSecretLikeStrings(input.payloadPreview ?? '') as string;
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateActionCode();
     try {
@@ -186,7 +194,7 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
           input.toolId,
           input.toolLabel,
           JSON.stringify(safePayload),
-          input.payloadPreview,
+          safePayloadPreview,
           checksum,
           input.riskLevel,
           JSON.stringify(input.complianceRefs || []),
