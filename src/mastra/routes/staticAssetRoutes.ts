@@ -96,4 +96,9 @@ export const staticAssetRoutes = [
     method: "GET" as const,
     createHandler: async () => serveStaticText("js/csp-styles.js", "application/javascript"),
   },
+  {
+    path: "/js/streaming-download.js",
+    method: "GET" as const,
+    createHandler: async () => serveStaticText("js/streaming-download.js", "application/javascript"),
+  },
 ];

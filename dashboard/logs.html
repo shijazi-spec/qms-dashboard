@@ -49,6 +49,7 @@
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/streaming-download.js?v=1.0.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('logs');
@@ -552,7 +553,7 @@
             loadLogs(1);
         }
 
-        function exportCSV() {
+        function exportCSV(event) {
             const params = new URLSearchParams();
             
             const fromDate = document.getElementById('filterFromDate').value;
@@ -574,7 +575,8 @@
             if (search) params.append('search', search);
             
             const url = `/api/logs/export${params.toString() ? '?' + params.toString() : ''}`;
-            window.location.href = url;
+            const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            return streamingDownloadFromEvent(event || null, url, { filename: `event-logs-${ts}.csv` });
         }
 
         document.addEventListener('DOMContentLoaded', function() {

@@ -45,6 +45,7 @@
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
     <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/streaming-download.js?v=1.0.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('policies');
@@ -58,10 +59,10 @@
                 <p class="text-sm text-gray-500 mt-1">Policies, Procedures, Work Instructions, SOPs & Forms — centralised governance with version control</p>
             </div>
             <div class="flex gap-3">
-                <a href="/api/policies/export" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2" data-testid="link-export-csv">
+                <button type="button" data-on-click="streamDownload" data-args="[&quot;/api/policies/export&quot;,&quot;policies.csv&quot;]" data-pass-event="true" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2" data-testid="link-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                     Export CSV
-                </a>
+                </button>
                 <button data-on-click="openAddPolicyModal" class="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 font-medium flex items-center gap-2" data-testid="button-new-document">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     New Document

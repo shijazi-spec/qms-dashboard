@@ -29,6 +29,7 @@
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/streaming-download.js?v=1.0.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('audits');
@@ -864,34 +865,13 @@
         }
 
         async function exportAuditPDF(auditId, auditCode, buttonEl) {
-            const btn = buttonEl;
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-            btn.disabled = true;
-
             try {
-                const response = await fetch(`/api/audits/${auditId}/export-pdf`);
-                
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to generate PDF');
-                }
-
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${auditCode}_report.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-            } catch (error) {
-                console.error('Error exporting PDF:', error);
-                alert('Error exporting PDF: ' + error.message);
-            } finally {
-                btn.innerHTML = originalContent;
-                btn.disabled = false;
+                await streamingDownload(`/api/audits/${auditId}/export-pdf`, {
+                    filename: `${auditCode}_report.pdf`,
+                    button: buttonEl,
+                });
+            } catch (_) {
+                // streamingDownload already surfaces the error to the user.
             }
         }
 

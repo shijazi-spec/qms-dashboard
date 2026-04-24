@@ -170,5 +170,6 @@ export const ROUTE_MANIFEST = {
     '/js/navigation.js',
     '/js/ai-consultant-widget.js',
     '/js/csp-styles.js',
+    '/js/streaming-download.js',
   ],
 } as const;

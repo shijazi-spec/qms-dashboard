@@ -49,6 +49,7 @@
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
     <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/streaming-download.js?v=1.0.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('duplicates');
@@ -96,7 +97,7 @@
                     </svg>
                     Scan from Zoho
                 </button>
-                <button data-on-click="exportData" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
+                <button data-on-click="exportData" data-pass-event="true" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
@@ -555,7 +556,7 @@
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" aria-label="Export start date" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" aria-label="Export end date" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
                 </div>
-                <button data-on-click="downloadExport" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export</button>
+                <button data-on-click="downloadExport" data-pass-event="true" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export</button>
             </div>
         </div>
 
@@ -954,7 +955,7 @@
                     <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${o.rag_status === 'green' ? '≤2% ✓' : o.rag_status === 'amber' ? '2-5% ⚠' : '>5% ✗'}</span></td>
                     <td class="px-6 py-3 text-sm">${o.high_confidence_duplicates}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
-                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">Export</a></td>
+                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" onclick="exportOwner(event, this)" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">Export</a></td>
                 </tr>
             `).join('') || '<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">No owner data</td></tr>';
         }
@@ -1343,32 +1344,39 @@
             }, 2000);
         }
 
-        function exportDataXLSX() {
+        function exportDataXLSX(event) {
             // Default omits the redundant "All Records" sheet — per-type sheets cover the same
             // data without doubling memory/file size. Add &include_raw=1 manually if you need it.
             const range = getDateRange();
             let url = '/api/duplicates/export-xlsx';
             if (range.from) url += `?start_date=${range.from}`;
             if (range.to) url += (url.includes('?') ? '&' : '?') + `end_date=${range.to}`;
-            window.location.href = url;
+            return streamingDownloadFromEvent(event, url, { filename: 'duplicates.xlsx' });
         }
 
-        function exportData() {
+        function exportData(event) {
             const range = getDateRange();
             let url = '/api/duplicates/export?type=all';
             if (range.from) url += `&start_date=${range.from}`;
             if (range.to) url += `&end_date=${range.to}`;
-            window.open(url, '_blank');
+            return streamingDownloadFromEvent(event, url, { filename: 'duplicates-all.csv' });
         }
 
-        function downloadExport() {
+        function exportOwner(event, anchor) {
+            const owner = anchor && anchor.dataset ? (anchor.dataset.owner || 'owner') : 'owner';
+            const safe = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'owner';
+            return streamingDownloadFromEvent(event, anchor.href, { filename: `duplicates-owner-${safe}.csv` });
+        }
+
+        function downloadExport(event) {
             const type = document.getElementById('exportType').value;
             const start = document.getElementById('exportStartDate').value;
             const end = document.getElementById('exportEndDate').value;
             let url = `/api/duplicates/export?type=${type}`;
             if (start) url += `&start_date=${start}`;
             if (end) url += `&end_date=${end}`;
-            window.open(url, '_blank');
+            const safeType = String(type || 'export').replace(/[^a-zA-Z0-9_-]/g, '_');
+            return streamingDownloadFromEvent(event, url, { filename: `duplicates-${safeType}.csv` });
         }
 
         async function performSearch() {
