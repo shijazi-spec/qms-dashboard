@@ -19,9 +19,12 @@
 
 import {
   runToolHealthCheck,
+  evaluateWindowAggregates,
   TOOL_HEALTH_THRESHOLDS,
+  TOOL_HEALTH_ENV_BASELINE,
   validateToolHealthThresholds,
   __resetThresholdValidationForTests,
+  type EffectiveToolHealthConfig,
   type ToolHealthDeps,
 } from "../src/mastra/workflows/toolHealthAlertsCron";
 import type { ToolWindowAggregate } from "../src/utils/aiTelemetry";
@@ -1650,6 +1653,120 @@ await suite.test(
     } finally {
       console.error = originalErr;
     }
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// (PREVIEW) evaluateWindowAggregates — pure helper extracted for the dry-run
+// "Preview impact" endpoint (Task #189). The cron uses this same helper to
+// compute breach candidates, so any drift between cron and preview behavior
+// would show up here first.
+// ──────────────────────────────────────────────────────────────────────────────
+function makeCfg(over: Partial<EffectiveToolHealthConfig> = {}): EffectiveToolHealthConfig {
+  return { ...TOOL_HEALTH_ENV_BASELINE, ...over };
+}
+
+await suite.test(
+  "(P1) evaluateWindowAggregates returns no candidates when no aggregate breaches the floor",
+  () => {
+    const aggs: ToolWindowAggregate[] = [
+      makeAggregate({ tool_name: "calm_tool", error_rate_pct: 5, p95_latency_ms: 100 }),
+    ];
+    const out = evaluateWindowAggregates(aggs, makeCfg({
+      errorRatePct: 25, p95LatencyMs: 15_000, minCalls: 5,
+    }));
+    suite.expectEqual(out.length, 0, "no breaches");
+  },
+);
+
+await suite.test(
+  "(P2) evaluateWindowAggregates emits both reasons for a tool that breaches both",
+  () => {
+    const aggs: ToolWindowAggregate[] = [
+      makeAggregate({
+        tool_name: "double_breach",
+        agent_name: "agent_a",
+        call_count: 100,
+        error_count: 60,
+        error_rate_pct: 60,
+        p95_latency_ms: 20_000,
+      }),
+    ];
+    const out = evaluateWindowAggregates(aggs, makeCfg({
+      errorRatePct: 25, errorRateHighPct: 50, errorRateCriticalPct: 75,
+      p95LatencyMs: 15_000, latencyHighMs: 30_000, latencyCriticalMs: 60_000,
+      minCalls: 5, windowMinutes: 60,
+    }));
+    suite.expectEqual(out.length, 2, "two breaches");
+    suite.expectEqual(out[0].reason, "error_rate", "error_rate first");
+    suite.expectEqual(out[0].severity, "high", "60% → high");
+    suite.expectEqual(out[0].related_record_id, "double_breach:error_rate", "rid err");
+    suite.expectEqual(out[1].reason, "p95_latency", "p95 second");
+    suite.expectEqual(out[1].severity, "medium", "20s → medium");
+    suite.expectEqual(out[1].related_record_id, "double_breach:p95_latency", "rid lat");
+    // Live observed values are surfaced for the preview UI.
+    suite.expectEqual(out[0].observed.error_rate_pct, 60, "observed err pct");
+    suite.expectEqual(out[1].observed.p95_latency_ms, 20_000, "observed p95");
+  },
+);
+
+await suite.test(
+  "(P3) evaluateWindowAggregates filters by minCalls so a stricter proposed minCalls narrows the list",
+  () => {
+    const aggs: ToolWindowAggregate[] = [
+      makeAggregate({
+        tool_name: "low_traffic", call_count: 3,
+        error_rate_pct: 100, error_count: 3,
+      }),
+      makeAggregate({
+        tool_name: "high_traffic", call_count: 100,
+        error_rate_pct: 100, error_count: 100,
+      }),
+    ];
+    const looseCfg = makeCfg({ errorRatePct: 25, minCalls: 1 });
+    const strictCfg = makeCfg({ errorRatePct: 25, minCalls: 50 });
+    const looseOut = evaluateWindowAggregates(aggs, looseCfg);
+    const strictOut = evaluateWindowAggregates(aggs, strictCfg);
+    suite.expectEqual(looseOut.length, 2, "loose → both tools breach");
+    suite.expectEqual(strictOut.length, 1, "strict → only high_traffic breaches");
+    suite.expectEqual(strictOut[0].tool_name, "high_traffic", "strict keeps high_traffic");
+  },
+);
+
+await suite.test(
+  "(P4) evaluateWindowAggregates is purely deterministic — same input twice = same output",
+  () => {
+    const aggs: ToolWindowAggregate[] = [
+      makeAggregate({ tool_name: "t1", error_rate_pct: 80, p95_latency_ms: 70_000 }),
+      makeAggregate({ tool_name: "t2", error_rate_pct: 30, p95_latency_ms: 8_000 }),
+    ];
+    const cfg = makeCfg({
+      errorRatePct: 25, errorRateHighPct: 50, errorRateCriticalPct: 75,
+      p95LatencyMs: 15_000, latencyHighMs: 30_000, latencyCriticalMs: 60_000,
+      minCalls: 5,
+    });
+    const a = evaluateWindowAggregates(aggs, cfg);
+    const b = evaluateWindowAggregates(aggs, cfg);
+    suite.expectEqual(JSON.stringify(a), JSON.stringify(b), "stable output");
+  },
+);
+
+await suite.test(
+  "(P5) evaluateWindowAggregates severity ladder responds to cfg overrides",
+  () => {
+    const aggs: ToolWindowAggregate[] = [
+      makeAggregate({ tool_name: "borderline", error_rate_pct: 55 }),
+    ];
+    // With high cutoff at 50 → "55%" is high.
+    const high = evaluateWindowAggregates(aggs, makeCfg({
+      errorRatePct: 25, errorRateHighPct: 50, errorRateCriticalPct: 75,
+    }));
+    suite.expectEqual(high[0].severity, "high", "high band");
+    // Tighten the critical cutoff to 50 → "55%" is now critical.
+    const crit = evaluateWindowAggregates(aggs, makeCfg({
+      errorRatePct: 25, errorRateHighPct: 40, errorRateCriticalPct: 50,
+    }));
+    suite.expectEqual(crit[0].severity, "critical", "critical band");
   },
 );
 

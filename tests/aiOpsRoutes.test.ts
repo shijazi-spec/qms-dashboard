@@ -663,6 +663,222 @@ if (HAS_DB) {
     },
   );
 
+  await suite.test("POST /api/ai-ops/tool-health-config/preview — happy path returns current vs proposed breach lists", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const previewHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config/preview",
+        "POST",
+      );
+      // Pick safe values that satisfy floor <= high < critical for both bands.
+      const res = await previewHandler(
+        makeContext({
+          method: "POST",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: {
+            overrides: {
+              windowMinutes: 30,
+              minCalls: 1,
+              errorRatePct: 5,
+              errorRateHighPct: 20,
+              errorRateCriticalPct: 80,
+              p95LatencyMs: 500,
+              latencyHighMs: 2000,
+              latencyCriticalMs: 8000,
+            },
+          },
+        }),
+      );
+      suite.expectEqual(res.status, 200, "status");
+      const data = res.body?.data;
+      suite.expect(data && typeof data === "object", "data envelope present");
+      suite.expectEqual(
+        data?.effective_proposed?.errorRatePct,
+        5,
+        "proposed effective reflects override",
+      );
+      suite.expect(
+        data?.effective_current && typeof data.effective_current === "object",
+        "current effective present",
+      );
+      suite.expect(
+        Array.isArray(data?.current?.breaches),
+        "current.breaches array",
+      );
+      suite.expect(
+        Array.isArray(data?.proposed?.breaches),
+        "proposed.breaches array",
+      );
+      suite.expect(
+        data?.current?.summary && typeof data.current.summary.total === "number",
+        "current summary present",
+      );
+      suite.expect(
+        data?.diff && Array.isArray(data.diff.new_breaches)
+          && Array.isArray(data.diff.resolved_breaches)
+          && Array.isArray(data.diff.severity_changes),
+        "diff envelope present",
+      );
+      suite.expect(
+        typeof data?.current?.tools_evaluated === "number"
+          && typeof data?.proposed?.tools_evaluated === "number",
+        "per-cfg tools_evaluated present",
+      );
+      suite.expectEqual(
+        data?.current?.window_minutes,
+        data?.effective_current?.windowMinutes,
+        "current.window_minutes echoes effective_current",
+      );
+      suite.expectEqual(
+        data?.proposed?.window_minutes,
+        data?.effective_proposed?.windowMinutes,
+        "proposed.window_minutes echoes effective_proposed",
+      );
+      // Same window submitted ⇒ window_minutes_changed must be false.
+      suite.expectEqual(
+        data?.window_minutes_changed,
+        data?.current?.window_minutes !== data?.proposed?.window_minutes,
+        "window_minutes_changed flag matches actual window difference",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
+  // Reviewer-flagged correctness case (Task #189 follow-up): when current
+  // and proposed windowMinutes differ, the endpoint MUST evaluate each cfg
+  // against aggregates over its OWN exact horizon. A 30-min aggregate
+  // cannot be derived from a 60-min one (or vice versa) since
+  // getToolWindowAggregates(N) returns metrics pre-aggregated over exactly
+  // N minutes. This test asserts the response surfaces that distinction.
+  await suite.test("POST /api/ai-ops/tool-health-config/preview — differing windowMinutes yields per-cfg horizon", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      // Read the current effective windowMinutes so we can deliberately
+      // pick a DIFFERENT proposed window and force the two-query path.
+      const getHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "GET",
+      );
+      const getRes = await getHandler(
+        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+      );
+      suite.expectEqual(getRes.status, 200, "GET status");
+      const currentWindow = getRes.body?.data?.effective?.windowMinutes;
+      suite.expect(
+        typeof currentWindow === "number" && currentWindow >= 5,
+        "current windowMinutes available",
+      );
+      // Pick a deliberately-different proposed window inside the validator
+      // bounds (5..1440). Adding 15 min lands well inside bounds for any
+      // sane current window (cron defaults to 30 min in env).
+      const proposedWindow = currentWindow === 30 ? 60 : 30;
+
+      const previewHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config/preview",
+        "POST",
+      );
+      const res = await previewHandler(
+        makeContext({
+          method: "POST",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: { overrides: { windowMinutes: proposedWindow } },
+        }),
+      );
+      suite.expectEqual(res.status, 200, "preview status");
+      const data = res.body?.data;
+      suite.expectEqual(
+        data?.window_minutes_changed,
+        true,
+        "window_minutes_changed flagged true when windows differ",
+      );
+      suite.expectEqual(
+        data?.current?.window_minutes,
+        currentWindow,
+        "current.window_minutes equals current effective",
+      );
+      suite.expectEqual(
+        data?.proposed?.window_minutes,
+        proposedWindow,
+        "proposed.window_minutes equals override",
+      );
+      suite.expect(
+        typeof data?.current?.tools_evaluated === "number"
+          && typeof data?.proposed?.tools_evaluated === "number",
+        "each cfg gets its own tools_evaluated count from its own SQL hit",
+      );
+      // Both breach lists must be present and independently evaluated.
+      suite.expect(
+        Array.isArray(data?.current?.breaches)
+          && Array.isArray(data?.proposed?.breaches),
+        "both breach arrays present",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
+  await suite.test("POST /api/ai-ops/tool-health-config/preview — 400 on band ordering violation", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const previewHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config/preview",
+        "POST",
+      );
+      const res = await previewHandler(
+        makeContext({
+          method: "POST",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: {
+            overrides: { errorRateHighPct: 90, errorRateCriticalPct: 90 },
+          },
+        }),
+      );
+      suite.expectEqual(res.status, 400, "status");
+      suite.expect(
+        typeof res.body?.error === "string"
+          && res.body.error.includes("errorRateHighPct"),
+        "error mentions field",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
+  await suite.test("POST /api/ai-ops/tool-health-config/preview — 400 when overrides missing", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const previewHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config/preview",
+        "POST",
+      );
+      const res = await previewHandler(
+        makeContext({
+          method: "POST",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: { note: "no overrides" },
+        }),
+      );
+      suite.expectEqual(res.status, 400, "status");
+      suite.expectEqual(res.body?.error, "overrides must be an object", "error");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
   await suite.test("PUT /api/ai-ops/tool-health-config — 400 on band ordering violation", async () => {
     const original = process.env.ADMIN_API_KEY;
     process.env.ADMIN_API_KEY = ADMIN_KEY;

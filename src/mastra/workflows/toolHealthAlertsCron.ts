@@ -292,6 +292,146 @@ function severityForLatency(
 
 export type ToolHealthReason = "error_rate" | "p95_latency";
 
+/**
+ * A would-be alert as produced by the pure {@link evaluateWindowAggregates}
+ * helper. Carries everything the cron's side-effecting layer needs to write
+ * an `ai_alerts` row AND everything the AI Ops "Preview impact" UI needs to
+ * render the breach inline (tool name, agent, severity, human-readable
+ * description). The cron path adds DB write + paging on top; the preview
+ * route just JSON-serializes this and returns it.
+ */
+export interface ToolHealthBreachCandidate {
+  tool_name: string;
+  agent_name: string | null;
+  reason: ToolHealthReason;
+  severity: AlertSeverity;
+  /** Stable composite used for `ai_alerts.related_record_id` dedupe. */
+  related_record_id: string;
+  /** Title used by `createAIAlert` and the notifier. Excludes live metrics. */
+  title: string;
+  /** Verbose breach description with live metric values. */
+  description: string;
+  /** Suggested next step shown next to the breach. */
+  suggestion: string;
+  /** Compact one-liner (e.g. "42% over 60m") suitable for table rendering. */
+  detail: string;
+  /** Live metric values that drove the breach — useful for tooltips/tests. */
+  observed: {
+    call_count: number;
+    error_count: number;
+    error_rate_pct: number;
+    p95_latency_ms: number;
+    avg_latency_ms: number;
+    max_latency_ms: number;
+  };
+}
+
+/**
+ * Pure breach-evaluator extracted from {@link runToolHealthCheck} so the
+ * dry-run "Preview impact" endpoint (POST /api/ai-ops/tool-health-config/
+ * preview) can re-use the exact same severity ladder, threshold comparison,
+ * and human-readable strings the live cron uses — without writing any
+ * `ai_alerts` rows or paging on-call.
+ *
+ * Contract:
+ *   • No I/O. Given the same inputs, returns the same output.
+ *   • A tool can produce 0, 1, or 2 candidates (one per breach reason).
+ *   • Order matches the input aggregate order; for a single tool the
+ *     "error_rate" candidate is emitted before "p95_latency" so the cron
+ *     loop and the preview UI agree on rendering order.
+ *   • Aggregates whose `call_count < cfg.minCalls` should be filtered out
+ *     by the caller (the SQL aggregator already does this for the cron;
+ *     the preview endpoint applies the same filter explicitly so a
+ *     stricter `minCalls` in a proposed override actually narrows the
+ *     would-be breach list).
+ */
+export function evaluateWindowAggregates(
+  aggregates: ToolWindowAggregate[],
+  cfg: EffectiveToolHealthConfig,
+): ToolHealthBreachCandidate[] {
+  const out: ToolHealthBreachCandidate[] = [];
+  for (const agg of aggregates) {
+    if (agg.call_count < cfg.minCalls) continue;
+
+    if (agg.error_rate_pct >= cfg.errorRatePct) {
+      const severity = severityForErrorRate(cfg, agg.error_rate_pct);
+      const title =
+        `Tool "${agg.tool_name}" error rate above threshold ` +
+        `over last ${cfg.windowMinutes} min`;
+      const description =
+        `Tool "${agg.tool_name}"` +
+        (agg.agent_name ? ` (agent: ${agg.agent_name})` : "") +
+        ` had ${agg.error_count}/${agg.call_count} failed calls ` +
+        `(${agg.error_rate_pct}%) in the last ${cfg.windowMinutes} minutes. ` +
+        `Threshold is ${cfg.errorRatePct}% with at least ${cfg.minCalls} calls. ` +
+        `Avg latency ${agg.avg_latency_ms} ms, p95 ${agg.p95_latency_ms} ms.`;
+      const suggestion =
+        `Open the AI Operations panel and inspect the recent failures for ` +
+        `"${agg.tool_name}". Check for upstream service errors, schema ` +
+        `validation failures, or rate-limit responses before the next cron ` +
+        `evaluation.`;
+      out.push({
+        tool_name: agg.tool_name,
+        agent_name: agg.agent_name,
+        reason: "error_rate",
+        severity,
+        related_record_id: `${agg.tool_name}:error_rate`,
+        title,
+        description,
+        suggestion,
+        detail: `${agg.error_rate_pct}% over ${cfg.windowMinutes}m`,
+        observed: {
+          call_count: agg.call_count,
+          error_count: agg.error_count,
+          error_rate_pct: agg.error_rate_pct,
+          p95_latency_ms: agg.p95_latency_ms,
+          avg_latency_ms: agg.avg_latency_ms,
+          max_latency_ms: agg.max_latency_ms,
+        },
+      });
+    }
+
+    if (agg.p95_latency_ms >= cfg.p95LatencyMs) {
+      const severity = severityForLatency(cfg, agg.p95_latency_ms);
+      const title =
+        `Tool "${agg.tool_name}" p95 latency above threshold ` +
+        `over last ${cfg.windowMinutes} min`;
+      const description =
+        `Tool "${agg.tool_name}"` +
+        (agg.agent_name ? ` (agent: ${agg.agent_name})` : "") +
+        ` p95 latency is ${agg.p95_latency_ms} ms over ${agg.call_count} ` +
+        `calls in the last ${cfg.windowMinutes} minutes ` +
+        `(threshold: ${cfg.p95LatencyMs} ms; avg ${agg.avg_latency_ms} ms, ` +
+        `max ${agg.max_latency_ms} ms, errors ${agg.error_count}).`;
+      const suggestion =
+        `Investigate the slow path for "${agg.tool_name}" — check the ` +
+        `upstream API/SQL latency and recent traffic spikes in the AI ` +
+        `Operations panel. Consider raising timeouts or adding back-pressure ` +
+        `if this is a recurring breach.`;
+      out.push({
+        tool_name: agg.tool_name,
+        agent_name: agg.agent_name,
+        reason: "p95_latency",
+        severity,
+        related_record_id: `${agg.tool_name}:p95_latency`,
+        title,
+        description,
+        suggestion,
+        detail: `${agg.p95_latency_ms}ms over ${cfg.windowMinutes}m`,
+        observed: {
+          call_count: agg.call_count,
+          error_count: agg.error_count,
+          error_rate_pct: agg.error_rate_pct,
+          p95_latency_ms: agg.p95_latency_ms,
+          avg_latency_ms: agg.avg_latency_ms,
+          max_latency_ms: agg.max_latency_ms,
+        },
+      });
+    }
+  }
+  return out;
+}
+
 export interface ToolHealthCheckResult {
   toolsEvaluated: number;
   alertsCreated: number;
@@ -637,45 +777,38 @@ export async function runToolHealthCheck(
 
   out.toolsEvaluated = aggregates.length;
 
+  // Evaluate breaches via the pure helper. The cron path then layers on
+  // DB writes (createAIAlert) and on-call paging (notifyToolHealthBreach);
+  // the dry-run preview endpoint just JSON-serializes the same candidates.
+  const candidates = evaluateWindowAggregates(aggregates, cfg);
+  const candidatesByKey = new Map<string, ToolHealthBreachCandidate>();
+  for (const cand of candidates) {
+    candidatesByKey.set(cand.related_record_id, cand);
+  }
+
   for (const agg of aggregates) {
-    // Error-rate breach
-    if (agg.error_rate_pct >= cfg.errorRatePct) {
-      const severity = severityForErrorRate(cfg, agg.error_rate_pct);
-      // Title intentionally OMITS live metric values so dedupe via
-      // related_record_id stays meaningful across cron runs while the
-      // breach is ongoing. Live values live in `description`.
-      const title =
-        `Tool "${agg.tool_name}" error rate above threshold ` +
-        `over last ${cfg.windowMinutes} min`;
-      const description =
-        `Tool "${agg.tool_name}"` +
-        (agg.agent_name ? ` (agent: ${agg.agent_name})` : "") +
-        ` had ${agg.error_count}/${agg.call_count} failed calls ` +
-        `(${agg.error_rate_pct}%) in the last ${cfg.windowMinutes} minutes. ` +
-        `Threshold is ${cfg.errorRatePct}% with at least ${cfg.minCalls} calls. ` +
-        `Avg latency ${agg.avg_latency_ms} ms, p95 ${agg.p95_latency_ms} ms.`;
-      const suggestion =
-        `Open the AI Operations panel and inspect the recent failures for ` +
-        `"${agg.tool_name}". Check for upstream service errors, schema ` +
-        `validation failures, or rate-limit responses before the next cron ` +
-        `evaluation.`;
+    // Error-rate: breach → write+page; otherwise → recovery sweep.
+    const errCand = candidatesByKey.get(`${agg.tool_name}:error_rate`);
+    if (errCand) {
       try {
         const result = await maybeCreateBreachAlert(
-          deps, agg, "error_rate", severity, title, description, suggestion,
+          deps, agg, "error_rate", errCand.severity,
+          errCand.title, errCand.description, errCand.suggestion,
         );
         if (result.created) {
           out.alertsCreated++;
           out.breaches.push({
-            tool_name: agg.tool_name,
+            tool_name: errCand.tool_name,
             reason: "error_rate",
-            severity,
-            detail: `${agg.error_rate_pct}% over ${cfg.windowMinutes}m`,
+            severity: errCand.severity,
+            detail: errCand.detail,
           });
           // Page on-call now that we know this is a brand-new alert. The
           // notifier inherits the (alert_type, related_record_id) dedupe
           // semantics for free because we only call it on `created=true`.
           await dispatchBreachNotification(
-            deps, agg, "error_rate", severity, title, description, suggestion,
+            deps, agg, "error_rate", errCand.severity,
+            errCand.title, errCand.description, errCand.suggestion,
             result.alertId, out,
           );
         } else {
@@ -693,41 +826,25 @@ export async function runToolHealthCheck(
       await maybeResolveRecoveredAlert(deps, cfg, agg, "error_rate", out);
     }
 
-    // p95 latency breach
-    if (agg.p95_latency_ms >= cfg.p95LatencyMs) {
-      const severity = severityForLatency(cfg, agg.p95_latency_ms);
-      // Title intentionally OMITS the live p95 value so dedupe via
-      // related_record_id stays stable across cron runs while the breach
-      // is ongoing. Live values live in `description`.
-      const title =
-        `Tool "${agg.tool_name}" p95 latency above threshold ` +
-        `over last ${cfg.windowMinutes} min`;
-      const description =
-        `Tool "${agg.tool_name}"` +
-        (agg.agent_name ? ` (agent: ${agg.agent_name})` : "") +
-        ` p95 latency is ${agg.p95_latency_ms} ms over ${agg.call_count} ` +
-        `calls in the last ${cfg.windowMinutes} minutes ` +
-        `(threshold: ${cfg.p95LatencyMs} ms; avg ${agg.avg_latency_ms} ms, ` +
-        `max ${agg.max_latency_ms} ms, errors ${agg.error_count}).`;
-      const suggestion =
-        `Investigate the slow path for "${agg.tool_name}" — check the ` +
-        `upstream API/SQL latency and recent traffic spikes in the AI ` +
-        `Operations panel. Consider raising timeouts or adding back-pressure ` +
-        `if this is a recurring breach.`;
+    // p95 latency: breach → write+page; otherwise → recovery sweep.
+    const latCand = candidatesByKey.get(`${agg.tool_name}:p95_latency`);
+    if (latCand) {
       try {
         const result = await maybeCreateBreachAlert(
-          deps, agg, "p95_latency", severity, title, description, suggestion,
+          deps, agg, "p95_latency", latCand.severity,
+          latCand.title, latCand.description, latCand.suggestion,
         );
         if (result.created) {
           out.alertsCreated++;
           out.breaches.push({
-            tool_name: agg.tool_name,
+            tool_name: latCand.tool_name,
             reason: "p95_latency",
-            severity,
-            detail: `${agg.p95_latency_ms}ms over ${cfg.windowMinutes}m`,
+            severity: latCand.severity,
+            detail: latCand.detail,
           });
           await dispatchBreachNotification(
-            deps, agg, "p95_latency", severity, title, description, suggestion,
+            deps, agg, "p95_latency", latCand.severity,
+            latCand.title, latCand.description, latCand.suggestion,
             result.alertId, out,
           );
         } else {

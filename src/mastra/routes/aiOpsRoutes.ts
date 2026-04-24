@@ -30,7 +30,11 @@ import {
   TOOL_HEALTH_DEFAULTS,
   TOOL_HEALTH_ENV_BASELINE,
   getEffectiveToolHealthConfig,
+  evaluateWindowAggregates,
+  type EffectiveToolHealthConfig,
+  type ToolHealthBreachCandidate,
 } from "../workflows/toolHealthAlertsCron";
+import { getToolWindowAggregates } from "../../utils/aiTelemetry";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 
@@ -118,6 +122,151 @@ function parseToolHealthRelatedId(
 function safeInt(value: string | undefined, defaultVal: number, min: number, max: number): number {
   const n = parseInt(value ?? '', 10);
   return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : defaultVal;
+}
+
+/**
+ * Shared body-validator for the threshold PUT and the dry-run preview
+ * endpoint. Both expect the same `{ overrides: { <field>: number|null } }`
+ * shape and must agree on per-field bounds AND on the cross-field band
+ * ordering rules — otherwise an admin could "preview" a config the server
+ * would then reject on save (silent contract drift).
+ *
+ * Returns either:
+ *   - `{ ok: false, status, error, details? }` ready to pass into c.json,
+ *   - `{ ok: true, cleanOverrides, mergedEffective }` for the caller to
+ *     persist or evaluate. `mergedEffective` is the
+ *     {@link EffectiveToolHealthConfig} that *would* be live if the patch
+ *     were applied on top of the currently-persisted overrides.
+ *
+ * Note on the cross-field check: we don't require the patch itself to be
+ * complete — a request that only updates `errorRateHighPct` is still
+ * validated against the existing `errorRateCriticalPct` override, mirroring
+ * what the cron actually evaluates at runtime.
+ */
+type ValidatedOverrides = { [K in ToolHealthConfigField]?: number | null };
+type OverrideValidationResult =
+  | {
+      ok: true;
+      cleanOverrides: ValidatedOverrides;
+      mergedEffective: EffectiveToolHealthConfig;
+    }
+  | {
+      ok: false;
+      status: 400;
+      error: string;
+      details?: string[];
+    };
+
+async function validateThresholdOverridesBody(
+  body: any,
+): Promise<OverrideValidationResult> {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 400, error: "Request body must be an object" };
+  }
+  const rawOverrides = body.overrides;
+  if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) {
+    return { ok: false, status: 400, error: "overrides must be an object" };
+  }
+
+  const cleanOverrides: ValidatedOverrides = {};
+  const errors: string[] = [];
+  for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
+    if (!Object.prototype.hasOwnProperty.call(rawOverrides, field)) continue;
+    const v = rawOverrides[field];
+    if (v === null) {
+      cleanOverrides[field] = null;
+      continue;
+    }
+    const n = Number(v);
+    const { min, max } = TOOL_HEALTH_CONFIG_BOUNDS[field];
+    if (!Number.isFinite(n) || !Number.isInteger(n)) {
+      errors.push(`${field} must be an integer or null`);
+      continue;
+    }
+    if (n < min || n > max) {
+      errors.push(`${field} must be between ${min} and ${max}`);
+      continue;
+    }
+    cleanOverrides[field] = n;
+  }
+  if (errors.length > 0) {
+    return { ok: false, status: 400, error: "Validation failed", details: errors };
+  }
+
+  const { getToolHealthConfigRow } = await import(
+    "../../utils/toolHealthConfigDatabase"
+  );
+  const currentRow = await getToolHealthConfigRow();
+  const merged: EffectiveToolHealthConfig = { ...TOOL_HEALTH_ENV_BASELINE };
+  for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
+    const ovr = currentRow.overrides[field];
+    if (ovr != null) merged[field] = ovr;
+  }
+  for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
+    if (Object.prototype.hasOwnProperty.call(cleanOverrides, field)) {
+      const v = cleanOverrides[field];
+      merged[field] = v == null
+        ? TOOL_HEALTH_ENV_BASELINE[field]
+        : v;
+    }
+  }
+  if (merged.errorRateHighPct >= merged.errorRateCriticalPct) {
+    return {
+      ok: false, status: 400,
+      error: "errorRateHighPct must be less than errorRateCriticalPct " +
+        `(would be ${merged.errorRateHighPct} ≥ ${merged.errorRateCriticalPct})`,
+    };
+  }
+  if (merged.errorRatePct > merged.errorRateHighPct) {
+    return {
+      ok: false, status: 400,
+      error: "errorRatePct (breach floor) must not exceed errorRateHighPct " +
+        `(would be ${merged.errorRatePct} > ${merged.errorRateHighPct})`,
+    };
+  }
+  if (merged.latencyHighMs >= merged.latencyCriticalMs) {
+    return {
+      ok: false, status: 400,
+      error: "latencyHighMs must be less than latencyCriticalMs " +
+        `(would be ${merged.latencyHighMs} ≥ ${merged.latencyCriticalMs})`,
+    };
+  }
+  if (merged.p95LatencyMs > merged.latencyHighMs) {
+    return {
+      ok: false, status: 400,
+      error: "p95LatencyMs (breach floor) must not exceed latencyHighMs " +
+        `(would be ${merged.p95LatencyMs} > ${merged.latencyHighMs})`,
+    };
+  }
+
+  return { ok: true, cleanOverrides, mergedEffective: merged };
+}
+
+/**
+ * Roll a list of breach candidates into the count summary the AI Ops
+ * "Preview impact" UI renders side-by-side with the current-config result.
+ * Kept tiny and dependency-free so the response shape stays stable for
+ * both the JS dashboard and any future CLI consumers.
+ */
+function summarizeBreachCandidates(
+  candidates: ToolHealthBreachCandidate[],
+): {
+  total: number;
+  byReason: { error_rate: number; p95_latency: number };
+  bySeverity: { critical: number; high: number; medium: number };
+} {
+  const summary = {
+    total: candidates.length,
+    byReason: { error_rate: 0, p95_latency: 0 },
+    bySeverity: { critical: 0, high: 0, medium: 0 },
+  };
+  for (const c of candidates) {
+    summary.byReason[c.reason]++;
+    if (c.severity === 'critical') summary.bySeverity.critical++;
+    else if (c.severity === 'high') summary.bySeverity.high++;
+    else summary.bySeverity.medium++;
+  }
+  return summary;
 }
 
 export const aiOpsRoutes = [
@@ -612,43 +761,9 @@ export const aiOpsRoutes = [
           } catch {
             return c.json({ error: "Request body must be valid JSON" }, 400);
           }
-          if (!body || typeof body !== 'object') {
-            return c.json({ error: "Request body must be an object" }, 400);
-          }
-          const rawOverrides = body.overrides;
-          if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) {
-            return c.json({ error: "overrides must be an object" }, 400);
-          }
-
-          // Validate each field that was provided. Missing fields are left
-          // alone (existing override is preserved).
-          const cleanOverrides: { [K in ToolHealthConfigField]?: number | null } = {};
-          const errors: string[] = [];
-          for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
-            if (!Object.prototype.hasOwnProperty.call(rawOverrides, field)) continue;
-            const v = rawOverrides[field];
-            if (v === null) {
-              cleanOverrides[field] = null;
-              continue;
-            }
-            const n = Number(v);
-            const { min, max } = TOOL_HEALTH_CONFIG_BOUNDS[field];
-            if (!Number.isFinite(n) || !Number.isInteger(n)) {
-              errors.push(`${field} must be an integer or null`);
-              continue;
-            }
-            if (n < min || n > max) {
-              errors.push(`${field} must be between ${min} and ${max}`);
-              continue;
-            }
-            cleanOverrides[field] = n;
-          }
-          if (errors.length > 0) {
-            return c.json({ error: "Validation failed", details: errors }, 400);
-          }
 
           let note: string | null = null;
-          if (body.note != null) {
+          if (body && typeof body === 'object' && body.note != null) {
             if (typeof body.note !== 'string') {
               return c.json({ error: "note must be a string" }, 400);
             }
@@ -704,56 +819,21 @@ export const aiOpsRoutes = [
             }
           }
 
-          // Compute the effective config that would result *after* applying
-          // this patch, so the band-ordering invariant catches a change to
-          // 'high' even when 'critical' isn't part of the same request.
-          const {
-            getToolHealthConfigRow: peekRow,
-            setToolHealthConfigOverrides,
-          } = await import("../../utils/toolHealthConfigDatabase");
-          const currentRow = await peekRow();
-          const merged = { ...TOOL_HEALTH_ENV_BASELINE };
-          for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
-            const ovr = currentRow.overrides[field];
-            if (ovr != null) merged[field] = ovr;
+          // Validate the body against per-field bounds AND the cross-field
+          // band ordering, computing the merged effective config that would
+          // result if the patch were applied. Identical to the dry-run
+          // preview endpoint so the two cannot drift apart (Task #189).
+          const validation = await validateThresholdOverridesBody(body);
+          if (!validation.ok) {
+            const payload: any = { error: validation.error };
+            if (validation.details) payload.details = validation.details;
+            return c.json(payload, validation.status);
           }
-          for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
-            if (Object.prototype.hasOwnProperty.call(cleanOverrides, field)) {
-              const v = cleanOverrides[field];
-              merged[field] = v == null
-                ? TOOL_HEALTH_ENV_BASELINE[field]
-                : v;
-            }
-          }
-          if (merged.errorRateHighPct >= merged.errorRateCriticalPct) {
-            return c.json({
-              error:
-                "errorRateHighPct must be less than errorRateCriticalPct " +
-                `(would be ${merged.errorRateHighPct} ≥ ${merged.errorRateCriticalPct})`,
-            }, 400);
-          }
-          if (merged.errorRatePct > merged.errorRateHighPct) {
-            return c.json({
-              error:
-                "errorRatePct (breach floor) must not exceed errorRateHighPct " +
-                `(would be ${merged.errorRatePct} > ${merged.errorRateHighPct})`,
-            }, 400);
-          }
-          if (merged.latencyHighMs >= merged.latencyCriticalMs) {
-            return c.json({
-              error:
-                "latencyHighMs must be less than latencyCriticalMs " +
-                `(would be ${merged.latencyHighMs} ≥ ${merged.latencyCriticalMs})`,
-            }, 400);
-          }
-          if (merged.p95LatencyMs > merged.latencyHighMs) {
-            return c.json({
-              error:
-                "p95LatencyMs (breach floor) must not exceed latencyHighMs " +
-                `(would be ${merged.p95LatencyMs} > ${merged.latencyHighMs})`,
-            }, 400);
-          }
+          const { cleanOverrides } = validation;
 
+          const { setToolHealthConfigOverrides } = await import(
+            "../../utils/toolHealthConfigDatabase"
+          );
           const changedBy = user.name || user.email || `user:${user.userId}`;
           const result = await setToolHealthConfigOverrides({
             overrides: cleanOverrides,
@@ -833,6 +913,199 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] tool-health-config audit error:", error);
           return c.json({ error: "Failed to load config audit" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Tool-health threshold tuning — dry-run "Preview impact" endpoint.
+   *
+   * Lets an admin sanity-check a proposed threshold change BEFORE saving:
+   * runs the same evaluator the cron uses against the current rolling
+   * window's per-tool aggregates, with both the currently-effective config
+   * AND the proposed config, and returns the would-be breach lists side by
+   * side (no `ai_alerts` rows written, no on-call paged).
+   *
+   * Body shape: identical to PUT — `{ overrides: { <field>: number|null, ... } }`.
+   * Validation: same as PUT (per-field bounds + band ordering on the merged
+   * effective config), so a preview that "passes" can always be saved
+   * without a second validation surprise.
+   *
+   * Auth: AI_OPS_ROLES (read-level). Anyone who can see the threshold form
+   * can preview — they still cannot save it. The endpoint is read-only and
+   * has no audit-log side-effect, so opening it up does not weaken the
+   * write gate.
+   *
+   * Response shape (kept in sync with the c.json(...) call below):
+   *   {
+   *     effective_current:      EffectiveToolHealthConfig,
+   *     effective_proposed:     EffectiveToolHealthConfig,
+   *     window_minutes_changed: boolean,        // true when current/proposed
+   *                                             // windowMinutes differ — UI
+   *                                             // surfaces this so operators
+   *                                             // know the diff compares two
+   *                                             // different aggregation horizons
+   *     current:  { window_minutes, tools_evaluated, breaches: [...], summary: {...} },
+   *     proposed: { window_minutes, tools_evaluated, breaches: [...], summary: {...} },
+   *     diff: {
+   *       new_breaches:      [...],  // in proposed, not in current
+   *       resolved_breaches: [...],  // in current,  not in proposed
+   *       severity_changes:  [...],  // same key, severity differs
+   *     }
+   *   }
+   *
+   * Aggregate sourcing
+   *   `getToolWindowAggregates(windowMinutes, minCalls)` returns metrics
+   *   pre-aggregated over EXACTLY that time horizon. A 60-min aggregate
+   *   cannot be derived from a 30-min one (and vice versa). So:
+   *     - If both configs share the same windowMinutes, we make ONE SQL
+   *       hit with the loosest minCalls and let `evaluateWindowAggregates`
+   *       enforce each cfg's own minCalls in-memory.
+   *     - If the windowMinutes differ, we make TWO SQL hits — one per
+   *       config — to guarantee each evaluation sees aggregates over its
+   *       own exact window. Correctness > a single round-trip.
+   */
+  {
+    path: "/api/ai-ops/tool-health-config/preview",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          let body: any;
+          try {
+            body = await c.req.json();
+          } catch {
+            return c.json({ error: "Request body must be valid JSON" }, 400);
+          }
+
+          const validation = await validateThresholdOverridesBody(body);
+          if (!validation.ok) {
+            const payload: any = { error: validation.error };
+            if (validation.details) payload.details = validation.details;
+            return c.json(payload, validation.status);
+          }
+
+          const effective_current = await getEffectiveToolHealthConfig();
+          const effective_proposed = validation.mergedEffective;
+
+          // Load aggregates per cfg's exact windowMinutes — see doc block
+          // above. When the two configs share a window we collapse to one
+          // SQL hit using the loosest minCalls, since `evaluateWindowAggregates`
+          // enforces each cfg's own minCalls in-memory.
+          const sameWindow =
+            effective_current.windowMinutes === effective_proposed.windowMinutes;
+          let currentAggregates: Awaited<ReturnType<typeof getToolWindowAggregates>>;
+          let proposedAggregates: Awaited<ReturnType<typeof getToolWindowAggregates>>;
+          try {
+            if (sameWindow) {
+              const minCallsUsed = Math.min(
+                effective_current.minCalls,
+                effective_proposed.minCalls,
+              );
+              const aggs = await getToolWindowAggregates(
+                effective_current.windowMinutes,
+                minCallsUsed,
+              );
+              currentAggregates = aggs;
+              proposedAggregates = aggs;
+            } else {
+              // Different windows ⇒ different SQL aggregations. We must
+              // load each separately or proposed/current breaches will be
+              // computed off the wrong horizon.
+              [currentAggregates, proposedAggregates] = await Promise.all([
+                getToolWindowAggregates(
+                  effective_current.windowMinutes,
+                  effective_current.minCalls,
+                ),
+                getToolWindowAggregates(
+                  effective_proposed.windowMinutes,
+                  effective_proposed.minCalls,
+                ),
+              ]);
+            }
+          } catch (err) {
+            console.error("[AI-Ops] tool-health-config preview aggregate error:", err);
+            return c.json(
+              { error: "Failed to load tool window aggregates for preview" },
+              500,
+            );
+          }
+
+          const currentBreaches = evaluateWindowAggregates(
+            currentAggregates, effective_current,
+          );
+          const proposedBreaches = evaluateWindowAggregates(
+            proposedAggregates, effective_proposed,
+          );
+
+          // Diff by `related_record_id` (= "<tool>:<reason>"). Same scheme
+          // the cron uses for ai_alerts.related_record_id, so two breaches
+          // are "the same alert" iff their composite key matches.
+          const currentByKey = new Map(
+            currentBreaches.map((b) => [b.related_record_id, b]),
+          );
+          const proposedByKey = new Map(
+            proposedBreaches.map((b) => [b.related_record_id, b]),
+          );
+          const newBreaches: ToolHealthBreachCandidate[] = [];
+          const severityChanges: Array<{
+            tool_name: string;
+            reason: ToolHealthBreachCandidate['reason'];
+            from_severity: ToolHealthBreachCandidate['severity'];
+            to_severity: ToolHealthBreachCandidate['severity'];
+          }> = [];
+          for (const [key, p] of proposedByKey) {
+            const cur = currentByKey.get(key);
+            if (!cur) {
+              newBreaches.push(p);
+            } else if (cur.severity !== p.severity) {
+              severityChanges.push({
+                tool_name: p.tool_name,
+                reason: p.reason,
+                from_severity: cur.severity,
+                to_severity: p.severity,
+              });
+            }
+          }
+          const resolvedBreaches: ToolHealthBreachCandidate[] = [];
+          for (const [key, c2] of currentByKey) {
+            if (!proposedByKey.has(key)) resolvedBreaches.push(c2);
+          }
+
+          // `window_minutes_changed` flags the case where current and
+          // proposed windows differ. The UI surfaces this so operators
+          // know the diff compares two different aggregation horizons.
+          return c.json({
+            data: {
+              effective_current,
+              effective_proposed,
+              window_minutes_changed: !sameWindow,
+              current: {
+                window_minutes: effective_current.windowMinutes,
+                tools_evaluated: currentAggregates.length,
+                breaches: currentBreaches,
+                summary: summarizeBreachCandidates(currentBreaches),
+              },
+              proposed: {
+                window_minutes: effective_proposed.windowMinutes,
+                tools_evaluated: proposedAggregates.length,
+                breaches: proposedBreaches,
+                summary: summarizeBreachCandidates(proposedBreaches),
+              },
+              diff: {
+                new_breaches: newBreaches,
+                resolved_breaches: resolvedBreaches,
+                severity_changes: severityChanges,
+              },
+            },
+          });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-config preview error:", error);
+          return c.json({ error: "Failed to preview tool-health config" }, 500);
         }
       };
     },
