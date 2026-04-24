@@ -580,6 +580,93 @@
             }, delayMs || 0);
         }
 
+        // Surface a "Resume / Cancel" prompt after a recoverable interruption.
+        // Replaces the cancel button area with two buttons; resolves the
+        // returned promise with `true` when the user clicks Resume and
+        // `false` when they click Cancel (or dismiss the card).
+        var resumeRow = null;
+        function setResumePrompt(received, total) {
+            return new Promise(function (resolve) {
+                if (resumeRow && resumeRow.parentNode) {
+                    resumeRow.parentNode.removeChild(resumeRow);
+                    resumeRow = null;
+                }
+                // Replace the spinner header state with an "interrupted" look.
+                spinner.innerHTML = '<svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" ' +
+                    'stroke="currentColor" aria-hidden="true">' +
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
+                    'd="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 ' +
+                    '3.86a2 2 0 00-3.42 0z"/></svg>';
+                bar.className = 'h-full bg-amber-500 transition-all duration-150';
+                var sizeText = formatBytes(received);
+                statusEl.textContent = total
+                    ? 'Interrupted at ' + sizeText + ' / ' + formatBytes(total) +
+                      ' — click Resume to continue from where it stopped.'
+                    : 'Interrupted at ' + sizeText + ' — click Resume to continue.';
+
+                // Hide the existing cancel button while we own the prompt.
+                cancelBtn.style.display = 'none';
+
+                resumeRow = document.createElement('div');
+                resumeRow.className = 'mt-2 flex items-center gap-2';
+                resumeRow.setAttribute('data-testid', 'row-download-resume-prompt');
+
+                var resumeBtn = document.createElement('button');
+                resumeBtn.type = 'button';
+                resumeBtn.className = 'text-xs font-medium px-2 py-1 rounded ' +
+                    'bg-blue-600 text-white hover:bg-blue-700 ' +
+                    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1';
+                resumeBtn.textContent = 'Resume';
+                resumeBtn.setAttribute('aria-label', 'Resume download from ' + sizeText);
+                resumeBtn.setAttribute('data-testid', 'button-resume-download');
+
+                var giveUpBtn = document.createElement('button');
+                giveUpBtn.type = 'button';
+                giveUpBtn.className = 'text-xs font-medium text-red-600 hover:text-red-800 hover:underline ' +
+                    'focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded px-2 py-1';
+                giveUpBtn.textContent = 'Cancel';
+                giveUpBtn.setAttribute('aria-label', 'Discard interrupted download');
+                giveUpBtn.setAttribute('data-testid', 'button-discard-download');
+
+                var settled = false;
+                function pick(value) {
+                    if (settled) return;
+                    settled = true;
+                    resumeBtn.disabled = true;
+                    giveUpBtn.disabled = true;
+                    resolve(value);
+                }
+                resumeBtn.addEventListener('click', function () {
+                    resumeBtn.textContent = 'Resuming…';
+                    pick(true);
+                });
+                giveUpBtn.addEventListener('click', function () {
+                    pick(false);
+                });
+
+                resumeRow.appendChild(resumeBtn);
+                resumeRow.appendChild(giveUpBtn);
+                card.appendChild(resumeRow);
+            });
+        }
+
+        // Restore the card to its normal "in-progress" appearance after a
+        // resume prompt — used when the user clicks Resume so the new pipe
+        // attempt looks identical to the first one.
+        function clearResumePrompt() {
+            if (resumeRow && resumeRow.parentNode) {
+                resumeRow.parentNode.removeChild(resumeRow);
+                resumeRow = null;
+            }
+            spinner.innerHTML = '<svg class="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">' +
+                '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+            bar.className = 'h-full bg-blue-600 transition-all duration-150';
+            cancelBtn.style.display = '';
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = 'Cancel';
+        }
+
         return {
             el: card,
             setLabel: setLabel,
@@ -588,6 +675,8 @@
             disableCancel: disableCancel,
             hideCancel: hideCancel,
             setBarColor: setBarColor,
+            setResumePrompt: setResumePrompt,
+            clearResumePrompt: clearResumePrompt,
             remove: remove
         };
     }
@@ -1228,9 +1317,56 @@
 
     // --- Streaming paths --------------------------------------------------
 
-    // True streaming path: pipe response.body directly to a file handle so the
-    // browser never holds the full document in memory.
-    async function streamResponseToDisk(response, filename, contentType, button, card, onProgress, totalLength) {
+    // Drain a response body straight into an already-open File System Access
+    // writable, counting bytes as each write completes (so `received` reflects
+    // what's actually on disk and not what's still queued upstream). The
+    // writable is intentionally NOT closed/aborted here so callers can resume
+    // into the same handle on the next attempt.
+    //
+    // Uses the standard `WritableStreamDefaultWriter` interface (via
+    // getWriter()) rather than the FSA-only `writable.write()` convenience
+    // method, so the helper works against any WritableStream — including the
+    // test mock and any future non-FSA backing.
+    async function pipeBodyToWritable(response, writable, button, card, onProgress, totalLength, receivedRef) {
+        var reader = response.body.getReader();
+        var writer = writable.getWriter();
+        try {
+            while (true) {
+                var step = await reader.read();
+                if (step.done) break;
+                if (!step.value || !step.value.byteLength) continue;
+                // `await` ensures the chunk has been handed off to the
+                // underlying sink before we count it — overcounting on the
+                // way out would leave gaps after a Range-based resume.
+                await writer.ready;
+                await writer.write(step.value);
+                receivedRef.value += step.value.byteLength;
+                if (button) {
+                    setBusy(button, progressLabel(receivedRef.value, totalLength));
+                }
+                if (card) {
+                    try { card.update(receivedRef.value, totalLength); } catch (_) { /* ignore */ }
+                }
+                if (onProgress) {
+                    try { onProgress(receivedRef.value, totalLength); } catch (_) { /* ignore */ }
+                }
+            }
+        } finally {
+            try { reader.releaseLock(); } catch (_) { /* ignore */ }
+            // releaseLock() is required so the caller can later call
+            // close()/abort()/seek()/truncate() on the writable for resume.
+            try { writer.releaseLock(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    // True streaming path: pipe response.body directly to a file handle so
+    // the browser never holds the full document in memory.
+    //
+    // `streamCtx.cancelled` (when present) signals that a non-cancel error
+    // should NOT be treated as resumable — used so the user-cancel path can
+    // tear the writable down cleanly without prompting for a resume that
+    // they never asked for.
+    async function streamResponseToDisk(response, filename, contentType, button, card, onProgress, totalLength, url, fetchInit, streamCtx) {
         var handle;
         try {
             handle = await window.showSaveFilePicker({
@@ -1252,32 +1388,150 @@
         }
 
         var writable = await handle.createWritable();
-        var received = 0;
+        var receivedRef = { value: 0 };
+        // Capture the response validator from the *first* response so resume
+        // requests can use If-Range to ensure the export hasn't changed.
+        var etag = response.headers.get && response.headers.get('etag');
+        var acceptRanges = response.headers.get && response.headers.get('accept-ranges');
+        // Resume only makes sense when the server advertises range support
+        // (Accept-Ranges: bytes) AND we have a stable validator AND we know
+        // the total length (so we can detect truly partial responses).
+        var canResume = !!(etag && acceptRanges && /bytes/i.test(acceptRanges) &&
+            totalLength && totalLength > 0);
 
-        var progressStream = new TransformStream({
-            transform: function (chunk, controller) {
-                received += chunk.byteLength || 0;
-                if (button) {
-                    setBusy(button, progressLabel(received, totalLength));
+        // Resume state machine. The loop alternates between two phases:
+        //   1. Pipe `currentResponse.body` into the writable, advancing
+        //      `receivedRef.value` on each successful chunk.
+        //   2. If pipe errors with a recoverable network failure, prompt the
+        //      user; on Resume, refetch with `Range`+`If-Range` and feed the
+        //      next response into phase 1 again.
+        // `pendingError` carries the latest pipe/fetch failure between
+        // iterations so a re-fetch failure cleanly re-opens the prompt
+        // instead of throwing through the loop.
+        var currentResponse = response;
+        var pendingError = null;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            if (pendingError === null) {
+                try {
+                    await pipeBodyToWritable(
+                        currentResponse, writable, button, card, onProgress, totalLength, receivedRef
+                    );
+                    break; // success — fall through to close()
+                } catch (pipeErr) {
+                    pendingError = pipeErr;
                 }
-                if (card) {
-                    try { card.update(received, totalLength); } catch (_) { /* ignore */ }
-                }
-                if (onProgress) {
-                    try { onProgress(received, totalLength); } catch (_) { /* ignore */ }
-                }
-                controller.enqueue(chunk);
             }
-        });
 
-        try {
-            await response.body.pipeThrough(progressStream).pipeTo(writable);
-        } catch (err) {
-            try { await writable.abort(err); } catch (_) { /* ignore */ }
-            throw err;
+            var userCancel = !!(streamCtx && streamCtx.cancelled);
+            var abortLike = pendingError &&
+                (pendingError.name === 'AbortError' || pendingError.cancelled === true);
+            if (userCancel || abortLike) {
+                try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
+                throw pendingError;
+            }
+            if (!canResume || !card || typeof card.setResumePrompt !== 'function' ||
+                receivedRef.value <= 0 || receivedRef.value >= totalLength) {
+                try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
+                throw pendingError;
+            }
+
+            // Ask the user whether to resume. The card prompt resolves
+            // true (Resume) or false (Cancel/give up). Either way we
+            // do not propagate a "Failed" state to streamingDownload.
+            var wantResume = false;
+            try {
+                wantResume = await card.setResumePrompt(receivedRef.value, totalLength);
+            } catch (_) {
+                wantResume = false;
+            }
+            if (streamCtx && streamCtx.cancelled) wantResume = false;
+            if (!wantResume) {
+                try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
+                var giveUp = new Error('Download cancelled');
+                giveUp.name = 'AbortError';
+                giveUp.cancelled = true;
+                throw giveUp;
+            }
+
+            // Refresh the card UI back to the in-progress look.
+            if (card.clearResumePrompt) {
+                try { card.clearResumePrompt(); } catch (_) { /* ignore */ }
+            }
+
+            // Issue a Range request from the byte we last successfully
+            // wrote. Keep the original fetchInit (signal, credentials, …)
+            // but layer Range/If-Range on top of any existing headers the
+            // caller provided.
+            var resumeFetchInit = Object.assign({}, fetchInit || {});
+            var origHeaders = (fetchInit && fetchInit.headers) || {};
+            var mergedHeaders = {};
+            if (origHeaders && typeof origHeaders.forEach === 'function') {
+                origHeaders.forEach(function (v, k) { mergedHeaders[k] = v; });
+            } else {
+                for (var k in origHeaders) {
+                    if (Object.prototype.hasOwnProperty.call(origHeaders, k)) {
+                        mergedHeaders[k] = origHeaders[k];
+                    }
+                }
+            }
+            mergedHeaders['Range'] = 'bytes=' + receivedRef.value + '-';
+            if (etag) mergedHeaders['If-Range'] = etag;
+            resumeFetchInit.headers = mergedHeaders;
+
+            var resumed;
+            try {
+                resumed = await fetch(url, resumeFetchInit);
+            } catch (fetchErr) {
+                // Network still down (or DNS failed, or the user navigated,
+                // …). Stash the new error and re-loop so the prompt re-opens
+                // on the next iteration without entering pipeBodyToWritable.
+                pendingError = fetchErr;
+                continue;
+            }
+
+            if (resumed.status === 206) {
+                // Validate the server resumed at the byte we expect — a
+                // mismatch would corrupt the file, so we'd rather bail out
+                // than write garbage on top of good bytes.
+                var cr = resumed.headers.get('content-range') || '';
+                var crMatch = /bytes\s+(\d+)-(\d+)\/(\d+|\*)/i.exec(cr);
+                var startsAt = crMatch ? parseInt(crMatch[1], 10) : NaN;
+                if (!Number.isFinite(startsAt) || startsAt !== receivedRef.value) {
+                    try { await writable.abort(); } catch (_) { /* ignore */ }
+                    throw new Error('Resume failed: server returned an unexpected byte range');
+                }
+                currentResponse = resumed;
+                pendingError = null;
+                continue;
+            }
+            if (resumed.status === 200) {
+                // Server didn't honour Range (or our If-Range validator
+                // stopped matching). Restart from byte 0 by truncating the
+                // file and re-piping.
+                try { await writable.truncate(0); } catch (_) { /* ignore */ }
+                try { await writable.seek(0); } catch (_) { /* ignore */ }
+                receivedRef.value = 0;
+                currentResponse = resumed;
+                pendingError = null;
+                continue;
+            }
+            try { await writable.abort(); } catch (_) { /* ignore */ }
+            throw new Error('Resume failed (HTTP ' + resumed.status + ')');
         }
 
-        return { bytes: received, streamedToDisk: true };
+        try {
+            await writable.close();
+        } catch (closeErr) {
+            // Surfacing close failures is important — the bytes may have
+            // been written but never flushed to disk. We log instead of
+            // throwing because the bytes-on-disk count is still meaningful
+            // and rethrowing would mask the user's successful resume.
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[streamingDownload] writable.close() failed after resumable download:', closeErr);
+            }
+        }
+        return { bytes: receivedRef.value, streamedToDisk: true };
     }
 
     // Legacy in-memory path: drain the body into an array of chunks, then
@@ -1625,7 +1879,9 @@
 
         var initialFilename = options.filename || tr('downloads.preparing_download', 'Preparing download…');
         var card = null;
-        var cancelled = false;
+        // Wrapped in an object so streamResponseToDisk's resume loop can see
+        // the live value (cancellation may flip while it's mid-pipe).
+        var cancelState = { cancelled: false };
         var originalContent = null;
         // Hoisted so the catch block (e.g. environmental-abort path) can
         // reference the parsed filename in the user-facing toast even
@@ -1855,8 +2111,12 @@
             var allowServiceWorker = options.useServiceWorker !== false;
 
             if (supportsFileSystemAccess() && wantStream) {
+                // Pass url/fetchInit/cancelState so the FSA path can issue a
+                // Range-based resume request after a network interruption,
+                // stitching the resumed bytes into the same writable handle.
                 result = await streamResponseToDisk(
-                    response, filename, contentType, button, card, onProgress, totalLength
+                    response, filename, contentType, button, card, onProgress, totalLength,
+                    url, fetchInit, cancelState
                 );
                 // result === null means the picker call failed in a recoverable
                 // way (e.g. lost user activation) and the body is still intact,

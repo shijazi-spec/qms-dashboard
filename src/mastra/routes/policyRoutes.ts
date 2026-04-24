@@ -912,12 +912,19 @@ export const policyRoutes = [
           const file = getUploadedFile(policy.file_path);
           if (!file) return c.json({ error: 'File not found on disk' }, 404);
 
-          return new Response(file.buffer, {
-            headers: {
-              'Content-Type': policy.file_mime_type || 'application/octet-stream',
-              'Content-Disposition': `attachment; filename="${policy.file_name || file.fileName}"`,
-            },
-          });
+          // Range-aware response so the streaming-download helper can resume
+          // an interrupted download without re-fetching the whole file.
+          const { bufferResponseWithRange } = await import('../../utils/excelExport');
+          const reqHeaders = {
+            range: c.req.header('Range'),
+            'if-range': c.req.header('If-Range'),
+          };
+          return bufferResponseWithRange(
+            file.buffer,
+            policy.file_mime_type || 'application/octet-stream',
+            policy.file_name || file.fileName,
+            reqHeaders,
+          );
         } catch (error) {
           console.error('❌ [PolicyAPI] Error downloading file:', error);
           return c.json({ error: 'Failed to download file' }, 500);

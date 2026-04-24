@@ -16,6 +16,7 @@
  */
 import ExcelJS from "exceljs";
 import { PassThrough } from "stream";
+import { createHash } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Typed shim for ExcelJS streaming WorkbookWriter
@@ -372,6 +373,180 @@ export function xlsxResponseHeaders(filename: string): Record<string, string> {
     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "Content-Disposition": `attachment; filename="${filename}"`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Range-aware buffered response
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a weak ETag for a buffered export. We use a cheap fingerprint
+ * (size + first/last 8 KB hashed via SHA-1) instead of hashing the whole
+ * buffer so we don't pay an O(n) cost on every request just to validate
+ * resumes. Weak validators are perfectly adequate here — `If-Range` only
+ * needs to detect that the underlying export changed between the original
+ * request and the resume.
+ */
+function weakBufferEtag(buffer: Buffer): string {
+  const total = buffer.byteLength;
+  const SAMPLE = 8 * 1024;
+  const head = buffer.subarray(0, Math.min(SAMPLE, total));
+  const tail = total > SAMPLE
+    ? buffer.subarray(Math.max(0, total - SAMPLE), total)
+    : Buffer.alloc(0);
+  const h = createHash("sha1");
+  h.update(head);
+  if (tail.byteLength > 0) h.update(tail);
+  return `W/"${total.toString(16)}-${h.digest("hex").substring(0, 16)}"`;
+}
+
+/** Minimal subset of the request-headers shape we accept. */
+export type RangeRequestHeaders =
+  | Headers
+  | { get?: (name: string) => string | null | undefined; [k: string]: unknown };
+
+function readReqHeader(headers: RangeRequestHeaders, name: string): string | null {
+  if (headers && typeof (headers as Headers).get === "function") {
+    return (headers as Headers).get(name) || null;
+  }
+  const lower = name.toLowerCase();
+  const obj = headers as Record<string, unknown>;
+  for (const k of Object.keys(obj)) {
+    if (k.toLowerCase() === lower) {
+      const v = obj[k];
+      if (typeof v === "string") return v;
+      if (Array.isArray(v) && typeof v[0] === "string") return v[0] as string;
+    }
+  }
+  return null;
+}
+
+interface ParsedRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Parse a single-range `Range: bytes=` header against a known total length.
+ * Returns null for malformed ranges (caller should ignore and serve full body)
+ * and an object with start === -1 to signal "unsatisfiable" (caller should
+ * return 416). We only support a single range — that's all the streaming-
+ * download helper ever issues.
+ */
+function parseSingleRange(rangeHeader: string, total: number): ParsedRange | null | "unsatisfiable" {
+  const m = /^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$/i.exec(rangeHeader);
+  if (!m) return null;
+  const startStr = m[1];
+  const endStr = m[2];
+  if (startStr === "" && endStr === "") return null;
+  let start: number;
+  let end: number;
+  if (startStr === "") {
+    // Suffix range: last N bytes.
+    const suffixLen = parseInt(endStr, 10);
+    if (!Number.isFinite(suffixLen) || suffixLen <= 0) return "unsatisfiable";
+    if (total === 0) return "unsatisfiable";
+    start = Math.max(0, total - suffixLen);
+    end = total - 1;
+  } else {
+    start = parseInt(startStr, 10);
+    if (!Number.isFinite(start) || start < 0) return null;
+    if (start >= total) return "unsatisfiable";
+    if (endStr === "") {
+      end = total - 1;
+    } else {
+      end = parseInt(endStr, 10);
+      if (!Number.isFinite(end) || end < start) return null;
+      end = Math.min(end, total - 1);
+    }
+  }
+  return { start, end };
+}
+
+export interface BufferedRangeOptions {
+  /** Override the auto-computed weak ETag. Useful when a stable identifier
+   *  is already available (e.g. a content hash or row count). */
+  etag?: string;
+  /** Extra response headers to merge (e.g. Cache-Control). */
+  extraHeaders?: Record<string, string>;
+}
+
+/**
+ * Build an HTTP `Response` that serves a Buffer with full HTTP Range support
+ * (RFC 7233). Always advertises `Accept-Ranges: bytes` and an ETag so the
+ * client-side streaming-download helper can issue `Range: bytes=N-` +
+ * `If-Range: <etag>` to resume an interrupted download.
+ *
+ * Behaviour:
+ *   - No Range header           → 200 with full body and `Content-Length`.
+ *   - Valid `bytes=N-`/`N-M`/`-N` → 206 with `Content-Range` + sliced body.
+ *   - Unsatisfiable range        → 416 with `Content-Range: bytes <empty>/<total>`.
+ *   - `If-Range` validator mismatch → ignore Range and return 200 (full body).
+ *   - Malformed Range header     → ignore Range and return 200 (per RFC 7233 §3.1).
+ */
+export function bufferResponseWithRange(
+  buffer: Buffer,
+  contentType: string,
+  filename: string,
+  reqHeaders: RangeRequestHeaders,
+  options: BufferedRangeOptions = {}
+): Response {
+  const total = buffer.byteLength;
+  const etag = options.etag || weakBufferEtag(buffer);
+
+  const baseHeaders: Record<string, string> = {
+    "Content-Type": contentType,
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Accept-Ranges": "bytes",
+    "ETag": etag,
+    ...(options.extraHeaders || {}),
+  };
+
+  const rangeHeader = readReqHeader(reqHeaders, "range");
+  const ifRangeHeader = readReqHeader(reqHeaders, "if-range");
+
+  if (!rangeHeader) {
+    return new Response(buffer, {
+      status: 200,
+      headers: { ...baseHeaders, "Content-Length": String(total) },
+    });
+  }
+
+  // If-Range: ignore Range when the validator no longer matches the resource.
+  // Compare verbatim — both weak and strong validator forms must match exactly
+  // for resume to be safe.
+  if (ifRangeHeader && ifRangeHeader.trim() !== etag.trim()) {
+    return new Response(buffer, {
+      status: 200,
+      headers: { ...baseHeaders, "Content-Length": String(total) },
+    });
+  }
+
+  const parsed = parseSingleRange(rangeHeader, total);
+  if (parsed === null) {
+    // Malformed Range — RFC 7233 §3.1 says we MUST treat as if Range was absent.
+    return new Response(buffer, {
+      status: 200,
+      headers: { ...baseHeaders, "Content-Length": String(total) },
+    });
+  }
+  if (parsed === "unsatisfiable") {
+    return new Response(null, {
+      status: 416,
+      headers: { ...baseHeaders, "Content-Range": `bytes */${total}` },
+    });
+  }
+
+  const { start, end } = parsed;
+  const slice = buffer.subarray(start, end + 1);
+  return new Response(slice, {
+    status: 206,
+    headers: {
+      ...baseHeaders,
+      "Content-Range": `bytes ${start}-${end}/${total}`,
+      "Content-Length": String(slice.byteLength),
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

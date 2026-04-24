@@ -1013,6 +1013,177 @@ describe('streamingDownload (browser helper)', () => {
     expect(realCallCount).toBe(2);
   });
 
+  // ---- Resume after interrupted streaming download ------------------------
+  // This branch's feature: surface a Resume affordance after a recoverable
+  // network error and stitch the resumed bytes into the same writable handle.
+
+  it('surfaces a Resume button on a mid-stream network failure and stitches the resumed bytes into the same writable handle', async () => {
+    env = setupBrowserEnv();
+
+    // First fetch: serve the first half then error before completion. The
+    // mock advertises Accept-Ranges + ETag + Content-Length so the helper
+    // considers the response resumable.
+    const HEAD = new Uint8Array([10, 20, 30, 40]);
+    const TAIL = new Uint8Array([50, 60, 70, 80, 90]);
+    const TOTAL = HEAD.byteLength + TAIL.byteLength;
+    const ETAG = 'W/"deadbeef"';
+
+    let firstBodyController: any;
+    const firstBody = new (globalThis as any).ReadableStream({
+      start(c: any) { firstBodyController = c; },
+    });
+
+    const fetchSpy = vi.fn(async (_url: string, init: any = {}) => {
+      const headers = (init && init.headers) || {};
+      const range =
+        (typeof headers.get === 'function' && headers.get('Range')) ||
+        headers['Range'] || headers['range'];
+      const ifRange =
+        (typeof headers.get === 'function' && headers.get('If-Range')) ||
+        headers['If-Range'] || headers['if-range'];
+
+      if (!range) {
+        // Initial request — return the streaming body whose tail we'll error.
+        return new (globalThis as any).Response(firstBody, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-disposition': 'attachment; filename="demo.bin"',
+            'content-length': String(TOTAL),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        });
+      }
+
+      // Resume request — must include If-Range matching the original etag
+      // and a Range header rooted at exactly the byte we last wrote.
+      expect(ifRange).toBe(ETAG);
+      expect(range).toBe('bytes=' + HEAD.byteLength + '-');
+      return new (globalThis as any).Response(
+        new (globalThis as any).Response(TAIL).body,
+        {
+          status: 206,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-range': 'bytes ' + HEAD.byteLength + '-' + (TOTAL - 1) + '/' + TOTAL,
+            'content-length': String(TAIL.byteLength),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        }
+      );
+    });
+    env.win.fetch = fetchSpy;
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/demo.bin', {
+      // Force the FSA streaming path even though the body is small.
+      streamToDisk: true,
+      skipEstimate: true,
+    });
+
+    // Drive the first attempt up to the boundary then simulate a mid-stream
+    // network drop by erroring the body controller.
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    const netErr: any = new Error('network closed');
+    netErr.name = 'TypeError';
+    firstBodyController.error(netErr);
+
+    // The Resume affordance should appear in the progress card. We poll the
+    // DOM until the button is present (the prompt is added asynchronously
+    // when the pipe loop catches the body error).
+    let resumeBtn: any = null;
+    for (let i = 0; i < 50; i++) {
+      resumeBtn = env.win.document.querySelector('[data-testid="button-resume-download"]');
+      if (resumeBtn) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(resumeBtn).not.toBeNull();
+    expect(resumeBtn.textContent).toMatch(/Resume/i);
+
+    // User clicks Resume. The helper must issue a second fetch with the
+    // Range/If-Range headers and finish writing the tail into the *same*
+    // writable handle — i.e. createWritable must NOT have been called twice.
+    resumeBtn.click();
+
+    const result = await downloadPromise;
+
+    expect(result.streamedToDisk).toBe(true);
+    expect(result.bytes).toBe(TOTAL);
+    expect(env.fileHandle.createWritable).toHaveBeenCalledTimes(1);
+
+    // Both calls (initial + resume) should have been issued against the
+    // same URL and the resume call must have included the Range header.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const resumeCallInit = fetchSpy.mock.calls[1][1] || {};
+    const resumeRange =
+      (resumeCallInit.headers && (
+        (typeof resumeCallInit.headers.get === 'function' && resumeCallInit.headers.get('Range')) ||
+        resumeCallInit.headers['Range'] ||
+        resumeCallInit.headers['range']
+      )) || null;
+    expect(resumeRange).toBe('bytes=' + HEAD.byteLength + '-');
+
+    // Stitched file must contain HEAD followed by TAIL — no overlap, no gap.
+    const merged = new Uint8Array(result.bytes);
+    let off = 0;
+    for (const w of env.writes) {
+      merged.set(w, off);
+      off += w.byteLength;
+    }
+    expect(Array.from(merged)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90]);
+  });
+
+  it('aborts the writable when the user dismisses the Resume prompt', async () => {
+    env = setupBrowserEnv();
+
+    const HEAD = new Uint8Array([1, 2, 3, 4]);
+    const TOTAL = 8;
+    const ETAG = 'W/"giveup"';
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    env.win.fetch = vi.fn(async (_url: string, _init: any = {}) =>
+      new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-length': String(TOTAL),
+          'accept-ranges': 'bytes',
+          'etag': ETAG,
+        },
+      })
+    );
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/giveup.bin', {
+      streamToDisk: true,
+      skipEstimate: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.error(Object.assign(new Error('drop'), { name: 'TypeError' }));
+
+    let discardBtn: any = null;
+    for (let i = 0; i < 50; i++) {
+      discardBtn = env.win.document.querySelector('[data-testid="button-discard-download"]');
+      if (discardBtn) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(discardBtn).not.toBeNull();
+
+    discardBtn.click();
+
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(env.fileHandle.aborted).toBe(true);
+  });
+
   describe('confirm-before-cancel for near-complete downloads', () => {
     function makeAbortableBody() {
       let bodyController: any;

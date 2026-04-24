@@ -638,11 +638,19 @@ export const auditRoutes = [
             });
           });
           
-          return c.body(pdfBuffer, 200, {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="${audit.audit_code}_report.pdf"`,
-            'Content-Length': pdfBuffer.length.toString()
-          });
+          // Range-aware response so the streaming-download helper can resume
+          // an interrupted PDF export instead of restarting from byte 0.
+          const { bufferResponseWithRange } = await import('../../utils/excelExport');
+          const reqHeaders = {
+            range: c.req.header('Range'),
+            'if-range': c.req.header('If-Range'),
+          };
+          return bufferResponseWithRange(
+            pdfBuffer,
+            'application/pdf',
+            `${audit.audit_code}_report.pdf`,
+            reqHeaders,
+          );
 
         } catch (error) {
           console.error('❌ [AuditAPI] Error exporting audit PDF:', error);

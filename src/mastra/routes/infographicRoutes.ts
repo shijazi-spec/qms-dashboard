@@ -278,14 +278,34 @@ export const infographicRoutes = [
 
           if (wantPng) {
             const png = await svgToPng(svg);
+            if (wantDownload) {
+              // Use the Range-aware buffered response so an interrupted
+              // export can be resumed from the byte the client already has.
+              const { bufferResponseWithRange } = await import('../../utils/excelExport');
+              return bufferResponseWithRange(
+                Buffer.from(png),
+                'image/png',
+                filename,
+                c.req.raw.headers,
+                { extraHeaders: { 'Cache-Control': 'no-store' } },
+              );
+            }
             c.header('Content-Type', 'image/png');
-            if (wantDownload) c.header('Content-Disposition', `attachment; filename="${filename}"`);
             c.header('Cache-Control', 'no-store');
             return c.body(png);
           }
 
+          if (wantDownload) {
+            const { bufferResponseWithRange } = await import('../../utils/excelExport');
+            return bufferResponseWithRange(
+              Buffer.from(svg, 'utf-8'),
+              'image/svg+xml; charset=utf-8',
+              filename,
+              c.req.raw.headers,
+              { extraHeaders: { 'Cache-Control': 'no-store' } },
+            );
+          }
           c.header('Content-Type', 'image/svg+xml; charset=utf-8');
-          if (wantDownload) c.header('Content-Disposition', `attachment; filename="${filename}"`);
           c.header('Cache-Control', 'no-store');
           return c.body(svg);
         } catch (error: any) {

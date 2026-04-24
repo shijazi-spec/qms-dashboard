@@ -308,13 +308,20 @@ export const manualAuditRoutes = [
         const intake = await getIntakeById(id);
         if (!intake || !intake.file_path) return c.json({ error: 'File not found' }, 404);
         const buffer = await fs.readFile(intake.file_path);
-        return new Response(buffer, {
-          headers: {
-            'Content-Type': intake.file_mime || 'application/octet-stream',
-            'Content-Disposition': `inline; filename="${intake.file_name}"`,
-            'Content-Length': String(buffer.length),
-          },
-        });
+        // Range-aware response so the streaming-download helper can resume
+        // an interrupted intake-file download.
+        const { bufferResponseWithRange } = await import('../../utils/excelExport');
+        const reqHeaders = {
+          range: c.req.header('Range'),
+          'if-range': c.req.header('If-Range'),
+        };
+        return bufferResponseWithRange(
+          buffer,
+          intake.file_mime || 'application/octet-stream',
+          intake.file_name,
+          reqHeaders,
+          { extraHeaders: { 'Content-Disposition': `inline; filename="${intake.file_name}"` } },
+        );
       } catch (err: any) {
         console.error('[ManualIntake] file download error', err);
         return c.json({ error: 'Failed to load file', details: err.message }, 500);
