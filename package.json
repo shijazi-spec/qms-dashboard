@@ -9,7 +9,8 @@
     "check": "tsc",
     "check:format": "prettier --check '**/*.ts'",
     "format": "prettier --write '**/*.ts'",
-    "qc": "npx tsx tests/qc/run-platform-qc.ts"
+    "qc": "npx tsx tests/qc/run-platform-qc.ts",
+    "test": "npx tsx tests/runIntegrationTests.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.24",
