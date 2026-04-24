@@ -3,6 +3,15 @@
 
     var DEFAULT_STREAM_TO_DISK_THRESHOLD = 10 * 1024 * 1024; // 10 MB
 
+    // When a streaming download has gotten "far enough", a single accidental
+    // click on the Cancel pill could throw away hundreds of MB of work. Past
+    // either threshold below we ask the user to confirm before aborting.
+    // Both are overridable per-call via options.confirmCancelThresholdPercent
+    // / options.confirmCancelThresholdMs (or disabled with confirmCancel: false).
+    var DEFAULT_CONFIRM_CANCEL_PERCENT = 50;
+    var DEFAULT_CONFIRM_CANCEL_MS = 30 * 1000;
+    var CONFIRM_CANCEL_MESSAGE = "Cancel this download? You'll lose progress.";
+
     function parseContentDispositionFilename(header) {
         if (!header) return null;
         var starMatch = /filename\*\s*=\s*([^;]+)/i.exec(header);
@@ -439,9 +448,16 @@
         cancelBtn.setAttribute('aria-label', 'Cancel download of ' + (filename || 'file'));
         cancelBtn.setAttribute('data-testid', 'button-cancel-download');
         cancelBtn.addEventListener('click', function () {
+            // The owner's onCancel may pop a confirm() and return false if
+            // the user backs out. In that case keep the Cancel button live
+            // so they can try again instead of getting stuck on "Cancelling…".
+            var triggered;
+            try {
+                if (typeof onCancel === 'function') triggered = onCancel();
+            } catch (_) { triggered = undefined; }
+            if (triggered === false) return;
             cancelBtn.disabled = true;
             cancelBtn.textContent = 'Cancelling…';
-            try { if (typeof onCancel === 'function') onCancel(); } catch (_) {}
         });
         header.appendChild(cancelBtn);
 
@@ -1297,7 +1313,7 @@
     async function streamingDownload(url, options) {
         options = options || {};
         var button = options.button || null;
-        var onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+        var userOnProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
         var fetchInit = Object.assign({ credentials: 'same-origin' }, options.fetchInit || {});
         var showProgressUI = options.showProgressUI !== false;
         var showToastUI = options.showToast !== false;
@@ -1308,6 +1324,22 @@
         var card = null;
         var cancelled = false;
         var originalContent = null;
+
+        // Track live progress so the cancel-confirmation gate can decide
+        // whether the user is far enough along to deserve a "Are you sure?"
+        // prompt before we tear the download down.
+        var progressState = {
+            received: 0,
+            totalLength: 0,
+            startedAt: Date.now()
+        };
+        var onProgress = function (received, totalLength) {
+            progressState.received = received;
+            if (totalLength) progressState.totalLength = totalLength;
+            if (userOnProgress) {
+                try { userOnProgress(received, totalLength); } catch (_) { /* ignore */ }
+            }
+        };
 
         // Wire up an AbortController so the user can cancel the download
         // mid-stream (and so external callers can pass their own signal via
@@ -1342,6 +1374,52 @@
                 } catch (_) { /* ignore */ }
             }
         }
+
+        // Decide whether the download is "far enough along" that a stray
+        // click should not be allowed to silently throw away progress.
+        // Either threshold trips the confirm prompt:
+        //   * percent of bytes received vs total (only when total is known)
+        //   * elapsed wall-clock since the download started
+        function shouldConfirmCancel() {
+            if (options.confirmCancel === false) return false;
+            var pctThreshold = (typeof options.confirmCancelThresholdPercent === 'number')
+                ? options.confirmCancelThresholdPercent
+                : DEFAULT_CONFIRM_CANCEL_PERCENT;
+            var msThreshold = (typeof options.confirmCancelThresholdMs === 'number')
+                ? options.confirmCancelThresholdMs
+                : DEFAULT_CONFIRM_CANCEL_MS;
+            var elapsed = Date.now() - progressState.startedAt;
+            var pastPct = isFinite(pctThreshold) && pctThreshold >= 0 &&
+                progressState.totalLength > 0 &&
+                ((progressState.received / progressState.totalLength) * 100) > pctThreshold;
+            var pastMs = isFinite(msThreshold) && msThreshold >= 0 && elapsed > msThreshold;
+            return pastPct || pastMs;
+        }
+
+        // Gate the raw cancelDownload() behind a confirm prompt for
+        // long-running downloads. Returns true if the cancellation actually
+        // proceeded (so UI can move into a "Cancelling…" state) and false if
+        // the user backed out (so the Cancel control should stay live).
+        function requestCancel() {
+            if (cancelled) return true;
+            if (shouldConfirmCancel()) {
+                var prompter = (typeof options.confirmCancel === 'function')
+                    ? options.confirmCancel
+                    : ((typeof window !== 'undefined' && typeof window.confirm === 'function')
+                        ? window.confirm.bind(window)
+                        : null);
+                if (prompter) {
+                    var ok;
+                    try { ok = prompter(CONFIRM_CANCEL_MESSAGE); }
+                    catch (_) { ok = true; }
+                    if (!ok) return false;
+                }
+            }
+            cancelled = true;
+            cancelDownload();
+            return true;
+        }
+
         // Expose for callers that want a programmatic cancel handle (e.g. an
         // external Cancel button rendered next to the export button).
         if (typeof options.onCancelHandle === 'function') {
@@ -1372,19 +1450,17 @@
 
         if (button) {
             originalContent = button.innerHTML;
-            cancelable = setupCancelableButton(button, cancelDownload);
+            cancelable = setupCancelableButton(button, requestCancel);
             if (cancelable) cancelable.updateLabel('Preparing…');
             else setBusy(button, 'Preparing…');
         }
 
         if (showProgressUI) {
-            card = createProgressCard(initialFilename, function () {
-                // Route the card's cancel button through cancelDownload() so
-                // the SW (when used) also gets a `{ type: 'cancel', id }`
-                // message — not just a fetch abort.
-                cancelled = true;
-                cancelDownload();
-            });
+            // Route the card's cancel button through requestCancel so the
+            // confirm-before-tearing-down-a-near-complete-download gate runs
+            // for it too, and so the SW (when used) gets a
+            // `{ type: 'cancel', id }` message — not just a fetch abort.
+            card = createProgressCard(initialFilename, requestCancel);
             if (card && !cancellable) card.hideCancel();
         }
 
@@ -1430,6 +1506,10 @@
             if ((!totalLength || totalLength <= 0) && preflightEstimate && preflightEstimate.bytes > 0) {
                 totalLength = preflightEstimate.bytes;
             }
+            // Seed the cancel-confirmation gate with the known total before
+            // any chunks arrive, so an early-cancel after a slow first byte
+            // can still evaluate the percent threshold.
+            if (totalLength) progressState.totalLength = totalLength;
 
             var filename = options.filename ||
                 parseContentDispositionFilename(disposition) ||

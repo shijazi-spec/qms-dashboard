@@ -777,6 +777,289 @@ describe('streamingDownload (browser helper)', () => {
     expect(realCallCount).toBe(2);
   });
 
+  describe('confirm-before-cancel for near-complete downloads', () => {
+    function makeAbortableBody() {
+      let bodyController: any;
+      const body = new (globalThis as any).ReadableStream({
+        start(c: any) { bodyController = c; },
+      });
+      return {
+        body,
+        get controller() { return bodyController; },
+      };
+    }
+
+    function installAbortableFetch(win: any, b: { controller: any }, headers: Record<string, string>) {
+      win.fetch = vi.fn(async (_url: string, init: any = {}) => {
+        if (init && init.signal) {
+          init.signal.addEventListener('abort', () => {
+            try {
+              const err: any = new Error('aborted');
+              err.name = 'AbortError';
+              b.controller.error(err);
+            } catch (_) { /* ignore */ }
+          });
+        }
+        return new (globalThis as any).Response((b as any).body, { status: 200, headers });
+      });
+    }
+
+    it('does NOT prompt when cancellation happens early in the download (under both thresholds)', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        'content-type': 'application/octet-stream',
+        'content-length': '1000',
+      });
+
+      const confirmFn = vi.fn(() => true);
+      env.win.confirm = confirmFn;
+
+      const button = env.win.document.createElement('button');
+      env.win.document.body.appendChild(button);
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/early-cancel.bin', {
+        button,
+        skipEstimate: true,
+        useServiceWorker: false,
+        showProgressUI: false,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      // Send 100 bytes of 1000 (10%) — well under the 50% threshold and only
+      // a few ms have elapsed, so no confirm should fire.
+      b.controller.enqueue(new Uint8Array(100));
+      await new Promise((r) => setTimeout(r, 5));
+
+      button.click();
+
+      await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(confirmFn).not.toHaveBeenCalled();
+    });
+
+    it('prompts before cancelling once the download is past the configurable percent threshold', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        'content-type': 'application/octet-stream',
+        'content-length': '1000',
+      });
+
+      const confirmFn = vi.fn(() => true);
+      env.win.confirm = confirmFn;
+
+      const button = env.win.document.createElement('button');
+      env.win.document.body.appendChild(button);
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/big-cancel.bin', {
+        button,
+        skipEstimate: true,
+        useServiceWorker: false,
+        showProgressUI: false,
+        // Lock out the time-based trigger so this test is purely about percent.
+        confirmCancelThresholdMs: Infinity,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      // 700/1000 = 70% > 50% threshold → confirm should fire.
+      b.controller.enqueue(new Uint8Array(700));
+      await new Promise((r) => setTimeout(r, 5));
+
+      button.click();
+
+      await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(confirmFn).toHaveBeenCalledTimes(1);
+      expect(confirmFn.mock.calls[0][0]).toMatch(/cancel this download/i);
+      expect(confirmFn.mock.calls[0][0]).toMatch(/lose progress/i);
+    });
+
+    it('keeps the download running when the user backs out of the cancel confirm', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        'content-type': 'application/octet-stream',
+        'content-length': '1000',
+      });
+
+      // First click → user says "no, keep going". Second click → confirms.
+      const confirmFn = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+      env.win.confirm = confirmFn;
+
+      const button = env.win.document.createElement('button');
+      env.win.document.body.appendChild(button);
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/two-clicks.bin', {
+        button,
+        skipEstimate: true,
+        useServiceWorker: false,
+        showProgressUI: false,
+        confirmCancelThresholdMs: Infinity,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      b.controller.enqueue(new Uint8Array(800));
+      await new Promise((r) => setTimeout(r, 5));
+
+      // First click — user backs out. The download must NOT abort.
+      button.click();
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(confirmFn).toHaveBeenCalledTimes(1);
+      // Internal AbortController stays un-aborted, button remains in cancel mode.
+      expect(button.getAttribute('data-streaming-active')).toBe('1');
+      expect(button.disabled).toBe(false);
+
+      // Push more bytes through to prove the stream is still alive.
+      b.controller.enqueue(new Uint8Array(50));
+      await new Promise((r) => setTimeout(r, 5));
+
+      // Second click — user confirms.
+      button.click();
+      await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(confirmFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('prompts once the elapsed-time threshold passes even when total size is unknown', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        // No content-length: we can't compute a percentage, only elapsed time.
+        'content-type': 'application/octet-stream',
+      });
+
+      const confirmFn = vi.fn(() => true);
+      env.win.confirm = confirmFn;
+
+      const button = env.win.document.createElement('button');
+      env.win.document.body.appendChild(button);
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/slow.bin', {
+        button,
+        skipEstimate: true,
+        useServiceWorker: false,
+        showProgressUI: false,
+        // 5 ms is easy to cross in the test loop; percent threshold disabled
+        // because content-length is absent.
+        confirmCancelThresholdMs: 5,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      b.controller.enqueue(new Uint8Array(10));
+      // Wait long enough to pass the 5 ms threshold.
+      await new Promise((r) => setTimeout(r, 25));
+
+      button.click();
+      await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(confirmFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips the confirm gate entirely when confirmCancel is set to false', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        'content-type': 'application/octet-stream',
+        'content-length': '1000',
+      });
+
+      const confirmFn = vi.fn(() => true);
+      env.win.confirm = confirmFn;
+
+      const button = env.win.document.createElement('button');
+      env.win.document.body.appendChild(button);
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/no-confirm.bin', {
+        button,
+        skipEstimate: true,
+        useServiceWorker: false,
+        showProgressUI: false,
+        confirmCancel: false,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      b.controller.enqueue(new Uint8Array(900));
+      await new Promise((r) => setTimeout(r, 5));
+
+      button.click();
+      await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(confirmFn).not.toHaveBeenCalled();
+    });
+
+    it('uses a caller-supplied confirmCancel function instead of window.confirm', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        'content-type': 'application/octet-stream',
+        'content-length': '1000',
+      });
+
+      const windowConfirm = vi.fn(() => true);
+      env.win.confirm = windowConfirm;
+      const customConfirm = vi.fn(() => true);
+
+      const button = env.win.document.createElement('button');
+      env.win.document.body.appendChild(button);
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/custom-confirm.bin', {
+        button,
+        skipEstimate: true,
+        useServiceWorker: false,
+        showProgressUI: false,
+        confirmCancel: customConfirm,
+        confirmCancelThresholdMs: Infinity,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      b.controller.enqueue(new Uint8Array(800));
+      await new Promise((r) => setTimeout(r, 5));
+
+      button.click();
+      await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+
+      expect(customConfirm).toHaveBeenCalledTimes(1);
+      expect(customConfirm.mock.calls[0][0]).toMatch(/cancel this download/i);
+      expect(windowConfirm).not.toHaveBeenCalled();
+    });
+
+    it('keeps the floating progress card cancel button live when the user backs out of the confirm', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      const b = makeAbortableBody();
+      installAbortableFetch(env.win, b, {
+        'content-type': 'application/octet-stream',
+        'content-length': '1000',
+      });
+
+      const confirmFn = vi.fn(() => false);
+      env.win.confirm = confirmFn;
+
+      const downloadPromise = env.win.streamingDownload('/api/exports/card-cancel.bin', {
+        skipEstimate: true,
+        useServiceWorker: false,
+        confirmCancelThresholdMs: Infinity,
+      });
+
+      await new Promise((r) => setTimeout(r, 5));
+      b.controller.enqueue(new Uint8Array(800));
+      await new Promise((r) => setTimeout(r, 5));
+
+      const cancelBtn = env.win.document.querySelector(
+        '[data-testid="button-cancel-download"]'
+      ) as HTMLButtonElement | null;
+      expect(cancelBtn).not.toBeNull();
+
+      cancelBtn!.click();
+      await new Promise((r) => setTimeout(r, 5));
+
+      expect(confirmFn).toHaveBeenCalledTimes(1);
+      // Card stays in "Cancel" state (not "Cancelling…") because the user backed out.
+      expect(cancelBtn!.disabled).toBe(false);
+      expect(cancelBtn!.textContent).toBe('Cancel');
+
+      // Clean up: actually cancel so the test promise settles.
+      b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
+      await expect(downloadPromise).rejects.toBeDefined();
+    });
+  });
+
   it('honours useServiceWorker=false to skip the SW path entirely', async () => {
     env = setupBrowserEnv({
       enableShowSaveFilePicker: false,
