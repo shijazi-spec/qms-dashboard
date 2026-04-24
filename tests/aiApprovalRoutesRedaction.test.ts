@@ -232,12 +232,29 @@ const PAYLOAD_BCRYPT =
 const RESULT_API_KEY = 'sk-live-LEAK_DETECTOR_RESULT_FRESHKEY_4321';
 const RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORACCESS_freshtoken';
 
+// Credential-shaped substrings interpolated into the FREE-FORM payload_preview
+// TEXT column. These reach the row through a different code path than the
+// JSONB `payload` deny-list (a tool's buildPreview() callback can paste
+// arbitrary strings into the human-readable summary line). Each one targets
+// a distinct regex in SECRET_LIKE_PATTERNS so a regression in any single
+// pattern is caught here.
+const PREVIEW_SK_KEY = 'sk-live-LEAK_DETECTOR_PREVIEW_aabbccddeeff112233';
+const PREVIEW_GH_TOKEN = 'ghp_LEAKDETECTORPREVIEWghp1234567890abcdefghij';
+const PREVIEW_JWT =
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJMRUFLREVURUNUT1JQUkVWSUVXIn0.LEAKDETECTORPREVIEWsignatureXYZ';
+const PREVIEW_BCRYPT =
+  '$2b$12$ABCDEFGHIJKLMNOPQRSTUVLEAKDETECTORPREVIEW1234567890XYZ';
+
 const SECRETS = [
   PAYLOAD_API_KEY,
   PAYLOAD_REFRESH,
   PAYLOAD_BCRYPT,
   RESULT_API_KEY,
   RESULT_ACCESS_TOKEN,
+  PREVIEW_SK_KEY,
+  PREVIEW_GH_TOKEN,
+  PREVIEW_JWT,
+  PREVIEW_BCRYPT,
 ];
 
 function findLeakedSecret(body: unknown, allowed: string[] = []): string | null {
@@ -265,7 +282,10 @@ async function run(): Promise<void> {
       },
       reason: 'rotate-zoho-books-key',
     },
-    payloadPreview: 'Rotate API key for zoho_books',
+    payloadPreview:
+      `Rotate API key for zoho_books — new=${PREVIEW_SK_KEY}, ` +
+      `gh=${PREVIEW_GH_TOKEN}, jwt=${PREVIEW_JWT}, ` +
+      `legacy_hash=${PREVIEW_BCRYPT}`,
     riskLevel: 'high',
     // Intentionally NO `WP-*` codes here so the detail handler skips the
     // controlled-document DB lookup; this test must not depend on a
@@ -280,6 +300,20 @@ async function run(): Promise<void> {
   assert(
     enqueued.payload?.api_key === REDACTED_SENTINEL,
     'baseline: enqueuePendingAction returns redacted payload (sanity check)',
+  );
+
+  // Sanity-check the preview scrubber at the data layer before exercising the
+  // HTTP surface. Each credential-shaped substring must already be replaced
+  // with the sentinel; otherwise the leak-guard assertions below cannot
+  // distinguish a route bug from a missing scrub.
+  assert(
+    findLeakedSecret(enqueued.payload_preview) === null,
+    'baseline: enqueued payload_preview is scrubbed of secret-shaped substrings',
+  );
+  assert(
+    enqueued.payload_preview.includes(REDACTED_SENTINEL) &&
+      enqueued.payload_preview.includes('zoho_books'),
+    'baseline: payload_preview retains human-readable prose around the sentinel',
   );
 
   /* ---------- GET /api/ai/approvals (list) ---------- */
