@@ -134,19 +134,29 @@
     <!-- Prompt Version Tab -->
     <div id="content-prompts" class="hidden fade-in">
       <div class="bg-white rounded-xl shadow-sm border p-6">
-        <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
           <h2 class="text-lg font-semibold text-gray-900">Prompt Version Comparison</h2>
-          <select id="prompt-days" onchange="loadPromptVersions()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-prompt-days">
-            <option value="7">Last 7 days</option>
-            <option value="30" selected>Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
+          <div class="flex items-center gap-3 flex-wrap">
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none" data-testid="label-prompt-archived-toggle">
+              <input type="checkbox" id="prompt-show-archived" onchange="loadPromptVersions()"
+                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                data-testid="checkbox-show-archived" />
+              <span>Show archived versions</span>
+            </label>
+            <select id="prompt-days" onchange="loadPromptVersions()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-prompt-days">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
         </div>
         <p class="text-sm text-gray-500 mb-4">
           Side-by-side feedback rate, latency, and error rate per (agent, prompt version).
           Use this to spot a regression after a prompt edit — every code change to an
           agent's instructions produces a new <code class="bg-gray-100 px-1 rounded">prompt_version</code>
           (e.g. <code>qms-consultant@a1b2c3d4</code>) and a new row here.
+          The version currently deployed in code is marked with a <span class="inline-block bg-green-100 text-green-700 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide align-middle">current</span> pill;
+          older versions are hidden by default.
         </p>
         <div id="prompts-table" class="overflow-x-auto">
           <p class="text-gray-400 text-sm">Loading…</p>
@@ -690,17 +700,24 @@
     async function loadPromptVersions() {
       const el = document.getElementById('prompts-table');
       const days = document.getElementById('prompt-days').value;
+      const showArchived = !!document.getElementById('prompt-show-archived')?.checked;
       try {
-        const resp = await apiFetch(`/api/ai-ops/prompt-versions?days=${days}`);
-        const data = resp.data;
+        // Active versions and historical rows in parallel.
+        const [versionsRes, activeRes] = await Promise.all([
+          apiFetch(`/api/ai-ops/prompt-versions?days=${days}`),
+          apiFetch('/api/ai-ops/prompt-versions/active').catch(() => ({ data: [] })),
+        ]);
+        const data = versionsRes.data || [];
+        const activeMap = {};
+        (activeRes.data || []).forEach(a => { activeMap[a.agent_name] = a.prompt_version; });
         // The aggregate echoes back the small-sample floor it applied so we
         // can render a single, consistent "needs N votes to compare" hint.
         // Fall back to 5 if an older API/cache happens to omit it.
-        const minFeedback = Number.isFinite(parseInt(resp.min_feedback))
-          ? parseInt(resp.min_feedback)
+        const minFeedback = Number.isFinite(parseInt(versionsRes.min_feedback))
+          ? parseInt(versionsRes.min_feedback)
           : 5;
         if (!data.length) {
-          el.innerHTML = '<p class="text-gray-400 text-sm">No prompt-version data in the selected window.</p>';
+          el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-prompts-empty">No prompt-version data in the selected window.</p>';
           return;
         }
 
@@ -710,7 +727,15 @@
           (byAgent[r.agent_name] ||= []).push(r);
         });
 
-        const blocks = Object.entries(byAgent).map(([agent, rows]) => {
+        const blocks = Object.entries(byAgent).map(([agent, allRows]) => {
+          const activeVersion = activeMap[agent] || null;
+          const archivedCount = activeVersion
+            ? allRows.filter(r => r.prompt_version !== activeVersion).length
+            : 0;
+          const rows = showArchived || !activeVersion
+            ? allRows
+            : allRows.filter(r => r.prompt_version === activeVersion);
+
           // A row is comparable only once it has cleared the small-sample
           // floor — otherwise a brand-new prompt with one thumbs-down would
           // light up red against a mature version with hundreds of votes.
@@ -728,9 +753,64 @@
             .map(v => parseFloat(v));
           const bestRate = ratesOnly.length ? Math.max(...ratesOnly) : null;
 
+          const headerExtras = (() => {
+            const parts = [];
+            if (activeVersion) {
+              parts.push(`<span class="text-xs font-normal text-gray-500" data-testid="text-active-version-${esc(agent)}">active: <code class="bg-gray-100 px-1 rounded">${esc(activeVersion)}</code></span>`);
+            }
+            if (!showArchived && archivedCount > 0) {
+              parts.push(`<span class="text-xs text-gray-400" data-testid="text-archived-hidden-${esc(agent)}">${archivedCount} archived hidden</span>`);
+            }
+            return parts.length ? ` <span class="ml-2">${parts.join(' · ')}</span>` : '';
+          })();
+
+          const body = rows.length
+            ? rows.map((r, i) => {
+                const rate = r.feedback_rate_pct != null ? parseFloat(r.feedback_rate_pct) : null;
+                const comparable = isComparable(r);
+                // Best/regression highlighting is gated on the small-sample
+                // floor: rows below the floor render with neutral styling
+                // and a tooltip explaining why we are not flagging them.
+                const isBest = comparable && bestRate != null && rate != null
+                  && rate === bestRate && ratesOnly.length > 1;
+                const isRegression = comparable && bestRate != null && rate != null
+                  && (bestRate - rate) >= 10;
+                const isCurrent = activeVersion != null && r.prompt_version === activeVersion;
+                const totalVotes = Number(r.total_feedback || 0);
+                const smallSampleTip =
+                  `Sample too small to compare yet — ${totalVotes}/${minFeedback} ratings required.`;
+                let rateCell;
+                if (rate == null) {
+                  rateCell = `<span class="text-gray-400" title="${esc(smallSampleTip)}" data-testid="text-prompt-small-sample-${esc(r.prompt_version)}">—</span>`;
+                } else if (!comparable) {
+                  rateCell = `<span class="text-gray-500" title="${esc(smallSampleTip)}" data-testid="text-prompt-small-sample-${esc(r.prompt_version)}">${rate.toFixed(0)}% <span class="text-xs italic text-gray-400">(small sample)</span></span>`;
+                } else {
+                  rateCell = `<span class="${isRegression ? 'text-red-600 font-semibold' : isBest ? 'text-green-700 font-semibold' : ''}" title="${r.thumbs_up}/${r.total_feedback} thumbs-up">${rate.toFixed(0)}%${isBest ? ' ★' : ''}</span>`;
+                }
+                const currentPill = isCurrent
+                  ? ` <span class="inline-block bg-green-100 text-green-700 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide align-middle" data-testid="badge-current-${esc(r.prompt_version)}">current</span>`
+                  : '';
+                return `
+                  <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}">
+                    <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}</td>
+                    <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
+                    <td class="px-3 py-2 text-right" data-testid="text-prompt-feedback-rate-${esc(r.prompt_version)}">${rateCell}</td>
+                    <td class="px-3 py-2 text-right text-xs text-gray-500">
+                      ${r.total_feedback > 0 ? `👍 ${r.thumbs_up} / 👎 ${r.thumbs_down}` : '<span class="text-gray-400">—</span>'}
+                    </td>
+                    <td class="px-3 py-2 text-right">${fmtMs(r.p50_ms)}</td>
+                    <td class="px-3 py-2 text-right">${fmtMs(r.avg_ms)}</td>
+                    <td class="px-3 py-2 text-right ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
+                    <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.last_seen)}</td>
+                  </tr>`;
+              }).join('')
+            : `<tr><td colspan="8" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
+                  No traffic on the currently-deployed version yet${archivedCount > 0 ? ` — ${archivedCount} archived version${archivedCount === 1 ? '' : 's'} hidden` : ''}.
+                </td></tr>`;
+
           return `
             <div class="mb-6" data-testid="block-prompt-agent-${esc(agent)}">
-              <h3 class="text-sm font-semibold text-gray-800 mb-2">${esc(agent)}</h3>
+              <h3 class="text-sm font-semibold text-gray-800 mb-2">${esc(agent)}${headerExtras}</h3>
               <table class="min-w-full text-left text-sm" data-testid="table-prompt-versions">
                 <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
                   <th class="px-3 py-2">Prompt Version</th>
@@ -742,41 +822,7 @@
                   <th class="px-3 py-2 text-right">Error %</th>
                   <th class="px-3 py-2">Last seen</th>
                 </tr></thead>
-                <tbody>${rows.map((r, i) => {
-                  const rate = r.feedback_rate_pct != null ? parseFloat(r.feedback_rate_pct) : null;
-                  const comparable = isComparable(r);
-                  // Best/regression highlighting is gated on the small-sample
-                  // floor: rows below the floor render with neutral styling
-                  // and a tooltip explaining why we are not flagging them.
-                  const isBest = comparable && bestRate != null && rate != null
-                    && rate === bestRate && ratesOnly.length > 1;
-                  const isRegression = comparable && bestRate != null && rate != null
-                    && (bestRate - rate) >= 10;
-                  const totalVotes = Number(r.total_feedback || 0);
-                  const smallSampleTip =
-                    `Sample too small to compare yet — ${totalVotes}/${minFeedback} ratings required.`;
-                  let rateCell;
-                  if (rate == null) {
-                    rateCell = `<span class="text-gray-400" title="${esc(smallSampleTip)}" data-testid="text-prompt-small-sample-${esc(r.prompt_version)}">—</span>`;
-                  } else if (!comparable) {
-                    rateCell = `<span class="text-gray-500" title="${esc(smallSampleTip)}" data-testid="text-prompt-small-sample-${esc(r.prompt_version)}">${rate.toFixed(0)}% <span class="text-xs italic text-gray-400">(small sample)</span></span>`;
-                  } else {
-                    rateCell = `<span class="${isRegression ? 'text-red-600 font-semibold' : isBest ? 'text-green-700 font-semibold' : ''}" title="${r.thumbs_up}/${r.total_feedback} thumbs-up">${rate.toFixed(0)}%${isBest ? ' ★' : ''}</span>`;
-                  }
-                  return `
-                    <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}">
-                      <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}</td>
-                      <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
-                      <td class="px-3 py-2 text-right" data-testid="text-prompt-feedback-rate-${esc(r.prompt_version)}">${rateCell}</td>
-                      <td class="px-3 py-2 text-right text-xs text-gray-500">
-                        ${r.total_feedback > 0 ? `👍 ${r.thumbs_up} / 👎 ${r.thumbs_down}` : '<span class="text-gray-400">—</span>'}
-                      </td>
-                      <td class="px-3 py-2 text-right">${fmtMs(r.p50_ms)}</td>
-                      <td class="px-3 py-2 text-right">${fmtMs(r.avg_ms)}</td>
-                      <td class="px-3 py-2 text-right ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
-                      <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.last_seen)}</td>
-                    </tr>`;
-                }).join('')}</tbody>
+                <tbody>${body}</tbody>
               </table>
               <p class="mt-2 text-xs text-gray-500" data-testid="text-prompt-min-feedback-note">
                 Versions need at least ${minFeedback} ratings before they're flagged as best ★ or as a regression.

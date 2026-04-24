@@ -22,8 +22,19 @@ import {
   resolveAlert,
   type AIAlert,
 } from "../../utils/aiAlertsDatabase";
+import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
+import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../agents/qualitySpecialistAgent";
+import { SDR_QUALITY_PROMPT_VERSION } from "../agents/sdrQualityAgent";
+import { SALES_QUALITY_PROMPT_VERSION } from "../agents/salesQualityAgent";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
+
+const ACTIVE_PROMPT_VERSIONS: { agent_name: string; prompt_version: string }[] = [
+  { agent_name: "WalaPlus QMS Consultant",           prompt_version: QMS_CONSULTANT_PROMPT_VERSION },
+  { agent_name: "WalaPlus Quality Specialist",       prompt_version: QUALITY_SPECIALIST_PROMPT_VERSION },
+  { agent_name: "WalaPlus SDR Quality Specialist",   prompt_version: SDR_QUALITY_PROMPT_VERSION },
+  { agent_name: "WalaPlus Sales Quality Specialist", prompt_version: SALES_QUALITY_PROMPT_VERSION },
+];
 
 const AI_OPS_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
 
@@ -201,6 +212,23 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] prompt-versions error:", error);
           return c.json({ error: "Failed to fetch prompt-version comparison" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/prompt-versions/active",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          return c.json({ data: ACTIVE_PROMPT_VERSIONS });
+        } catch (error) {
+          console.error("[AI-Ops] active prompt-versions error:", error);
+          return c.json({ error: "Failed to fetch active prompt versions" }, 500);
         }
       };
     },
