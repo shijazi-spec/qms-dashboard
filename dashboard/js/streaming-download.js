@@ -62,6 +62,16 @@
 
     function setBusy(button, label) {
         if (!button) return;
+        // If the button is already in a cancelable streaming state, keep the
+        // Cancel affordance intact and just refresh the progress label so the
+        // user never loses their ability to abort mid-download.
+        if (button.getAttribute('data-streaming-active') === '1') {
+            var labelEl = button.querySelector('[data-streaming-label]');
+            if (labelEl) {
+                labelEl.textContent = label;
+                return;
+            }
+        }
         button.disabled = true;
         button.setAttribute('aria-busy', 'true');
         button.innerHTML = SPINNER_SVG + '<span class="ml-2">' + label + '</span>';
@@ -74,6 +84,52 @@
         if (original !== undefined && original !== null) {
             button.innerHTML = original;
         }
+    }
+
+    // Put a button into a "streaming, cancelable" state: keep it enabled, swap
+    // the contents to spinner + progress label + Cancel pill, and install a
+    // capture-phase click handler that fires onCancel() instead of any
+    // existing click listeners (which would otherwise re-trigger the export).
+    function setupCancelableButton(button, onCancel) {
+        if (!button) return null;
+
+        button.disabled = false;
+        button.setAttribute('aria-busy', 'true');
+        button.setAttribute('data-streaming-active', '1');
+
+        var labelEl = button.ownerDocument.createElement('span');
+        labelEl.setAttribute('data-streaming-label', '');
+        labelEl.className = 'ml-2';
+        labelEl.textContent = 'Preparing…';
+
+        var cancelEl = button.ownerDocument.createElement('span');
+        cancelEl.setAttribute('data-streaming-cancel', '');
+        cancelEl.className = 'ml-2 underline decoration-dotted opacity-90';
+        cancelEl.textContent = 'Cancel';
+
+        button.innerHTML = SPINNER_SVG;
+        button.appendChild(labelEl);
+        button.appendChild(cancelEl);
+
+        var handler = function (event) {
+            if (button.getAttribute('data-streaming-active') !== '1') return;
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+            if (event && typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            } else if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+            try { onCancel(); } catch (_) { /* ignore */ }
+        };
+        button.addEventListener('click', handler, true);
+
+        return {
+            updateLabel: function (text) { labelEl.textContent = text; },
+            teardown: function () {
+                button.removeAttribute('data-streaming-active');
+                try { button.removeEventListener('click', handler, true); } catch (_) { /* ignore */ }
+            }
+        };
     }
 
     function progressLabel(received, totalLength) {
@@ -186,7 +242,12 @@
     // service worker that returns it as an `attachment` Response. Returns null
     // (without consuming response.body) when the SW path is unavailable so the
     // caller can still fall back to the in-memory Blob path.
-    async function streamResponseViaServiceWorker(response, filename, contentType, totalLength, button, onProgress) {
+    //
+    // `swCancelInfo` (when provided) is populated with `{ sw, id }` once the
+    // registration is ack'd, so the caller's cancel handler can post a
+    // `{ type: 'cancel', id }` message immediately on user abort instead of
+    // waiting for pipeTo() to reject.
+    async function streamResponseViaServiceWorker(response, filename, contentType, totalLength, button, onProgress, swCancelInfo) {
         if (!supportsServiceWorkerStreaming()) return null;
 
         var sw = await ensureServiceWorker();
@@ -252,6 +313,13 @@
             return null;
         }
         try { channel.port1.close(); } catch (_) { /* ignore */ }
+
+        // Expose the registration to the caller's cancel path so it can fire
+        // `{ type: 'cancel', id }` immediately when the user clicks Cancel.
+        if (swCancelInfo) {
+            swCancelInfo.sw = sw;
+            swCancelInfo.id = id;
+        }
 
         // Trigger the download via a hidden iframe. The SW intercepts the
         // navigation and returns a streamed `attachment` response.
@@ -887,27 +955,65 @@
         var showToastUI = options.showToast !== false;
         var cancellable = options.cancellable !== false;
 
-        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        if (controller && !fetchInit.signal) {
-            fetchInit.signal = controller.signal;
-        }
-
         var initialFilename = options.filename || 'Preparing download…';
         var card = null;
         var cancelled = false;
         var originalContent = null;
 
+        // Wire up an AbortController so the user can cancel the download
+        // mid-stream (and so external callers can pass their own signal via
+        // fetchInit.signal — we forward aborts to our internal controller).
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var externalSignal = fetchInit.signal || null;
+        if (controller) {
+            if (externalSignal) {
+                if (externalSignal.aborted) {
+                    try { controller.abort(externalSignal.reason); } catch (_) { /* ignore */ }
+                } else {
+                    try {
+                        externalSignal.addEventListener('abort', function () {
+                            try { controller.abort(externalSignal.reason); } catch (_) { /* ignore */ }
+                        });
+                    } catch (_) { /* ignore */ }
+                }
+            }
+            fetchInit.signal = controller.signal;
+        }
+
+        // Populated by the SW path so cancelDownload() can post a cancel
+        // message immediately, before pipeTo() rejects.
+        var swCancelInfo = { sw: null, id: null };
+        function cancelDownload() {
+            if (controller && !controller.signal.aborted) {
+                try { controller.abort(); } catch (_) { /* ignore */ }
+            }
+            if (swCancelInfo.sw && swCancelInfo.id) {
+                try {
+                    swCancelInfo.sw.postMessage({ type: 'cancel', id: swCancelInfo.id });
+                } catch (_) { /* ignore */ }
+            }
+        }
+        // Expose for callers that want a programmatic cancel handle (e.g. an
+        // external Cancel button rendered next to the export button).
+        if (typeof options.onCancelHandle === 'function') {
+            try { options.onCancelHandle(cancelDownload); } catch (_) { /* ignore */ }
+        }
+
+        var cancelable = null;
         if (button) {
             originalContent = button.innerHTML;
-            setBusy(button, 'Preparing…');
+            cancelable = setupCancelableButton(button, cancelDownload);
+            if (cancelable) cancelable.updateLabel('Preparing…');
+            else setBusy(button, 'Preparing…');
         }
 
         if (showProgressUI) {
             card = createProgressCard(initialFilename, function () {
+                // Route the card's cancel button through cancelDownload() so
+                // the SW (when used) also gets a `{ type: 'cancel', id }`
+                // message — not just a fetch abort.
                 cancelled = true;
-                if (controller) {
-                    try { controller.abort(); } catch (_) { /* ignore */ }
-                }
+                cancelDownload();
             });
             if (card && !cancellable) card.hideCancel();
         }
@@ -983,7 +1089,7 @@
                 // body if the SW can't be registered or transferable streams
                 // aren't available, so the Blob fallback below still works.
                 result = await streamResponseViaServiceWorker(
-                    response, filename, contentType, totalLength, button, onProgress
+                    response, filename, contentType, totalLength, button, onProgress, swCancelInfo
                 );
             }
 
@@ -1012,11 +1118,18 @@
                 streamedToDisk: !!result.streamedToDisk
             };
         } catch (err) {
-            var isCancel = cancelled || (err && (err.name === 'AbortError' || err.cancelled === true));
+            // A user cancel can come from three places: the floating progress
+            // card (`cancelled` flag), the export-button Cancel affordance or
+            // an external signal (controller.signal.aborted), or the save
+            // dialog being dismissed (AbortError). All three should be quiet
+            // — no alert, no scary console.error — and should leave the UI in
+            // a "Cancelled" state rather than a "Failed" one.
+            var isCancel = cancelled
+                || (controller && controller.signal && controller.signal.aborted)
+                || (err && (err.name === 'AbortError' || err.cancelled === true));
             var displayName = options.filename || (card ? null : 'file');
 
             if (isCancel) {
-                // User cancelled — quiet, no alert. Update UI to reflect cancellation.
                 console.info('streamingDownload cancelled by user for', url);
                 if (card) {
                     card.setBarColor('bg-gray-400');
@@ -1027,13 +1140,11 @@
                 if (showToastUI) {
                     showToast('Download cancelled' + (displayName ? ' (' + displayName + ')' : ''), 'info');
                 }
-                if (cancelled) {
-                    var cancelErr = new Error('Download cancelled');
-                    cancelErr.name = 'AbortError';
-                    cancelErr.cancelled = true;
-                    throw cancelErr;
-                }
-                throw err;
+                if (err && err.name === 'AbortError') throw err;
+                var cancelErr = new Error((err && err.message) || 'Download cancelled');
+                cancelErr.name = 'AbortError';
+                cancelErr.cancelled = true;
+                throw cancelErr;
             }
 
             console.error('streamingDownload failed for', url, err);
@@ -1048,6 +1159,7 @@
             }
             throw err;
         } finally {
+            if (cancelable && cancelable.teardown) cancelable.teardown();
             restoreButton(button, originalContent);
         }
     }

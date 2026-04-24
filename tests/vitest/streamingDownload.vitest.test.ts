@@ -378,6 +378,233 @@ describe('streamingDownload (browser helper)', () => {
     expect(result.bytes).toBe(payload.byteLength);
   });
 
+  it('lets the user cancel an in-progress download via the export button (File System Access path)', async () => {
+    env = setupBrowserEnv();
+
+    // Build a body stream we can drip-feed and then error out from the
+    // mocked fetch's signal handler when the user clicks Cancel.
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    env.win.fetch = vi.fn(async (_url: string, init: any = {}) => {
+      if (init && init.signal) {
+        init.signal.addEventListener('abort', () => {
+          try {
+            const err: any = new Error('aborted');
+            err.name = 'AbortError';
+            bodyController.error(err);
+          } catch (_) { /* ignore */ }
+        });
+      }
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': 'attachment; filename="big.bin"',
+        },
+      });
+    });
+
+    const button = env.win.document.createElement('button');
+    button.textContent = 'Export';
+    env.win.document.body.appendChild(button);
+    const originalHTML = button.innerHTML;
+
+    // A second click handler simulating the page's existing wiring (e.g. a
+    // bound onClick that would re-trigger the export). It must NOT fire while
+    // the button is in cancel mode.
+    const pageHandler = vi.fn();
+    button.addEventListener('click', pageHandler);
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/big.bin', {
+      button,
+      // Skip the preflight estimate so it doesn't consume our singleton body.
+      skipEstimate: true,
+      // Force the FSA streaming path even though Content-Length is absent.
+      streamToDisk: true,
+    });
+
+    // Let setBusy + picker + first chunk run.
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(new Uint8Array([1, 2, 3, 4]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(button.getAttribute('data-streaming-active')).toBe('1');
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toContain('Cancel');
+
+    button.click();
+
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+
+    // Page-level click handler must not have fired (we suppressed via
+    // stopImmediatePropagation in the capture-phase cancel handler).
+    expect(pageHandler).not.toHaveBeenCalled();
+    // Cancellation is silent — no scary alert, no spurious ok flow.
+    expect(env.win.alert).not.toHaveBeenCalled();
+    // Original button content restored and cancel state cleared.
+    expect(button.innerHTML).toBe(originalHTML);
+    expect(button.hasAttribute('data-streaming-active')).toBe(false);
+    expect(button.disabled).toBe(false);
+  });
+
+  it('lets the user cancel an in-progress download via the export button (service worker path) and notifies the SW', async () => {
+    env = setupBrowserEnv({
+      enableShowSaveFilePicker: false,
+      installServiceWorker: true,
+    });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    env.win.fetch = vi.fn(async (_url: string, init: any = {}) => {
+      if (init && init.signal) {
+        init.signal.addEventListener('abort', () => {
+          try {
+            const err: any = new Error('aborted');
+            err.name = 'AbortError';
+            bodyController.error(err);
+          } catch (_) { /* ignore */ }
+        });
+      }
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': 'attachment; filename="sw-big.bin"',
+        },
+      });
+    });
+
+    const button = env.win.document.createElement('button');
+    button.textContent = 'Export';
+    env.win.document.body.appendChild(button);
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/sw-big.bin', {
+      button,
+      skipEstimate: true,
+      streamToDisk: true,
+    });
+
+    // Wait until the SW register ack lands and the iframe is in the DOM.
+    for (let i = 0; i < 50; i++) {
+      const hasReg = env.swCalls.some((c) => c.msg && c.msg.type === 'register');
+      const hasIframe = env.win.document.querySelectorAll('iframe').length > 0;
+      if (hasReg && hasIframe) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+
+    const registerCall = env.swCalls.find((c) => c.msg && c.msg.type === 'register');
+    expect(registerCall).toBeDefined();
+    const registeredId = registerCall!.msg.id;
+
+    bodyController.enqueue(new Uint8Array([7, 7, 7]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(button.getAttribute('data-streaming-active')).toBe('1');
+    expect(button.textContent).toContain('Cancel');
+
+    button.click();
+
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+
+    // Service worker received an explicit cancel for the registered id.
+    const cancelCalls = env.swCalls.filter(
+      (c) => c.msg && c.msg.type === 'cancel' && c.msg.id === registeredId
+    );
+    expect(cancelCalls.length).toBeGreaterThanOrEqual(1);
+    expect(env.win.alert).not.toHaveBeenCalled();
+    expect(button.hasAttribute('data-streaming-active')).toBe(false);
+  });
+
+  it('exposes a programmatic cancel handle via options.onCancelHandle for callers without a button', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    env.win.fetch = vi.fn(async (_url: string, init: any = {}) => {
+      if (init && init.signal) {
+        init.signal.addEventListener('abort', () => {
+          try {
+            const err: any = new Error('aborted');
+            err.name = 'AbortError';
+            bodyController.error(err);
+          } catch (_) { /* ignore */ }
+        });
+      }
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      });
+    });
+
+    let cancelFn: (() => void) | null = null;
+    const downloadPromise = env.win.streamingDownload('/api/exports/handle.csv', {
+      onCancelHandle: (fn: () => void) => { cancelFn = fn; },
+      skipEstimate: true,
+      // No SW + no FSA: forces the Blob path, which still respects the abort.
+      useServiceWorker: false,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(new Uint8Array([1, 2]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(cancelFn).toBeTypeOf('function');
+    cancelFn!();
+
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
+  it('forwards an externally provided fetchInit.signal abort into the streaming download', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    env.win.fetch = vi.fn(async (_url: string, init: any = {}) => {
+      if (init && init.signal) {
+        init.signal.addEventListener('abort', () => {
+          try {
+            const err: any = new Error('aborted');
+            err.name = 'AbortError';
+            bodyController.error(err);
+          } catch (_) { /* ignore */ }
+        });
+      }
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      });
+    });
+
+    const externalCtrl = new (globalThis as any).AbortController();
+    const downloadPromise = env.win.streamingDownload('/api/exports/external.csv', {
+      fetchInit: { signal: externalCtrl.signal },
+      skipEstimate: true,
+      useServiceWorker: false,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(new Uint8Array([1]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    externalCtrl.abort();
+
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
   it('honours useServiceWorker=false to skip the SW path entirely', async () => {
     env = setupBrowserEnv({
       enableShowSaveFilePicker: false,
