@@ -468,6 +468,70 @@ exceeding the configured threshold of <strong>$${thresholdUsd}</strong>.</p>
 );
 inngestFunctions.push(aiCostSummaryFunction);
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Archived prompt-version telemetry purge cron
+//
+// Prompt versions are content-addressed hashes derived from each agent's
+// instruction string (e.g. "qms-consultant@a1b2c3d4"). When a new deploy
+// changes an agent's prompt the old version becomes "archived" — the UI hides
+// it behind a toggle but the underlying ai_call_metrics rows remain forever.
+//
+// This job deletes those stale rows so the table stays small. It ONLY removes
+// rows for versions that are both:
+//   (a) not one of the four currently-deployed PROMPT_VERSION constants, AND
+//   (b) older than PROMPT_VERSION_RETENTION_DAYS (default 30).
+//
+// The safety guard in purgeArchivedPromptVersionMetrics() rejects an empty
+// live-versions list so a bad import cannot wipe all versioned rows.
+// ──────────────────────────────────────────────────────────────────────────────
+const promptVersionPurgeFunction = inngest.createFunction(
+  { id: "prompt-version-telemetry-purge" },
+  { cron: process.env.PROMPT_VERSION_PURGE_CRON || "0 7 * * *" }, // daily @ 07:00 UTC
+  async ({ step }) => {
+    return await step.run("purge-archived-prompt-version-metrics", async () => {
+      const retentionDays = Math.max(
+        1,
+        parseInt(process.env.PROMPT_VERSION_RETENTION_DAYS || "30", 10) || 30,
+      );
+
+      const [
+        { QMS_CONSULTANT_PROMPT_VERSION },
+        { QUALITY_SPECIALIST_PROMPT_VERSION },
+        { SDR_QUALITY_PROMPT_VERSION },
+        { SALES_QUALITY_PROMPT_VERSION },
+      ] = await Promise.all([
+        import("../agents/qmsConsultantAgent"),
+        import("../agents/qualitySpecialistAgent"),
+        import("../agents/sdrQualityAgent"),
+        import("../agents/salesQualityAgent"),
+      ]);
+
+      const liveVersions = [
+        QMS_CONSULTANT_PROMPT_VERSION,
+        QUALITY_SPECIALIST_PROMPT_VERSION,
+        SDR_QUALITY_PROMPT_VERSION,
+        SALES_QUALITY_PROMPT_VERSION,
+      ];
+
+      console.log(
+        `[PromptVersionPurge] Retention window: ${retentionDays} days. ` +
+        `Live versions: ${liveVersions.join(", ")}`,
+      );
+
+      const { purgeArchivedPromptVersionMetrics } = await import("../../utils/aiTelemetry");
+      const deleted = await purgeArchivedPromptVersionMetrics(liveVersions, retentionDays);
+
+      console.log(
+        `[PromptVersionPurge] Deleted ${deleted} ai_call_metrics row(s) for ` +
+        `archived prompt versions older than ${retentionDays} days.`,
+      );
+
+      return { deleted, retentionDays, liveVersions };
+    });
+  },
+);
+inngestFunctions.push(promptVersionPurgeFunction);
+
 const aiScannerFunction = inngest.createFunction(
   { id: "ai-background-scanner" },
   { cron: process.env.AI_SCANNER_CRON || "0 */6 * * *" },

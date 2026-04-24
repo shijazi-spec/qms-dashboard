@@ -615,6 +615,58 @@ export async function pruneOldAiMetrics(): Promise<number> {
   }
 }
 
+/**
+ * Purge telemetry rows for prompt versions that are no longer deployed.
+ *
+ * A prompt-version is eligible for purging when ALL of the following hold:
+ *  1. It is NOT in `liveVersions` (the set of currently deployed constants).
+ *  2. Its newest `started_at` timestamp is older than `retentionDays` days
+ *     — i.e. MAX(started_at) for that version is outside the window.
+ *
+ * When a version qualifies, ALL rows for that version are removed (not just
+ * the old ones). If any row is still within the retention window the entire
+ * version is left untouched.
+ *
+ * Returns the number of rows deleted.
+ */
+export async function purgeArchivedPromptVersionMetrics(
+  liveVersions: string[],
+  retentionDays: number,
+): Promise<number> {
+  try {
+    await ensureAiMetricsTable();
+    if (liveVersions.length === 0) {
+      console.warn(
+        '[aiTelemetry] purgeArchivedPromptVersionMetrics: no live versions supplied — skipping to avoid purging everything',
+      );
+      return 0;
+    }
+    // First identify which archived versions have their NEWEST sample older than
+    // the retention window, then delete ALL rows for those versions.
+    // This matches the "newest sample is >N days old" semantics from the spec:
+    // if any row for an archived version is still within the window we leave
+    // the entire version untouched.
+    const result = await pool.query(
+      `DELETE FROM ai_call_metrics
+        WHERE metadata->>'prompt_version' IS NOT NULL
+          AND metadata->>'prompt_version' != ALL($1::text[])
+          AND metadata->>'prompt_version' IN (
+            SELECT metadata->>'prompt_version'
+            FROM   ai_call_metrics
+            WHERE  metadata->>'prompt_version' IS NOT NULL
+              AND  metadata->>'prompt_version' != ALL($1::text[])
+            GROUP  BY metadata->>'prompt_version'
+            HAVING MAX(started_at) < NOW() - MAKE_INTERVAL(days => $2)
+          )`,
+      [liveVersions, retentionDays],
+    );
+    return result.rowCount ?? 0;
+  } catch (err) {
+    console.error('[aiTelemetry] purgeArchivedPromptVersionMetrics failed:', err);
+    return 0;
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Aggregate queries — consumed by the AI Operations panel routes
 // ──────────────────────────────────────────────────────────────────────────────
