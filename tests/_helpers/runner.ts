@@ -63,12 +63,44 @@ export class TestSuite {
     return { passed, failed, total: this.results.length };
   }
 
-  finishOrExit(): never | void {
+  /**
+   * Print the summary and exit the process with the appropriate code.
+   *
+   * Always exits explicitly (0 on success, 1 on failure) instead of relying on
+   * the Node event loop to drain naturally. Many of our route handlers create
+   * long-lived module-level resources during a test (SSE keep-alive
+   * `setInterval` timers, pg `Pool` workers, etc.) that would otherwise keep
+   * the process alive for minutes after every test has reported PASS, blowing
+   * past CI's 2-minute budget. If a test cares about graceful shutdown it can
+   * still tear those resources down before this is called; otherwise this
+   * guarantees forward progress so `npm test` finishes in bounded time.
+   */
+  finishOrExit(): never {
     const { passed, failed, total } = this.summarize();
     console.log(`\n${this.title}: ${passed}/${total} passed`);
     if (failed > 0) {
       console.error(`${this.title}: ${failed} test(s) failed`);
-      process.exit(1);
     }
+    // Flush stdout/stderr before exiting so output isn't truncated when
+    // exit() races with buffered writes.
+    const exitCode = failed > 0 ? 1 : 0;
+    const flushAndExit = () => process.exit(exitCode);
+    let pending = 0;
+    const tryDone = () => {
+      if (--pending <= 0) flushAndExit();
+    };
+    for (const stream of [process.stdout, process.stderr]) {
+      // `write("")` returns true if drained; otherwise wait for `drain`.
+      pending++;
+      if (stream.write("")) {
+        queueMicrotask(tryDone);
+      } else {
+        stream.once("drain", tryDone);
+      }
+    }
+    // Defensive fallback: never let a stuck stream block exit for >250ms.
+    setTimeout(flushAndExit, 250).unref();
+    // Unreachable, satisfies `never` return type.
+    return undefined as never;
   }
 }

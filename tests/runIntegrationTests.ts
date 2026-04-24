@@ -9,15 +9,43 @@
  * execute the vitest-based suites under `tests/vitest/**` which need real
  * module mocking (e.g. stubbing dynamic ESM imports of database modules).
  *
+ * Concurrency
+ * -----------
+ * The tsx test files are dispatched through a worker pool (default 4
+ * concurrent subprocesses) so the fixed tsx + module-init cost (DB pool
+ * bootstrap, schema seeding) is paid in parallel rather than serially. Each
+ * subprocess still gets its own pg Pool / module graph, preserving the
+ * per-file isolation the existing tests rely on (no cookie/role bleed-through
+ * between suites). The vitest suite runs concurrently with the tsx workers
+ * and is bounded by its own internal `pool: "forks"` config.
+ *
+ * Output from each subprocess is buffered and printed as a single labelled
+ * block once the file finishes, so parallel runs do not produce interleaved
+ * unreadable logs.
+ *
+ * Override the worker count with TEST_CONCURRENCY (e.g. TEST_CONCURRENCY=1
+ * for fully serial debugging).
+ *
  * Usage:    npm test
  *           npx tsx tests/runIntegrationTests.ts
+ *           TEST_CONCURRENCY=1 npx tsx tests/runIntegrationTests.ts
  */
 
 import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
+import pLimit from "p-limit";
+
 const TESTS_DIR = path.resolve(new URL(".", import.meta.url).pathname);
+
+interface RunResult {
+  file: string;
+  ok: boolean;
+  code: number;
+  durationMs: number;
+}
 
 async function discoverTestFiles(): Promise<string[]> {
   const entries = await readdir(TESTS_DIR, { withFileTypes: true });
@@ -27,66 +55,140 @@ async function discoverTestFiles(): Promise<string[]> {
     .sort();
 }
 
-function runOne(file: string): Promise<{ file: string; ok: boolean; code: number }> {
+/**
+ * Spawn one tsx subprocess. Captures stdout+stderr into a single buffer so
+ * parallel runs don't interleave. The buffered output is flushed as a single
+ * labelled block once the child exits.
+ */
+function runOne(file: string): Promise<RunResult> {
   return new Promise((resolve) => {
+    const started = Date.now();
+    const rel = path.relative(process.cwd(), file);
     const child = spawn("npx", ["tsx", file], {
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
-    child.on("exit", (code) => {
-      resolve({ file, ok: code === 0, code: code ?? -1 });
-    });
+
+    const chunks: Buffer[] = [];
+    child.stdout?.on("data", (b: Buffer) => chunks.push(b));
+    child.stderr?.on("data", (b: Buffer) => chunks.push(b));
+
+    let finished = false;
+    const finish = (code: number) => {
+      // A child can emit both `error` and `exit` (e.g. spawn failure followed
+      // by the synthetic exit event). Guard against double-resolving.
+      if (finished) return;
+      finished = true;
+      const durationMs = Date.now() - started;
+      const output = Buffer.concat(chunks).toString("utf8");
+      // Print as one coherent block so parallel runs stay readable.
+      process.stdout.write(
+        `\n──── ${rel}  (${(durationMs / 1000).toFixed(1)}s, exit ${code}) ────\n` +
+          (output.endsWith("\n") || output.length === 0 ? output : output + "\n"),
+      );
+      resolve({ file, ok: code === 0, code, durationMs });
+    };
+
+    child.on("exit", (code) => finish(code ?? -1));
     child.on("error", (err) => {
-      console.error(`Failed to spawn ${file}: ${(err as Error).message}`);
-      resolve({ file, ok: false, code: -1 });
+      chunks.push(Buffer.from(`Failed to spawn ${rel}: ${(err as Error).message}\n`));
+      finish(-1);
     });
   });
 }
 
-function runVitest(): Promise<{ file: string; ok: boolean; code: number }> {
+function runVitest(): Promise<RunResult> {
   return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/vitest/** (vitest)";
     const child = spawn("npx", ["vitest", "run", "--reporter=default"], {
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
-    child.on("exit", (code) => {
-      resolve({ file: "tests/vitest/** (vitest)", ok: code === 0, code: code ?? -1 });
-    });
+
+    const chunks: Buffer[] = [];
+    child.stdout?.on("data", (b: Buffer) => chunks.push(b));
+    child.stderr?.on("data", (b: Buffer) => chunks.push(b));
+
+    let finished = false;
+    const finish = (code: number) => {
+      if (finished) return;
+      finished = true;
+      const durationMs = Date.now() - started;
+      const output = Buffer.concat(chunks).toString("utf8");
+      process.stdout.write(
+        `\n──── ${label}  (${(durationMs / 1000).toFixed(1)}s, exit ${code}) ────\n` +
+          (output.endsWith("\n") || output.length === 0 ? output : output + "\n"),
+      );
+      resolve({ file: label, ok: code === 0, code, durationMs });
+    };
+
+    child.on("exit", (code) => finish(code ?? -1));
     child.on("error", (err) => {
-      console.error(`Failed to spawn vitest: ${(err as Error).message}`);
-      resolve({ file: "tests/vitest/** (vitest)", ok: false, code: -1 });
+      chunks.push(Buffer.from(`Failed to spawn vitest: ${(err as Error).message}\n`));
+      finish(-1);
     });
   });
+}
+
+function resolveConcurrency(fileCount: number): number {
+  const raw = process.env.TEST_CONCURRENCY;
+  if (raw && raw.trim() !== "") {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return Math.min(parsed, Math.max(1, fileCount));
+    }
+  }
+  // Default: 4 workers, but never more than file count or available CPUs.
+  const cpus = Math.max(1, os.cpus().length);
+  return Math.max(1, Math.min(4, cpus, Math.max(1, fileCount)));
 }
 
 async function main(): Promise<void> {
+  const overallStart = Date.now();
   const files = await discoverTestFiles();
   if (files.length === 0) {
     console.error("No *.test.ts files discovered under tests/");
     process.exit(1);
   }
 
-  console.log(`\n▶ Running ${files.length} integration test file(s) + vitest suite\n`);
+  const concurrency = resolveConcurrency(files.length);
+  console.log(
+    `\n▶ Running ${files.length} integration test file(s) + vitest suite ` +
+      `(concurrency=${concurrency})\n`,
+  );
 
-  const results: Array<{ file: string; ok: boolean; code: number }> = [];
-  for (const file of files) {
-    console.log(`\n──── ${path.relative(process.cwd(), file)} ────`);
-    const r = await runOne(file);
-    results.push(r);
-  }
+  const limit = pLimit(concurrency);
 
-  console.log(`\n──── tests/vitest/** (vitest run) ────`);
-  results.push(await runVitest());
+  // Dispatch all tsx test files through the worker pool, plus the vitest
+  // suite, all in parallel. Vitest manages its own internal worker pool
+  // (`pool: "forks"`) so it composes cleanly with the tsx workers.
+  const tsxPromises = files.map((file) => limit(() => runOne(file)));
+  const vitestPromise = runVitest();
+
+  const tsxResults = await Promise.all(tsxPromises);
+  const vitestResult = await vitestPromise;
+
+  const results: RunResult[] = [...tsxResults, vitestResult];
 
   const passed = results.filter((r) => r.ok).length;
   const failed = results.length - passed;
 
+  // Sort summary by duration (slowest first) so future tuning is obvious.
+  const summary = [...results].sort((a, b) => b.durationMs - a.durationMs);
+
   console.log("\n========== Integration test summary ==========");
-  for (const r of results) {
+  for (const r of summary) {
     const tag = r.ok ? "PASS" : `FAIL (exit ${r.code})`;
-    console.log(`  [${tag}] ${r.file.startsWith("tests/") ? r.file : path.relative(process.cwd(), r.file)}`);
+    const rel = r.file.startsWith("tests/")
+      ? r.file
+      : path.relative(process.cwd(), r.file);
+    console.log(`  [${tag}] ${(r.durationMs / 1000).toFixed(1)}s  ${rel}`);
   }
-  console.log(`\n${passed}/${results.length} test files passed`);
+  const wallClock = ((Date.now() - overallStart) / 1000).toFixed(1);
+  console.log(
+    `\n${passed}/${results.length} test files passed in ${wallClock}s wall clock`,
+  );
 
   if (failed > 0) process.exit(1);
 }
