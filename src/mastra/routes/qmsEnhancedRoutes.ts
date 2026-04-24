@@ -1,5 +1,5 @@
 import type { Pool as PgPool } from 'pg';
-import { streamCsv } from "../../utils/excelExport";
+import { streamCsv, stageStreamingExportFromHono } from "../../utils/excelExport";
 import { escapeCSVValue } from "../../utils/inputSanitizer";
 import { gateApiRoute } from "../../utils/rbacMiddleware";
 
@@ -365,7 +365,7 @@ const _qmsEnhancedRoutesRaw = [
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await ncPool.end(); }
           })();
-          return streamCsv('nonconformances.csv', cols, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv('nonconformances.csv', cols, rows));
         } catch (error) {
           await ncPool.end();
           return c.json({ error: "Export failed" }, 500);
@@ -390,7 +390,7 @@ const _qmsEnhancedRoutesRaw = [
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await capaPool.end(); }
           })();
-          return streamCsv('capa_records.csv', cols, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv('capa_records.csv', cols, rows));
         } catch (error) {
           await capaPool.end();
           return c.json({ error: "Export failed" }, 500);
@@ -415,7 +415,7 @@ const _qmsEnhancedRoutesRaw = [
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
           })();
-          return streamCsv('compliance_obligations.csv', cols, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv('compliance_obligations.csv', cols, rows));
         } catch (error) {
           console.error('Compliance export error:', error);
           await pool.end();
@@ -441,7 +441,7 @@ const _qmsEnhancedRoutesRaw = [
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
           })();
-          return streamCsv('pdpl_inventory.csv', cols, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv('pdpl_inventory.csv', cols, rows));
         } catch (error) {
           console.error('PDPL export error:', error);
           await pool.end();
@@ -467,7 +467,7 @@ const _qmsEnhancedRoutesRaw = [
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
           })();
-          return streamCsv('kpi_values.csv', cols, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv('kpi_values.csv', cols, rows));
         } catch (error) {
           await pool.end();
           return c.json({ error: "Export failed" }, 500);
@@ -577,7 +577,7 @@ const _qmsEnhancedRoutesRaw = [
             rows: allValRows,
           });
 
-          return await streamXlsx(sheets, `kpi_scorecard_${Date.now()}.xlsx`, { title: 'KPI Scorecard Export' });
+          return await stageStreamingExportFromHono(c, async () => streamXlsx(sheets, `kpi_scorecard_${Date.now()}.xlsx`, { title: 'KPI Scorecard Export' }));
         } catch (error) {
           console.error('Error exporting KPIs XLSX:', error);
           await pool.end();
@@ -605,7 +605,7 @@ const _qmsEnhancedRoutesRaw = [
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
           })();
-          return streamCsv('vendor_assessments.csv', cols, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv('vendor_assessments.csv', cols, rows));
         } catch (error) {
           await pool.end();
           return c.json({ error: "Export failed" }, 500);
@@ -650,7 +650,7 @@ const _qmsEnhancedRoutesRaw = [
             finally { if (ncXlsxPool) await ncXlsxPool.end(); }
           })();
 
-          return await streamXlsx([
+          return await stageStreamingExportFromHono(c, async () => streamXlsx([
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
@@ -687,7 +687,7 @@ const _qmsEnhancedRoutesRaw = [
               ],
               rows: ncDataRows,
             },
-          ], `nonconformances_${Date.now()}.xlsx`, { title: 'Nonconformance Records Export' });
+          ], `nonconformances_${Date.now()}.xlsx`, { title: 'Nonconformance Records Export' }));
         } catch (error) {
           console.error('Error exporting NC XLSX:', error);
           if (ncXlsxPool) await ncXlsxPool.end();
@@ -737,7 +737,7 @@ const _qmsEnhancedRoutesRaw = [
             finally { if (capaXlsxPool) await capaXlsxPool.end(); }
           })();
 
-          return await streamXlsx([
+          return await stageStreamingExportFromHono(c, async () => streamXlsx([
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
@@ -776,7 +776,7 @@ const _qmsEnhancedRoutesRaw = [
               ],
               rows: capaDataRows,
             },
-          ], `capa_records_${Date.now()}.xlsx`, { title: 'CAPA Records Export' });
+          ], `capa_records_${Date.now()}.xlsx`, { title: 'CAPA Records Export' }));
         } catch (error) {
           console.error('Error exporting CAPA XLSX:', error);
           if (capaXlsxPool) await capaXlsxPool.end();
@@ -840,7 +840,7 @@ const _qmsEnhancedRoutesRaw = [
             finally { await pool.end(); }
           })();
 
-          return await streamXlsx([
+          return await stageStreamingExportFromHono(c, async () => streamXlsx([
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
@@ -891,7 +891,7 @@ const _qmsEnhancedRoutesRaw = [
               ],
               rows: assessRows,
             },
-          ], `vendors_${Date.now()}.xlsx`, { title: 'Vendor Risk Export' });
+          ], `vendors_${Date.now()}.xlsx`, { title: 'Vendor Risk Export' }));
         } catch (error) {
           console.error('Error exporting vendors XLSX:', error);
           await pool.end();

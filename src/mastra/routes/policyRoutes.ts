@@ -206,7 +206,7 @@ export const policyRoutes = [
           const status = url.searchParams.get('status') || undefined;
 
           const { escapeCSVValue } = await import('../../utils/inputSanitizer');
-          const { streamCsv, cursorQuery } = await import('../../utils/excelExport');
+          const { streamCsv, cursorQuery, stageStreamingExportFromHono } = await import('../../utils/excelExport');
           const pg = await import('pg');
           exportPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -237,7 +237,7 @@ export const policyRoutes = [
               }
             } finally { await exportPool.end(); }
           })();
-          return streamCsv(`qms_documents_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+          return await stageStreamingExportFromHono(c, () => streamCsv(`qms_documents_${new Date().toISOString().split('T')[0]}.csv`, headers, rows));
         } catch (error) {
           console.error('❌ [PolicyAPI] Error exporting:', error);
           if (exportPool) await exportPool.end();

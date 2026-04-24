@@ -93,7 +93,7 @@ export const riskRoutes = [
           const pg = await import("pg");
           const localPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
           const { escapeCSVValue } = await import('../../utils/inputSanitizer');
-          const { streamCsv, cursorQuery } = await import('../../utils/excelExport');
+          const { streamCsv, cursorQuery, stageStreamingExportFromHono } = await import('../../utils/excelExport');
           const headers = ['Public ID','Title','Category','Source','Identified Date','Identified By','Owner','Department','Impact','Likelihood','Score','Level','Treatment','Status','Created','Updated'];
           const cols = ['public_id','risk_title','risk_category','risk_source','identified_date','identified_by',
                         'risk_owner','owner_department','impact_score','likelihood_score','risk_score','risk_level',
@@ -111,7 +111,7 @@ export const riskRoutes = [
               await localPool.end();
             }
           })();
-          return streamCsv(`risks_${Date.now()}.csv`, headers, mappedRows);
+          return await stageStreamingExportFromHono(c, () => streamCsv(`risks_${Date.now()}.csv`, headers, mappedRows));
         } catch (error) {
           console.error('❌ [RiskAPI] Error exporting risks:', error);
           return c.json({ error: 'Failed to export risks' }, 500);
@@ -134,7 +134,7 @@ export const riskRoutes = [
           await initRiskTables();
           logger?.info('📊 [RiskAPI] GET /api/risks/export-xlsx');
 
-          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery, stageStreamingExportFromHono } = await import('../../utils/excelExport');
 
           // Aggregate summary stats and distinct categories — small results
           const [rTotR, rLevR, aTotR, aOvR, catsR] = await Promise.all([
@@ -252,7 +252,7 @@ export const riskRoutes = [
             rows: actRows,
           });
 
-          return await streamXlsx(sheets, `risks_${Date.now()}.xlsx`, { title: 'Enterprise Risk Register Export' });
+          return await stageStreamingExportFromHono(c, async () => streamXlsx(sheets, `risks_${Date.now()}.xlsx`, { title: 'Enterprise Risk Register Export' }));
         } catch (error) {
           console.error('❌ [RiskAPI] Error exporting risks XLSX:', error);
           await pool.end();

@@ -1130,7 +1130,7 @@ export const duplicateRadarRoutes = [
 
           const pg = await import("pg");
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const { streamCsv, cursorQuery } = await import("../../utils/excelExport");
+          const { streamCsv, cursorQuery, stageStreamingExportFromHono } = await import("../../utils/excelExport");
 
           // Build WHERE clause matching getExportRecords filter logic
           const filterParams: unknown[] = ['active'];
@@ -1184,7 +1184,7 @@ export const duplicateRadarRoutes = [
               } finally { drCsvPool && await drCsvPool.end(); }
             })();
             streaming = true;
-            return streamCsv(`duplicate_radar_export_${Date.now()}.csv`, csvHeaders, rows);
+            return await stageStreamingExportFromHono(c, () => streamCsv(`duplicate_radar_export_${Date.now()}.csv`, csvHeaders, rows));
           } catch (innerErr) {
             if (!streaming && drCsvPool) await drCsvPool.end();
             throw innerErr;
@@ -1210,7 +1210,7 @@ export const duplicateRadarRoutes = [
           const end_date = url.searchParams.get('end_date') || undefined;
           const includeRaw = url.searchParams.get('include_raw') === '1';
 
-          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery, stageStreamingExportFromHono } = await import('../../utils/excelExport');
           const pg2 = await import("pg");
 
           // Build WHERE clause for date filters (no status filter — XLSX exports all active)
@@ -1340,7 +1340,7 @@ export const duplicateRadarRoutes = [
             }
 
             streaming = true;
-            return await streamXlsx(sheets, `duplicate_radar_${Date.now()}.xlsx`, { title: 'Duplicate Radar Export' });
+            return await stageStreamingExportFromHono(c, async () => streamXlsx(sheets, `duplicate_radar_${Date.now()}.xlsx`, { title: 'Duplicate Radar Export' }));
           } catch (innerErr) {
             if (!streaming && drXlsxPool) await drXlsxPool.end();
             throw innerErr;

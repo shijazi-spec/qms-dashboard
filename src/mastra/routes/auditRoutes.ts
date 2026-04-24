@@ -676,7 +676,7 @@ export const auditRoutes = [
           const audit = await getAuditById(id);
           if (!audit) return c.json({ error: 'Audit not found' }, 404);
 
-          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery, stageStreamingExportFromHono } = await import('../../utils/excelExport');
           const pg = await import("pg");
 
           const formatDate = (d: unknown) => d ? new Date(String(d)).toISOString().substring(0, 10) : '';
@@ -721,7 +721,7 @@ export const auditRoutes = [
             })();
 
             streaming = true;
-            return await streamXlsx([
+            return await stageStreamingExportFromHono(c, async () => streamXlsx([
               {
                 name: 'Summary',
                 columns: [
@@ -762,7 +762,7 @@ export const auditRoutes = [
                 ],
                 rows: findingsRows,
               },
-            ], (() => { const safeCode = String(audit.audit_code || id).replace(/[^A-Za-z0-9._-]/g, '_'); return `${safeCode}_audit_report.xlsx`; })(), { title: `Audit Report ${audit.audit_code || id}` });
+            ], (() => { const safeCode = String(audit.audit_code || id).replace(/[^A-Za-z0-9._-]/g, '_'); return `${safeCode}_audit_report.xlsx`; })(), { title: `Audit Report ${audit.audit_code || id}` }));
           } catch (innerErr) {
             if (!streaming && auditPool) await auditPool.end();
             throw innerErr;

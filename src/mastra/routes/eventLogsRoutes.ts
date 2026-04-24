@@ -203,7 +203,7 @@ export const eventLogsRoutes = [
           const pg = await import("pg");
           const logPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const { streamCsv, cursorQuery } = await import("../../utils/excelExport");
+          const { streamCsv, cursorQuery, stageStreamingExportFromHono } = await import("../../utils/excelExport");
           const logCols = ['id','timestamp','user_id','user_name','user_email','user_role','action_type','entity_type','entity_id','entity_name','description','old_value','new_value','ai_involved','severity','correlation_id','ip_address','user_agent','module','checksum','created_at'];
 
           const source = cursorQuery(logPool, baseSql, baseParams);
@@ -226,7 +226,7 @@ export const eventLogsRoutes = [
           ];
 
           logger?.info("📋 [EventLogs API] CSV export streaming started (paged)");
-          return streamCsv(`event_logs_${new Date().toISOString().split('T')[0]}.csv`, headers, mappedRows);
+          return await stageStreamingExportFromHono(c, () => streamCsv(`event_logs_${new Date().toISOString().split('T')[0]}.csv`, headers, mappedRows));
         } catch (error) {
           console.error("Error exporting event logs:", error);
           return c.json({ 

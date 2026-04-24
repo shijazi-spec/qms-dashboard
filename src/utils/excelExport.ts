@@ -16,7 +16,10 @@
  */
 import ExcelJS from "exceljs";
 import { PassThrough } from "stream";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
+import { promises as fsPromises, createReadStream } from "fs";
+import * as path from "path";
+import * as os from "os";
 
 // ---------------------------------------------------------------------------
 // Typed shim for ExcelJS streaming WorkbookWriter
@@ -714,4 +717,517 @@ export function streamCsv(
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Range-aware staging for streaming exports
+// ---------------------------------------------------------------------------
+//
+// `bufferResponseWithRange` only works for already-built buffers. The big
+// XLSX/CSV exports use ExcelJS' streaming WorkbookWriter / pg-cursor
+// pipelines and have no `Content-Length` up front, so an interrupted
+// multi-GB CSV download had to restart from byte 0.
+//
+// The helpers below stage a streaming Response to a per-job temp file, then
+// serve the file with full Range/ETag support so the client-side
+// streaming-download.js resume affordance works for streaming exports the
+// same way it does for buffered ones. A periodic janitor unlinks staged
+// files past their TTL (default 1 hour) so disk doesn't grow unbounded.
+
+/**
+ * Cache directory for staged streaming exports.  Override via
+ * STREAMING_EXPORT_CACHE_DIR env (useful in tests, or to point at a
+ * larger ephemeral volume than `/tmp`).
+ */
+const STAGED_EXPORT_DIR_DEFAULT = path.join(os.tmpdir(), "walaplus-export-cache");
+
+/** Default TTL — exports older than this are unlinked by the janitor. */
+const STAGED_EXPORT_TTL_MS_DEFAULT = 60 * 60 * 1000; // 1 hour
+
+/** How often the janitor scans for expired entries.  5 minutes is plenty
+ *  given the default 1-hour TTL — the lazy-on-access GC catches the rest. */
+const STAGED_EXPORT_JANITOR_INTERVAL_MS = 5 * 60 * 1000;
+
+interface StagedExportEntry {
+  filePath: string;
+  size: number;
+  etag: string;
+  contentType: string;
+  contentDisposition: string;
+  expiresAt: number;
+  /** In-flight reads against this file.  Deferred-unlink waits on this. */
+  refCount: number;
+  /** Set by the janitor when refCount > 0 at TTL expiry — file is unlinked
+   *  by the last reader's decRef rather than yanked out from under it. */
+  pendingDelete: boolean;
+}
+
+/**
+ * Discriminated result of a staging attempt.  We need this so concurrent
+ * waiters on the same in-flight staging promise all observe the same
+ * outcome — either an entry to serve from disk, or a buffered non-200
+ * response that we can re-materialize for each caller (Response bodies
+ * are single-shot, so we cannot share the original Response object).
+ */
+type StagingResult =
+  | { kind: "entry"; entry: StagedExportEntry }
+  | {
+      kind: "passthrough";
+      status: number;
+      statusText: string;
+      headers: Array<[string, string]>;
+      body: Uint8Array;
+    };
+
+const stagedExportCache = new Map<string, StagedExportEntry>();
+const inFlightStaging = new Map<string, Promise<StagingResult>>();
+let stagedExportJanitorTimer: NodeJS.Timeout | null = null;
+
+function stagedExportCacheDir(): string {
+  return process.env.STREAMING_EXPORT_CACHE_DIR || STAGED_EXPORT_DIR_DEFAULT;
+}
+
+function stagedExportTtlMs(): number {
+  const raw = process.env.STREAMING_EXPORT_TTL_MS;
+  if (raw === undefined || raw === "") return STAGED_EXPORT_TTL_MS_DEFAULT;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return STAGED_EXPORT_TTL_MS_DEFAULT;
+  return n;
+}
+
+async function ensureStagedExportDir(): Promise<string> {
+  const dir = stagedExportCacheDir();
+  await fsPromises.mkdir(dir, { recursive: true });
+  return dir;
+}
+
+async function unlinkStagedFile(filePath: string): Promise<void> {
+  try {
+    await fsPromises.unlink(filePath);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT") {
+      // Soft-fail — janitor will retry on the next scan.
+      // eslint-disable-next-line no-console
+      console.warn("[stagedExport] failed to unlink", filePath, err);
+    }
+  }
+}
+
+function decRefStagedEntry(entry: StagedExportEntry): void {
+  entry.refCount = Math.max(0, entry.refCount - 1);
+  if (entry.refCount === 0 && entry.pendingDelete) {
+    void unlinkStagedFile(entry.filePath);
+  }
+}
+
+async function reapStagedEntry(key: string, entry: StagedExportEntry): Promise<void> {
+  stagedExportCache.delete(key);
+  if (entry.refCount > 0) {
+    // Defer unlink until the last reader drains.
+    entry.pendingDelete = true;
+    return;
+  }
+  await unlinkStagedFile(entry.filePath);
+}
+
+/**
+ * Hash the job key into a fixed-length filename prefix. We hash rather than
+ * encode so that auth cookies / session tokens that callers fold into the
+ * job key never end up readable in the on-disk filename.
+ *
+ * The actual on-disk filename appends a per-staging generation suffix (see
+ * `mintStagedFilePath`) so that re-staging the same `jobKey` after TTL
+ * expiry — when a previous generation's file is still being read by a slow
+ * downloader — writes to a fresh file and never truncates the older one
+ * out from under the in-flight reader.
+ */
+function safeStagedFilename(jobKey: string): string {
+  return createHash("sha256").update(jobKey).digest("hex");
+}
+
+/** Mint a generation-unique on-disk path for a fresh staging.  The
+ *  hash-of-jobKey prefix lets ops humans recognise files belonging to the
+ *  same logical export; the random suffix makes each generation unique. */
+function mintStagedFilePath(dir: string, jobKey: string): string {
+  const generation = randomBytes(8).toString("hex");
+  return path.join(dir, `${safeStagedFilename(jobKey)}-${generation}.bin`);
+}
+
+/**
+ * Compute the same weak ETag as `bufferResponseWithRange` does for a Buffer,
+ * but reading the head/tail samples back from a freshly-written file. We
+ * share the scheme so that — should an export become small enough to switch
+ * back to the buffered path in future — clients that already cached the
+ * etag can still resume across the migration boundary.
+ */
+async function computeStagedFileWeakEtag(filePath: string, size: number): Promise<string> {
+  const SAMPLE = 8 * 1024;
+  const headLen = Math.min(SAMPLE, size);
+  const fh = await fsPromises.open(filePath, "r");
+  try {
+    const head = Buffer.alloc(headLen);
+    if (headLen > 0) await fh.read(head, 0, headLen, 0);
+    const h = createHash("sha1");
+    h.update(head);
+    if (size > headLen) {
+      const tailStart = Math.max(0, size - SAMPLE);
+      const tailLen = size - tailStart;
+      const tail = Buffer.alloc(tailLen);
+      await fh.read(tail, 0, tailLen, tailStart);
+      h.update(tail);
+    }
+    return `W/"${size.toString(16)}-${h.digest("hex").substring(0, 16)}"`;
+  } finally {
+    await fh.close();
+  }
+}
+
+async function drainResponseBodyToFile(response: Response, filePath: string): Promise<number> {
+  if (!response.body) {
+    // Empty body — write a 0-byte file so `serveFromStagedEntry` can still
+    // open it for a Range read without an ENOENT race.
+    await fsPromises.writeFile(filePath, Buffer.alloc(0));
+    return 0;
+  }
+  const reader = response.body.getReader();
+  const fh = await fsPromises.open(filePath, "w");
+  let size = 0;
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value || !value.byteLength) continue;
+      const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+      await fh.write(chunk);
+      size += chunk.byteLength;
+    }
+  } finally {
+    await fh.close();
+    try { reader.releaseLock(); } catch { /* noop */ }
+  }
+  return size;
+}
+
+/**
+ * Run one pass of the janitor: drop and unlink any cache entry whose TTL
+ * has expired. Exposed for tests; production callers should rely on the
+ * 5-minute interval started lazily by `stageAndServeStreamingExport`.
+ *
+ * Returns the number of entries reaped.
+ */
+export async function runStagedExportJanitor(): Promise<number> {
+  const now = Date.now();
+  const expired: Array<[string, StagedExportEntry]> = [];
+  for (const [key, entry] of stagedExportCache) {
+    if (entry.expiresAt <= now) expired.push([key, entry]);
+  }
+  for (const [key, entry] of expired) {
+    await reapStagedEntry(key, entry);
+  }
+  return expired.length;
+}
+
+function startStagedExportJanitorIfNeeded(): void {
+  if (stagedExportJanitorTimer) return;
+  if (process.env.STREAMING_EXPORT_DISABLE_JANITOR === "1") return;
+  stagedExportJanitorTimer = setInterval(() => {
+    void runStagedExportJanitor();
+  }, STAGED_EXPORT_JANITOR_INTERVAL_MS);
+  // Don't keep the event loop alive solely for cleanup.
+  if (typeof stagedExportJanitorTimer.unref === "function") {
+    stagedExportJanitorTimer.unref();
+  }
+}
+
+/** Test-only — drop everything from the cache, unlink files, stop the
+ *  janitor. Vitest tests should call this in afterEach to keep runs hermetic. */
+export async function _resetStagedExportCacheForTests(): Promise<void> {
+  if (stagedExportJanitorTimer) {
+    clearInterval(stagedExportJanitorTimer);
+    stagedExportJanitorTimer = null;
+  }
+  inFlightStaging.clear();
+  const entries = [...stagedExportCache.entries()];
+  stagedExportCache.clear();
+  for (const [, entry] of entries) {
+    await unlinkStagedFile(entry.filePath);
+  }
+}
+
+/**
+ * Derive a cache key for a streaming export.
+ *
+ * The key SHOULD be:
+ *   - Stable across resume attempts (same URL + filters + caller identity).
+ *   - Per-user (so two users requesting the same export don't share files).
+ *   - Insensitive to header noise that doesn't affect the body.
+ *
+ * We hash {url, identity, extra} into a single hex string.  Identity is
+ * folded in BEFORE hashing — the caller can pass session id / admin key /
+ * cookie as the identity without it leaking into logs or filenames.
+ */
+export function deriveStreamingExportJobKey(parts: {
+  url: string;
+  userIdentity?: string | null;
+  extra?: string;
+}): string {
+  const h = createHash("sha256");
+  h.update(parts.url || "");
+  h.update("\0");
+  h.update(parts.userIdentity || "anon");
+  h.update("\0");
+  h.update(parts.extra || "");
+  return h.digest("hex");
+}
+
+export interface StreamingExportStagingOptions {
+  /** TTL for the staged file (ms).  Defaults to env `STREAMING_EXPORT_TTL_MS`
+   *  or 1 hour. */
+  ttlMs?: number;
+}
+
+/**
+ * Stage a streaming Response to a per-job temp file, then serve it with
+ * full HTTP Range support so the client-side streaming-download helper can
+ * resume an interrupted XLSX/CSV download the same way it can resume a
+ * buffered PDF/XLSX.
+ *
+ * Behaviour:
+ *   - On cache miss, `build()` is called exactly once.  Its Response body
+ *     is drained into the temp file before any byte is sent to the client.
+ *     A weak ETag, total size, content-type, and content-disposition are
+ *     captured from the producer's Response and stored alongside the file.
+ *   - On cache hit, `build()` is not called at all — the cached file is
+ *     served directly, even if the new request has no `Range` header.
+ *     Subsequent `Range:`+`If-Range:` requests stream the requested byte
+ *     range straight off disk via `fs.createReadStream(start, end)`.
+ *   - Concurrent requests for the same `jobKey` coalesce — the second
+ *     request awaits the first staging promise instead of rebuilding.
+ *   - Non-200 responses from `build()` (e.g. a 401 from middleware) are
+ *     passed straight through and never cached.
+ *
+ * Garbage collection: a 5-minute interval scans the cache for entries past
+ * `ttlMs` and unlinks their files.  Lazy-on-access GC catches stale
+ * entries between janitor passes.  Files with active reads are deferred
+ * to the last reader's decRef (so a slow downloader is never yanked).
+ */
+export async function stageAndServeStreamingExport(
+  reqHeaders: RangeRequestHeaders,
+  jobKey: string,
+  build: () => Promise<Response> | Response,
+  options: StreamingExportStagingOptions = {}
+): Promise<Response> {
+  startStagedExportJanitorIfNeeded();
+  const ttlMs = options.ttlMs ?? stagedExportTtlMs();
+
+  // Lazy GC on access — drop expired entries before serving so a hit on a
+  // long-stale entry can't beat the periodic janitor by milliseconds.
+  const now0 = Date.now();
+  const stale = stagedExportCache.get(jobKey);
+  if (stale && stale.expiresAt <= now0) {
+    await reapStagedEntry(jobKey, stale);
+  }
+
+  let entry = stagedExportCache.get(jobKey);
+  if (!entry) {
+    let staging = inFlightStaging.get(jobKey);
+    let owns = false;
+    if (!staging) {
+      owns = true;
+      staging = (async (): Promise<StagingResult> => {
+        const dir = await ensureStagedExportDir();
+        // Generation-unique path: a re-stage of the same jobKey while a
+        // previous generation's file is still being streamed by a slow
+        // reader writes to a fresh file and never truncates the older one.
+        const filePath = mintStagedFilePath(dir, jobKey);
+        const built = await build();
+        // Pass non-200 responses straight through. We buffer the body
+        // here (typically a small JSON error) so concurrent waiters
+        // attached to this staging promise can each materialize their own
+        // fresh Response — Response bodies are single-shot.  We never
+        // cache error bodies — that would pin a bad response across the
+        // TTL window even after the underlying problem is fixed.
+        if (built.status !== 200) {
+          const headerPairs: Array<[string, string]> = [];
+          built.headers.forEach((v, k) => headerPairs.push([k, v]));
+          const body = new Uint8Array(await built.arrayBuffer());
+          return {
+            kind: "passthrough",
+            status: built.status,
+            statusText: built.statusText,
+            headers: headerPairs,
+            body,
+          };
+        }
+        const contentType = built.headers.get("content-type") ||
+          "application/octet-stream";
+        const contentDisposition = built.headers.get("content-disposition") ||
+          'attachment; filename="export.bin"';
+        const size = await drainResponseBodyToFile(built, filePath);
+        const etag = await computeStagedFileWeakEtag(filePath, size);
+        const newEntry: StagedExportEntry = {
+          filePath,
+          size,
+          etag,
+          contentType,
+          contentDisposition,
+          expiresAt: Date.now() + ttlMs,
+          refCount: 0,
+          pendingDelete: false,
+        };
+        stagedExportCache.set(jobKey, newEntry);
+        return { kind: "entry", entry: newEntry };
+      })();
+      inFlightStaging.set(jobKey, staging);
+    }
+
+    let result: StagingResult;
+    try {
+      result = await staging;
+    } finally {
+      // Only the owning caller clears the in-flight slot — followers
+      // must not race ahead and remove a slot the owner is still
+      // waiting on.  Failed stagings (the await throws) also clear
+      // their slot so a subsequent caller can retry from scratch.
+      if (owns) inFlightStaging.delete(jobKey);
+    }
+
+    if (result.kind === "passthrough") {
+      return new Response(result.body, {
+        status: result.status,
+        statusText: result.statusText,
+        headers: result.headers,
+      });
+    }
+    entry = result.entry;
+  }
+
+  return serveFromStagedEntry(entry, reqHeaders);
+}
+
+function serveFromStagedEntry(
+  entry: StagedExportEntry,
+  reqHeaders: RangeRequestHeaders
+): Response {
+  const total = entry.size;
+  const baseHeaders: Record<string, string> = {
+    "Content-Type": entry.contentType,
+    "Content-Disposition": entry.contentDisposition,
+    "Accept-Ranges": "bytes",
+    "ETag": entry.etag,
+  };
+
+  const rangeHeader = readReqHeader(reqHeaders, "range");
+  const ifRangeHeader = readReqHeader(reqHeaders, "if-range");
+
+  // If-Range: ignore Range when the validator no longer matches.  Same
+  // semantics as bufferResponseWithRange (verbatim compare, weak or strong).
+  const useRange = !!rangeHeader &&
+    (!ifRangeHeader || ifRangeHeader.trim() === entry.etag.trim());
+
+  let start = 0;
+  let end = total > 0 ? total - 1 : 0;
+  let status = 200;
+  if (useRange) {
+    const parsed = parseSingleRange(rangeHeader as string, total);
+    if (parsed === "unsatisfiable") {
+      return new Response(null, {
+        status: 416,
+        headers: { ...baseHeaders, "Content-Range": `bytes */${total}` },
+      });
+    }
+    if (parsed) {
+      start = parsed.start;
+      end = parsed.end;
+      status = 206;
+    }
+    // parsed === null → malformed; RFC 7233 §3.1 says serve full body.
+  }
+
+  if (total === 0) {
+    return new Response(new Uint8Array(0), {
+      status: 200,
+      headers: { ...baseHeaders, "Content-Length": "0" },
+    });
+  }
+
+  const length = end - start + 1;
+  // refcount this read against deferred-unlink so the janitor can't yank
+  // the file out from under a slow downloader mid-stream.
+  entry.refCount++;
+
+  const nodeStream = createReadStream(entry.filePath, { start, end });
+  let settled = false;
+  const release = () => {
+    if (settled) return;
+    settled = true;
+    decRefStagedEntry(entry);
+  };
+
+  const webStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      nodeStream.on("data", (chunk: Buffer) => {
+        controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+      });
+      nodeStream.on("end", () => {
+        try { controller.close(); } catch { /* already closed */ }
+        release();
+      });
+      nodeStream.on("error", (err: Error) => {
+        try { controller.error(err); } catch { /* already errored */ }
+        release();
+      });
+    },
+    cancel() {
+      try { nodeStream.destroy(); } catch { /* noop */ }
+      release();
+    },
+  });
+
+  const headers: Record<string, string> = {
+    ...baseHeaders,
+    "Content-Length": String(length),
+  };
+  if (status === 206) {
+    headers["Content-Range"] = `bytes ${start}-${end}/${total}`;
+  }
+  return new Response(webStream, { status, headers });
+}
+
+/**
+ * Convenience wrapper for Hono route handlers.  Derives the job key from
+ * `c.req.url` + the caller's session/admin-key, and forwards the standard
+ * Range / If-Range headers into `stageAndServeStreamingExport`.
+ *
+ * Usage:
+ *   return await stageStreamingExportFromHono(c, () =>
+ *     streamXlsx(sheets, filename, meta));
+ */
+export async function stageStreamingExportFromHono(
+  c: { req: { url: string; method?: string; header: (n: string) => string | null | undefined } },
+  build: () => Promise<Response> | Response,
+  options: StreamingExportStagingOptions = {}
+): Promise<Response> {
+  const reqHeaders: Record<string, string> = {};
+  const range = c.req.header("Range") || c.req.header("range");
+  if (range) reqHeaders["range"] = range;
+  const ifRange = c.req.header("If-Range") || c.req.header("if-range");
+  if (ifRange) reqHeaders["if-range"] = ifRange;
+
+  const userIdentity =
+    c.req.header("Cookie") ||
+    c.req.header("cookie") ||
+    c.req.header("X-Admin-Key") ||
+    c.req.header("x-admin-key") ||
+    c.req.header("Authorization") ||
+    "";
+
+  const method = (c.req.method || "GET").toUpperCase();
+  const jobKey = deriveStreamingExportJobKey({
+    url: `${method} ${c.req.url}`,
+    userIdentity,
+  });
+  return stageAndServeStreamingExport(reqHeaders, jobKey, build, options);
 }
