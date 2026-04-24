@@ -7,6 +7,8 @@ import {
   getDailyCostSummary,
   getFeedbackRateByAgent,
   insertCallFeedback,
+  getChildToolCallsForParent,
+  getKnownAgentNames,
   MODEL_PRICE_TABLE,
 } from "../../utils/aiTelemetry";
 import { join } from "path";
@@ -138,11 +140,39 @@ export const aiOpsRoutes = [
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const limit = safeInt(c.req.query("limit"), 10, 1, 50);
-          const data = await getTopToolsByCost(limit);
-          return c.json({ data });
+          const agentParam = c.req.query("agent");
+          const agent = typeof agentParam === 'string' ? agentParam.slice(0, 100) : undefined;
+          const [data, agents] = await Promise.all([
+            getTopToolsByCost(limit, agent),
+            getKnownAgentNames(),
+          ]);
+          return c.json({ data, agents });
         } catch (error) {
           console.error("[AI-Ops] top-tools error:", error);
           return c.json({ error: "Failed to fetch tool stats" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/calls/:id/children",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const idParam = c.req.param("id");
+          const parentId = parseInt(String(idParam ?? ''), 10);
+          if (!Number.isFinite(parentId) || parentId <= 0) {
+            return c.json({ error: "Invalid call id" }, 400);
+          }
+          const data = await getChildToolCallsForParent(parentId);
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] call children error:", error);
+          return c.json({ error: "Failed to fetch child tool calls" }, 500);
         }
       };
     },

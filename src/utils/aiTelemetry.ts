@@ -605,8 +605,14 @@ export async function getAgentLatencyPercentiles(): Promise<any[]> {
   return result.rows;
 }
 
-export async function getTopToolsByCost(limit = 10): Promise<any[]> {
+export async function getTopToolsByCost(limit = 10, agentName?: string): Promise<any[]> {
   await ensureAiMetricsTable();
+  const params: any[] = [limit];
+  let agentFilter = '';
+  if (agentName && agentName.trim()) {
+    params.push(agentName.trim());
+    agentFilter = `AND agent_name = $${params.length}`;
+  }
   const result = await pool.query(
     `SELECT
        tool_name,
@@ -621,10 +627,46 @@ export async function getTopToolsByCost(limit = 10): Promise<any[]> {
      FROM ai_call_metrics
      WHERE tool_name IS NOT NULL
        AND started_at >= NOW() - INTERVAL '7 days'
+       ${agentFilter}
      GROUP BY tool_name, agent_name
      ORDER BY total_cost DESC, call_count DESC
      LIMIT $1`,
-    [limit]
+    params
+  );
+  return result.rows;
+}
+
+export async function getKnownAgentNames(): Promise<string[]> {
+  await ensureAiMetricsTable();
+  const result = await pool.query(
+    `SELECT DISTINCT agent_name
+     FROM ai_call_metrics
+     WHERE tool_name IS NOT NULL
+       AND started_at >= NOW() - INTERVAL '7 days'
+     ORDER BY agent_name`
+  );
+  return result.rows.map(r => r.agent_name);
+}
+
+export async function getChildToolCallsForParent(parentId: number): Promise<{
+  id: string;
+  agent_name: string;
+  tool_name: string | null;
+  latency_ms: number;
+  success: boolean;
+  error_class: string | null;
+  error_message: string | null;
+  started_at: string;
+}[]> {
+  await ensureAiMetricsTable();
+  const result = await pool.query(
+    `SELECT
+       id, agent_name, tool_name,
+       latency_ms, success, error_class, error_message, started_at
+     FROM ai_call_metrics
+     WHERE parent_call_id = $1
+     ORDER BY started_at ASC, id ASC`,
+    [parentId]
   );
   return result.rows;
 }

@@ -108,7 +108,17 @@
     <!-- Top Tools Tab -->
     <div id="content-tools" class="hidden fade-in">
       <div class="bg-white rounded-xl shadow-sm border p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Top Tool Calls by Cost — last 7 days</h2>
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 class="text-lg font-semibold text-gray-900">Top Tool Calls by Cost — last 7 days</h2>
+          <div class="flex items-center gap-2">
+            <label for="tools-agent-filter" class="text-xs text-gray-500 uppercase tracking-wide">Agent</label>
+            <select id="tools-agent-filter" onchange="loadTools()"
+              class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500"
+              data-testid="select-tools-agent-filter">
+              <option value="">All agents</option>
+            </select>
+          </div>
+        </div>
         <div id="tools-table" class="overflow-x-auto">
           <p class="text-gray-400 text-sm">Loading…</p>
         </div>
@@ -285,11 +295,35 @@
       }
     }
 
+    function syncToolAgentOptions(agents) {
+      const sel = document.getElementById('tools-agent-filter');
+      if (!sel) return;
+      const current = sel.value;
+      const seen = new Set(['']);
+      // Remove all options except the first ("All agents")
+      while (sel.options.length > 1) sel.remove(1);
+      (agents || []).forEach(a => {
+        if (!a || seen.has(a)) return;
+        seen.add(a);
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+      if (current && seen.has(current)) sel.value = current;
+    }
+
     async function loadTools() {
       const el = document.getElementById('tools-table');
+      const agent = document.getElementById('tools-agent-filter')?.value || '';
       try {
-        const { data } = await apiFetch('/api/ai-ops/top-tools?limit=15');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No tool calls recorded in the last 7 days.</p>'; return; }
+        const url = '/api/ai-ops/top-tools?limit=15' + (agent ? `&agent=${encodeURIComponent(agent)}` : '');
+        const { data, agents } = await apiFetch(url);
+        syncToolAgentOptions(agents);
+        if (!data.length) {
+          el.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tools-empty">No tool calls recorded in the last 7 days${agent ? ` for agent "${esc(agent)}"` : ''}.</p>`;
+          return;
+        }
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-top-tools">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -324,6 +358,7 @@
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-recent-issues">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+              <th class="px-3 py-2 w-6"></th>
               <th class="px-3 py-2">Time</th>
               <th class="px-3 py-2">Agent</th>
               <th class="px-3 py-2">Tool</th>
@@ -331,8 +366,21 @@
               <th class="px-3 py-2">Status</th>
               <th class="px-3 py-2">Error / Prompt preview</th>
             </tr></thead>
-            <tbody>${data.map((r, i) => `
+            <tbody>${data.map((r, i) => {
+              const isParent = !r.tool_name;
+              const expandCell = isParent
+                ? `<td class="px-3 py-2 align-top">
+                     <button type="button"
+                       class="w-5 h-5 inline-flex items-center justify-center rounded border border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-800 text-xs"
+                       onclick="toggleChildren('${r.id}', this)"
+                       data-expanded="false"
+                       aria-label="Show child tool calls"
+                       data-testid="button-expand-${r.id}">+</button>
+                   </td>`
+                : `<td class="px-3 py-2"></td>`;
+              return `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-issue-${r.id}">
+                ${expandCell}
                 <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.started_at)}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 text-xs">${esc(r.agent_name)}</td>
                 <td class="px-3 py-2 text-gray-600 font-mono text-xs">${esc(r.tool_name || '—')}</td>
@@ -352,12 +400,87 @@
                     ? `<div class="mt-0.5 truncate text-gray-400 italic" title="${esc(r.prompt_preview)}" data-testid="text-prompt-preview-${r.id}">&ldquo;${esc(r.prompt_preview.slice(0,120))}&rdquo;</div>`
                     : ''}
                 </td>
-              </tr>`).join('')}
+              </tr>
+              ${isParent ? `<tr id="children-row-${r.id}" class="hidden" data-testid="children-row-${r.id}">
+                <td></td>
+                <td colspan="6" class="px-3 py-3 bg-blue-50/40">
+                  <div id="children-content-${r.id}" class="text-xs text-gray-500">Loading…</div>
+                </td>
+              </tr>` : ''}`;
+            }).join('')}
             </tbody>
           </table>`;
       } catch (e) {
         el.innerHTML = '<p class="text-red-500 text-sm">Failed to load recent issues.</p>';
       }
+    }
+
+    const childrenCache = new Map();
+
+    async function toggleChildren(parentId, btn) {
+      const row = document.getElementById(`children-row-${parentId}`);
+      const container = document.getElementById(`children-content-${parentId}`);
+      if (!row || !container) return;
+      const expanded = btn.getAttribute('data-expanded') === 'true';
+      if (expanded) {
+        row.classList.add('hidden');
+        btn.setAttribute('data-expanded', 'false');
+        btn.setAttribute('aria-label', 'Show child tool calls');
+        btn.textContent = '+';
+        return;
+      }
+      row.classList.remove('hidden');
+      btn.setAttribute('data-expanded', 'true');
+      btn.setAttribute('aria-label', 'Hide child tool calls');
+      btn.textContent = '−';
+
+      if (childrenCache.has(parentId)) {
+        renderChildren(container, childrenCache.get(parentId));
+        return;
+      }
+      container.innerHTML = '<span class="text-gray-400">Loading child tool calls…</span>';
+      try {
+        const { data } = await apiFetch(`/api/ai-ops/calls/${encodeURIComponent(parentId)}/children`);
+        childrenCache.set(parentId, data);
+        renderChildren(container, data);
+      } catch (e) {
+        container.innerHTML = '<span class="text-red-500">Failed to load child tool calls.</span>';
+      }
+    }
+
+    function renderChildren(container, rows) {
+      if (!rows || !rows.length) {
+        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">No child tool calls were recorded for this agent invocation.</span>';
+        return;
+      }
+      container.innerHTML = `
+        <div class="font-semibold text-gray-700 mb-2">Child tool calls (${rows.length})</div>
+        <table class="min-w-full text-left text-xs" data-testid="table-child-tools">
+          <thead><tr class="text-gray-500 uppercase">
+            <th class="px-2 py-1">Time</th>
+            <th class="px-2 py-1">Tool</th>
+            <th class="px-2 py-1 text-right">Latency</th>
+            <th class="px-2 py-1">Status</th>
+            <th class="px-2 py-1">Error</th>
+          </tr></thead>
+          <tbody>${rows.map(c => `
+            <tr class="border-t border-blue-100" data-testid="row-child-${c.id}">
+              <td class="px-2 py-1 text-gray-500 whitespace-nowrap">${fmtDate(c.started_at)}</td>
+              <td class="px-2 py-1 font-mono text-gray-800">${esc(c.tool_name || '—')}</td>
+              <td class="px-2 py-1 text-right ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':''}">${fmtMs(c.latency_ms)}</td>
+              <td class="px-2 py-1">
+                ${c.success
+                  ? '<span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">OK</span>'
+                  : '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">Error</span>'}
+              </td>
+              <td class="px-2 py-1 text-gray-500">
+                ${c.error_class
+                  ? `<span class="font-mono text-red-600">${esc(c.error_class)}</span>: ${esc((c.error_message||'').slice(0,100))}`
+                  : ''}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
     }
 
     function refreshAll() {
