@@ -605,6 +605,238 @@ describe('streamingDownload (browser helper)', () => {
     expect(env.win.alert).not.toHaveBeenCalled();
   });
 
+  // === Environmental-abort tests (Task #183) ===
+  // Distinguish user-initiated cancels from browser/OS aborts (tab discarded,
+  // sleep/wake, background-throttling, network drop) and surface a non-blocking
+  // "Download interrupted — Retry" toast in the latter case.
+
+  it('shows an "Interrupted — Retry" toast when the browser aborts the fetch mid-stream (no user cancel)', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    let fetchCalls = 0;
+    env.win.fetch = vi.fn(async () => {
+      fetchCalls += 1;
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="huge.csv"',
+        },
+      });
+    });
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/huge.csv', {
+      skipEstimate: true,
+      useServiceWorker: false,
+    });
+
+    // Let the download start and receive a chunk.
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(new Uint8Array([1, 2, 3, 4]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    // Simulate the browser/OS killing the fetch (tab discarded, sleep/wake,
+    // background-throttling, network drop). We surface this as an AbortError
+    // even though no one called cancelDownload().
+    const browserAbort: any = new Error('The user agent terminated the request.');
+    browserAbort.name = 'AbortError';
+    bodyController.error(browserAbort);
+
+    await expect(downloadPromise).rejects.toMatchObject({
+      name: 'AbortError',
+      interrupted: true,
+    });
+
+    // The "Interrupted — Retry" warn toast must be in the DOM.
+    const toast = env.win.document.querySelector('[data-testid="toast-download-interrupted"]');
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).toMatch(/interrupted/i);
+    expect(toast?.textContent).toMatch(/huge\.csv/);
+    // The Retry action button must be present and labelled "Retry". Scope
+    // the lookup to the toast so we don't accidentally match the
+    // recent-downloads-tray Retry button (data-testid prefix
+    // `button-retry-download-<id>`).
+    const retryBtn = toast?.querySelector(
+      '[data-testid="button-retry-download"]'
+    ) as HTMLButtonElement | null;
+    expect(retryBtn).not.toBeNull();
+    expect(retryBtn?.textContent).toBe('Retry');
+
+    // The progress card must show an "Interrupted" state, not "Cancelled".
+    const card = env.win.document.querySelector('[data-testid="card-download-progress"]');
+    const status = card?.querySelector('[data-testid="text-download-status"]');
+    expect(status?.textContent).toMatch(/interrupted/i);
+
+    // Sanity: only one fetch so far (the Retry hasn't fired yet).
+    expect(fetchCalls).toBe(1);
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
+  it('Retry action on the interrupted toast re-invokes streamingDownload with the same url/options', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    // First call: starts streaming, then errors with an environmental
+    // AbortError. Second call (from Retry): completes successfully.
+    let callCount = 0;
+    let firstBodyController: any;
+
+    env.win.fetch = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        const body = new (globalThis as any).ReadableStream({
+          start(c: any) { firstBodyController = c; },
+        });
+        return new (globalThis as any).Response(body, {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        });
+      }
+      // Retry attempt — return a small payload that completes normally.
+      return new (globalThis as any).Response(streamFromChunks([new Uint8Array([42, 43])]), {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      });
+    });
+
+    const firstPromise = env.win.streamingDownload('/api/exports/retry-abort.csv', {
+      skipEstimate: true,
+      useServiceWorker: false,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(new Uint8Array([0]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    // Simulate environmental abort.
+    const envAbort: any = new Error('aborted by browser');
+    envAbort.name = 'AbortError';
+    firstBodyController.error(envAbort);
+
+    await expect(firstPromise).rejects.toMatchObject({ name: 'AbortError', interrupted: true });
+
+    // Capture the interrupted toast so we can assert it gets dismissed.
+    const interruptedToast = env.win.document.querySelector(
+      '[data-testid="toast-download-interrupted"]'
+    ) as HTMLElement | null;
+    expect(interruptedToast).not.toBeNull();
+
+    // Click Retry on the toast (scoped to the toast itself to avoid the
+    // recent-downloads tray's per-row retry button).
+    const retryBtn = interruptedToast?.querySelector(
+      '[data-testid="button-retry-download"]'
+    ) as HTMLButtonElement | null;
+    expect(retryBtn).not.toBeNull();
+    retryBtn?.click();
+
+    // Wait for the second download to complete (it runs through the Blob path).
+    await new Promise((r) => setTimeout(r, 350));
+
+    expect(callCount).toBe(2);
+    // After Retry is clicked, the interrupted toast is dismissed (fades out
+    // and is removed from the DOM) so the user isn't left looking at a stale
+    // "interrupted" warning while the retried download is in flight.
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-interrupted"]')
+    ).toBeNull();
+  });
+
+  it('does NOT show an "Interrupted — Retry" toast when the user clicks Cancel (stays silent)', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    env.win.fetch = vi.fn(async (_url: string, init: any = {}) => {
+      if (init && init.signal) {
+        init.signal.addEventListener('abort', () => {
+          try {
+            const err: any = new Error('aborted');
+            err.name = 'AbortError';
+            bodyController.error(err);
+          } catch (_) { /* ignore */ }
+        });
+      }
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="silent.csv"',
+        },
+      });
+    });
+
+    let cancelFn: (() => void) | null = null;
+    const downloadPromise = env.win.streamingDownload('/api/exports/silent.csv', {
+      onCancelHandle: (fn: () => void) => { cancelFn = fn; },
+      skipEstimate: true,
+      useServiceWorker: false,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(new Uint8Array([1, 2]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    // User-initiated cancel.
+    cancelFn!();
+
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+
+    // No interrupted toast, no error toast — user cancels stay silent.
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-interrupted"]')
+    ).toBeNull();
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-error"]')
+    ).toBeNull();
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-info"]')
+    ).toBeNull();
+
+    // The card briefly shows "Cancelled" (not "Interrupted").
+    const card = env.win.document.querySelector('[data-testid="card-download-progress"]');
+    const status = card?.querySelector('[data-testid="text-download-status"]');
+    expect(status?.textContent).toMatch(/cancelled/i);
+
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
+  it('treats a save-dialog dismissal (picker AbortError) as a user cancel, not an environmental abort', async () => {
+    env = setupBrowserEnv({
+      showSaveFilePickerImpl: async () => {
+        const err: any = new Error('The user aborted a request.');
+        err.name = 'AbortError';
+        throw err;
+      },
+    });
+    const payload = new Uint8Array([1, 2, 3]);
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([payload]), {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      })
+    );
+
+    await expect(env.win.streamingDownload('/api/exports/picker.csv')).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    // Picker dismissal is a deliberate user action — must NOT show the
+    // environmental-interrupted toast.
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-interrupted"]')
+    ).toBeNull();
+  });
+
+  // === Recent-downloads history tests (sessionStorage tray, from main) ===
+
   it('records each successful download in the recent-downloads history (sessionStorage)', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
     const payload = new Uint8Array([10, 11, 12]);
@@ -1161,7 +1393,7 @@ describe('streamingDownload (browser helper)', () => {
     });
   });
 
-  it('Cancel button aborts an in-flight slow download, marks the card cancelled, shows an info toast, and never alerts', async () => {
+  it('Cancel button aborts an in-flight slow download, marks the card cancelled, stays silent (no toast), and never alerts', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
     // Capture the AbortSignal handed to fetch so the test can prove it fired.
@@ -1236,19 +1468,23 @@ describe('streamingDownload (browser helper)', () => {
 
     expect((cancelBtn as HTMLButtonElement).disabled).toBe(true);
 
-    // An info-style toast (not an error toast) confirms the cancellation.
-    const infoToast = env.win.document.querySelector(
-      '[data-testid="toast-download-info"]'
-    );
-    expect(infoToast).not.toBeNull();
-    expect((infoToast as HTMLElement).textContent || '').toContain('Download cancelled');
-    expect((infoToast as HTMLElement).textContent || '').toContain('slow.csv');
-
-    // Cancellation must NOT use the disruptive native alert UX, and must
-    // NOT raise an error toast (which would imply the download "failed").
+    // Per Task #183 spec: user-initiated cancels stay silent. The card
+    // state change (gray bar + "Cancelled" status, asserted above) is the
+    // only feedback — no toast at all. We must NOT show:
+    //   * an info toast (would imply this is just a routine notification)
+    //   * an error toast (would imply the download "failed")
+    //   * the environmental "interrupted — Retry" toast (would mislead the
+    //     user into thinking the browser killed their cancel)
+    // and we must NOT use the disruptive native alert() UX.
     expect(env.win.alert).not.toHaveBeenCalled();
     expect(
+      env.win.document.querySelector('[data-testid="toast-download-info"]')
+    ).toBeNull();
+    expect(
       env.win.document.querySelector('[data-testid="toast-download-error"]')
+    ).toBeNull();
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-interrupted"]')
     ).toBeNull();
   });
 });

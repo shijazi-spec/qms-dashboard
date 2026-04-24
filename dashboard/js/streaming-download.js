@@ -542,13 +542,16 @@
         };
     }
 
-    function showToast(message, type) {
+    function showToast(message, type, opts) {
         var container = ensureToastContainer();
         if (!container) return;
         var palette;
         switch (type) {
             case 'error':
                 palette = 'bg-red-600 text-white';
+                break;
+            case 'warn':
+                palette = 'bg-amber-600 text-white';
                 break;
             case 'info':
                 palette = 'bg-blue-600 text-white';
@@ -558,20 +561,15 @@
         }
         var toast = document.createElement('div');
         toast.className = 'shadow-lg rounded-lg px-4 py-3 text-sm flex items-start gap-3 ' + palette;
-        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-        toast.setAttribute('data-testid', 'toast-download-' + (type || 'success'));
+        toast.setAttribute('role', type === 'error' || type === 'warn' ? 'alert' : 'status');
+        var testId = (opts && opts.testId) || ('toast-download-' + (type || 'success'));
+        toast.setAttribute('data-testid', testId);
 
         var msg = document.createElement('span');
         msg.className = 'flex-1 break-words';
         msg.textContent = message;
         toast.appendChild(msg);
 
-        var close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'text-white/80 hover:text-white text-lg leading-none focus:outline-none focus:ring-2 focus:ring-white/60 rounded';
-        close.innerHTML = '&times;';
-        close.setAttribute('aria-label', 'Dismiss notification');
-        close.setAttribute('data-testid', 'button-dismiss-toast');
         var dismissed = false;
         function dismiss() {
             if (dismissed) return;
@@ -582,11 +580,36 @@
                 if (toast.parentNode) toast.parentNode.removeChild(toast);
             }, 300);
         }
+
+        // Optional inline action button (e.g. "Retry"). Rendered before the
+        // dismiss "×" so screen readers announce the call-to-action first.
+        if (opts && opts.action && typeof opts.action.onClick === 'function') {
+            var actionBtn = document.createElement('button');
+            actionBtn.type = 'button';
+            actionBtn.className = 'underline font-medium text-white/95 hover:text-white ' +
+                'focus:outline-none focus:ring-2 focus:ring-white/60 rounded px-2 py-1 flex-shrink-0';
+            actionBtn.textContent = opts.action.label || 'Retry';
+            actionBtn.setAttribute('data-testid', (opts.action.testId || 'button-toast-action'));
+            actionBtn.addEventListener('click', function () {
+                try { opts.action.onClick(); } catch (_) { /* ignore */ }
+                dismiss();
+            });
+            toast.appendChild(actionBtn);
+        }
+
+        var close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'text-white/80 hover:text-white text-lg leading-none focus:outline-none focus:ring-2 focus:ring-white/60 rounded';
+        close.innerHTML = '&times;';
+        close.setAttribute('aria-label', 'Dismiss notification');
+        close.setAttribute('data-testid', 'button-dismiss-toast');
         close.addEventListener('click', dismiss);
         toast.appendChild(close);
 
         container.appendChild(toast);
-        setTimeout(dismiss, type === 'error' ? 6000 : 4000);
+        var defaultMs = (type === 'error' || type === 'warn') ? 6000 : 4000;
+        var ms = (opts && typeof opts.autoDismissMs === 'number') ? opts.autoDismissMs : defaultMs;
+        if (ms > 0) setTimeout(dismiss, ms);
     }
 
     // --- Recent downloads history & tray ---------------------------------
@@ -945,7 +968,10 @@
             });
         } catch (err) {
             if (err && err.name === 'AbortError') {
-                // Propagate user cancellation as-is so the caller can clean up.
+                // Tag the picker dismissal as an explicit user-initiated
+                // cancellation so the outer catch can keep the UX silent
+                // rather than treating it as an environmental abort.
+                try { err.userCancelled = true; } catch (_) { /* frozen err */ }
                 throw err;
             }
             // SecurityError (lost user activation), NotAllowedError, or any
@@ -1324,6 +1350,20 @@
         var card = null;
         var cancelled = false;
         var originalContent = null;
+        // Hoisted so the catch block (e.g. environmental-abort path) can
+        // reference the parsed filename in the user-facing toast even
+        // after the floating progress card has auto-removed.
+        var resolvedFilename = options.filename || null;
+
+        // Track whether the abort came from a user-initiated cancel (the
+        // export-button Cancel affordance, the floating-card Cancel button,
+        // a programmatic onCancelHandle, or an externally-supplied
+        // AbortSignal) vs. an environmental abort (browser/OS killing the
+        // fetch — tab discarded, mobile background-throttling, sleep/wake,
+        // network drop). The two look identical at the AbortError level,
+        // but only the latter should surface a visible "Download
+        // interrupted — Retry" toast.
+        var userCancelled = false;
 
         // Track live progress so the cancel-confirmation gate can decide
         // whether the user is far enough along to deserve a "Are you sure?"
@@ -1349,10 +1389,14 @@
         if (controller) {
             if (externalSignal) {
                 if (externalSignal.aborted) {
+                    // A pre-aborted external signal means the caller chose
+                    // not to start — count it as user-initiated.
+                    userCancelled = true;
                     try { controller.abort(externalSignal.reason); } catch (_) { /* ignore */ }
                 } else {
                     try {
                         externalSignal.addEventListener('abort', function () {
+                            userCancelled = true;
                             try { controller.abort(externalSignal.reason); } catch (_) { /* ignore */ }
                         });
                     } catch (_) { /* ignore */ }
@@ -1365,6 +1409,7 @@
         // message immediately, before pipeTo() rejects.
         var swCancelInfo = { sw: null, id: null };
         function cancelDownload() {
+            userCancelled = true;
             if (controller && !controller.signal.aborted) {
                 try { controller.abort(); } catch (_) { /* ignore */ }
             }
@@ -1514,6 +1559,7 @@
             var filename = options.filename ||
                 parseContentDispositionFilename(disposition) ||
                 buildFallbackName(url, contentType);
+            resolvedFilename = filename;
 
             if (card) {
                 card.setLabel(filename);
@@ -1580,18 +1626,38 @@
                 streamedToDisk: !!result.streamedToDisk
             };
         } catch (err) {
-            // A user cancel can come from three places: the floating progress
-            // card (`cancelled` flag), the export-button Cancel affordance or
-            // an external signal (controller.signal.aborted), or the save
-            // dialog being dismissed (AbortError). All three should be quiet
-            // — no alert, no scary console.error — and should leave the UI in
-            // a "Cancelled" state rather than a "Failed" one.
-            var isCancel = cancelled
+            // An abort can come from several places:
+            //   1. User clicked Cancel on the floating progress card
+            //      (`cancelled` flag) — userCancelled is also set via
+            //      cancelDownload().
+            //   2. User clicked Cancel on the export button or invoked the
+            //      programmatic onCancelHandle — userCancelled is set.
+            //   3. Caller passed an external AbortSignal that fired —
+            //      userCancelled is set by the abort listener above.
+            //   4. User dismissed the save-file picker — the picker AbortError
+            //      is tagged with `userCancelled = true` by streamResponseToDisk.
+            //   5. Browser/OS killed the fetch (tab discarded, sleep/wake,
+            //      mobile background-throttling, network drop). This shows
+            //      up as an AbortError with controller NOT aborted by us.
+            //
+            // Cases 1–4 are user-initiated and stay silent (the card briefly
+            // shows "Cancelled" then disappears). Case 5 is environmental
+            // and surfaces a "Download interrupted — Retry" toast so the
+            // user knows their long-running export didn't silently vanish.
+            var isAbortLike = cancelled
+                || userCancelled
                 || (controller && controller.signal && controller.signal.aborted)
                 || (err && (err.name === 'AbortError' || err.cancelled === true));
-            var displayName = options.filename || (card ? null : 'file');
+            var isUserCancel = cancelled
+                || userCancelled
+                || (err && err.userCancelled === true);
+            var isEnvironmentalAbort = isAbortLike && !isUserCancel
+                && err && err.name === 'AbortError';
+            // Prefer the parsed filename so the interrupted toast keeps the
+            // file context even after the floating card has gone away.
+            var displayName = options.filename || resolvedFilename || (card ? null : 'file');
 
-            if (isCancel) {
+            if (isUserCancel) {
                 console.info('streamingDownload cancelled by user for', url);
                 if (card) {
                     card.setBarColor('bg-gray-400');
@@ -1599,9 +1665,9 @@
                     card.disableCancel();
                     card.remove(2500);
                 }
-                if (showToastUI) {
-                    showToast('Download cancelled' + (displayName ? ' (' + displayName + ')' : ''), 'info');
-                }
+                // Per spec: user-initiated cancels stay silent — the card
+                // state change (or the restored button) is sufficient
+                // feedback. No toast, no alert.
                 if (historyId) {
                     updateHistoryEntry(historyId, {
                         status: 'cancelled',
@@ -1612,7 +1678,60 @@
                 var cancelErr = new Error((err && err.message) || 'Download cancelled');
                 cancelErr.name = 'AbortError';
                 cancelErr.cancelled = true;
+                cancelErr.userCancelled = true;
                 throw cancelErr;
+            }
+
+            if (isEnvironmentalAbort) {
+                console.warn('streamingDownload interrupted by environment for', url, err);
+                if (card) {
+                    card.setBarColor('bg-amber-500');
+                    card.setStatus('Interrupted — browser stopped the download');
+                    card.disableCancel();
+                    card.remove(8000);
+                }
+                if (showToastUI) {
+                    var retryUrl = url;
+                    var retryOptions = options;
+                    showToast(
+                        'Download interrupted' +
+                            (displayName ? ' (' + displayName + ')' : '') +
+                            ' — your browser stopped the download (tab inactive, sleep, or network drop).',
+                        'warn',
+                        {
+                            testId: 'toast-download-interrupted',
+                            autoDismissMs: 12000,
+                            action: {
+                                label: 'Retry',
+                                testId: 'button-retry-download',
+                                onClick: function () {
+                                    try {
+                                        // Best-effort: re-run with the same
+                                        // url/options. Swallow the rejection
+                                        // so an unhandled-promise warning
+                                        // doesn't fire — failures will
+                                        // surface their own toast.
+                                        var p = streamingDownload(retryUrl, retryOptions);
+                                        if (p && typeof p.catch === 'function') {
+                                            p.catch(function () { /* swallow */ });
+                                        }
+                                    } catch (_) { /* ignore */ }
+                                }
+                            }
+                        }
+                    );
+                }
+                if (historyId) {
+                    updateHistoryEntry(historyId, {
+                        status: 'interrupted',
+                        error: (err && err.message) ? String(err.message).slice(0, 200) : 'Interrupted',
+                        finishedAt: new Date().toISOString()
+                    });
+                }
+                var interruptedErr = new Error((err && err.message) || 'Download interrupted');
+                interruptedErr.name = 'AbortError';
+                interruptedErr.interrupted = true;
+                throw interruptedErr;
             }
 
             console.error('streamingDownload failed for', url, err);
