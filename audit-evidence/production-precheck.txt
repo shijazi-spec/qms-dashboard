@@ -1,0 +1,10 @@
+Production database pre-sweep state — captured 2026-04-24T15:53:09.518Z
+
+Source: read-only production replica via executeSql({ environment: "production" })
+
+table_name,total_rows,rows_with_payload
+event_logs,0,0
+nc_change_history,0,0
+capa_change_history,0,0
+ai_pending_actions,0,0
+
