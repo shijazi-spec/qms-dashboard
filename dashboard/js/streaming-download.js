@@ -3,6 +3,13 @@
 
     var DEFAULT_STREAM_TO_DISK_THRESHOLD = 10 * 1024 * 1024; // 10 MB
 
+    // When an export's estimated size or row count exceeds either threshold
+    // we show an inline confirmation before the download starts, giving users
+    // on slow connections or low-disk environments a chance to cancel or
+    // tighten their filters first. Set to Infinity to disable entirely.
+    var DEFAULT_LARGE_EXPORT_BYTE_THRESHOLD = 50 * 1024 * 1024; // 50 MB
+    var DEFAULT_LARGE_EXPORT_ROW_THRESHOLD  = 250000;            // 250 k rows
+
     // When a streaming download has gotten "far enough", a single accidental
     // click on the Cancel pill could throw away hundreds of MB of work. Past
     // either threshold below we ask the user to confirm before aborting.
@@ -2283,6 +2290,85 @@
             } catch (_) { /* fall through — estimate is best-effort */ }
         }
 
+        // ── Large-export gate ─────────────────────────────────────────────
+        // If the preflight estimate is above either configured threshold,
+        // ask the user to confirm before the streaming response starts and
+        // the save-as picker fires. This lets users cancel or narrow their
+        // filters without consuming bandwidth or triggering a disk write.
+        if (preflightEstimate && options.skipLargeExportWarning !== true) {
+            var byteThreshold = (typeof options.largeExportByteThreshold === 'number')
+                ? options.largeExportByteThreshold
+                : (typeof global.STREAMING_DOWNLOAD_LARGE_EXPORT_BYTE_THRESHOLD === 'number'
+                    ? global.STREAMING_DOWNLOAD_LARGE_EXPORT_BYTE_THRESHOLD
+                    : DEFAULT_LARGE_EXPORT_BYTE_THRESHOLD);
+            var rowThreshold = (typeof options.largeExportRowThreshold === 'number')
+                ? options.largeExportRowThreshold
+                : (typeof global.STREAMING_DOWNLOAD_LARGE_EXPORT_ROW_THRESHOLD === 'number'
+                    ? global.STREAMING_DOWNLOAD_LARGE_EXPORT_ROW_THRESHOLD
+                    : DEFAULT_LARGE_EXPORT_ROW_THRESHOLD);
+
+            var estimatedBytes = (preflightEstimate.bytes > 0) ? preflightEstimate.bytes : 0;
+            var estimatedRows  = (preflightEstimate.rows  > 0) ? preflightEstimate.rows  : 0;
+            var exceedsByte    = isFinite(byteThreshold) && byteThreshold >= 0 && estimatedBytes > byteThreshold;
+            var exceedsRow     = isFinite(rowThreshold)  && rowThreshold  >= 0 && estimatedRows  > rowThreshold;
+
+            if (exceedsByte || exceedsRow) {
+                var sizeStr = estimatedBytes > 0
+                    ? formatBytes(estimatedBytes)
+                    : null;
+                var rowsStr = estimatedRows > 0
+                    ? tr('downloads.rows', '{count} rows', { count: estimatedRows.toLocaleString() })
+                    : null;
+
+                var detailParts = [];
+                if (sizeStr) detailParts.push(sizeStr);
+                if (rowsStr) detailParts.push(rowsStr);
+                var detailStr = detailParts.join(', ');
+
+                var confirmMsg = detailStr
+                    ? tr('downloads.large_export_confirm_detail',
+                        'This export is about {detail} and may take a moment. Continue?',
+                        { detail: detailStr })
+                    : tr('downloads.large_export_confirm',
+                        'This is a large export and may take a moment. Continue?');
+
+                var confirmLarge = (typeof options.confirmLargeExport === 'function')
+                    ? options.confirmLargeExport
+                    : ((typeof window !== 'undefined' && typeof window.confirm === 'function')
+                        ? window.confirm.bind(window)
+                        : null);
+
+                var proceed = true;
+                if (confirmLarge) {
+                    try { proceed = !!confirmLarge(confirmMsg, preflightEstimate); }
+                    catch (_) { proceed = true; }
+                }
+
+                if (!proceed) {
+                    // User chose not to proceed — restore the button and bail
+                    // cleanly without touching the network.
+                    if (cancelable && cancelable.teardown) cancelable.teardown();
+                    restoreButton(button, originalContent);
+                    if (card) { try { card.remove(0); } catch (_) { /* ignore */ } }
+                    if (historyId) {
+                        try {
+                            updateHistoryEntry(historyId, {
+                                status: 'cancelled',
+                                finishedAt: new Date().toISOString()
+                            });
+                        } catch (_) { /* ignore */ }
+                    }
+                    var largeExportCancelErr = new Error('Large export cancelled by user');
+                    largeExportCancelErr.name = 'AbortError';
+                    largeExportCancelErr.cancelled = true;
+                    largeExportCancelErr.userCancelled = true;
+                    // Throw outside the main try/finally so the finally block
+                    // does not double-call restoreButton / cancelable.teardown.
+                    throw largeExportCancelErr;
+                }
+            }
+        }
+
         try {
             var response = await fetch(url, fetchInit);
 
@@ -2561,6 +2647,8 @@
     }
 
     streamingDownload.DEFAULT_STREAM_TO_DISK_THRESHOLD = DEFAULT_STREAM_TO_DISK_THRESHOLD;
+    streamingDownload.DEFAULT_LARGE_EXPORT_BYTE_THRESHOLD = DEFAULT_LARGE_EXPORT_BYTE_THRESHOLD;
+    streamingDownload.DEFAULT_LARGE_EXPORT_ROW_THRESHOLD  = DEFAULT_LARGE_EXPORT_ROW_THRESHOLD;
     streamingDownload.fetchEstimate = fetchExportEstimate;
     streamingDownload.estimateUrlFor = estimateUrlFor;
     streamingDownload.attachSizeHints = attachSizeHints;
