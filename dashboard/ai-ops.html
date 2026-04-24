@@ -43,6 +43,58 @@
       </button>
     </div>
 
+    <!-- Tool-Health Override Auto-Revert banner (Task #212).
+
+         The Alert Thresholds tab can schedule a time-boxed override that
+         silently reverts to the env baseline once the incident is over.
+         Operators landing on the main Tool Health view (not the editor)
+         used to have no obvious cue that current alert noise was being
+         suppressed by an expiring override — this banner makes it
+         loud-and-clear with a live countdown. Hidden whenever the active
+         row has no expires_at (or the user has dismissed *this specific*
+         expiry; rescheduling shows it again).
+
+         Color flips amber when <30 min remain so the impending revert is
+         hard to miss. Clicking the body deep-links to the thresholds tab
+         so the operator can extend or clear the schedule in one click. -->
+    <section id="tool-health-override-banner-section" class="hidden mb-4" data-testid="section-tool-health-override-banner" aria-live="polite">
+      <div
+        id="tool-health-override-banner"
+        role="status"
+        class="rounded-lg border p-3 flex items-center justify-between gap-3 transition-colors bg-blue-50 border-blue-200 text-blue-900"
+        data-testid="banner-tool-health-override-expiry"
+      >
+        <button
+          type="button"
+          class="flex-1 text-left flex items-center gap-2 min-w-0 hover:opacity-90"
+          id="tool-health-override-banner-deeplink"
+          data-testid="button-tool-health-override-banner-deeplink"
+        >
+          <svg id="tool-health-override-banner-icon" class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span class="text-sm leading-tight">
+            <span class="font-semibold">Heads up:</span>
+            tool-health overrides revert at
+            <span class="font-mono" id="tool-health-override-banner-absolute" data-testid="text-tool-health-override-expiry-absolute">—</span>
+            <span id="tool-health-override-banner-countdown" data-testid="text-tool-health-override-expiry-countdown">(in —)</span>
+            <span class="ml-2 text-xs underline whitespace-nowrap">Open Alert Thresholds →</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="shrink-0 p-1 rounded hover:bg-black/10"
+          id="tool-health-override-banner-dismiss"
+          aria-label="Dismiss override expiry banner"
+          data-testid="button-tool-health-override-banner-dismiss"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+
     <!-- Tool Health Alerts banner: surfaces open `tool_health` alerts at the
          very top of the panel so ops doesn't have to scroll into the tools
          table to notice a degraded tool. Hidden when there are zero open
@@ -610,6 +662,167 @@
       const card = document.querySelector(`[data-alert-id="${alertId}"]`);
       const toolName = card?.getAttribute('data-tool-name') || '';
       if (toolName) jumpToToolRow(toolName);
+    }
+
+    // ── Tool-Health Override Auto-Revert banner (Task #212) ───────────────
+    // The thresholds tab can schedule an `expires_at` so the override
+    // silently reverts to the env baseline. This banner makes the schedule
+    // visible from the *main* Tool Health view (the tab the operator
+    // usually lands on first), so they aren't surprised when the alert
+    // floor jumps back later in the shift.
+    //
+    // Visibility rules:
+    //   • Hidden when no expires_at, when expires_at has already elapsed
+    //     (the existing "expired — pending reaper sweep" line in the
+    //     thresholds tab covers that edge case), or when the operator
+    //     dismissed *this specific* expiry. Rescheduling a new expires_at
+    //     re-shows the banner because the dismissal is keyed by timestamp.
+    //   • Color flips amber when <30 minutes remain so the impending
+    //     revert is hard to miss while triaging.
+    //
+    // Live countdown: a setInterval refreshes the "in N…" text every 30s
+    // so operators reading the dashboard for several minutes still see
+    // accurate guidance without having to hit Refresh.
+    const TOOL_HEALTH_OVERRIDE_BANNER_DISMISS_KEY = 'wp.toolHealthOverrideBanner.dismissedFor';
+    const TOOL_HEALTH_OVERRIDE_BANNER_AMBER_MS = 30 * 60 * 1000;
+    const TOOL_HEALTH_OVERRIDE_BANNER_NEUTRAL_CLASSES =
+      'rounded-lg border p-3 flex items-center justify-between gap-3 transition-colors bg-blue-50 border-blue-200 text-blue-900';
+    const TOOL_HEALTH_OVERRIDE_BANNER_AMBER_CLASSES =
+      'rounded-lg border p-3 flex items-center justify-between gap-3 transition-colors bg-amber-50 border-amber-300 text-amber-900';
+    let toolHealthOverrideBannerExpiresAtMs = null;
+    let toolHealthOverrideBannerTimer = null;
+
+    // Fetches the current tool-health config and applies the result. Quietly
+    // hides on auth failure so non-AI-Ops viewers don't see a misleading
+    // banner — the GET endpoint requires AI_OPS_ROLES.
+    async function loadToolHealthOverrideBanner() {
+      try {
+        const { data } = await apiFetch('/api/ai-ops/tool-health-config');
+        applyToolHealthOverrideBannerData(data);
+      } catch (e) {
+        hideToolHealthOverrideBanner();
+      }
+    }
+
+    // Renders the banner from a tool-health config payload. Exposed so
+    // loadThresholdsForm() can reuse the data it already fetched, instead
+    // of issuing a duplicate GET on the same endpoint.
+    function applyToolHealthOverrideBannerData(data) {
+      if (!data || !data.expires_at) {
+        hideToolHealthOverrideBanner();
+        return;
+      }
+      const expiresAtMs = new Date(data.expires_at).getTime();
+      if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+        // Already expired or unparseable — the thresholds tab already
+        // surfaces "expired — pending reaper sweep", so don't double-shout.
+        hideToolHealthOverrideBanner();
+        return;
+      }
+      let dismissedFor = null;
+      try { dismissedFor = localStorage.getItem(TOOL_HEALTH_OVERRIDE_BANNER_DISMISS_KEY); } catch (_e) { /* private mode */ }
+      if (dismissedFor && dismissedFor === String(expiresAtMs)) {
+        hideToolHealthOverrideBanner();
+        return;
+      }
+      toolHealthOverrideBannerExpiresAtMs = expiresAtMs;
+      const section = document.getElementById('tool-health-override-banner-section');
+      const absoluteEl = document.getElementById('tool-health-override-banner-absolute');
+      if (section) section.classList.remove('hidden');
+      if (absoluteEl) absoluteEl.textContent = formatToolHealthOverrideBannerAbsolute(expiresAtMs);
+      updateToolHealthOverrideBannerCountdown();
+      // Refresh the countdown on a 30-second cadence so the "in N…" text
+      // doesn't silently drift while the operator stays on the page.
+      if (toolHealthOverrideBannerTimer == null) {
+        toolHealthOverrideBannerTimer = setInterval(updateToolHealthOverrideBannerCountdown, 30 * 1000);
+      }
+    }
+
+    function hideToolHealthOverrideBanner() {
+      toolHealthOverrideBannerExpiresAtMs = null;
+      const section = document.getElementById('tool-health-override-banner-section');
+      if (section) section.classList.add('hidden');
+      if (toolHealthOverrideBannerTimer != null) {
+        clearInterval(toolHealthOverrideBannerTimer);
+        toolHealthOverrideBannerTimer = null;
+      }
+    }
+
+    function updateToolHealthOverrideBannerCountdown() {
+      if (toolHealthOverrideBannerExpiresAtMs == null) return;
+      const remainingMs = toolHealthOverrideBannerExpiresAtMs - Date.now();
+      if (remainingMs <= 0) {
+        // Expired while the operator was watching — drop the banner so
+        // the next reaper-driven alert noise doesn't get ignored. The
+        // thresholds tab will surface the post-expiry status separately.
+        hideToolHealthOverrideBanner();
+        return;
+      }
+      const banner = document.getElementById('tool-health-override-banner');
+      const countdownEl = document.getElementById('tool-health-override-banner-countdown');
+      if (countdownEl) {
+        countdownEl.textContent = `(in ${formatToolHealthOverrideBannerCountdown(remainingMs)})`;
+      }
+      if (banner) {
+        banner.className = remainingMs < TOOL_HEALTH_OVERRIDE_BANNER_AMBER_MS
+          ? TOOL_HEALTH_OVERRIDE_BANNER_AMBER_CLASSES
+          : TOOL_HEALTH_OVERRIDE_BANNER_NEUTRAL_CLASSES;
+      }
+    }
+
+    // Build a compact UTC absolute timestamp. Includes a short date prefix
+    // when the expiry isn't on today's UTC day so cross-midnight schedules
+    // ("reverts at 02:15 UTC tomorrow") aren't ambiguous.
+    function formatToolHealthOverrideBannerAbsolute(ms) {
+      const d = new Date(ms);
+      const hh = String(d.getUTCHours()).padStart(2, '0');
+      const mm = String(d.getUTCMinutes()).padStart(2, '0');
+      const today = new Date();
+      const sameUtcDay =
+        d.getUTCFullYear() === today.getUTCFullYear() &&
+        d.getUTCMonth()    === today.getUTCMonth()    &&
+        d.getUTCDate()     === today.getUTCDate();
+      if (sameUtcDay) return `${hh}:${mm} UTC`;
+      const yyyy = d.getUTCFullYear();
+      const mon  = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day  = String(d.getUTCDate()).padStart(2, '0');
+      return `${yyyy}-${mon}-${day} ${hh}:${mm} UTC`;
+    }
+
+    function formatToolHealthOverrideBannerCountdown(remainingMs) {
+      // floor (not round) so a "1h" label never overstates the time left
+      // and silently roll under to "0m" exactly when the override expires.
+      const totalMinutes = Math.max(0, Math.floor(remainingMs / 60000));
+      if (totalMinutes < 1) return '<1m';
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours <= 0) return `${minutes}m`;
+      if (minutes === 0) return `${hours}h`;
+      return `${hours}h ${minutes}m`;
+    }
+
+    function dismissToolHealthOverrideBanner(e) {
+      // The dismiss button lives inside the banner-as-a-button click target,
+      // so swallow the event to avoid also navigating to the thresholds tab.
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      try {
+        if (toolHealthOverrideBannerExpiresAtMs != null) {
+          localStorage.setItem(
+            TOOL_HEALTH_OVERRIDE_BANNER_DISMISS_KEY,
+            String(toolHealthOverrideBannerExpiresAtMs),
+          );
+        }
+      } catch (_e) { /* private mode — best-effort only */ }
+      hideToolHealthOverrideBanner();
+    }
+
+    function goToThresholdsTabFromBanner() {
+      switchTab('thresholds');
+      // Defer the scroll until the tab's content has rendered.
+      requestAnimationFrame(() => {
+        const tab = document.getElementById('content-thresholds');
+        if (tab) tab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }
 
     function renderPriceTable(pt) {
@@ -1224,6 +1437,10 @@
       try {
         const { data } = await apiFetch('/api/ai-ops/tool-health-config');
         thresholdsState = data;
+        // Keep the top-of-page auto-revert banner in sync with the form.
+        // Reuses the payload we just fetched so saving overrides also
+        // re-renders (or hides) the banner without a duplicate request.
+        applyToolHealthOverrideBannerData(data);
         renderThresholdsForm(data);
         renderThresholdsAudit(data.audit || []);
         if (data.updated_at) {
@@ -1489,6 +1706,7 @@
     function refreshAll() {
       loadSummary();
       loadToolHealthAlerts();
+      loadToolHealthOverrideBanner();
       loadCostTrend();
       const active = TABS.find(t => !document.getElementById(`content-${t}`).classList.contains('hidden'));
       if (active === 'latency')    loadLatency();
@@ -1513,8 +1731,16 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Wire the override-banner buttons via addEventListener — the page CSP
+      // (`script-src 'self' 'nonce-…'`) blocks inline `onclick=` handlers,
+      // so they MUST be attached programmatically from a nonced <script>.
+      const overrideDeeplinkBtn = document.getElementById('tool-health-override-banner-deeplink');
+      if (overrideDeeplinkBtn) overrideDeeplinkBtn.addEventListener('click', goToThresholdsTabFromBanner);
+      const overrideDismissBtn = document.getElementById('tool-health-override-banner-dismiss');
+      if (overrideDismissBtn) overrideDismissBtn.addEventListener('click', dismissToolHealthOverrideBanner);
       loadSummary();
       loadToolHealthAlerts();
+      loadToolHealthOverrideBanner();
       loadCostTrend();
       // Honor a deep-link like /ai-ops?tab=prompts so notifications can
       // jump the admin straight to the regression view (Task #121).
