@@ -464,7 +464,7 @@
                 '<div class="widget-down-box">' +
                   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
                     '<strong style="font-size:14px;color:#1e293b;">What went wrong?</strong>' +
-                    '<button onclick="widgetCloseDownModal()" aria-label="Close" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;">✕</button>' +
+                    '<button type="button" data-on-click="widgetCloseDownModal" aria-label="Close" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;">✕</button>' +
                   '</div>' +
                   '<div id="widget-cats" style="margin-bottom:12px;">' +
                     '<span class="widget-cat-btn" data-cat="incorrect">Incorrect</span>' +
@@ -476,8 +476,8 @@
                   '</div>' +
                   '<textarea id="widget-feedback-comment" rows="2" maxlength="500" placeholder="Optional: describe what went wrong" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-size:12px;resize:none;box-sizing:border-box;margin-bottom:10px;"></textarea>' +
                   '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
-                    '<button onclick="widgetCloseDownModal()" style="padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;cursor:pointer;color:#64748b;">Skip</button>' +
-                    '<button onclick="widgetSubmitDownModal()" style="padding:6px 14px;border:none;border-radius:8px;background:#dc2626;color:white;font-size:12px;cursor:pointer;font-weight:500;">Submit</button>' +
+                    '<button type="button" data-on-click="widgetCloseDownModal" style="padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;cursor:pointer;color:#64748b;">Skip</button>' +
+                    '<button type="button" data-on-click="widgetSubmitDownModal" style="padding:6px 14px;border:none;border-radius:8px;background:#dc2626;color:white;font-size:12px;cursor:pointer;font-weight:500;">Submit</button>' +
                   '</div>' +
                 '</div>';
             document.body.appendChild(m);
