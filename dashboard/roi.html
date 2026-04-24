@@ -50,6 +50,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -132,13 +133,13 @@
             <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-gray-900">Initiatives</h3>
                 <div class="flex items-center space-x-4">
-                    <select id="filterRecommendation" onchange="loadInitiatives()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                    <select id="filterRecommendation" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                         <option value="">All Recommendations</option>
                         <option value="approve">Approve</option>
                         <option value="evaluate">Evaluate</option>
                         <option value="reject">Reject</option>
                     </select>
-                    <select id="sortBy" onchange="loadInitiatives()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                    <select id="sortBy" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                         <option value="created">Recently Added</option>
                         <option value="roi">Highest ROI</option>
                         <option value="npv">Highest NPV</option>
@@ -178,18 +179,18 @@
     </main>
 
     <div id="newInitiativeModal" class="fixed inset-0 z-50 hidden">
-        <div class="modal-backdrop absolute inset-0" onclick="closeNewInitiativeModal()"></div>
+        <div class="modal-backdrop absolute inset-0" data-on-click="closeNewInitiativeModal"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
                 <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
                     <h2 class="text-xl font-bold text-gray-900">New ROI Initiative - Hybrid Model</h2>
-                    <button onclick="closeNewInitiativeModal()" class="text-gray-400 hover:text-gray-600">
+                    <button data-on-click="closeNewInitiativeModal" class="text-gray-400 hover:text-gray-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                     </button>
                 </div>
-                <form id="initiativeForm" onsubmit="submitInitiative(event)" class="p-6 space-y-6">
+                <form id="initiativeForm" data-on-submit="submitInitiative" data-pass-event="true" class="p-6 space-y-6">
                     <div class="grid grid-cols-2 gap-4">
                         <div class="col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Initiative Name *</label>
@@ -226,7 +227,7 @@
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 <span>Expected Monthly Savings - High Level (SAR)</span>
-                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" onclick="showTooltip(event, 'expected_savings_monthly')">
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;expected_savings_monthly&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
                             </label>
@@ -235,7 +236,7 @@
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 <span>High-Level Implementation Cost (SAR)</span>
-                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" onclick="showTooltip(event, 'implementation_cost')">
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;implementation_cost&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
                             </label>
@@ -244,7 +245,7 @@
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 <span>Project Duration (months)</span>
-                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" onclick="showTooltip(event, 'project_duration_months')">
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;project_duration_months&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
                             </label>
@@ -253,7 +254,7 @@
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 <span>Discount Rate (%)</span>
-                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" onclick="showTooltip(event, 'discount_rate')">
+                                <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;discount_rate&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
                             </label>
@@ -262,7 +263,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" onclick="toggleSection('manpowerSection')" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;manpowerSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
                             <span class="text-lg font-semibold text-gray-900">B. Manpower Cost Breakdown</span>
                             <svg id="manpowerSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -272,36 +273,36 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Average Monthly Salary (SAR)</label>
-                                    <input type="number" name="avg_monthly_salary" value="0" min="0" step="0.01" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="avg_monthly_salary" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">GOSI % </label>
-                                    <input type="number" name="gosi_percent" value="12" min="0" max="100" step="0.1" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="gosi_percent" value="12" min="0" max="100" step="0.1" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Insurance Cost (SAR/month)</label>
-                                    <input type="number" name="insurance_cost" value="0" min="0" step="0.01" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="insurance_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Laptop & Equipment (amortized/month)</label>
-                                    <input type="number" name="equipment_cost" value="0" min="0" step="0.01" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="equipment_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Software Seat Cost (SAR/month)</label>
-                                    <input type="number" name="software_seat_cost" value="0" min="0" step="0.01" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="software_seat_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Hours Wasted/Employee/Week</label>
-                                    <input type="number" name="hours_wasted_per_week" value="0" min="0" step="0.1" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="hours_wasted_per_week" value="0" min="0" step="0.1" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="field-with-tooltip">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">
                                         <span>Number of Employees Impacted</span>
-                                        <span class="tooltip-icon text-purple-500 hover:text-purple-700" onclick="showTooltip(event, 'headcount_affected')">
+                                        <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;headcount_affected&quot;]" data-pass-event="true">
                                             <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                         </span>
                                     </label>
-                                    <input type="number" name="employees_impacted" value="0" min="0" oninput="calculateManpowerCosts()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="employees_impacted" value="0" min="0" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
@@ -322,7 +323,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" onclick="toggleSection('platformSection')" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;platformSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
                             <span class="text-lg font-semibold text-gray-900">C. Platform & Tool Costs</span>
                             <svg id="platformSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -330,7 +331,7 @@
                         </button>
                         <div id="platformSection" class="hidden mt-4 space-y-4">
                             <div id="platformToolsList" class="space-y-3"></div>
-                            <button type="button" onclick="addPlatformTool()" class="flex items-center space-x-2 text-indigo-600 hover:text-indigo-800 font-medium">
+                            <button type="button" data-on-click="addPlatformTool" class="flex items-center space-x-2 text-indigo-600 hover:text-indigo-800 font-medium">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                 </svg>
@@ -340,7 +341,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" onclick="toggleSection('errorSection')" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;errorSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
                             <span class="text-lg font-semibold text-gray-900">D. Error, Rework & SLA Costs</span>
                             <svg id="errorSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -351,31 +352,31 @@
                                 <div class="field-with-tooltip">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">
                                         <span>Current Error Rate (%)</span>
-                                        <span class="tooltip-icon text-purple-500 hover:text-purple-700" onclick="showTooltip(event, 'error_rate_percent')">
+                                        <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;error_rate_percent&quot;]" data-pass-event="true">
                                             <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                         </span>
                                     </label>
-                                    <input type="number" name="current_error_rate" value="0" min="0" max="100" step="0.1" oninput="calculateErrorSavings()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="current_error_rate" value="0" min="0" max="100" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Monthly Transactions</label>
-                                    <input type="number" name="monthly_transactions" value="0" min="0" oninput="calculateErrorSavings()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="monthly_transactions" value="0" min="0" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Cost per Error (SAR)</label>
-                                    <input type="number" name="cost_per_error" value="0" min="0" step="0.01" oninput="calculateErrorSavings()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="cost_per_error" value="0" min="0" step="0.01" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Rework Hours per Error</label>
-                                    <input type="number" name="rework_hours_per_error" value="0" min="0" step="0.1" oninput="calculateErrorSavings()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="rework_hours_per_error" value="0" min="0" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">SLA Penalties (SAR/month)</label>
-                                    <input type="number" name="sla_penalties" value="0" min="0" step="0.01" oninput="calculateErrorSavings()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="sla_penalties" value="0" min="0" step="0.01" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Expected Reduction (%)</label>
-                                    <input type="number" name="expected_error_reduction" value="0" min="0" max="100" step="0.1" oninput="calculateErrorSavings()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="expected_error_reduction" value="0" min="0" max="100" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
@@ -386,7 +387,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" onclick="toggleSection('revenueSection')" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;revenueSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
                             <span class="text-lg font-semibold text-gray-900">E. Revenue Impact</span>
                             <svg id="revenueSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -396,23 +397,23 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Leads Saved</label>
-                                    <input type="number" name="leads_saved" value="0" min="0" oninput="calculateRevenueImpact()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="leads_saved" value="0" min="0" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Conversion Rate (%)</label>
-                                    <input type="number" name="conversion_rate" value="0" min="0" max="100" step="0.1" oninput="calculateRevenueImpact()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="conversion_rate" value="0" min="0" max="100" step="0.1" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Revenue per Lead (SAR)</label>
-                                    <input type="number" name="revenue_per_lead" value="0" min="0" step="0.01" oninput="calculateRevenueImpact()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="revenue_per_lead" value="0" min="0" step="0.01" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Churn Reduction (%)</label>
-                                    <input type="number" name="churn_reduction" value="0" min="0" max="100" step="0.1" oninput="calculateRevenueImpact()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="churn_reduction" value="0" min="0" max="100" step="0.1" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Upsell Opportunities</label>
-                                    <input type="number" name="upsell_opportunities" value="0" min="0" oninput="calculateRevenueImpact()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="upsell_opportunities" value="0" min="0" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
@@ -423,7 +424,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" onclick="toggleSection('implementationSection')" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;implementationSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
                             <span class="text-lg font-semibold text-gray-900">F. Implementation Breakdown</span>
                             <svg id="implementationSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -433,59 +434,59 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Vendor Costs (SAR)</label>
-                                    <input type="number" name="vendor_costs" value="0" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="vendor_costs" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Setup Fees (SAR)</label>
-                                    <input type="number" name="setup_fees" value="0" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="setup_fees" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">API/License Fees (SAR)</label>
-                                    <input type="number" name="api_license_fees" value="0" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="api_license_fees" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="col-span-2 md:col-span-3 grid grid-cols-4 gap-2">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Developer Hours</label>
-                                        <input type="number" name="developer_hours" value="0" min="0" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="developer_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
-                                        <input type="number" name="developer_rate" value="150" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="developer_rate" value="150" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">QA Hours</label>
-                                        <input type="number" name="qa_hours" value="0" min="0" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="qa_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
-                                        <input type="number" name="qa_rate" value="100" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="qa_rate" value="100" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
                                 <div class="col-span-2 md:col-span-3 grid grid-cols-4 gap-2">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Product Hours</label>
-                                        <input type="number" name="product_hours" value="0" min="0" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="product_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
-                                        <input type="number" name="product_rate" value="120" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="product_rate" value="120" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Architect Hours</label>
-                                        <input type="number" name="architect_hours" value="0" min="0" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="architect_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
-                                        <input type="number" name="architect_rate" value="200" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <input type="number" name="architect_rate" value="200" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Training Cost (SAR)</label>
-                                    <input type="number" name="training_cost" value="0" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="training_cost" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Change Management Cost (SAR)</label>
-                                    <input type="number" name="change_management_cost" value="0" min="0" step="0.01" oninput="calculateImplementationCost()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="change_management_cost" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Monthly Recurring Cost (SAR)</label>
@@ -500,7 +501,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" onclick="toggleSection('riskSection')" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;riskSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
                             <span class="text-lg font-semibold text-gray-900">G. Risk & Confidence Inputs</span>
                             <svg id="riskSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -518,11 +519,11 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Probability of Success (%)</label>
-                                    <input type="number" name="probability_of_success" value="70" min="0" max="100" step="1" oninput="calculateRiskAdjustedNPV()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="probability_of_success" value="70" min="0" max="100" step="1" data-on-input="calculateRiskAdjustedNPV" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Risk Adjustment Factor</label>
-                                    <input type="number" name="risk_adjustment_factor" value="1.0" min="0" max="2" step="0.1" oninput="calculateRiskAdjustedNPV()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" name="risk_adjustment_factor" value="1.0" min="0" max="2" step="0.1" data-on-input="calculateRiskAdjustedNPV" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="col-span-2 md:col-span-3">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Dependencies</label>
@@ -571,13 +572,13 @@
 
                     <div class="flex items-center justify-between border-t border-gray-200 pt-6">
                         <div class="flex space-x-3">
-                            <button type="button" onclick="calculatePreview()" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
+                            <button type="button" data-on-click="calculatePreview" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                                 </svg>
                                 Calculate Preview
                             </button>
-                            <button type="button" onclick="runAIValidation()" class="text-purple-600 hover:text-purple-800 font-medium flex items-center" id="validateBtn">
+                            <button type="button" data-on-click="runAIValidation" class="text-purple-600 hover:text-purple-800 font-medium flex items-center" id="validateBtn">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                                 </svg>
@@ -585,7 +586,7 @@
                             </button>
                         </div>
                         <div class="flex space-x-3">
-                            <button type="button" onclick="closeNewInitiativeModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button type="button" data-on-click="closeNewInitiativeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                             <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Initiative</button>
                         </div>
                     </div>
@@ -654,7 +655,7 @@
                             <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">AI Help</span>
                             <h4 class="font-semibold text-gray-900 text-sm">${tooltip.field_label || fieldId.replace(/_/g, ' ')}</h4>
                         </div>
-                        <button onclick="hideActiveTooltip()" class="text-gray-400 hover:text-gray-600">
+                        <button data-on-click="hideActiveTooltip" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
@@ -830,7 +831,7 @@
             const container = document.getElementById('platformToolsList');
             container.innerHTML = platformTools.map((tool, index) => `
                 <div class="bg-gray-50 rounded-lg p-4 relative">
-                    <button type="button" onclick="removePlatformTool(${index})" class="absolute top-2 right-2 text-red-500 hover:text-red-700">
+                    <button type="button" data-on-click="removePlatformTool" data-args="[${index}]" class="absolute top-2 right-2 text-red-500 hover:text-red-700">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -838,23 +839,23 @@
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <div class="col-span-2 md:col-span-1">
                             <label class="block text-xs font-medium text-gray-600 mb-1">Tool Name</label>
-                            <input type="text" value="${tool.name}" onchange="updatePlatformTool(${index}, 'name', this.value)" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                            <input type="text" value="${tool.name}" data-on-change="updatePlatformTool" data-args="[${index},&quot;name&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-600 mb-1">Cost/Month (SAR)</label>
-                            <input type="number" value="${tool.cost}" onchange="updatePlatformTool(${index}, 'cost', parseFloat(this.value) || 0)" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                            <input type="number" value="${tool.cost}" data-on-change="updatePlatformTool" data-args="[${index},&quot;cost&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-600 mb-1">Seats Impacted</label>
-                            <input type="number" value="${tool.seats}" onchange="updatePlatformTool(${index}, 'seats', parseInt(this.value) || 0)" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                            <input type="number" value="${tool.seats}" data-on-change="updatePlatformTool" data-args="[${index},&quot;seats&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-600 mb-1">Vendor Support</label>
-                            <input type="number" value="${tool.vendorSupport}" onchange="updatePlatformTool(${index}, 'vendorSupport', parseFloat(this.value) || 0)" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
+                            <input type="number" value="${tool.vendorSupport}" data-on-change="updatePlatformTool" data-args="[${index},&quot;vendorSupport&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div class="flex items-center">
                             <label class="flex items-center space-x-2 text-sm text-gray-700">
-                                <input type="checkbox" ${tool.toBeRemoved ? 'checked' : ''} onchange="updatePlatformTool(${index}, 'toBeRemoved', this.checked)" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <input type="checkbox" ${tool.toBeRemoved ? 'checked' : ''} data-on-change="updatePlatformTool" data-args="[${index},&quot;toBeRemoved&quot;,&quot;@this.checked&quot;]" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                 <span>To Be Removed</span>
                             </label>
                         </div>
@@ -990,8 +991,8 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-center">
-                            <button onclick="viewInitiative(${i.id})" class="text-indigo-600 hover:text-indigo-800 mr-2">View</button>
-                            <button onclick="deleteInitiative(${i.id})" class="text-red-600 hover:text-red-800">Delete</button>
+                            <button data-on-click="viewInitiative" data-args="[${i.id}]" class="text-indigo-600 hover:text-indigo-800 mr-2">View</button>
+                            <button data-on-click="deleteInitiative" data-args="[${i.id}]" class="text-red-600 hover:text-red-800">Delete</button>
                         </td>
                     </tr>
                 `).join('');

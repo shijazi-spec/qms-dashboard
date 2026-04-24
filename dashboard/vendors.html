@@ -28,6 +28,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -42,18 +43,18 @@
                 <p class="text-sm text-gray-500 mt-1">Manage third-party vendors, risk assessments, and remediation tracking</p>
             </div>
             <div class="flex gap-3">
-                <button onclick="window.location.href='/api/vendors/export-xlsx'" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-export-xlsx" title="Multi-sheet workbook (Summary, Vendors, Assessments)">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/vendors/export-xlsx&quot;]" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-export-xlsx" title="Multi-sheet workbook (Summary, Vendors, Assessments)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Excel
                 </button>
-                <button onclick="window.location.href='/api/vendors/export'" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/vendors/export&quot;]" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Export CSV
                 </button>
-                <button onclick="openAssessmentModal()" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium">
+                <button data-on-click="openAssessmentModal" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium">
                     + Assessment
                 </button>
-                <button onclick="openAddVendorModal()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium flex items-center gap-2">
+                <button data-on-click="openAddVendorModal" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
@@ -99,15 +100,15 @@
                     <h2 class="text-lg font-semibold text-gray-900">Vendor Registry</h2>
                     <div class="flex gap-3">
                         <input type="text" id="searchVendor" placeholder="Search vendors..." 
-                               onkeyup="loadVendors()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48">
-                        <select id="filterCriticality" onchange="loadVendors()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                               data-on-keyup="loadVendors" class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48">
+                        <select id="filterCriticality" data-on-change="loadVendors" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Criticality</option>
                             <option value="critical">Critical</option>
                             <option value="high">High</option>
                             <option value="medium">Medium</option>
                             <option value="low">Low</option>
                         </select>
-                        <select id="filterVendorStatus" onchange="loadVendors()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <select id="filterVendorStatus" data-on-change="loadVendors" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Status</option>
                             <option value="active">Active</option>
                             <option value="pending_approval">Pending</option>
@@ -162,14 +163,14 @@
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-gray-900">Remediation Tracker</h2>
                 <div class="flex gap-3">
-                    <select id="filterRemediationPriority" onchange="loadRemediations()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <select id="filterRemediationPriority" data-on-change="loadRemediations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">All Priority</option>
                         <option value="critical">Critical</option>
                         <option value="high">High</option>
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                     </select>
-                    <select id="filterRemediationStatus" onchange="loadRemediations()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <select id="filterRemediationStatus" data-on-change="loadRemediations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">All Status</option>
                         <option value="open">Open</option>
                         <option value="in_progress">In Progress</option>
@@ -294,7 +295,7 @@
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 pt-4">
-                    <button type="button" onclick="closeModal('vendorModal')" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;vendorModal&quot;]" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Register Vendor</button>
                 </div>
             </form>
@@ -388,7 +389,7 @@
                     </select>
                 </div>
                 <div class="flex justify-end gap-3 pt-4">
-                    <button type="button" onclick="closeModal('assessmentModal')" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Submit Assessment</button>
                 </div>
             </form>
@@ -508,7 +509,7 @@
             }
             
             tbody.innerHTML = vendors.map(v => `
-                <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewVendor(${v.id})">
+                <tr class="hover:bg-gray-50 cursor-pointer" data-on-click="viewVendor" data-args="[${v.id}]">
                     <td class="px-4 py-3 text-sm font-mono text-gray-600">${v.vendor_code}</td>
                     <td class="px-4 py-3">
                         <div class="text-sm font-medium text-gray-900">${v.name}</div>

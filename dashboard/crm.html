@@ -96,6 +96,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -113,7 +114,7 @@
                 <div class="flex items-center space-x-3">
                     <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm" data-testid="status-connection">Checking...</span>
                     <span id="lastUpdated" class="text-xs text-gray-400"></span>
-                    <button onclick="refreshData()" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2" data-testid="button-refresh">
+                    <button data-on-click="refreshData" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2" data-testid="button-refresh">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
@@ -147,10 +148,10 @@
 
             <div class="border-b border-gray-200 mb-6">
                 <nav class="flex space-x-8" id="moduleTabs">
-                    <button onclick="switchModule('Leads')" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads">Leads</button>
-                    <button onclick="switchModule('Deals')" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals">Deals</button>
-                    <button onclick="switchModule('Contacts')" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts">Contacts</button>
-                    <button onclick="switchModule('Accounts')" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-accounts">Accounts</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Leads&quot;]" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads">Leads</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Deals&quot;]" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals">Deals</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Contacts&quot;]" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts">Contacts</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Accounts&quot;]" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-accounts">Accounts</button>
                 </nav>
             </div>
 
@@ -159,7 +160,7 @@
                     <div class="relative">
                         <input type="text" id="searchInput" placeholder="Search records..."
                             class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
-                            onkeyup="filterTable()" data-testid="input-search">
+                            data-on-keyup="filterTable" data-testid="input-search">
                         <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
@@ -168,16 +169,16 @@
                 </div>
                 <div class="flex items-center space-x-3">
                     <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
-                        <input type="checkbox" id="highlightIssues" checked onchange="renderTable()"
+                        <input type="checkbox" id="highlightIssues" checked data-on-change="renderTable"
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-highlight-issues">
                         <span>Highlight Issues</span>
                     </label>
                     <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
-                        <input type="checkbox" id="hideJunk" onchange="filterTable()"
+                        <input type="checkbox" id="hideJunk" data-on-change="filterTable"
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-hide-junk">
                         <span>Hide Junk</span>
                     </label>
-                    <select id="perPageSelect" onchange="refreshData()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500" data-testid="select-per-page">
+                    <select id="perPageSelect" data-on-change="refreshData" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500" data-testid="select-per-page">
                         <option value="25">25</option>
                         <option value="50" selected>50</option>
                         <option value="100">100</option>
@@ -196,7 +197,7 @@
                     </svg>
                 </div>
                 <p id="errorMessage" class="text-red-600 font-medium mb-2">Error loading data</p>
-                <button onclick="refreshData()" class="text-indigo-600 hover:text-indigo-800 text-sm" data-testid="button-retry">Try again</button>
+                <button data-on-click="refreshData" class="text-indigo-600 hover:text-indigo-800 text-sm" data-testid="button-retry">Try again</button>
             </div>
 
             <div id="dataContainer" class="table-container relative">
@@ -224,9 +225,9 @@
             </div>
 
             <div id="pagination" class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                <button onclick="previousPage()" id="prevBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-testid="button-prev-page">Previous</button>
+                <button data-on-click="previousPage" id="prevBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-testid="button-prev-page">Previous</button>
                 <span id="pageInfo" class="text-sm text-gray-500">Page 1</span>
-                <button onclick="nextPage()" id="nextBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="button-next-page">Next</button>
+                <button data-on-click="nextPage" id="nextBtn" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="button-next-page">Next</button>
             </div>
         </div>
 
@@ -262,11 +263,11 @@
         </div>
     </main>
 
-    <div id="detailModal" class="detail-modal" onclick="if(event.target===this)closeDetailModal()">
+    <div id="detailModal" class="detail-modal" data-on-click="closeDetailModalOnBackdrop" data-pass-event="true">
         <div class="detail-modal-content">
             <div class="flex items-center justify-between mb-4">
                 <h3 id="detailTitle" class="text-lg font-bold text-gray-900">Record Details</h3>
-                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600" data-testid="button-close-modal">
+                <button data-on-click="closeDetailModal" class="text-gray-400 hover:text-gray-600" data-testid="button-close-modal">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -476,7 +477,7 @@
                     return '<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">' + escapeHtml(value || '-') + hygiene + '</td>';
                 }).join('');
 
-                return '<tr class="' + rowClass + '" data-record-id="' + record.id + '" onclick="showRecordDetail(\'' + record.id + '\')"' + hideStyle + ' data-testid="row-record-' + record.id + '">' + cells + '</tr>';
+                return '<tr class="' + rowClass + '" data-record-id="' + record.id + '" data-on-click="showRecordDetail" data-args="' + escAttr(JSON.stringify([record.id])) + '"' + hideStyle + ' data-testid="row-record-' + record.id + '">' + cells + '</tr>';
             }).join('');
         }
 
@@ -505,7 +506,7 @@
             var label = cluster.totalInCluster + ' recs';
             var tip = 'Cluster: ' + (cluster.clusterCompany || cluster.clusterDomain) + ' (' + lvl + ' confidence, score ' + cluster.confidenceScore + ')';
             return '<td class="px-3 py-3 text-sm">' +
-                '<span class="cluster-badge ' + cls + '" title="' + escapeHtml(tip) + '" onclick="event.stopPropagation(); window.open(\'/duplicates#cluster-' + cluster.clusterId + '\',\'_blank\')">' +
+                '<span class="cluster-badge ' + cls + '" title="' + escapeHtml(tip) + '" data-on-click="openInNewTab" data-args="' + escAttr(JSON.stringify(['/duplicates#cluster-' + cluster.clusterId])) + '">' +
                 '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>' +
                 label +
                 '</span>' +
@@ -595,6 +596,10 @@
         function closeDetailModal() {
             document.getElementById('detailModal').classList.remove('active');
         }
+        function closeDetailModalOnBackdrop(e) {
+            if (e && e.target && e.target.id === 'detailModal') closeDetailModal();
+        }
+        window.closeDetailModalOnBackdrop = closeDetailModalOnBackdrop;
 
         function formatDateTime(isoStr) {
             if (!isoStr) return '';

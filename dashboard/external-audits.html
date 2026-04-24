@@ -30,6 +30,7 @@
 <body class="bg-gray-50">
   <div id="walaplus-nav"></div>
   <script src="/js/a11y.js" defer></script>
+  <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -53,7 +54,7 @@
           <a href="/policies" class="text-purple-700 hover:underline">WP-SOP-042</a>.
         </p>
       </div>
-      <button onclick="openNewExternalModal()"
+      <button data-on-click="openNewExternalModal"
               class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 font-medium">
         + New External Audit
       </button>
@@ -85,15 +86,15 @@
 
     <!-- ============================== TABS =================================== -->
     <div class="flex gap-2 border-b border-gray-200 mb-4">
-      <button onclick="switchTab('calendar')" id="tab-calendar"
+      <button data-on-click="switchTab" data-args="[&quot;calendar&quot;]" id="tab-calendar"
               class="tab-btn px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 border-purple-600 text-purple-700">
         Calendar / Audits
       </button>
-      <button onclick="switchTab('certs')" id="tab-certs"
+      <button data-on-click="switchTab" data-args="[&quot;certs&quot;]" id="tab-certs"
               class="tab-btn px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-600 hover:text-gray-900">
         Certificate Register
       </button>
-      <button onclick="switchTab('readiness')" id="tab-readiness"
+      <button data-on-click="switchTab" data-args="[&quot;readiness&quot;]" id="tab-readiness"
               class="tab-btn px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-600 hover:text-gray-900">
         Readiness Checklist
       </button>
@@ -102,7 +103,7 @@
     <!-- ============================== CALENDAR TAB =========================== -->
     <div id="pane-calendar" class="tab-pane bg-white rounded-lg shadow">
       <div class="p-4 border-b border-gray-200 flex items-center gap-2 flex-wrap">
-        <select id="filterKind" onchange="loadAudits()"
+        <select id="filterKind" data-on-change="loadAudits"
                 class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
           <option value="">All kinds</option>
           <option value="regulatory">Regulatory</option>
@@ -112,7 +113,7 @@
           <option value="customer">Customer</option>
           <option value="other">Other</option>
         </select>
-        <select id="filterStatus" onchange="loadAudits()"
+        <select id="filterStatus" data-on-change="loadAudits"
                 class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
           <option value="">All statuses</option>
           <option value="scheduled">Scheduled</option>
@@ -146,7 +147,7 @@
     <div id="pane-certs" class="tab-pane hidden bg-white rounded-lg shadow">
       <div class="p-4 border-b border-gray-200 flex justify-between items-center flex-wrap gap-2">
         <h2 class="font-semibold text-gray-900">Certificate Register</h2>
-        <button onclick="openNewCertModal()"
+        <button data-on-click="openNewCertModal"
                 class="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">
           + Register Certificate
         </button>
@@ -174,7 +175,7 @@
     <div id="pane-readiness" class="tab-pane hidden bg-white rounded-lg shadow">
       <div class="p-4 border-b border-gray-200 flex justify-between items-center">
         <h2 class="font-semibold text-gray-900">Readiness Checklist</h2>
-        <select id="readinessAuditSelector" onchange="loadReadiness()"
+        <select id="readinessAuditSelector" data-on-change="loadReadiness"
                 class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
           <option value="">— Select an audit —</option>
         </select>
@@ -190,9 +191,9 @@
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
       <div class="flex justify-between items-start mb-4">
         <h3 class="text-lg font-bold text-gray-900">New External Audit</h3>
-        <button onclick="closeModal('newExternalModal')" class="text-gray-400 hover:text-gray-600">&times;</button>
+        <button data-on-click="closeModal" data-args="[&quot;newExternalModal&quot;]" class="text-gray-400 hover:text-gray-600">&times;</button>
       </div>
-      <form onsubmit="submitNewExternal(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <form data-on-submit="submitNewExternal" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div class="md:col-span-2">
           <label class="block font-medium text-gray-700">Title *</label>
           <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
@@ -233,7 +234,7 @@
           <textarea name="scope_summary" rows="2" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeModal('newExternalModal')"
+          <button type="button" data-on-click="closeModal" data-args="[&quot;newExternalModal&quot;]"
                   class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
           <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Create</button>
         </div>
@@ -246,9 +247,9 @@
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
       <div class="flex justify-between items-start mb-4">
         <h3 class="text-lg font-bold text-gray-900">Register Certificate</h3>
-        <button onclick="closeModal('newCertModal')" class="text-gray-400 hover:text-gray-600">&times;</button>
+        <button data-on-click="closeModal" data-args="[&quot;newCertModal&quot;]" class="text-gray-400 hover:text-gray-600">&times;</button>
       </div>
-      <form onsubmit="submitNewCert(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <form data-on-submit="submitNewCert" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div>
           <label class="block font-medium text-gray-700">Audit *</label>
           <select name="external_audit_id" id="certAuditSelector" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></select>
@@ -274,7 +275,7 @@
           <input name="expiry_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeModal('newCertModal')"
+          <button type="button" data-on-click="closeModal" data-args="[&quot;newCertModal&quot;]"
                   class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
           <button type="submit" class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Register</button>
         </div>
@@ -354,7 +355,7 @@
             <td class="px-4 py-2 text-center text-xs">${r.planned_start ? new Date(r.planned_start).toLocaleDateString() : '—'}</td>
             <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium status-${esc(r.status)}">${esc(r.status)}</span></td>
             <td class="px-4 py-2 text-right">
-              <button onclick="openAudit(${r.id})" class="text-purple-700 hover:text-purple-900 text-sm">Open &rarr;</button>
+              <button data-on-click="openAudit" data-args="[${r.id}]" class="text-purple-700 hover:text-purple-900 text-sm">Open &rarr;</button>
             </td>
           </tr>
         `).join('');
@@ -423,7 +424,7 @@
         const data = await res.json();
         const checklist = data.checklist || [];
         const newItemForm = `
-          <form onsubmit="addChecklistItem(event, ${id})" class="flex gap-2 mb-4 text-sm flex-wrap">
+          <form data-on-submit="addChecklistItem" data-args="[${id}]" data-pass-event="true" class="flex gap-2 mb-4 text-sm flex-wrap">
             <input name="requirement" placeholder="New readiness item (e.g. 'Evidence pack for A.5.1 — Information Security Policy')"
                    required class="flex-1 min-w-[300px] border border-gray-300 rounded-lg px-3 py-2">
             <select name="category" class="border border-gray-300 rounded-lg px-3 py-2">
@@ -455,7 +456,7 @@
                    <div class="text-sm text-gray-900 ${i.status === 'done' ? 'line-through text-gray-400' : ''}">${esc(i.requirement)}</div>
                    <div class="text-xs text-gray-500">${esc(i.category || '')}${i.owner_email ? ' · ' + esc(i.owner_email) : ''}</div>
                  </div>
-                 <select onchange="updateChecklistItem(${i.id}, this.value, ${id})"
+                 <select data-on-change="updateChecklistItem" data-args="[${i.id},&quot;@this.value&quot;,${id}]"
                          class="border border-gray-300 rounded px-2 py-1 text-xs">
                    <option value="open"        ${i.status === 'open' ? 'selected' : ''}>Open</option>
                    <option value="in_progress" ${i.status === 'in_progress' ? 'selected' : ''}>In Progress</option>

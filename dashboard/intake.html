@@ -27,6 +27,7 @@
 <body class="bg-gray-50">
   <div id="walaplus-nav"></div>
   <script src="/js/a11y.js" defer></script>
+  <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -50,7 +51,7 @@
           Ref: <a href="/policies" class="text-purple-700 hover:underline">WP-SOP-041</a>.
         </p>
       </div>
-      <button id="newIntakeBtn" onclick="document.getElementById('uploadDrawer').classList.remove('hidden')"
+      <button id="newIntakeBtn" data-on-click="removeClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
               class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium">
         + New Intake
       </button>
@@ -60,10 +61,10 @@
     <div id="uploadDrawer" class="hidden bg-white border border-indigo-200 rounded-lg shadow-sm p-5 mb-6">
       <div class="flex justify-between items-center mb-3">
         <h2 class="font-semibold text-gray-900">Upload Off-Platform Audit Report</h2>
-        <button onclick="document.getElementById('uploadDrawer').classList.add('hidden')"
+        <button data-on-click="addClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
                 class="text-gray-400 hover:text-gray-600">&times;</button>
       </div>
-      <form id="uploadForm" onsubmit="submitIntake(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <form id="uploadForm" data-on-submit="submitIntake" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div>
           <label class="block text-gray-700 font-medium">Audit Title *</label>
           <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
@@ -92,7 +93,7 @@
           </p>
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 pt-2">
-          <button type="button" onclick="document.getElementById('uploadDrawer').classList.add('hidden')"
+          <button type="button" data-on-click="addClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
                   class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
           <button type="submit"
                   class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium">
@@ -106,7 +107,7 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
       <div class="p-4 border-b border-gray-200 flex justify-between items-center">
         <h2 class="font-semibold text-gray-900">Intakes</h2>
-        <button onclick="loadIntakes()" class="text-sm text-indigo-700 hover:text-indigo-900">Refresh</button>
+        <button data-on-click="loadIntakes" class="text-sm text-indigo-700 hover:text-indigo-900">Refresh</button>
       </div>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -138,15 +139,15 @@
         </div>
         <div class="flex gap-2 flex-wrap">
           <a id="detailFileLink" href="#" target="_blank" class="hidden text-sm text-indigo-700 hover:text-indigo-900 underline self-center">Open source file</a>
-          <button id="detailExtractBtn" onclick="runExtraction()"
+          <button id="detailExtractBtn" data-on-click="runExtraction"
                   class="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 hidden">
             Run AI Extraction
           </button>
-          <button id="detailFinalizeBtn" onclick="finalizeIntake()"
+          <button id="detailFinalizeBtn" data-on-click="finalizeIntake"
                   class="px-3 py-1.5 text-sm bg-green-700 text-white rounded-lg hover:bg-green-800 hidden">
             Promote Accepted to Findings
           </button>
-          <button onclick="closeDetail()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <button data-on-click="closeDetail" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
       </div>
 
@@ -188,7 +189,7 @@
           return;
         }
         tbody.innerHTML = rows.map(r => `
-          <tr class="hover:bg-gray-50 cursor-pointer" onclick="openDetail(${r.id})">
+          <tr class="hover:bg-gray-50 cursor-pointer" data-on-click="openDetail" data-args="[${r.id}]">
             <td class="px-4 py-2 font-mono text-xs">${escHtml(r.intake_code)}</td>
             <td class="px-4 py-2">${escHtml(r.title)}</td>
             <td class="px-4 py-2">${escHtml(r.department || '—')}</td>
@@ -200,7 +201,7 @@
             <td class="px-4 py-2 text-center">${r.findings_count ?? '—'}</td>
             <td class="px-4 py-2 text-center text-xs text-gray-500">${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
             <td class="px-4 py-2 text-right">
-              <button onclick="event.stopPropagation(); openDetail(${r.id})"
+              <button data-on-click="event.stopPropagation,openDetail" data-args="[[],[${r.id}]]"
                       class="text-indigo-700 hover:text-indigo-900 text-sm">Review &rarr;</button>
             </td>
           </tr>
@@ -324,11 +325,11 @@
             </div>
             <div class="flex flex-col gap-2">
               ${f.status === 'pending' || f.status === 'edited' ? `
-                <button onclick="reviewFinding(${f.id}, 'accept')"
+                <button data-on-click="reviewFinding" data-args="[${f.id},&quot;accept&quot;]"
                         class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">Accept</button>
-                <button onclick="saveFindingEdits(${f.id})"
+                <button data-on-click="saveFindingEdits" data-args="[${f.id}]"
                         class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Save Edits</button>
-                <button onclick="rejectFinding(${f.id})"
+                <button data-on-click="rejectFinding" data-args="[${f.id}]"
                         class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Reject</button>
               ` : ''}
             </div>

@@ -34,6 +34,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -48,18 +49,18 @@
                 <p class="text-sm text-gray-500 mt-1">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
             </div>
             <div class="flex gap-3">
-                <select id="statusFilter" class="border rounded-lg px-3 py-2 text-sm" onchange="loadObligations()" data-testid="select-status-filter">
+                <select id="statusFilter" class="border rounded-lg px-3 py-2 text-sm" data-on-change="loadObligations" data-testid="select-status-filter">
                     <option value="">All Statuses</option>
                     <option value="compliant">Compliant</option>
                     <option value="in_progress">In Progress</option>
                     <option value="non_compliant">Non-Compliant</option>
                     <option value="pending">Pending</option>
                 </select>
-                <button onclick="window.location.href='/api/compliance/export'" class="px-4 py-2 border border-green-700 text-green-700 rounded-lg hover:bg-green-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/compliance/export&quot;]" class="px-4 py-2 border border-green-700 text-green-700 rounded-lg hover:bg-green-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Export CSV
                 </button>
-                <button onclick="openAddObligationModal()" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
+                <button data-on-click="openAddObligationModal" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
@@ -137,7 +138,7 @@
                 <div class="bg-white rounded-lg shadow">
                     <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                         <h2 class="text-lg font-semibold text-gray-900">Obligations Register</h2>
-                        <select id="filterRegulation" onchange="loadObligations()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <select id="filterRegulation" data-on-change="loadObligations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Regulations</option>
                         </select>
                     </div>
@@ -187,7 +188,7 @@
         <div class="bg-white rounded-lg shadow mt-6">
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-gray-900">Gap Analysis</h2>
-                <select id="gapRegulationFilter" onchange="loadGapAnalysis()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-gap-regulation">
+                <select id="gapRegulationFilter" data-on-change="loadGapAnalysis" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-gap-regulation">
                     <option value="">All Regulations</option>
                 </select>
             </div>
@@ -216,13 +217,13 @@
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Add Compliance Obligation</h3>
-                <button onclick="closeModal('addObligationModal')" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            <form id="addObligationForm" onsubmit="submitObligation(event)" class="p-6 space-y-4">
+            <form id="addObligationForm" data-on-submit="submitObligation" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Obligation Code *</label>
@@ -290,7 +291,7 @@
                     <textarea name="evidence_requirements" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="What evidence is needed to demonstrate compliance?"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onclick="closeModal('addObligationModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800">Create Obligation</button>
                 </div>
             </form>
@@ -301,13 +302,13 @@
         <div class="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Record Assessment</h3>
-                <button onclick="closeModal('assessmentModal')" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            <form id="assessmentForm" onsubmit="submitAssessment(event)" class="p-6 space-y-4">
+            <form id="assessmentForm" data-on-submit="submitAssessment" data-pass-event="true" class="p-6 space-y-4">
                 <input type="hidden" name="obligation_id" id="assessmentObligationId">
                 <div id="assessmentObligationInfo" class="bg-gray-50 p-3 rounded-lg text-sm mb-4"></div>
                 <div>
@@ -336,7 +337,7 @@
                     <textarea name="comments" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Additional notes"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onclick="closeModal('assessmentModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800">Record Assessment</button>
                 </div>
             </form>
@@ -515,7 +516,7 @@
                         <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(o.status)}">${formatStatus(o.status)}</span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        <button data-title="${escAttr(o.title)}" onclick="openAssessmentModal(${o.id}, this.dataset.title)" class="text-green-600 hover:text-green-800 text-sm font-medium">Assess</button>
+                        <button data-title="${escAttr(o.title)}" data-on-click="openAssessmentModal" data-args="[${o.id},&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-sm font-medium">Assess</button>
                     </td>
                 </tr>
             `).join('');

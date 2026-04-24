@@ -27,6 +27,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -52,10 +53,10 @@
                     </svg>
                     Manual Intake
                 </a>
-                <button onclick="openAddFindingModal()" class="px-4 py-2 border border-purple-700 text-purple-700 rounded-lg hover:bg-purple-50 font-medium">
+                <button data-on-click="openAddFindingModal" class="px-4 py-2 border border-purple-700 text-purple-700 rounded-lg hover:bg-purple-50 font-medium">
                     + Finding
                 </button>
-                <button onclick="openAddAuditModal()" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 font-medium flex items-center gap-2">
+                <button data-on-click="openAddAuditModal" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 font-medium flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
@@ -123,7 +124,7 @@
             <div class="lg:col-span-2 bg-white rounded-lg shadow">
                 <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 class="text-lg font-semibold text-gray-900">Audit Schedule</h2>
-                    <select id="filterAuditStatus" aria-label="Filter by audit status" onchange="loadAudits()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <select id="filterAuditStatus" aria-label="Filter by audit status" data-on-change="loadAudits" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">All Status</option>
                         <option value="planned">Planned</option>
                         <option value="in_progress">In Progress</option>
@@ -173,14 +174,14 @@
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-gray-900">Findings Register</h2>
                 <div class="flex gap-3">
-                    <select id="filterFindingSeverity" aria-label="Filter by finding severity" onchange="loadFindings()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <select id="filterFindingSeverity" aria-label="Filter by finding severity" data-on-change="loadFindings" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">All Severity</option>
                         <option value="critical">Critical</option>
                         <option value="major">Major</option>
                         <option value="minor">Minor</option>
                         <option value="observation">Observation</option>
                     </select>
-                    <select id="filterFindingStatus" aria-label="Filter by finding status" onchange="loadFindings()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <select id="filterFindingStatus" aria-label="Filter by finding status" data-on-change="loadFindings" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                         <option value="">All Status</option>
                         <option value="open">Open</option>
                         <option value="in_progress">In Progress</option>
@@ -214,13 +215,13 @@
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Schedule New Audit</h3>
-                <button onclick="closeModal('addAuditModal')" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="closeModal" data-args="[&quot;addAuditModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            <form id="addAuditForm" onsubmit="submitAudit(event)" class="p-6 space-y-4">
+            <form id="addAuditForm" data-on-submit="submitAudit" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Audit Code *</label>
@@ -280,7 +281,7 @@
                     <textarea name="scope" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Define the scope of the audit"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onclick="closeModal('addAuditModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addAuditModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Schedule Audit</button>
                 </div>
             </form>
@@ -291,13 +292,13 @@
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Record Audit Finding</h3>
-                <button onclick="closeModal('addFindingModal')" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="closeModal" data-args="[&quot;addFindingModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            <form id="addFindingForm" onsubmit="submitFinding(event)" class="p-6 space-y-4">
+            <form id="addFindingForm" data-on-submit="submitFinding" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Finding Code *</label>
@@ -361,7 +362,7 @@
                     <textarea name="corrective_action" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Proposed corrective action"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onclick="closeModal('addFindingModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addFindingModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Record Finding</button>
                 </div>
             </form>
@@ -482,7 +483,7 @@
                     </td>
                     <td class="px-4 py-3 text-center">${formatStatus(a.status)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button data-audit-code="${escAttr(a.audit_code)}" onclick="exportAuditPDF(${a.id}, this.dataset.auditCode, this)" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Export to PDF">
+                        <button data-audit-code="${escAttr(a.audit_code)}" data-on-click="exportAuditPDF" data-args="[${a.id},&quot;@this.dataset.auditCode&quot;,&quot;@this&quot;]" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Export to PDF">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
@@ -537,7 +538,7 @@
                     <td class="px-4 py-3 text-center text-sm ${isOverdue(f.due_date, f.status) ? 'text-red-600 font-bold' : 'text-gray-600'}">${f.due_date ? new Date(f.due_date).toLocaleDateString() : '-'}</td>
                     <td class="px-4 py-3 text-center">${formatStatus(f.status)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="updateFindingStatus(${f.id}, '${f.status}')" class="text-purple-600 hover:text-purple-800 text-sm font-medium">Update</button>
+                        <button data-on-click="updateFindingStatus" data-args="[${f.id},&quot;${f.status}&quot;]" class="text-purple-600 hover:text-purple-800 text-sm font-medium">Update</button>
                     </td>
                 </tr>
             `).join('');
@@ -699,7 +700,7 @@
                 if (!latest) {
                     subtitle.innerHTML =
                         'No programme on file for <strong>' + year + '</strong>. ' +
-                        '<button onclick="draftProgramme(' + year + ')" class="text-indigo-700 underline ml-2">Draft one now</button>';
+                        '<button data-on-click="draftProgramme" data-args="[&quot; + year + &quot;]" class="text-indigo-700 underline ml-2">Draft one now</button>';
                     badge.className = 'hidden';
                     return;
                 }
@@ -724,7 +725,7 @@
                 if (latest.status === 'draft') {
                     subtitle.innerHTML =
                         'Draft programme ready for submission. ' +
-                        '<button onclick="submitProgramme(' + latest.id + ')" class="text-indigo-700 underline ml-2">Submit for sign-off</button>';
+                        '<button data-on-click="submitProgramme" data-args="[&quot; + latest.id + &quot;]" class="text-indigo-700 underline ml-2">Submit for sign-off</button>';
                 } else if (latest.status === 'pending_signoff') {
                     subtitle.innerHTML =
                         'Awaiting sign-off in the HITL queue. ' +
@@ -800,9 +801,9 @@
                                     audit register. (Ref: WP-SOP-041)
                                 </p>
                             </div>
-                            <button onclick="closeModal('manualIntakeModal')" class="text-gray-400 hover:text-gray-600">&times;</button>
+                            <button data-on-click="closeModal" data-args="[&quot;manualIntakeModal&quot;]" class="text-gray-400 hover:text-gray-600">&times;</button>
                         </div>
-                        <form onsubmit="submitManualIntake(event)" class="space-y-3">
+                        <form data-on-submit="submitManualIntake" data-pass-event="true" class="space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Audit Title *</label>
                                 <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -823,7 +824,7 @@
                                 <p class="text-xs text-gray-500 mt-1">PDF, Word, TXT or Markdown. Max ~10 MB.</p>
                             </div>
                             <div class="pt-3 flex gap-2 justify-end">
-                                <button type="button" onclick="closeModal('manualIntakeModal')" class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                <button type="button" data-on-click="closeModal" data-args="[&quot;manualIntakeModal&quot;]" class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>
                                 <button type="submit" class="px-4 py-2 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Upload &amp; Extract</button>
                             </div>
                         </form>

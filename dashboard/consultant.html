@@ -154,6 +154,7 @@
 <body class="bg-gray-50">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
     <script src="/js/navigation.js?v=4.6"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -161,7 +162,7 @@
         });
     </script>
 
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <div class="sidebar-overlay" id="sidebarOverlay" data-on-click="toggleSidebar"></div>
 
     <div class="chat-container flex">
         <aside class="sidebar w-[280px] bg-white border-r border-gray-200 flex flex-col shrink-0" id="sidebar">
@@ -176,7 +177,7 @@
                 </div>
 
                 <div class="space-y-1.5" id="quickActions">
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="runFullScan()">
+                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="runFullScan">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center shrink-0">
                                 <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -184,31 +185,31 @@
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.full_scan">Full Platform Scan</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Check PDPL Compliance: Analyze our current compliance status with Saudi PDPL regulations, highlight any gaps, and recommend remediation actions.')">
+                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Check PDPL Compliance: Analyze our current compliance status with Saudi PDPL regulations, highlight any gaps, and recommend remediation actions.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.check_pdpl">Check PDPL Compliance</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Analyze Nonconformances: Review all open nonconformances, identify trends and root causes, and suggest corrective actions prioritized by impact.')">
+                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Analyze Nonconformances: Review all open nonconformances, identify trends and root causes, and suggest corrective actions prioritized by impact.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-amber-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.analyze_nc">Analyze Nonconformances</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Review Risk Register: Provide a comprehensive analysis of the current risk register including heat map insights, overdue mitigations, and risk appetite alignment.')">
+                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Review Risk Register: Provide a comprehensive analysis of the current risk register including heat map insights, overdue mitigations, and risk appetite alignment.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-red-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.review_risk">Review Risk Register</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Check KPI Status: Evaluate all active KPIs, identify those off-target, analyze trends, and recommend adjustments to meet our quality objectives.')">
+                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Check KPI Status: Evaluate all active KPIs, identify those off-target, analyze trends, and recommend adjustments to meet our quality objectives.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.check_kpi">Check KPI Status</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" onclick="sendQuickMessage('Suggest Improvements: Based on current QMS data, audit findings, and industry best practices, suggest the top improvement opportunities with expected impact and effort estimates.')">
+                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Suggest Improvements: Based on current QMS data, audit findings, and industry best practices, suggest the top improvement opportunities with expected impact and effort estimates.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-purple-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.suggest_improvements">Suggest Improvements</span>
@@ -218,7 +219,7 @@
 
                 <!-- Chat History Section -->
                 <div class="mt-4 pt-3 border-t border-gray-200">
-                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" onclick="toggleSection('chatHistoryList')">
+                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" data-on-click="toggleSection" data-args='["chatHistoryList"]'>
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.chat_history">Chat History</span>
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
@@ -229,28 +230,28 @@
 
                 <!-- Checklists Section -->
                 <div class="mt-3 pt-3 border-t border-gray-200">
-                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" onclick="toggleSection('checklistsList')">
+                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" data-on-click="toggleSection" data-args='["checklistsList"]'>
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.checklists">Checklists</span>
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
                     <div id="checklistsList" class="space-y-1 mb-2">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="common.loading">Loading...</div>
                     </div>
-                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" onclick="sendQuickMessage('List all available compliance checklists. If none exist, create a starter checklist for ISO 9001 Clause 10.2 Nonconformity Management with automated checks.')" data-i18n="consultant.create_checklist">
+                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="sendQuickMessage" data-args='["List all available compliance checklists. If none exist, create a starter checklist for ISO 9001 Clause 10.2 Nonconformity Management with automated checks."]' data-i18n="consultant.create_checklist">
                         + Create Checklist via AI
                     </button>
                 </div>
 
                 <!-- Knowledge Base Section -->
                 <div class="mt-3 pt-3 border-t border-gray-200">
-                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" onclick="toggleSection('knowledgeDocsList')">
+                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" data-on-click="toggleSection" data-args='["knowledgeDocsList"]'>
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.knowledge_base">Knowledge Base</span>
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
                     <div id="knowledgeDocsList" class="space-y-1 mb-2">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="common.loading">Loading...</div>
                     </div>
-                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" onclick="document.getElementById('docUploadModal').classList.remove('hidden')" data-i18n="consultant.upload_document">
+                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="removeClass" data-args='["docUploadModal","hidden"]' data-i18n="consultant.upload_document">
                         + Upload Document
                     </button>
                 </div>
@@ -261,7 +262,7 @@
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.alerts">Alerts</span>
                         <div class="flex items-center gap-2">
                             <span class="hidden text-[10px] font-bold text-white bg-red-500 rounded-full w-5 h-5 items-center justify-center" id="alertBadge">0</span>
-                            <button onclick="showAllAlerts()" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium" data-i18n="consultant.view_all_alerts">View All</button>
+                            <button data-on-click="showAllAlerts" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium" data-i18n="consultant.view_all_alerts">View All</button>
                         </div>
                     </div>
                     <div id="alertsList" class="space-y-1">
@@ -273,7 +274,7 @@
 
         <main class="flex-1 flex flex-col min-w-0">
             <div class="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
-                <button class="sidebar-toggle items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100" onclick="toggleSidebar()">
+                <button class="sidebar-toggle items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100" data-on-click="toggleSidebar">
                     <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                 </button>
                 <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -284,10 +285,10 @@
                     <p class="text-xs text-gray-500" data-i18n="consultant.subtitle">Powered by WalaPlus Intelligence</p>
                 </div>
                 <div class="ml-auto flex items-center gap-2">
-                    <button onclick="exportChat()" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.export_conversation" title="Export conversation">
+                    <button data-on-click="exportChat" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.export_conversation" title="Export conversation">
                         <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     </button>
-                    <button onclick="clearChat()" class="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.new_conversation" title="New conversation">
+                    <button data-on-click="clearChat" class="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.new_conversation" title="New conversation">
                         <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span data-i18n="consultant.new_chat">New Chat</span>
                     </button>
@@ -362,21 +363,21 @@
             <div class="p-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-gray-800">All Alerts</h3>
                 <div class="flex items-center gap-2">
-                    <select id="alertFilterStatus" aria-label="Filter by alert status" onchange="loadAllAlerts()" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
+                    <select id="alertFilterStatus" aria-label="Filter by alert status" data-on-change="loadAllAlerts" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
                         <option value="">All Status</option>
                         <option value="open">Open</option>
                         <option value="acknowledged">Acknowledged</option>
                         <option value="resolved">Resolved</option>
                         <option value="dismissed">Dismissed</option>
                     </select>
-                    <select id="alertFilterSeverity" aria-label="Filter by alert severity" onchange="loadAllAlerts()" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
+                    <select id="alertFilterSeverity" aria-label="Filter by alert severity" data-on-change="loadAllAlerts" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
                         <option value="">All Severity</option>
                         <option value="critical">Critical</option>
                         <option value="high">High</option>
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                     </select>
-                    <button onclick="document.getElementById('allAlertsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600" aria-label="Close alerts">
+                    <button data-on-click="addClass" data-args='["allAlertsModal","hidden"]' class="text-gray-400 hover:text-gray-600" aria-label="Close alerts">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
@@ -392,7 +393,7 @@
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div class="p-5 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-gray-800" data-i18n="consultant.upload_document_title">Upload Document to Knowledge Base</h3>
-                <button onclick="document.getElementById('docUploadModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600" aria-label="Close document upload">
+                <button data-on-click="addClass" data-args='["docUploadModal","hidden"]' class="text-gray-400 hover:text-gray-600" aria-label="Close document upload">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -418,7 +419,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="consultant.doc_upload_label">Upload File (PDF, DOCX, TXT)</label>
-                    <input id="docFileInput" type="file" accept=".pdf,.docx,.txt,.doc" aria-label="Choose document file to upload" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" onchange="handleFileSelect(this)">
+                    <input id="docFileInput" type="file" accept=".pdf,.docx,.txt,.doc" aria-label="Choose document file to upload" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" data-on-change="handleFileSelect" data-args='["@this"]'>
                     <p class="text-xs text-gray-400 mt-1" data-i18n="consultant.doc_paste_hint">Or paste text content below</p>
                 </div>
                 <div>
@@ -427,8 +428,8 @@
                 </div>
             </div>
             <div class="p-5 border-t border-gray-200 flex justify-end gap-3">
-                <button onclick="document.getElementById('docUploadModal').classList.add('hidden')" class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg" data-i18n="consultant.cancel">Cancel</button>
-                <button id="uploadBtn" onclick="uploadDocument()" class="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium" data-i18n="consultant.upload">Upload</button>
+                <button data-on-click="addClass" data-args='["docUploadModal","hidden"]' class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg" data-i18n="consultant.cancel">Cancel</button>
+                <button id="uploadBtn" data-on-click="uploadDocument" class="px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium" data-i18n="consultant.upload">Upload</button>
             </div>
         </div>
     </div>
@@ -1026,10 +1027,10 @@
                                 '<div class="text-xs font-medium text-gray-700 truncate">' + escapeHtml(alert.title || 'Alert') + '</div>' +
                                 '<div class="text-[10px] text-gray-400 mt-0.5">' + escapeHtml(timeAgo(alert.created_at)) + ' · ' + escapeHtml(severity) + '</div>' +
                                 '<div class="flex gap-1 mt-1">' +
-                                    '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" onclick="event.stopPropagation();alertAction(' + alert.id + ',\'acknowledge\')" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_acknowledge') : 'Acknowledge') + '">ACK</button>' +
-                                    '<button class="alert-action-btn bg-green-50 text-green-700 border-green-200 hover:bg-green-100" onclick="event.stopPropagation();alertAction(' + alert.id + ',\'resolve\')" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_resolve') : 'Resolve') + '">✓</button>' +
-                                    '<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100" onclick="event.stopPropagation();alertAction(' + alert.id + ',\'dismiss\')" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_dismiss') : 'Dismiss') + '">✕</button>' +
-                                    '<button class="alert-action-btn bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100" onclick="event.stopPropagation();askAboutAlert(' + JSON.stringify(escapeHtml(alert.title || '')).replace(/'/g, "\\'") + ')" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_ask_ai') : 'Ask AI') + '">?</button>' +
+                                    '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, \'acknowledge\'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_acknowledge\') : \'Acknowledge\') + '">ACK</button>\' +
+                                    \'<button class="alert-action-btn bg-green-50 text-green-700 border-green-200 hover:bg-green-100" data-on-click="alertAction" data-args="\' + escAttr(JSON.stringify([alert.id, \'resolve\'])) + \'" title="\' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_resolve\') : \'Resolve\') + \'">✓</button>\' +
+                                    \'<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100" data-on-click="alertAction" data-args="\' + escAttr(JSON.stringify([alert.id, \'dismiss\'])) + \'" title="\' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_dismiss\') : \'Dismiss\') + \'">✕</button>\' +
+                                    \'<button class="alert-action-btn bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100" data-on-click="askAboutAlert" data-args="\' + escAttr(JSON.stringify([escapeHtml(alert.title || \'\')])) + \'" title="\' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_ask_ai\') : \'Ask AI\') + \'">?</button>\' +
                                 '</div>' +
                             '</div>' +
                         '</div>';
@@ -1109,7 +1110,7 @@
                     return;
                 }
                 container.innerHTML = history.slice(0, 8).map(function(h) {
-                    return '<div class="history-item flex items-center gap-2 p-2 text-xs" onclick="resumeChat(\'' + escapeHtml(h.threadId) + '\')">' +
+                    return '<div class="history-item flex items-center gap-2 p-2 text-xs" data-on-click="resumeChat" data-args="' + escAttr(JSON.stringify([h.threadId])) + '">' +
                         '<svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>' +
                         '<div class="min-w-0 flex-1">' +
                             '<div class="font-medium text-gray-700 truncate">' + escapeHtml(h.title) + '</div>' +
@@ -1186,9 +1187,9 @@
                             '<p class="text-xs text-gray-500 line-clamp-2">' + escapeHtml(a.description || '') + '</p>' +
                             '<div class="flex items-center gap-2 mt-2">' +
                                 '<span class="text-[10px] text-gray-400">' + timeAgo(a.created_at) + '</span>' +
-                                (a.status === 'open' ? '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200" onclick="alertAction(' + a.id + ',\'acknowledge\');loadAllAlerts()">Acknowledge</button>' +
-                                '<button class="alert-action-btn bg-green-50 text-green-700 border-green-200" onclick="alertAction(' + a.id + ',\'resolve\');loadAllAlerts()">Resolve</button>' +
-                                '<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200" onclick="alertAction(' + a.id + ',\'dismiss\');loadAllAlerts()">Dismiss</button>' : '') +
+                                (a.status === 'open' ? '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200" data-on-click="alertAction,loadAllAlerts" data-args="' + escAttr(JSON.stringify([[a.id, 'acknowledge'], []])) + '">Acknowledge</button>' +
+                                '<button class="alert-action-btn bg-green-50 text-green-700 border-green-200" data-on-click="alertAction,loadAllAlerts" data-args="' + escAttr(JSON.stringify([[a.id, 'resolve'], []])) + '">Resolve</button>' +
+                                '<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200" data-on-click="alertAction,loadAllAlerts" data-args="' + escAttr(JSON.stringify([[a.id, 'dismiss'], []])) + '">Dismiss</button>' : '') +
                             '</div>' +
                         '</div></div></div>';
                 }).join('');
@@ -1273,7 +1274,7 @@
                     return;
                 }
                 container.innerHTML = data.checklists.slice(0, 5).map(function(cl) {
-                    return '<button class="w-full text-left p-2 rounded-md hover:bg-indigo-50 transition text-xs group" onclick="sendQuickMessage(\'Run checklist #' + cl.id + ': ' + cl.name.replace(/'/g, '') + '\')">' +
+                    return '<button class="w-full text-left p-2 rounded-md hover:bg-indigo-50 transition text-xs group" data-on-click="sendQuickMessage" data-args="' + escAttr(JSON.stringify(['Run checklist #' + cl.id + ': ' + cl.name])) + '">' +
                         '<div class="font-medium text-gray-700 group-hover:text-indigo-700 truncate">' + escapeHtml(cl.name) + '</div>' +
                         '<div class="text-gray-400 mt-0.5">' + escapeHtml(cl.standard) + '</div>' +
                     '</button>';
@@ -1294,7 +1295,7 @@
                     return;
                 }
                 container.innerHTML = data.documents.slice(0, 5).map(function(doc) {
-                    return '<div class="flex items-center gap-2 p-2 rounded-md hover:bg-indigo-50 cursor-pointer text-xs group" onclick="askAboutDoc(\'' + escapeHtml(doc.title).replace(/'/g, "\\'") + '\')">' +
+                    return '<div class="flex items-center gap-2 p-2 rounded-md hover:bg-indigo-50 cursor-pointer text-xs group" data-on-click="askAboutDoc" data-args="' + escAttr(JSON.stringify([doc.title])) + '">' +
                         '<svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' +
                         '<div class="min-w-0 flex-1">' +
                             '<div class="font-medium text-gray-700 group-hover:text-indigo-700 truncate">' + escapeHtml(doc.title) + '</div>' +

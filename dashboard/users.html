@@ -39,6 +39,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -52,7 +53,7 @@
                 <h1 class="text-2xl font-bold text-gray-900">Users & Access Control</h1>
                 <p class="text-gray-600">Manage user invitations, approvals, and permissions</p>
             </div>
-            <button onclick="showInviteModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+            <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                 </svg>
@@ -85,22 +86,22 @@
 
         <div class="border-b border-gray-200 mb-6">
             <nav class="flex space-x-8">
-                <button onclick="switchTab('pending')" id="tab-pending" class="py-3 px-1 tab-active font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;pending&quot;]" id="tab-pending" class="py-3 px-1 tab-active font-medium text-sm">
                     Pending Requests <span id="pending-badge" class="ml-2 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs">0</span>
                 </button>
-                <button onclick="switchTab('active')" id="tab-active" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;active&quot;]" id="tab-active" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     Active Users
                 </button>
-                <button onclick="switchTab('all')" id="tab-all" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;all&quot;]" id="tab-all" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     All Users
                 </button>
-                <button onclick="switchTab('invitations')" id="tab-invitations" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;invitations&quot;]" id="tab-invitations" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     Invitations
                 </button>
-                <button onclick="switchTab('roles')" id="tab-roles" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;roles&quot;]" id="tab-roles" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     Roles & Permissions
                 </button>
-                <button onclick="switchTab('audit')" id="tab-audit" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;audit&quot;]" id="tab-audit" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     Audit Log
                 </button>
             </nav>
@@ -210,7 +211,7 @@
                         <h3 class="font-semibold">Access Audit Log</h3>
                         <p class="text-sm text-gray-500">All access-related events for PDPL accountability</p>
                     </div>
-                    <select id="audit-filter" onchange="loadAuditLog()" class="border rounded px-3 py-1 text-sm">
+                    <select id="audit-filter" data-on-change="loadAuditLog" class="border rounded px-3 py-1 text-sm">
                         <option value="">All Events</option>
                         <option value="INVITATION_CREATED">Invitations Created</option>
                         <option value="INVITATION_ACCEPTED">Invitations Accepted</option>
@@ -246,9 +247,9 @@
         <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">Invite New User</h3>
-                <button onclick="hideInviteModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button data-on-click="hideInviteModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
-            <form id="invite-form" onsubmit="sendInvitation(event)">
+            <form id="invite-form" data-on-submit="sendInvitation" data-pass-event="true">
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">Email <span class="text-red-500">*</span></label>
@@ -302,7 +303,7 @@
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 mt-6">
-                    <button type="button" onclick="hideInviteModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="hideInviteModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Send Invitation</button>
                 </div>
             </form>
@@ -313,7 +314,7 @@
         <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">User Details & Permissions</h3>
-                <button onclick="hideUserDetailModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button data-on-click="hideUserDetailModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <div id="user-detail-content">Loading...</div>
         </div>
@@ -404,9 +405,9 @@
                                 <p class="text-xs text-gray-400 mt-2">Requested: ${new Date(u.created_at).toLocaleString()}</p>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="approveUser(${u.id})" class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">Approve</button>
-                                <button onclick="denyUser(${u.id})" class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">Deny</button>
-                                <button onclick="viewUserDetail(${u.id})" class="px-3 py-1 border text-sm rounded hover:bg-gray-50">Edit Permissions</button>
+                                <button data-on-click="approveUser" data-args="[${u.id}]" class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">Approve</button>
+                                <button data-on-click="denyUser" data-args="[${u.id}]" class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">Deny</button>
+                                <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="px-3 py-1 border text-sm rounded hover:bg-gray-50">Edit Permissions</button>
                             </div>
                         </div>
                     </div>
@@ -435,8 +436,8 @@
                         <td class="px-4 py-3 text-sm">${u.team}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                         <td class="px-4 py-3">
-                            <button onclick="viewUserDetail(${u.id})" class="text-blue-600 hover:text-blue-800 text-sm mr-2">Edit</button>
-                            <button onclick="disableUser(${u.id})" class="text-red-600 hover:text-red-800 text-sm">Disable</button>
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm mr-2">Edit</button>
+                            <button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>
                         </td>
                     </tr>
                 `).join('');
@@ -464,9 +465,9 @@
                         <td class="px-4 py-3 text-sm">${u.team}</td>
                         <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${u.status}">${u.status.replace('_', ' ')}</span></td>
                         <td class="px-4 py-3">
-                            <button onclick="viewUserDetail(${u.id})" class="text-blue-600 hover:text-blue-800 text-sm mr-2">View</button>
-                            ${u.status === 'disabled' ? `<button onclick="enableUser(${u.id})" class="text-green-600 hover:text-green-800 text-sm">Enable</button>` : ''}
-                            ${u.status === 'active' ? `<button onclick="disableUser(${u.id})" class="text-red-600 hover:text-red-800 text-sm">Disable</button>` : ''}
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm mr-2">View</button>
+                            ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm">Enable</button>` : ''}
+                            ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>` : ''}
                         </td>
                     </tr>
                 `).join('');

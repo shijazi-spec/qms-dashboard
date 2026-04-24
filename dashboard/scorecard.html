@@ -23,6 +23,7 @@
         .status-amber { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
         .status-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
     </style>
+    <script src="/js/safe-actions.js?v=1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -66,11 +67,11 @@
                         <p id="employeeMission" class="text-sm text-blue-600 mt-2 italic">"Ensure governance discipline, visibility & readiness — NOT execution"</p>
                     </div>
                     <div class="flex items-center space-x-4">
-                        <button onclick="refreshScorecard()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2">
+                        <button data-on-click="refreshScorecard" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2">
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                             <span>Refresh</span>
                         </button>
-                        <button onclick="saveSnapshot()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2">
+                        <button data-on-click="saveSnapshot" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2">
                             <i data-lucide="save" class="w-4 h-4"></i>
                             <span>Save Snapshot</span>
                         </button>
@@ -129,7 +130,7 @@
                 <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                     <div class="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
                         <h3 id="modalKpiName" class="text-xl font-bold text-gray-900"></h3>
-                        <button onclick="closeNavigationMap()" class="p-2 hover:bg-gray-100 rounded-lg">
+                        <button data-on-click="closeNavigationMap" class="p-2 hover:bg-gray-100 rounded-lg">
                             <i data-lucide="x" class="w-6 h-6 text-gray-500"></i>
                         </button>
                     </div>
@@ -165,7 +166,7 @@
                             <i data-lucide="alert-circle" class="w-8 h-8 text-red-600"></i>
                         </div>
                         <p class="text-red-600">${error.message}</p>
-                        <button onclick="loadScorecard()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
+                        <button data-on-click="loadScorecard" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
                     </div>
                 `;
                 lucide.createIcons();
@@ -287,7 +288,7 @@
                                         <span class="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">${src}</span>
                                     `).join('')}
                                 </div>
-                                <button onclick="openNavigationMap(${index})" class="flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                <button data-on-click="openNavigationMap" data-args="[${index}]" class="flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm font-medium">
                                     <i data-lucide="map" class="w-4 h-4"></i>
                                     <span>View Steps</span>
                                 </button>

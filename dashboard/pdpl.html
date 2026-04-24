@@ -36,6 +36,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>WalaPlusNav.init('pdpl');</script>
 
@@ -46,7 +47,7 @@
                 <p class="text-gray-500">Personal Data Protection Law - Privacy by Design</p>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="window.location.href='/api/pdpl/export'" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2 text-sm" data-testid="button-export-csv">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/pdpl/export&quot;]" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2 text-sm" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Export CSV
                 </button>
@@ -88,18 +89,18 @@
         <div class="bg-white rounded-lg shadow">
             <div class="border-b">
                 <nav class="flex space-x-8 px-6" aria-label="Tabs">
-                    <button onclick="switchTab('inventory')" id="tab-inventory" class="py-4 px-1 tab-active font-medium text-sm">Data Inventory</button>
-                    <button onclick="switchTab('dsar')" id="tab-dsar" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">DSAR Requests</button>
-                    <button onclick="switchTab('retention')" id="tab-retention" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">Retention Policies</button>
-                    <button onclick="switchTab('incidents')" id="tab-incidents" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">Incidents</button>
-                    <button onclick="switchTab('guardrails')" id="tab-guardrails" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">AI Guardrails</button>
+                    <button data-on-click="switchTab" data-args="[&quot;inventory&quot;]" id="tab-inventory" class="py-4 px-1 tab-active font-medium text-sm">Data Inventory</button>
+                    <button data-on-click="switchTab" data-args="[&quot;dsar&quot;]" id="tab-dsar" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">DSAR Requests</button>
+                    <button data-on-click="switchTab" data-args="[&quot;retention&quot;]" id="tab-retention" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">Retention Policies</button>
+                    <button data-on-click="switchTab" data-args="[&quot;incidents&quot;]" id="tab-incidents" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">Incidents</button>
+                    <button data-on-click="switchTab" data-args="[&quot;guardrails&quot;]" id="tab-guardrails" class="py-4 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">AI Guardrails</button>
                 </nav>
             </div>
 
             <div id="panel-inventory" class="p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Personal Data Inventory</h3>
-                    <button onclick="openAddInventoryModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add Field</button>
+                    <button data-on-click="openAddInventoryModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add Field</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -123,7 +124,7 @@
             <div id="panel-dsar" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Data Subject Access Requests</h3>
-                    <button onclick="openAddDSARModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">New Request</button>
+                    <button data-on-click="openAddDSARModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">New Request</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -170,7 +171,7 @@
             <div id="panel-incidents" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Data Incidents</h3>
-                    <button onclick="openAddIncidentModal()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Report Incident</button>
+                    <button data-on-click="openAddIncidentModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Report Incident</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -194,12 +195,12 @@
             <div id="panel-guardrails" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">AI PII Guardrails</h3>
-                    <button onclick="openAddGuardrailModal()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Add Guardrail</button>
+                    <button data-on-click="openAddGuardrailModal" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Add Guardrail</button>
                 </div>
                 <div class="mb-6 p-4 bg-purple-50 rounded-lg">
                     <h4 class="font-medium text-purple-800 mb-2">Test PII Masking</h4>
                     <textarea id="testPiiInput" rows="3" class="w-full border rounded-lg p-2 text-sm" placeholder="Enter text with PII to test masking (e.g., email: test@example.com, phone: +971501234567)"></textarea>
-                    <button onclick="testPiiMasking()" class="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Test Masking</button>
+                    <button data-on-click="testPiiMasking" class="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Test Masking</button>
                     <div id="maskedOutput" class="mt-2 p-3 bg-white rounded border hidden">
                         <div class="text-sm font-medium text-gray-700">Masked Output:</div>
                         <div id="maskedText" class="text-sm text-gray-600 mt-1"></div>
@@ -257,7 +258,7 @@
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 mt-6">
-                    <button type="button" onclick="closeModal('addDSARModal')" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addDSARModal&quot;]" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Request</button>
                 </div>
             </form>
@@ -296,7 +297,7 @@
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 mt-6">
-                    <button type="button" onclick="closeModal('addIncidentModal')" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addIncidentModal&quot;]" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Report Incident</button>
                 </div>
             </form>
@@ -367,7 +368,7 @@
                             <td class="px-4 py-3 text-sm ${new Date(req.due_date) < new Date() && req.status !== 'completed' ? 'text-red-600 font-medium' : 'text-gray-600'}">${new Date(req.due_date).toLocaleDateString()}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">${req.assigned_to || '-'}</td>
                             <td class="px-4 py-3 text-sm">
-                                <select onchange="updateDSARStatus(${req.id}, this.value)" class="text-xs border rounded px-2 py-1">
+                                <select data-on-change="updateDSARStatus" data-args="[${req.id},&quot;@this.value&quot;]" class="text-xs border rounded px-2 py-1">
                                     <option value="received" ${req.status === 'received' ? 'selected' : ''}>Received</option>
                                     <option value="in_progress" ${req.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
                                     <option value="pending_approval" ${req.status === 'pending_approval' ? 'selected' : ''}>Pending Approval</option>
@@ -423,7 +424,7 @@
                             <td class="px-4 py-3 text-sm text-gray-600">${inc.records_affected || '-'}</td>
                             <td class="px-4 py-3 text-sm">${inc.notification_required ? (inc.notification_sent ? '<span class="text-green-600">Sent</span>' : '<span class="text-amber-600">Required</span>') : '<span class="text-gray-400">Not Required</span>'}</td>
                             <td class="px-4 py-3 text-sm">
-                                <select onchange="updateIncidentStatus(${inc.id}, this.value)" class="text-xs border rounded px-2 py-1">
+                                <select data-on-change="updateIncidentStatus" data-args="[${inc.id},&quot;@this.value&quot;]" class="text-xs border rounded px-2 py-1">
                                     <option value="detected" ${inc.status === 'detected' ? 'selected' : ''}>Detected</option>
                                     <option value="contained" ${inc.status === 'contained' ? 'selected' : ''}>Contained</option>
                                     <option value="investigating" ${inc.status === 'investigating' ? 'selected' : ''}>Investigating</option>

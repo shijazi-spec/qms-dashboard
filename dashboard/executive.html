@@ -21,6 +21,7 @@
 <body class="bg-gray-100 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
     <script src="/js/navigation.js?v=4.6"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -36,18 +37,18 @@
                 <p class="text-xs text-gray-400 mt-1" id="hijri-date-display"></p>
             </div>
             <div class="flex space-x-2">
-                <button onclick="generateReport('mbr')" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700" data-i18n="executive.generate_mbr">Generate MBR</button>
-                <button onclick="generateReport('qbr')" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700" data-i18n="executive.generate_qbr">Generate QBR</button>
+                <button data-on-click="generateReport" data-args='["mbr"]' class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700" data-i18n="executive.generate_mbr">Generate MBR</button>
+                <button data-on-click="generateReport" data-args='["qbr"]' class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700" data-i18n="executive.generate_qbr">Generate QBR</button>
             </div>
         </div>
 
         <div class="mb-6 border-b bg-white rounded-t-xl">
             <nav class="flex space-x-6 px-4">
-                <button onclick="showTab('overview')" id="tab-overview" class="py-3 text-sm font-medium tab-active" data-i18n="executive.tabs.overview">Overview</button>
-                <button onclick="showTab('kpis')" id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.kpis">KPI Health</button>
-                <button onclick="showTab('risks')" id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.risks">Risk Exposure</button>
-                <button onclick="showTab('compliance')" id="tab-compliance" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.compliance">Compliance</button>
-                <button onclick="showTab('reports')" id="tab-reports" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.reports">Reports Archive</button>
+                <button data-on-click="showTab" data-args='["overview"]' id="tab-overview" class="py-3 text-sm font-medium tab-active" data-i18n="executive.tabs.overview">Overview</button>
+                <button data-on-click="showTab" data-args='["kpis"]' id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.kpis">KPI Health</button>
+                <button data-on-click="showTab" data-args='["risks"]' id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.risks">Risk Exposure</button>
+                <button data-on-click="showTab" data-args='["compliance"]' id="tab-compliance" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.compliance">Compliance</button>
+                <button data-on-click="showTab" data-args='["reports"]' id="tab-reports" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.reports">Reports Archive</button>
             </nav>
         </div>
 
@@ -205,7 +206,7 @@
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-semibold text-gray-900" data-i18n="executive.reports_archive">Executive Reports Archive</h3>
-                    <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" aria-label="Filter by report type" onchange="loadReports()">
+                    <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" aria-label="Filter by report type" data-on-change="loadReports">
                         <option value="" data-i18n="executive.all_reports">All Reports</option>
                         <option value="mbr" data-i18n="executive.monthly_mbr">Monthly (MBR)</option>
                         <option value="qbr" data-i18n="executive.quarterly_qbr">Quarterly (QBR)</option>

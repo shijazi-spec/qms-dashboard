@@ -26,6 +26,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -41,28 +42,28 @@
                 <span id="lastCalcTimestamp" class="text-xs text-gray-400"></span>
             </div>
             <div class="flex space-x-2">
-                <select id="ownerFilter" class="border rounded px-3 py-2 text-sm" onchange="loadKPIs()">
+                <select id="ownerFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs">
                     <option value="">All Owners</option>
                     <option value="quality_manager">Sara (Quality Manager)</option>
                     <option value="grc_manager">Maram (GRC Manager)</option>
                     <option value="governance_officer">Mohammed (Governance Officer)</option>
                     <option value="shared">Shared KPIs</option>
                 </select>
-                <select id="statusFilter" class="border rounded px-3 py-2 text-sm" onchange="loadKPIs()" data-testid="select-status-filter">
+                <select id="statusFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
                     <option value="">All Statuses</option>
                     <option value="green">On Target</option>
                     <option value="yellow">At Risk</option>
                     <option value="red">Below Target</option>
                 </select>
-                <button onclick="window.location.href='/api/kpis/export-xlsx'" class="border border-emerald-700 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" data-testid="button-export-xlsx" title="Multi-sheet workbook by category">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export-xlsx&quot;]" class="border border-emerald-700 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" data-testid="button-export-xlsx" title="Multi-sheet workbook by category">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Excel
                 </button>
-                <button onclick="window.location.href='/api/kpis/export'" class="border border-blue-600 text-blue-600 px-3 py-2 rounded text-sm hover:bg-blue-50 flex items-center gap-1" data-testid="button-export-csv">
+                <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export&quot;]" class="border border-blue-600 text-blue-600 px-3 py-2 rounded text-sm hover:bg-blue-50 flex items-center gap-1" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     CSV
                 </button>
-                <button onclick="openAddModal()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">+ Add KPI</button>
+                <button data-on-click="openAddModal" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">+ Add KPI</button>
             </div>
         </div>
 
@@ -104,7 +105,7 @@
             <div class="p-4 border-b flex justify-between items-center">
                 <h2 class="font-semibold text-gray-900">KPI Catalog</h2>
                 <div class="flex space-x-2">
-                    <input type="text" id="searchInput" placeholder="Search KPIs..." class="border rounded px-3 py-1 text-sm" oninput="filterKPIs()">
+                    <input type="text" id="searchInput" placeholder="Search KPIs..." class="border rounded px-3 py-1 text-sm" data-on-input="filterKPIs">
                 </div>
             </div>
             <div id="kpiList" class="divide-y">
@@ -116,7 +117,7 @@
         <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-4 border-b flex justify-between items-center">
                 <h3 class="font-semibold text-gray-900" id="modalTitle">Add KPI</h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button data-on-click="closeModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <form id="kpiForm" class="p-4 space-y-4">
                 <input type="hidden" id="kpiId">
@@ -204,7 +205,7 @@
                     </div>
                 </div>
                 <div class="flex justify-end space-x-2 pt-4">
-                    <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" class="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save KPI</button>
                 </div>
             </form>
@@ -215,7 +216,7 @@
         <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-4 border-b flex justify-between items-center">
                 <h3 class="font-semibold text-gray-900" id="detailTitle">KPI Details</h3>
-                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button data-on-click="closeDetailModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <div id="detailContent" class="p-4">
             </div>
@@ -327,7 +328,7 @@
                 const trendClass = kpi.trend ? `trend-${kpi.trend}` : '';
                 
                 return `
-                    <div class="p-4 hover:bg-gray-50 cursor-pointer owner-${kpi.owner_type}" onclick="showDetail(${kpi.id})">
+                    <div class="p-4 hover:bg-gray-50 cursor-pointer owner-${kpi.owner_type}" data-on-click="showDetail" data-args="[${kpi.id}]">
                         <div class="flex justify-between items-start">
                             <div class="flex-1">
                                 <div class="flex items-center space-x-2">
@@ -462,8 +463,8 @@
                         ` : '<p class="text-gray-500 text-sm">No historical data available</p>'}
                     </div>
                     <div class="mt-6 flex justify-end space-x-2">
-                        <button onclick="openRecordValueModal(${kpi.id})" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Record Value</button>
-                        <button onclick="editKPI(${kpi.id})" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Edit KPI</button>
+                        <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Record Value</button>
+                        <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Edit KPI</button>
                     </div>
                 `;
                 

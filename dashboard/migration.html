@@ -27,6 +27,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -40,7 +41,7 @@
                 <h1 class="text-2xl font-bold text-gray-900">Data Migration Engine</h1>
                 <p class="text-sm text-gray-500 mt-1">Import data from Excel, CSV, and other sources with AI-powered field mapping and deduplication</p>
             </div>
-            <button onclick="openImportModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2">
+            <button data-on-click="openImportModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
@@ -80,14 +81,14 @@
                 <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 class="text-lg font-semibold text-gray-900">Migration Jobs</h2>
                     <div class="flex gap-3">
-                        <select id="filterModule" onchange="loadJobs()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <select id="filterModule" data-on-change="loadJobs" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Modules</option>
                             <option value="risks">Risks</option>
                             <option value="policies">Policies</option>
                             <option value="compliance">Compliance</option>
                             <option value="vendors">Vendors</option>
                         </select>
-                        <select id="filterJobStatus" onchange="loadJobs()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <select id="filterJobStatus" data-on-change="loadJobs" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Status</option>
                             <option value="pending">Pending</option>
                             <option value="importing">Importing</option>
@@ -228,7 +229,7 @@
                             <span id="fileName" class="text-sm font-medium text-gray-700"></span>
                             <span id="fileSize" class="text-xs text-gray-500 ml-2"></span>
                         </div>
-                        <button type="button" onclick="clearFile()" class="text-red-500 hover:text-red-700">
+                        <button type="button" data-on-click="clearFile" class="text-red-500 hover:text-red-700">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -240,7 +241,7 @@
                     <div id="mappingContent" class="text-sm text-gray-600"></div>
                 </div>
                 <div class="flex justify-end gap-3 pt-4">
-                    <button type="button" onclick="closeModal('importModal')" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;importModal&quot;]" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Import Job</button>
                 </div>
             </form>

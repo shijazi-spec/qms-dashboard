@@ -43,7 +43,8 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
-        <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('policies');
@@ -61,7 +62,7 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                     Export CSV
                 </a>
-                <button onclick="openAddPolicyModal()" class="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 font-medium flex items-center gap-2" data-testid="button-new-document">
+                <button data-on-click="openAddPolicyModal" class="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 font-medium flex items-center gap-2" data-testid="button-new-document">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     New Document
                 </button>
@@ -132,8 +133,8 @@
                 <div class="p-4 border-b border-gray-200 flex flex-wrap items-center gap-3">
                     <h2 class="text-lg font-semibold text-gray-900">Document Register</h2>
                     <div class="flex-1"></div>
-                    <input type="text" id="searchInput" onkeyup="debounceSearch()" placeholder="Search..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40" data-testid="input-search">
-                    <select id="filterDocType" aria-label="Filter by document type" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-doctype">
+                    <input type="text" id="searchInput" data-on-keyup="debounceSearch" placeholder="Search..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40" data-testid="input-search">
+                    <select id="filterDocType" aria-label="Filter by document type" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-doctype">
                         <option value="">All Types</option>
                         <option value="policy">Policy</option>
                         <option value="procedure">Procedure</option>
@@ -144,7 +145,7 @@
                         <option value="manual">Manual</option>
                         <option value="guideline">Guideline</option>
                     </select>
-                    <select id="filterStatus" aria-label="Filter by document status" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-status">
+                    <select id="filterStatus" aria-label="Filter by document status" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-status">
                         <option value="">All Status</option>
                         <option value="draft">Draft</option>
                         <option value="review">In Review</option>
@@ -152,7 +153,7 @@
                         <option value="published">Published</option>
                         <option value="archived">Archived</option>
                     </select>
-                    <select id="filterCategory" aria-label="Filter by category" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-category">
+                    <select id="filterCategory" aria-label="Filter by category" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-category">
                         <option value="">All Categories</option>
                         <option value="governance">Governance</option>
                         <option value="operational">Operational</option>
@@ -186,8 +187,8 @@
                 <div id="pagination" class="p-4 border-t border-gray-200 flex justify-between items-center">
                     <div class="text-sm text-gray-500">Showing <span id="showingCount">0</span> of <span id="totalCount">0</span> documents</div>
                     <div class="flex gap-2">
-                        <button onclick="prevPage()" id="prevBtn" class="px-3 py-1 border rounded text-sm disabled:opacity-50" disabled data-testid="button-prev-page">Previous</button>
-                        <button onclick="nextPage()" id="nextBtn" class="px-3 py-1 border rounded text-sm disabled:opacity-50" disabled data-testid="button-next-page">Next</button>
+                        <button data-on-click="prevPage" id="prevBtn" class="px-3 py-1 border rounded text-sm disabled:opacity-50" disabled data-testid="button-prev-page">Previous</button>
+                        <button data-on-click="nextPage" id="nextBtn" class="px-3 py-1 border rounded text-sm disabled:opacity-50" disabled data-testid="button-next-page">Next</button>
                     </div>
                 </div>
             </div>
@@ -214,11 +215,11 @@
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Create New Document</h3>
-                <button onclick="closeModal('addPolicyModal')" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
+                <button data-on-click="closeModal" data-args="[&quot;addPolicyModal&quot;]" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            <form id="addPolicyForm" onsubmit="submitPolicy(event)" class="p-6 space-y-4">
+            <form id="addPolicyForm" data-on-submit="submitPolicy" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Document Type *</label>
@@ -326,7 +327,7 @@
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onclick="closeModal('addPolicyModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-testid="button-cancel-create">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addPolicyModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-testid="button-cancel-create">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800" data-testid="button-submit-create">Create Document</button>
                 </div>
             </form>
@@ -337,7 +338,7 @@
         <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Document Details</h3>
-                <button onclick="closeModal('policyDetailModal')" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog" data-testid="button-close-detail">
+                <button data-on-click="closeModal" data-args="[&quot;policyDetailModal&quot;]" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog" data-testid="button-close-detail">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
@@ -396,7 +397,7 @@
                     return;
                 }
                 container.innerHTML = data.summary.map(s => `
-                    <div class="bg-white rounded-lg shadow p-3 cursor-pointer hover:ring-2 hover:ring-blue-300 transition" onclick="filterByDocType('${escAttr(s.document_type)}')" data-testid="card-doctype-${escAttr(s.document_type)}">
+                    <div class="bg-white rounded-lg shadow p-3 cursor-pointer hover:ring-2 hover:ring-blue-300 transition" data-on-click="filterByDocType" data-args="[&quot;${escAttr(s.document_type)}&quot;]" data-testid="card-doctype-${escAttr(s.document_type)}">
                         <div class="flex items-center justify-between mb-1">
                             <span class="doc-type-badge doc-${escAttr(s.document_type)}">${escapeHtml(docTypeLabels[s.document_type] || s.document_type)}</span>
                             <span class="text-lg font-bold text-gray-900">${s.count}</span>
@@ -503,8 +504,8 @@
                     <td class="px-4 py-3 text-center">${formatStatus(policy.status)}</td>
                     <td class="px-4 py-3 text-center">
                         <div class="flex items-center justify-center gap-2">
-                            <button onclick="viewPolicyDetail('${policy.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-document-${policy.id}">View</button>
-                            ${policy.status !== 'published' ? `<button data-title="${escAttr(policy.title)}" onclick="deleteDocument('${policy.id}', this.dataset.title)" class="text-red-600 hover:text-red-800 text-sm" data-testid="button-delete-document-${policy.id}">Del</button>` : ''}
+                            <button data-on-click="viewPolicyDetail" data-args="[&quot;${policy.id}&quot;]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-document-${policy.id}">View</button>
+                            ${policy.status !== 'published' ? `<button data-title="${escAttr(policy.title)}" data-on-click="deleteDocument" data-args="[&quot;${policy.id}&quot;,&quot;@this.dataset.title&quot;]" class="text-red-400 hover:text-red-600 text-sm" data-testid="button-delete-document-${policy.id}">Del</button>` : ''}
                         </div>
                     </td>
                 </tr>`;
@@ -655,7 +656,7 @@
                             <p class="text-sm text-gray-500 mb-2">No file attached</p>
                             <label class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 cursor-pointer" data-testid="button-upload-file">
                                 Upload File
-                                <input type="file" class="hidden" onchange="uploadFile(${policy.id}, this)" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg">
+                                <input type="file" class="hidden" data-on-change="uploadFile" data-args="[${policy.id},&quot;@this&quot;]" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg">
                             </label>
                         </div>
                     </div>`}
@@ -744,7 +745,7 @@
 
             let buttons = transitions[status] || [];
             let html = buttons.map(b => `
-                <button onclick="transitionPolicy('${id}', '${b.target}')" 
+                <button data-on-click="transitionPolicy" data-args="[&quot;${id}&quot;,&quot;${b.target}&quot;]" 
                     class="px-4 py-2 ${b.color === 'gray' ? 'border border-gray-300 text-gray-700 hover:bg-gray-50' : `bg-${b.color}-600 text-white hover:bg-${b.color}-700`} rounded-lg"
                     data-testid="button-transition-${b.target}">
                     ${b.label}
@@ -753,7 +754,7 @@
 
             if (status === 'approval' && !grcApproved) {
                 html += `
-                    <button onclick="requestGrcApproval('${id}')" 
+                    <button data-on-click="requestGrcApproval" data-args="[&quot;${id}&quot;]" 
                         class="px-4 py-2 bg-slate-700 text-white hover:bg-slate-800 rounded-lg flex items-center gap-2" data-testid="button-grc-approval">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                         Request GRC Approval

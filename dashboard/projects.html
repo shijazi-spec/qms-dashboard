@@ -22,6 +22,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -36,13 +37,13 @@
                 <p class="text-gray-500">Project Management Professional Framework</p>
             </div>
             <div class="flex space-x-3">
-                <button onclick="openCharterGenerator()" class="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                <button data-on-click="openCharterGenerator" class="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                     <i class="fas fa-magic mr-2"></i>AI Charter Generator
                 </button>
-                <button onclick="openScopeWizard()" class="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                <button data-on-click="openScopeWizard" class="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
                     <i class="fas fa-clipboard-list mr-2"></i>Define Full Scope
                 </button>
-                <button onclick="openProjectModal()" class="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <button data-on-click="openProjectModal" class="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     <i class="fas fa-plus mr-2"></i>Quick Project
                 </button>
             </div>
@@ -109,25 +110,25 @@
         <div class="bg-white rounded-xl shadow-sm mb-6">
             <div class="border-b border-gray-200">
                 <nav class="flex space-x-4 px-6 overflow-x-auto" id="mainTabs">
-                    <button onclick="switchMainTab('portfolio')" class="py-4 px-1 text-sm font-medium tab-active whitespace-nowrap" data-tab="portfolio">
+                    <button data-on-click="switchMainTab" data-args="[&quot;portfolio&quot;]" class="py-4 px-1 text-sm font-medium tab-active whitespace-nowrap" data-tab="portfolio">
                         <i class="fas fa-th-large mr-2"></i>Portfolio
                     </button>
-                    <button onclick="switchMainTab('analytics')" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="analytics">
+                    <button data-on-click="switchMainTab" data-args="[&quot;analytics&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="analytics">
                         <i class="fas fa-chart-pie mr-2"></i>Analytics
                     </button>
-                    <button onclick="switchMainTab('risks')" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="risks">
+                    <button data-on-click="switchMainTab" data-args="[&quot;risks&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="risks">
                         <i class="fas fa-shield-alt mr-2"></i>Risks
                     </button>
-                    <button onclick="switchMainTab('milestones')" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="milestones">
+                    <button data-on-click="switchMainTab" data-args="[&quot;milestones&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="milestones">
                         <i class="fas fa-flag-checkered mr-2"></i>Milestones
                     </button>
-                    <button onclick="switchMainTab('stakeholders')" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="stakeholders">
+                    <button data-on-click="switchMainTab" data-args="[&quot;stakeholders&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="stakeholders">
                         <i class="fas fa-user-tie mr-2"></i>Stakeholders
                     </button>
-                    <button onclick="switchMainTab('procurement')" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="procurement">
+                    <button data-on-click="switchMainTab" data-args="[&quot;procurement&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="procurement">
                         <i class="fas fa-file-contract mr-2"></i>Procurement
                     </button>
-                    <button onclick="switchMainTab('changes')" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="changes">
+                    <button data-on-click="switchMainTab" data-args="[&quot;changes&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="changes">
                         <i class="fas fa-exchange-alt mr-2"></i>Change Control
                     </button>
                 </nav>
@@ -136,7 +137,7 @@
             <div id="portfolioTab" class="p-6">
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex space-x-3">
-                        <select id="statusFilter" onchange="loadProjects()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="statusFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Status</option>
                             <option value="initiation">Initiation</option>
                             <option value="planning">Planning</option>
@@ -146,14 +147,14 @@
                             <option value="completed">Completed</option>
                             <option value="on_hold">On Hold</option>
                         </select>
-                        <select id="priorityFilter" onchange="loadProjects()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="priorityFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Priorities</option>
                             <option value="critical">Critical</option>
                             <option value="high">High</option>
                             <option value="medium">Medium</option>
                             <option value="low">Low</option>
                         </select>
-                        <select id="deptFilter" onchange="loadProjects()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="deptFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Departments</option>
                             <option value="Quality Assurance">Quality Assurance</option>
                             <option value="Operations">Operations</option>
@@ -162,10 +163,10 @@
                         </select>
                     </div>
                     <div class="flex space-x-2">
-                        <button onclick="setViewMode('cards')" id="cardsViewBtn" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
+                        <button data-on-click="setViewMode" data-args="[&quot;cards&quot;]" id="cardsViewBtn" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
                             <i class="fas fa-th-large"></i>
                         </button>
-                        <button onclick="setViewMode('table')" id="tableViewBtn" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                        <button data-on-click="setViewMode" data-args="[&quot;table&quot;]" id="tableViewBtn" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
                             <i class="fas fa-table"></i>
                         </button>
                     </div>
@@ -214,7 +215,7 @@
             <div id="risksTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Risk Register</h3>
-                    <button onclick="openRiskModal()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    <button data-on-click="openRiskModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                         <i class="fas fa-plus mr-2"></i>Add Risk
                     </button>
                 </div>
@@ -248,7 +249,7 @@
             <div id="milestonesTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Project Milestones Timeline</h3>
-                    <button onclick="openMilestoneModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <button data-on-click="openMilestoneModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                         <i class="fas fa-plus mr-2"></i>Add Milestone
                     </button>
                 </div>
@@ -276,7 +277,7 @@
             <div id="stakeholdersTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Stakeholder Register</h3>
-                    <button onclick="openStakeholderModal()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <button data-on-click="openStakeholderModal" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                         <i class="fas fa-plus mr-2"></i>Add Stakeholder
                     </button>
                 </div>
@@ -329,7 +330,7 @@
             <div id="procurementTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Procurement Management</h3>
-                    <button onclick="openProcurementModal()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
+                    <button data-on-click="openProcurementModal" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
                         <i class="fas fa-plus mr-2"></i>Add Procurement
                     </button>
                 </div>
@@ -373,7 +374,7 @@
             <div id="changesTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold">Change Control Board (CCB)</h3>
-                    <button onclick="openChangeRequestModal()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+                    <button data-on-click="openChangeRequestModal" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
                         <i class="fas fa-plus mr-2"></i>Submit Change Request
                     </button>
                 </div>
@@ -426,12 +427,12 @@
             <div class="p-6 border-b border-gray-200">
                 <div class="flex justify-between items-center">
                     <h2 class="text-xl font-bold text-gray-900" id="projectModalTitle">New PMP Project</h2>
-                    <button onclick="closeProjectModal()" class="text-gray-400 hover:text-gray-600">
+                    <button data-on-click="closeProjectModal" class="text-gray-400 hover:text-gray-600">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
             </div>
-            <form id="projectForm" onsubmit="saveProject(event)" class="p-6">
+            <form id="projectForm" data-on-submit="saveProject" data-pass-event="true" class="p-6">
                 <input type="hidden" id="projectId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -521,7 +522,7 @@
                     <textarea id="qualityCriteria" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
                 </div>
                 <div class="mt-6 flex justify-end space-x-3">
-                    <button type="button" onclick="closeProjectModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Project</button>
                 </div>
             </form>
@@ -533,7 +534,7 @@
             <div class="p-6 border-b border-gray-200">
                 <div class="flex justify-between items-center">
                     <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-magic text-purple-600 mr-2"></i>AI Project Charter Generator</h2>
-                    <button onclick="closeCharterModal()" class="text-gray-400 hover:text-gray-600">
+                    <button data-on-click="closeCharterModal" class="text-gray-400 hover:text-gray-600">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
@@ -574,8 +575,8 @@
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end space-x-3">
-                    <button type="button" onclick="closeCharterModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                    <button onclick="generateCharter()" id="generateCharterBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <button type="button" data-on-click="closeCharterModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button data-on-click="generateCharter" id="generateCharterBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                         <i class="fas fa-magic mr-2"></i>Generate Charter
                     </button>
                 </div>
@@ -583,7 +584,7 @@
                     <h3 class="font-semibold text-gray-900 mb-3">Generated Project Charter</h3>
                     <div id="charterContent" class="bg-gray-50 rounded-lg p-4 text-sm max-h-80 overflow-y-auto"></div>
                     <div class="mt-4 flex justify-end">
-                        <button onclick="applyCharterToProject()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <button data-on-click="applyCharterToProject" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
                             <i class="fas fa-check mr-2"></i>Create Project from Charter
                         </button>
                     </div>
@@ -601,7 +602,7 @@
                         <h2 class="text-xl font-bold text-white"><i class="fas fa-clipboard-list mr-2"></i>Project Scope Wizard</h2>
                         <p class="text-blue-100 text-sm mt-1">Define your complete project scope from A to Z</p>
                     </div>
-                    <button onclick="closeScopeWizard()" class="text-white hover:text-gray-200">
+                    <button data-on-click="closeScopeWizard" class="text-white hover:text-gray-200">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
@@ -709,7 +710,7 @@
                         <textarea id="wizDescription" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Briefly describe what this project aims to achieve..."></textarea>
                     </div>
                     <div class="mt-4 p-4 bg-purple-50 rounded-lg">
-                        <button onclick="aiGenerateScope()" id="aiScopeBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        <button data-on-click="aiGenerateScope" id="aiScopeBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                             <i class="fas fa-magic mr-2"></i>AI: Generate Scope from Description
                         </button>
                         <p class="text-sm text-purple-700 mt-2">Let AI help you define objectives, deliverables, and WBS based on your description.</p>
@@ -725,7 +726,7 @@
                             <div id="objectivesList" class="space-y-2 mb-2"></div>
                             <div class="flex space-x-2">
                                 <input type="text" id="newObjective" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add a SMART objective...">
-                                <button onclick="addObjective()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><i class="fas fa-plus"></i></button>
+                                <button data-on-click="addObjective" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><i class="fas fa-plus"></i></button>
                             </div>
                         </div>
                         <div>
@@ -738,7 +739,7 @@
                                 <div id="wbsList" class="space-y-2"></div>
                                 <div class="flex space-x-2 mt-3">
                                     <input type="text" id="newWbsItem" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add WBS item (e.g., 1.1 Requirements Gathering)">
-                                    <button onclick="addWbsItem()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><i class="fas fa-plus"></i></button>
+                                    <button data-on-click="addWbsItem" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><i class="fas fa-plus"></i></button>
                                 </div>
                             </div>
                         </div>
@@ -747,7 +748,7 @@
                             <div id="exclusionsList" class="space-y-2 mb-2"></div>
                             <div class="flex space-x-2">
                                 <input type="text" id="newExclusion" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="What is explicitly NOT included...">
-                                <button onclick="addExclusion()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"><i class="fas fa-plus"></i></button>
+                                <button data-on-click="addExclusion" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"><i class="fas fa-plus"></i></button>
                             </div>
                         </div>
                     </div>
@@ -762,7 +763,7 @@
                             <div id="deliverablesList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
                             <div class="flex space-x-2">
                                 <input type="text" id="newDeliverable" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add deliverable...">
-                                <button onclick="addDeliverable()" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"><i class="fas fa-plus"></i></button>
+                                <button data-on-click="addDeliverable" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"><i class="fas fa-plus"></i></button>
                             </div>
                         </div>
                         <div>
@@ -772,7 +773,7 @@
                                 <input type="text" id="newMilestoneName" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2" placeholder="Milestone name">
                                 <input type="date" id="newMilestoneDate" class="border border-gray-300 rounded-lg px-3 py-2">
                             </div>
-                            <button onclick="addMilestone()" class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-full"><i class="fas fa-plus mr-2"></i>Add Milestone</button>
+                            <button data-on-click="addMilestone" class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-full"><i class="fas fa-plus mr-2"></i>Add Milestone</button>
                         </div>
                     </div>
                     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -801,7 +802,7 @@
                             <div id="constraintsList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
                             <div class="flex space-x-2">
                                 <input type="text" id="newConstraint" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add constraint...">
-                                <button onclick="addConstraint()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"><i class="fas fa-plus"></i></button>
+                                <button data-on-click="addConstraint" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"><i class="fas fa-plus"></i></button>
                             </div>
                         </div>
                         <div>
@@ -810,7 +811,7 @@
                             <div id="assumptionsList" class="space-y-2 mb-2 max-h-[200px] overflow-y-auto"></div>
                             <div class="flex space-x-2">
                                 <input type="text" id="newAssumption" class="flex-1 border border-gray-300 rounded-lg px-3 py-2" placeholder="Add assumption...">
-                                <button onclick="addAssumption()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><i class="fas fa-plus"></i></button>
+                                <button data-on-click="addAssumption" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><i class="fas fa-plus"></i></button>
                             </div>
                         </div>
                     </div>
@@ -837,7 +838,7 @@
                                 <input type="text" id="newResourceRole" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2" placeholder="Role name">
                                 <input type="number" id="newResourceCount" class="border border-gray-300 rounded-lg px-3 py-2" placeholder="Count" min="1" value="1">
                             </div>
-                            <button onclick="addResource()" class="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 w-full"><i class="fas fa-plus mr-2"></i>Add Resource</button>
+                            <button data-on-click="addResource" class="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 w-full"><i class="fas fa-plus mr-2"></i>Add Resource</button>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Key Stakeholders</label>
@@ -852,7 +853,7 @@
                                     <option value="regulator">Regulator</option>
                                 </select>
                             </div>
-                            <button onclick="addStakeholder()" class="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 w-full"><i class="fas fa-plus mr-2"></i>Add Stakeholder</button>
+                            <button data-on-click="addStakeholder" class="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 w-full"><i class="fas fa-plus mr-2"></i>Add Stakeholder</button>
                         </div>
                     </div>
                     <div class="mt-6">
@@ -889,15 +890,15 @@
                 </div>
             </div>
             <div class="p-4 border-t border-gray-200 bg-gray-50 flex justify-between">
-                <button onclick="prevWizardStep()" id="wizardPrevBtn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 hidden">
+                <button data-on-click="prevWizardStep" id="wizardPrevBtn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 hidden">
                     <i class="fas fa-arrow-left mr-2"></i>Previous
                 </button>
                 <div class="flex space-x-3 ml-auto">
-                    <button onclick="closeScopeWizard()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button onclick="nextWizardStep()" id="wizardNextBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <button data-on-click="closeScopeWizard" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
+                    <button data-on-click="nextWizardStep" id="wizardNextBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                         Next<i class="fas fa-arrow-right ml-2"></i>
                     </button>
-                    <button onclick="submitScopeWizard()" id="wizardSubmitBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 hidden">
+                    <button data-on-click="submitScopeWizard" id="wizardSubmitBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 hidden">
                         <i class="fas fa-check mr-2"></i>Create Project
                     </button>
                 </div>
@@ -915,24 +916,24 @@
                         <h2 id="detailProjectName" class="text-xl font-bold text-white"></h2>
                     </div>
                     <div class="flex items-center space-x-3">
-                        <button onclick="editProject(currentDetailProject?.project_id)" class="px-3 py-1 bg-white/20 text-white rounded hover:bg-white/30">
+                        <button data-on-click="editCurrentDetailProject" class="px-3 py-1 bg-white/20 text-white rounded hover:bg-white/30">
                             <i class="fas fa-edit mr-1"></i>Edit
                         </button>
-                        <button onclick="closeProjectDetail()" class="text-white hover:text-gray-200">
+                        <button data-on-click="closeProjectDetail" class="text-white hover:text-gray-200">
                             <i class="fas fa-times text-xl"></i>
                         </button>
                     </div>
                 </div>
                 <!-- Detail Tabs -->
                 <div class="flex space-x-1 mt-4 overflow-x-auto" id="detailTabs">
-                    <button onclick="switchDetailTab('overview')" data-dtab="overview" class="px-3 py-2 text-sm rounded-t bg-white text-indigo-700 font-medium">Overview</button>
-                    <button onclick="switchDetailTab('scope')" data-dtab="scope" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Scope</button>
-                    <button onclick="switchDetailTab('schedule')" data-dtab="schedule" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Schedule</button>
-                    <button onclick="switchDetailTab('budget')" data-dtab="budget" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Budget</button>
-                    <button onclick="switchDetailTab('drisk')" data-dtab="drisk" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Risks</button>
-                    <button onclick="switchDetailTab('dstake')" data-dtab="dstake" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Stakeholders</button>
-                    <button onclick="switchDetailTab('dproc')" data-dtab="dproc" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Procurement</button>
-                    <button onclick="switchDetailTab('dchange')" data-dtab="dchange" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Changes</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;overview&quot;]" data-dtab="overview" class="px-3 py-2 text-sm rounded-t bg-white text-indigo-700 font-medium">Overview</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;scope&quot;]" data-dtab="scope" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Scope</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;schedule&quot;]" data-dtab="schedule" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Schedule</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;budget&quot;]" data-dtab="budget" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Budget</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;drisk&quot;]" data-dtab="drisk" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Risks</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;dstake&quot;]" data-dtab="dstake" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Stakeholders</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;dproc&quot;]" data-dtab="dproc" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Procurement</button>
+                    <button data-on-click="switchDetailTab" data-args="[&quot;dchange&quot;]" data-dtab="dchange" class="px-3 py-2 text-sm rounded-t bg-indigo-500 text-white hover:bg-indigo-400">Changes</button>
                 </div>
             </div>
             <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="detailContent">
@@ -1354,8 +1355,8 @@
                     </td>
                     <td class="px-4 py-3 text-sm">${p.end_date ? new Date(p.end_date).toLocaleDateString() : '-'}</td>
                     <td class="px-4 py-3">
-                        <button onclick="editProcurement('${p.procurement_id}')" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteProcurement('${p.procurement_id}')" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                        <button data-on-click="editProcurement" data-args="[&quot;${p.procurement_id}&quot;]" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteProcurement" data-args="[&quot;${p.procurement_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
             `).join('');
@@ -1407,8 +1408,8 @@
                         </span>
                     </td>
                     <td class="px-4 py-3">
-                        <button onclick="editChangeRequest('${c.change_request_id}')" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteChangeRequest('${c.change_request_id}')" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                        <button data-on-click="editChangeRequest" data-args="[&quot;${c.change_request_id}&quot;]" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteChangeRequest" data-args="[&quot;${c.change_request_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
             `).join('');
@@ -1450,7 +1451,7 @@
             const statusColors = { initiation: 'purple', planning: 'blue', execution: 'green', monitoring: 'amber', closing: 'indigo', completed: 'emerald', on_hold: 'gray', cancelled: 'red' };
 
             grid.innerHTML = projects.map(p => `
-                <div class="project-card bg-white rounded-xl shadow-sm p-4 border border-gray-100 cursor-pointer transition-all" onclick="viewProject('${p.project_id}')">
+                <div class="project-card bg-white rounded-xl shadow-sm p-4 border border-gray-100 cursor-pointer transition-all" data-on-click="viewProject" data-args="[&quot;${p.project_id}&quot;]">
                     <div class="flex justify-between items-start mb-3">
                         <div>
                             <span class="text-xs text-gray-500">${p.project_code}</span>
@@ -1517,9 +1518,9 @@
                     <td class="px-4 py-3 text-sm ${p.cost_performance_index < 0.9 ? 'text-red-600' : 'text-green-600'}">${(p.cost_performance_index || 1).toFixed(2)}</td>
                     <td class="px-4 py-3 text-sm text-gray-500">${p.planned_end_date ? new Date(p.planned_end_date).toLocaleDateString() : '-'}</td>
                     <td class="px-4 py-3">
-                        <button onclick="viewProject('${p.project_id}')" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-eye"></i></button>
-                        <button onclick="editProject('${p.project_id}')" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteProject('${p.project_id}')" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                        <button data-on-click="viewProject" data-args="[&quot;${p.project_id}&quot;]" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-eye"></i></button>
+                        <button data-on-click="editProject" data-args="[&quot;${p.project_id}&quot;]" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteProject" data-args="[&quot;${p.project_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
             `).join('');
@@ -1546,8 +1547,8 @@
                         <td class="px-4 py-3 capitalize text-sm">${r.status}</td>
                         <td class="px-4 py-3 text-sm">${r.risk_owner_name || '-'}</td>
                         <td class="px-4 py-3">
-                            <button onclick="editRisk('${r.risk_id}')" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
-                            <button onclick="deleteRisk('${r.risk_id}')" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                            <button data-on-click="editRisk" data-args="[&quot;${r.risk_id}&quot;]" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
+                            <button data-on-click="deleteRisk" data-args="[&quot;${r.risk_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                 `;
@@ -1672,8 +1673,8 @@
                         <span class="px-2 py-1 text-xs rounded-full bg-${engagementColors[s.engagement_level]}-100 text-${engagementColors[s.engagement_level]}-700 capitalize">${s.engagement_level}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <button onclick="editStakeholder('${s.stakeholder_id}')" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteStakeholder('${s.stakeholder_id}')" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                        <button data-on-click="editStakeholder" data-args="[&quot;${s.stakeholder_id}&quot;]" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="deleteStakeholder" data-args="[&quot;${s.stakeholder_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
             `).join('');
@@ -1824,7 +1825,7 @@
                 const text = isObject ? (item.name || item.role || item.text) + (item.date ? ` (${item.date})` : '') + (item.count ? ` x${item.count}` : '') + (item.type ? ` - ${item.type}` : '') : item;
                 return `<div class="flex items-center justify-between bg-${color}-50 px-3 py-2 rounded-lg">
                     <span class="text-sm text-${color}-800">${text}</span>
-                    <button onclick="removeWizardItem('${key}', ${idx})" class="text-${color}-600 hover:text-${color}-800"><i class="fas fa-times"></i></button>
+                    <button data-on-click="removeWizardItem" data-args="[&quot;${key}&quot;,${idx}]" class="text-${color}-600 hover:text-${color}-800"><i class="fas fa-times"></i></button>
                 </div>`;
             }).join('');
         }
@@ -2270,6 +2271,13 @@
                 viewProject(projectId);
             }
         });
+
+        function editCurrentDetailProject() {
+            if (typeof currentDetailProject !== 'undefined' && currentDetailProject && currentDetailProject.project_id) {
+                editProject(currentDetailProject.project_id);
+            }
+        }
+        window.editCurrentDetailProject = editCurrentDetailProject;
 
         async function editProject(projectId) {
             try {

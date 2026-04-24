@@ -77,6 +77,11 @@ export const staticAssetRoutes = [
     createHandler: async () => serveStaticText("js/navigation.js", "application/javascript"),
   },
   {
+    path: "/js/safe-actions.js",
+    method: "GET" as const,
+    createHandler: async () => serveStaticText("js/safe-actions.js", "application/javascript"),
+  },
+  {
     path: "/js/ai-consultant-widget.js",
     method: "GET" as const,
     createHandler: async () => serveStaticText("js/ai-consultant-widget.js", "application/javascript"),

@@ -67,6 +67,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -76,25 +77,25 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
-            <button onclick="showTab('overview')" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active whitespace-nowrap">
                 Overview
             </button>
-            <button onclick="showTab('calls')" id="tab-calls" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;calls&quot;]" id="tab-calls" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
                 Call Records
             </button>
-            <button onclick="showTab('sources')" id="tab-sources" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;sources&quot;]" id="tab-sources" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
                 Data Sources
             </button>
-            <button onclick="showTab('evaluate')" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;evaluate&quot;]" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
                 SDR Evaluation
             </button>
-            <button onclick="showTab('scorecards')" id="tab-scorecards" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;scorecards&quot;]" id="tab-scorecards" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
                 Scorecards
             </button>
-            <button onclick="showTab('compliance')" id="tab-compliance" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;compliance&quot;]" id="tab-compliance" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
                 CRM Compliance
             </button>
-            <button onclick="showTab('analytics')" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+            <button data-on-click="showTab" data-args="[&quot;analytics&quot;]" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
                 Analytics
             </button>
         </div>
@@ -229,19 +230,19 @@
                 <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
                     <h3 class="text-lg font-semibold">Call Records</h3>
                     <div class="flex items-center space-x-3">
-                        <select id="sourceFilter" onchange="loadCalls()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                        <select id="sourceFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Sources</option>
                             <option value="five9">Five9</option>
                             <option value="manual">Manual</option>
                             <option value="api">API</option>
                         </select>
-                        <select id="statusFilter" onchange="loadCalls()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                        <select id="statusFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Statuses</option>
                             <option value="pending">Pending</option>
                             <option value="analyzed">Analyzed</option>
                             <option value="failed">Failed</option>
                         </select>
-                        <button onclick="exportCalls('csv')" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
+                        <button data-on-click="exportCalls" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
@@ -267,8 +268,8 @@
                         Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="prevPage()" id="prevBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50" disabled>Previous</button>
-                        <button onclick="nextPage()" id="nextBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Next</button>
+                        <button data-on-click="prevPage" id="prevBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50" disabled>Previous</button>
+                        <button data-on-click="nextPage" id="nextBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Next</button>
                     </div>
                 </div>
             </div>
@@ -315,15 +316,15 @@
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                             <div class="flex gap-3">
-                                <button onclick="testFive9Connection()" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                                <button data-on-click="testFive9Connection" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                                     Test Connection
                                 </button>
-                                <button onclick="saveFive9Config()" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition font-medium">
+                                <button data-on-click="saveFive9Config" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition font-medium">
                                     Save & Connect
                                 </button>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
-                                <button onclick="syncFive9Calls()" id="five9-sync-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
+                                <button data-on-click="syncFive9Calls" id="five9-sync-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
                                     <span class="flex items-center justify-center gap-2">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -351,8 +352,8 @@
                         </div>
                     </div>
                     <div class="p-6">
-                        <div class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-emerald-400 transition cursor-pointer" id="upload-dropzone" onclick="document.getElementById('call-file-input').click()">
-                            <input type="file" id="call-file-input" class="hidden" accept=".mp3,.wav,.m4a,.mp4,.webm" onchange="handleFileSelect(event)">
+                        <div class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-emerald-400 transition cursor-pointer" id="upload-dropzone" data-on-click="clickElement" data-args="[&quot;call-file-input&quot;]">
+                            <input type="file" id="call-file-input" class="hidden" accept=".mp3,.wav,.m4a,.mp4,.webm" data-on-change="handleFileSelect" data-pass-event="true">
                             <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                             </svg>
@@ -367,7 +368,7 @@
                                     </svg>
                                     <span id="upload-file-name" class="text-sm font-medium text-emerald-800">filename.mp3</span>
                                 </div>
-                                <button onclick="clearUploadFile()" class="text-gray-400 hover:text-gray-600">
+                                <button data-on-click="clearUploadFile" class="text-gray-400 hover:text-gray-600">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                     </svg>
@@ -413,7 +414,7 @@
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
                             </div>
-                            <button onclick="uploadManualCall()" id="upload-submit-btn" class="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
+                            <button data-on-click="uploadManualCall" id="upload-submit-btn" class="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
                                 <span class="flex items-center justify-center gap-2">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
@@ -442,8 +443,8 @@
                     </div>
                 </div>
                 <div class="p-6">
-                    <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 transition cursor-pointer" id="bulk-audio-dropzone" onclick="document.getElementById('bulk-audio-input').click()">
-                        <input type="file" id="bulk-audio-input" class="hidden" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg" multiple onchange="handleBulkAudioSelect(event)">
+                    <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 transition cursor-pointer" id="bulk-audio-dropzone" data-on-click="clickElement" data-args="[&quot;bulk-audio-input&quot;]">
+                        <input type="file" id="bulk-audio-input" class="hidden" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg" multiple data-on-change="handleBulkAudioSelect" data-pass-event="true">
                         <svg class="w-10 h-10 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                         </svg>
@@ -453,7 +454,7 @@
                     <div id="bulk-audio-list" class="hidden mt-4 space-y-2">
                         <div class="flex items-center justify-between mb-2">
                             <h4 class="text-sm font-medium text-gray-700">Selected Files</h4>
-                            <button onclick="clearBulkAudio()" class="text-xs text-red-600 hover:text-red-800">Clear All</button>
+                            <button data-on-click="clearBulkAudio" class="text-xs text-red-600 hover:text-red-800">Clear All</button>
                         </div>
                         <div id="bulk-audio-files" class="space-y-2 max-h-48 overflow-y-auto"></div>
                     </div>
@@ -473,7 +474,7 @@
                         <input type="checkbox" id="bulk-auto-analyze" checked class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
                         <label for="bulk-auto-analyze" class="text-sm text-gray-700">Auto-transcribe and analyze after upload (Arabic supported)</label>
                     </div>
-                    <button onclick="uploadBulkAudioCalls()" id="bulk-audio-upload-btn" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
+                    <button data-on-click="uploadBulkAudioCalls" id="bulk-audio-upload-btn" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
                         <span class="flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
@@ -516,7 +517,7 @@
                             <div class="mb-4">
                                 <input type="text" id="eval-search" placeholder="Search by agent or contact..." 
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
-                                       onkeyup="searchCallsForEval()">
+                                       data-on-keyup="searchCallsForEval">
                             </div>
                             <div id="eval-calls-list" class="space-y-2 max-h-96 overflow-y-auto">
                                 <p class="text-gray-500 text-sm p-2">Loading calls...</p>
@@ -550,7 +551,7 @@
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                             <h3 class="text-lg font-semibold">SDR Evaluation Scorecards</h3>
-                            <button onclick="showCreateScorecardModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition flex items-center gap-2">
+                            <button data-on-click="showCreateScorecardModal" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition flex items-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                 Create Scorecard
                             </button>
@@ -614,7 +615,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                     <h3 class="text-lg font-semibold">CRM Compliance Records</h3>
-                    <button onclick="exportCompliance('csv')" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
+                    <button data-on-click="exportCompliance" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full">
@@ -677,21 +678,21 @@
             </svg>
             <h3 class="text-xl font-semibold text-gray-600 mb-2">No Call Data Yet</h3>
             <p class="text-gray-500 mb-6">Call records will appear here once ingested from Five9 or uploaded manually.</p>
-            <button onclick="showIngestModal()" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+            <button data-on-click="showIngestModal" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
                 Ingest Sample Call
             </button>
         </div>
     </main>
 
     <div id="callDetailModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-black bg-opacity-50" onclick="closeCallModal()"></div>
+        <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeCallModal"></div>
         <div class="absolute inset-4 md:inset-10 lg:inset-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-bold text-gray-900" id="callModalTitle">Call Details</h2>
                     <p class="text-sm text-gray-500" id="callModalSubtitle"></p>
                 </div>
-                <button onclick="closeCallModal()" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="closeCallModal" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -703,14 +704,14 @@
     </div>
 
     <div id="scorecardModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-black bg-opacity-50" onclick="closeScorecardModal()"></div>
+        <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeScorecardModal"></div>
         <div class="absolute inset-4 md:inset-8 lg:inset-16 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-bold text-white" id="scorecardModalTitle">Create Evaluation Scorecard</h2>
                     <p class="text-sm text-white/80">Define attributes for SDR call evaluation</p>
                 </div>
-                <button onclick="closeScorecardModal()" class="text-white/80 hover:text-white">
+                <button data-on-click="closeScorecardModal" class="text-white/80 hover:text-white">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -741,7 +742,7 @@
                     <div class="border-t pt-4">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-semibold">Evaluation Attributes</h3>
-                            <button type="button" onclick="addAttribute()" class="text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition">+ Add Attribute</button>
+                            <button type="button" data-on-click="addAttribute" class="text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition">+ Add Attribute</button>
                         </div>
                         <div id="attributes-container" class="space-y-4">
                             <!-- Attributes will be added here -->
@@ -749,7 +750,7 @@
                     </div>
                     
                     <div class="flex gap-3 pt-4 border-t">
-                        <button type="button" onclick="closeScorecardModal()" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">Cancel</button>
+                        <button type="button" data-on-click="closeScorecardModal" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">Cancel</button>
                         <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">Save Scorecard</button>
                     </div>
                 </form>
@@ -758,14 +759,14 @@
     </div>
 
     <div id="transcriptModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-black bg-opacity-50" onclick="closeTranscriptModal()"></div>
+        <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeTranscriptModal"></div>
         <div class="absolute inset-4 md:inset-10 lg:inset-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-bold text-gray-900">Full Call Transcript</h2>
                     <p class="text-sm text-gray-500" id="transcriptModalSubtitle"></p>
                 </div>
-                <button onclick="closeTranscriptModal()" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="closeTranscriptModal" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -933,7 +934,7 @@
 
             tbody.innerHTML = pageData.map(call => `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-medium text-indigo-600 cursor-pointer" onclick="viewCall(${call.id})">${escapeHtml(call.call_id)}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-indigo-600 cursor-pointer" data-on-click="viewCall" data-args="[${call.id}]">${escapeHtml(call.call_id)}</td>
                     <td class="px-4 py-3 text-sm text-gray-900">${escapeHtml(call.source)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(call.agent_email || '--')}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(call.contact_name || '--')}</td>
@@ -950,7 +951,7 @@
                         </span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="analyzeCall(${call.id})" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" ${call.status === 'analyzed' ? 'disabled' : ''}>
+                        <button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" ${call.status === 'analyzed' ? 'disabled' : ''}>
                             ${call.status === 'analyzed' ? 'View' : 'Analyze'}
                         </button>
                     </td>
@@ -1292,7 +1293,7 @@
                         <span class="text-sm font-medium text-blue-800">${escapeHtml(file.name)}</span>
                         <span class="text-xs text-blue-600">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
-                    <button onclick="removeBulkAudioFile(${idx})" class="text-gray-400 hover:text-red-600">
+                    <button data-on-click="removeBulkAudioFile" data-args="[${idx}]" class="text-gray-400 hover:text-red-600">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -1611,7 +1612,7 @@
                 return;
             }
             container.innerHTML = calls.map(call => `
-                <div class="p-3 rounded-lg border cursor-pointer hover:bg-blue-50 transition ${selectedEvalCall?.id === call.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}" onclick="selectCallForEval(${call.id})">
+                <div class="p-3 rounded-lg border cursor-pointer hover:bg-blue-50 transition ${selectedEvalCall?.id === call.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}" data-on-click="selectCallForEval" data-args="[${call.id}]">
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="font-medium text-sm">${escapeHtml(call.agent_name || call.agent_email)}</div>
@@ -1678,7 +1679,7 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                             Call Transcript
                         </h4>
-                        <button type="button" onclick="showTranscriptModal(\`${escapeForJs(transcript.transcript_text)}\`, '${call.agent_name || call.agent_email} - ${call.contact_name || 'Unknown'}')" class="text-sm bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                        <button type="button" data-on-click="showTranscriptModal" data-args="${escAttr(JSON.stringify([transcript.transcript_text, (call.agent_name || call.agent_email) + ' - ' + (call.contact_name || 'Unknown')]))}" class="text-sm bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                             View Full
                         </button>
@@ -1701,7 +1702,7 @@
                             <p class="text-sm text-purple-700">Use AI to automatically evaluate this call using the active scorecard</p>
                         </div>
                     </div>
-                    <button type="button" onclick="runAIEvaluation()" id="btn-ai-eval" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-2">
+                    <button type="button" data-on-click="runAIEvaluation" id="btn-ai-eval" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
@@ -1722,7 +1723,7 @@
                             <p class="text-sm text-purple-700">Click below to transcribe the audio (Arabic) and run AI evaluation</p>
                         </div>
                     </div>
-                    <button type="button" onclick="runAIEvaluation()" id="btn-ai-eval" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-2">
+                    <button type="button" data-on-click="runAIEvaluation" id="btn-ai-eval" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
@@ -1768,10 +1769,10 @@
                         </div>
                         
                         <div class="flex gap-3">
-                            <button type="button" onclick="saveEvaluation()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
+                            <button type="button" data-on-click="saveEvaluation" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
                                 Save Evaluation
                             </button>
-                            <button type="button" onclick="saveEvaluation(true)" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium">
+                            <button type="button" data-on-click="saveEvaluation" data-args="[true]" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium">
                                 Save & Complete
                             </button>
                         </div>
@@ -1808,7 +1809,7 @@
                     </div>
                     <input type="range" id="slider-${c.id}" min="0" max="${c.maxScore}" value="${existingScore?.criteria_scores?.[c.id] || 0}"
                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                           oninput="document.getElementById('score-${c.id}').value = this.value; updateTotalScore()">
+                           data-criteria-id="${c.id}" data-on-input="updateCriteriaSlider" data-pass-event="true">
                 </div>
             `).join('')}</div>`;
         }
@@ -1961,15 +1962,15 @@
                     <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4">
                         <p class="text-sm font-medium text-purple-900 mb-3">Rate AI Evaluation Accuracy</p>
                         <div class="flex gap-2">
-                            <button type="button" onclick="rateAIEvaluation(${selectedEvalCall?.id || 0}, ${evaluation.id || 0}, 'accurate')" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
+                            <button type="button" data-on-click="rateAIEvaluation" data-args="[${selectedEvalCall?.id || 0},${evaluation.id || 0},&quot;accurate&quot;]" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                 Accurate
                             </button>
-                            <button type="button" onclick="rateAIEvaluation(${selectedEvalCall?.id || 0}, ${evaluation.id || 0}, 'partially_accurate')" class="flex-1 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
+                            <button type="button" data-on-click="rateAIEvaluation" data-args="[${selectedEvalCall?.id || 0},${evaluation.id || 0},&quot;partially_accurate&quot;]" class="flex-1 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 Partial
                             </button>
-                            <button type="button" onclick="rateAIEvaluation(${selectedEvalCall?.id || 0}, ${evaluation.id || 0}, 'inaccurate')" class="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
+                            <button type="button" data-on-click="rateAIEvaluation" data-args="[${selectedEvalCall?.id || 0},${evaluation.id || 0},&quot;inaccurate&quot;]" class="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 Incorrect
                             </button>
@@ -1979,14 +1980,14 @@
 
                     <!-- Action Buttons -->
                     <div class="flex gap-3">
-                        <button type="button" onclick="currentSDREvaluation=null; selectCallForEval(selectedEvalCall.id)" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
+                        <button type="button" data-on-click="resetSDRAndReselect" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
                             ↻ Re-evaluate
                         </button>
-                        <button type="button" onclick="syncToZoho()" id="btn-sync-zoho" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition font-medium flex items-center gap-2">
+                        <button type="button" data-on-click="syncToZoho" id="btn-sync-zoho" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition font-medium flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
                             Sync to Zoho
                         </button>
-                        <button type="button" onclick="exportEvaluation()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
+                        <button type="button" data-on-click="exportEvaluation" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
                             Export PDF
                         </button>
                     </div>
@@ -2039,6 +2040,24 @@
             a.click();
             URL.revokeObjectURL(url);
         }
+
+        function resetSDRAndReselect() {
+            if (typeof currentSDREvaluation !== 'undefined') currentSDREvaluation = null;
+            if (typeof selectedEvalCall !== 'undefined' && selectedEvalCall) selectCallForEval(selectedEvalCall.id);
+        }
+        window.resetSDRAndReselect = resetSDRAndReselect;
+
+        function updateCriteriaSlider(event) {
+            const slider = event && event.target;
+            if (!slider) return;
+            const id = slider.dataset.criteriaId;
+            if (id) {
+                const out = document.getElementById('score-' + id);
+                if (out) out.value = slider.value;
+            }
+            updateTotalScore();
+        }
+        window.updateCriteriaSlider = updateCriteriaSlider;
 
         function updateTotalScore() {
             const criteria = ['opening', 'discovery', 'product_knowledge', 'objection_handling', 'value_proposition', 'closing', 'communication', 'crm_compliance'];
@@ -2118,7 +2137,7 @@
                     <div class="p-8 text-center text-gray-400">
                         <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                         <p>No scorecards created yet</p>
-                        <button onclick="showCreateScorecardModal()" class="mt-4 text-blue-600 hover:text-blue-700">Create your first scorecard</button>
+                        <button data-on-click="showCreateScorecardModal" class="mt-4 text-blue-600 hover:text-blue-700">Create your first scorecard</button>
                     </div>
                 `;
                 return;
@@ -2144,10 +2163,10 @@
                                 </div>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="toggleScorecardActive(${sc.id}, ${!sc.is_active})" class="p-2 ${sc.is_active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'} rounded-lg transition" title="${sc.is_active ? 'Deactivate' : 'Activate'}">
+                                <button data-on-click="toggleScorecardActive" data-args="[${sc.id},${!sc.is_active}]" class="p-2 ${sc.is_active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'} rounded-lg transition" title="${sc.is_active ? 'Deactivate' : 'Activate'}">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 </button>
-                                <button onclick="viewScorecardDetails(${sc.id})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View Details">
+                                <button data-on-click="viewScorecardDetails" data-args="[${sc.id}]" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View Details">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                 </button>
                             </div>
@@ -2176,7 +2195,7 @@
                 <div id="attr-${attributeCounter}" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
                     <div class="flex items-start justify-between mb-3">
                         <span class="font-medium text-sm text-gray-700">Attribute #${attributeCounter}</span>
-                        <button type="button" onclick="removeAttribute(${attributeCounter})" class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+                        <button type="button" data-on-click="removeAttribute" data-args="[${attributeCounter}]" class="text-red-500 hover:text-red-700 text-sm">Remove</button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -2318,7 +2337,7 @@
                 <div class="bg-gray-50 rounded-lg p-4 mb-4">
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-sm font-medium text-gray-700">Full Transcript</span>
-                        <button onclick="copyTranscript()" class="text-sm text-blue-600 hover:text-blue-700">Copy</button>
+                        <button data-on-click="copyTranscript" class="text-sm text-blue-600 hover:text-blue-700">Copy</button>
                     </div>
                 </div>
                 <div class="whitespace-pre-wrap text-gray-700 leading-relaxed font-arabic font-segoe">${escapeHtml(transcriptText)}</div>
@@ -2398,15 +2417,15 @@
                 <div class="mt-4 pt-4 border-t border-gray-100">
                     <p class="text-sm font-medium text-gray-700 mb-3">Rate AI Evaluation Accuracy</p>
                     <div class="flex gap-2">
-                        <button onclick="rateAIEvaluation(${callId}, ${evaluationId}, 'accurate')" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
+                        <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;accurate&quot;]" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             Accurate
                         </button>
-                        <button onclick="rateAIEvaluation(${callId}, ${evaluationId}, 'partially_accurate')" class="flex-1 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
+                        <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;partially_accurate&quot;]" class="flex-1 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             Partial
                         </button>
-                        <button onclick="rateAIEvaluation(${callId}, ${evaluationId}, 'inaccurate')" class="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
+                        <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;inaccurate&quot;]" class="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             Incorrect
                         </button>

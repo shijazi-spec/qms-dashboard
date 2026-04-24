@@ -50,6 +50,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -59,22 +60,22 @@
 
     <main class="max-w-7xl mx-auto px-4 py-6">
         <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
-            <button onclick="showTab('overview')" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active">
+            <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active">
                 Overview
             </button>
-            <button onclick="showTab('members')" id="tab-members" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;members&quot;]" id="tab-members" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
                 Team Members
             </button>
-            <button onclick="showTab('courses')" id="tab-courses" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;courses&quot;]" id="tab-courses" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
                 Training Courses
             </button>
-            <button onclick="showTab('training')" id="tab-training" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;training&quot;]" id="tab-training" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
                 Training Matrix
             </button>
-            <button onclick="showTab('projects')" id="tab-projects" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;projects&quot;]" id="tab-projects" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
                 Projects
             </button>
-            <button onclick="showTab('analytics')" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
+            <button data-on-click="showTab" data-args="[&quot;analytics&quot;]" id="tab-analytics" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200">
                 Analytics
             </button>
         </div>
@@ -169,17 +170,17 @@
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900">Team Members</h3>
                     <div class="flex items-center space-x-4">
-                        <select id="filterDepartment" onchange="loadMembers()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="filterDepartment" data-on-change="loadMembers" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Departments</option>
                         </select>
-                        <select id="filterStatus" onchange="loadMembers()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="filterStatus" data-on-change="loadMembers" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Status</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                             <option value="on_leave">On Leave</option>
                             <option value="probation">Probation</option>
                         </select>
-                        <button onclick="openNewMemberModal()" data-testid="button-add-member" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2">
+                        <button data-on-click="openNewMemberModal" data-testid="button-add-member" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                             </svg>
@@ -215,12 +216,12 @@
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900">Training Courses Catalog</h3>
                     <div class="flex items-center space-x-4">
-                        <select id="filterCourseType" onchange="loadCourses()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="filterCourseType" data-on-change="loadCourses" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Types</option>
                             <option value="mandatory">Mandatory</option>
                             <option value="optional">Optional</option>
                         </select>
-                        <button onclick="openNewCourseModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
+                        <button data-on-click="openNewCourseModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
                             Add Course
                         </button>
                     </div>
@@ -260,23 +261,23 @@
                     <h3 class="text-lg font-semibold text-gray-900">Project Assignments</h3>
                     <div class="flex items-center space-x-4">
                         <div class="flex bg-gray-100 rounded-lg p-1">
-                            <button onclick="setProjectView('table')" id="viewTable" class="px-3 py-1 rounded text-sm font-medium bg-white shadow">
+                            <button data-on-click="setProjectView" data-args="[&quot;table&quot;]" id="viewTable" class="px-3 py-1 rounded text-sm font-medium bg-white shadow">
                                 <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                                 Table
                             </button>
-                            <button onclick="setProjectView('kanban')" id="viewKanban" class="px-3 py-1 rounded text-sm font-medium text-gray-600">
+                            <button data-on-click="setProjectView" data-args="[&quot;kanban&quot;]" id="viewKanban" class="px-3 py-1 rounded text-sm font-medium text-gray-600">
                                 <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
                                 Kanban
                             </button>
                         </div>
-                        <select id="filterProjectStatus" onchange="loadProjects()" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
+                        <select id="filterProjectStatus" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Status</option>
                             <option value="assigned">Assigned</option>
                             <option value="in_progress">In Progress</option>
                             <option value="completed">Completed</option>
                             <option value="on_hold">On Hold</option>
                         </select>
-                        <button onclick="openNewProjectModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
+                        <button data-on-click="openNewProjectModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm">
                             New Assignment
                         </button>
                     </div>
@@ -372,10 +373,10 @@
 
     <div id="newMemberModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen px-4">
-            <div class="fixed inset-0 modal-backdrop" onclick="closeNewMemberModal()"></div>
+            <div class="fixed inset-0 modal-backdrop" data-on-click="closeNewMemberModal"></div>
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Team Member</h3>
-                <form id="newMemberForm" onsubmit="createMember(event)">
+                <form id="newMemberForm" data-on-submit="createMember" data-pass-event="true">
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
@@ -424,7 +425,7 @@
                         </div>
                     </div>
                     <div class="flex justify-end space-x-3 mt-6">
-                        <button type="button" onclick="closeNewMemberModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="button" data-on-click="closeNewMemberModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Member</button>
                     </div>
                 </form>
@@ -434,10 +435,10 @@
 
     <div id="newProjectModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen px-4">
-            <div class="fixed inset-0 modal-backdrop" onclick="closeNewProjectModal()"></div>
+            <div class="fixed inset-0 modal-backdrop" data-on-click="closeNewProjectModal"></div>
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">New Project Assignment</h3>
-                <form id="newProjectForm" onsubmit="createProject(event)">
+                <form id="newProjectForm" data-on-submit="createProject" data-pass-event="true">
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
@@ -491,7 +492,7 @@
                         </div>
                     </div>
                     <div class="flex justify-end space-x-3 mt-6">
-                        <button type="button" onclick="closeNewProjectModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="button" data-on-click="closeNewProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Assignment</button>
                     </div>
                 </form>
@@ -501,10 +502,10 @@
 
     <div id="newCourseModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen px-4">
-            <div class="fixed inset-0 modal-backdrop" onclick="closeNewCourseModal()"></div>
+            <div class="fixed inset-0 modal-backdrop" data-on-click="closeNewCourseModal"></div>
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Training Course</h3>
-                <form id="newCourseForm" onsubmit="createCourse(event)">
+                <form id="newCourseForm" data-on-submit="createCourse" data-pass-event="true">
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Course Name *</label>
@@ -547,7 +548,7 @@
                         </div>
                     </div>
                     <div class="flex justify-end space-x-3 mt-6">
-                        <button type="button" onclick="closeNewCourseModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="button" data-on-click="closeNewCourseModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Course</button>
                     </div>
                 </form>
@@ -680,7 +681,7 @@
                                 <span class="${c.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium">${c.is_active ? 'Active' : 'Inactive'}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <button onclick="deleteCourse('${c.course_id}')" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteCourse" data-args="[&quot;${c.course_id}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -934,7 +935,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <button onclick="deleteMember('${m.member_id}')" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteMember" data-args="[&quot;${m.member_id}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -983,7 +984,7 @@
                                 <span class="badge-${p.priority} px-2 py-1 rounded-full text-xs font-medium capitalize">${p.priority}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <select onchange="updateProjectStatus('${p.assignment_id}', this.value)" class="text-sm border border-gray-200 rounded px-2 py-1">
+                                <select data-on-change="updateProjectStatus" data-args="[&quot;${p.assignment_id}&quot;,&quot;@this.value&quot;]" class="text-sm border border-gray-200 rounded px-2 py-1">
                                     <option value="assigned" ${p.status === 'assigned' ? 'selected' : ''}>Assigned</option>
                                     <option value="in_progress" ${p.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
                                     <option value="completed" ${p.status === 'completed' ? 'selected' : ''}>Completed</option>
@@ -991,7 +992,7 @@
                                 </select>
                             </td>
                             <td class="px-6 py-4">
-                                <button onclick="deleteProject('${p.assignment_id}')" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteProject" data-args="[&quot;${p.assignment_id}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>

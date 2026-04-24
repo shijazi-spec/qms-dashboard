@@ -85,6 +85,7 @@
     <body class="bg-gray-50 min-h-screen">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
+        <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -95,49 +96,49 @@
         <div class="max-w-7xl mx-auto px-4 py-6">
             <div class="flex space-x-2 mb-6 border-b border-gray-200">
                 <button
-                    onclick="showTab('overview')"
+                    data-on-click="showTab" data-args="[&quot;overview&quot;]"
                     id="tab-overview"
                     class="px-4 py-2 font-medium rounded-t-lg tab-active"
                 >
                     Overview
                 </button>
                 <button
-                    onclick="showTab('evaluations')"
+                    data-on-click="showTab" data-args="[&quot;evaluations&quot;]"
                     id="tab-evaluations"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
                     Deal Evaluations
                 </button>
                 <button
-                    onclick="showTab('capa')"
+                    data-on-click="showTab" data-args="[&quot;capa&quot;]"
                     id="tab-capa"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
                     CAPA
                 </button>
                 <button
-                    onclick="showTab('nc')"
+                    data-on-click="showTab" data-args="[&quot;nc&quot;]"
                     id="tab-nc"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
                     Nonconformances
                 </button>
                 <button
-                    onclick="showTab('training')"
+                    data-on-click="showTab" data-args="[&quot;training&quot;]"
                     id="tab-training"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
                     Training
                 </button>
                 <button
-                    onclick="showTab('framework')"
+                    data-on-click="showTab" data-args="[&quot;framework&quot;]"
                     id="tab-framework"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
                     Framework
                 </button>
                 <button
-                    onclick="showTab('triggers')"
+                    data-on-click="showTab" data-args="[&quot;triggers&quot;]"
                     id="tab-triggers"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100 relative"
                 >
@@ -358,7 +359,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold">Deal Evaluations</h3>
                         <button
-                            onclick="triggerEvaluation()"
+                            data-on-click="triggerEvaluation"
                             class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                         >
                             Run Evaluation
@@ -399,17 +400,17 @@
                             Corrective and Preventive Actions
                         </h3>
                         <div class="flex space-x-2">
-                            <button onclick="exportCSV('capa')" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-1">
+                            <button data-on-click="exportCSV" data-args="[&quot;capa&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span>Export CSV</span>
                             </button>
-                            <button onclick="showCapaModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New CAPA</button>
+                            <button data-on-click="showCapaModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New CAPA</button>
                         </div>
                     </div>
                     <div class="flex space-x-2 mb-4">
                         <select
                             id="capa-status-filter"
-                            onchange="loadCapa()"
+                            data-on-change="loadCapa"
                             class="border rounded px-3 py-1 text-sm"
                         >
                             <option value="">All Status</option>
@@ -424,7 +425,7 @@
                         </select>
                         <select
                             id="capa-severity-filter"
-                            onchange="loadCapa()"
+                            data-on-change="loadCapa"
                             class="border rounded px-3 py-1 text-sm"
                         >
                             <option value="">All Severity</option>
@@ -438,7 +439,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
-                                    <th class="py-2 px-3 w-8"><input type="checkbox" onclick="toggleAllCheckboxes('capa', this)"></th>
+                                    <th class="py-2 px-3 w-8"><input type="checkbox" data-on-click="toggleAllCheckboxes" data-args="[&quot;capa&quot;,&quot;@this&quot;]"></th>
                                     <th class="text-left py-2 px-3">CAPA #</th>
                                     <th class="text-left py-2 px-3">Title</th>
                                     <th class="text-left py-2 px-3">Type</th>
@@ -477,7 +478,7 @@
                                 <option value="verification">Verification</option>
                                 <option value="closed">Closed</option>
                             </select>
-                            <button onclick="bulkUpdateRecords('capa')" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Apply</button>
+                            <button data-on-click="bulkUpdateRecords" data-args="[&quot;capa&quot;]" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -490,18 +491,18 @@
                             Nonconformance Records
                         </h3>
                         <div class="flex space-x-2">
-                            <button onclick="exportCSV('nc')" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-1">
+                            <button data-on-click="exportCSV" data-args="[&quot;nc&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span>Export CSV</span>
                             </button>
-                            <button onclick="showNcModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New NC</button>
+                            <button data-on-click="showNcModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New NC</button>
                         </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
-                                    <th class="py-2 px-3 w-8"><input type="checkbox" onclick="toggleAllCheckboxes('nc', this)"></th>
+                                    <th class="py-2 px-3 w-8"><input type="checkbox" data-on-click="toggleAllCheckboxes" data-args="[&quot;nc&quot;,&quot;@this&quot;]"></th>
                                     <th class="text-left py-2 px-3">NC #</th>
                                     <th class="text-left py-2 px-3">Title</th>
                                     <th class="text-left py-2 px-3">Type</th>
@@ -536,7 +537,7 @@
                                 <option value="corrective_action">Corrective Action</option>
                                 <option value="closed">Closed</option>
                             </select>
-                            <button onclick="bulkUpdateRecords('nc')" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">Apply</button>
+                            <button data-on-click="bulkUpdateRecords" data-args="[&quot;nc&quot;]" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -637,7 +638,7 @@
                 <div class="bg-white rounded-xl shadow p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold">Pending Audit Triggers</h3>
-                        <button onclick="loadTriggers()" class="text-blue-600 hover:text-blue-800 text-sm flex items-center">
+                        <button data-on-click="loadTriggers" class="text-blue-600 hover:text-blue-800 text-sm flex items-center">
                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
@@ -664,7 +665,7 @@
         >
             <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
                 <h3 class="text-lg font-semibold mb-4">Create New CAPA</h3>
-                <form id="capa-form" onsubmit="createCapa(event)">
+                <form id="capa-form" data-on-submit="createCapa" data-pass-event="true">
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium mb-1"
@@ -752,7 +753,7 @@
                     <div class="flex justify-end space-x-2 mt-6">
                         <button
                             type="button"
-                            onclick="hideCapaModal()"
+                            data-on-click="hideCapaModal"
                             class="px-4 py-2 border rounded-lg hover:bg-gray-50"
                         >
                             Cancel
@@ -805,7 +806,7 @@
                             </div>
                             <h1 class="text-xl font-bold text-gray-900 mb-2">Authentication Required</h1>
                             <p class="text-gray-600 mb-4">Admin API key is required to access the QMS Dashboard.</p>
-                            <button onclick="location.reload()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Try Again</button>
+                            <button data-on-click="location.reload" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Try Again</button>
                             <p class="mt-4"><a href="/dashboard" class="text-blue-600 hover:underline">Return to Main Dashboard</a></p>
                         </div>
                     </div>
@@ -990,14 +991,14 @@
                             .map(
                                 (c) => `
                     <tr class="border-b hover:bg-gray-50 cursor-pointer">
-                        <td class="py-2 px-3"><input type="checkbox" class="capa-checkbox" value="${c.id}" onclick="event.stopPropagation(); updateBulkToolbar('capa')"></td>
-                        <td class="py-2 px-3 font-mono text-xs" onclick="showCapaDetail(${c.id})">${c.capa_number}</td>
-                        <td class="py-2 px-3" onclick="showCapaDetail(${c.id})">${c.title}</td>
-                        <td class="py-2 px-3 capitalize" onclick="showCapaDetail(${c.id})">${c.capa_type}</td>
-                        <td class="py-2 px-3" onclick="showCapaDetail(${c.id})"><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${c.severity}</span></td>
-                        <td class="py-2 px-3" onclick="showCapaDetail(${c.id})"><span class="px-2 py-1 rounded text-xs status-${c.status.includes("progress") || c.status === "investigation" ? "in-progress" : c.status}">${c.status.replace("_", " ")}</span></td>
-                        <td class="py-2 px-3" onclick="showCapaDetail(${c.id})">${c.assigned_to || "-"}</td>
-                        <td class="py-2 px-3" onclick="showCapaDetail(${c.id})">${c.target_date ? new Date(c.target_date).toLocaleDateString() : "-"}</td>
+                        <td class="py-2 px-3"><input type="checkbox" class="capa-checkbox" value="${c.id}" data-on-click="event.stopPropagation,updateBulkToolbar" data-args="[[],[&quot;capa&quot;]]"></td>
+                        <td class="py-2 px-3 font-mono text-xs" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.capa_number}</td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.title}</td>
+                        <td class="py-2 px-3 capitalize" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.capa_type}</td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]"><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${c.severity}</span></td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]"><span class="px-2 py-1 rounded text-xs status-${c.status.includes("progress") || c.status === "investigation" ? "in-progress" : c.status}">${c.status.replace("_", " ")}</span></td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.assigned_to || "-"}</td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.target_date ? new Date(c.target_date).toLocaleDateString() : "-"}</td>
                     </tr>
                 `,
                             )
@@ -1019,13 +1020,13 @@
                             .map(
                                 (n) => `
                     <tr class="border-b hover:bg-gray-50 cursor-pointer">
-                        <td class="py-2 px-3"><input type="checkbox" class="nc-checkbox" value="${n.id}" onclick="event.stopPropagation(); updateBulkToolbar('nc')"></td>
-                        <td class="py-2 px-3 font-mono text-xs" onclick="showNcDetail(${n.id})">${n.nc_number}</td>
-                        <td class="py-2 px-3" onclick="showNcDetail(${n.id})">${n.title}</td>
-                        <td class="py-2 px-3" onclick="showNcDetail(${n.id})">${n.nc_type}</td>
-                        <td class="py-2 px-3" onclick="showNcDetail(${n.id})"><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${n.severity}</span></td>
-                        <td class="py-2 px-3" onclick="showNcDetail(${n.id})"><span class="px-2 py-1 rounded text-xs status-${n.status === "closed" ? "closed" : "open"}">${n.status.replace("_", " ")}</span></td>
-                        <td class="py-2 px-3" onclick="showNcDetail(${n.id})">${n.detected_date ? new Date(n.detected_date).toLocaleDateString() : "-"}</td>
+                        <td class="py-2 px-3"><input type="checkbox" class="nc-checkbox" value="${n.id}" data-on-click="event.stopPropagation,updateBulkToolbar" data-args="[[],[&quot;nc&quot;]]"></td>
+                        <td class="py-2 px-3 font-mono text-xs" data-on-click="showNcDetail" data-args="[${n.id}]">${n.nc_number}</td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.title}</td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.nc_type}</td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]"><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${n.severity}</span></td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]"><span class="px-2 py-1 rounded text-xs status-${n.status === "closed" ? "closed" : "open"}">${n.status.replace("_", " ")}</span></td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.detected_date ? new Date(n.detected_date).toLocaleDateString() : "-"}</td>
                     </tr>
                 `,
                             )
@@ -1229,19 +1230,19 @@
                                         <p class="text-xs text-gray-500 mt-2">Assigned to: ${t.assigned_role || 'N/A'} | Created: ${new Date(t.created_at).toLocaleString()}</p>
                                     </div>
                                     <div class="flex flex-wrap gap-2 ml-4 justify-end max-w-xs">
-                                        <button onclick="acknowledgeTrigger(${t.id})" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-300 rounded">
+                                        <button data-on-click="acknowledgeTrigger" data-args="[${t.id}]" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-300 rounded">
                                             Acknowledge
                                         </button>
                                         ${t.severity === 'critical' ? `
-                                            <button onclick="proposeTriggerHITL(${t.id})" title="Send this decision to /ai-approvals for Quality Manager sign-off" class="text-purple-700 hover:text-purple-900 text-sm px-2 py-1 border border-purple-300 rounded bg-purple-50">
+                                            <button data-on-click="proposeTriggerHITL" data-args="[${t.id}]" title="Send this decision to /ai-approvals for Quality Manager sign-off" class="text-purple-700 hover:text-purple-900 text-sm px-2 py-1 border border-purple-300 rounded bg-purple-50">
                                                 Propose via HITL
                                             </button>
                                         ` : ''}
                                         ${t.trigger_type === 'DECISION_PENDING' ? `
-                                            <button onclick="decideTrigger(${t.id}, 'approved')" class="text-green-600 hover:text-green-800 text-sm px-2 py-1 border border-green-300 rounded">Approve</button>
-                                            <button onclick="decideTrigger(${t.id}, 'rejected')" class="text-red-600 hover:text-red-800 text-sm px-2 py-1 border border-red-300 rounded">Reject</button>
+                                            <button data-on-click="decideTrigger" data-args="[${t.id},&quot;approved&quot;]" class="text-green-600 hover:text-green-800 text-sm px-2 py-1 border border-green-300 rounded">Approve</button>
+                                            <button data-on-click="decideTrigger" data-args="[${t.id},&quot;rejected&quot;]" class="text-red-600 hover:text-red-800 text-sm px-2 py-1 border border-red-300 rounded">Reject</button>
                                         ` : ''}
-                                        <button onclick="dismissTrigger(${t.id})" title="Dismissal requires a written justification and is auto-re-evaluated in 24h" class="text-gray-500 hover:text-gray-700 text-sm px-2 py-1 border border-gray-300 rounded">
+                                        <button data-on-click="dismissTrigger" data-args="[${t.id}]" title="Dismissal requires a written justification and is auto-re-evaluated in 24h" class="text-gray-500 hover:text-gray-700 text-sm px-2 py-1 border border-gray-300 rounded">
                                             Dismiss
                                         </button>
                                     </div>
@@ -1261,7 +1262,7 @@
                                     <p class="text-sm text-gray-600 mt-1">${n.message}</p>
                                     <p class="text-xs text-gray-500 mt-2">For: ${n.recipient_role} | ${new Date(n.created_at).toLocaleString()}</p>
                                 </div>
-                                <button onclick="markNotificationRead(${n.id})" class="text-blue-600 hover:text-blue-800 text-sm">
+                                <button data-on-click="markNotificationRead" data-args="[${n.id}]" class="text-blue-600 hover:text-blue-800 text-sm">
                                     Mark Read
                                 </button>
                             </div>
@@ -1512,7 +1513,7 @@
                             <h4 class="font-semibold text-amber-800 mb-2">Approve Closure</h4>
                             <div class="flex items-center space-x-2">
                                 <input type="text" id="capaApprover" placeholder="Your name/email" class="border rounded px-3 py-1 text-sm flex-1">
-                                <button onclick="approveCapaClosure(${c.id})" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
+                                <button data-on-click="approveCapaClosure" data-args="[${c.id}]" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
                             </div>
                         </div>` : ''}
 
@@ -1527,7 +1528,7 @@
                                 </select>
                                 <textarea id="capaEffEvidence" placeholder="Evidence / notes" rows="2" class="border rounded px-3 py-1 text-sm w-full"></textarea>
                                 <input type="text" id="capaEffReviewer" placeholder="Reviewer name/email" class="border rounded px-3 py-1 text-sm w-full">
-                                <button onclick="recordCapaEffectiveness(${c.id})" class="bg-purple-600 text-white px-4 py-1.5 rounded text-sm hover:bg-purple-700">Submit</button>
+                                <button data-on-click="recordCapaEffectiveness" data-args="[${c.id}]" class="bg-purple-600 text-white px-4 py-1.5 rounded text-sm hover:bg-purple-700">Submit</button>
                             </div>
                         </div>` : ''}
 
@@ -1536,13 +1537,13 @@
                             ${evidence.length ? evidence.map(e => `
                                 <div class="flex items-center justify-between border rounded p-2 mb-1">
                                     <div><span class="text-sm font-medium">${e.original_filename||e.filename}</span><span class="text-xs text-gray-500 ml-2">${e.uploaded_by}</span></div>
-                                    <button onclick="deleteEvidence(${e.id})" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                                    <button data-on-click="deleteEvidence" data-args="[${e.id}]" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
                                 </div>
                             `).join('') : '<p class="text-sm text-gray-500">No evidence attached</p>'}
                             <div class="flex items-center space-x-2 mt-2">
                                 <input type="text" id="evidenceFilename" placeholder="Filename" class="border rounded px-3 py-1 text-sm flex-1">
                                 <input type="text" id="evidenceUploader" placeholder="Your name" class="border rounded px-3 py-1 text-sm flex-1">
-                                <button onclick="addEvidence('capa', ${c.id})" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Attach</button>
+                                <button data-on-click="addEvidence" data-args="[&quot;capa&quot;,${c.id}]" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Attach</button>
                             </div>
                         </div>
 
@@ -1598,7 +1599,7 @@
                             <h4 class="font-semibold text-amber-800 mb-2">Approve Closure</h4>
                             <div class="flex items-center space-x-2">
                                 <input type="text" id="ncApprover" placeholder="Your name/email" class="border rounded px-3 py-1 text-sm flex-1">
-                                <button onclick="approveNcClosure(${n.id})" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
+                                <button data-on-click="approveNcClosure" data-args="[${n.id}]" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
                             </div>
                         </div>` : ''}
 
@@ -1607,13 +1608,13 @@
                             ${evidence.length ? evidence.map(e => `
                                 <div class="flex items-center justify-between border rounded p-2 mb-1">
                                     <div><span class="text-sm font-medium">${e.original_filename||e.filename}</span><span class="text-xs text-gray-500 ml-2">${e.uploaded_by}</span></div>
-                                    <button onclick="deleteEvidence(${e.id})" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                                    <button data-on-click="deleteEvidence" data-args="[${e.id}]" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
                                 </div>
                             `).join('') : '<p class="text-sm text-gray-500">No evidence attached</p>'}
                             <div class="flex items-center space-x-2 mt-2">
                                 <input type="text" id="evidenceFilename" placeholder="Filename" class="border rounded px-3 py-1 text-sm flex-1">
                                 <input type="text" id="evidenceUploader" placeholder="Your name" class="border rounded px-3 py-1 text-sm flex-1">
-                                <button onclick="addEvidence('nc', ${n.id})" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Attach</button>
+                                <button data-on-click="addEvidence" data-args="[&quot;nc&quot;,${n.id}]" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Attach</button>
                             </div>
                         </div>
 
@@ -1758,11 +1759,11 @@
 
         <div id="detailModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
             <div class="flex items-center justify-center min-h-screen px-4">
-                <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeDetailModal()"></div>
+                <div class="fixed inset-0 bg-black bg-opacity-50" data-on-click="closeDetailModal"></div>
                 <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 relative z-10">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-gray-900" id="detailModalTitle">Record Details</h3>
-                        <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600">
+                        <button data-on-click="closeDetailModal" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
@@ -1775,17 +1776,17 @@
 
         <div id="ncModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
             <div class="flex items-center justify-center min-h-screen px-4">
-                <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeNcModal()"></div>
+                <div class="fixed inset-0 bg-black bg-opacity-50" data-on-click="closeNcModal"></div>
                 <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative z-10">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-gray-900">New Nonconformance</h3>
-                        <button onclick="closeNcModal()" class="text-gray-400 hover:text-gray-600">
+                        <button data-on-click="closeNcModal" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
-                    <form id="ncForm" onsubmit="submitNc(event)">
+                    <form id="ncForm" data-on-submit="submitNc" data-pass-event="true">
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
@@ -1832,7 +1833,7 @@
                             </div>
                         </div>
                         <div class="flex justify-end space-x-3 mt-6">
-                            <button type="button" onclick="closeNcModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button type="button" data-on-click="closeNcModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                             <button type="submit" data-testid="button-submit-nc" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Create NC</button>
                         </div>
                     </form>

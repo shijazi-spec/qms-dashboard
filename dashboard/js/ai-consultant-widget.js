@@ -242,7 +242,7 @@
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                         ${fullView}
                     </a>
-                    <button onclick="window._closeAIWidget && window._closeAIWidget();" aria-label="Close AI Consultant chat" data-testid="button-close-widget">
+                    <button data-on-click="aiWidgetClose" aria-label="Close AI Consultant chat" data-testid="button-close-widget">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-18" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
@@ -252,10 +252,10 @@
                     <h4 data-i18n="consultant.widget_welcome_title">${welcomeTitle}</h4>
                     <p data-i18n="consultant.widget_welcome_sub">${welcomeSub}</p>
                     <div>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What is our current quality score?')" data-testid="button-quick-quality" data-i18n="consultant.quick_quality">${qQuality}</button>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Show compliance status')" data-testid="button-quick-compliance" data-i18n="consultant.quick_compliance">${qCompliance}</button>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What are the top CRM issues?')" data-testid="button-quick-crm" data-i18n="consultant.quick_crm">${qCrm}</button>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Explain ISO 9001 requirements')" data-testid="button-quick-iso" data-i18n="consultant.quick_iso">${qIso}</button>
+                        <button type="button" class="widget-quick-btn" data-on-click="widgetQuickSend" data-args="[&quot;What is our current quality score?&quot;]" data-testid="button-quick-quality" data-i18n="consultant.quick_quality">${qQuality}</button>
+                        <button type="button" class="widget-quick-btn" data-on-click="widgetQuickSend" data-args="[&quot;Show compliance status&quot;]" data-testid="button-quick-compliance" data-i18n="consultant.quick_compliance">${qCompliance}</button>
+                        <button type="button" class="widget-quick-btn" data-on-click="widgetQuickSend" data-args="[&quot;What are the top CRM issues?&quot;]" data-testid="button-quick-crm" data-i18n="consultant.quick_crm">${qCrm}</button>
+                        <button type="button" class="widget-quick-btn" data-on-click="widgetQuickSend" data-args="[&quot;Explain ISO 9001 requirements&quot;]" data-testid="button-quick-iso" data-i18n="consultant.quick_iso">${qIso}</button>
                     </div>
                 </div>
                 <div class="widget-typing" id="ai-widget-typing">
@@ -373,6 +373,15 @@
     } else {
         document.addEventListener('walaPlusI18nReady', applyWidgetTranslations);
     }
+
+    // CSP-safe close handler invoked via data-on-click="aiWidgetClose"
+    window.aiWidgetClose = function() {
+        var panel = document.getElementById('ai-widget-panel');
+        if (panel) panel.classList.remove('open');
+        if (typeof window._closeAIWidget === 'function') {
+            try { window._closeAIWidget(); } catch (_) {}
+        }
+    };
 
     function widgetScrollBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;

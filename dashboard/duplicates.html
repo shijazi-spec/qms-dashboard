@@ -47,7 +47,8 @@
 <body class="bg-gray-100">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
-        <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('duplicates');
@@ -83,25 +84,25 @@
                 <p class="text-sm text-gray-700 mt-1">AI-powered duplicate detection for CRM hygiene (Zoho-aligned, Read-Only)</p>
             </div>
             <div class="flex gap-3">
-                <button onclick="syncNowZohoCRM()" id="syncNowBtn" data-testid="button-sync-now" title="Quick sync to pull latest changes from Zoho (recommended after merging duplicates in Zoho)" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
+                <button data-on-click="syncNowZohoCRM" id="syncNowBtn" data-testid="button-sync-now" title="Quick sync to pull latest changes from Zoho (recommended after merging duplicates in Zoho)" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                     Sync Now
                 </button>
-                <button onclick="scanZohoCRM()" id="scanZohoBtn" data-testid="button-scan-zoho" title="Full re-scan: re-fetches every record from Zoho and rebuilds clusters (slower)" class="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 font-medium flex items-center gap-2">
+                <button data-on-click="scanZohoCRM" id="scanZohoBtn" data-testid="button-scan-zoho" title="Full re-scan: re-fetches every record from Zoho and rebuilds clusters (slower)" class="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
                     </svg>
                     Scan from Zoho
                 </button>
-                <button onclick="exportData()" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
+                <button data-on-click="exportData" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
                     Export CSV
                 </button>
-                <button onclick="refreshData()" data-testid="button-refresh" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
+                <button data-on-click="refreshData" data-testid="button-refresh" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
@@ -111,16 +112,16 @@
         </div>
 
         <div class="flex gap-2 mb-4 flex-wrap">
-            <button onclick="showTab('summary')" id="tab-summary" data-testid="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
-            <button onclick="showTab('clusters')" id="tab-clusters" data-testid="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
-            <button onclick="showTab('leads')" id="tab-leads" data-testid="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
-            <button onclick="showTab('deals')" id="tab-deals" data-testid="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
-            <button onclick="showTab('contacts')" id="tab-contacts" data-testid="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
-            <button onclick="showTab('accounts')" id="tab-accounts" data-testid="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
-            <button onclick="showTab('owners')" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
-            <button onclick="showTab('export')" id="tab-export" data-testid="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
-            <button onclick="showTab('logs')" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
-            <button onclick="showTab('search')" id="tab-search" data-testid="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
+            <button data-on-click="showTab" data-args="[&quot;summary&quot;]" id="tab-summary" data-testid="tab-summary" class="tab-active px-4 py-2 rounded-lg font-medium text-sm">Executive Summary</button>
+            <button data-on-click="showTab" data-args="[&quot;clusters&quot;]" id="tab-clusters" data-testid="tab-clusters" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Domain Clusters</button>
+            <button data-on-click="showTab" data-args="[&quot;leads&quot;]" id="tab-leads" data-testid="tab-leads" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Lead Duplicates</button>
+            <button data-on-click="showTab" data-args="[&quot;deals&quot;]" id="tab-deals" data-testid="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
+            <button data-on-click="showTab" data-args="[&quot;contacts&quot;]" id="tab-contacts" data-testid="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
+            <button data-on-click="showTab" data-args="[&quot;accounts&quot;]" id="tab-accounts" data-testid="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
+            <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
+            <button data-on-click="showTab" data-args="[&quot;export&quot;]" id="tab-export" data-testid="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
+            <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
+            <button data-on-click="showTab" data-args="[&quot;search&quot;]" id="tab-search" data-testid="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 Search
             </button>
@@ -147,7 +148,7 @@
                     <li>Click <strong>"Sync Now"</strong> above to refresh from Zoho and remove merged-away records from this list.</li>
                 </ol>
             </div>
-            <button onclick="document.getElementById('mergeGuideBanner').classList.add('hidden'); localStorage.setItem('mergeGuideDismissed','1');" class="text-blue-400 hover:text-blue-600" data-testid="button-dismiss-merge-guide" title="Dismiss">
+            <button data-on-click="addClass,localStorage.setItem" data-args="[[&quot;mergeGuideBanner&quot;,&quot;hidden&quot;],[&quot;mergeGuideDismissed&quot;,&quot;1&quot;]]" class="text-blue-400 hover:text-blue-600" data-testid="button-dismiss-merge-guide" title="Dismiss">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
@@ -155,14 +156,14 @@
         <!-- Advanced Filters Panel -->
         <div id="filterPanel" class="bg-white rounded-lg shadow px-4 py-3 mb-4">
             <div class="flex items-center justify-between mb-2">
-                <button onclick="toggleFilterPanel()" data-testid="button-toggle-filters" class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <button data-on-click="toggleFilterPanel" data-testid="button-toggle-filters" class="flex items-center gap-2 text-sm font-medium text-gray-700">
                     <svg id="filterChevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     Advanced Filters
                     <span id="activeFilterCount" class="hidden px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">0</span>
                 </button>
                 <div class="flex gap-2">
-                    <button onclick="applyAdvancedFilters()" data-testid="button-apply-filters" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Apply</button>
-                    <button onclick="clearAllFilters()" data-testid="button-clear-filters" class="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg">Clear All</button>
+                    <button data-on-click="applyAdvancedFilters" data-testid="button-apply-filters" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Apply</button>
+                    <button data-on-click="clearAllFilters" data-testid="button-clear-filters" class="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg">Clear All</button>
                 </div>
             </div>
             <div id="filterPanelBody" class="hidden">
@@ -311,7 +312,7 @@
                 <div class="bg-white rounded-lg shadow p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold">Top Match Signal Sources</h3>
-                        <button onclick="openSignalsListModal()" data-testid="button-view-all-signals" class="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline">View all signals →</button>
+                        <button data-on-click="openSignalsListModal" data-testid="button-view-all-signals" class="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline">View all signals →</button>
                     </div>
                     <p class="text-xs text-gray-400 mb-2">Click a signal to see every cluster matched by it.</p>
                     <div id="topSignals" class="space-y-2"></div>
@@ -319,7 +320,7 @@
                 <div class="bg-white rounded-lg shadow p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold">Top Clusters by Pipeline Inflation</h3>
-                        <button onclick="openInflationListModal()" data-testid="button-view-all-inflation" class="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline">View all clusters →</button>
+                        <button data-on-click="openInflationListModal" data-testid="button-view-all-inflation" class="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline">View all clusters →</button>
                     </div>
                     <p class="text-xs text-gray-400 mb-2">Showing top 5 — open the full list to see every inflated cluster.</p>
                     <div id="topClustersInflation" class="space-y-2"></div>
@@ -364,9 +365,9 @@
                     <div><label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="text" id="searchEmail" data-testid="input-search-email" placeholder="e.g., john@company.com" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-1">Lead/Deal Name</label><input type="text" id="searchName" data-testid="input-search-name" placeholder="e.g., John Smith" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-1">Owner Email</label><input type="text" id="searchOwner" data-testid="input-search-owner" placeholder="e.g., sara@walaplus.com" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                    <div class="flex items-end"><button onclick="performSearch()" data-testid="button-search" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Search</button></div>
+                    <div class="flex items-end"><button data-on-click="performSearch" data-testid="button-search" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Search</button></div>
                 </div>
-                <button onclick="clearSearch()" data-testid="button-clear-search" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
+                <button data-on-click="clearSearch" data-testid="button-clear-search" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
             </div>
             <div id="searchResults" class="hidden">
                 <div class="flex justify-between items-center mb-4">
@@ -406,19 +407,19 @@
         <!-- ═══ CLUSTERS TAB (C4: paginated 30/page) ═══ -->
         <div id="content-clusters" class="tab-content hidden">
             <div class="mb-4 flex gap-4 items-center">
-                <select id="clusterFilter" aria-label="Filter by cluster type" onchange="loadClusters()" data-testid="select-cluster-filter" class="border rounded-lg px-3 py-2">
+                <select id="clusterFilter" aria-label="Filter by cluster type" data-on-change="loadClusters" data-testid="select-cluster-filter" class="border rounded-lg px-3 py-2">
                     <option value="">All Similarity</option>
                     <option value="high">Strong (≥90%)</option>
                     <option value="medium">Moderate (60-89%)</option>
                     <option value="low">Weak (<60%)</option>
                 </select>
-                <select id="statusFilter" aria-label="Filter by status" onchange="loadClusters()" data-testid="select-status-filter" class="border rounded-lg px-3 py-2">
+                <select id="statusFilter" aria-label="Filter by status" data-on-change="loadClusters" data-testid="select-status-filter" class="border rounded-lg px-3 py-2">
                     <option value="">All Statuses</option>
                     <option value="active">Active</option>
                     <option value="resolved">Resolved</option>
                     <option value="ignored">Ignored</option>
                 </select>
-                <select id="layoutFilter" aria-label="Filter by Zoho layout" onchange="loadClusters()" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
+                <select id="layoutFilter" aria-label="Filter by Zoho layout" data-on-change="loadClusters" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
                     <option value="">All Layouts</option>
                 </select>
                 <span id="layoutFilterHint" class="text-xs text-gray-400"></span>
@@ -554,7 +555,7 @@
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" aria-label="Export start date" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" aria-label="Export end date" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
                 </div>
-                <button onclick="downloadExport()" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export</button>
+                <button data-on-click="downloadExport" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export</button>
             </div>
         </div>
 
@@ -586,7 +587,7 @@
                         <h2 id="listModalTitle" class="text-xl font-bold text-gray-900" data-testid="text-list-title">List</h2>
                         <p id="listModalSubtitle" class="text-xs text-gray-500 mt-1"></p>
                     </div>
-                    <button onclick="closeListModal()" data-testid="button-close-list" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                    <button data-on-click="closeListModal" data-testid="button-close-list" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
                 </div>
                 <div id="listModalBody" class="p-5 overflow-y-auto flex-1">
                     <div class="text-center text-gray-400 py-8">Loading...</div>
@@ -603,7 +604,7 @@
                             <h3 id="modalTitle" class="text-xl font-bold text-gray-900">Cluster Details</h3>
                             <p id="modalDomain" class="text-sm text-gray-500"></p>
                         </div>
-                        <button onclick="closeModal()" data-testid="button-close-modal" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
+                        <button data-on-click="closeModal" data-testid="button-close-modal" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
@@ -756,13 +757,13 @@
             const signalColors = { exact_email: 'bg-blue-100 text-blue-800', domain_match: 'bg-green-100 text-green-800', phone_match: 'bg-purple-100 text-purple-800', company_exact: 'bg-amber-100 text-amber-800', company_fuzzy: 'bg-orange-100 text-orange-800' };
             const sortedSignals = Object.entries(signals).sort((a, b) => b[1] - a[1]);
             topSignalsEl.innerHTML = sortedSignals.length === 0 ? '<p class="text-sm text-gray-400">No signal data yet</p>' :
-                sortedSignals.map(([key, count]) => `<div class="flex justify-between items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded" onclick="openClustersBySignalModal('${key}', '${(signalLabels[key] || key).replace(/'/g, "\\'")}')" data-testid="row-signal-${key}" title="Click to see all clusters with this signal"><span class="px-2 py-1 rounded text-xs font-medium ${signalColors[key] || 'bg-gray-100 text-gray-700'}">${escapeHtml(signalLabels[key] || key)}</span><span class="text-sm font-bold text-gray-700">${count} →</span></div>`).join('');
+                sortedSignals.map(([key, count]) => `<div class="flex justify-between items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded" data-on-click="openClustersBySignalModal" data-args="${escAttr(JSON.stringify([key, signalLabels[key] || key]))}" data-testid="row-signal-${key}" title="Click to see all clusters with this signal"><span class="px-2 py-1 rounded text-xs font-medium ${signalColors[key] || 'bg-gray-100 text-gray-700'}">${escapeHtml(signalLabels[key] || key)}</span><span class="text-sm font-bold text-gray-700">${count} →</span></div>`).join('');
 
             // D4: Top clusters by inflation
             const topClustersEl = document.getElementById('topClustersInflation');
             const topC = data.topClustersByInflation || [];
             topClustersEl.innerHTML = topC.length === 0 ? '<p class="text-sm text-gray-400">No pipeline inflation detected</p>' :
-                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" onclick="showClusterDetails(${c.id})"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ml-2">${c.total_records} records</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
+                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ml-2">${c.total_records} records</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
 
             updateCharts(data);
         }
@@ -825,7 +826,7 @@
 
         function renderClusters(clusters) {
             document.getElementById('clustersGrid').innerHTML = clusters.map(c => `
-                <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" onclick="showClusterDetails(${c.id})" data-testid="card-cluster-${c.id}">
+                <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" data-on-click="showClusterDetails" data-args="[${c.id}]" data-testid="card-cluster-${c.id}">
                     <div class="flex justify-between items-start mb-3">
                         <div>
                             <h4 class="font-semibold text-gray-900">${escapeHtml(c.domain)}</h4>
@@ -849,9 +850,9 @@
             const el = document.getElementById(containerId);
             if (totalPages <= 1) { el.innerHTML = ''; return; }
             let html = '';
-            if (currentPage > 0) html += `<button onclick="${callback.name}(${currentPage-1})" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">Prev</button>`;
+            if (currentPage > 0) html += `<button data-on-click="${callback.name}" data-args="[${currentPage-1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">Prev</button>`;
             html += `<span class="px-3 py-1 text-sm text-gray-500">Page ${currentPage+1} of ${totalPages}</span>`;
-            if (currentPage < totalPages - 1) html += `<button onclick="${callback.name}(${currentPage+1})" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">Next</button>`;
+            if (currentPage < totalPages - 1) html += `<button data-on-click="${callback.name}" data-args="[${currentPage+1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">Next</button>`;
             el.innerHTML = html;
         }
 
@@ -1080,8 +1081,8 @@
                     : 'Mark Resolved (Merged in Zoho)';
                 html += `<div class="border-t pt-4">
                     <div class="flex flex-wrap gap-3 mb-2">
-                        <button onclick="resolveClusterAction(${cluster.id}, 'resolve')" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
-                        <button onclick="resolveClusterAction(${cluster.id}, 'ignore')" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore (false positive)</button>
+                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;resolve&quot;]" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
+                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore (false positive)</button>
                     </div>
                     <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
                         After merging or linking inside Zoho, click <strong>Scan from Zoho</strong> for an immediate refresh — otherwise the auto-sync picks it up within ~6 hours.
@@ -1139,7 +1140,7 @@
                 const statusClr = status === 'resolved' ? 'bg-green-100 text-green-800'
                     : status === 'ignored' ? 'bg-gray-100 text-gray-700'
                     : 'bg-blue-100 text-blue-800';
-                return `<tr class="border-t hover:bg-gray-50 cursor-pointer" onclick="closeListModal(); showClusterDetails(${c.id})" data-testid="row-list-cluster-${c.id}">
+                return `<tr class="border-t hover:bg-gray-50 cursor-pointer" data-on-click="closeListModal,showClusterDetails" data-args="[[],[${c.id}]]" data-testid="row-list-cluster-${c.id}">
                     <td class="px-3 py-2 text-xs text-gray-400 text-right">${i + 1}</td>
                     <td class="px-3 py-2 text-sm font-medium text-gray-800">${escapeHtml(name)}<div class="text-xs text-gray-400">${escapeHtml(c.domain || '')}</div></td>
                     <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${c.total_records} records${breakdown ? ` <span class="text-gray-400">(${breakdown})</span>` : ''}</td>
@@ -1205,7 +1206,7 @@
                     const lbl = labels[key] || key;
                     const clr = colors[key] || 'bg-gray-100 text-gray-700';
                     const pct = Math.round((count / total) * 100);
-                    return `<tr class="border-t hover:bg-gray-50 cursor-pointer" onclick="openClustersBySignalModal('${key}', '${lbl.replace(/'/g, "\\'")}')" data-testid="row-signal-detail-${key}">
+                    return `<tr class="border-t hover:bg-gray-50 cursor-pointer" data-on-click="openClustersBySignalModal" data-args="${escAttr(JSON.stringify([key, lbl]))}" data-testid="row-signal-detail-${key}">
                         <td class="px-3 py-2"><span class="px-2 py-1 rounded text-xs font-medium ${clr}">${lbl}</span></td>
                         <td class="px-3 py-2 text-xs text-gray-500"><code class="bg-gray-100 px-1 rounded">${key}</code></td>
                         <td class="px-3 py-2 text-sm text-right font-bold text-gray-700">${count}</td>
@@ -1398,7 +1399,7 @@
                 document.getElementById('searchClusterInfo').textContent = `Found in ${data.clusters?.length || 0} clusters`;
 
                 document.getElementById('searchClustersGrid').innerHTML = (data.clusters || []).map(c => `
-                    <div class="bg-gray-50 border rounded-lg p-3 cursor-pointer hover:bg-gray-100" onclick="showClusterDetails(${c.id})">
+                    <div class="bg-gray-50 border rounded-lg p-3 cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]">
                         <div class="font-medium">${escapeHtml(c.domain)}</div>
                         <div class="text-xs text-gray-500">${c.total_records} records | ${c.confidence_score}% confidence</div>
                     </div>

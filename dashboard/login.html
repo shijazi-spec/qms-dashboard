@@ -24,6 +24,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.12);
         }
     </style>
+    <script src="/js/safe-actions.js?v=1"></script>
 </head>
 <body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md">
@@ -90,7 +91,7 @@
 
             <div>
                 <p class="text-sm text-gray-600 mb-3 font-medium" data-i18n="login.admin_key_label">Continue with Admin Key</p>
-                <form id="admin-key-form" autocomplete="on" onsubmit="event.preventDefault(); loginWithAdminKey();">
+                <form id="admin-key-form" autocomplete="on" data-on-submit="loginWithAdminKey">
                     <div class="flex gap-2">
                         <input type="password" id="admin-key-input" name="admin-key" data-testid="input-admin-key"
                                autocomplete="current-password"

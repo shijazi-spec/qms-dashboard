@@ -222,7 +222,7 @@ const WalaPlusNav = {
             const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
             const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
             const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
-            return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" onclick="WalaPlusNav.markRead(${safeId})" aria-label="Mark notification as read: ${this.escapeHtml(n.subject||'Notification')}">
+            return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" data-on-click="WalaPlusNav.markRead" data-args="[${safeId}]" aria-label="Mark notification as read: ${this.escapeHtml(n.subject||'Notification')}">
               <span class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0" aria-hidden="true"></span>
               <span class="flex-1 min-w-0">
                 <span class="block text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</span>
@@ -261,6 +261,37 @@ const WalaPlusNav = {
       .catch(() => {});
   },
 
+  async signOut() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (_) {}
+    window.location.href = '/api/logout';
+  },
+
+  refreshDashboard() {
+    if (typeof window.refreshDashboard === 'function') {
+      window.refreshDashboard();
+    }
+  },
+
+  setLang(lang) {
+    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.setLang === 'function') {
+      window.WalaPlusI18n.setLang(lang);
+    }
+  },
+
+  setNumerals(useEastern, btnEl) {
+    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.setUseEasternNumerals === 'function') {
+      window.WalaPlusI18n.setUseEasternNumerals(!!useEastern);
+    }
+    if (btnEl && btnEl.parentElement) {
+      btnEl.parentElement.querySelectorAll('button').forEach(b =>
+        b.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700', 'font-medium')
+      );
+      btnEl.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700', 'font-medium');
+    }
+  },
+
   loadUserInfo() {
     fetch('/api/auth/me')
       .then(r => { if (!r.ok) return { authenticated: false }; return r.json(); })
@@ -287,25 +318,25 @@ const WalaPlusNav = {
                 <div class="px-4 py-2 border-b border-gray-100">
                   <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.language">${_t('nav.language')}</p>
                   <div class="flex gap-2">
-                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setLang('en')"
+                    <button data-on-click="WalaPlusNav.setLang" data-args='["en"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
                       data-testid="button-lang-en">English</button>
-                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setLang('ar')"
+                    <button data-on-click="WalaPlusNav.setLang" data-args='["ar"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}"
                       data-testid="button-lang-ar">العربية</button>
                   </div>
                   ${isAr ? `<div class="mt-2">
                   <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.numerals">${_t('nav.numerals')}</p>
                   <div class="flex gap-2" id="nav-numeral-btns">
-                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setUseEasternNumerals(true); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium')); this.classList.add('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium');"
+                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[true, "@this"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${(window.WalaPlusI18n && !window.WalaPlusI18n.getUseEasternNumerals()) ? 'border-gray-200 text-gray-600' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
                       data-testid="button-numerals-eastern">${_t('nav.numerals_eastern')}</button>
-                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setUseEasternNumerals(false); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium')); this.classList.add('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium');"
+                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[false, "@this"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${(window.WalaPlusI18n && !window.WalaPlusI18n.getUseEasternNumerals()) ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600'}"
                       data-testid="button-numerals-western">${_t('nav.numerals_western')}</button>
                   </div></div>` : ''}
                 </div>
-                <button onclick="(async()=>{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});window.location.href='/api/logout';})()" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
+                <button data-on-click="WalaPlusNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                   <span data-i18n="common.sign_out">${_t('common.sign_out')}</span>
                 </button>
@@ -473,7 +504,7 @@ const WalaPlusNav = {
         </div>
         <div class="flex items-center space-x-2">
           <span id="lastUpdated" class="wp-tagline text-xs text-gray-600"></span>
-          <button onclick="typeof refreshDashboard === 'function' && refreshDashboard()" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
+          <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
             <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             <span data-i18n="nav.refresh">${this._t('nav.refresh')}</span>
           </button>

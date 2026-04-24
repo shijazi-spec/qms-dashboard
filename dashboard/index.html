@@ -159,6 +159,7 @@
     <div id="app">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
+        <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.5"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -171,7 +172,7 @@
             <div class="p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-lg font-bold text-gray-900">Customize Dashboard</h2>
-                    <button onclick="toggleSettingsPanel()" class="text-gray-400 hover:text-gray-600" aria-label="Open settings">
+                    <button data-on-click="toggleSettingsPanel" class="text-gray-400 hover:text-gray-600" aria-label="Open settings">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -192,7 +193,7 @@
                     </div>
 
                     <div class="border-t pt-6">
-                        <button onclick="resetLayout()" class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2">
+                        <button data-on-click="resetLayout" class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
@@ -204,11 +205,11 @@
         </div>
 
         <!-- Overlay for settings panel -->
-        <div id="settingsOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleSettingsPanel()"></div>
+        <div id="settingsOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" data-on-click="toggleSettingsPanel"></div>
 
         <!-- Issues Drill-down Modal -->
         <div id="issuesDrilldownModal" class="fixed inset-0 z-50 hidden">
-            <div class="absolute inset-0 bg-black bg-opacity-50" onclick="closeIssuesModal()"></div>
+            <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeIssuesModal"></div>
             <div class="absolute inset-4 md:inset-10 lg:inset-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
                 <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
                     <div>
@@ -216,36 +217,36 @@
                         <p class="text-sm text-gray-500" id="modalSubtitle">Click on any issue to view details</p>
                     </div>
                     <div class="flex items-center space-x-3">
-                        <select id="modalModuleFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
+                        <select id="modalModuleFilter" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
                             <option value="all">All Modules</option>
                             <option value="Deals">Deals</option>
                             <option value="Contacts">Contacts</option>
                             <option value="Leads">Leads</option>
                             <option value="Accounts">Accounts</option>
                         </select>
-                        <select id="modalSeverityFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-severity-filter">
+                        <select id="modalSeverityFilter" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-severity-filter">
                             <option value="all">All Severities</option>
                             <option value="critical">Critical</option>
                             <option value="high">High</option>
                             <option value="medium">Medium</option>
                             <option value="low">Low</option>
                         </select>
-                        <select id="modalLayoutFilter" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-layout-filter">
+                        <select id="modalLayoutFilter" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-layout-filter">
                             <option value="all">All Layouts</option>
                         </select>
-                        <button onclick="exportIssues('csv')" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 flex items-center space-x-1">
+                        <button data-on-click="exportIssues" data-args="[&quot;csv&quot;]" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 flex items-center space-x-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
                             <span>CSV</span>
                         </button>
-                        <button onclick="exportIssues('json')" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 flex items-center space-x-1">
+                        <button data-on-click="exportIssues" data-args="[&quot;json&quot;]" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 flex items-center space-x-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
                             <span>JSON</span>
                         </button>
-                        <button onclick="closeIssuesModal()" class="text-gray-400 hover:text-gray-600 p-1">
+                        <button data-on-click="closeIssuesModal" class="text-gray-400 hover:text-gray-600 p-1">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
@@ -257,24 +258,24 @@
                         <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Search Record ID</label>
                         <div class="relative">
                             <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z"/></svg>
-                            <input type="text" id="modalRecordIdSearch" oninput="filterModalIssues()" placeholder="Type record ID…" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
+                            <input type="text" id="modalRecordIdSearch" data-on-input="filterModalIssues" placeholder="Type record ID…" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
                         </div>
                     </div>
                     <div class="min-w-[200px]">
                         <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Owner</label>
-                        <select id="modalOwnerFilter" onchange="filterModalIssues()" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-owner-filter">
+                        <select id="modalOwnerFilter" data-on-change="filterModalIssues" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-owner-filter">
                             <option value="all">All Owners</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Created From</label>
-                        <input type="date" id="modalCreatedFrom" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="input-created-from">
+                        <input type="date" id="modalCreatedFrom" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="input-created-from">
                     </div>
                     <div>
                         <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Created To</label>
-                        <input type="date" id="modalCreatedTo" onchange="filterModalIssues()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="input-created-to">
+                        <input type="date" id="modalCreatedTo" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="input-created-to">
                     </div>
-                    <button onclick="resetModalFilters()" class="text-sm text-gray-600 hover:text-indigo-600 px-3 py-1.5 border border-gray-200 rounded-lg hover:border-indigo-300" data-testid="button-reset-filters">Reset</button>
+                    <button data-on-click="resetModalFilters" class="text-sm text-gray-600 hover:text-indigo-600 px-3 py-1.5 border border-gray-200 rounded-lg hover:border-indigo-300" data-testid="button-reset-filters">Reset</button>
                 </div>
                 <div class="flex-1 overflow-auto p-6">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -312,7 +313,7 @@
                 </svg>
                 <h3 class="mt-4 text-lg font-medium text-gray-900">No audit data yet</h3>
                 <p class="mt-2 text-gray-500">Run a quality audit to see your dashboard metrics.</p>
-                <button id="emptyStateAuditBtn" onclick="triggerAudit()" data-testid="button-trigger-audit" class="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+                <button id="emptyStateAuditBtn" data-on-click="triggerAudit" data-testid="button-trigger-audit" class="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
                     Run Quality Audit Now
                 </button>
             </div>
@@ -334,9 +335,9 @@
                                 </svg>
                                 <span class="text-xs font-medium text-blue-600">Created:</span>
                             </div>
-                            <input type="date" id="createdStartDate" aria-label="Filter created from date" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <input type="date" id="createdStartDate" aria-label="Filter created from date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
                             <span class="text-gray-600 text-xs">to</span>
-                            <input type="date" id="createdEndDate" aria-label="Filter created to date" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <input type="date" id="createdEndDate" aria-label="Filter created to date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
                         </div>
                         <!-- Modified Date Filter -->
                         <div class="flex items-center gap-2 bg-white border border-green-200 rounded-lg px-3 py-2 shadow-sm">
@@ -346,26 +347,26 @@
                                 </svg>
                                 <span class="text-xs font-medium text-green-700">Modified:</span>
                             </div>
-                            <input type="date" id="modifiedStartDate" aria-label="Filter modified from date" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <input type="date" id="modifiedStartDate" aria-label="Filter modified from date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
                             <span class="text-gray-600 text-xs">to</span>
-                            <input type="date" id="modifiedEndDate" aria-label="Filter modified to date" onchange="handleDateFilterChange()" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <input type="date" id="modifiedEndDate" aria-label="Filter modified to date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
                         </div>
                         <!-- Apply and Clear Filters Buttons -->
-                        <button onclick="applyDateFilters()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">Apply Filters</button>
-                        <button onclick="clearDateFilters()" class="text-xs text-gray-500 hover:text-red-500 underline">Clear</button>
-                        <button onclick="runManualAudit()" id="manualAuditBtn" data-testid="button-run-ai-audit" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 font-medium flex items-center gap-2 shadow-lg transition-all">
+                        <button data-on-click="applyDateFilters" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">Apply Filters</button>
+                        <button data-on-click="clearDateFilters" class="text-xs text-gray-500 hover:text-red-500 underline">Clear</button>
+                        <button data-on-click="runManualAudit" id="manualAuditBtn" data-testid="button-run-ai-audit" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 font-medium flex items-center gap-2 shadow-lg transition-all">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                             </svg>
                             Run AI Audit
                         </button>
-                        <button onclick="exportAuditToPDF()" id="exportPdfBtn" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2 shadow transition-all">
+                        <button data-on-click="exportAuditToPDF" id="exportPdfBtn" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2 shadow transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
                             Export PDF
                         </button>
-                        <button onclick="toggleSettingsPanel()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
+                        <button data-on-click="toggleSettingsPanel" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -546,7 +547,7 @@
                                           data-testid="info-issues-category">i</span>
                                 </span>
                                 <div class="flex items-center space-x-2">
-                                    <button onclick="openIssuesModal('all')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Issues</button>
+                                    <button data-on-click="openIssuesModal" data-args="[&quot;all&quot;]" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Issues</button>
                                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
                                     </svg>
@@ -593,7 +594,7 @@
                                           data-testid="info-records-issues">i</span>
                                 </span>
                                 <div class="flex items-center space-x-2">
-                                    <button onclick="openIssuesModal('all')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Records</button>
+                                    <button data-on-click="openIssuesModal" data-args="[&quot;all&quot;]" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Records</button>
                                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
                                     </svg>
@@ -620,7 +621,7 @@
                                 </span>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs text-gray-600" id="recordsLayoutSubtitle">Loading…</span>
-                                    <button onclick="loadLayoutsBreakdown(true)" class="text-xs text-gray-500 hover:text-gray-800" title="Force refresh from Zoho (~80s)" data-testid="button-refresh-layouts">↻</button>
+                                    <button data-on-click="loadLayoutsBreakdown" data-args="[true]" class="text-xs text-gray-500 hover:text-gray-800" title="Force refresh from Zoho (~80s)" data-testid="button-refresh-layouts">↻</button>
                                 </div>
                             </div>
                             <div class="p-6">
@@ -704,12 +705,12 @@
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase">CRM Owner Data Quality</span>
                                 <div class="flex items-center space-x-2">
-                                    <select id="statusFilter" aria-label="Filter by status" onchange="filterAndSortAgents()" class="text-xs border border-gray-200 rounded px-2 py-1" data-testid="select-status-filter">
+                                    <select id="statusFilter" aria-label="Filter by status" data-on-change="filterAndSortAgents" class="text-xs border border-gray-200 rounded px-2 py-1" data-testid="select-status-filter">
                                         <option value="Active" selected>Active</option>
                                         <option value="all">All Status</option>
                                         <option value="Inactive">Inactive</option>
                                     </select>
-                                    <select id="teamFilter" aria-label="Filter by team" onchange="filterAgentsByTeam()" class="text-xs border border-gray-200 rounded px-2 py-1">
+                                    <select id="teamFilter" aria-label="Filter by team" data-on-change="filterAgentsByTeam" class="text-xs border border-gray-200 rounded px-2 py-1">
                                         <option value="all">All Teams</option>
                                         <option value="WP Sales">WP Sales</option>
                                         <option value="WO Sales">WO Sales</option>
@@ -722,7 +723,7 @@
                                         <option value="MGMT">MGMT</option>
                                         <option value="WPE">WPE</option>
                                     </select>
-                                    <button onclick="exportAgentPerformance()" class="text-gray-400 hover:text-indigo-600 p-1" title="Export">
+                                    <button data-on-click="exportAgentPerformance" class="text-gray-400 hover:text-indigo-600 p-1" title="Export">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                         </svg>
@@ -736,9 +737,9 @@
                                 <div class="mb-3 flex flex-col sm:flex-row gap-3">
                                     <div class="relative flex-1">
                                         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                        <input type="text" id="agentSearchInput" oninput="filterAndSortAgents()" placeholder="Search by name..." class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
+                                        <input type="text" id="agentSearchInput" data-on-input="filterAndSortAgents" placeholder="Search by name..." class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
                                     </div>
-                                    <select id="agentSortOrder" aria-label="Sort agents by" onchange="filterAndSortAgents()" class="text-sm border border-gray-200 rounded-lg px-3 py-2" data-testid="select-agent-sort">
+                                    <select id="agentSortOrder" aria-label="Sort agents by" data-on-change="filterAndSortAgents" class="text-sm border border-gray-200 rounded-lg px-3 py-2" data-testid="select-agent-sort">
                                         <option value="score-asc">Score: Low → High</option>
                                         <option value="score-desc">Score: High → Low</option>
                                         <option value="name-asc">Name: A → Z</option>
@@ -1789,7 +1790,7 @@
                 const statusDot = agent.status === 'Active' ? 'bg-emerald-500' : 'bg-red-400';
                 
                 return `
-                    <div class="bg-gray-50 rounded-xl p-4 hover:shadow-md transition cursor-pointer" onclick="showAgentDetails('${agent.id}')">
+                    <div class="bg-gray-50 rounded-xl p-4 hover:shadow-md transition cursor-pointer" data-on-click="showAgentDetails" data-args="[&quot;${agent.id}&quot;]">
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center space-x-2">
                                 <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
@@ -2023,7 +2024,7 @@
                     const spark = renderSparkline(series);
                     const delta = renderDelta(series);
                     return `
-                        <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition" data-testid="card-issues-${cat.toLowerCase()}">
+                        <div data-on-click="openIssuesModal" data-args="[&quot;${cat}&quot;]" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition" data-testid="card-issues-${cat.toLowerCase()}">
                             <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
                             <div class="text-xs text-gray-600">${cat} Issues</div>
                             ${spark ? `<div class="mt-1.5 flex items-end justify-between gap-1">
@@ -2057,7 +2058,7 @@
                 const count = recordCounts[cat] || 0;
                 const color = colors[cat];
                 return `
-                    <div onclick="openIssuesModal('${cat}')" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
+                    <div data-on-click="openIssuesModal" data-args="[&quot;${cat}&quot;]" class="p-3 rounded-lg border ${color.bg} ${color.border} cursor-pointer hover:shadow-md transition">
                         <div class="text-2xl font-bold ${color.text}">${count.toLocaleString()}</div>
                         <div class="text-xs text-gray-600">${cat} Records</div>
                     </div>
@@ -2111,7 +2112,7 @@
                 const toggleHtml = `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <span class="text-sm text-gray-700">${widgetName}</span>
-                        <div class="toggle-switch ${isVisible ? 'active' : ''}" onclick="toggleWidget('${widgetId}')"></div>
+                        <div class="toggle-switch ${isVisible ? 'active' : ''}" data-on-click="toggleWidget" data-args="[&quot;${widgetId}&quot;]"></div>
                     </div>
                 `;
                 container.innerHTML += toggleHtml;
@@ -2481,7 +2482,7 @@
                     const safe = name.replace(/'/g, "\\'");
                     const c = colorFor(i);
                     return `
-                        <div onclick="openIssuesModalByLayout('${safe}')" class="p-3 rounded-lg border cursor-pointer hover:shadow-md transition" data-style="background:${c}14;border-color:${c}40;" data-testid="card-layout-${i}">
+                        <div data-on-click="openIssuesModalByLayout" data-args="[&quot;${safe}&quot;]" class="p-3 rounded-lg border cursor-pointer hover:shadow-md transition" data-style="background:${c}14;border-color:${c}40;" data-testid="card-layout-${i}">
                             <div class="text-2xl font-bold" data-style="color:${c}">${count.toLocaleString()}</div>
                             <div class="text-xs text-gray-600 truncate" title="${name}">${name}</div>
                         </div>

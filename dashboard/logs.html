@@ -47,6 +47,7 @@
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -196,10 +197,10 @@
                 </div>
             </div>
             <div class="flex justify-end space-x-3 mt-4">
-                <button onclick="clearFilters()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                <button data-on-click="clearFilters" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
                     Clear Filters
                 </button>
-                <button onclick="applyFilters()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                <button data-on-click="applyFilters" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
                     Apply Filters
                 </button>
             </div>
@@ -244,7 +245,7 @@
             <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <span class="text-sm text-gray-700">Page Size:</span>
-                    <select id="pageSize" onchange="loadLogs(1)" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+                    <select id="pageSize" data-on-change="loadLogs" data-args="[1]" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
                         <option value="10">10</option>
                         <option value="25" selected>25</option>
                         <option value="50">50</option>
@@ -252,11 +253,11 @@
                     </select>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button id="prevPage" onclick="loadLogs(currentPage - 1)" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <button id="prevPage" data-on-click="loadLogs" data-args="[${currentPage - 1}]" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         Previous
                     </button>
                     <span class="text-sm text-gray-700">Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span></span>
-                    <button id="nextPage" onclick="loadLogs(currentPage + 1)" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <button id="nextPage" data-on-click="loadLogs" data-args="[${currentPage + 1}]" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         Next
                     </button>
                 </div>
@@ -399,7 +400,7 @@
             }
             
             tbody.innerHTML = logs.map(log => `
-                <tr class="log-row" onclick="toggleLogDetails(${log.id})">
+                <tr class="log-row" data-on-click="toggleLogDetails" data-args="[${log.id}]">
                     <td class="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
                         ${formatDateTime(log.timestamp || log.created_at)}
                     </td>

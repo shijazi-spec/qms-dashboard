@@ -46,6 +46,7 @@
 <body class="bg-gray-100 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -69,7 +70,7 @@
                                 </svg>
                                 <p class="text-lg font-medium">Introduction Video</p>
                                 <p class="text-gray-400 text-sm">2-4 minute overview of the system</p>
-                                <button onclick="playVideo()" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition">
+                                <button data-on-click="playVideo" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition">
                                     Play Video
                                 </button>
                             </div>
@@ -86,10 +87,10 @@
                     </div>
                 </div>
                 <div class="flex justify-between items-center">
-                    <button onclick="skipVideo()" class="text-gray-500 hover:text-gray-700 px-4 py-2 transition">
+                    <button data-on-click="skipVideo" class="text-gray-500 hover:text-gray-700 px-4 py-2 transition">
                         Skip for now
                     </button>
-                    <button onclick="startTour()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg font-medium transition flex items-center space-x-2">
+                    <button data-on-click="startTour" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg font-medium transition flex items-center space-x-2">
                         <span>Start Guided Tour</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
                     </button>
@@ -104,18 +105,18 @@
                 <div class="flex items-center space-x-2">
                     <span id="tourStepBadge" class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">Step 1 of 6</span>
                 </div>
-                <button onclick="exitTour()" class="text-gray-400 hover:text-gray-600">
+                <button data-on-click="exitTour" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
             <h3 id="tourTitle" class="text-xl font-bold text-gray-900 mb-2">Dashboard Overview</h3>
             <p id="tourDescription" class="text-gray-600 mb-6">This is your main dashboard showing key quality metrics.</p>
             <div class="flex justify-between items-center">
-                <button id="tourPrevBtn" onclick="prevStep()" class="text-gray-500 hover:text-gray-700 px-4 py-2 transition hidden">
+                <button id="tourPrevBtn" data-on-click="prevStep" class="text-gray-500 hover:text-gray-700 px-4 py-2 transition hidden">
                     Back
                 </button>
                 <div class="flex-1"></div>
-                <button id="tourNextBtn" onclick="nextStep()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                <button id="tourNextBtn" data-on-click="nextStep" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition">
                     Next
                 </button>
             </div>
@@ -185,14 +186,14 @@
                     Quick Actions
                 </h3>
                 <div class="space-y-3">
-                    <button onclick="showWelcomeModal()" class="w-full text-left p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition flex items-center justify-between">
+                    <button data-on-click="showWelcomeModal" class="w-full text-left p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition flex items-center justify-between">
                         <div class="flex items-center">
                             <svg class="w-5 h-5 text-indigo-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
                             <span class="font-medium text-indigo-700">Watch Introduction Video</span>
                         </div>
                         <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </button>
-                    <button onclick="restartTour()" class="w-full text-left p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition flex items-center justify-between">
+                    <button data-on-click="restartTour" class="w-full text-left p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition flex items-center justify-between">
                         <div class="flex items-center">
                             <svg class="w-5 h-5 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
                             <span class="font-medium text-purple-700">Restart Guided Tour</span>
@@ -249,7 +250,7 @@
             </div>
             <div class="mb-4">
                 <h4 class="font-medium text-gray-900 mb-2">Demo Links</h4>
-                <button onclick="createDemoLink()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition mb-4">
+                <button data-on-click="createDemoLink" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition mb-4">
                     Generate New Demo Link
                 </button>
                 <div id="demoLinksList" class="space-y-2"></div>
@@ -484,7 +485,7 @@
                         <code class="text-sm text-indigo-600">${link.link_code}</code>
                         <p class="text-xs text-gray-500">Views: ${link.view_count} | ${link.is_active ? 'Active' : 'Inactive'}</p>
                     </div>
-                    <button onclick="copyDemoLink('${link.link_code}')" class="text-indigo-600 hover:text-indigo-800 text-sm">Copy</button>
+                    <button data-on-click="copyDemoLink" data-args="[&quot;${link.link_code}&quot;]" class="text-indigo-600 hover:text-indigo-800 text-sm">Copy</button>
                 </div>
             `).join('');
         }
