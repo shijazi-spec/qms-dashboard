@@ -51,9 +51,9 @@
         text = escapeHtml(text);
         text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, url) {
-            return '<a href="' + sanitizeUrl(url) + '" target="_blank" rel="noopener" style="color:#4f46e5;text-decoration:underline;">' + label + '</a>';
+            return '<a href="' + sanitizeUrl(url) + '" target="_blank" rel="noopener" class="aiw-link">' + label + '</a>';
         });
-        text = text.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:0.85em;">$1</code>');
+        text = text.replace(/`([^`]+)`/g, '<code class="aiw-code-inline">$1</code>');
         return text;
     }
 
@@ -61,7 +61,7 @@
         var codeBlocks = [];
         var html = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
             var idx = codeBlocks.length;
-            codeBlocks.push('<pre style="background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;overflow-x:auto;font-size:0.8em;margin:8px 0;"><code>' + escapeHtml(code.trim()) + '</code></pre>');
+            codeBlocks.push('<pre class="aiw-code-block"><code>' + escapeHtml(code.trim()) + '</code></pre>');
             return '%%CODEBLOCK_' + idx + '%%';
         });
 
@@ -77,20 +77,19 @@
             } else if (line.match(/^#{1,3}\s/)) {
                 if (inList) { result.push('</ul>'); inList = false; }
                 var level = line.match(/^(#{1,3})/)[1].length;
-                var sizes = { 1: '1.1em', 2: '1em', 3: '0.95em' };
-                result.push('<p style="font-weight:600;font-size:' + sizes[level] + ';margin:8px 0 4px;">' + formatInline(line.replace(/^#{1,3}\s*/, '')) + '</p>');
+                result.push('<p class="aiw-heading-' + level + '">' + formatInline(line.replace(/^#{1,3}\s*/, '')) + '</p>');
             } else if (line.match(/^[\-\*]\s/)) {
-                if (!inList) { result.push('<ul style="margin:4px 0;padding-left:18px;">'); inList = true; }
-                result.push('<li style="margin:2px 0;">' + formatInline(line.replace(/^[\-\*]\s*/, '')) + '</li>');
+                if (!inList) { result.push('<ul class="aiw-list">'); inList = true; }
+                result.push('<li class="aiw-list-item">' + formatInline(line.replace(/^[\-\*]\s*/, '')) + '</li>');
             } else if (line.match(/^\d+\.\s/)) {
-                if (!inList) { result.push('<ol style="margin:4px 0;padding-left:18px;">'); inList = true; }
-                result.push('<li style="margin:2px 0;">' + formatInline(line.replace(/^\d+\.\s*/, '')) + '</li>');
+                if (!inList) { result.push('<ol class="aiw-list">'); inList = true; }
+                result.push('<li class="aiw-list-item">' + formatInline(line.replace(/^\d+\.\s*/, '')) + '</li>');
             } else if (line.trim() === '') {
                 if (inList) { result.push('</ul>'); inList = false; }
                 result.push('<br>');
             } else {
                 if (inList) { result.push('</ul>'); inList = false; }
-                result.push('<p style="margin:4px 0;">' + formatInline(line) + '</p>');
+                result.push('<p class="aiw-paragraph">' + formatInline(line) + '</p>');
             }
         }
         if (inList) result.push('</ul>');
@@ -102,7 +101,9 @@
         return html;
     }
 
+    var widgetNonce = (document.currentScript && document.currentScript.nonce) || '';
     var style = document.createElement('style');
+    if (widgetNonce) style.setAttribute('nonce', widgetNonce);
     style.textContent = `
         #ai-consultant-widget { position: fixed; bottom: 24px; right: 24px; z-index: 99999; font-family: 'Inter', 'Noto Sans Arabic', sans-serif; }
         #ai-widget-btn {
@@ -206,16 +207,16 @@
         <div id="ai-widget-panel">
             <div id="ai-widget-header">
                 <h3>
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-18"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                     ${widgetTitle}
                 </h3>
-                <div style="display:flex;align-items:center;gap:8px;">
+                <div class="aiw-header-row">
                     <a href="/consultant.html" class="widget-expand-link" data-testid="link-expand-consultant">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                         ${fullView}
                     </a>
                     <button onclick="window._closeAIWidget && window._closeAIWidget();" aria-label="Close AI Consultant chat" data-testid="button-close-widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-18" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
             </div>
@@ -231,10 +232,10 @@
                     </div>
                 </div>
                 <div class="widget-typing" id="ai-widget-typing">
-                    <div class="avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <svg fill="none" stroke="white" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    <div class="aiw-avatar">
+                        <svg fill="none" stroke="white" viewBox="0 0 24 24" class="icon-14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                     </div>
-                    <div style="background:#f1f5f9;border-radius:14px;padding:10px 16px;">
+                    <div class="aiw-bubble-bot">
                         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
                     </div>
                 </div>
@@ -462,7 +463,7 @@
                     bubble.innerHTML = renderMarkdown(respText);
                 } catch (fallbackErr) {
                     bubble = widgetCreateAI();
-                    bubble.innerHTML = '<span style="color:#ef4444;">Unable to reach AI Consultant. Please try again.</span>';
+                    bubble.innerHTML = '<span class="aiw-error-text">Unable to reach AI Consultant. Please try again.</span>';
                 }
             } else if (bubble && fullText.trim()) {
                 fullText += '\n\n---\n*Response interrupted.*';

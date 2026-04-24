@@ -61,6 +61,8 @@
         .qms-governance { background-color: var(--qms-blue-bg); color: var(--qms-blue); }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -485,7 +487,7 @@
                             <span id="bulk-progress-text" class="text-sm text-gray-500">0/0</span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div id="bulk-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                            <div id="bulk-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all w-0"></div>
                         </div>
                     </div>
                     <div id="bulk-audio-results" class="hidden mt-4 p-4 rounded-lg">
@@ -1755,7 +1757,7 @@
                                 </div>
                             </div>
                             <div class="mt-2 h-3 bg-gray-200 rounded-full overflow-hidden">
-                                <div id="eval-score-bar" class="h-full bg-blue-600 transition-all" style="width: ${existingScore?.score_percentage || 0}%"></div>
+                                <div id="eval-score-bar" class="h-full bg-blue-600 transition-all" data-style="width: ${existingScore?.score_percentage || 0}%"></div>
                             </div>
                         </div>
                         
@@ -2319,7 +2321,7 @@
                         <button onclick="copyTranscript()" class="text-sm text-blue-600 hover:text-blue-700">Copy</button>
                     </div>
                 </div>
-                <div class="whitespace-pre-wrap text-gray-700 leading-relaxed font-arabic" style="font-family: 'Segoe UI', 'Arial', sans-serif;">${escapeHtml(transcriptText)}</div>
+                <div class="whitespace-pre-wrap text-gray-700 leading-relaxed font-arabic font-segoe">${escapeHtml(transcriptText)}</div>
             `;
             document.getElementById('transcriptModal').classList.remove('hidden');
         }

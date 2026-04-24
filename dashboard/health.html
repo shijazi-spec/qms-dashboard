@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
     <style>
         .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(255,255,255,0.6) inset; }
         .dot-pass { background: #10B981; }
@@ -118,7 +120,7 @@
                     </div>
                     <div class="text-sm text-gray-500" id="history-meta"></div>
                 </div>
-                <div style="position: relative; height: 220px;">
+                <div class="relative chart-h-220">
                     <canvas id="historyChart"></canvas>
                 </div>
             </div>

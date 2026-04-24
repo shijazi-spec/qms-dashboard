@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mohammed Al Muzaini Scorecard | WalaPlus QMS</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         .kpi-card { transition: all 0.3s ease; }
@@ -275,7 +277,7 @@
                                     <span>${kpi.current_value}% / ${kpi.target}%</span>
                                 </div>
                                 <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div class="h-full ${colors.bar} rounded-full transition-all duration-500" style="width: ${Math.min(100, (kpi.current_value / kpi.target) * 100)}%"></div>
+                                    <div class="h-full ${colors.bar} rounded-full transition-all duration-500" data-style="width: ${Math.min(100, (kpi.current_value / kpi.target) * 100)}%"></div>
                                 </div>
                             </div>
                             

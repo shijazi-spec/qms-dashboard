@@ -21,6 +21,8 @@
         .drop-zone:hover, .drop-zone.dragover { border-color: #6366F1; background-color: #EEF2FF; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -281,7 +283,7 @@
                     <span class="text-sm font-medium capitalize text-gray-700">${item.target_module}</span>
                     <div class="flex items-center gap-2">
                         <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div class="${colors[item.target_module] || 'bg-gray-400'} h-full rounded-full" style="width: ${(parseInt(item.count) / total) * 100}%"></div>
+                            <div class="${colors[item.target_module] || 'bg-gray-400'} h-full rounded-full" data-style="width: ${(parseInt(item.count) / total) * 100}%"></div>
                         </div>
                         <span class="text-sm font-semibold w-10 text-right">${item.records_imported}</span>
                     </div>

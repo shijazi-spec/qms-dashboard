@@ -480,7 +480,7 @@ const WalaPlusNav = {
           <div class="relative nav-dropdown" data-group="notifications">
             <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="${this._t('nav.notifications')}" aria-haspopup="true" aria-expanded="false" aria-controls="nav-notifications-list" data-testid="button-notifications">
               <svg class="w-5 h-5 text-gray-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-              <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold" aria-live="polite" style="font-size:10px"></span>
+              <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold nav-alert-badge-text" aria-live="polite"></span>
             </button>
             <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
               <div class="p-3 border-b border-gray-100 flex justify-between items-center">

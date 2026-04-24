@@ -22,6 +22,8 @@
         .modal.active { display: flex; align-items: center; justify-content: center; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -429,7 +431,7 @@
                     <span class="text-sm font-medium capitalize ${colors[item.criticality] ? 'text-gray-700' : 'text-gray-500'}">${item.criticality}</span>
                     <div class="flex items-center gap-2">
                         <div class="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div class="${colors[item.criticality] || 'bg-gray-400'} h-full rounded-full" style="width: ${(parseInt(item.count) / total) * 100}%"></div>
+                            <div class="${colors[item.criticality] || 'bg-gray-400'} h-full rounded-full" data-style="width: ${(parseInt(item.count) / total) * 100}%"></div>
                         </div>
                         <span class="text-sm font-semibold w-6 text-right">${item.count}</span>
                     </div>

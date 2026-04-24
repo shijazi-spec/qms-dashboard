@@ -611,14 +611,14 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 |-----------|-------|
 | default-src | 'self' |
 | script-src | 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net | Restricts scripts to same origin + specific nonce (Tailwind CDN allowed) |
-| style-src | 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com | Allows internal styles + Tailwind inline styles + Google Fonts |
+| style-src | 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://fonts.googleapis.com | Restricts styles to same origin + nonce-tagged `<style>` blocks (no inline `style="..."` attributes) + Tailwind CDN + Google Fonts |
 | font-src | 'self' https://fonts.gstatic.com | Restricts fonts to same origin + Google Fonts |
 | img-src | 'self' data: https: | Allows local images + data URIs + https images |
 | frame-ancestors | 'none' | Equivalent to X-Frame-Options: DENY; prevents clickjacking |
 | base-uri | 'self' | Prevents base tag hijacking |
 | form-action | 'self' | Restricts form submissions to the same origin |
 
-**Note on Nonce Mechanism:** The platform generates a unique `cspNonce` for every request. All `<script>` tags in the dashboard HTML files are injected with this nonce. Inline event handlers (e.g., `onclick="..."`) are blocked by this policy unless converted to `addEventListener` or moved to external scripts.
+**Note on Nonce Mechanism:** The platform generates a unique `cspNonce` for every request. All `<script>` and `<style>` tags in the dashboard HTML files are injected with this nonce at serve time. Inline event handlers (e.g., `onclick="..."`) and inline `style="..."` attributes are blocked by this policy. Inline event handlers must be converted to `addEventListener`; static inline styles must be moved to external CSS (`/css/utilities.css`); dynamic per-element styles use the `data-style="prop:val;..."` pattern, applied at runtime by `/js/csp-styles.js` via `el.style.setProperty()` (CSSOM property assignment is permitted under strict `style-src`).
 
 #### CORS Configuration
 

@@ -32,6 +32,8 @@
         .modal.active { display: flex; align-items: center; justify-content: center; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -104,7 +106,7 @@
             <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-4">Risk Heatmap</h2>
                 <div class="flex items-start gap-4">
-                    <div class="text-sm text-gray-500 writing-mode-vertical transform -rotate-180" style="writing-mode: vertical-rl;">← Lower Impact | Higher Impact →</div>
+                    <div class="text-sm text-gray-500 writing-mode-vertical-rl transform -rotate-180">← Lower Impact | Higher Impact →</div>
                     <div>
                         <div id="heatmapGrid" class="grid grid-cols-5 gap-1">
                         </div>
@@ -666,7 +668,7 @@
                                     </div>
                                     <div class="mt-2">
                                         <div class="flex justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>${prog}%</span></div>
-                                        <div class="w-full bg-gray-200 rounded-full h-2"><div class="${progColor} h-2 rounded-full" style="width:${prog}%"></div></div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2"><div class="${progColor} h-2 rounded-full" data-style="width:${prog}%"></div></div>
                                     </div>
                                     <div class="flex justify-between text-xs text-gray-500 mt-2">
                                         <span>Assigned: ${t.assigned_to}</span>

@@ -16,6 +16,8 @@
         .project-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -1094,7 +1096,7 @@
                     <div class="bg-white rounded-lg p-4 shadow-sm">
                         <h4 class="font-semibold text-gray-900 mb-3">Budget Progress</h4>
                         <div class="w-full bg-gray-200 rounded-full h-4">
-                            <div id="detailBudgetBar" class="bg-blue-600 h-4 rounded-full" style="width: 0%"></div>
+                            <div id="detailBudgetBar" class="bg-blue-600 h-4 rounded-full w-0"></div>
                         </div>
                         <div id="detailBudgetPercent" class="text-right text-sm text-gray-600 mt-1"></div>
                     </div>
@@ -1470,7 +1472,7 @@
                             <span>${p.percent_complete || 0}%</span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-blue-600 h-2 rounded-full" style="width: ${p.percent_complete || 0}%"></div>
+                            <div class="bg-blue-600 h-2 rounded-full" data-style="width: ${p.percent_complete || 0}%"></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-xs">
@@ -1506,7 +1508,7 @@
                     <td class="px-4 py-3">
                         <div class="flex items-center">
                             <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                                <div class="bg-blue-600 h-2 rounded-full" style="width: ${p.percent_complete || 0}%"></div>
+                                <div class="bg-blue-600 h-2 rounded-full" data-style="width: ${p.percent_complete || 0}%"></div>
                             </div>
                             <span class="text-sm">${p.percent_complete || 0}%</span>
                         </div>
@@ -1618,7 +1620,7 @@
 
             const statusColors = { pending: '#9CA3AF', in_progress: '#3B82F6', completed: '#10B981', delayed: '#EF4444', at_risk: '#F59E0B' };
 
-            let html = '<div class="relative" style="height: ' + (milestones.length * 40 + 40) + 'px;">';
+            let html = '<div class="relative" data-style="height: ' + (milestones.length * 40 + 40) + 'px;">';
             html += '<div class="absolute top-0 left-0 right-0 h-8 flex border-b border-gray-200">';
             for (let i = 0; i <= totalDays; i += 7) {
                 const d = new Date(minDate);
@@ -1633,11 +1635,11 @@
                 const color = statusColors[m.status] || '#9CA3AF';
 
                 html += `
-                    <div class="absolute flex items-center" style="top: ${idx * 40 + 40}px; left: 0; right: 0; height: 36px;">
+                    <div class="absolute flex items-center" data-style="top: ${idx * 40 + 40}px; left: 0; right: 0; height: 36px;">
                         <div class="w-40 text-sm text-gray-700 truncate pr-2">${m.name}</div>
                         <div class="flex-1 relative h-6">
                             <div class="gantt-bar absolute h-6 rounded flex items-center justify-center text-xs text-white font-medium" 
-                                 style="left: ${leftPercent}%; width: 80px; background-color: ${color};">
+                                 data-style="left: ${leftPercent}%; width: 80px; background-color: ${color};">
                                 ${m.percent_complete || 0}%
                             </div>
                         </div>

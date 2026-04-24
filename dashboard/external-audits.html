@@ -7,6 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
   <style>
     html, body { font-family: 'Inter', sans-serif; min-height: 100vh; }
     .kind-regulatory      { background:#DBEAFE; color:#1E40AF; }
@@ -184,8 +186,7 @@
   </main>
 
   <!-- =========================== NEW AUDIT MODAL ============================= -->
-  <div id="newExternalModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center"
-       style="display:none;">
+  <div id="newExternalModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
       <div class="flex justify-between items-start mb-4">
         <h3 class="text-lg font-bold text-gray-900">New External Audit</h3>
@@ -241,8 +242,7 @@
   </div>
 
   <!-- =========================== NEW CERT MODAL ============================== -->
-  <div id="newCertModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center"
-       style="display:none;">
+  <div id="newCertModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
       <div class="flex justify-between items-start mb-4">
         <h3 class="text-lg font-bold text-gray-900">Register Certificate</h3>
@@ -447,7 +447,7 @@
         body.innerHTML =
           newItemForm +
           `<div class="mb-3 text-sm text-gray-700">Progress: <strong>${done}/${total}</strong> (${percent}%)</div>
-           <div class="h-2 bg-gray-200 rounded-full mb-4"><div class="h-2 bg-green-500 rounded-full" style="width:${percent}%"></div></div>
+           <div class="h-2 bg-gray-200 rounded-full mb-4"><div class="h-2 bg-green-500 rounded-full" data-style="width:${percent}%"></div></div>
            <div class="divide-y divide-gray-100">
              ${checklist.map(i => `
                <div class="py-2 flex items-center justify-between gap-2">

@@ -41,6 +41,8 @@
         .kpi-gauge-fill { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; border-radius: 60px 60px 0 0; transform-origin: bottom center; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-100">
     <div id="walaplus-nav"></div>
@@ -65,7 +67,7 @@
                         </div>
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div id="scanProgressFill" class="bg-blue-600 h-2 rounded-full progress-bar-fill" style="width: 0%"></div>
+                        <div id="scanProgressFill" class="bg-blue-600 h-2 rounded-full progress-bar-fill w-0"></div>
                     </div>
                 </div>
                 <div id="moduleChips" class="flex gap-1 flex-wrap"></div>
@@ -275,7 +277,7 @@
                         </div>
                         <div class="flex-1">
                             <div class="w-full bg-gray-200 rounded-full h-4 relative">
-                                <div id="kpiGaugeBar" class="h-4 rounded-full transition-all duration-500" style="width:0%; background:#22C55E;"></div>
+                                <div id="kpiGaugeBar" class="h-4 rounded-full transition-all duration-500 w-0 bg-green-500"></div>
                                 <div class="absolute top-0 left-[50%] h-4 w-0.5 bg-red-500" title="2% KPI target"></div>
                             </div>
                             <div class="flex justify-between text-xs text-gray-400 mt-1">

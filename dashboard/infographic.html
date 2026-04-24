@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Infographic Generator – WalaPlus</title>
   <link rel="stylesheet" href="/dashboard/tailwind.css" />
+  <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
   <style>
     body { background: #f8fafc; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
     .section-card { transition: all .2s; cursor: pointer; }
@@ -99,7 +101,7 @@
           <button data-close class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-semibold">Cancel</button>
           <button id="slack-send" class="bg-[#4A154B] hover:bg-[#611f63] text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
             <span id="slack-send-label">Send</span>
-            <span id="slack-send-spinner" class="hidden spinner" style="width:16px;height:16px;border-width:2px"></span>
+            <span id="slack-send-spinner" class="hidden spinner spinner-sm"></span>
           </button>
         </div>
       </div>
@@ -124,7 +126,7 @@
           <button data-close class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-semibold">Cancel</button>
           <button id="email-send" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
             <span id="email-send-label">Send</span>
-            <span id="email-send-spinner" class="hidden spinner" style="width:16px;height:16px;border-width:2px"></span>
+            <span id="email-send-spinner" class="hidden spinner spinner-sm"></span>
           </button>
         </div>
       </div>

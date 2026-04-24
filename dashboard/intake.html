@@ -7,6 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
   <style>
     html, body { font-family: 'Inter', sans-serif; min-height: 100vh; }
     .sev-critical { background:#FECACA; color:#991B1B; }
@@ -318,7 +320,7 @@
                   ${escHtml(f.source_quote)}
                 </div>
               ` : ''}
-              <div class="confidence-bar mt-2"><div class="confidence-fill" style="width:${conf}%"></div></div>
+              <div class="confidence-bar mt-2"><div class="confidence-fill" data-style="width:${conf}%"></div></div>
             </div>
             <div class="flex flex-col gap-2">
               ${f.status === 'pending' || f.status === 'edited' ? `

@@ -58,7 +58,7 @@ function applySecurityHeaders(c: any, cspNonce: string): void {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('X-XSS-Protection', '1; mode=block');
-  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
+  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'nonce-${cspNonce}' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   (c as any)._cspNonce = cspNonce;
 }
@@ -156,7 +156,9 @@ async function injectCspNonce(c: any, cspNonce: string): Promise<void> {
   if (contentType.includes('text/html') && c.res.body) {
     try {
       const originalBody = await c.res.text();
-      const nonceInjected = originalBody.replace(/<script(?!\s+nonce=)/gi, `<script nonce="${cspNonce}"`);
+      const nonceInjected = originalBody
+        .replace(/<script(?!\s+nonce=)/gi, `<script nonce="${cspNonce}"`)
+        .replace(/<style(?!\s+nonce=)(\s|>)/gi, `<style nonce="${cspNonce}"$1`);
       c.res = new Response(nonceInjected, {
         status: c.res.status,
         headers: c.res.headers,

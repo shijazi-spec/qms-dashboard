@@ -116,7 +116,9 @@
         .history-item:hover { background-color: #eef2ff; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50">
     <div id="walaplus-nav"></div>
@@ -267,7 +269,7 @@
                     <span class="text-xs font-medium text-indigo-700" id="scanProgressLabel" data-i18n="consultant.scanning">Scanning platform...</span>
                     <span class="text-xs text-indigo-500" id="scanProgressPct">0%</span>
                 </div>
-                <div class="scan-progress-bar"><div class="scan-progress-fill" id="scanProgressFill" style="width: 0%"></div></div>
+                <div class="scan-progress-bar"><div class="scan-progress-fill w-0" id="scanProgressFill"></div></div>
                 <div class="flex flex-wrap gap-1 mt-1" id="scanCheckChips"></div>
             </div>
 
@@ -312,7 +314,7 @@
             <div class="p-4 bg-white border-t border-gray-200 chat-input-area">
                 <form id="chatForm" class="flex items-end gap-3">
                     <div class="flex-1 relative">
-                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pr-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow" style="max-height: 120px"></textarea>
+                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pr-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
                     </div>
                     <button type="submit" id="sendBtn" aria-label="Send message" class="shrink-0 w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors" disabled>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>
