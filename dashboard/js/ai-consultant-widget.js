@@ -115,6 +115,33 @@
         }
         #ai-widget-btn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5); }
         #ai-widget-btn svg { width: 26px; height: 26px; color: white; }
+        .widget-feedback-bar { display:flex; align-items:center; gap:4px; margin-top:5px; }
+        .widget-feedback-thumb {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:22px; height:22px; border-radius:5px; border:1px solid #e2e8f0;
+            background:#f8fafc; cursor:pointer; color:#94a3b8; transition:all 0.15s;
+        }
+        .widget-feedback-thumb:hover { background:#eef2ff; border-color:#c7d2fe; color:#4f46e5; }
+        .widget-feedback-thumb.up-selected { background:#dcfce7; border-color:#86efac; color:#16a34a; }
+        .widget-feedback-thumb.down-selected { background:#fee2e2; border-color:#fca5a5; color:#dc2626; }
+        .widget-feedback-thumb svg { width:11px; height:11px; }
+        .widget-feedback-label { font-size:10px; color:#94a3b8; }
+        .widget-feedback-thanks { font-size:10px; color:#16a34a; display:none; }
+        #widget-down-modal {
+            position:fixed; inset:0; z-index:100001; display:flex; align-items:flex-end; justify-content:center;
+            background:rgba(0,0,0,0.35);
+        }
+        #widget-down-modal.hidden { display:none; }
+        .widget-down-box {
+            background:white; border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:420px;
+            box-shadow:0 -8px 30px rgba(0,0,0,0.15);
+        }
+        .widget-cat-btn {
+            display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px;
+            border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; cursor:pointer; margin:2px;
+            transition:all 0.15s;
+        }
+        .widget-cat-btn.sel { border-color:#ef4444; background:#fee2e2; color:#dc2626; }
         #ai-widget-panel {
             display: none; position: absolute; bottom: 70px; right: 0;
             width: 380px; max-height: 520px; background: white;
@@ -377,6 +404,169 @@
         return bubble;
     }
 
+    function widgetAttachFeedback(bubble, messageId, promptText, responseText) {
+        if (!messageId || bubble.querySelector('.widget-feedback-bar')) return;
+        var bar = document.createElement('div');
+        bar.className = 'widget-feedback-bar';
+        bar.innerHTML =
+            '<button class="widget-feedback-thumb" title="Helpful" aria-label="Helpful">' +
+              '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905C11 6.003 9.1 7.7 7 8v12m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/></svg>' +
+            '</button>' +
+            '<button class="widget-feedback-thumb" title="Not helpful" aria-label="Not helpful">' +
+              '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905C13 14.997 14.9 13.3 17 13V1m-7 13h2M17 4h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/></svg>' +
+            '</button>' +
+            '<span class="widget-feedback-label">Helpful?</span>' +
+            '<span class="widget-feedback-thanks">Thanks!</span>';
+
+        var buttons = bar.querySelectorAll('.widget-feedback-thumb');
+        var upBtn = buttons[0], downBtn = buttons[1];
+        var label = bar.querySelector('.widget-feedback-label');
+        var thanks = bar.querySelector('.widget-feedback-thanks');
+
+        function markDone(rating) {
+            upBtn.classList.toggle('up-selected', rating === 'up');
+            downBtn.classList.toggle('down-selected', rating === 'down');
+            label.style.display = 'none';
+            thanks.style.display = 'inline';
+        }
+
+        upBtn.addEventListener('click', function() {
+            widgetSubmitFeedback(messageId, 'up', null, null, promptText, responseText, markDone);
+        });
+        downBtn.addEventListener('click', function() {
+            widgetOpenDownModal(messageId, promptText, responseText, markDone);
+        });
+
+        bubble.appendChild(bar);
+    }
+
+    var _wModalCb = null;
+
+    function widgetOpenDownModal(messageId, promptText, responseText, onDone) {
+        _wModalCb = { messageId: messageId, promptText: promptText, responseText: responseText, onDone: onDone };
+        var modal = document.getElementById('widget-down-modal');
+        if (!modal) {
+            var m = document.createElement('div');
+            m.id = 'widget-down-modal';
+            m.setAttribute('role', 'dialog');
+            m.setAttribute('aria-modal', 'true');
+            m.setAttribute('aria-label', 'Feedback: What went wrong?');
+            m.innerHTML =
+                '<div class="widget-down-box">' +
+                  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+                    '<strong style="font-size:14px;color:#1e293b;">What went wrong?</strong>' +
+                    '<button onclick="widgetCloseDownModal()" aria-label="Close" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;">✕</button>' +
+                  '</div>' +
+                  '<div id="widget-cats" style="margin-bottom:12px;">' +
+                    '<span class="widget-cat-btn" data-cat="incorrect">Incorrect</span>' +
+                    '<span class="widget-cat-btn" data-cat="missing_context">Missing context</span>' +
+                    '<span class="widget-cat-btn" data-cat="hallucinated">Hallucinated</span>' +
+                    '<span class="widget-cat-btn" data-cat="off_policy">Off-policy</span>' +
+                    '<span class="widget-cat-btn" data-cat="formatting">Formatting</span>' +
+                    '<span class="widget-cat-btn" data-cat="other">Other</span>' +
+                  '</div>' +
+                  '<textarea id="widget-feedback-comment" rows="2" maxlength="500" placeholder="Optional: describe what went wrong" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-size:12px;resize:none;box-sizing:border-box;margin-bottom:10px;"></textarea>' +
+                  '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+                    '<button onclick="widgetCloseDownModal()" style="padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;cursor:pointer;color:#64748b;">Skip</button>' +
+                    '<button onclick="widgetSubmitDownModal()" style="padding:6px 14px;border:none;border-radius:8px;background:#dc2626;color:white;font-size:12px;cursor:pointer;font-weight:500;">Submit</button>' +
+                  '</div>' +
+                '</div>';
+            document.body.appendChild(m);
+            m.querySelectorAll('.widget-cat-btn').forEach(function(b) {
+                b.addEventListener('click', function() { b.classList.toggle('sel'); });
+            });
+            modal = m;
+        } else {
+            modal.querySelectorAll('.widget-cat-btn').forEach(function(b) { b.classList.remove('sel'); });
+            var ta = modal.querySelector('#widget-feedback-comment');
+            if (ta) ta.value = '';
+            modal.classList.remove('hidden');
+        }
+    }
+
+    window.widgetCloseDownModal = function() {
+        var m = document.getElementById('widget-down-modal');
+        if (m) m.classList.add('hidden');
+        _wModalCb = null;
+    };
+
+    window.widgetSubmitDownModal = function() {
+        if (!_wModalCb) return;
+        var modal = document.getElementById('widget-down-modal');
+        var cats = Array.from(modal.querySelectorAll('.widget-cat-btn.sel')).map(function(b) { return b.dataset.cat; }).join(',');
+        var comment = (document.getElementById('widget-feedback-comment').value || '').trim();
+        var cb = _wModalCb;
+        widgetSubmitFeedback(cb.messageId, 'down', cats || null, comment || null, cb.promptText, cb.responseText, cb.onDone);
+        widgetCloseDownModal();
+    };
+
+    var W_FB_QUEUE_KEY = 'walaplus_feedback_queue';
+
+    function wFbQueueGet() {
+        try { return JSON.parse(localStorage.getItem(W_FB_QUEUE_KEY) || '[]'); } catch(e) { return []; }
+    }
+    function wFbQueueSave(q) {
+        try { localStorage.setItem(W_FB_QUEUE_KEY, JSON.stringify(q)); } catch(e) {}
+    }
+    function wFbQueueAdd(item) {
+        var q = wFbQueueGet();
+        var idx = q.findIndex(function(x) { return x.messageId === item.messageId; });
+        if (idx >= 0) { q[idx] = item; } else { q.push(item); }
+        wFbQueueSave(q);
+    }
+    function wFbQueueRemove(messageId) {
+        wFbQueueSave(wFbQueueGet().filter(function(x) { return x.messageId !== messageId; }));
+    }
+    function wFbQueueDrain() {
+        wFbQueueGet().forEach(function(item) {
+            fetch('/api/consultant/feedback', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin', body: JSON.stringify(item)
+            }).then(function(r) { if (r.ok) wFbQueueRemove(item.messageId); }).catch(function() {});
+        });
+    }
+    setTimeout(wFbQueueDrain, 2000);
+
+    function widgetSubmitFeedback(messageId, rating, category, comment, promptText, responseText, onDone) {
+        if (onDone) onDone(rating);
+        var payload = {
+            messageId: messageId,
+            conversationId: threadId || null,
+            rating: rating,
+            category: category || null,
+            comment: comment || null,
+            promptPreview: promptText ? promptText.substring(0, 300) : null,
+            responsePreview: responseText ? responseText.substring(0, 500) : null,
+        };
+        wFbQueueAdd(payload);
+        fetch('/api/consultant/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+        }).then(function(r) {
+            if (r.ok) wFbQueueRemove(messageId);
+        }).catch(function() {
+            var retries = 0;
+            function retry() {
+                retries++;
+                var delay = Math.min(30000, 5000 * Math.pow(2, retries - 1));
+                setTimeout(function() {
+                    var item = wFbQueueGet().find(function(x) { return x.messageId === messageId; });
+                    if (!item) return;
+                    fetch('/api/consultant/feedback', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin', body: JSON.stringify(item)
+                    }).then(function(r) {
+                        if (r.ok) wFbQueueRemove(messageId);
+                        else if (retries < 4) retry();
+                    }).catch(function() { if (retries < 4) retry(); });
+                }, delay);
+            }
+            retry();
+        });
+    }
+
     function widgetShowTyping() { typingEl.style.display = 'flex'; widgetScrollBottom(); }
     function widgetHideTyping() { typingEl.style.display = 'none'; }
 
@@ -392,6 +582,7 @@
         var bubble = null;
         var fullText = '';
         var streamOk = false;
+        var capturedMessageId = null;
 
         try {
             var response = await fetch('/api/consultant/chat/stream', {
@@ -429,6 +620,7 @@
                                 threadId = parsed.threadId;
                                 sessionStorage.setItem('widget_consultant_threadId', threadId);
                             }
+                            if (parsed.messageId) { capturedMessageId = parsed.messageId; }
                             if (parsed.text) { fullText += parsed.text; bubble.innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
                             if (parsed.content) { fullText += parsed.content; bubble.innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
                             if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; bubble.innerHTML = renderMarkdown(fullText); }
@@ -446,6 +638,10 @@
                 bubble.innerHTML = renderMarkdown(fullText);
             }
 
+            if (capturedMessageId && fullText.trim()) {
+                widgetAttachFeedback(bubble, capturedMessageId, text, fullText);
+            }
+
         } catch (err) {
             if (!streamOk) {
                 widgetHideTyping();
@@ -461,6 +657,9 @@
                     bubble = widgetCreateAI();
                     var respText = data.response || data.message || 'No response received.';
                     bubble.innerHTML = renderMarkdown(respText);
+                    if (data.messageId && respText.trim()) {
+                        widgetAttachFeedback(bubble, data.messageId, text, respText);
+                    }
                 } catch (fallbackErr) {
                     bubble = widgetCreateAI();
                     bubble.innerHTML = '<span class="aiw-error-text">Unable to reach AI Consultant. Please try again.</span>';
@@ -468,6 +667,7 @@
             } else if (bubble && fullText.trim()) {
                 fullText += '\n\n---\n*Response interrupted.*';
                 bubble.innerHTML = renderMarkdown(fullText);
+                if (capturedMessageId) widgetAttachFeedback(bubble, capturedMessageId, text, fullText);
             }
         } finally {
             widgetHideTyping();

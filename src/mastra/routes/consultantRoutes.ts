@@ -1,5 +1,6 @@
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
+import { randomUUID } from "crypto";
 import {
   initAIAlertsTable,
   getAIAlerts,
@@ -11,6 +12,12 @@ import {
   type AlertSeverity,
   type AlertType,
 } from "../../utils/aiAlertsDatabase";
+import {
+  initAIFeedbackTable,
+  saveFeedback,
+  getFeedbackStats,
+  getRecentThumbsDown,
+} from "../../utils/aiFeedbackDatabase";
 import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
@@ -22,6 +29,7 @@ interface AgentTextResult { text: string }
 const CONSULTANT_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
 
 initAIAlertsTable().catch(console.error);
+initAIFeedbackTable().catch(console.error);
 
 /**
  * Resolves the user's auto-approve tier. For now (document-control phase
@@ -111,11 +119,13 @@ export const consultantRoutes = [
               }
             );
 
+            const messageId = randomUUID();
             return c.json({
               success: true,
               threadId: resolvedThreadId,
               response: response.text,
               callId: callId ?? undefined,
+              messageId,
             });
           } finally {
             clearTimeout(timer);
@@ -171,7 +181,7 @@ export const consultantRoutes = [
             userId: user.userId,
             sessionId: resolvedThreadId,
           });
-
+          const messageId = randomUUID();
           let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
           try {
             stream = await span.run(() => withAgentUserContext(
@@ -211,6 +221,7 @@ export const consultantRoutes = [
               let streamSuccess = true;
               let streamError: Error | undefined;
               try {
+<<<<<<< HEAD
                 // Run the stream consumption INSIDE span.run() so the
                 // parent_call_id ALS context is visible to tools invoked
                 // during streaming (tools execute lazily as chunks flow).
@@ -222,6 +233,14 @@ export const consultantRoutes = [
                   }
                 });
                 streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId })}\n\n`));
+=======
+                for await (const chunk of stream.textStream) {
+                  streamController.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`)
+                  );
+                }
+                streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId })}\n\n`));
+>>>>>>> a5a43e1 (feat: Inline AI feedback thumbs up/down on consultant responses (#32))
                 streamController.close();
               } catch (err) {
                 streamSuccess = false;
@@ -401,6 +420,71 @@ export const consultantRoutes = [
           return c.json({ success: true, alert });
         } catch (error) {
           return c.json({ error: "Failed to dismiss alert" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/consultant/feedback",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const body = await c.req.json();
+          const { messageId, conversationId, rating, category, comment, promptPreview, responsePreview, toolsCalled } = body;
+
+          if (!messageId || !rating || !['up', 'down'].includes(rating)) {
+            return c.json({ error: "messageId and valid rating ('up'|'down') are required" }, 400);
+          }
+
+          const result = await saveFeedback({
+            message_id: messageId,
+            conversation_id: conversationId || undefined,
+            agent: 'qmsConsultantAgent',
+            rating,
+            category: category || undefined,
+            comment: comment ? String(comment).substring(0, 1000) : undefined,
+            user_id: user.userId,
+            user_email: user.email,
+            prompt_preview: promptPreview || undefined,
+            response_preview: responsePreview || undefined,
+            tools_called: toolsCalled ? JSON.stringify(toolsCalled).substring(0, 1000) : undefined,
+          });
+
+          return c.json({ success: true, id: result.id });
+        } catch (error) {
+          console.error("[Consultant] Feedback save error:", error);
+          return c.json({ error: "Failed to save feedback" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/consultant/feedback/stats",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, ['admin', 'ai_specialist'] as UserRole[]);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const days = parseInt(c.req.query("days") || "30");
+
+          const isAdmin = user.role === 'admin';
+          const [stats, recent] = await Promise.all([
+            getFeedbackStats(days),
+            isAdmin ? getRecentThumbsDown(20) : Promise.resolve([]),
+          ]);
+
+          return c.json({ stats, recent, isAdmin });
+        } catch (error) {
+          console.error("[Consultant] Feedback stats error:", error);
+          return c.json({ error: "Failed to fetch feedback stats" }, 500);
         }
       };
     },

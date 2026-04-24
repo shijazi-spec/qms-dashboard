@@ -114,6 +114,37 @@
 
         .history-item { transition: background-color 0.15s; cursor: pointer; border-radius: 0.375rem; }
         .history-item:hover { background-color: #eef2ff; }
+
+        .feedback-bar { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+        .feedback-thumb {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e2e8f0;
+            background: #f8fafc; cursor: pointer; transition: all 0.15s; color: #94a3b8;
+        }
+        .feedback-thumb:hover { background: #eef2ff; border-color: #c7d2fe; color: #4f46e5; }
+        .feedback-thumb.selected-up { background: #dcfce7; border-color: #86efac; color: #16a34a; }
+        .feedback-thumb.selected-down { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+        .feedback-thumb svg { width: 14px; height: 14px; }
+        .feedback-label { font-size: 11px; color: #94a3b8; }
+        .feedback-done { font-size: 11px; color: #16a34a; display: none; }
+
+        #feedbackModal {
+            position: fixed; inset: 0; z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.4);
+        }
+        #feedbackModal.hidden { display: none; }
+        .feedback-modal-box {
+            background: white; border-radius: 16px; padding: 24px; width: 420px; max-width: calc(100vw - 32px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .feedback-category-btn {
+            display: inline-block; padding: 5px 11px; border-radius: 20px; font-size: 12px;
+            border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; cursor: pointer;
+            transition: all 0.15s; margin: 3px;
+        }
+        .feedback-category-btn:hover { border-color: #c7d2fe; background: #eef2ff; color: #4f46e5; }
+        .feedback-category-btn.selected { border-color: #ef4444; background: #fee2e2; color: #dc2626; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
@@ -523,6 +554,160 @@
             return bubble;
         }
 
+        function attachFeedbackUI(bubble, messageId, promptText, responseText) {
+            if (!messageId || bubble.querySelector('.feedback-bar')) return;
+            var bar = document.createElement('div');
+            bar.className = 'feedback-bar';
+            bar.setAttribute('data-message-id', messageId);
+            bar.innerHTML =
+                '<button class="feedback-thumb" data-rating="up" aria-label="Helpful" title="Helpful" data-testid="button-feedback-up-' + messageId.substring(0,8) + '">' +
+                  '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905C11 6.003 9.1 7.7 7 8v12m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/></svg>' +
+                '</button>' +
+                '<button class="feedback-thumb" data-rating="down" aria-label="Not helpful" title="Not helpful" data-testid="button-feedback-down-' + messageId.substring(0,8) + '">' +
+                  '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905C13 14.997 14.9 13.3 17 13V1m-7 13h2M17 4h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/></svg>' +
+                '</button>' +
+                '<span class="feedback-label">Was this helpful?</span>' +
+                '<span class="feedback-done" aria-live="polite">Thanks for your feedback!</span>';
+
+            var upBtn = bar.querySelector('[data-rating="up"]');
+            var downBtn = bar.querySelector('[data-rating="down"]');
+            var label = bar.querySelector('.feedback-label');
+            var done = bar.querySelector('.feedback-done');
+
+            function markSelected(rating) {
+                upBtn.classList.toggle('selected-up', rating === 'up');
+                downBtn.classList.toggle('selected-down', rating === 'down');
+                label.style.display = 'none';
+                done.style.display = 'inline';
+            }
+
+            upBtn.addEventListener('click', function() {
+                submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected);
+            });
+            downBtn.addEventListener('click', function() {
+                openThumbsDownModal(messageId, promptText, responseText, markSelected);
+            });
+
+            bubble.appendChild(bar);
+        }
+
+        var _feedbackModalCallback = null;
+
+        function openThumbsDownModal(messageId, promptText, responseText, onDone) {
+            _feedbackModalCallback = { messageId: messageId, promptText: promptText, responseText: responseText, onDone: onDone };
+            var modal = document.getElementById('feedbackModal');
+            var catBtns = modal.querySelectorAll('.feedback-category-btn');
+            catBtns.forEach(function(b) { b.classList.remove('selected'); });
+            var textarea = document.getElementById('feedbackComment');
+            if (textarea) textarea.value = '';
+            modal.classList.remove('hidden');
+            modal.focus();
+        }
+
+        window.closeFeedbackModal = function() {
+            document.getElementById('feedbackModal').classList.add('hidden');
+            _feedbackModalCallback = null;
+        };
+
+        window.toggleFeedbackCategory = function(btn) {
+            btn.classList.toggle('selected');
+        };
+
+        window.submitThumbsDown = function() {
+            if (!_feedbackModalCallback) return;
+            var modal = document.getElementById('feedbackModal');
+            var catBtns = modal.querySelectorAll('.feedback-category-btn.selected');
+            var categories = Array.from(catBtns).map(function(b) { return b.dataset.cat; }).join(',');
+            var comment = (document.getElementById('feedbackComment').value || '').trim();
+            var cb = _feedbackModalCallback;
+            submitFeedback(cb.messageId, 'down', categories || null, comment || null, cb.promptText, cb.responseText, cb.onDone);
+            closeFeedbackModal();
+        };
+
+        var FEEDBACK_QUEUE_KEY = 'walaplus_feedback_queue';
+
+        function feedbackQueueGet() {
+            try { return JSON.parse(localStorage.getItem(FEEDBACK_QUEUE_KEY) || '[]'); }
+            catch(e) { return []; }
+        }
+
+        function feedbackQueueSave(q) {
+            try { localStorage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(q)); } catch(e) {}
+        }
+
+        function feedbackQueueAdd(item) {
+            var q = feedbackQueueGet();
+            var idx = q.findIndex(function(x) { return x.messageId === item.messageId; });
+            if (idx >= 0) { q[idx] = item; } else { q.push(item); }
+            feedbackQueueSave(q);
+        }
+
+        function feedbackQueueRemove(messageId) {
+            var q = feedbackQueueGet().filter(function(x) { return x.messageId !== messageId; });
+            feedbackQueueSave(q);
+        }
+
+        function feedbackQueueDrain() {
+            var q = feedbackQueueGet();
+            if (!q.length) return;
+            q.forEach(function(item) {
+                fetch('/api/consultant/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(item)
+                }).then(function(r) {
+                    if (r.ok) feedbackQueueRemove(item.messageId);
+                }).catch(function() {});
+            });
+        }
+
+        setTimeout(feedbackQueueDrain, 2000);
+
+        function submitFeedback(messageId, rating, category, comment, promptText, responseText, onDone) {
+            if (onDone) onDone(rating);
+            var payload = {
+                messageId: messageId,
+                conversationId: threadId || null,
+                rating: rating,
+                category: category || null,
+                comment: comment || null,
+                promptPreview: promptText ? promptText.substring(0, 300) : null,
+                responsePreview: responseText ? responseText.substring(0, 500) : null,
+            };
+            feedbackQueueAdd(payload);
+            fetch('/api/consultant/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            }).then(function(r) {
+                if (r.ok) feedbackQueueRemove(messageId);
+            }).catch(function(err) {
+                console.warn('[Feedback] Queued for retry:', messageId);
+                var retries = 0;
+                function retry() {
+                    retries++;
+                    var delay = Math.min(30000, 5000 * Math.pow(2, retries - 1));
+                    setTimeout(function() {
+                        var q = feedbackQueueGet();
+                        var item = q.find(function(x) { return x.messageId === messageId; });
+                        if (!item) return;
+                        fetch('/api/consultant/feedback', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin', body: JSON.stringify(item)
+                        }).then(function(r) {
+                            if (r.ok) feedbackQueueRemove(messageId);
+                            else if (retries < 4) retry();
+                        }).catch(function() {
+                            if (retries < 4) retry();
+                        });
+                    }, delay);
+                }
+                retry();
+            });
+        }
+
         function renderMarkdown(text) {
             var codeBlocks = [];
             var tableBlocks = [];
@@ -630,6 +815,7 @@
             var bubble = null;
             var fullText = '';
             var streamOk = false;
+            var capturedMessageId = null;
 
             try {
                 var response = await fetch('/api/consultant/chat/stream', {
@@ -663,6 +849,7 @@
                             try {
                                 var parsed = JSON.parse(data);
                                 if (parsed.threadId) { threadId = parsed.threadId; sessionStorage.setItem('consultant_threadId', threadId); }
+                                if (parsed.messageId) { capturedMessageId = parsed.messageId; }
                                 if (parsed.text) { fullText += parsed.text; bubble.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                                 if (parsed.content) { fullText += parsed.content; bubble.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                                 if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; bubble.innerHTML = renderMarkdown(fullText); }
@@ -682,6 +869,9 @@
 
                 if (isArabic(fullText)) bubble.setAttribute('dir', 'rtl');
                 chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
+                if (capturedMessageId && fullText.trim()) {
+                    attachFeedbackUI(bubble, capturedMessageId, text, fullText);
+                }
             } catch (err) {
                 if (!streamOk) {
                     hideTyping();
@@ -698,6 +888,9 @@
                         bubble.innerHTML = renderMarkdown(respText);
                         if (isArabic(respText)) bubble.setAttribute('dir', 'rtl');
                         chatMessages.push({ role: 'assistant', content: respText, time: new Date().toISOString() });
+                        if (data.messageId && respText.trim()) {
+                            attachFeedbackUI(bubble, data.messageId, text, respText);
+                        }
                     } catch (fallbackErr) {
                         bubble = createAssistantMessage();
                         bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the AI Consultant. Please check your connection and try again.');
@@ -707,6 +900,7 @@
                     if (fullText.trim()) {
                         bubble.innerHTML = renderMarkdown(fullText + '\n\n*⚠️ Response was interrupted.*');
                         chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
+                        if (capturedMessageId) attachFeedbackUI(bubble, capturedMessageId, text, fullText);
                     } else {
                         bubble.innerHTML = renderMarkdown('**Error:** The response stream was interrupted. Please try again.');
                     }
@@ -1209,6 +1403,54 @@
         chatInput.focus();
     })();
 
+    /* =====================================================================
+       Keyboard accessibility: close feedback modal on Escape
+       ===================================================================== */
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var fm = document.getElementById('feedbackModal');
+            if (fm && !fm.classList.contains('hidden')) closeFeedbackModal();
+        }
+    });
+    </script>
+
+    <!-- Feedback Modal -->
+    <div id="feedbackModal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle" tabindex="-1">
+        <div class="feedback-modal-box">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 id="feedbackModalTitle" class="text-base font-semibold text-gray-800">What went wrong?</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Select all that apply (optional)</p>
+                </div>
+                <button onclick="closeFeedbackModal()" aria-label="Close feedback dialog" data-testid="button-close-feedback-modal"
+                    class="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="mb-4">
+                <button class="feedback-category-btn" data-cat="incorrect" onclick="toggleFeedbackCategory(this)" data-testid="cat-incorrect">Incorrect information</button>
+                <button class="feedback-category-btn" data-cat="missing_context" onclick="toggleFeedbackCategory(this)" data-testid="cat-missing-context">Missing context</button>
+                <button class="feedback-category-btn" data-cat="hallucinated" onclick="toggleFeedbackCategory(this)" data-testid="cat-hallucinated">Hallucinated</button>
+                <button class="feedback-category-btn" data-cat="off_policy" onclick="toggleFeedbackCategory(this)" data-testid="cat-off-policy">Off-policy</button>
+                <button class="feedback-category-btn" data-cat="formatting" onclick="toggleFeedbackCategory(this)" data-testid="cat-formatting">Formatting issue</button>
+                <button class="feedback-category-btn" data-cat="other" onclick="toggleFeedbackCategory(this)" data-testid="cat-other">Other</button>
+            </div>
+            <div class="mb-4">
+                <label for="feedbackComment" class="block text-xs font-medium text-gray-700 mb-1">Additional comments (optional)</label>
+                <textarea id="feedbackComment" rows="3" maxlength="1000" placeholder="Describe what went wrong..."
+                    data-testid="input-feedback-comment"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeFeedbackModal()" data-testid="button-feedback-skip"
+                    class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition">Skip</button>
+                <button onclick="submitThumbsDown()" data-testid="button-feedback-submit"
+                    class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
     /* =====================================================================
        HITL Approval Gate — inline approval cards
        Per WP-SOP-011 (Automated Decision and Processing Process) and

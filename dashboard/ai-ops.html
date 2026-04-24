@@ -73,6 +73,7 @@
         <button onclick="switchTab('latency')" id="tab-latency" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-latency">Agent Latency</button>
         <button onclick="switchTab('tools')" id="tab-tools" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-tools">Top Tools</button>
         <button onclick="switchTab('issues')" id="tab-issues" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-issues">Recent Issues</button>
+        <button onclick="switchTab('feedback')" id="tab-feedback" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-feedback">Consultant Feedback</button>
       </nav>
     </div>
 
@@ -136,6 +137,42 @@
       </div>
     </div>
 
+    <!-- Consultant Feedback Tab -->
+    <div id="content-feedback" class="hidden fade-in">
+      <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">AI Consultant Feedback</h2>
+            <p class="text-sm text-gray-500">Thumbs up/down ratings on AI Consultant responses</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <select id="feedback-days" onchange="loadAIFeedback()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-days">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+        </div>
+        <div id="ai-ops-feedback-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div class="text-center py-6 text-gray-400 col-span-4">Loading feedback stats…</div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Top Thumbs-Down Categories</h3>
+            <div id="ai-ops-feedback-categories" class="space-y-2">
+              <div class="text-sm text-gray-400">—</div>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Recent Thumbs-Down <span class="text-xs font-normal text-gray-400">(admin only)</span></h3>
+            <div id="ai-ops-feedback-recent" class="space-y-3">
+              <div class="text-sm text-gray-400">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Price Table Info -->
     <div class="bg-white rounded-xl shadow-sm border p-5 mt-6" data-testid="section-price-table">
       <h3 class="text-sm font-semibold text-gray-700 mb-2">Model Price Table</h3>
@@ -151,7 +188,7 @@
 
   <script>
     let costChart = null;
-    const TABS = ['cost', 'latency', 'tools', 'issues'];
+    const TABS = ['cost', 'latency', 'tools', 'issues', 'feedback'];
 
     function switchTab(tab) {
       TABS.forEach(t => {
@@ -168,6 +205,93 @@
       if (tab === 'latency') loadLatency();
       if (tab === 'tools') loadTools();
       if (tab === 'issues') loadIssues();
+      if (tab === 'feedback') loadAIFeedback();
+    }
+
+    function aiOpsEscapeHtml(str) {
+      if (str == null) return '';
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+
+    async function loadAIFeedback() {
+      const kpiEl = document.getElementById('ai-ops-feedback-kpis');
+      const catsEl = document.getElementById('ai-ops-feedback-categories');
+      const recentEl = document.getElementById('ai-ops-feedback-recent');
+      try {
+        const days = document.getElementById('feedback-days')?.value || '30';
+        const payload = await apiFetch(`/api/consultant/feedback/stats?days=${days}`);
+        const data = payload.stats || {};
+        const recent = payload.recent || [];
+        const isAdmin = payload.isAdmin || false;
+
+        const total = data.total ?? 0;
+        const thumbsUp = data.thumbs_up ?? 0;
+        const thumbsDown = data.thumbs_down ?? 0;
+        const upRate = total > 0 ? Math.round((thumbsUp / total) * 100) : 0;
+        kpiEl.innerHTML = `
+          <div class="bg-blue-50 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-blue-700">${total}</div>
+            <div class="text-xs text-blue-600 mt-1">Total Ratings</div>
+          </div>
+          <div class="bg-green-50 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-green-700">${upRate}%</div>
+            <div class="text-xs text-green-600 mt-1">Satisfaction Rate</div>
+          </div>
+          <div class="bg-emerald-50 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-emerald-700">${thumbsUp}</div>
+            <div class="text-xs text-emerald-600 mt-1">Thumbs Up</div>
+          </div>
+          <div class="bg-red-50 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-red-700">${thumbsDown}</div>
+            <div class="text-xs text-red-600 mt-1">Thumbs Down</div>
+          </div>
+        `;
+
+        const topCats = data.top_categories || [];
+        if (topCats.length > 0) {
+          const maxCount = topCats[0].count;
+          catsEl.innerHTML = topCats.map(c => {
+            const label = aiOpsEscapeHtml((c.category || 'other').replace(/_/g,' '));
+            const pct = Math.round((c.count / maxCount) * 100);
+            return `<div class="flex items-center gap-2">
+              <span class="text-xs text-gray-600 w-32 shrink-0 capitalize">${label}</span>
+              <div class="flex-1 bg-gray-100 rounded-full h-2">
+                <div class="bg-red-400 h-2 rounded-full" style="width:${pct}%"></div>
+              </div>
+              <span class="text-xs text-gray-500 w-6 text-right">${c.count}</span>
+            </div>`;
+          }).join('');
+        } else {
+          catsEl.innerHTML = '<div class="text-sm text-gray-400">No category data yet</div>';
+        }
+
+        if (!isAdmin) {
+          recentEl.innerHTML = '<div class="text-sm text-gray-400 italic">Recent feedback details are visible to admins only.</div>';
+        } else if (recent.length > 0) {
+          recentEl.innerHTML = recent.map(r => {
+            const catLabel = aiOpsEscapeHtml((r.category || 'no category').replace(/_/g,' '));
+            const dateStr = aiOpsEscapeHtml(new Date(r.created_at).toLocaleDateString());
+            const comment = r.comment ? aiOpsEscapeHtml(r.comment.substring(0, 120)) : '';
+            const promptPrev = r.prompt_preview ? aiOpsEscapeHtml(r.prompt_preview.substring(0, 80)) : '';
+            const respPrev = r.response_preview ? aiOpsEscapeHtml(r.response_preview.substring(0, 80)) : '';
+            const toolsCalled = r.tools_called ? aiOpsEscapeHtml(r.tools_called.substring(0, 80)) : '';
+            return `<div class="border border-red-100 rounded-lg p-3 bg-red-50">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <span class="text-xs font-medium text-red-700 capitalize">${catLabel}</span>
+                <span class="text-xs text-gray-400">${dateStr}</span>
+              </div>
+              ${comment ? `<p class="text-xs text-gray-600 mb-1">${comment}</p>` : ''}
+              ${promptPrev ? `<p class="text-xs text-gray-500 mb-1"><span class="font-medium">Q:</span> ${promptPrev}…</p>` : ''}
+              ${respPrev ? `<p class="text-xs text-gray-400 italic mb-1">"${respPrev}…"</p>` : ''}
+              ${toolsCalled ? `<p class="text-xs text-gray-400">Tools: ${toolsCalled}</p>` : ''}
+            </div>`;
+          }).join('');
+        } else {
+          recentEl.innerHTML = '<div class="text-sm text-gray-400">No thumbs-down feedback yet</div>';
+        }
+      } catch (err) {
+        kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">Failed to load feedback stats</div>';
+      }
     }
 
     async function apiFetch(url) {

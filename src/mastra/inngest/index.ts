@@ -685,6 +685,47 @@ const executiveDigestFunction = inngest.createFunction(
 );
 inngestFunctions.push(executiveDigestFunction);
 
+const aiFeedbackDigestFunction = inngest.createFunction(
+  { id: "ai-feedback-digest" },
+  { cron: process.env.AI_FEEDBACK_DIGEST_CRON || "0 7 * * 1" },
+  async ({ step }) => {
+    return await step.run("send-ai-feedback-digest", async () => {
+      console.log("[AIFeedbackDigest] Weekly AI feedback digest triggered");
+      const { getWeeklyFeedbackDigest } = await import("../../utils/aiFeedbackDatabase");
+      const digest = await getWeeklyFeedbackDigest();
+      console.log("[AIFeedbackDigest] Digest data:", digest);
+
+      if (!digest || digest.total === 0) {
+        console.log("[AIFeedbackDigest] No feedback this week, skipping notifications");
+        return { skipped: true };
+      }
+
+      const upRate = digest.total > 0 ? Math.round((digest.thumbs_up / digest.total) * 100) : 0;
+      const summary = `AI Consultant received ${digest.total} ratings this week: ${digest.thumbs_up} 👍 (${upRate}%) / ${digest.thumbs_down} 👎. Top issue: ${digest.top_categories?.[0]?.category || 'none'}.`;
+
+      try {
+        const { createNotification } = await import("../../utils/notificationHub");
+        await createNotification({
+          type: 'info',
+          title: 'Weekly AI Feedback Digest',
+          message: summary,
+          link: '/dashboard/admin.html',
+          severity: 'low'
+        });
+      } catch {}
+
+      try {
+        const { sendSlackNotification } = await import("../../utils/slackNotifications");
+        const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_QMS_CHANNEL || '#general';
+        await sendSlackNotification(slackChannel, `📊 *Weekly AI Consultant Feedback*\n${summary}`);
+      } catch {}
+
+      return { total: digest.total, thumbsUp: digest.thumbs_up, thumbsDown: digest.thumbs_down, upRate };
+    });
+  },
+);
+inngestFunctions.push(aiFeedbackDigestFunction);
+
 export function inngestServe({
   mastra,
   inngest,
