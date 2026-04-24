@@ -409,11 +409,26 @@ This document serves as:
 - **Global enforcement:** `enforceRoutePermission()` is called in `src/mastra/index.ts` for every API request, checking the route against `ROUTE_PERMISSION_MAP`.
 - **Route-level:** `ROUTE_PERMISSION_MAP` in `src/utils/rbacMiddleware.ts` defines per-route role and permission requirements for 40+ route patterns.
 - **department_viewer:** Blocked from all POST, PUT, PATCH, DELETE operations globally.
+- **Defense-in-depth:** Sensitive route handlers additionally call `requireRole()` directly so that a future map misconfiguration cannot silently expose the endpoint.
+
+#### Report Route Access Control
+
+All `/api/reports/*` endpoints carry explicit RBAC entries in `ROUTE_PERMISSION_MAP` **and** in-handler `requireRole()` guards (defense-in-depth).
+
+| Route | Allowed Roles | Blocked Roles (examples) |
+|-------|--------------|--------------------------|
+| `GET /api/reports/capa-effectiveness` | admin, quality_manager, grc_manager, head_of_operations_quality, executive | department_viewer, quality_specialist, team_lead, auditor, bu_owner, ai_specialist |
+| `GET /api/reports/compliance-posture` | admin, quality_manager, grc_manager, head_of_operations_quality, executive | department_viewer, quality_specialist, team_lead, auditor, bu_owner, ai_specialist |
+| `GET /api/reports/pdpl-inventory` | admin only | all non-admin roles |
+
+Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the global RBAC middleware before the handler is reached; the in-handler guard provides a second enforcement layer.
 
 #### Implementation Files
-- `src/utils/rbacMiddleware.ts` — RBAC middleware, permission checks, ROUTE_PERMISSION_MAP
+- `src/utils/rbacMiddleware.ts` — RBAC middleware, permission checks, ROUTE_PERMISSION_MAP, `canAccessRoute()` test helper
 - `src/utils/rbacDatabase.ts` — Role/permission database, permission matrix
 - `src/mastra/index.ts` — Global enforcement middleware
+- `src/mastra/routes/reportRoutes.ts` — In-handler `requireRole()` guards on all report routes
+- `tests/rbacReportRoutes.test.ts` — Unit tests asserting 403 for department_viewer / 200 for executive
 
 ---
 
@@ -651,6 +666,7 @@ This document serves as:
 | 1.0 | March 12, 2026 | WalaPlus Security Team | Initial VAPT remediation (19 findings) |
 | 2.0 | March 15, 2026 | WalaPlus Security Team | Security Assessment Response document |
 | 3.0 | March 24, 2026 | WalaPlus Security Team | Pentest v3.0 full remediation (39 findings), comprehensive SOP |
+| 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes (capa-effectiveness, compliance-posture); in-handler requireRole() defense-in-depth; updated §5.1 Report Route Access Control table; added unit test (tests/rbacReportRoutes.test.ts) |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.

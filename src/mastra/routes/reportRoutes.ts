@@ -1,3 +1,5 @@
+const REPORT_ALLOWED_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] as const;
+
 export const reportRoutes = [
   {
     path: "/api/reports/capa-effectiveness",
@@ -5,6 +7,9 @@ export const reportRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...REPORT_ALLOWED_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for this report');
           const { generateCapaEffectivenessReport } = await import("../../utils/reportGenerator");
           const html = await generateCapaEffectivenessReport();
           return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
@@ -20,6 +25,9 @@ export const reportRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...REPORT_ALLOWED_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for this report');
           const { generateCompliancePostureReport } = await import("../../utils/reportGenerator");
           const html = await generateCompliancePostureReport();
           return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });

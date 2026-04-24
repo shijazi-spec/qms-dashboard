@@ -261,6 +261,10 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/management-reviews/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
   { pattern: /^\/api\/management-reviews/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
 
+  // GRC aggregated reports — governance roles and senior leadership only; department_viewer excluded
+  { pattern: /^\/api\/reports\/capa-effectiveness$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/reports\/compliance-posture$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
   // PDPL reports — admin-only (privacy inventory, incident history, security posture)
   { pattern: /^\/api\/reports\/pdpl-inventory/, methods: ['GET'], roles: ['admin'] },
 
@@ -358,4 +362,24 @@ export async function enforceRoutePermission(c: any, path: string, method: strin
   }
 
   return { allowed: true };
+}
+
+/**
+ * Pure permission-map lookup — no DB calls, no session parsing.
+ * Used by unit tests to assert that the ROUTE_PERMISSION_MAP is correctly
+ * configured for a given (role, path, method) triple.
+ */
+export function canAccessRoute(role: string, path: string, method: string): boolean {
+  if (role === 'admin') return true;
+  for (const rule of ROUTE_PERMISSION_MAP) {
+    if (rule.pattern.test(path) && rule.methods.includes(method)) {
+      if (rule.roles && !rule.roles.includes(role as UserRole)) {
+        return false;
+      }
+      if (rule.roles && rule.roles.includes(role as UserRole)) {
+        return true;
+      }
+    }
+  }
+  return true;
 }
