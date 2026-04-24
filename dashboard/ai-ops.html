@@ -209,6 +209,15 @@
               <option value="30" selected>Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>
+            <label class="flex items-center gap-1.5 text-sm text-gray-700" data-testid="label-prompt-min-feedback">
+              <span>Min ratings</span>
+              <select id="prompt-min-feedback" data-on-change="loadPromptVersions" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-prompt-min-feedback">
+                <option value="1">1</option>
+                <option value="5" selected>5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+              </select>
+            </label>
           </div>
         </div>
         <p class="text-sm text-gray-500 mb-4">
@@ -1031,11 +1040,12 @@
     async function loadPromptVersions() {
       const el = document.getElementById('prompts-table');
       const days = document.getElementById('prompt-days').value;
+      const minFeedbackParam = document.getElementById('prompt-min-feedback')?.value || '5';
       const showArchived = !!document.getElementById('prompt-show-archived')?.checked;
       try {
         // Active versions and historical rows in parallel.
         const [versionsRes, activeRes] = await Promise.all([
-          apiFetch(`/api/ai-ops/prompt-versions?days=${days}`),
+          apiFetch(`/api/ai-ops/prompt-versions?days=${days}&minFeedback=${minFeedbackParam}`),
           apiFetch('/api/ai-ops/prompt-versions/active').catch(() => ({ data: [] })),
         ]);
         const data = versionsRes.data || [];
