@@ -16,6 +16,9 @@ import {
 
 initScorecardTables().catch(console.error);
 
+const SCORECARD_READ_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] as const;
+const SCORECARD_WRITE_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] as const;
+
 export const scorecardRoutes = [
   {
     path: "/scorecard",
@@ -46,6 +49,9 @@ export const scorecardRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...SCORECARD_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for scorecard data');
           console.log('📊 [Scorecard] Fetching Mohammed Al Muzaini scorecard...');
           const scorecard = await getMohammedScorecard();
           return c.json({ success: true, data: scorecard });
@@ -62,6 +68,9 @@ export const scorecardRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...SCORECARD_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for scorecard data');
           const kpiNumber = parseInt(c.req.param('kpiNumber'));
           console.log('📊 [Scorecard] Fetching individual KPI:', kpiNumber);
           
@@ -103,6 +112,9 @@ export const scorecardRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...SCORECARD_WRITE_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to save scorecard snapshot');
           console.log('📝 [Scorecard] Saving scorecard snapshot...');
           const scorecard = await getMohammedScorecard();
           
@@ -134,6 +146,9 @@ export const scorecardRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...SCORECARD_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for scorecard data');
           const name = c.req.query('name') || 'Mohammed Al Muzaini';
           const limit = parseInt(c.req.query('limit') || '12');
           

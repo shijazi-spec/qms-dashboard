@@ -1,3 +1,6 @@
+const ANALYTICS_READ_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] as const;
+const DIGEST_SEND_ROLES = ['admin', 'head_of_operations_quality'] as const;
+
 export const analyticsRoutes = [
   {
     path: "/api/analytics/cycle-times",
@@ -5,6 +8,9 @@ export const analyticsRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for analytics data');
           const { getCycleTimeMetrics } = await import("../../utils/analyticsEngine");
           const dateFrom = c.req.query("from") || undefined;
           const dateTo = c.req.query("to") || undefined;
@@ -22,6 +28,9 @@ export const analyticsRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for analytics data');
           const { getAgentComplianceReports } = await import("../../utils/analyticsEngine");
           const reports = await getAgentComplianceReports();
           return c.json({ reports });
@@ -37,6 +46,9 @@ export const analyticsRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for analytics data');
           const { detectCAPARecurrence } = await import("../../utils/analyticsEngine");
           const recurrences = await detectCAPARecurrence();
           return c.json({ recurrences, total: recurrences.length });
@@ -52,6 +64,9 @@ export const analyticsRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for analytics data');
           const { getTrendData } = await import("../../utils/analyticsEngine");
           const periods = parseInt(c.req.query("periods") || "12");
           const interval = c.req.query("interval") === "week" ? "week" : "month" as const;
@@ -69,6 +84,9 @@ export const analyticsRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for executive digest');
           const { generateDigestData, buildDigestHTML } = await import("../../utils/executiveDigest");
           const format = c.req.query("format");
           const data = await generateDigestData();
@@ -89,6 +107,9 @@ export const analyticsRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...DIGEST_SEND_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to send executive digest');
           const { sendDigestEmail } = await import("../../utils/executiveDigest");
           const result = await sendDigestEmail();
           return c.json(result);

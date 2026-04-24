@@ -23,6 +23,9 @@ import {
 
 initKPITables().catch(console.error);
 
+const KPI_READ_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] as const;
+const KPI_WRITE_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] as const;
+
 export const kpiRoutes = [
   {
     path: "/kpis",
@@ -76,6 +79,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI data');
           const ownerType = c.req.query("owner");
           let kpis;
           if (ownerType) {
@@ -97,6 +103,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI data');
           const summary = await getKPIDashboardSummary();
           return c.json(summary);
         } catch (error) {
@@ -112,6 +121,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI data');
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) {
             return c.json({ error: "Invalid KPI ID" }, 400);
@@ -136,6 +148,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to create KPIs');
           const body = await c.req.json();
           const kpi = await createKPIDefinition(body);
 
@@ -167,6 +182,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to update KPIs');
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const kpi = await updateKPIDefinition(id, body);
@@ -202,6 +220,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to record KPI values');
           const kpiId = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const value = await recordKPIValue({ ...body, kpi_id: kpiId });
@@ -234,6 +255,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI history');
           const id = parseInt(c.req.param("id"));
           const limit = parseInt(c.req.query("limit") || "12");
           const history = await getKPIHistory(id, limit);
@@ -251,6 +275,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for executive reports');
           const reportType = c.req.query("type");
           const reports = await getExecutiveReports(reportType);
           return c.json(reports);
@@ -267,6 +294,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to create executive reports');
           const body = await c.req.json();
           const report = await createExecutiveReport(body);
 
@@ -298,6 +328,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for executive reports');
           const id = parseInt(c.req.param("id"));
           const report = await getExecutiveReportById(id);
           if (!report) {
@@ -317,6 +350,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions to update executive reports');
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const report = await updateExecutiveReport(id, body);
@@ -352,6 +388,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user) return forbiddenResponse(c, 'Insufficient permissions for MBR data');
           const data = await generateMBRData();
           return c.json(data);
         } catch (error) {
@@ -367,6 +406,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, ['admin']);
+          if (!user) return forbiddenResponse(c, 'Admin access required to seed KPIs');
           await seedMohammedKPIsManual();
           return c.json({ success: true, message: "Mohammed's KPIs seeded successfully" });
         } catch (error) {
@@ -382,6 +424,9 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, ['admin']);
+          if (!user) return forbiddenResponse(c, 'Admin access required to seed KPIs');
           await seedSDRKPIsManual();
           return c.json({ success: true, message: "SDR Team KPIs (11) seeded successfully" });
         } catch (error) {

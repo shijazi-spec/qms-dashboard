@@ -61,12 +61,18 @@ async function svgToPng(svg: string): Promise<Buffer> {
   });
 }
 
+const INFOGRAPHIC_READ_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] as const;
+const INFOGRAPHIC_SHARE_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] as const;
+
 export const infographicRoutes = [
   {
     path: '/api/infographic/sections',
     method: 'GET' as const,
     createHandler: async () => {
       return async (c: any) => {
+        const { requireRole, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+        const user = await requireRole(c, [...INFOGRAPHIC_READ_ROLES]);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions for infographic catalog');
         return c.json({ sections: SECTION_CATALOG });
       };
     },
@@ -76,6 +82,9 @@ export const infographicRoutes = [
     method: 'POST' as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
+        const { requireRole, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+        const user = await requireRole(c, [...INFOGRAPHIC_SHARE_ROLES]);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions to share infographic');
         const logger = mastra?.getLogger();
         const section = c.req.param('section') as InfographicSection;
         if (!VALID_SECTIONS.has(section)) {
@@ -169,6 +178,9 @@ export const infographicRoutes = [
     method: 'POST' as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
+        const { requireRole, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+        const user = await requireRole(c, [...INFOGRAPHIC_SHARE_ROLES]);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions to share infographic');
         const logger = mastra?.getLogger();
         const section = c.req.param('section') as InfographicSection;
         if (!VALID_SECTIONS.has(section)) {
@@ -244,6 +256,9 @@ export const infographicRoutes = [
     method: 'GET' as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
+        const { requireRole, forbiddenResponse } = await import('../../utils/rbacMiddleware');
+        const user = await requireRole(c, [...INFOGRAPHIC_READ_ROLES]);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions for infographic');
         const logger = mastra?.getLogger();
         const raw = c.req.param('section') || '';
         const url = new URL(c.req.url);

@@ -314,6 +314,46 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/duplicates/, methods: ['GET'], roles: ['admin', 'grc_manager', 'ai_specialist', 'head_of_operations_quality', 'quality_manager', 'bu_owner', 'executive'] },
   { pattern: /^\/api\/policies/, methods: ['GET'], roles: ['admin', 'grc_manager', 'quality_manager', 'head_of_operations_quality', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead', 'ai_specialist'] },
   { pattern: /^\/api\/calls/, methods: ['GET'], roles: ['admin', 'ai_specialist', 'head_of_operations_quality', 'quality_manager', 'team_lead', 'grc_manager'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // KPI / Executive reporting / Scorecard / Analytics / Health-pulse /
+  // Infographic — sensitive aggregated governance metrics. Locked to the
+  // governance/executive role set; department_viewer and other low-privilege
+  // roles are blocked.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Admin-only KPI seeders (write fixture data into the platform).
+  { pattern: /^\/api\/kpis\/seed-(mohammed|sdr)$/, methods: ['POST'], roles: ['admin'] },
+  // KPI value entry — governance write roles only.
+  { pattern: /^\/api\/kpis\/\d+\/values$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  // KPI definition writes (create / update / delete) — governance write roles only.
+  { pattern: /^\/api\/kpis(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  // KPI reads (definitions, summary, individual KPI, history) — governance roles + executive.
+  { pattern: /^\/api\/kpis(\/(\d+(\/history)?|summary))?$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
+  // Executive reports (MBR/QBR documents) and MBR data feed — governance + executive.
+  { pattern: /^\/api\/executive\/reports(\/\d+)?$/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/executive\/reports(\/\d+)?$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/executive\/mbr-data$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
+  // Analytics — cycle times, agent compliance, CAPA recurrence, trends, executive digest.
+  // Digest send (emails leadership) is restricted to admin + Head of Operations & Quality.
+  { pattern: /^\/api\/analytics\/executive-digest\/send$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/analytics\//, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
+  // Platform Health Pulse — admin only (operational diagnostics, secret presence,
+  // dependency health, latency).  POST /run triggers an actual probe sweep.
+  { pattern: /^\/api\/health\/pulse(\/(latest|run))?$/, methods: ['GET', 'POST'], roles: ['admin'] },
+
+  // Scorecard — Mohammed-style governance scorecard (raw KPI calculations).
+  // Snapshot save = governance write; reads = governance + executive.
+  { pattern: /^\/api\/scorecard\/snapshot$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/scorecard\//, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
+  // Infographics — governance-only renders.  Share-out (Slack / email) distributes
+  // sensitive aggregated data externally and is restricted to governance write roles.
+  { pattern: /^\/api\/infographic\/[^/]+\/share\/(slack|email)$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/infographic(\/.+)?$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {
