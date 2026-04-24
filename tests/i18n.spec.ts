@@ -27,6 +27,11 @@ import { test, expect, Page } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:5000';
 
+// Mirrors SHOW_LANG_TOGGLE in dashboard/js/navigation.js. While the in-app
+// language switcher is hidden (English-only ship), tests that assert on the
+// rendered toggle buttons are skipped. Flip both flags together to re-enable.
+const SHOW_LANG_TOGGLE = false;
+
 async function setLanguage(page: Page, lang: 'en' | 'ar') {
   // Only seed when the user has not already chosen a language. This allows
   // setLang() in-app reloads to take effect without being clobbered by the
@@ -327,6 +332,7 @@ test.describe('Navigation RTL — rail direction', () => {
   });
 
   test('language toggle buttons rendered in navigation (English / العربية)', async ({ page }) => {
+    if (!SHOW_LANG_TOGGLE) { test.skip(); return; }
     const ok = await authenticate(page);
     if (!ok) { test.skip(); return; }
 
@@ -690,6 +696,7 @@ test.describe('AI Consultant widget — i18n chrome', () => {
 
 test.describe('In-app language toggle — user menu', () => {
   test('clicking العربية button in user menu sets dir=rtl and lang=ar', async ({ page }) => {
+    if (!SHOW_LANG_TOGGLE) { test.skip(); return; }
     const ok = await authenticate(page);
     if (!ok) { test.skip(); return; }
 
@@ -722,6 +729,7 @@ test.describe('In-app language toggle — user menu', () => {
   });
 
   test('clicking English button in user menu restores ltr', async ({ page }) => {
+    if (!SHOW_LANG_TOGGLE) { test.skip(); return; }
     const ok = await authenticate(page);
     if (!ok) { test.skip(); return; }
 

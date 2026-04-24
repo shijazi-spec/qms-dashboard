@@ -327,6 +327,11 @@ const WalaPlusNav = {
           // Static skeleton only — no user data interpolated here
           const _t = (k) => (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop());
           const isAr = window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar';
+          // Language toggle hidden for English-only release. The i18n
+          // machinery and en/ar bundles remain in place — flip this back
+          // to true to re-expose the English / العربية picker in the
+          // user dropdown without any other changes.
+          const SHOW_LANG_TOGGLE = false;
           container.innerHTML = `
             <div class="relative nav-dropdown" data-group="user-menu">
               <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="User menu" aria-haspopup="true" aria-expanded="false" data-testid="button-user-menu">
@@ -338,7 +343,7 @@ const WalaPlusNav = {
                   <p class="text-sm font-medium text-gray-900" data-testid="text-user-name"></p>
                   <p class="text-xs text-gray-500" data-testid="text-user-email"></p>
                 </div>
-                <div class="px-4 py-2 border-b border-gray-100">
+                ${SHOW_LANG_TOGGLE ? `<div class="px-4 py-2 border-b border-gray-100">
                   <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.language">${_t('nav.language')}</p>
                   <div class="flex gap-2">
                     <button data-on-click="WalaPlusNav.setLang" data-args='["en"]'
@@ -348,7 +353,7 @@ const WalaPlusNav = {
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}"
                       data-testid="button-lang-ar">العربية</button>
                   </div>
-                </div>
+                </div>` : ''}
                 <button data-on-click="WalaPlusNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                   <span data-i18n="common.sign_out">${_t('common.sign_out')}</span>
