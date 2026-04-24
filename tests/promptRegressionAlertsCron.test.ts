@@ -15,7 +15,7 @@ import {
   PROMPT_REGRESSION_THRESHOLDS,
 } from "../src/mastra/workflows/promptRegressionAlertsCron";
 import type { PromptVersionAggregate } from "../src/utils/aiTelemetry";
-import type { AlertSeverity } from "../src/utils/aiAlertsDatabase";
+import type { AIAlert, AlertSeverity } from "../src/utils/aiAlertsDatabase";
 
 let passed = 0;
 let failed = 0;
@@ -38,20 +38,34 @@ interface CapturedAlert {
   relatedRecordId: string;
 }
 
+interface CapturedResolve {
+  id: number;
+  note: string;
+}
+
 function makeStub(opts: {
   rows: PromptVersionAggregate[];
   existingKeys?: Set<string>;
+  openAlerts?: AIAlert[];
 }) {
   const created: CapturedAlert[] = [];
+  const resolved: CapturedResolve[] = [];
   const seenExists = new Set(opts.existingKeys ?? []);
+  const openAlertsList: AIAlert[] = opts.openAlerts ?? [];
   return {
     created,
+    resolved,
     deps: {
       fetchAggregates: async (_days: number) => opts.rows,
       alertExists: async (relatedRecordId: string) =>
         seenExists.has(relatedRecordId),
       createAlert: async (alert: CapturedAlert) => {
         created.push(alert);
+      },
+      listOpenRegressionAlerts: async () => openAlertsList,
+      resolveAlert: async (id: number, note: string): Promise<AIAlert | null> => {
+        resolved.push({ id, note });
+        return { id, alert_type: "prompt_regression", severity: "medium", title: "", description: "", status: "resolved" };
       },
     },
   };
@@ -296,6 +310,146 @@ async function run(): Promise<void> {
     assert(cfg.windowDays === 30, "default window is 30 days");
     assert(cfg.minFeedback >= 1, "min-feedback default is positive");
     assert(cfg.link === "/ai-ops?tab=prompts", "link points at the prompts tab");
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 11: Recovery — an open alert exists for TestAgent:v2, but v2 is
+  // now back within the threshold vs v1. The cron must auto-resolve it.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n11. Recovery — open alert auto-resolved when version recovers");
+  {
+    const openAlert: AIAlert = {
+      id: 42,
+      alert_type: "prompt_regression",
+      severity: "high",
+      title: "Prompt regression: TestAgent v2",
+      description: "...",
+      status: "open",
+      related_record_id: "TestAgent:v2",
+    };
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 85, total_feedback: 20, thumbs_up: 17, thumbs_down: 3 }),
+      ],
+      openAlerts: [openAlert],
+    });
+    const out = await runPromptRegressionCheck(stub.deps);
+    assert(out.alertsCreated === 0, "no new alert (5pp drop is below threshold)");
+    assert(out.alertsAutoResolved === 1, "one alert auto-resolved");
+    assert(stub.resolved.length === 1, "stub captured one resolve call");
+    assert(stub.resolved[0].id === 42, `resolved alert id is 42 (got ${stub.resolved[0].id})`);
+    assert(
+      stub.resolved[0].note.includes("TestAgent:v2"),
+      "resolution note identifies the recovered key",
+    );
+    assert(out.recoveries.length === 1, "recoveries list has one entry");
+    assert(
+      out.recoveries[0].related_record_id === "TestAgent:v2",
+      "recovery record identifies TestAgent:v2",
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 12: Still-breaching alert is NOT auto-resolved. If a version is
+  // still below the threshold vs best, an existing open alert stays open.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n12. Still-breaching alert is not auto-resolved");
+  {
+    const openAlert: AIAlert = {
+      id: 99,
+      alert_type: "prompt_regression",
+      severity: "high",
+      title: "Prompt regression: TestAgent v2",
+      description: "...",
+      status: "open",
+      related_record_id: "TestAgent:v2",
+    };
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 70, total_feedback: 20, thumbs_up: 14, thumbs_down: 6 }),
+      ],
+      existingKeys: new Set(["TestAgent:v2"]),
+      openAlerts: [openAlert],
+    });
+    const out = await runPromptRegressionCheck(stub.deps);
+    assert(out.alertsSkippedDuplicate === 1, "duplicate skip (alert already open)");
+    assert(out.alertsAutoResolved === 0, "still-breaching alert is not auto-resolved");
+    assert(stub.resolved.length === 0, "resolve was not called");
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 13: Recovery when version drops below the minimum sample count.
+  // An open alert for a version that now has too few samples should also
+  // be auto-resolved (no longer evaluable, feed should not stay cluttered).
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n13. Recovery when regressed version drops below min-sample threshold");
+  {
+    const openAlert: AIAlert = {
+      id: 77,
+      alert_type: "prompt_regression",
+      severity: "medium",
+      title: "Prompt regression: TestAgent v2",
+      description: "...",
+      status: "acknowledged",
+      related_record_id: "TestAgent:v2",
+    };
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 0,  total_feedback: 1,  thumbs_up: 0,  thumbs_down: 1 }),
+      ],
+      openAlerts: [openAlert],
+    });
+    const out = await runPromptRegressionCheck(stub.deps);
+    assert(out.alertsCreated === 0, "tiny-sample version creates no new alert");
+    assert(out.alertsAutoResolved === 1, "alert auto-resolved (version lost enough samples)");
+    assert(stub.resolved[0].id === 77, `resolved alert id is 77 (got ${stub.resolved[0]?.id})`);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 14: Multiple open alerts — only recovered ones are resolved, live
+  // breaches remain open.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n14. Selective recovery — only recovered alerts are resolved");
+  {
+    const openAlerts: AIAlert[] = [
+      {
+        id: 10,
+        alert_type: "prompt_regression",
+        severity: "high",
+        title: "",
+        description: "",
+        status: "open",
+        related_record_id: "TestAgent:v2",
+      },
+      {
+        id: 11,
+        alert_type: "prompt_regression",
+        severity: "critical",
+        title: "",
+        description: "",
+        status: "open",
+        related_record_id: "TestAgent:v3",
+      },
+    ];
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 85, total_feedback: 20, thumbs_up: 17, thumbs_down: 3 }),
+        makeRow({ prompt_version: "v3", feedback_rate_pct: 55, total_feedback: 20, thumbs_up: 11, thumbs_down: 9 }),
+      ],
+      existingKeys: new Set(["TestAgent:v3"]),
+      openAlerts,
+    });
+    const out = await runPromptRegressionCheck(stub.deps);
+    assert(out.alertsAutoResolved === 1, "only v2 (recovered) is auto-resolved");
+    assert(
+      stub.resolved.length === 1 && stub.resolved[0].id === 10,
+      "only alert 10 (v2) resolved, alert 11 (v3) left open",
+    );
+    assert(out.alertsCreated === 0, "v3 alert already exists — not duplicated");
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

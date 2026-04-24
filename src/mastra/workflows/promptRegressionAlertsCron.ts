@@ -41,6 +41,9 @@ import {
 import {
   openAlertExistsByKey,
   createAIAlert,
+  resolveAlert,
+  getOpenAlertsByType,
+  type AIAlert,
   type AlertSeverity,
 } from "../../utils/aiAlertsDatabase";
 
@@ -96,12 +99,20 @@ interface RegressionBreach {
   severity: AlertSeverity;
 }
 
+interface RegressionRecovery {
+  alert_id: number;
+  related_record_id: string;
+  note: string;
+}
+
 export interface PromptRegressionCheckResult {
   agentsEvaluated: number;
   versionsEvaluated: number;
   alertsCreated: number;
   alertsSkippedDuplicate: number;
+  alertsAutoResolved: number;
   breaches: RegressionBreach[];
+  recoveries: RegressionRecovery[];
 }
 
 /**
@@ -119,6 +130,10 @@ export interface PromptRegressionDeps {
     severity: AlertSeverity;
     relatedRecordId: string;
   }) => Promise<void>;
+  /** Returns every open/acknowledged prompt_regression alert. */
+  listOpenRegressionAlerts?: () => Promise<AIAlert[]>;
+  /** Marks an alert as resolved with an optional audit note. */
+  resolveAlert?: (id: number, note: string) => Promise<AIAlert | null>;
 }
 
 const defaultDeps: Required<PromptRegressionDeps> = {
@@ -138,6 +153,8 @@ const defaultDeps: Required<PromptRegressionDeps> = {
       related_record_id: relatedRecordId,
     });
   },
+  listOpenRegressionAlerts: () => getOpenAlertsByType("prompt_regression"),
+  resolveAlert: (id, note) => resolveAlert(id, note),
 };
 
 function toNumOrNull(v: unknown): number | null {
@@ -165,7 +182,9 @@ export async function runPromptRegressionCheck(
     versionsEvaluated: 0,
     alertsCreated: 0,
     alertsSkippedDuplicate: 0,
+    alertsAutoResolved: 0,
     breaches: [],
+    recoveries: [],
   };
 
   let aggregates: PromptVersionAggregate[];
@@ -191,6 +210,10 @@ export async function runPromptRegressionCheck(
   }
   out.agentsEvaluated = byAgent.size;
   out.versionsEvaluated = aggregates.length;
+
+  // Track every (agent:version) pair that is currently breaching so the
+  // recovery sweep below can auto-resolve alerts whose key is absent.
+  const currentBreachKeys = new Set<string>();
 
   for (const [agentName, rows] of byAgent.entries()) {
     // Eligible versions = enough feedback to be statistically meaningful
@@ -232,6 +255,7 @@ export async function runPromptRegressionCheck(
 
       const severity = severityForDrop(drop);
       const relatedRecordId = `${agentName}:${r.prompt_version}`;
+      currentBreachKeys.add(relatedRecordId);
       const title =
         `Prompt regression: "${agentName}" version ` +
         `${r.prompt_version} feedback rate dropped vs best`;
@@ -286,12 +310,51 @@ export async function runPromptRegressionCheck(
     }
   }
 
-  if (out.alertsCreated > 0) {
+  // ── Recovery sweep ────────────────────────────────────────────────────────
+  // Auto-resolve any open prompt_regression alert whose (agent:version) is no
+  // longer in the breach set — meaning the version recovered above the
+  // threshold or no longer has enough samples to be evaluated.
+  let openAlerts: AIAlert[];
+  try {
+    openAlerts = await deps.listOpenRegressionAlerts();
+  } catch (err) {
+    console.error("[PromptRegression] Failed to load open alerts for recovery sweep:", err);
+    openAlerts = [];
+  }
+
+  for (const alert of openAlerts) {
+    const key = alert.related_record_id;
+    if (!key || currentBreachKeys.has(key)) continue;
+    if (alert.id == null) continue;
+
+    const note =
+      `auto-resolved: prompt regression for "${key}" is no longer ` +
+      `detected in the ${cfg.windowDays}-day window (version recovered above ` +
+      `the ${cfg.dropPctPoints}pp threshold or no longer has enough samples ` +
+      `to be evaluated).`;
+    try {
+      const resolved = await deps.resolveAlert(alert.id, note);
+      if (resolved) {
+        out.alertsAutoResolved++;
+        out.recoveries.push({ alert_id: alert.id, related_record_id: key, note });
+        console.log(`[PromptRegression] Auto-resolved alert ${alert.id} (${key}): ${note}`);
+      }
+    } catch (err) {
+      console.error(
+        `[PromptRegression] Failed to auto-resolve alert ${alert.id} (${key}):`,
+        err,
+      );
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  if (out.alertsCreated > 0 || out.alertsAutoResolved > 0) {
     console.log("[PromptRegression] Check complete:", {
       agentsEvaluated: out.agentsEvaluated,
       versionsEvaluated: out.versionsEvaluated,
       alertsCreated: out.alertsCreated,
       alertsSkippedDuplicate: out.alertsSkippedDuplicate,
+      alertsAutoResolved: out.alertsAutoResolved,
       breaches: out.breaches.map((b) => ({
         agent: b.agent_name,
         regressed: b.regressed_version,
@@ -299,12 +362,14 @@ export async function runPromptRegressionCheck(
         drop_pp: Math.round(b.drop_pp),
         severity: b.severity,
       })),
+      recoveries: out.recoveries.map((r) => r.related_record_id),
     });
   } else {
     console.log(
       `[PromptRegression] Check complete — ${out.agentsEvaluated} agents, ` +
         `${out.versionsEvaluated} versions evaluated, 0 new alerts ` +
-        `(skipped ${out.alertsSkippedDuplicate} duplicates).`,
+        `(skipped ${out.alertsSkippedDuplicate} duplicates, ` +
+        `0 auto-resolved).`,
     );
   }
   return out;
