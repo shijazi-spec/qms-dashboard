@@ -1046,7 +1046,7 @@ export const duplicateRadarRoutes = [
 
           const pg = await import("pg");
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const { streamCsv, pagedQuery } = await import("../../utils/excelExport");
+          const { streamCsv, cursorQuery } = await import("../../utils/excelExport");
 
           // Build WHERE clause matching getExportRecords filter logic
           const filterParams: unknown[] = ['active'];
@@ -1054,8 +1054,6 @@ export const duplicateRadarRoutes = [
           if (owner) { filterParams.push(owner); whereClause += ` AND (dr.owner_name = $${filterParams.length} OR dr.owner_email = $${filterParams.length})`; }
           if (startDate) { filterParams.push(startDate); whereClause += ` AND dr.created_date >= $${filterParams.length}`; }
           if (endDate) { filterParams.push(endDate + 'T23:59:59Z'); whereClause += ` AND dr.created_date <= $${filterParams.length}`; }
-          const limIdx = filterParams.length + 1;
-          const offIdx = filterParams.length + 2;
 
           let drCsvPool: InstanceType<(typeof pg.default)['Pool']> | null = null;
           let streaming = false;
@@ -1078,15 +1076,15 @@ export const duplicateRadarRoutes = [
             });
 
             const csvHeaders = ['Record ID','Type','Name','Company','Domain','Owner','Status/Stage','Value','Source','Created Date','Confidence','Recommendation'];
-            const source = pagedQuery((limit, offset) => drCsvPool!.query(
+            const source = cursorQuery(drCsvPool!,
               `SELECT dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
                       dr.owner_name, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
                       dr.confidence_score, dr.ai_recommendation
                FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
                ${whereClause}
-               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC LIMIT $${limIdx} OFFSET $${offIdx}`,
-              [...filterParams, limit, offset]
-            ));
+               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`,
+              filterParams
+            );
             const rows = (async function* () {
               try {
                 for await (const r of source) {
@@ -1128,7 +1126,7 @@ export const duplicateRadarRoutes = [
           const end_date = url.searchParams.get('end_date') || undefined;
           const includeRaw = url.searchParams.get('include_raw') === '1';
 
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
           const pg2 = await import("pg");
 
           // Build WHERE clause for date filters (no status filter — XLSX exports all active)
@@ -1187,10 +1185,8 @@ export const duplicateRadarRoutes = [
               { header: 'Created', key: 'created_str', width: 14 },
             ];
 
-            // SQL template for per-type paged queries — avoids raw_data JSONB blob
+            // SQL template for per-type cursor queries — avoids raw_data JSONB blob
             const typeIdx = xlsxFilterParams.length + 1;
-            const limIdx2 = xlsxFilterParams.length + 2;
-            const offIdx2 = xlsxFilterParams.length + 3;
             const recSql = `
               SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email,
                      dr.domain, dr.phone, dr.owner_name,
@@ -1199,11 +1195,10 @@ export const duplicateRadarRoutes = [
                      TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str
               FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
               ${xlsxWhere} AND dr.record_type = $${typeIdx}
-              ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
-              LIMIT $${limIdx2} OFFSET $${offIdx2}`;
+              ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`;
 
             const makeTypeRows = (rtype: string) => {
-              const src = pagedQuery((limit, offset) => drXlsxPool!.query(recSql, [...xlsxFilterParams, rtype, limit, offset]));
+              const src = cursorQuery(drXlsxPool!, recSql, [...xlsxFilterParams, rtype]);
               return (async function* () {
                 for await (const r of src) yield r as Record<string, unknown>;
               })();
@@ -1234,7 +1229,7 @@ export const duplicateRadarRoutes = [
             ];
 
             // Accounts is the last type sheet — used as the pool-close anchor when !includeRaw
-            const accountsSrc = pagedQuery((limit, offset) => drXlsxPool!.query(recSql, [...xlsxFilterParams, 'account', limit, offset]));
+            const accountsSrc = cursorQuery(drXlsxPool!, recSql, [...xlsxFilterParams, 'account']);
             const accountsRows = includeRaw
               ? (async function* () { for await (const r of accountsSrc) yield r as Record<string, unknown>; })()
               : (async function* () {
@@ -1244,18 +1239,15 @@ export const duplicateRadarRoutes = [
             sheets.push({ name: 'Accounts', columns: recordColumns, rows: accountsRows });
 
             if (includeRaw) {
-              const allLim = xlsxFilterParams.length + 1;
-              const allOff = xlsxFilterParams.length + 2;
-              const allSrc = pagedQuery((limit, offset) => drXlsxPool!.query(
+              const allSrc = cursorQuery(drXlsxPool!,
                 `SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email, dr.domain,
                         dr.phone, dr.owner_name, COALESCE(dr.status, dr.stage, '') AS status_or_stage,
                         dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
                         TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str
                  FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-                 ${xlsxWhere} ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
-                 LIMIT $${allLim} OFFSET $${allOff}`,
-                [...xlsxFilterParams, limit, offset]
-              ));
+                 ${xlsxWhere} ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`,
+                xlsxFilterParams
+              );
               const allRows = (async function* () {
                 try { for await (const r of allSrc) yield r as Record<string, unknown>; }
                 finally { drXlsxPool && await drXlsxPool.end(); }

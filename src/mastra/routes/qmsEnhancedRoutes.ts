@@ -152,10 +152,10 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const ncPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const { pagedQuery } = await import("../../utils/excelExport");
+          const { cursorQuery } = await import("../../utils/excelExport");
           const cols = ['nc_number','title','nc_type','severity','status','detected_by','detected_date','category','closure_approved_by'];
-          const source = pagedQuery(
-            (limit, offset) => ncPool.query(`SELECT ${cols.join(',')} FROM nonconformance_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset])
+          const source = cursorQuery(ncPool,
+            `SELECT ${cols.join(',')} FROM nonconformance_records ORDER BY created_at DESC`
           );
           const rows = (async function* () {
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
@@ -177,10 +177,10 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const capaPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const { pagedQuery } = await import("../../utils/excelExport");
+          const { cursorQuery } = await import("../../utils/excelExport");
           const cols = ['capa_number','title','capa_type','severity','status','assigned_to','target_date','effectiveness_result','closure_approved_by'];
-          const source = pagedQuery(
-            (limit, offset) => capaPool.query(`SELECT ${cols.join(',')} FROM capa_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset])
+          const source = cursorQuery(capaPool,
+            `SELECT ${cols.join(',')} FROM capa_records ORDER BY created_at DESC`
           );
           const rows = (async function* () {
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
@@ -204,9 +204,9 @@ export const qmsEnhancedRoutes = [
         try {
           const { initComplianceTables } = await import("../../utils/complianceDatabase");
           await initComplianceTables();
-          const { pagedQuery } = await import("../../utils/excelExport");
+          const { cursorQuery } = await import("../../utils/excelExport");
           const cols = ['id','obligation_code','title','regulation_id','status','requirement_type','responsible_department','compliance_frequency'];
-          const source = pagedQuery((limit, offset) => pool.query(`SELECT ${cols.join(',')} FROM obligations ORDER BY id ASC LIMIT $1 OFFSET $2`, [limit, offset]));
+          const source = cursorQuery(pool, `SELECT ${cols.join(',')} FROM obligations ORDER BY id ASC`);
           const rows = (async function* () {
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
@@ -230,9 +230,9 @@ export const qmsEnhancedRoutes = [
         try {
           const { initPdplTables } = await import("../../utils/pdplDatabase");
           await initPdplTables();
-          const { pagedQuery } = await import("../../utils/excelExport");
+          const { cursorQuery } = await import("../../utils/excelExport");
           const cols = ['id','field_name','data_category','module','table_name','purpose','legal_basis','storage_location','retention_days','is_encrypted','is_masked','pii_type'];
-          const source = pagedQuery((limit, offset) => pool.query(`SELECT ${cols.join(',')} FROM data_inventory ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]));
+          const source = cursorQuery(pool, `SELECT ${cols.join(',')} FROM data_inventory ORDER BY created_at DESC`);
           const rows = (async function* () {
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
@@ -254,12 +254,11 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const { pagedQuery } = await import("../../utils/excelExport");
+          const { cursorQuery } = await import("../../utils/excelExport");
           const cols = ['kpi_name','target_value','actual_value','period_start','period_end','calculated_by'];
-          const source = pagedQuery((limit, offset) => pool.query(
-            `SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.kpi_name, kv.period_end DESC LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+          const source = cursorQuery(pool,
+            `SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.kpi_name, kv.period_end DESC`
+          );
           const rows = (async function* () {
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
@@ -280,7 +279,7 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
 
           // Aggregate summary stats and distinct categories — small results
           const [kpiTotR, valTotR, catsR] = await Promise.all([
@@ -321,8 +320,8 @@ export const qmsEnhancedRoutes = [
               SELECT actual_value, period_end
               FROM kpi_values WHERE kpi_id = kd.id ORDER BY period_end DESC LIMIT 1
             ) lat ON true
-            WHERE kd.is_active = true AND COALESCE(kd.category, 'Uncategorised') = $3
-            ORDER BY kd.kpi_name LIMIT $1 OFFSET $2`;
+            WHERE kd.is_active = true AND COALESCE(kd.category, 'Uncategorised') = $1
+            ORDER BY kd.kpi_name`;
 
           const sheets: Array<{ name: string; columns: { header: string; key: string; width: number }[]; rows: AsyncIterable<Record<string,unknown>> | Array<Record<string,unknown>> }> = [
             {
@@ -338,24 +337,23 @@ export const qmsEnhancedRoutes = [
           ];
 
           for (const cat of kpiCats) {
-            const catSource = pagedQuery((limit, offset) => pool.query(catDefSql, [limit, offset, cat]));
+            const catSource = cursorQuery(pool, catDefSql, [cat]);
             const catRows = (async function* () {
               for await (const r of catSource) yield r as Record<string, unknown>;
             })();
             sheets.push({ name: cat, columns: kpiDefCols, rows: catRows });
           }
 
-          // All Values sheet — paged via JOIN to include kpi_name; closes pool when done
-          const allValSource = pagedQuery((limit, offset) => pool.query(`
+          // All Values sheet — server-side cursor via JOIN to include kpi_name; closes pool when done
+          const allValSource = cursorQuery(pool, `
             SELECT kv.kpi_id, COALESCE(kd.kpi_name, '') AS kpi_name,
                    kv.actual_value, kv.target_value,
                    TO_CHAR(kv.period_start, 'YYYY-MM-DD') AS period_start_str,
                    TO_CHAR(kv.period_end,   'YYYY-MM-DD') AS period_end_str,
                    kv.calculated_by
             FROM kpi_values kv LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
-            ORDER BY kv.period_end DESC, kv.kpi_id LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+            ORDER BY kv.period_end DESC, kv.kpi_id`
+          );
           const allValRows = (async function* () {
             try { for await (const r of allValSource) yield r as Record<string, unknown>; }
             finally { await pool.end(); }
@@ -394,12 +392,11 @@ export const qmsEnhancedRoutes = [
         try {
           const { initVendorTables } = await import("../../utils/vendorDatabase");
           await initVendorTables();
-          const { pagedQuery } = await import("../../utils/excelExport");
+          const { cursorQuery } = await import("../../utils/excelExport");
           const cols = ['name','category','overall_risk_level','assessment_type','status','overall_score','assessment_date'];
-          const source = pagedQuery((limit, offset) => pool.query(
-            `SELECT v.name, v.category, v.overall_risk_level, va.assessment_type, va.status, va.overall_score, va.assessment_date FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id ORDER BY v.name LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+          const source = cursorQuery(pool,
+            `SELECT v.name, v.category, v.overall_risk_level, va.assessment_type, va.status, va.overall_score, va.assessment_date FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id ORDER BY v.name`
+          );
           const rows = (async function* () {
             try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
             finally { await pool.end(); }
@@ -421,7 +418,7 @@ export const qmsEnhancedRoutes = [
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
           if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
           const pg = await import("pg");
           ncXlsxPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -435,16 +432,15 @@ export const qmsEnhancedRoutes = [
           const ncByStat = (s: string) => statR.rows.find(r => r.status === s)?.cnt ?? 0;
           const ncBySev  = (s: string) => sevR.rows.find(r => r.severity === s)?.cnt ?? 0;
 
-          // Stream data rows — O(1) RSS via pagedQuery
-          const ncDataSource = pagedQuery((limit, offset) => ncXlsxPool.query(
+          // Stream data rows — O(n) total cost via server-side cursor
+          const ncDataSource = cursorQuery(ncXlsxPool,
             `SELECT nc_number, title, nc_type, category, severity, status, disposition, source_type, source_reference, detected_by,
                     TO_CHAR(detected_date, 'YYYY-MM-DD') AS detected_date_str,
                     reviewed_by, closed_by,
                     TO_CHAR(closed_date, 'YYYY-MM-DD') AS closed_date_str,
                     description, disposition_notes
-             FROM nonconformance_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+             FROM nonconformance_records ORDER BY created_at DESC`
+          );
           const ncDataRows = (async function* () {
             try { for await (const r of ncDataSource) yield r as Record<string, unknown>; }
             finally { if (ncXlsxPool) await ncXlsxPool.end(); }
@@ -508,7 +504,7 @@ export const qmsEnhancedRoutes = [
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
           if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
           const pg = await import("pg");
           capaXlsxPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -522,17 +518,16 @@ export const qmsEnhancedRoutes = [
           const capaByStat = (s: string) => capaStatR.rows.find(r => r.status === s)?.cnt ?? 0;
           const capaOverdue = capaOvR.rows[0]?.cnt ?? 0;
 
-          // Stream data rows — O(1) RSS via pagedQuery
-          const capaDataSource = pagedQuery((limit, offset) => capaXlsxPool.query(
+          // Stream data rows — O(n) total cost via server-side cursor
+          const capaDataSource = cursorQuery(capaXlsxPool,
             `SELECT capa_number, title, capa_type, severity, priority, status, assigned_to,
                     TO_CHAR(target_date, 'YYYY-MM-DD') AS target_date_str,
                     TO_CHAR(completion_date, 'YYYY-MM-DD') AS completion_date_str,
                     TO_CHAR(verification_date, 'YYYY-MM-DD') AS verification_date_str,
                     effectiveness_result, closure_approved_by, source_type, source_reference,
                     root_cause, corrective_action, preventive_action
-             FROM capa_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+             FROM capa_records ORDER BY created_at DESC`
+          );
           const capaDataRows = (async function* () {
             try { for await (const r of capaDataSource) yield r as Record<string, unknown>; }
             finally { if (capaXlsxPool) await capaXlsxPool.end(); }
@@ -599,7 +594,7 @@ export const qmsEnhancedRoutes = [
           const { initVendorTables } = await import("../../utils/vendorDatabase");
           await initVendorTables();
 
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
 
           // Aggregate summary stats — small results, no large arrays
           const [vTotR, vCritR, aTotR, aRiskR] = await Promise.all([
@@ -613,31 +608,29 @@ export const qmsEnhancedRoutes = [
           const aTotal = aTotR.rows[0]?.total ?? 0;
           const aByRisk = (l: string) => aRiskR.rows.find(r => r.risk_level === l)?.cnt ?? 0;
 
-          // Stream Vendors sheet — O(1) RSS via pagedQuery
-          const vendorSource = pagedQuery((limit, offset) => pool.query(
+          // Stream Vendors sheet — O(n) total cost via server-side cursor
+          const vendorSource = cursorQuery(pool,
             `SELECT vendor_code, name, category, criticality, status, country, data_access_level,
                     TO_CHAR(contract_start, 'YYYY-MM-DD') AS contract_start_str,
                     TO_CHAR(contract_end, 'YYYY-MM-DD') AS contract_end_str,
                     contract_value, primary_contact_name, primary_contact_email, primary_contact_phone,
                     TO_CHAR(last_assessment_date, 'YYYY-MM-DD') AS last_assessment_str
-             FROM vendors ORDER BY name LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+             FROM vendors ORDER BY name`
+          );
           const vendorRows = (async function* () {
             for await (const r of vendorSource) yield r as Record<string, unknown>;
           })();
 
-          // Stream Assessments sheet — O(1) RSS via pagedQuery
-          const assessSource = pagedQuery((limit, offset) => pool.query(
+          // Stream Assessments sheet — O(n) total cost via server-side cursor
+          const assessSource = cursorQuery(pool,
             `SELECT v.name AS vendor_name, va.assessment_type,
                     TO_CHAR(va.assessment_date, 'YYYY-MM-DD') AS assessment_date_str,
                     va.status, va.risk_level, va.overall_score, va.security_score,
                     va.financial_score, va.operational_score, va.compliance_score,
                     va.assessed_by, va.recommendations
              FROM vendor_assessments va LEFT JOIN vendors v ON v.id = va.vendor_id
-             ORDER BY va.assessment_date DESC LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+             ORDER BY va.assessment_date DESC`
+          );
           const assessRows = (async function* () {
             try { for await (const r of assessSource) yield r as Record<string, unknown>; }
             finally { await pool.end(); }

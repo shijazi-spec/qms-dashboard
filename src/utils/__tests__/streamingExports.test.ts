@@ -528,6 +528,159 @@ async function testStreamCsvFirstByteFasterThanFullDrain() {
   console.log(`  ✓ streamCsv first-byte latency: ${firstByteMs} ms (total row delay would be ${DELAY_PER_ROW_MS * ROWS} ms)`);
 }
 
+// ─── (g) cursorQuery — server-side cursor streaming ─────────────────────────
+//
+// Verifies that cursorQuery:
+//   1. yields every row from a fake QueryStream in order,
+//   2. acquires exactly one client and releases it on full consumption,
+//   3. releases the client *with* the error when the stream errors out
+//      (so pg destroys the connection rather than poisoning the pool),
+//   4. honours the EXPORT_MAX_ROWS hard cap.
+//
+// The fake QueryStream is injected via `_deps.QueryStream`; no real Postgres
+// is touched.
+
+import type { CursorPool, CursorPoolClient, CursorQueryDeps } from '../excelExport';
+
+// Shape that satisfies what cursorQuery does with the value returned from
+// `client.query(new QueryStreamCtor(...))` — it iterates async and may call
+// `.destroy()` to abort. Each fake below implements this directly.
+type FakeStream = AsyncIterable<Record<string, unknown>> & { destroy?(err?: Error): void };
+
+// Constructor signature expected by `CursorQueryDeps.QueryStream`. The fakes
+// each return their own iterable instance, so the return type can be `unknown`
+// (matching the interface) while still being usable downstream because the
+// fake pool's `query()` returns it as a `FakeStream`.
+type FakeStreamCtor = NonNullable<CursorQueryDeps['QueryStream']>;
+
+class FakeQueryStream implements FakeStream {
+  public destroyed = false;
+  constructor(public readonly sql: string, public readonly params: unknown[], public readonly opts?: { batchSize?: number }) {}
+  async *[Symbol.asyncIterator](): AsyncIterator<Record<string, unknown>> {
+    for (let i = 0; i < 1_250; i++) yield { id: i, val: `v${i}` };
+  }
+  destroy(_err?: Error) { this.destroyed = true; }
+}
+
+class FakeErrorStream implements FakeStream {
+  public destroyed = false;
+  constructor(public readonly sql: string, public readonly params: unknown[], public readonly opts?: { batchSize?: number }) {}
+  async *[Symbol.asyncIterator](): AsyncIterator<Record<string, unknown>> {
+    yield { id: 0 };
+    yield { id: 1 };
+    throw new Error('boom — simulated cursor error');
+  }
+  destroy(_err?: Error) { this.destroyed = true; }
+}
+
+class FakeUnboundedStream implements FakeStream {
+  constructor(public readonly sql: string, public readonly params: unknown[], public readonly opts?: { batchSize?: number }) {}
+  async *[Symbol.asyncIterator](): AsyncIterator<Record<string, unknown>> {
+    for (let i = 0; ; i++) yield { i };
+  }
+  destroy(_err?: Error) { /* noop */ }
+}
+
+interface FakePool extends CursorPool {
+  stats(): { connectCount: number; releaseCount: number; releaseErrors: unknown[] };
+}
+
+function makeFakePool(): FakePool {
+  let connectCount = 0;
+  let releaseCount = 0;
+  const releaseErrors: unknown[] = [];
+  const client: CursorPoolClient = {
+    query(stream) {
+      // The fakes implement FakeStream (which extends AsyncIterable<...> &
+      // optional destroy) — exactly the shape cursorQuery expects back.
+      return stream as FakeStream;
+    },
+    release(err?: unknown) {
+      releaseCount++;
+      releaseErrors.push(err);
+    },
+  };
+  return {
+    async connect() {
+      connectCount++;
+      return client;
+    },
+    stats: () => ({ connectCount, releaseCount, releaseErrors }),
+  };
+}
+
+async function testCursorQueryYieldsAllRowsAndReleasesClient() {
+  const { cursorQuery } = await import('../excelExport');
+  const pool = makeFakePool();
+
+  const collected: { id: number; val: string }[] = [];
+  for await (const row of cursorQuery<{ id: number; val: string }>(
+    pool, 'SELECT * FROM whatever', [],
+    { _deps: { QueryStream: FakeQueryStream satisfies FakeStreamCtor } }
+  )) {
+    collected.push(row);
+  }
+
+  const stats = pool.stats();
+  assert.strictEqual(collected.length, 1_250, 'cursorQuery must yield every row from the stream');
+  assert.strictEqual(collected[0].id, 0, 'first row preserved');
+  assert.strictEqual(collected[1_249].id, 1_249, 'last row preserved');
+  assert.strictEqual(stats.connectCount, 1, 'cursorQuery must acquire exactly one client');
+  assert.strictEqual(stats.releaseCount, 1, 'cursorQuery must release the client exactly once');
+  assert.strictEqual(stats.releaseErrors[0], undefined, 'on success, client.release() must be called WITHOUT an error');
+  console.log(`  ✓ cursorQuery: streamed ${collected.length} rows, released 1/1 client cleanly`);
+}
+
+async function testCursorQueryReleasesClientWithErrorOnStreamFailure() {
+  const { cursorQuery } = await import('../excelExport');
+  const pool = makeFakePool();
+
+  let threw = false;
+  try {
+    for await (const _row of cursorQuery(
+      pool, 'SELECT * FROM whatever', [],
+      { _deps: { QueryStream: FakeErrorStream satisfies FakeStreamCtor } }
+    )) { /* drain */ }
+  } catch (err) {
+    threw = true;
+    const message = err instanceof Error ? err.message : String(err);
+    assert.ok(/boom/.test(message), `Expected stream error to propagate, got: ${message}`);
+  }
+
+  const stats = pool.stats();
+  assert.ok(threw, 'cursorQuery must propagate stream errors to the consumer');
+  assert.strictEqual(stats.releaseCount, 1, 'client must still be released on error');
+  assert.ok(stats.releaseErrors[0] instanceof Error, 'client.release() must receive the error so pg destroys the connection');
+  console.log(`  ✓ cursorQuery: stream error propagated and client released with error (pg destroys connection)`);
+}
+
+async function testCursorQueryHonoursMaxRowsCap() {
+  const { cursorQuery } = await import('../excelExport');
+  const pool = makeFakePool();
+
+  let consumed = 0;
+  let threw = false;
+  try {
+    for await (const _row of cursorQuery(
+      pool, 'SELECT * FROM whatever', [],
+      { maxRows: 100, _deps: { QueryStream: FakeUnboundedStream satisfies FakeStreamCtor } }
+    )) {
+      consumed++;
+      if (consumed > 10_000) break; // hard fail-safe
+    }
+  } catch (err) {
+    threw = true;
+    const message = err instanceof Error ? err.message : String(err);
+    assert.ok(/refusing to stream more than 100/.test(message), `Expected cap error, got: ${message}`);
+  }
+
+  assert.ok(threw, 'cursorQuery must throw when row count exceeds maxRows');
+  assert.strictEqual(consumed, 100, 'consumer must receive exactly maxRows rows before the cap fires');
+  const stats = pool.stats();
+  assert.strictEqual(stats.releaseCount, 1, 'client must still be released after a cap-triggered error');
+  console.log(`  ✓ cursorQuery: maxRows cap fired at ${consumed} rows, client released`);
+}
+
 // ─── Runner ─────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -556,6 +709,11 @@ async function main() {
 
     console.log('— Streaming first-byte latency —');
     await testStreamCsvFirstByteFasterThanFullDrain();
+
+    console.log('— cursorQuery (server-side cursor) —');
+    await testCursorQueryYieldsAllRowsAndReleasesClient();
+    await testCursorQueryReleasesClientWithErrorOnStreamFailure();
+    await testCursorQueryHonoursMaxRowsCap();
 
     console.log('— Memory bound: 500 000-row paged export under 128 MB —');
     await testStreamCsvMemoryUnder128MBFor500kRows();

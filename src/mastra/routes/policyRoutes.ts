@@ -169,7 +169,7 @@ export const policyRoutes = [
           const status = url.searchParams.get('status') || undefined;
 
           const { escapeCSVValue } = await import('../../utils/inputSanitizer');
-          const { streamCsv, pagedQuery } = await import('../../utils/excelExport');
+          const { streamCsv, cursorQuery } = await import('../../utils/excelExport');
           const pg = await import('pg');
           exportPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -178,13 +178,11 @@ export const policyRoutes = [
           if (document_type) { filterParams.push(document_type); conditions.push(`document_type = $${filterParams.length}`); }
           if (status) { filterParams.push(status); conditions.push(`status = $${filterParams.length}`); }
           const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-          const limIdx = filterParams.length + 1;
-          const offIdx = filterParams.length + 2;
 
-          const source = pagedQuery((limit, offset) => exportPool.query(
-            `SELECT id, document_number, policy_number, title, document_type, category, status, confidentiality, owner_name, owner_department, version, effective_date, review_date, tags, created_at FROM policies ${where} ORDER BY id ASC LIMIT $${limIdx} OFFSET $${offIdx}`,
-            [...filterParams, limit, offset]
-          ));
+          const source = cursorQuery(exportPool,
+            `SELECT id, document_number, policy_number, title, document_type, category, status, confidentiality, owner_name, owner_department, version, effective_date, review_date, tags, created_at FROM policies ${where} ORDER BY id ASC`,
+            filterParams
+          );
 
           const headers = ['ID','Doc Number','Policy Number','Title','Type','Category','Status','Confidentiality','Owner','Department','Version','Effective Date','Review Date','Tags','Created'];
           const rows = (async function* () {

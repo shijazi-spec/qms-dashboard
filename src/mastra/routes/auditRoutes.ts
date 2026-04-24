@@ -668,7 +668,7 @@ export const auditRoutes = [
           const audit = await getAuditById(id);
           if (!audit) return c.json({ error: 'Audit not found' }, 404);
 
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
           const pg = await import("pg");
 
           const formatDate = (d: unknown) => d ? new Date(String(d)).toISOString().substring(0, 10) : '';
@@ -690,14 +690,14 @@ export const auditRoutes = [
             );
             const agg = aggRes.rows[0] ?? { total: 0, critical: 0, high: 0, capa_req: 0 };
 
-            // Paged findings source
-            const findingsSrc = pagedQuery((limit, offset) => auditPool!.query(
+            // Server-side cursor for findings — O(n) total cost vs LIMIT/OFFSET's O(n²)
+            const findingsSrc = cursorQuery(auditPool!,
               `SELECT finding_number, severity, status, dimension, criteria_name, description, evidence,
                       recommendation, capa_required, owner, target_date, resolution_date
                FROM grc_audit_findings WHERE audit_id = $1
-               ORDER BY severity DESC, created_at DESC LIMIT $2 OFFSET $3`,
-              [id, limit, offset]
-            ));
+               ORDER BY severity DESC, created_at DESC`,
+              [id]
+            );
             const findingsRows = (async function* () {
               try {
                 for await (const r of findingsSrc) {

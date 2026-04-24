@@ -13,16 +13,14 @@ export const riskRoutes = [
           const pg = await import("pg");
           const localPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
           const { escapeCSVValue } = await import('../../utils/inputSanitizer');
-          const { streamCsv, pagedQuery } = await import('../../utils/excelExport');
+          const { streamCsv, cursorQuery } = await import('../../utils/excelExport');
           const headers = ['Public ID','Title','Category','Source','Identified Date','Identified By','Owner','Department','Impact','Likelihood','Score','Level','Treatment','Status','Created','Updated'];
           const cols = ['public_id','risk_title','risk_category','risk_source','identified_date','identified_by',
                         'risk_owner','owner_department','impact_score','likelihood_score','risk_score','risk_level',
                         'treatment_strategy','status','created_at','updated_at'];
-          const source = pagedQuery(
-            (limit, offset) => localPool.query(
-              `SELECT ${cols.join(',')} FROM enterprise_risks ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-              [limit, offset]
-            )
+          const source = cursorQuery(
+            localPool,
+            `SELECT ${cols.join(',')} FROM enterprise_risks ORDER BY created_at DESC`
           );
           const mappedRows = (async function* () {
             try {
@@ -56,7 +54,7 @@ export const riskRoutes = [
           await initRiskTables();
           logger?.info('📊 [RiskAPI] GET /api/risks/export-xlsx');
 
-          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const { streamXlsx, cursorQuery } = await import('../../utils/excelExport');
 
           // Aggregate summary stats and distinct categories — small results
           const [rTotR, rLevR, aTotR, aOvR, catsR] = await Promise.all([
@@ -99,10 +97,10 @@ export const riskRoutes = [
                    TO_CHAR(treatment_deadline, 'YYYY-MM-DD')  AS treatment_deadline_str
             FROM enterprise_risks`;
 
-          // All Risks sheet — paged, O(1) RSS
-          const allRisksSource = pagedQuery((limit, offset) => pool.query(
-            `${riskSql} ORDER BY risk_score DESC, id LIMIT $1 OFFSET $2`, [limit, offset]
-          ));
+          // All Risks sheet — server-side cursor, O(1) RSS, O(n) DB cost
+          const allRisksSource = cursorQuery(pool,
+            `${riskSql} ORDER BY risk_score DESC, id`
+          );
           const allRisksRows = (async function* () {
             for await (const r of allRisksSource) yield r as Record<string, unknown>;
           })();
@@ -126,20 +124,20 @@ export const riskRoutes = [
             { name: 'All Risks', columns: riskColumns, rows: allRisksRows },
           ];
 
-          // Per-category sheets — one pagedQuery per category, no full materialisation
+          // Per-category sheets — one server-side cursor per category, no full materialisation
           for (const cat of categories) {
-            const catSource = pagedQuery((limit, offset) => pool.query(
-              `${riskSql} WHERE COALESCE(risk_category, 'Uncategorised') = $3 ORDER BY risk_score DESC, id LIMIT $1 OFFSET $2`,
-              [limit, offset, cat]
-            ));
+            const catSource = cursorQuery(pool,
+              `${riskSql} WHERE COALESCE(risk_category, 'Uncategorised') = $1 ORDER BY risk_score DESC, id`,
+              [cat]
+            );
             const catRows = (async function* () {
               for await (const r of catSource) yield r as Record<string, unknown>;
             })();
             sheets.push({ name: cat, columns: riskColumns, rows: catRows });
           }
 
-          // Treatment Actions sheet — paged, closes pool when done
-          const actSource = pagedQuery((limit, offset) => pool.query(`
+          // Treatment Actions sheet — server-side cursor, closes pool when done
+          const actSource = cursorQuery(pool, `
             SELECT rta.risk_id, er.risk_title, rta.action_title, rta.action_description,
                    rta.action_type, rta.assigned_to, rta.status, rta.percent_complete,
                    TO_CHAR(rta.due_date, 'YYYY-MM-DD')        AS due_date_str,
@@ -148,9 +146,8 @@ export const riskRoutes = [
                    CASE WHEN rta.evidence_attached THEN 'Yes' ELSE 'No' END AS evidence_attached_str
             FROM risk_treatment_actions rta
             LEFT JOIN enterprise_risks er ON er.id = rta.risk_id
-            ORDER BY rta.due_date ASC LIMIT $1 OFFSET $2`,
-            [limit, offset]
-          ));
+            ORDER BY rta.due_date ASC`
+          );
           const actRows = (async function* () {
             try { for await (const r of actSource) yield r as Record<string, unknown>; }
             finally { await pool.end(); }

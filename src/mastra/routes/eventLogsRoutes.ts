@@ -134,21 +134,17 @@ export const eventLogsRoutes = [
           }
 
           const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          // No trailing LIMIT/OFFSET — cursorQuery streams the full result set
+          // via a server-side Postgres cursor (O(n) total).
           const baseSql = `SELECT id,timestamp,user_id,user_name,user_email,user_role,action_type,entity_type,entity_id,entity_name,description,old_value,new_value,ai_involved,severity,correlation_id,ip_address,user_agent,module,checksum,created_at FROM event_logs ${where} ORDER BY timestamp DESC`;
-          const limitParamIdx = paramIndex;
 
           const pg = await import("pg");
           const logPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const { streamCsv, pagedQuery } = await import("../../utils/excelExport");
+          const { streamCsv, cursorQuery } = await import("../../utils/excelExport");
           const logCols = ['id','timestamp','user_id','user_name','user_email','user_role','action_type','entity_type','entity_id','entity_name','description','old_value','new_value','ai_involved','severity','correlation_id','ip_address','user_agent','module','checksum','created_at'];
 
-          const source = pagedQuery(
-            (limit, offset) => logPool.query(
-              `${baseSql} LIMIT $${limitParamIdx} OFFSET $${limitParamIdx + 1}`,
-              [...baseParams, limit, offset]
-            )
-          );
+          const source = cursorQuery(logPool, baseSql, baseParams);
           const mappedRows = (async function* () {
             try {
               for await (const log of source) {
