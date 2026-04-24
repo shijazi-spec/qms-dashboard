@@ -182,6 +182,38 @@ export const aiApprovalRoutes = [
             return forbiddenResponse(c, 'Not authorized to view this approval');
           }
 
+          // PDPL Art. 16 / ISO 27001 A.5.37 evidence trail:
+          // record an AI_ACTION event whenever a non-requester reviewer
+          // inspects the (potentially sensitive) detail payload. We
+          // intentionally skip the requester's own self-views to avoid
+          // log noise — the request itself is already audited at enqueue
+          // time. The event carries no payload values; correlation_id =
+          // action_code so it lines up with the eventual approve/reject
+          // entries on the same trail.
+          if (!isRequester) {
+            // Status-aware wording so the audit row stays accurate when the
+            // detail page is reopened after the action has already been
+            // approved/executed/rejected/etc. (we still record those views —
+            // the redacted execution_result is itself sensitive evidence).
+            const statusLabel = action.status === 'pending' ? 'pending' : action.status;
+            await logEvent({
+              userId: user.userId,
+              userEmail: user.email,
+              userRole: user.role,
+              actionType: 'AI_ACTION',
+              entityType: 'SYSTEM',
+              entityId: action.action_code,
+              entityName: action.tool_label,
+              description: `Viewed ${statusLabel} AI action ${action.action_code} (${action.tool_label})`,
+              aiInvolved: true,
+              severity: 'INFO',
+              module: 'ai-governance',
+              correlationId: action.action_code,
+            }).catch(err => {
+              console.error('[AI-Approval] view-audit logEvent failed (non-fatal):', err);
+            });
+          }
+
           // Enrich compliance_refs with clickable links to the controlled documents.
           const wpCodes = extractWpCodes(action.compliance_refs || []);
           const docLinks = await resolveControlledDocuments(wpCodes);

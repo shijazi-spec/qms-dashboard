@@ -23,7 +23,7 @@ import {
   recordExecutionResult,
   type PendingAction,
 } from '../src/utils/aiApprovalDatabase';
-import { REDACTED_SENTINEL } from '../src/utils/eventLogsDatabase';
+import { REDACTED_SENTINEL, pool as eventLogsPool } from '../src/utils/eventLogsDatabase';
 import { aiApprovalRoutes } from '../src/mastra/routes/aiApprovalRoutes';
 
 let passed = 0;
@@ -152,6 +152,72 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
 aiApprovalPool.query = stubQuery as typeof aiApprovalPool.query;
 
 /* ------------------------------------------------------------------ */
+/* event_logs pool stub — captures view-audit writes                  */
+/* ------------------------------------------------------------------ */
+
+interface CapturedEventLog {
+  user_id: number | null;
+  user_email: string | null;
+  user_role: string | null;
+  action_type: string;
+  entity_type: string;
+  entity_id: string | null;
+  entity_name: string | null;
+  description: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  ai_involved: boolean;
+  severity: string;
+  correlation_id: string | null;
+  module: string | null;
+}
+
+const capturedEventLogs: CapturedEventLog[] = [];
+
+const eventLogsStubQuery: StubQuery = async <R extends QueryResultRow>(
+  sql: string,
+  params: ReadonlyArray<unknown> = [],
+): Promise<QueryResult<R>> => {
+  const empty: QueryResult<R> = {
+    command: '',
+    rowCount: 0,
+    oid: 0,
+    fields: [],
+    rows: [],
+  };
+
+  if (/INSERT INTO event_logs/i.test(sql)) {
+    const row: CapturedEventLog = {
+      user_id: params[0] as number | null,
+      user_email: params[2] as string | null,
+      user_role: params[3] as string | null,
+      action_type: params[4] as string,
+      entity_type: params[5] as string,
+      entity_id: params[6] as string | null,
+      entity_name: params[7] as string | null,
+      description: params[8] as string | null,
+      old_value: params[9] as string | null,
+      new_value: params[10] as string | null,
+      ai_involved: Boolean(params[11]),
+      severity: params[12] as string,
+      correlation_id: params[13] as string | null,
+      module: params[16] as string | null,
+    };
+    capturedEventLogs.push(row);
+    return {
+      ...empty,
+      command: 'INSERT',
+      rowCount: 1,
+      rows: [{ id: capturedEventLogs.length, ...row } as unknown as R],
+    };
+  }
+
+  return empty;
+};
+
+eventLogsPool.query = eventLogsStubQuery as typeof eventLogsPool.query;
+
+/* ------------------------------------------------------------------ */
 /* Hono context shim                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -170,6 +236,19 @@ function adminCookie(): string {
     email: 'qm@walaplus.test',
     name: 'Quality Manager Test',
     role: 'admin',
+    exp: Date.now() + 3600_000,
+  });
+  return `walaplus_session=${encodeURIComponent(token)}`;
+}
+
+function requesterCookie(): string {
+  // Same userId as `requestedByUserId` on the enqueued action below (99) so
+  // this viewer is the requester themselves — the view-audit gate must skip.
+  const token = signSession({
+    userId: 99,
+    email: 'requester@walaplus.test',
+    name: 'Requester User',
+    role: 'engineer',
     exp: Date.now() + 3600_000,
   });
   return `walaplus_session=${encodeURIComponent(token)}`;
@@ -360,6 +439,10 @@ async function run(): Promise<void> {
   );
 
   /* ---------- GET /api/ai/approvals/:code (pending) ---------- */
+  // Reset the captured event-log buffer so the assertions below count only
+  // the writes produced by this specific reviewer view.
+  capturedEventLogs.length = 0;
+
   const detailPendingRes = await callRoute(
     '/api/ai/approvals/:code',
     'GET',
@@ -379,6 +462,98 @@ async function run(): Promise<void> {
     'GET /api/ai/approvals/:code (pending) contains the redaction sentinel',
   );
 
+  /* ---- View-audit trail (Task #70 / PDPL Art. 16, ISO 27001 A.5.37) ---- */
+  // The admin viewer is NOT the requester (admin userId=42, requester userId=99)
+  // so the GET must have written exactly one AI_ACTION event log carrying
+  // the reviewer identity, no payload values, and correlation_id = action_code.
+  const viewAuditEvents = capturedEventLogs.filter(
+    e => e.action_type === 'AI_ACTION' && /Viewed/i.test(e.description ?? ''),
+  );
+  assert(
+    viewAuditEvents.length === 1,
+    `GET /api/ai/approvals/:code by non-requester writes exactly one view-audit event (got ${viewAuditEvents.length})`,
+  );
+
+  const viewEvent = viewAuditEvents[0];
+  assert(
+    viewEvent?.user_id === 42 && viewEvent?.user_email === 'qm@walaplus.test',
+    'view-audit event captures reviewer identity (user_id + email)',
+  );
+  assert(
+    viewEvent?.user_role === 'admin',
+    'view-audit event captures reviewer role',
+  );
+  assert(
+    viewEvent?.correlation_id === enqueued.action_code,
+    'view-audit event correlation_id = action_code (joins approve/reject trail)',
+  );
+  assert(
+    viewEvent?.entity_type === 'SYSTEM' && viewEvent?.entity_id === enqueued.action_code,
+    'view-audit event entity_type=SYSTEM and entity_id=action_code',
+  );
+  assert(
+    viewEvent?.severity === 'INFO',
+    'view-audit event uses low severity (INFO)',
+  );
+  assert(
+    viewEvent?.module === 'ai-governance' && viewEvent?.ai_involved === true,
+    'view-audit event tagged module=ai-governance, ai_involved=true',
+  );
+
+  // Critical: the audit row itself must never embed the raw payload values.
+  // We serialize EVERY captured field and run it through the same secret
+  // detector used for the HTTP responses.
+  const viewEventLeak = findLeakedSecret(viewEvent);
+  assert(
+    viewEventLeak === null,
+    `view-audit event row contains no plaintext payload secret (leaked: ${viewEventLeak ?? 'none'})`,
+  );
+  assert(
+    viewEvent?.old_value === null && viewEvent?.new_value === null,
+    'view-audit event carries no old/new value blobs (description-only entry)',
+  );
+
+  /* ---- Requester self-view must NOT trigger a view-audit (gated) ---- */
+  capturedEventLogs.length = 0;
+  const detailRequesterRes = await callRoute(
+    '/api/ai/approvals/:code',
+    'GET',
+    makeContext({
+      url: `https://test.local/api/ai/approvals/${enqueued.action_code}`,
+      param: enqueued.action_code,
+      cookie: requesterCookie(),
+    }),
+  );
+  assert(
+    detailRequesterRes.status === 200,
+    'GET /api/ai/approvals/:code (requester self-view) → 200',
+  );
+  const requesterViewEvents = capturedEventLogs.filter(
+    e => e.action_type === 'AI_ACTION' && /Viewed/i.test(e.description ?? ''),
+  );
+  assert(
+    requesterViewEvents.length === 0,
+    `requester self-view does NOT emit a view-audit event (got ${requesterViewEvents.length}, gate failed)`,
+  );
+
+  /* ---- Idempotency-per-call: a second non-requester GET writes one more event ---- */
+  capturedEventLogs.length = 0;
+  await callRoute(
+    '/api/ai/approvals/:code',
+    'GET',
+    makeContext({
+      url: `https://test.local/api/ai/approvals/${enqueued.action_code}`,
+      param: enqueued.action_code,
+    }),
+  );
+  const secondViewEvents = capturedEventLogs.filter(
+    e => e.action_type === 'AI_ACTION' && /Viewed/i.test(e.description ?? ''),
+  );
+  assert(
+    secondViewEvents.length === 1,
+    `each non-requester reviewer view emits exactly one view-audit event (got ${secondViewEvents.length})`,
+  );
+
   /* Record an execution result whose returned `data` also contains fresh
      credentials, then re-fetch via every read endpoint. */
   await recordExecutionResult(enqueued.action_code, {
@@ -394,6 +569,7 @@ async function run(): Promise<void> {
   });
 
   /* ---------- GET /api/ai/approvals/:code (executed) ---------- */
+  capturedEventLogs.length = 0;
   const detailExecRes = await callRoute(
     '/api/ai/approvals/:code',
     'GET',
@@ -416,6 +592,19 @@ async function run(): Promise<void> {
   assert(
     detailExecText.includes('Rotation completed successfully'),
     'GET /api/ai/approvals/:code (executed) preserves the safe audit_note field',
+  );
+
+  /* ---- View-audit on a non-pending row uses status-aware wording ---- */
+  const execViewEvents = capturedEventLogs.filter(
+    e => e.action_type === 'AI_ACTION' && /Viewed/i.test(e.description ?? ''),
+  );
+  assert(
+    execViewEvents.length === 1,
+    `non-requester GET on executed action also writes one view-audit event (got ${execViewEvents.length})`,
+  );
+  assert(
+    execViewEvents[0]?.description?.includes('Viewed executed AI action') === true,
+    `view-audit description reflects current status (got: "${execViewEvents[0]?.description}")`,
   );
 
   /* ---------- GET /api/ai/approvals (after execution) ---------- */
