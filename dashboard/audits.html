@@ -382,12 +382,12 @@
                 const auditStats = data.audits || {};
                 const findingStats = data.findings || {};
                 
-                document.getElementById('totalAudits').textContent = auditStats.total_audits || 0;
-                document.getElementById('plannedAudits').textContent = auditStats.planned || 0;
-                document.getElementById('inProgressAudits').textContent = auditStats.in_progress || 0;
-                document.getElementById('closedAudits').textContent = auditStats.closed || 0;
-                document.getElementById('openFindings').textContent = findingStats.open || 0;
-                document.getElementById('overdueFindings').textContent = findingStats.overdue || 0;
+                document.getElementById('totalAudits').textContent = _fn(auditStats.total_audits || 0);
+                document.getElementById('plannedAudits').textContent = _fn(auditStats.planned || 0);
+                document.getElementById('inProgressAudits').textContent = _fn(auditStats.in_progress || 0);
+                document.getElementById('closedAudits').textContent = _fn(auditStats.closed || 0);
+                document.getElementById('openFindings').textContent = _fn(findingStats.open || 0);
+                document.getElementById('overdueFindings').textContent = _fn(findingStats.overdue || 0);
 
                 if (data.findings_by_severity) renderBySeverity(data.findings_by_severity);
                 if (data.upcoming_audits) renderUpcomingAudits(data.upcoming_audits);
@@ -396,10 +396,14 @@
             }
         }
 
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
+        const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
+
         function renderBySeverity(severities) {
             const container = document.getElementById('bySeverityChart');
             if (!severities || severities.length === 0) {
-                container.innerHTML = '<div class="text-gray-600 text-center py-4">No open findings</div>';
+                container.innerHTML = '<div class="text-gray-600 text-center py-4">' + _t('dyn.audits.no_open_findings') + '</div>';
                 return;
             }
             const colors = {
@@ -410,8 +414,8 @@
             };
             container.innerHTML = severities.map(s => `
                 <div class="flex justify-between items-center p-2 rounded ${colors[s.severity] || 'bg-gray-100'}">
-                    <span class="text-sm font-medium capitalize">${s.severity}</span>
-                    <span class="text-sm font-bold">${s.count}</span>
+                    <span class="text-sm font-medium capitalize">${_t('dyn.audits.severity.' + s.severity)}</span>
+                    <span class="text-sm font-bold">${_fn(s.count)}</span>
                 </div>
             `).join('');
         }
@@ -419,7 +423,7 @@
         function renderUpcomingAudits(upcoming) {
             const container = document.getElementById('upcomingAudits');
             if (!upcoming || upcoming.length === 0) {
-                container.innerHTML = '<div class="text-gray-600 text-center py-4">No upcoming audits</div>';
+                container.innerHTML = '<div class="text-gray-600 text-center py-4">' + _t('dyn.audits.no_upcoming_audits') + '</div>';
                 return;
             }
             container.innerHTML = upcoming.map(a => `
@@ -427,7 +431,7 @@
                     <div class="font-medium text-sm truncate">${a.title}</div>
                     <div class="flex justify-between items-center mt-1">
                         <span class="text-xs text-gray-500">${a.audit_code}</span>
-                        <span class="text-xs text-purple-600">${a.planned_start_date ? new Date(a.planned_start_date).toLocaleDateString() : 'TBD'}</span>
+                        <span class="text-xs text-purple-600">${a.planned_start_date ? _fd(a.planned_start_date) : _t('dyn.common.tbd')}</span>
                     </div>
                 </div>
             `).join('');
@@ -456,7 +460,7 @@
         function renderAudits(audits) {
             const tbody = document.getElementById('auditsTableBody');
             if (!audits || audits.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-600">No audits found. Schedule your first audit to get started.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-600">' + _t('dyn.audits.no_audits_found') + '</td></tr>';
                 return;
             }
 
@@ -473,15 +477,15 @@
                     <td class="px-4 py-3 text-sm font-medium text-purple-600">${a.audit_code}</td>
                     <td class="px-4 py-3">
                         <div class="text-sm font-medium text-gray-900 truncate max-w-xs">${a.title}</div>
-                        <div class="text-xs text-gray-500">${a.lead_auditor || 'No lead assigned'}</div>
+                        <div class="text-xs text-gray-500">${a.lead_auditor || _t('dyn.audits.no_lead_assigned')}</div>
                     </td>
                     <td class="px-4 py-3 text-center">
                         <span class="px-2 py-1 text-xs rounded-full ${typeColors[a.audit_type] || 'bg-gray-100'} capitalize">${a.audit_type}</span>
                     </td>
-                    <td class="px-4 py-3 text-center text-sm text-gray-600">${a.planned_start_date ? new Date(a.planned_start_date).toLocaleDateString() : 'TBD'}</td>
+                    <td class="px-4 py-3 text-center text-sm text-gray-600">${a.planned_start_date ? _fd(a.planned_start_date) : _t('dyn.common.tbd')}</td>
                     <td class="px-4 py-3 text-center">
-                        ${a.critical_findings > 0 ? `<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">${a.critical_findings} critical</span>` : ''}
-                        <span class="text-sm text-gray-600">${a.findings_count || 0}</span>
+                        ${a.critical_findings > 0 ? `<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">${_t('dyn.audits.n_critical', { n: _fn(a.critical_findings) })}</span>` : ''}
+                        <span class="text-sm text-gray-600">${_fn(a.findings_count || 0)}</span>
                     </td>
                     <td class="px-4 py-3 text-center">${formatStatus(a.status)}</td>
                     <td class="px-4 py-3 text-center">
@@ -499,7 +503,7 @@
         function populateAuditDropdown(audits) {
             const select = document.getElementById('modalAuditSelect');
             const options = audits.map(a => `<option value="${a.id}">${a.audit_code} - ${a.title}</option>`).join('');
-            select.innerHTML = '<option value="">Select audit</option>' + options;
+            select.innerHTML = '<option value="">' + _t('dyn.audits.select_audit') + '</option>' + options;
         }
 
         async function loadFindings() {
@@ -522,7 +526,7 @@
         function renderFindings(findings) {
             const tbody = document.getElementById('findingsTableBody');
             if (!findings || findings.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-600">No findings found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-600">' + _t('dyn.audits.no_findings_found') + '</td></tr>';
                 return;
             }
 
@@ -534,13 +538,13 @@
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-600">${f.audit_code || '-'}</td>
                     <td class="px-4 py-3 text-center">
-                        <span class="px-2 py-1 text-xs rounded-full severity-${f.severity}">${f.severity}</span>
+                        <span class="px-2 py-1 text-xs rounded-full severity-${f.severity}">${_t('dyn.audits.severity.' + f.severity)}</span>
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-600">${f.responsible_party || '-'}</td>
-                    <td class="px-4 py-3 text-center text-sm ${isOverdue(f.due_date, f.status) ? 'text-red-600 font-bold' : 'text-gray-600'}">${f.due_date ? new Date(f.due_date).toLocaleDateString() : '-'}</td>
+                    <td class="px-4 py-3 text-center text-sm ${isOverdue(f.due_date, f.status) ? 'text-red-600 font-bold' : 'text-gray-600'}">${_fd(f.due_date)}</td>
                     <td class="px-4 py-3 text-center">${formatStatus(f.status)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button data-on-click="updateFindingStatus" data-args="[${f.id},&quot;${f.status}&quot;]" class="text-purple-600 hover:text-purple-800 text-sm font-medium">Update</button>
+                        <button data-on-click="updateFindingStatus" data-args="[${f.id},&quot;${f.status}&quot;]" class="text-purple-600 hover:text-purple-800 text-sm font-medium">${_t('common.edit')}</button>
                     </td>
                 </tr>
             `).join('');
@@ -563,7 +567,9 @@
                 'pending_verification': 'bg-blue-100 text-blue-800',
                 'verified_closed': 'bg-green-100 text-green-800'
             };
-            const displayText = status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const fallback = status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const translated = _t('dyn.audits.status.' + status);
+            const displayText = translated && translated !== status ? translated : fallback;
             return `<span class="px-2 py-1 text-xs rounded-full ${statusClasses[status] || 'bg-gray-100'}">${displayText}</span>`;
         }
 
@@ -598,14 +604,14 @@
                 if (res.ok) {
                     closeModal('addAuditModal');
                     loadAll();
-                    alert('Audit scheduled successfully!');
+                    alert(_t('dyn.audits.audit_scheduled'));
                 } else {
                     const err = await res.json();
-                    alert('Error: ' + (err.error || 'Failed to create audit'));
+                    alert(_t('dyn.audits.error_prefix', { msg: err.error || _t('dyn.audits.failed_create_audit') }));
                 }
             } catch (error) {
                 console.error('Error creating audit:', error);
-                alert('Error creating audit');
+                alert(_t('dyn.audits.error_creating_audit'));
             }
         }
 
@@ -627,14 +633,14 @@
                 if (res.ok) {
                     closeModal('addFindingModal');
                     loadAll();
-                    alert('Finding recorded successfully!');
+                    alert(_t('dyn.audits.finding_recorded'));
                 } else {
                     const err = await res.json();
-                    alert('Error: ' + (err.error || 'Failed to record finding'));
+                    alert(_t('dyn.audits.error_prefix', { msg: err.error || _t('dyn.audits.failed_record_finding') }));
                 }
             } catch (error) {
                 console.error('Error recording finding:', error);
-                alert('Error recording finding');
+                alert(_t('dyn.audits.error_recording_finding'));
             }
         }
 
@@ -647,11 +653,15 @@
             
             const newStatus = nextStatus[currentStatus];
             if (!newStatus) {
-                alert('Finding is already closed');
+                alert(_t('dyn.audits.finding_already_closed'));
                 return;
             }
 
-            if (!confirm(`Move finding to "${newStatus.replace(/_/g, ' ')}"?`)) return;
+            const newStatusLabel = (function () {
+                const t = _t('dyn.audits.status.' + newStatus);
+                return t && t !== newStatus ? t : newStatus.replace(/_/g, ' ');
+            })();
+            if (!confirm(_t('dyn.audits.move_finding_to', { status: newStatusLabel }))) return;
 
             try {
                 const res = await fetch(`/api/audits/findings/${id}`, {
@@ -664,7 +674,7 @@
                     loadAll();
                 } else {
                     const err = await res.json();
-                    alert('Error: ' + (err.error || 'Failed to update finding'));
+                    alert(_t('dyn.audits.error_prefix', { msg: err.error || _t('dyn.audits.failed_update_finding') }));
                 }
             } catch (error) {
                 console.error('Error updating finding:', error);
@@ -678,6 +688,14 @@
             loadProgramme();
         }
 
+        function _runWhenI18nReady(fn) {
+            if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') {
+                WalaPlusI18n.onReady(fn);
+            } else {
+                fn();
+            }
+        }
+
         // Annual Audit Programme (ISO 19011 §5.2). The panel shows the most
         // recent programme for the current calendar year; if none exists,
         // we offer a one-click draft that the Quality Manager can submit for
@@ -689,7 +707,7 @@
                 const panel = document.getElementById('programmePanel');
                 if (!res.ok) {
                     document.getElementById('programmeSubtitle').textContent =
-                        'Programme service unavailable — showing nothing.';
+                        _t('dyn.audits.programme_unavailable');
                     return;
                 }
                 const data = await res.json();
@@ -701,8 +719,8 @@
 
                 if (!latest) {
                     subtitle.innerHTML =
-                        'No programme on file for <strong>' + year + '</strong>. ' +
-                        '<button data-on-click="draftProgramme" data-args="[&quot; + year + &quot;]" class="text-indigo-700 underline ml-2">Draft one now</button>';
+                        _t('dyn.audits.no_programme_html', { year: year }) +
+                        '<button data-on-click="draftProgramme" data-args="[&quot; + year + &quot;]" class="text-indigo-700 underline ml-2">' + _t('dyn.audits.draft_one_now') + '</button>';
                     badge.className = 'hidden';
                     return;
                 }
@@ -711,7 +729,7 @@
                 document.getElementById('programmeYear').textContent       = latest.programme_year || year;
                 document.getElementById('programmeApprover').textContent   = latest.approved_by_email || '— (not yet signed off)';
                 document.getElementById('programmeApprovedAt').textContent = latest.approved_at
-                    ? new Date(latest.approved_at).toLocaleDateString()
+                    ? _fd(latest.approved_at)
                     : '—';
 
                 const statusColors = {
@@ -726,17 +744,16 @@
 
                 if (latest.status === 'draft') {
                     subtitle.innerHTML =
-                        'Draft programme ready for submission. ' +
-                        '<button data-on-click="submitProgramme" data-args="[&quot; + latest.id + &quot;]" class="text-indigo-700 underline ml-2">Submit for sign-off</button>';
+                        _t('dyn.audits.draft_ready_html') +
+                        '<button data-on-click="submitProgramme" data-args="[&quot; + latest.id + &quot;]" class="text-indigo-700 underline ml-2">' + _t('dyn.audits.submit_for_signoff') + '</button>';
                 } else if (latest.status === 'pending_signoff') {
                     subtitle.innerHTML =
-                        'Awaiting sign-off in the HITL queue. ' +
-                        '<a href="/ai-approvals" class="text-indigo-700 underline">Go to /ai-approvals</a>';
+                        _t('dyn.audits.awaiting_signoff_html') +
+                        '<a href="/ai-approvals" class="text-indigo-700 underline">' + _t('dyn.audits.go_to_approvals') + '</a>';
                 } else if (latest.status === 'approved') {
-                    subtitle.textContent =
-                        'Approved programme in force — scheduled audits execute against this plan.';
+                    subtitle.textContent = _t('dyn.audits.approved_in_force');
                 } else {
-                    subtitle.textContent = 'Status: ' + latest.status;
+                    subtitle.textContent = _t('dyn.audits.status_label', { status: latest.status });
                 }
             } catch (err) {
                 console.error('loadProgramme failed', err);
@@ -744,7 +761,7 @@
         }
 
         async function draftProgramme(year) {
-            const title = prompt('Programme title (e.g. "WalaPlus Annual Audit Programme ' + year + '"):');
+            const title = prompt(_t('dyn.audits.prompt_programme_title', { year: year }));
             if (!title) return;
             const res = await fetch('/api/audit-programme', {
                 method: 'POST',
@@ -756,16 +773,12 @@
                 loadProgramme();
             } else {
                 const err = await res.json().catch(() => ({}));
-                alert('Could not draft programme: ' + (err.error || res.statusText));
+                alert(_t('dyn.audits.could_not_draft', { err: err.error || res.statusText }));
             }
         }
 
         async function submitProgramme(id) {
-            if (!confirm(
-                'Submit this programme for Head of Operations & Quality sign-off?\n\n' +
-                'A HITL ticket will be created at /ai-approvals. ' +
-                'The programme cannot be edited after submission until approved or rejected.'
-            )) return;
+            if (!confirm(_t('dyn.audits.submit_confirm'))) return;
             const res = await fetch('/api/audit-programme/' + id + '/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -774,11 +787,11 @@
             });
             if (res.ok) {
                 const data = await res.json();
-                alert('Submitted. HITL ticket: ' + (data.action_code || '(see /ai-approvals)'));
+                alert(_t('dyn.audits.submitted_hitl', { ticket: data.action_code || _t('dyn.audits.see_approvals') }));
                 loadProgramme();
             } else {
                 const err = await res.json().catch(() => ({}));
-                alert('Could not submit: ' + (err.error || res.statusText));
+                alert(_t('dyn.audits.could_not_submit', { err: err.error || res.statusText }));
             }
         }
 
@@ -847,17 +860,12 @@
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                alert('Upload failed: ' + (err.error || res.statusText));
+                alert(_t('dyn.audits.upload_failed', { err: err.error || res.statusText }));
                 return;
             }
             const data = await res.json();
             closeModal('manualIntakeModal');
-            alert(
-                'Uploaded. Intake #' + (data.intake?.id || '?') + ' created.\n\n' +
-                'Next: run AI extraction from the intake detail view ' +
-                '(coming to this page in the next release, or call ' +
-                'POST /api/manual-audit-intake/' + (data.intake?.id || ':id') + '/extract directly).'
-            );
+            alert(_t('dyn.audits.uploaded_intake', { id: (data.intake && data.intake.id) || '?' }));
         }
 
         function closeModal(id) {
@@ -876,7 +884,7 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', loadAll);
+        document.addEventListener('DOMContentLoaded', function () { _runWhenI18nReady(loadAll); });
     </script>
     <script>
         if (window.WalaPlusI18n) {

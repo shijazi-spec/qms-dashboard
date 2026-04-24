@@ -284,6 +284,11 @@
         let allRecords = [];
         let enrichmentData = {};
 
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
+        const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
+        function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
+
         const moduleColumns = {
             Leads:    ['Full_Name', 'Email', 'Company', 'Phone', 'Lead_Source', 'Lead_Status', 'Created_By', 'Owner'],
             Deals:    ['Deal_Name', 'Amount', 'Stage', 'Closing_Date', 'Account_Name', 'Created_By', 'Owner'],
@@ -292,18 +297,10 @@
             Accounts: ['Account_Name', 'Phone', 'Website', 'Industry', 'Billing_City', 'Created_By', 'Owner']
         };
 
-        const FLAG_LABELS = {
-            missing_name: 'Missing name',
-            garbage_name: 'Garbage name',
-            gibberish_name: 'Gibberish name',
-            missing_company: 'Missing company',
-            gibberish_company: 'Gibberish company',
-            missing_email: 'Missing email',
-            suspicious_email: 'Suspicious email',
-            missing_phone: 'Missing phone',
-            missing_owner: 'Missing owner',
-            no_business_domain: 'No business domain',
-        };
+        function _flagLabel(flag) {
+            const t = _t('dyn.crm.flags.' + flag);
+            return (t && t !== flag) ? t : String(flag).replace(/_/g, ' ');
+        }
 
         async function checkConnection() {
             try {
@@ -311,11 +308,11 @@
                 var data = await response.json();
                 var statusEl = document.getElementById('connectionStatus');
                 if (data.zoho?.connected) {
-                    statusEl.textContent = 'Connected';
+                    statusEl.textContent = _t('dyn.crm.connected');
                     statusEl.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
                     statusEl.title = data.zoho.message;
                 } else {
-                    statusEl.textContent = 'Not Connected';
+                    statusEl.textContent = _t('dyn.crm.not_connected');
                     statusEl.className = 'px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium';
                 }
             } catch (error) {
@@ -364,8 +361,8 @@
                 if (!data.success) throw new Error(data.error || 'Failed to fetch data');
 
                 allRecords = data.records || [];
-                document.getElementById('recordCount').textContent = allRecords.length + ' records';
-                document.getElementById('lastUpdated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                document.getElementById('recordCount').textContent = _t('dyn.crm.records_count', { count: _fn(allRecords.length) });
+                document.getElementById('lastUpdated').textContent = _t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
 
                 loadingEl.classList.add('hidden');
 
@@ -408,11 +405,11 @@
                 else clean++;
                 if (e.cluster && !e.cluster.isJunk && e.cluster.totalInCluster > 1) duplicates++;
             }
-            document.getElementById('stat-total').textContent = total;
-            document.getElementById('stat-clean').textContent = clean;
-            document.getElementById('stat-issues').textContent = issues;
-            document.getElementById('stat-junk').textContent = junk;
-            document.getElementById('stat-duplicates').textContent = duplicates;
+            document.getElementById('stat-total').textContent = _fn(total);
+            document.getElementById('stat-clean').textContent = _fn(clean);
+            document.getElementById('stat-issues').textContent = _fn(issues);
+            document.getElementById('stat-junk').textContent = _fn(junk);
+            document.getElementById('stat-duplicates').textContent = _fn(duplicates);
         }
 
         function renderTable() {
@@ -426,9 +423,9 @@
             var allCols = extraCols.concat(columns);
 
             headerRow.innerHTML = allCols.map(function(col) {
-                if (col === '_quality') return '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-80">Quality</th>';
-                if (col === '_duplicates') return '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-90">Duplicates</th>';
-                return '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">' + formatColumnName(col) + '</th>';
+                if (col === '_quality') return '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-80">' + escapeHtml(_t('dyn.crm.quality_header')) + '</th>';
+                if (col === '_duplicates') return '<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-90">' + escapeHtml(_t('dyn.crm.duplicates_header')) + '</th>';
+                return '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">' + escapeHtml(formatColumnName(col)) + '</th>';
             }).join('');
 
             tbody.innerHTML = allRecords.map(function(record) {
@@ -468,11 +465,11 @@
                     var hygiene = '';
                     if (showHighlights && !isTaskModule) {
                         if (col === 'Phone' && value && value !== '-') hygiene = checkPhoneHygiene(value);
-                        if (col === 'Email' && value && value !== '-' && qFlags.indexOf('suspicious_email') !== -1) hygiene = '<span class="hygiene-warn" title="Suspicious email pattern">&#9888;</span>';
+                        if (col === 'Email' && value && value !== '-' && qFlags.indexOf('suspicious_email') !== -1) hygiene = '<span class="hygiene-warn" title="' + escapeHtml(_t('dyn.crm.suspicious_email_tip')) + '">&#9888;</span>';
                         if ((col === 'Full_Name' || col === 'Deal_Name') && (qFlags.indexOf('gibberish_name') !== -1 || qFlags.indexOf('garbage_name') !== -1)) {
-                            hygiene = '<span class="hygiene-warn" title="' + (qFlags.indexOf('gibberish_name') !== -1 ? 'Gibberish name detected' : 'Garbage name') + '">&#9888;</span>';
+                            hygiene = '<span class="hygiene-warn" title="' + escapeHtml(qFlags.indexOf('gibberish_name') !== -1 ? _t('dyn.crm.gibberish_name_tip') : _t('dyn.crm.garbage_name_tip')) + '">&#9888;</span>';
                         }
-                        if (col === 'Company' && qFlags.indexOf('gibberish_company') !== -1) hygiene = '<span class="hygiene-warn" title="Gibberish company name">&#9888;</span>';
+                        if (col === 'Company' && qFlags.indexOf('gibberish_company') !== -1) hygiene = '<span class="hygiene-warn" title="' + escapeHtml(_t('dyn.crm.gibberish_company_tip')) + '">&#9888;</span>';
                     }
 
                     return '<td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">' + escapeHtml(value || '-') + hygiene + '</td>';
@@ -491,8 +488,8 @@
             else if (score < 50) cls = 'quality-poor';
             else if (score < 85) cls = 'quality-fair';
 
-            var flagTip = flags.length ? flags.map(function(f) { return FLAG_LABELS[f] || f; }).join(', ') : 'No issues';
-            return '<td class="px-3 py-3 text-sm"><span class="quality-badge ' + cls + '" title="' + escapeHtml(flagTip) + '">' + score + '</span></td>';
+            var flagTip = flags.length ? flags.map(function(f) { return _flagLabel(f); }).join(', ') : _t('dyn.crm.no_issues');
+            return '<td class="px-3 py-3 text-sm"><span class="quality-badge ' + cls + '" title="' + escapeHtml(flagTip) + '">' + _fn(score) + '</span></td>';
         }
 
         function renderClusterCell(cluster) {
@@ -500,12 +497,14 @@
                 return '<td class="px-3 py-3 text-sm"><span class="text-gray-300 text-xs">--</span></td>';
             }
             if (cluster.totalInCluster <= 1) {
-                return '<td class="px-3 py-3 text-sm"><span class="text-gray-400 text-xs">Unique</span></td>';
+                return '<td class="px-3 py-3 text-sm"><span class="text-gray-400 text-xs">' + escapeHtml(_t('dyn.crm.unique')) + '</span></td>';
             }
             var lvl = cluster.confidenceLevel || 'low';
             var cls = lvl === 'high' ? 'cluster-high' : lvl === 'medium' ? 'cluster-medium' : 'cluster-low';
-            var label = cluster.totalInCluster + ' recs';
-            var tip = 'Cluster: ' + (cluster.clusterCompany || cluster.clusterDomain) + ' (' + lvl + ' confidence, score ' + cluster.confidenceScore + ')';
+            var label = _t('dyn.crm.n_recs', { n: _fn(cluster.totalInCluster) });
+            var lvlLabel = _t('dyn.common.' + lvl);
+            if (!lvlLabel || lvlLabel === lvl) lvlLabel = lvl;
+            var tip = _t('dyn.crm.cluster_tip', { label: (cluster.clusterCompany || cluster.clusterDomain), level: lvlLabel, score: _fn(cluster.confidenceScore) });
             return '<td class="px-3 py-3 text-sm">' +
                 '<span class="cluster-badge ' + cls + '" title="' + escapeHtml(tip) + '" data-on-click="openInNewTab" data-args="' + escAttr(JSON.stringify(['/duplicates#cluster-' + cluster.clusterId])) + '">' +
                 '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>' +
@@ -517,8 +516,8 @@
         function checkPhoneHygiene(phone) {
             if (!phone || phone === '-') return '';
             var digits = phone.replace(/\D/g, '');
-            if (digits.length > 15) return '<span class="hygiene-warn" title="Phone number too long (' + digits.length + ' digits)">&#9888; long</span>';
-            if (digits.length < 7 && digits.length > 0) return '<span class="hygiene-warn" title="Phone number too short (' + digits.length + ' digits)">&#9888; short</span>';
+            if (digits.length > 15) return '<span class="hygiene-warn" title="' + escapeHtml(_t('dyn.crm.phone_too_long', { n: _fn(digits.length) })) + '">&#9888; ' + escapeHtml(_t('dyn.crm.long')) + '</span>';
+            if (digits.length < 7 && digits.length > 0) return '<span class="hygiene-warn" title="' + escapeHtml(_t('dyn.crm.phone_too_short', { n: _fn(digits.length) })) + '">&#9888; ' + escapeHtml(_t('dyn.crm.short')) + '</span>';
             return '';
         }
 
@@ -542,34 +541,36 @@
                 var bgCls = q.isJunk ? 'bg-red-50' : q.score < 50 ? 'bg-orange-50' : q.score < 85 ? 'bg-amber-50' : 'bg-green-50';
                 html += '<div class="mb-4 p-4 rounded-lg ' + bgCls + '">' +
                     '<div class="flex items-center justify-between mb-2">' +
-                    '<span class="font-semibold text-sm">Data Quality</span>' +
-                    '<span class="quality-badge ' + cls + '">' + q.score + '/100</span>' +
+                    '<span class="font-semibold text-sm">' + escapeHtml(_t('dyn.crm.data_quality')) + '</span>' +
+                    '<span class="quality-badge ' + cls + '">' + _fn(q.score) + '/' + _fn(100) + '</span>' +
                     '</div>';
                 if (q.flags && q.flags.length) {
                     html += '<div class="flex flex-wrap gap-1">';
                     for (var fi = 0; fi < q.flags.length; fi++) {
-                        html += '<span class="inline-block px-2 py-0.5 bg-white/60 rounded text-xs text-gray-700">' + (FLAG_LABELS[q.flags[fi]] || q.flags[fi]) + '</span>';
+                        html += '<span class="inline-block px-2 py-0.5 bg-white/60 rounded text-xs text-gray-700">' + escapeHtml(_flagLabel(q.flags[fi])) + '</span>';
                     }
                     html += '</div>';
                 } else {
-                    html += '<span class="text-xs text-green-700">No issues detected</span>';
+                    html += '<span class="text-xs text-green-700">' + escapeHtml(_t('dyn.crm.no_issues_detected')) + '</span>';
                 }
                 html += '</div>';
             }
 
             if (enr && enr.cluster && !enr.cluster.isJunk && enr.cluster.totalInCluster > 1) {
                 var c = enr.cluster;
+                var cLvlLabel = _t('dyn.common.' + c.confidenceLevel);
+                if (!cLvlLabel || cLvlLabel === c.confidenceLevel) cLvlLabel = c.confidenceLevel;
                 html += '<div class="mb-4 p-4 rounded-lg bg-purple-50">' +
                     '<div class="flex items-center justify-between mb-2">' +
-                    '<span class="font-semibold text-sm">Duplicate Cluster</span>' +
-                    '<span class="cluster-badge cluster-' + c.confidenceLevel + '">' + c.totalInCluster + ' records</span>' +
+                    '<span class="font-semibold text-sm">' + escapeHtml(_t('dyn.crm.duplicate_cluster')) + '</span>' +
+                    '<span class="cluster-badge cluster-' + c.confidenceLevel + '">' + escapeHtml(_t('dyn.crm.n_records', { n: _fn(c.totalInCluster) })) + '</span>' +
                     '</div>' +
                     '<div class="text-xs text-gray-600 space-y-1">' +
-                    '<div><strong>Company:</strong> ' + escapeHtml(c.clusterCompany || '-') + '</div>' +
-                    '<div><strong>Domain:</strong> ' + escapeHtml(c.clusterDomain || '-') + '</div>' +
-                    '<div><strong>Confidence:</strong> ' + c.confidenceLevel + ' (' + c.confidenceScore + '%)</div>' +
+                    '<div><strong>' + escapeHtml(_t('dyn.crm.company_label')) + '</strong> ' + escapeHtml(c.clusterCompany || '-') + '</div>' +
+                    '<div><strong>' + escapeHtml(_t('dyn.crm.domain_label')) + '</strong> ' + escapeHtml(c.clusterDomain || '-') + '</div>' +
+                    '<div><strong>' + escapeHtml(_t('dyn.crm.confidence_label')) + '</strong> ' + escapeHtml(cLvlLabel) + ' (' + _fn(c.confidenceScore) + '%)</div>' +
                     '</div>' +
-                    '<a href="/duplicates#cluster-' + c.clusterId + '" target="_blank" class="inline-block mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium" data-testid="link-view-cluster">View in Duplicate Radar &rarr;</a>' +
+                    '<a href="/duplicates#cluster-' + c.clusterId + '" target="_blank" class="inline-block mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium" data-testid="link-view-cluster">' + escapeHtml(_t('dyn.crm.view_in_dup')) + '</a>' +
                     '</div>';
             }
 
@@ -649,15 +650,17 @@
         function updatePagination(data) {
             document.getElementById('prevBtn').disabled = currentPage <= 1;
             document.getElementById('nextBtn').disabled = data.count < parseInt(document.getElementById('perPageSelect').value);
-            document.getElementById('pageInfo').textContent = 'Page ' + currentPage;
+            document.getElementById('pageInfo').textContent = _t('dyn.crm.page_label', { n: _fn(currentPage) });
         }
 
         function previousPage() { if (currentPage > 1) { currentPage--; refreshData(); } }
         function nextPage() { currentPage++; refreshData(); }
 
         document.addEventListener('DOMContentLoaded', function() {
-            checkConnection();
-            refreshData();
+            _runWhenI18nReady(function() {
+                checkConnection();
+                refreshData();
+            });
         });
 
         document.addEventListener('keydown', function(e) {

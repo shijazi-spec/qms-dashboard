@@ -226,6 +226,11 @@
 
     <script>
         let allKPIs = [];
+
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
+        const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
+        function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
         let charts = {};
 
         async function loadKPIs() {
@@ -265,10 +270,10 @@
         }
 
         function updateStats(data) {
-            document.getElementById('totalKPIs').textContent = data.total || allKPIs.length;
-            document.getElementById('greenCount').textContent = data.byStatus?.green || 0;
-            document.getElementById('amberCount').textContent = data.byStatus?.amber || 0;
-            document.getElementById('redCount').textContent = data.byStatus?.red || 0;
+            document.getElementById('totalKPIs').textContent = _fn(data.total || allKPIs.length);
+            document.getElementById('greenCount').textContent = _fn(data.byStatus?.green || 0);
+            document.getElementById('amberCount').textContent = _fn(data.byStatus?.amber || 0);
+            document.getElementById('redCount').textContent = _fn(data.byStatus?.red || 0);
         }
 
         function renderCharts(data) {
@@ -306,7 +311,7 @@
                 data: {
                     labels: cats.map(c => c[0].charAt(0).toUpperCase() + c[0].slice(1)),
                     datasets: [{
-                        label: 'KPIs',
+                        label: _t('dyn.kpis.chart_kpis'),
                         data: cats.map(c => c[1]),
                         backgroundColor: '#4F46E5'
                     }]
@@ -318,12 +323,12 @@
         function renderKPIList(kpis) {
             const container = document.getElementById('kpiList');
             if (!kpis.length) {
-                container.innerHTML = '<div class="p-8 text-center text-gray-500">No KPIs found</div>';
+                container.innerHTML = '<div class="p-8 text-center text-gray-500">' + _t('dyn.kpis.no_kpis') + '</div>';
                 return;
             }
             
             container.innerHTML = kpis.map(kpi => {
-                const ownerLabel = kpi.owner_type === 'quality_manager' ? 'Sara' : kpi.owner_type === 'grc_manager' ? 'Maram' : kpi.owner_type === 'governance_officer' ? 'Mohammed' : 'Shared';
+                const ownerLabel = _t('dyn.kpis.owners.' + (kpi.owner_type || 'shared'));
                 const hasNavMap = kpi.navigation_map && kpi.navigation_map.length > 0;
                 const statusClass = kpi.status || 'no_data';
                 const trendClass = kpi.trend ? `trend-${kpi.trend}` : '';
@@ -339,17 +344,17 @@
                                 </div>
                                 <p class="text-sm text-gray-600 mt-1">${kpi.description || ''}</p>
                                 <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                    <span>Owner: ${ownerLabel}</span>
-                                    <span>Category: ${kpi.category}</span>
-                                    <span>Frequency: ${kpi.frequency}</span>
-                                    ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 Has Steps</span>` : ''}
+                                    <span>${_t('dyn.kpis.owner_label', { name: ownerLabel })}</span>
+                                    <span>${_t('dyn.kpis.category_label', { name: kpi.category })}</span>
+                                    <span>${_t('dyn.kpis.frequency_label', { name: kpi.frequency })}</span>
+                                    ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 ${_t('dyn.kpis.has_steps')}</span>` : ''}
                                 </div>
                             </div>
                             <div class="text-right">
                                 <div class="text-2xl font-bold text-gray-900 ${trendClass}">
-                                    ${kpi.latestValue !== null && kpi.latestValue !== undefined ? kpi.latestValue + (kpi.unit || '%') : '--'}
+                                    ${kpi.latestValue !== null && kpi.latestValue !== undefined ? _fn(kpi.latestValue) + (kpi.unit || '%') : '--'}
                                 </div>
-                                <div class="text-xs text-gray-500">Target: ${kpi.target_value || '--'}${kpi.unit || '%'}</div>
+                                <div class="text-xs text-gray-500">${_t('dyn.kpis.target_label', { value: (kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--') + (kpi.unit || '%') })}</div>
                             </div>
                         </div>
                     </div>
@@ -372,50 +377,50 @@
                 const res = await fetch(`/api/kpis/${id}`);
                 const kpi = await res.json();
                 
-                const ownerLabel = kpi.owner_type === 'quality_manager' ? 'Sara (Quality Manager)' : kpi.owner_type === 'grc_manager' ? 'Maram (GRC Manager)' : kpi.owner_type === 'governance_officer' ? 'Mohammed (Governance Officer)' : 'Shared';
+                const ownerLabel = _t('dyn.kpis.owners_full.' + (kpi.owner_type || 'shared'));
                 const navMap = kpi.navigation_map ? (typeof kpi.navigation_map === 'string' ? JSON.parse(kpi.navigation_map) : kpi.navigation_map) : null;
-                const statusLabel = kpi.latestValue?.status || 'No Data';
+                const statusLabel = kpi.latestValue?.status || _t('dyn.kpis.no_data_status');
                 
                 document.getElementById('detailTitle').textContent = kpi.kpi_name;
                 document.getElementById('detailContent').innerHTML = `
                     <div class="grid grid-cols-2 gap-6">
                         <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">Definition</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.definition')}</h4>
                             <div class="space-y-2 text-sm">
-                                <div><span class="text-gray-500">Code:</span> ${kpi.kpi_code}</div>
-                                <div><span class="text-gray-500">Owner:</span> ${ownerLabel}</div>
-                                <div><span class="text-gray-500">Category:</span> ${kpi.category}</div>
-                                <div><span class="text-gray-500">Frequency:</span> ${kpi.frequency}</div>
-                                <div><span class="text-gray-500">Unit:</span> ${kpi.unit}</div>
+                                <div><span class="text-gray-500">${_t('dyn.kpis.code_label')}</span> ${kpi.kpi_code}</div>
+                                <div><span class="text-gray-500">${_t('dyn.kpis.owner_kw')}</span> ${ownerLabel}</div>
+                                <div><span class="text-gray-500">${_t('dyn.kpis.category_kw')}</span> ${kpi.category}</div>
+                                <div><span class="text-gray-500">${_t('dyn.kpis.frequency_kw')}</span> ${kpi.frequency}</div>
+                                <div><span class="text-gray-500">${_t('dyn.kpis.unit_kw')}</span> ${kpi.unit}</div>
                             </div>
                             <div class="mt-4">
-                                <span class="text-gray-500 text-sm">Description:</span>
-                                <p class="text-sm text-gray-700 mt-1">${kpi.description || 'No description'}</p>
+                                <span class="text-gray-500 text-sm">${_t('dyn.kpis.description_kw')}</span>
+                                <p class="text-sm text-gray-700 mt-1">${kpi.description || _t('dyn.kpis.no_description')}</p>
                             </div>
                             <div class="mt-4">
-                                <span class="text-gray-500 text-sm">Formula:</span>
-                                <p class="text-sm text-gray-700 mt-1 font-mono bg-gray-50 p-2 rounded">${kpi.formula || 'Not specified'}</p>
+                                <span class="text-gray-500 text-sm">${_t('dyn.kpis.formula_kw')}</span>
+                                <p class="text-sm text-gray-700 mt-1 font-mono bg-gray-50 p-2 rounded">${kpi.formula || _t('dyn.kpis.not_specified')}</p>
                             </div>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">Thresholds</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.thresholds')}</h4>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between p-2 bg-green-50 rounded">
-                                    <span class="text-green-700">Green (On Target)</span>
-                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${kpi.threshold_green}${kpi.unit}</span>
+                                    <span class="text-green-700">${_t('dyn.kpis.green_on_target')}</span>
+                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${_fn(kpi.threshold_green)}${kpi.unit}</span>
                                 </div>
                                 <div class="flex items-center justify-between p-2 bg-amber-50 rounded">
-                                    <span class="text-amber-700">Amber (At Risk)</span>
-                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${kpi.threshold_amber}${kpi.unit}</span>
+                                    <span class="text-amber-700">${_t('dyn.kpis.amber_at_risk')}</span>
+                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${_fn(kpi.threshold_amber)}${kpi.unit}</span>
                                 </div>
                                 <div class="flex items-center justify-between p-2 bg-red-50 rounded">
-                                    <span class="text-red-700">Red (Off Target)</span>
-                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '<' : '>'} ${kpi.threshold_red}${kpi.unit}</span>
+                                    <span class="text-red-700">${_t('dyn.kpis.red_off_target')}</span>
+                                    <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '<' : '>'} ${_fn(kpi.threshold_red)}${kpi.unit}</span>
                                 </div>
                             </div>
                             <div class="mt-4">
-                                <span class="text-gray-500 text-sm">Target Value:</span>
-                                <p class="text-2xl font-bold text-blue-800">${kpi.target_value || '--'}${kpi.unit}</p>
+                                <span class="text-gray-500 text-sm">${_t('dyn.kpis.target_value')}</span>
+                                <p class="text-2xl font-bold text-blue-800">${kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--'}${kpi.unit}</p>
                             </div>
                         </div>
                     </div>
@@ -423,31 +428,31 @@
                     <div class="mt-6">
                         <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
                             <span class="w-6 h-6 bg-cyan-100 text-cyan-600 rounded mr-2 flex items-center justify-center text-sm">📋</span>
-                            Navigation Steps (How to Monitor This KPI)
+                            ${_t('dyn.kpis.nav_steps')}
                         </h4>
                         <div class="space-y-3">
                             ${navMap.map(step => `
                                 <div class="border-l-4 border-cyan-500 bg-gray-50 rounded-r-lg p-3">
                                     <div class="flex items-start space-x-3">
-                                        <div class="w-7 h-7 rounded-full bg-cyan-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">${step.step}</div>
+                                        <div class="w-7 h-7 rounded-full bg-cyan-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">${_fn(step.step)}</div>
                                         <div class="flex-1">
                                             <div class="font-medium text-gray-900">${step.action}</div>
                                             <div class="text-sm text-gray-600 mt-1">
-                                                <span class="text-gray-500">Screen:</span> 
+                                                <span class="text-gray-500">${_t('dyn.kpis.screen_kw')}</span> 
                                                 <a href="${step.route}" class="text-cyan-600 hover:underline">${step.screen}</a>
                                             </div>
                                             <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
                                                 <div class="bg-white rounded p-2">
-                                                    <div class="text-gray-500 uppercase font-medium">What to Check</div>
+                                                    <div class="text-gray-500 uppercase font-medium">${_t('dyn.kpis.what_to_check')}</div>
                                                     <div class="text-gray-700">${step.what_to_check}</div>
                                                 </div>
                                                 <div class="bg-amber-50 rounded p-2">
-                                                    <div class="text-amber-600 uppercase font-medium">If Result</div>
+                                                    <div class="text-amber-600 uppercase font-medium">${_t('dyn.kpis.if_result')}</div>
                                                     <div class="text-gray-700">${step.if_result}</div>
                                                 </div>
                                             </div>
                                             <div class="bg-green-50 rounded p-2 mt-2 text-xs">
-                                                <div class="text-green-600 uppercase font-medium">Then Action</div>
+                                                <div class="text-green-600 uppercase font-medium">${_t('dyn.kpis.then_action')}</div>
                                                 <div class="text-gray-700">${step.then_action}</div>
                                             </div>
                                         </div>
@@ -458,14 +463,14 @@
                     </div>
                     ` : ''}
                     <div class="mt-6">
-                        <h4 class="font-semibold text-gray-900 mb-3">History (Last 12 Periods)</h4>
+                        <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.history_title')}</h4>
                         ${kpi.history && kpi.history.length ? `
                             <canvas id="historyChart" height="120"></canvas>
-                        ` : '<p class="text-gray-500 text-sm">No historical data available</p>'}
+                        ` : '<p class="text-gray-500 text-sm">' + _t('dyn.kpis.no_history') + '</p>'}
                     </div>
                     <div class="mt-6 flex justify-end space-x-2">
-                        <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Record Value</button>
-                        <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Edit KPI</button>
+                        <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${_t('dyn.kpis.record_value_btn')}</button>
+                        <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${_t('dyn.kpis.edit_kpi_btn')}</button>
                     </div>
                 `;
                 
@@ -478,14 +483,14 @@
                             new Chart(ctx, {
                                 type: 'line',
                                 data: {
-                                    labels: kpi.history.reverse().map(h => new Date(h.period_end).toLocaleDateString()),
+                                    labels: kpi.history.reverse().map(h => _fd(h.period_end)),
                                     datasets: [{
-                                        label: 'Actual',
+                                        label: _t('dyn.kpis.chart_actual'),
                                         data: kpi.history.map(h => h.actual_value),
                                         borderColor: '#1E3A8A',
                                         tension: 0.3
                                     }, {
-                                        label: 'Target',
+                                        label: _t('dyn.kpis.chart_target'),
                                         data: kpi.history.map(() => kpi.target_value),
                                         borderColor: '#9CA3AF',
                                         borderDash: [5, 5]
@@ -506,7 +511,7 @@
         }
 
         function openAddModal() {
-            document.getElementById('modalTitle').textContent = 'Add KPI';
+            document.getElementById('modalTitle').textContent = _t('dyn.kpis.modal_add');
             document.getElementById('kpiForm').reset();
             document.getElementById('kpiId').value = '';
             document.getElementById('kpiModal').classList.remove('hidden');
@@ -522,7 +527,7 @@
                 const res = await fetch(`/api/kpis/${id}`);
                 const kpi = await res.json();
                 
-                document.getElementById('modalTitle').textContent = 'Edit KPI';
+                document.getElementById('modalTitle').textContent = _t('dyn.kpis.modal_edit');
                 document.getElementById('kpiId').value = kpi.id;
                 document.getElementById('kpiName').value = kpi.kpi_name;
                 document.getElementById('kpiCode').value = kpi.kpi_code;
@@ -578,16 +583,16 @@
                     closeModal();
                     loadKPIs();
                 } else {
-                    alert('Failed to save KPI');
+                    alert(_t('dyn.kpis.failed_save'));
                 }
             } catch (error) {
                 console.error('Error saving KPI:', error);
-                alert('Error saving KPI');
+                alert(_t('dyn.kpis.error_save'));
             }
         });
 
         function openRecordValueModal(kpiId) {
-            const value = prompt('Enter the current KPI value:');
+            const value = prompt(_t('dyn.kpis.prompt_value'));
             if (value !== null) {
                 recordValue(kpiId, parseFloat(value));
             }
@@ -613,14 +618,14 @@
                     closeDetailModal();
                     loadKPIs();
                 } else {
-                    alert('Failed to record value');
+                    alert(_t('dyn.kpis.failed_record_value'));
                 }
             } catch (error) {
                 console.error('Error recording value:', error);
             }
         }
 
-        loadKPIs();
+        _runWhenI18nReady(loadKPIs);
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>

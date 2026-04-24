@@ -282,6 +282,26 @@
   }
 
   /**
+   * Format a date in the active locale, with Eastern Arabic numerals when appropriate.
+   * `opts` accepts standard Intl.DateTimeFormat options (year/month/day/hour/minute/...).
+   * Returns '-' for falsy or invalid dates so it can be dropped into table cells safely.
+   */
+  function formatDate(date, opts) {
+    if (date == null || date === '') return '-';
+    var d = date instanceof Date ? date : new Date(date);
+    if (isNaN(d.getTime())) return '-';
+    var useEastern = _useEasternNumerals;
+    var locale = (_lang === 'ar' && useEastern) ? 'ar-SA'
+      : (_lang === 'ar' ? 'ar' : 'en-US');
+    var options = opts || { year: 'numeric', month: 'short', day: 'numeric' };
+    try {
+      return new Intl.DateTimeFormat(locale, options).format(d);
+    } catch (_) {
+      try { return d.toLocaleDateString(); } catch (__) { return String(date); }
+    }
+  }
+
+  /**
    * Enable or disable Eastern Arabic numerals (١٢٣ vs 123).
    * Persisted to localStorage and applied immediately without reload.
    */
@@ -328,6 +348,7 @@
     isRTL: isRTL,
     applyToDOM: applyToDOM,
     formatDateBilingual: formatDateBilingual,
+    formatDate: formatDate,
     formatNumber: formatNumber,
     setUseEasternNumerals: setUseEasternNumerals,
     getUseEasternNumerals: getUseEasternNumerals,
