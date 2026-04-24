@@ -15,7 +15,7 @@ import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
 import type { AutoApproveTier } from "../../utils/aiToolGovernance";
-import { withAiTelemetry, recordStreamTelemetry } from "../../utils/aiTelemetry";
+import { withAiTelemetry, startTelemetrySpan } from "../../utils/aiTelemetry";
 
 interface AgentTextResult { text: string }
 
@@ -159,10 +159,22 @@ export const consultantRoutes = [
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), streamTimeout);
 
-          const streamStartedAt = Date.now();
+          // Open the parent telemetry row UP FRONT so any tools the agent
+          // calls during the stream consumption can record their child rows
+          // with parent_call_id pointing back here. The .run() wrapper
+          // installs the AsyncLocalStorage context that propagates through
+          // the agent's tool-execution loop.
+          const span = await startTelemetrySpan({
+            agentName: 'WalaPlus QMS Consultant',
+            model: 'gpt-4o',
+            promptText: message,
+            userId: user.userId,
+            sessionId: resolvedThreadId,
+          });
+
           let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
           try {
-            stream = await withAgentUserContext(
+            stream = await span.run(() => withAgentUserContext(
               {
                 user: {
                   userId: user.userId,
@@ -177,20 +189,14 @@ export const consultantRoutes = [
                 resourceId: "consultant-session",
                 abortSignal: controller.signal,
               })
-            );
+            ));
           } catch (streamInitErr) {
             clearTimeout(timer);
             const e = streamInitErr instanceof Error ? streamInitErr : new Error(String(streamInitErr));
-            recordStreamTelemetry({
-              agentName: 'WalaPlus QMS Consultant',
-              model: 'gpt-4o',
-              startedAt: streamStartedAt,
-              stream: null,
+            span.finalize({
               success: false,
               errorClass: e.constructor.name,
               errorMessage: e.message,
-              userId: user.userId,
-              sessionId: resolvedThreadId,
             }).catch(() => {});
             throw streamInitErr;
           }
@@ -205,11 +211,16 @@ export const consultantRoutes = [
               let streamSuccess = true;
               let streamError: Error | undefined;
               try {
-                for await (const chunk of stream.textStream) {
-                  streamController.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`)
-                  );
-                }
+                // Run the stream consumption INSIDE span.run() so the
+                // parent_call_id ALS context is visible to tools invoked
+                // during streaming (tools execute lazily as chunks flow).
+                await span.run(async () => {
+                  for await (const chunk of stream.textStream) {
+                    streamController.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`)
+                    );
+                  }
+                });
                 streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId })}\n\n`));
                 streamController.close();
               } catch (err) {
@@ -224,17 +235,36 @@ export const consultantRoutes = [
                 streamController.close();
               } finally {
                 clearTimeout(timer);
-                recordStreamTelemetry({
-                  agentName: 'WalaPlus QMS Consultant',
-                  model: 'gpt-4o',
-                  startedAt: streamStartedAt,
-                  stream,
+
+                // Best-effort token-usage extraction, then finalize the
+                // parent row that was opened above.
+                let promptTokens: number | undefined;
+                let completionTokens: number | undefined;
+                let totalTokens: number | undefined;
+                if (streamSuccess) {
+                  try {
+                    const usage = await Promise.race([
+                      stream.usage ?? Promise.resolve(null),
+                      new Promise<null>(res => setTimeout(() => res(null), 2000)),
+                    ]);
+                    if (usage && typeof usage === 'object') {
+                      const u = usage as Record<string, unknown>;
+                      const pt = u.promptTokens     ?? u.prompt_tokens;
+                      const ct = u.completionTokens ?? u.completion_tokens;
+                      const tt = u.totalTokens      ?? u.total_tokens;
+                      promptTokens     = typeof pt === 'number' ? pt : undefined;
+                      completionTokens = typeof ct === 'number' ? ct : undefined;
+                      totalTokens      = typeof tt === 'number' ? tt : undefined;
+                    }
+                  } catch { /* usage unavailable */ }
+                }
+                span.finalize({
                   success: streamSuccess,
+                  promptTokens,
+                  completionTokens,
+                  totalTokens,
                   errorClass: streamError ? streamError.constructor.name : undefined,
                   errorMessage: streamError?.message,
-                  promptText: message,
-                  userId: user.userId,
-                  sessionId: resolvedThreadId,
                 }).catch(() => {});
               }
             },

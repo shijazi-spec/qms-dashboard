@@ -17,6 +17,9 @@ import { runChecklistTool, manageChecklistTool } from "../tools/checklistTools";
 import { searchKnowledgeTool } from "../tools/searchKnowledgeTool";
 import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainingAssignmentsTool, completeTrainingTool } from "../tools/trainingManagementTool";
 import { withApprovalGate } from "../../utils/withApprovalGate";
+import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
+
+const AGENT_NAME = "WalaPlus QMS Consultant";
 
 const openai = createOpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -225,35 +228,39 @@ Additional capabilities:
   // executing directly. The gate is governed by TOOL_GOVERNANCE_POLICIES
   // in src/utils/aiToolGovernance.ts — see WP-SOP-011 (Automated Decision
   // and Processing Process) and WP-DOC-004 (AI Adoption Guidelines).
+  // Every tool is wrapped with wt(...) so per-tool latency, error rate,
+  // and parent_call_id are recorded in ai_call_metrics. The telemetry
+  // wrapper sits OUTSIDE withApprovalGate so we capture queued (HITL)
+  // calls too — see wrapToolWithTelemetry() in src/utils/aiTelemetry.ts.
   tools: {
     // --- read-only / safe tools: no gate ---
-    queryPlatformDataTool,
-    analyzeNonconformitiesTool,
-    suggestImprovementsTool,
-    checkRegulationComplianceTool,
-    reviewDocumentTool,
-    monitorRisksTool,
-    monitorKPIsTool,
-    createAlertTool,             // low-risk internal alerts (policy exempts)
-    getNcListTool,
-    getCapaListTool,
-    getCapaDetailsTool,
-    runChecklistTool,
-    searchKnowledgeTool,
-    getTrainingListTool,
-    getTrainingAssignmentsTool,
+    queryPlatformDataTool:        wt(queryPlatformDataTool, AGENT_NAME),
+    analyzeNonconformitiesTool:   wt(analyzeNonconformitiesTool, AGENT_NAME),
+    suggestImprovementsTool:      wt(suggestImprovementsTool, AGENT_NAME),
+    checkRegulationComplianceTool: wt(checkRegulationComplianceTool, AGENT_NAME),
+    reviewDocumentTool:           wt(reviewDocumentTool, AGENT_NAME),
+    monitorRisksTool:             wt(monitorRisksTool, AGENT_NAME),
+    monitorKPIsTool:              wt(monitorKPIsTool, AGENT_NAME),
+    createAlertTool:              wt(createAlertTool, AGENT_NAME),  // low-risk internal alerts (policy exempts)
+    getNcListTool:                wt(getNcListTool, AGENT_NAME),
+    getCapaListTool:              wt(getCapaListTool, AGENT_NAME),
+    getCapaDetailsTool:           wt(getCapaDetailsTool, AGENT_NAME),
+    runChecklistTool:             wt(runChecklistTool, AGENT_NAME),
+    searchKnowledgeTool:          wt(searchKnowledgeTool, AGENT_NAME),
+    getTrainingListTool:          wt(getTrainingListTool, AGENT_NAME),
+    getTrainingAssignmentsTool:   wt(getTrainingAssignmentsTool, AGENT_NAME),
 
     // --- HIGH-risk write tools (gated) ---
-    createNcTool:        withApprovalGate(createNcTool),
-    createCapaTool:      withApprovalGate(createCapaTool),
-    updateCapaTool:      withApprovalGate(updateCapaTool),
-    completeTrainingTool: withApprovalGate(completeTrainingTool),
+    createNcTool:         wt(withApprovalGate(createNcTool),         AGENT_NAME),
+    createCapaTool:       wt(withApprovalGate(createCapaTool),       AGENT_NAME),
+    updateCapaTool:       wt(withApprovalGate(updateCapaTool),       AGENT_NAME),
+    completeTrainingTool: wt(withApprovalGate(completeTrainingTool), AGENT_NAME),
 
     // --- MEDIUM-risk write tools (gated) ---
-    addCapaActionTool:   withApprovalGate(addCapaActionTool),
-    createTrainingTool:  withApprovalGate(createTrainingTool),
-    assignTrainingTool:  withApprovalGate(assignTrainingTool),
-    manageChecklistTool: withApprovalGate(manageChecklistTool),
+    addCapaActionTool:   wt(withApprovalGate(addCapaActionTool),   AGENT_NAME),
+    createTrainingTool:  wt(withApprovalGate(createTrainingTool),  AGENT_NAME),
+    assignTrainingTool:  wt(withApprovalGate(assignTrainingTool),  AGENT_NAME),
+    manageChecklistTool: wt(withApprovalGate(manageChecklistTool), AGENT_NAME),
   },
 
   memory: new Memory({

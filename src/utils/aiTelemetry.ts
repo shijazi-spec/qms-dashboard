@@ -31,6 +31,7 @@
 import pg from 'pg';
 const { Pool } = pg;
 import { createHash } from 'crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -192,6 +193,153 @@ export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number |
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Parent-call AsyncLocalStorage — used by wrapToolWithTelemetry() to attach
+// a child tool row to its parent agent call. The context is set by
+// startTelemetrySpan().run() / withAiTelemetry() and propagates across
+// awaits inside the agent's generate/stream loop.
+// ──────────────────────────────────────────────────────────────────────────────
+const aiCallContext = new AsyncLocalStorage<{ callId: number | null }>();
+
+export function getCurrentParentCallId(): number | null {
+  return aiCallContext.getStore()?.callId ?? null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Open / finalize helpers — used by startTelemetrySpan() so we can allocate
+// a row id BEFORE the LLM call so child tool rows have a parent to point at.
+// ──────────────────────────────────────────────────────────────────────────────
+async function openAiCallMetric(params: {
+  agentName: string;
+  model: string;
+  promptPreview?: string;
+  userId?: string;
+  sessionId?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<number | null> {
+  try {
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `INSERT INTO ai_call_metrics
+         (agent_name, model, success, prompt_preview, user_hash, session_hash, metadata)
+       VALUES ($1, $2, TRUE, $3, $4, $5, $6)
+       RETURNING id`,
+      [
+        params.agentName,
+        params.model,
+        params.promptPreview ?? null,
+        params.userId ? hashValue(params.userId) : null,
+        params.sessionId ? hashValue(params.sessionId) : null,
+        JSON.stringify(params.metadata ?? {}),
+      ]
+    );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    console.error('[aiTelemetry] Failed to open metric:', err);
+    return null;
+  }
+}
+
+async function finalizeAiCallMetric(
+  callId: number,
+  finals: {
+    latencyMs: number;
+    model: string;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    success: boolean;
+    errorClass?: string;
+    errorMessage?: string;
+  }
+): Promise<void> {
+  try {
+    const cost =
+      finals.promptTokens != null && finals.completionTokens != null
+        ? computeCost(finals.model, finals.promptTokens, finals.completionTokens)
+        : 0;
+    await pool.query(
+      `UPDATE ai_call_metrics
+         SET latency_ms         = $2,
+             prompt_tokens      = $3,
+             completion_tokens  = $4,
+             total_tokens       = $5,
+             estimated_cost_usd = $6,
+             success            = $7,
+             error_class        = $8,
+             error_message      = $9
+       WHERE id = $1`,
+      [
+        callId,
+        finals.latencyMs,
+        finals.promptTokens ?? null,
+        finals.completionTokens ?? null,
+        finals.totalTokens ?? null,
+        cost,
+        finals.success,
+        finals.errorClass ?? null,
+        finals.errorMessage ? finals.errorMessage.slice(0, 500) : null,
+      ]
+    );
+  } catch (err) {
+    console.error('[aiTelemetry] Failed to finalize metric:', err);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Telemetry span — preferred low-level API. Allocates the parent row up
+// front so any tool calls made inside .run(fn) can reference it via
+// AsyncLocalStorage. Used by withAiTelemetry() (sync agent calls) and by
+// the streaming routes (where init + stream consumption must share context).
+// ──────────────────────────────────────────────────────────────────────────────
+export interface TelemetrySpan {
+  callId: number | null;
+  run<T>(fn: () => Promise<T>): Promise<T>;
+  finalize(opts: {
+    success: boolean;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    errorClass?: string;
+    errorMessage?: string;
+  }): Promise<void>;
+}
+
+export async function startTelemetrySpan(params: WithAiTelemetryParams): Promise<TelemetrySpan> {
+  const startedAt = Date.now();
+  const promptPreview = params.promptText
+    ? redactPromptPreview(params.promptText)
+    : undefined;
+  const callId = await openAiCallMetric({
+    agentName: params.agentName,
+    model: params.model,
+    promptPreview,
+    userId: params.userId,
+    sessionId: params.sessionId,
+    metadata: params.metadata,
+  });
+
+  return {
+    callId,
+    run<T>(fn: () => Promise<T>): Promise<T> {
+      return aiCallContext.run({ callId }, fn);
+    },
+    async finalize(opts) {
+      if (callId == null) return;
+      await finalizeAiCallMetric(callId, {
+        latencyMs: Date.now() - startedAt,
+        model: params.model,
+        promptTokens: opts.promptTokens,
+        completionTokens: opts.completionTokens,
+        totalTokens: opts.totalTokens,
+        success: opts.success,
+        errorClass: opts.errorClass,
+        errorMessage: opts.errorMessage,
+      });
+    },
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Primary wrapper — wraps any agent.generateLegacy / generate call
 // ──────────────────────────────────────────────────────────────────────────────
 export interface WithAiTelemetryParams {
@@ -207,15 +355,10 @@ export async function withAiTelemetry<T>(
   params: WithAiTelemetryParams,
   fn: () => Promise<T>
 ): Promise<{ result: T; callId: number | null }> {
-  await ensureAiMetricsTable();
-  const startedAt = Date.now();
-  const promptPreview = params.promptText
-    ? redactPromptPreview(params.promptText)
-    : undefined;
+  const span = await startTelemetrySpan(params);
 
   try {
-    const result = await fn();
-    const latencyMs = Date.now() - startedAt;
+    const result = await span.run(fn);
 
     const res = result as Record<string, unknown>;
     const rawUsage =
@@ -235,37 +378,109 @@ export async function withAiTelemetry<T>(
       : typeof rawUsage?.total_tokens === 'number' ? rawUsage.total_tokens
       : undefined;
 
-    const callId = await insertAiCallMetric({
-      agent_name: params.agentName,
-      model: params.model,
-      prompt_tokens: promptTokens,
-      completion_tokens: completionTokens,
-      total_tokens: totalTokens,
-      latency_ms: latencyMs,
+    await span.finalize({
       success: true,
-      prompt_preview: promptPreview,
-      user_hash: params.userId ? hashValue(params.userId) : undefined,
-      session_hash: params.sessionId ? hashValue(params.sessionId) : undefined,
-      metadata: params.metadata,
+      promptTokens,
+      completionTokens,
+      totalTokens,
     });
 
-    return { result, callId };
+    return { result, callId: span.callId };
   } catch (err) {
-    const latencyMs = Date.now() - startedAt;
-    await insertAiCallMetric({
-      agent_name: params.agentName,
-      model: params.model,
-      latency_ms: latencyMs,
+    await span.finalize({
       success: false,
-      error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
-      error_message: err instanceof Error ? err.message : String(err),
-      prompt_preview: promptPreview,
-      user_hash: params.userId ? hashValue(params.userId) : undefined,
-      session_hash: params.sessionId ? hashValue(params.sessionId) : undefined,
-      metadata: params.metadata,
+      errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
+      errorMessage: err instanceof Error ? err.message : String(err),
     });
     throw err;
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tool-call telemetry — wrap each Mastra tool's execute() so we record a
+// child row in ai_call_metrics tagged with `tool_name` + `parent_call_id`.
+// This powers the "Top Tools" and "Recent Issues" tabs in dashboard/ai-ops.
+//
+// Wrapping ORDER (when combining with withApprovalGate):
+//   wrapToolWithTelemetry(withApprovalGate(tool), agentName)
+// Telemetry stays OUTSIDE the gate so we capture every LLM-initiated tool
+// call — including those that get queued for human approval (which return
+// { success: false, queued: true }). Queued calls are NOT counted as
+// errors in the dashboard; only true exceptions or non-queued failures are.
+// ──────────────────────────────────────────────────────────────────────────────
+type WrappableTool = {
+  id?: string;
+  description?: string;
+  execute?: (args: unknown) => Promise<unknown>;
+};
+
+function describeToolFailure(result: unknown): string | null {
+  if (result === null || typeof result !== 'object') return null;
+  const r = result as Record<string, unknown>;
+  if (r.success !== false) return null;
+  if (r.queued === true) return null; // HITL-gated queue is not an error
+  if (typeof r.error === 'string') return r.error;
+  if (typeof r.message === 'string') return r.message;
+  return 'Tool returned success=false';
+}
+
+export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentName: string): T {
+  const originalExecute = tool.execute;
+  const toolId = tool.id;
+  if (!originalExecute || !toolId) return tool;
+
+  const wrappedExecute = async (args: unknown): Promise<unknown> => {
+    const startedAt = Date.now();
+    const parentCallId = getCurrentParentCallId();
+    let success = true;
+    let errorClass: string | undefined;
+    let errorMessage: string | undefined;
+
+    try {
+      const result = await originalExecute(args);
+
+      // Tools standardize on { success: boolean, ...}.
+      // Treat soft-fail returns as errors UNLESS they are HITL-gated queues
+      // (which are an expected, non-error outcome of a write tool).
+      const failureMessage = describeToolFailure(result);
+      if (failureMessage !== null) {
+        success = false;
+        errorClass = 'ToolReturnedFailure';
+        errorMessage = failureMessage;
+      }
+      return result;
+    } catch (err) {
+      success = false;
+      errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
+      errorMessage = err instanceof Error ? err.message : String(err);
+      throw err;
+    } finally {
+      const latencyMs = Date.now() - startedAt;
+      // Fire-and-forget — never let a metric write slow tool execution.
+      insertAiCallMetric({
+        agent_name: agentName,
+        tool_name: toolId,
+        parent_call_id: parentCallId ?? undefined,
+        model: 'tool',
+        latency_ms: latencyMs,
+        success,
+        error_class: errorClass,
+        error_message: errorMessage,
+      }).catch(() => { /* non-fatal */ });
+    }
+  };
+
+  // Clone the tool so we don't mutate the shared instance, then swap in the
+  // telemetry-wrapped execute. Cloning via Object.assign preserves the
+  // tool's prototype (e.g. Mastra's Tool class) and all original fields
+  // (id, description, inputSchema, outputSchema, requireApproval, etc.).
+  const proto = Object.getPrototypeOf(tool) as object | null;
+  const cloned = Object.assign(
+    proto ? Object.create(proto) : {},
+    tool,
+    { execute: wrappedExecute as unknown as T['execute'] },
+  ) as T;
+  return cloned;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -407,7 +622,7 @@ export async function getTopToolsByCost(limit = 10): Promise<any[]> {
      WHERE tool_name IS NOT NULL
        AND started_at >= NOW() - INTERVAL '7 days'
      GROUP BY tool_name, agent_name
-     ORDER BY total_cost DESC
+     ORDER BY total_cost DESC, call_count DESC
      LIMIT $1`,
     [limit]
   );
@@ -545,7 +760,8 @@ export async function getDailyCostSummary(): Promise<{
        COUNT(*) FILTER (WHERE NOT success)         AS error_count,
        COALESCE(ROUND(AVG(latency_ms)::NUMERIC,0), 0) AS avg_latency_ms
      FROM ai_call_metrics
-     WHERE started_at >= NOW() - INTERVAL '24 hours'`
+     WHERE started_at >= NOW() - INTERVAL '24 hours'
+       AND tool_name IS NULL`
   );
   const row = result.rows[0];
   return {

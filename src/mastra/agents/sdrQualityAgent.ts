@@ -6,6 +6,9 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
 import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
 import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
+import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
+
+const AGENT_NAME = "WalaPlus SDR Quality Specialist";
 
 const openai = createOpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -90,13 +93,15 @@ Remember: You are the SDR team's quality guardian. Your audits help the SDR team
 
   model: openai.chat("gpt-4o"),
 
+  // Each tool is wrapped with wt(...) so per-tool latency, error rate, and
+  // parent_call_id are recorded in ai_call_metrics for the AI Ops panel.
   tools: {
-    fetchCalendarEventsTool,
-    listCalendarsTool,
-    auditCRMHygieneTool,
-    checkCRMActivityTool,
-    sendQualityReportTool,
-    sendAlertTool,
+    fetchCalendarEventsTool: wt(fetchCalendarEventsTool, AGENT_NAME),
+    listCalendarsTool:       wt(listCalendarsTool,       AGENT_NAME),
+    auditCRMHygieneTool:     wt(auditCRMHygieneTool,     AGENT_NAME),
+    checkCRMActivityTool:    wt(checkCRMActivityTool,    AGENT_NAME),
+    sendQualityReportTool:   wt(sendQualityReportTool,   AGENT_NAME),
+    sendAlertTool:           wt(sendAlertTool,           AGENT_NAME),
   },
 
   memory: new Memory({
