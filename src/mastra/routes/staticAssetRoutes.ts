@@ -101,4 +101,47 @@ export const staticAssetRoutes = [
     method: "GET" as const,
     createHandler: async () => serveStaticText("js/streaming-download.js", "application/javascript"),
   },
+  {
+    path: "/js/i18n.js",
+    method: "GET" as const,
+    createHandler: async () => serveStaticText("js/i18n.js", "application/javascript; charset=utf-8"),
+  },
+  {
+    path: "/js/a11y.js",
+    method: "GET" as const,
+    createHandler: async () => serveStaticText("js/a11y.js", "application/javascript; charset=utf-8"),
+  },
+  {
+    path: "/js/safe-render.js",
+    method: "GET" as const,
+    createHandler: async () => serveStaticText("js/safe-render.js", "application/javascript; charset=utf-8"),
+  },
+  {
+    path: "/dashboard/i18n/:lang",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const raw = c.req.param('lang') || '';
+          if (!/^[a-zA-Z0-9_-]+\.json$/.test(raw)) {
+            return c.text('Invalid locale', 400);
+          }
+          const candidates = [
+            join(process.cwd(), "dashboard", "i18n", raw),
+            join(process.cwd(), "..", "dashboard", "i18n", raw),
+            `/home/runner/workspace/dashboard/i18n/${raw}`,
+          ];
+          const filePath = resolveFile(candidates);
+          if (!filePath) return c.text('Locale not found', 404);
+          return c.body(readFileSync(filePath, 'utf-8'), 200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=300',
+          });
+        } catch (error) {
+          console.error('Error serving locale json:', error);
+          return c.text('Error loading locale', 500);
+        }
+      };
+    },
+  },
 ];

@@ -104,7 +104,7 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
 const PUBLIC_PATHS = [
   '/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout',
   '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/',
-  '/dashboard/tailwind.css', '/api/invitations/validate/', '/api/invitations/accept',
+  '/dashboard/tailwind.css', '/dashboard/i18n/', '/api/invitations/validate/', '/api/invitations/accept',
   '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack',
   '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview', '/a11y',
 ];

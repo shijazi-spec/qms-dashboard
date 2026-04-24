@@ -93,6 +93,29 @@
     return val;
   }
 
+  /**
+   * Translate a dynamic API-supplied value (e.g. a status code, category, or
+   * module name) by looking up `${prefix}.${normalized}`. Normalization
+   * lowercases the value and replaces spaces/dashes with underscores.
+   * If no translation exists, returns a graceful, prettified fallback of
+   * the raw value (e.g. "data_privacy" -> "Data Privacy") so unknown
+   * values still render readably in both languages.
+   */
+  function tDynamic(prefix, value, opts) {
+    if (value == null) {
+      return (opts && opts.fallback != null) ? String(opts.fallback) : '';
+    }
+    var raw = String(value);
+    var normalized = raw.toLowerCase().replace(/[\s-]+/g, '_');
+    var translated = _get(_strings, prefix + '.' + normalized);
+    if (translated != null) return translated;
+    if (opts && opts.fallback != null) return String(opts.fallback);
+    // Prettify unknown raw value: "data_privacy" -> "Data Privacy"
+    return raw
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
   function applyToDOM(root) {
     var container = root || document;
     container.querySelectorAll('[data-i18n]').forEach(function (el) {
@@ -299,6 +322,7 @@
   global.WalaPlusI18n = {
     init: init,
     t: t,
+    tDynamic: tDynamic,
     setLang: setLang,
     currentLang: currentLang,
     isRTL: isRTL,

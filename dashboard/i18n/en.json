@@ -154,7 +154,73 @@
     "chart_kpis": "KPIs",
     "owner_quality": "Sara (Quality)",
     "owner_grc": "Maram (GRC)",
-    "owner_shared": "Shared"
+    "owner_shared": "Shared",
+    "chart_risks_dataset": "Risks",
+    "risk_levels": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "risk_categories": {
+      "operational": "Operational",
+      "legal": "Legal",
+      "financial": "Financial",
+      "data_privacy": "Data Privacy",
+      "information_security": "Information Security",
+      "fraud": "Fraud",
+      "vendor": "Vendor",
+      "strategic": "Strategic",
+      "compliance": "Compliance",
+      "reputational": "Reputational",
+      "cyber": "Cyber"
+    },
+    "kpi_categories": {
+      "governance": "Governance",
+      "risk": "Risk",
+      "compliance": "Compliance",
+      "audit": "Audit",
+      "quality": "Quality",
+      "vendor": "Vendor",
+      "training": "Training",
+      "ai": "AI"
+    },
+    "kpi_statuses": {
+      "green": "On Target",
+      "amber": "At Risk",
+      "red": "Off Target"
+    },
+    "report_types": {
+      "mbr": "MBR",
+      "qbr": "QBR",
+      "abr": "ABR"
+    },
+    "report_statuses": {
+      "draft": "Draft",
+      "approved": "Approved",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "kpi_names": {
+      "qm-gov-001": "Governance Coverage",
+      "qm-doc-001": "Document Completion Rate",
+      "qm-aud-001": "Audit Execution Rate",
+      "qm-aud-002": "Audit Finding Closure Rate",
+      "qm-aud-003": "Repeat Findings Reduction",
+      "qm-trn-001": "Training Coverage",
+      "qm-ci-001": "Continuous Improvement Index",
+      "qm-auto-001": "Automation Coverage",
+      "grc-rsk-001": "Enterprise Risk Coverage",
+      "grc-rsk-002": "Risk Treatment Completion",
+      "grc-rsk-003": "High Risk Aging",
+      "grc-cmp-001": "Compliance Coverage",
+      "grc-aud-001": "Audit Readiness Score",
+      "grc-vnd-001": "Vendor Risk Posture",
+      "grc-reg-001": "Regulatory Response Time",
+      "shr-gov-001": "Governance Loop Closure",
+      "shr-ai-001": "AI-Enabled Resolution Index",
+      "shr-int-001": "Cross-Module Integration Score"
+    }
   },
   "grc": {
     "title": "GRC Control Tower",
@@ -232,7 +298,23 @@
     "status_failed": "Failed",
     "status_pending": "Pending",
     "no_compliance_data": "No compliance data",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "modules": {
+      "risks": "Risks",
+      "policies": "Policies",
+      "compliance": "Compliance",
+      "audits": "Audits",
+      "vendors": "Vendors",
+      "qms": "QMS",
+      "calls": "Calls",
+      "team": "Team",
+      "sandbox": "Sandbox"
+    },
+    "control_types": {
+      "preventive": "Preventive",
+      "detective": "Detective",
+      "corrective": "Corrective"
+    }
   },
   "consultant": {
     "title": "QMS AI Consultant",

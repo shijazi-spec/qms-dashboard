@@ -322,6 +322,9 @@
             if (charts.risk) charts.risk.destroy();
 
             const _exTr = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            const _exTd = (prefix, val) => window.WalaPlusI18n
+                ? window.WalaPlusI18n.tDynamic(prefix, val)
+                : (val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : '');
             charts.kpiOwner = new Chart(document.getElementById('kpiOwnerChart'), {
                 type: 'bar',
                 data: {
@@ -338,8 +341,9 @@
             charts.risk = new Chart(document.getElementById('riskChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: risks.map(r => r.risk_level.charAt(0).toUpperCase() + r.risk_level.slice(1)),
+                    labels: risks.map(r => _exTd('executive.risk_levels', r.risk_level)),
                     datasets: [{
+                        label: _exTr('executive.chart_risks_dataset'),
                         data: risks.map(r => r.count),
                         backgroundColor: ['#B91C1C', '#D97706', '#F59E0B', '#047857']
                     }]
@@ -403,11 +407,12 @@
                     return;
                 }
                 
+                const _trDyn = (prefix, val) => window.WalaPlusI18n ? window.WalaPlusI18n.tDynamic(prefix, val) : (val ? String(val) : '');
                 document.getElementById('topRisks').innerHTML = riskList.slice(0, 5).map(r => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                             <div class="font-medium text-gray-900">${r.risk_title}</div>
-                            <div class="text-xs text-gray-500">${r.risk_category} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned')}</div>
+                            <div class="text-xs text-gray-500">${_trDyn('executive.risk_categories', r.risk_category)} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned')}</div>
                         </div>
                         <span class="px-2 py-1 rounded text-xs font-medium ${r.risk_level === 'critical' ? 'bg-red-100 text-red-700' : r.risk_level === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}">
                             ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.score') : 'Score'}: ${r.risk_score}
@@ -430,12 +435,16 @@
             
             document.getElementById('kpisBelow').innerHTML = belowTarget.slice(0, 5).map(k => {
                 const _owT = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
+                const _kbDyn = (prefix, val) => window.WalaPlusI18n ? window.WalaPlusI18n.tDynamic(prefix, val) : (val ? String(val) : '');
                 const ownerLabel = k.owner_type === 'quality_manager' ? _owT('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT('executive.owner_grc').split(' ')[0] : _owT('executive.owner_shared');
+                const kpiNameLabel = window.WalaPlusI18n
+                    ? window.WalaPlusI18n.tDynamic('executive.kpi_names', k.kpi_code, { fallback: k.kpi_name })
+                    : (k.kpi_name || '');
                 return `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                            <div class="font-medium text-gray-900">${k.kpi_name}</div>
-                            <div class="text-xs text-gray-500">${ownerLabel} | ${k.category}</div>
+                            <div class="font-medium text-gray-900">${kpiNameLabel}</div>
+                            <div class="text-xs text-gray-500">${ownerLabel} | ${_kbDyn('executive.kpi_categories', k.category)}</div>
                         </div>
                         <span class="px-2 py-1 rounded text-xs font-medium ${k.status === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
                             ${k.latestValue || '--'}${k.unit || '%'}
@@ -459,15 +468,19 @@
                     return;
                 }
                 
+                const _rpDyn = (prefix, val) => window.WalaPlusI18n
+                    ? window.WalaPlusI18n.tDynamic(prefix, val)
+                    : (val ? String(val).toUpperCase() : '');
+                const _rpLocale = window.WalaPlusI18n ? window.WalaPlusI18n.currentLang() : 'en';
                 document.getElementById('reportsList').innerHTML = reports.map(r => `
                     <div class="p-4 hover:bg-gray-50">
                         <div class="flex justify-between items-start">
                             <div>
                                 <div class="font-medium text-gray-900">${r.period_name}</div>
-                                <div class="text-sm text-gray-500">${r.report_type.toUpperCase()} | ${new Date(r.created_at).toLocaleDateString()}</div>
+                                <div class="text-sm text-gray-500">${_rpDyn('executive.report_types', r.report_type)} | ${new Date(r.created_at).toLocaleDateString(_rpLocale === 'ar' ? 'ar-SA' : 'en-US')}</div>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <span class="px-2 py-1 rounded text-xs ${r.status === 'published' ? 'bg-green-100 text-green-700' : r.status === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${r.status}</span>
+                                <span class="px-2 py-1 rounded text-xs ${r.status === 'published' ? 'bg-green-100 text-green-700' : r.status === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${_rpDyn('executive.report_statuses', r.status)}</span>
                                 <span class="text-lg font-bold text-gray-900">${r.overall_health_score || '--'}%</span>
                             </div>
                         </div>
@@ -485,15 +498,19 @@
                 
                 document.getElementById('kpiDetailList').innerHTML = (data.kpiDetails || []).map(k => {
                     const _owT2 = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
+                    const _kdDyn = (prefix, val, fb) => window.WalaPlusI18n
+                        ? window.WalaPlusI18n.tDynamic(prefix, val, { fallback: fb })
+                        : (val ? String(val) : (fb || ''));
                     const ownerLabel = k.owner_type === 'quality_manager' ? _owT2('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT2('executive.owner_grc').split(' ')[0] : _owT2('executive.owner_shared');
                     const statusColor = k.status === 'green' ? 'bg-green-500' : k.status === 'amber' ? 'bg-amber-500' : k.status === 'red' ? 'bg-red-500' : 'bg-gray-400';
+                    const kpiNameLabel = _kdDyn('executive.kpi_names', k.kpi_code, k.kpi_name);
                     return `
                         <div class="flex items-center justify-between p-3 border rounded-lg">
                             <div class="flex items-center space-x-3">
                                 <div class="w-3 h-3 rounded-full ${statusColor}"></div>
                                 <div>
-                                    <div class="font-medium text-gray-900">${k.kpi_name}</div>
-                                    <div class="text-xs text-gray-500">${ownerLabel} | ${k.category}</div>
+                                    <div class="font-medium text-gray-900">${kpiNameLabel}</div>
+                                    <div class="text-xs text-gray-500">${ownerLabel} | ${_kdDyn('executive.kpi_categories', k.category, k.category)}</div>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -516,12 +533,16 @@
                 if (charts.riskCategory) charts.riskCategory.destroy();
                 
                 const byCategory = data.by_category || data.byCategory || [];
+                const _rdT = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+                const _rdDyn = (prefix, val) => window.WalaPlusI18n
+                    ? window.WalaPlusI18n.tDynamic(prefix, val)
+                    : (val ? String(val) : '');
                 charts.riskCategory = new Chart(document.getElementById('riskCategoryChart'), {
                     type: 'bar',
                     data: {
-                        labels: byCategory.map(c => c.risk_category || c.category),
+                        labels: byCategory.map(c => _rdDyn('executive.risk_categories', c.risk_category || c.category)),
                         datasets: [{
-                            label: 'Risks',
+                            label: _rdT('executive.chart_risks_dataset'),
                             data: byCategory.map(c => c.count),
                             backgroundColor: '#1E293B'
                         }]
@@ -601,8 +622,6 @@
             }
         }
 
-        loadDashboard();
-
         // i18n initialization + Hijri date
         (function initI18nAndHijri() {
             function showHijriDate() {
@@ -624,13 +643,18 @@
                     }
                 } catch (_) {}
             }
+            // Defer dashboard data load until translations are ready so chart
+            // labels and dynamic KPI/risk metric names render in the correct
+            // language on first paint (avoids an English flash before AR loads).
             if (window.WalaPlusI18n) {
                 window.WalaPlusI18n.init().then(() => {
                     window.WalaPlusI18n.applyToDOM();
                     showHijriDate();
+                    loadDashboard();
                 });
             } else {
                 document.addEventListener('DOMContentLoaded', showHijriDate);
+                loadDashboard();
             }
         })();
     </script>
