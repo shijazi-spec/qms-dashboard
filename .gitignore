@@ -6,3 +6,6 @@ dist
 *.db
 *.db-*
 .DS_Store
+a11y-report.json
+a11y-playwright-report.json
+test-results/
