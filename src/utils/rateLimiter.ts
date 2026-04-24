@@ -229,6 +229,49 @@ export interface RateLimitStats {
   dbError?: string;
 }
 
+const RATE_LIMIT_429_RETENTION_HOURS = (() => {
+  const raw = process.env.RATE_LIMIT_429_RETENTION_HOURS;
+  const parsed = parseInt(raw ?? '24', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+})();
+
+/**
+ * Delete `system_events` rows of type `rate_limit_429` that are older than
+ * RATE_LIMIT_429_RETENTION_HOURS (default 24h). The Rate Limits panel only
+ * looks back 5 minutes, so anything older is pure storage cost — under a real
+ * 429 storm this table can grow by thousands of rows per minute.
+ *
+ * Returns `{ deleted, retentionHours }`. Failures are logged and never thrown
+ * so the caller (cron job) can keep its own bookkeeping intact.
+ */
+export async function pruneRateLimit429Events(): Promise<{
+  deleted: number;
+  retentionHours: number;
+  dbReachable: boolean;
+}> {
+  const retentionHours = RATE_LIMIT_429_RETENTION_HOURS;
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      `DELETE FROM system_events
+        WHERE event_type = 'rate_limit_429'
+          AND created_at < NOW() - ($1::int * INTERVAL '1 hour')`,
+      [retentionHours],
+    );
+    const deleted = result.rowCount ?? 0;
+    console.log(
+      `[RateLimit429Pruner] Pruned ${deleted} rate_limit_429 system_events rows older than ${retentionHours}h`,
+    );
+    return { deleted, retentionHours, dbReachable: true };
+  } catch (err) {
+    rlLogger.warn(
+      { err: (err as Error).message, component: 'rateLimiter' },
+      'pruneRateLimit429Events failed — will retry on next cron tick',
+    );
+    return { deleted: 0, retentionHours, dbReachable: false };
+  }
+}
+
 export async function getRateLimitStats(): Promise<RateLimitStats> {
   // The rolling window starts ~60s ago in DB time. We expose an approximate
   // wall-clock anchor for the dashboard but the actual cutoff used by the

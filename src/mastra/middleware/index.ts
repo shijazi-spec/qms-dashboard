@@ -7,7 +7,78 @@ import { sanitizeRequestBody } from "../../utils/inputSanitizer";
 import { checkRateLimit, parseClientIp } from "../../utils/rateLimiter";
 import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
+// Per-IP in-memory sampler: caps how many `rate_limit_429` rows we write per
+// minute per source IP so a single attacker (or misconfigured client) can't
+// fill `system_events` with thousands of identical rows per minute. The cap is
+// configurable via env (default 20/min/IP). Suppressed counts are folded into
+// the next emitted row's metadata so ops can see the true volume.
+const RATE_LIMIT_429_LOG_MAX_PER_MIN = (() => {
+  const raw = process.env.RATE_LIMIT_429_LOG_MAX_PER_MIN;
+  const parsed = parseInt(raw ?? '20', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+})();
+
+interface RateLimit429SampleBucket {
+  windowStartMinute: number;
+  emitted: number;
+  suppressed: number;
+}
+const rateLimit429Samples = new Map<string, RateLimit429SampleBucket>();
+const RATE_LIMIT_429_SAMPLES_MAX_KEYS = 10_000;
+
+function evictStaleSampleBuckets(currentMinute: number): void {
+  // First pass: drop anything not in the current OR previous minute
+  // (previous-minute buckets are kept only long enough to carry their
+  // suppressed count forward — see the carryover branch below).
+  for (const [k, v] of rateLimit429Samples) {
+    if (v.windowStartMinute < currentMinute - 1) rateLimit429Samples.delete(k);
+  }
+  // Second pass: if still over budget (e.g. >10k unique IPs in a single
+  // minute — a high-cardinality attack), drop previous-minute buckets too.
+  // We accept losing the suppressed-count carryover for those keys in
+  // exchange for hard-bounded memory.
+  if (rateLimit429Samples.size > RATE_LIMIT_429_SAMPLES_MAX_KEYS) {
+    for (const [k, v] of rateLimit429Samples) {
+      if (v.windowStartMinute < currentMinute) rateLimit429Samples.delete(k);
+      if (rateLimit429Samples.size <= RATE_LIMIT_429_SAMPLES_MAX_KEYS) break;
+    }
+  }
+}
+
+function evaluateRateLimit429Sampling(ip: string): { log: boolean; suppressedCarryover: number } {
+  const minute = Math.floor(Date.now() / 60_000);
+  const key = ip || 'unknown';
+  const bucket = rateLimit429Samples.get(key);
+
+  if (!bucket || bucket.windowStartMinute !== minute) {
+    const suppressedCarryover = bucket && bucket.windowStartMinute === minute - 1 ? bucket.suppressed : 0;
+    if (rateLimit429Samples.size >= RATE_LIMIT_429_SAMPLES_MAX_KEYS) {
+      evictStaleSampleBuckets(minute);
+      // If we're STILL at the cap (every key is from the current minute),
+      // skip tracking this new IP. We still emit the log so observability
+      // doesn't go dark — the only thing we lose is per-IP sampling for
+      // IPs that didn't make it into the budget this minute.
+      if (rateLimit429Samples.size >= RATE_LIMIT_429_SAMPLES_MAX_KEYS) {
+        return { log: true, suppressedCarryover };
+      }
+    }
+    rateLimit429Samples.set(key, { windowStartMinute: minute, emitted: 1, suppressed: 0 });
+    return { log: true, suppressedCarryover };
+  }
+
+  if (bucket.emitted < RATE_LIMIT_429_LOG_MAX_PER_MIN) {
+    bucket.emitted += 1;
+    return { log: true, suppressedCarryover: 0 };
+  }
+
+  bucket.suppressed += 1;
+  return { log: false, suppressedCarryover: 0 };
+}
+
 function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter?: number): void {
+  const { log, suppressedCarryover } = evaluateRateLimit429Sampling(ip);
+  if (!log) return;
+
   // Fire-and-forget — never block the request or surface DB errors back to clients.
   import("../../utils/database")
     .then(({ logSystemEvent }) =>
@@ -17,7 +88,14 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
         description: `429 Too Many Requests on ${method} ${urlPath}`,
         severity: 'warning',
         source: 'rateLimiter',
-        metadata: { path: urlPath, method, ip, retry_after: retryAfter ?? null },
+        metadata: {
+          path: urlPath,
+          method,
+          ip,
+          retry_after: retryAfter ?? null,
+          sampling_cap_per_min: RATE_LIMIT_429_LOG_MAX_PER_MIN,
+          ...(suppressedCarryover > 0 ? { suppressed_in_previous_minute: suppressedCarryover } : {}),
+        },
       }),
     )
     .catch(() => { /* swallow — observability must never break the request path */ });

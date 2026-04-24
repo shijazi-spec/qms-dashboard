@@ -650,6 +650,26 @@ const rateLimitJanitorFunction = inngest.createFunction(
 );
 inngestFunctions.push(rateLimitJanitorFunction);
 
+// Prune `system_events` rows of type `rate_limit_429` older than the
+// configured retention (default 24h, env: RATE_LIMIT_429_RETENTION_HOURS).
+// The Rate Limits panel only looks back 5 minutes, so older rows just
+// bloat the table and slow `getRateLimitStats` / activity queries —
+// especially during a real attack when this row can grow by thousands per
+// minute.
+const rateLimit429EventsPrunerFunction = inngest.createFunction(
+  { id: "rate-limit-429-events-pruner" },
+  { cron: process.env.RATE_LIMIT_429_PRUNER_CRON || "0 * * * *" },
+  async ({ step }) => {
+    return await step.run("prune-rate-limit-429-events", async () => {
+      const { pruneRateLimit429Events } = await import("../../utils/rateLimiter");
+      const result = await pruneRateLimit429Events();
+      console.log(`[RateLimit429Pruner] Cron run complete:`, result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(rateLimit429EventsPrunerFunction);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Per-tool health alert cron — defined in workflows/toolHealthAlertsCron.ts
 // (kept there so all the threshold config + evaluation logic live together).
