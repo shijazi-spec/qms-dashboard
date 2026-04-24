@@ -44,7 +44,7 @@ export interface FakeContext {
     method: string;
   };
   json: (body: any, status?: number) => CapturedResponse;
-  header: (name: string, value: string) => void;
+  header: (name: string, value: string, options?: { append?: boolean }) => void;
   text: (body: string, status?: number) => CapturedResponse;
   body: (body: any, status?: number) => CapturedResponse;
   redirect: (url: string, status?: number) => CapturedResponse;
@@ -96,8 +96,17 @@ export function makeContext(init: FakeRequestInit = {}): FakeContext {
       responseHeaders["Location"] = url;
       return { status: status ?? 302, body: "", headers: { ...responseHeaders } };
     },
-    header: (name: string, value: string) => {
-      responseHeaders[name] = value;
+    header: (name: string, value: string, options?: { append?: boolean }) => {
+      // Mirror Hono's `c.header(name, value, { append: true })` semantics
+      // for headers that may legitimately appear multiple times in a single
+      // response (Set-Cookie, Link, etc.). When appending, we join values
+      // with ", " so a single string lookup like `headers["Set-Cookie"]`
+      // still surfaces every value the handler emitted.
+      if (options?.append && responseHeaders[name]) {
+        responseHeaders[name] = `${responseHeaders[name]}, ${value}`;
+      } else {
+        responseHeaders[name] = value;
+      }
     },
     responseHeaders,
   };

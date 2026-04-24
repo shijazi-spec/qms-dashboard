@@ -319,43 +319,38 @@ export const authRoutes = [
     path: "/api/auth/me",
     method: "GET" as const,
     createHandler: async () => {
-      return async (c: any) => {
-        const session = getSessionFromCookie(c.req.header('Cookie'));
-        if (!session) {
-          return c.json({ authenticated: false }, 401);
-        }
-        return c.json({
-          authenticated: true,
-          user: {
-            id: session.userId,
-            email: session.email,
-            name: session.name,
-            picture: session.picture,
-            role: session.role,
-          },
-        });
-      };
-    },
-  },
-  {
-    path: "/api/auth/admin-status",
-    method: "GET" as const,
-    createHandler: async () => {
+      // Lazy-loaded so this module stays free of cycles with rbacMiddleware
+      // (which itself imports `getSessionFromCookie` from this file).
       const { hasValidAdminApiKey } = await import("../../utils/rbacMiddleware");
       return async (c: any) => {
-        if (!hasValidAdminApiKey(c)) {
-          return c.json({ authenticated: false }, 401);
+        const session = getSessionFromCookie(c.req.header('Cookie'));
+        if (session) {
+          return c.json({
+            authenticated: true,
+            user: {
+              id: session.userId,
+              email: session.email,
+              name: session.name,
+              picture: session.picture,
+              role: session.role,
+            },
+          });
         }
-        return c.json({
-          authenticated: true,
-          user: {
-            id: 'admin',
-            email: 'admin@walaplus.local',
-            name: 'Admin',
-            picture: null,
-            role: 'admin',
-          },
-        });
+        // Admin-key callers (X-Admin-Key header or admin_key cookie) get the
+        // same shape as a session so callers don't need a separate endpoint.
+        if (hasValidAdminApiKey(c)) {
+          return c.json({
+            authenticated: true,
+            user: {
+              id: 'admin',
+              email: 'admin@walaplus.local',
+              name: 'Admin',
+              picture: null,
+              role: 'admin',
+            },
+          });
+        }
+        return c.json({ authenticated: false }, 401);
       };
     },
   },
@@ -366,7 +361,11 @@ export const authRoutes = [
       return async (c: any) => {
         const secure = isSecureDomain();
         const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
-        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`);
+        // Clear both auth cookies so the unified /api/auth/me endpoint stops
+        // reporting the caller as authenticated regardless of which auth path
+        // they used (OIDC session or admin API key).
+        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`, { append: true });
+        c.header('Set-Cookie', `admin_key=; ${cookieFlags}`, { append: true });
         try {
           const { logEvent } = await import("../../utils/eventLogsDatabase");
           await logEvent({ actionType: 'LOGOUT', entityType: 'SESSION', entityId: 'session', entityName: 'user-session', description: 'User logged out', module: 'auth', severity: 'INFO' });
@@ -382,7 +381,11 @@ export const authRoutes = [
       return async (c: any) => {
         const secure = isSecureDomain();
         const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
-        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`);
+        // Clear both auth cookies (session + admin_key) so the unified
+        // /api/auth/me endpoint won't keep reporting the caller as
+        // authenticated after they sign out.
+        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`, { append: true });
+        c.header('Set-Cookie', `admin_key=; ${cookieFlags}`, { append: true });
 
         try {
           const config = await getOidcConfig();

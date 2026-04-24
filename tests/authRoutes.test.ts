@@ -2,11 +2,16 @@
  * Integration tests for src/mastra/routes/authRoutes.ts
  *
  * Coverage matrix:
- *   - 401 unauth      → GET /api/auth/me without a session cookie.
+ *   - 401 unauth      → GET /api/auth/me without a session cookie or admin key.
+ *   - 200 admin key   → GET /api/auth/me with a matching X-Admin-Key returns
+ *                       the synthetic admin user (no separate
+ *                       /api/auth/admin-status endpoint is needed any more).
+ *   - 200 admin cookie→ GET /api/auth/me with a matching admin_key cookie
+ *                       returns the synthetic admin user.
  *   - 200 happy path  → POST /api/auth/logout returns success and clears the
- *                       session cookie.
- *   - structural      → every route exposes path/method/createHandler.
- *   - redirect        → GET /api/logout returns a redirect.
+ *                       session cookie *and* the admin_key cookie.
+ *   - structural      → every route exposes path/method/createHandler, and
+ *                       the legacy /api/auth/admin-status route is gone.
  *
  * Run:  npx tsx tests/authRoutes.test.ts
  */
@@ -14,6 +19,10 @@
 import { authRoutes } from "../src/mastra/routes/authRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+
+const TEST_ADMIN_KEY = "test-admin-key-authroutes-2026";
+const ORIGINAL_ADMIN_KEY = process.env.ADMIN_API_KEY;
+process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 
 const suite = new TestSuite("authRoutes");
 
@@ -26,6 +35,10 @@ await suite.test("every route exposes path, method and createHandler", async () 
     suite.expect(typeof r.createHandler === "function", `createHandler missing on ${r.method} ${r.path}`);
   }
   suite.expect(authRoutes.length >= 4, "at least 4 routes registered");
+  // The legacy /api/auth/admin-status endpoint has been folded into
+  // /api/auth/me — make sure nobody re-introduces it.
+  const legacy = authRoutes.find((r) => r.path === "/api/auth/admin-status");
+  suite.expect(!legacy, "/api/auth/admin-status must not be re-registered");
 });
 
 await suite.test("GET /api/auth/me — 401 with authenticated:false when no cookie", async () => {
@@ -35,14 +48,54 @@ await suite.test("GET /api/auth/me — 401 with authenticated:false when no cook
   suite.expectEqual(res.body?.authenticated, false, "body.authenticated");
 });
 
-await suite.test("POST /api/auth/logout — 200 with cleared session cookie", async () => {
+await suite.test("GET /api/auth/me — 200 with admin user when X-Admin-Key matches", async () => {
+  const handler = await buildHandler(authRoutes, "/api/auth/me", "GET");
+  const res = await handler(makeContext({
+    method: "GET",
+    headers: { "X-Admin-Key": TEST_ADMIN_KEY },
+  }));
+  suite.expectEqual(res.status, 200, "status");
+  suite.expectEqual(res.body?.authenticated, true, "body.authenticated");
+  suite.expectEqual(res.body?.user?.role, "admin", "body.user.role");
+  suite.expectEqual(res.body?.user?.id, "admin", "body.user.id");
+});
+
+await suite.test("GET /api/auth/me — 200 with admin user when admin_key cookie matches", async () => {
+  const handler = await buildHandler(authRoutes, "/api/auth/me", "GET");
+  const res = await handler(makeContext({
+    method: "GET",
+    headers: { Cookie: `admin_key=${TEST_ADMIN_KEY}` },
+  }));
+  suite.expectEqual(res.status, 200, "status");
+  suite.expectEqual(res.body?.authenticated, true, "body.authenticated");
+  suite.expectEqual(res.body?.user?.role, "admin", "body.user.role");
+});
+
+await suite.test("GET /api/auth/me — 401 when X-Admin-Key is wrong", async () => {
+  const handler = await buildHandler(authRoutes, "/api/auth/me", "GET");
+  const res = await handler(makeContext({
+    method: "GET",
+    headers: { "X-Admin-Key": "definitely-not-the-key" },
+  }));
+  suite.expectEqual(res.status, 401, "status");
+  suite.expectEqual(res.body?.authenticated, false, "body.authenticated");
+});
+
+await suite.test("POST /api/auth/logout — 200 clears session AND admin_key cookies", async () => {
   const handler = await buildHandler(authRoutes, "/api/auth/logout", "POST");
   const res = await handler(makeContext({ method: "POST" }));
   suite.expectEqual(res.status, 200, "status");
   suite.expectEqual(res.body?.success, true, "body.success");
   const cookie = res.headers["Set-Cookie"] ?? "";
   suite.expect(cookie.includes("walaplus_session="), "Set-Cookie clears session");
+  suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
 });
+
+if (ORIGINAL_ADMIN_KEY === undefined) {
+  delete process.env.ADMIN_API_KEY;
+} else {
+  process.env.ADMIN_API_KEY = ORIGINAL_ADMIN_KEY;
+}
 
 suite.finishOrExit();

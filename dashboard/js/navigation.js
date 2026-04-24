@@ -299,13 +299,11 @@ const WalaPlusNav = {
   },
 
   loadUserInfo() {
-    const tryAdminFallback = () =>
-      fetch('/api/auth/admin-status', { credentials: 'same-origin' })
-        .then(r => (r.ok ? r.json() : { authenticated: false }))
-        .catch(() => ({ authenticated: false }));
-    fetch('/api/auth/me')
+    // /api/auth/me returns the authenticated user for both OIDC sessions and
+    // admin-key callers, so a single round-trip is enough — no separate
+    // /api/auth/admin-status fallback is needed.
+    fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(r => (r.ok ? r.json() : { authenticated: false }))
-      .then(data => (data.authenticated ? data : tryAdminFallback()))
       .then(data => {
         // Wire the recent-downloads tray to a per-user localStorage
         // namespace so long-running exports survive a tab close, browser
