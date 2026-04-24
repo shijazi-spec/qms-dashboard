@@ -20,12 +20,16 @@
 import {
   notifyToolHealthBreach,
   notifyToolHealthConfigChange,
+  notifyToolHealthOverrideExpired,
   _diffToolHealthConfigOverridesForTests,
   _resetToolHealthNotifierThrottleForTests,
   type ToolHealthBreachNotification,
   type ToolHealthNotifierDeps,
   type ToolHealthConfigChangeNotification,
+  type ToolHealthOverrideExpiredNotification,
+  type ToolHealthOverrideNotifierDeps,
 } from "../src/utils/toolHealthAlertNotifier";
+import { TestSuite } from "./_helpers/runner";
 import { TestSuite } from "./_helpers/runner";
 
 interface SlackCall {
@@ -446,6 +450,7 @@ await suite.test(
   },
 );
 
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Tool-health threshold-tuning notifier (Task #190)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -674,6 +679,162 @@ await suite.test(
     suite.expectEqual(diff[2]?.field, "errorRateHighPct", "errorRateHighPct third");
     suite.expectEqual(diff[2]?.before, 20, "errorRateHighPct before");
     suite.expectEqual(diff[2]?.after, 25, "errorRateHighPct after");
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Task #213 — override auto-revert Slack notification
+// ──────────────────────────────────────────────────────────────────────────────
+function makeOverrideStubs(opts: { slackResult?: boolean | Error } = {}): {
+  deps: ToolHealthOverrideNotifierDeps;
+  slackCalls: SlackCall[];
+} {
+  const slackCalls: SlackCall[] = [];
+  return {
+    deps: {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks });
+        if (opts.slackResult instanceof Error) throw opts.slackResult;
+        return opts.slackResult ?? true;
+      },
+    },
+    slackCalls,
+  };
+}
+
+function sampleOverride(
+  overrides: Partial<ToolHealthOverrideExpiredNotification> = {},
+): ToolHealthOverrideExpiredNotification {
+  return {
+    cleared_overrides: { errorRatePct: 99, p95LatencyMs: 30_000 },
+    previous_updated_by: "alice@example.com",
+    expired_at: new Date("2026-04-24T09:00:00Z"),
+    audit_id: 7777,
+    ...overrides,
+  };
+}
+
+await suite.test(
+  "override-expired: no Slack channel configured → skipped without sending",
+  async () => {
+    clearEnv();
+    const { deps, slackCalls } = makeOverrideStubs();
+    const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    suite.expectEqual(result.skipped, true, "skipped");
+    suite.expectEqual(result.slackSent, false, "no slack sent");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "override-expired: posts to TOOL_HEALTH_SLACK_CHANNEL with operator + cleared fields + audit deep-link",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL-CHAN";
+    process.env.TOOL_HEALTH_APP_URL = "https://qms.example.com";
+    const { deps, slackCalls } = makeOverrideStubs();
+    const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.skipped, false, "not skipped");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
+    suite.expect(
+      slackCalls[0]?.text.includes("alice@example.com"),
+      "fallback text mentions the operator who set the override",
+    );
+    suite.expect(
+      slackCalls[0]?.text.includes("auto-reverted"),
+      "fallback text describes the revert",
+    );
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("alice@example.com"),
+      "blocks attribute the override to the operator",
+    );
+    suite.expect(
+      blocks.includes("error-rate breach floor (%)"),
+      `blocks describe each cleared field (got: ${blocks.slice(0, 200)}...)`,
+    );
+    suite.expect(
+      blocks.includes("p95 latency breach floor (ms)"),
+      "blocks describe the latency override field too",
+    );
+    suite.expect(
+      blocks.includes("99") && blocks.includes("30000"),
+      "blocks include the prior values that were cleared",
+    );
+    suite.expect(
+      blocks.includes(
+        "https://qms.example.com/dashboard/ai-ops.html?tab=thresholds#threshold-audit-7777",
+      ),
+      `blocks deep-link to the audit row (got: ${blocks.slice(0, 400)}...)`,
+    );
+    suite.expect(
+      blocks.includes("audit row #7777"),
+      "context footer references the audit row id",
+    );
+  },
+);
+
+await suite.test(
+  "override-expired: missing previous_updated_by falls back to 'unknown'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeOverrideStubs();
+    await notifyToolHealthOverrideExpired(
+      sampleOverride({ previous_updated_by: null }),
+      deps,
+    );
+    suite.expect(
+      slackCalls[0]?.text.includes("unknown"),
+      `fallback text uses 'unknown' (got: ${slackCalls[0]?.text})`,
+    );
+  },
+);
+
+await suite.test(
+  "override-expired: no TOOL_HEALTH_APP_URL → no actions button (Slack rejects relative urls)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeOverrideStubs();
+    await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    const blocks = slackCalls[0]?.blocks ?? [];
+    const hasButton = blocks.some(
+      (b: any) =>
+        b?.type === "actions" &&
+        Array.isArray(b.elements) &&
+        b.elements.some((e: any) => e?.type === "button"),
+    );
+    suite.expectEqual(hasButton, false, "no actions button when URL is relative");
+    const json = JSON.stringify(blocks);
+    suite.expect(
+      json.includes("/dashboard/ai-ops.html"),
+      "still surfaces the relative path as text",
+    );
+    suite.expect(
+      json.includes("TOOL_HEALTH_APP_URL"),
+      "tells the operator how to enable a clickable link",
+    );
+  },
+);
+
+await suite.test(
+  "override-expired: Slack send throws → swallowed; result reflects failure",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps } = makeOverrideStubs({ slackResult: new Error("slack down") });
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+      suite.expectEqual(result.slackSent, false, "slack failed");
+      suite.expectEqual(result.skipped, false, "not skipped — Slack channel was set");
+    } finally {
+      console.error = origErr;
+    }
   },
 );
 

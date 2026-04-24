@@ -1436,6 +1436,7 @@ await suite.test(
           cleared_overrides: {},
           expired_at: null,
           audit_id: null,
+          previous_updated_by: null,
         };
       },
       getToolWindowAggregates: async (windowMinutes, minCalls) => {
@@ -1465,6 +1466,7 @@ await suite.test(
         cleared_overrides: { errorRatePct: 99 },
         expired_at: new Date(Date.now() - 60_000),
         audit_id: 12345,
+        previous_updated_by: "alice@example.com",
       }),
     };
     const out = await runToolHealthCheck(deps);
@@ -1473,6 +1475,138 @@ await suite.test(
       1,
       "reaper sweep reflected in summary",
     );
+  },
+);
+
+// ─── Task #213: Slack notification when an override auto-reverts ───────────
+// The cron is expected to invoke `notifyOverrideExpired` exactly when the
+// reaper actually swept a row, forwarding `previous_updated_by`,
+// `cleared_overrides`, `expired_at`, and `audit_id`. Notifier failures must
+// be logged but never abort the surrounding cron pass — the override has
+// already been revert-ed and audited at that point.
+
+await suite.test(
+  "(t213-1) cron invokes notifyOverrideExpired when reaper reports a sweep",
+  async () => {
+    const notifyCalls: any[] = [];
+    const baseDeps = makeDeps({ aggregates: [] }).deps;
+    const deps: ToolHealthDeps = {
+      ...baseDeps,
+      reapExpiredOverrides: async () => ({
+        reaped: true,
+        cleared_overrides: { errorRatePct: 99, p95LatencyMs: 30_000 },
+        expired_at: new Date("2026-04-24T09:00:00Z"),
+        audit_id: 7777,
+        previous_updated_by: "alice@example.com",
+      }),
+      notifyOverrideExpired: (async (n: any) => {
+        notifyCalls.push(n);
+        return { slackSent: true, skipped: false };
+      }) as any,
+    };
+    await runToolHealthCheck(deps);
+    suite.expectEqual(notifyCalls.length, 1, "exactly one Slack post sent");
+    const call = notifyCalls[0];
+    suite.expectEqual(
+      call.previous_updated_by,
+      "alice@example.com",
+      "carries the operator who set the override",
+    );
+    suite.expectEqual(
+      call.audit_id,
+      7777,
+      "carries the audit row id for deep-link",
+    );
+    suite.expect(
+      call.cleared_overrides.errorRatePct === 99 &&
+        call.cleared_overrides.p95LatencyMs === 30_000,
+      "carries the cleared override snapshot",
+    );
+    suite.expect(
+      call.expired_at instanceof Date &&
+        call.expired_at.toISOString() === "2026-04-24T09:00:00.000Z",
+      `carries the expires_at that triggered the reap (got: ${call.expired_at})`,
+    );
+  },
+);
+
+await suite.test(
+  "(t213-2) cron does NOT invoke notifyOverrideExpired on a no-op reaper pass",
+  async () => {
+    const notifyCalls: any[] = [];
+    const baseDeps = makeDeps({ aggregates: [] }).deps;
+    const deps: ToolHealthDeps = {
+      ...baseDeps,
+      reapExpiredOverrides: async () => ({
+        reaped: false,
+        cleared_overrides: {},
+        expired_at: null,
+        audit_id: null,
+        previous_updated_by: null,
+      }),
+      notifyOverrideExpired: (async (n: any) => {
+        notifyCalls.push(n);
+        return { slackSent: true, skipped: false };
+      }) as any,
+    };
+    await runToolHealthCheck(deps);
+    suite.expectEqual(
+      notifyCalls.length,
+      0,
+      "no Slack post when nothing was reaped",
+    );
+  },
+);
+
+await suite.test(
+  "(t213-3) notifyOverrideExpired throwing is logged but does not abort the cron",
+  async () => {
+    const captured: string[] = [];
+    const originalErr = console.error;
+    console.error = (...args: any[]) => {
+      captured.push(args.map(String).join(" "));
+    };
+    try {
+      const baseDeps = makeDeps({
+        aggregates: [
+          makeAggregate({
+            tool_name: "still_runs_after_slack_blowup",
+            agent_name: "agent",
+            call_count: 20,
+            error_count: 12,
+            error_rate_pct: 60,
+          }),
+        ],
+      }).deps;
+      const deps: ToolHealthDeps = {
+        ...baseDeps,
+        reapExpiredOverrides: async () => ({
+          reaped: true,
+          cleared_overrides: { errorRatePct: 75 },
+          expired_at: new Date(Date.now() - 60_000),
+          audit_id: 4242,
+          previous_updated_by: "bob@example.com",
+        }),
+        notifyOverrideExpired: (async () => {
+          throw new Error("simulated Slack outage");
+        }) as any,
+      };
+      const out = await runToolHealthCheck(deps);
+      suite.expectEqual(out.toolsEvaluated, 1, "evaluation still ran");
+      suite.expectEqual(
+        out.expiredOverridesReaped,
+        1,
+        "reap counter reflects the sweep even when Slack threw",
+      );
+      suite.expect(
+        captured.some((l) =>
+          /override auto-revert Slack notification failed/i.test(l),
+        ),
+        `Slack failure logged (got: ${captured.join(" | ")})`,
+      );
+    } finally {
+      console.error = originalErr;
+    }
   },
 );
 

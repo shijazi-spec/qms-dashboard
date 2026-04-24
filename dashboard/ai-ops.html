@@ -1691,8 +1691,12 @@
         const diffStr = diffs.length
           ? diffs.join(' · ')
           : '<span class="text-gray-400 italic">no field changed</span>';
+        // The `id="threshold-audit-{id}"` anchor lets Slack notifications
+        // (e.g. the override auto-revert post — Task #213) deep-link
+        // straight to the row that was just written.
+        const anchorId = r.id != null ? ` id="threshold-audit-${esc(r.id)}"` : '';
         return `
-          <div class="px-3 py-2 border border-gray-200 rounded text-xs" data-testid="row-thresholds-audit-${i}">
+          <div${anchorId} class="px-3 py-2 border border-gray-200 rounded text-xs" data-testid="row-thresholds-audit-${i}">
             <div class="flex items-center justify-between flex-wrap gap-2">
               <div class="font-medium text-gray-800">${esc(r.changed_by || 'unknown')}</div>
               <div class="text-gray-500">${esc(fmtDate(r.changed_at))}</div>

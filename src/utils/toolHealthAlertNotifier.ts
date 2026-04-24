@@ -633,3 +633,226 @@ export async function notifyToolHealthConfigChange(
 
   return result;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Override auto-revert notification (Task #213)
+//
+// When the cron's reaper clears an expired tool-health override row, post a
+// Slack message to the same on-call channel so the team notices that the
+// env baseline has taken back over. Best-effort: failure is logged but
+// never propagates back to the cron.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Camel-case → human-readable label for the cleared override fields. */
+const OVERRIDE_FIELD_LABELS: Record<string, string> = {
+  windowMinutes: "rolling window (min)",
+  minCalls: "min calls per window",
+  errorRatePct: "error-rate breach floor (%)",
+  errorRateHighPct: "error-rate high cutoff (%)",
+  errorRateCriticalPct: "error-rate critical cutoff (%)",
+  p95LatencyMs: "p95 latency breach floor (ms)",
+  latencyHighMs: "p95 latency high cutoff (ms)",
+  latencyCriticalMs: "p95 latency critical cutoff (ms)",
+};
+
+function describeClearedOverrides(
+  cleared: Record<string, number | undefined>,
+): string {
+  const keys = Object.keys(cleared).filter((k) => cleared[k] != null);
+  if (keys.length === 0) return "_(no fields recorded)_";
+  return keys
+    .map((k) => `• \`${OVERRIDE_FIELD_LABELS[k] ?? k}\` (was ${cleared[k]})`)
+    .join("\n");
+}
+
+function describeClearedOverridesPlain(
+  cleared: Record<string, number | undefined>,
+): string {
+  const keys = Object.keys(cleared).filter((k) => cleared[k] != null);
+  if (keys.length === 0) return "(no fields recorded)";
+  return keys
+    .map((k) => `${OVERRIDE_FIELD_LABELS[k] ?? k} (was ${cleared[k]})`)
+    .join(", ");
+}
+
+export interface ToolHealthOverrideExpiredNotification {
+  /** Map of cleared override field → its prior value. */
+  cleared_overrides: Record<string, number | undefined>;
+  /**
+   * `updated_by` recorded against the override row immediately before
+   * the reaper cleared it. May be an email like `alice@example.com`,
+   * a free-form name, or `null` when the row had no attribution.
+   */
+  previous_updated_by: string | null;
+  /** The `expires_at` timestamp the reaper acted on. */
+  expired_at: Date | null;
+  /** The audit row id written by the reaper. */
+  audit_id: number | null;
+}
+
+export interface NotifyOverrideExpiredResult {
+  slackSent: boolean;
+  /** True when no Slack channel is configured — caller can ignore quietly. */
+  skipped: boolean;
+}
+
+export interface ToolHealthOverrideNotifierDeps {
+  /** Defaults to `sendSlackNotification`. */
+  sendSlack?: typeof sendSlackNotification;
+}
+
+function buildOverrideExpiredSlackBlocks(
+  n: ToolHealthOverrideExpiredNotification,
+  link: string,
+  linkIsAbsolute: boolean,
+): any[] {
+  const setBy = n.previous_updated_by?.trim() || "_unknown_";
+  const expiredAtIso =
+    n.expired_at instanceof Date
+      ? n.expired_at.toISOString()
+      : n.expired_at != null
+      ? String(n.expired_at)
+      : "—";
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: ":hourglass_flowing_sand: Tool-health override auto-reverted",
+        emoji: true,
+      },
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `Tool-health overrides scheduled by *${setBy}* just auto-reverted ` +
+          `(expires_at: \`${expiredAtIso}\`). Alerts are now using the env ` +
+          `baseline again — keep an eye out for breaches the override was ` +
+          `silencing.`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Cleared fields:*\n${describeClearedOverrides(n.cleared_overrides)}`,
+      },
+    },
+  ];
+  // Slack rejects relative URLs in `actions.button.url`, so degrade to a
+  // plain mrkdwn link when no public origin is configured (mirrors the
+  // breach notifier's behavior — see buildSlackBlocks).
+  if (linkIsAbsolute) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Open audit log",
+            emoji: true,
+          },
+          url: link,
+          style: "primary",
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:link: AI Operations panel: \`${link}\`\n` +
+          `_Set \`TOOL_HEALTH_APP_URL\` to enable a clickable link._`,
+      },
+    });
+  }
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text:
+          `:robot_face: _WalaPlus tool-health override reaper` +
+          (n.audit_id != null ? ` | audit row #${n.audit_id}` : "") +
+          `_`,
+      },
+    ],
+  });
+  return blocks;
+}
+
+/**
+ * Post a Slack message announcing that the time-boxed override row was
+ * auto-reverted by the cron's reaper (Task #213).
+ *
+ * Best-effort by design — the cron calls this AFTER the reaper has already
+ * cleared the row and written the audit entry, so a Slack outage must not
+ * roll back the revert. The function therefore:
+ *   • returns `{ skipped: true }` when no Slack channel is configured
+ *     (dev/test environments shouldn't have to special-case the call);
+ *   • catches and logs any error from `sendSlack` so the caller can stay
+ *     in a single try/catch around the whole cron tick;
+ *   • does NOT consult the breach throttle map — a reaper firing is a
+ *     comparatively rare event and operators want to see every one.
+ *
+ * The link points at the AI Operations thresholds tab and (when available)
+ * deep-links straight to the audit row that was just written, so the
+ * recipient can confirm "who set what" in one click.
+ */
+export async function notifyToolHealthOverrideExpired(
+  notification: ToolHealthOverrideExpiredNotification,
+  depsOverride: ToolHealthOverrideNotifierDeps = {},
+): Promise<NotifyOverrideExpiredResult> {
+  const cfg = readConfig();
+  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+
+  const result: NotifyOverrideExpiredResult = {
+    slackSent: false,
+    skipped: false,
+  };
+
+  if (!cfg.slackChannel) {
+    result.skipped = true;
+    return result;
+  }
+
+  // Build a deep link to the thresholds tab + the specific audit row when
+  // we have an audit_id. The dashboard renders an `id="threshold-audit-N"`
+  // anchor on each row so this scrolls straight to the entry.
+  const baseLink = cfg.link.includes("?")
+    ? `${cfg.link}&tab=thresholds`
+    : `${cfg.link}?tab=thresholds`;
+  const link =
+    notification.audit_id != null
+      ? `${baseLink}#threshold-audit-${notification.audit_id}`
+      : baseLink;
+
+  const setBy = notification.previous_updated_by?.trim() || "unknown";
+  const fallback =
+    `:hourglass_flowing_sand: Tool-health overrides scheduled by ` +
+    `${setBy} just auto-reverted; alerts now using env baseline ` +
+    `again. Cleared: ${describeClearedOverridesPlain(notification.cleared_overrides)}.`;
+
+  try {
+    result.slackSent = await sendSlack(
+      cfg.slackChannel,
+      fallback,
+      buildOverrideExpiredSlackBlocks(notification, link, cfg.linkIsAbsolute),
+    );
+  } catch (err) {
+    console.error(
+      `[ToolHealthNotifier] Slack send threw for override auto-revert ` +
+        `(audit_id=${notification.audit_id ?? "?"}):`,
+      err,
+    );
+    result.slackSent = false;
+  }
+
+  return result;
+}

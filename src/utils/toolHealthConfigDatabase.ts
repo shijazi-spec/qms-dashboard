@@ -407,6 +407,15 @@ export interface ReapExpiredToolHealthOverridesResult {
   expired_at: Date | null;
   /** The audit row id when reaped, otherwise null. */
   audit_id: number | null;
+  /**
+   * The `updated_by` value that was on the override row immediately
+   * before the reaper cleared it — i.e. the operator (or system actor)
+   * who originally scheduled the time-boxed override. Surfaced so the
+   * Slack auto-revert notification (Task #213) can attribute the change
+   * back to the human who set it. `null` when the row didn't exist or
+   * had no updated_by recorded.
+   */
+  previous_updated_by: string | null;
 }
 
 /**
@@ -454,10 +463,12 @@ export async function reapExpiredToolHealthOverrides(): Promise<ReapExpiredToolH
         cleared_overrides: {},
         expired_at: row?.expires_at ?? null,
         audit_id: null,
+        previous_updated_by: row?.updated_by ?? null,
       };
     }
 
     const before = rowToOverrides(row);
+    const previousUpdatedBy: string | null = row?.updated_by ?? null;
     const expiredAt: Date =
       row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at);
 
@@ -500,6 +511,7 @@ export async function reapExpiredToolHealthOverrides(): Promise<ReapExpiredToolH
       cleared_overrides: before,
       expired_at: expiredAt,
       audit_id: auditResult.rows[0].id,
+      previous_updated_by: previousUpdatedBy,
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

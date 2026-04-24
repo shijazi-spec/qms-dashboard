@@ -41,6 +41,7 @@ import {
 } from "../../utils/aiAlertsDatabase";
 import {
   notifyToolHealthBreach,
+  notifyToolHealthOverrideExpired,
   type NotifyToolHealthBreachResult,
 } from "../../utils/toolHealthAlertNotifier";
 import {
@@ -364,6 +365,14 @@ export interface ToolHealthDeps {
    * about the auto-revert path can leave it unstubbed.
    */
   reapExpiredOverrides?: () => Promise<ReapExpiredToolHealthOverridesResult>;
+  /**
+   * Posts a Slack message announcing the auto-revert when the reaper
+   * clears an expired override (Task #213). Optional so existing stubs
+   * stay backwards-compatible — the production default delegates to
+   * {@link notifyToolHealthOverrideExpired}, and tests can stub it to
+   * capture the call without touching real Slack.
+   */
+  notifyOverrideExpired?: typeof notifyToolHealthOverrideExpired;
 }
 
 const DEFAULT_DEPS: Required<ToolHealthDeps> = {
@@ -375,6 +384,7 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   notifyToolHealthBreach,
   loadOverrides: getToolHealthConfigOverrides,
   reapExpiredOverrides: reapExpiredToolHealthOverrides,
+  notifyOverrideExpired: notifyToolHealthOverrideExpired,
 };
 
 /**
@@ -547,6 +557,8 @@ export async function runToolHealthCheck(
     loadOverrides: depsOverride?.loadOverrides ?? DEFAULT_DEPS.loadOverrides,
     reapExpiredOverrides:
       depsOverride?.reapExpiredOverrides ?? DEFAULT_DEPS.reapExpiredOverrides,
+    notifyOverrideExpired:
+      depsOverride?.notifyOverrideExpired ?? DEFAULT_DEPS.notifyOverrideExpired,
   };
 
   // Reap any expired override rows BEFORE loading the merged config so
@@ -568,6 +580,27 @@ export async function runToolHealthCheck(
     }
   } catch (err) {
     console.error("[ToolHealth] Override reaper failed:", err);
+  }
+
+  // Task #213: when the reaper actually swept a row, push a Slack post to
+  // the tool-health channel so on-call notices that the override silencing
+  // alerts has just lifted. This is strictly best-effort: the override
+  // and audit row have already been written to the database — a Slack
+  // outage must not abort the surrounding cron tick or undo the revert.
+  if (reaperResult?.reaped) {
+    try {
+      await deps.notifyOverrideExpired({
+        cleared_overrides: reaperResult.cleared_overrides,
+        previous_updated_by: reaperResult.previous_updated_by,
+        expired_at: reaperResult.expired_at,
+        audit_id: reaperResult.audit_id,
+      });
+    } catch (err) {
+      console.error(
+        "[ToolHealth] Override auto-revert Slack notification failed:",
+        err,
+      );
+    }
   }
 
   // Re-read overrides on every pass so live edits from the AI Ops panel
