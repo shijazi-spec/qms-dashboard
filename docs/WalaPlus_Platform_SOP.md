@@ -1486,7 +1486,99 @@ Owners with Team = `Unassigned` should be triaged within 5 working days (assign 
 | `userAccessRoutes.ts` | User management |
 | `vendorRoutes.ts` | Vendor management |
 
-### 12.4 Utility Modules (47)
+### 12.4 Engineering SOP: Where to Add New Routes and Middleware
+
+#### Adding a New API Route
+
+1. **Identify the domain** — pick the right domain file in `src/mastra/routes/`:
+
+   | Route file | Use for |
+   |---|---|
+   | `dashboardApiRoutes.ts` | `/api/dashboard/*`, `/api/audit/*`, `/api/agents/*`, `/api/governance`, `/api/scorecard`, `/api/crm/*`, `/api/integrations/*` |
+   | `adminApiRoutes.ts` | `/api/admin/*`, `/api/workflow/*`, `/api/system/*`, `/api/activity/*` |
+   | `qmsApiRoutes.ts` | `/api/qms/*` |
+   | `sandboxApiRoutes.ts` | `/api/sandbox/*` |
+   | `tablefApiRoutes.ts` | `/api/tablef/*` |
+   | `feedbackApiRoutes.ts` | `/api/feedback/*` |
+   | `sopRoutes.ts` | `/api/sop`, `/api/sop/download` |
+   | `staticPageRoutes.ts` | HTML page shells (GET returning `c.html(...)`) |
+
+2. **Use the standard route object shape**:
+
+   ```ts
+   {
+     path: "/api/my-domain/something",
+     method: "GET",          // GET | POST | PUT | DELETE | PATCH | ALL
+     createHandler: async ({ mastra }) => {
+       return async (c: any) => {
+         // handler logic
+         return c.json({ success: true });
+       };
+     },
+   }
+   ```
+
+   - All imports inside `createHandler` must use `../../utils/...` or `../../data/...` (two levels up from `src/mastra/routes/`).
+   - Add admin auth check where required: copy the `isAdminAuthorized(c)` helper pattern from `adminApiRoutes.ts`.
+
+3. **Create a new domain file** (if none fits) in `src/mastra/routes/my-new-domain-routes.ts`, export a named `const` array, import and spread it in `src/mastra/index.ts`, and update `src/mastra/routeManifest.ts`.
+
+4. **Register in `src/mastra/index.ts`**:
+
+   ```ts
+   import { myNewRoutes } from "./routes/myNewRoutes";
+   // ...
+   apiRoutes: [
+     ...myNewRoutes,
+     // existing spreads
+   ],
+   ```
+
+5. **Update the route manifest** `src/mastra/routeManifest.ts` — add entries to the correct domain block (or add a new block).
+
+6. **Run the 66-test safety net** before merging:
+
+   ```bash
+   bash scripts/run-platform-tests.sh
+   ```
+
+#### Adding or Modifying Middleware
+
+All global middleware lives in **`src/mastra/middleware/index.ts`** as the `globalMiddleware` array.
+
+Follow these rules:
+
+- **Add middleware at the correct position** in the array (CORS first, auth second, RBAC third, rate-limit fourth, sanitizer fifth, CSP sixth, error handler last).
+- **Use the `urlPath` / `isApi` / `method` guards** already present to avoid applying expensive logic to static assets or health checks:
+  ```ts
+  if (urlPath.startsWith('/api/') && method !== 'GET') {
+    // sanitize request body
+  }
+  ```
+- **Never add middleware that reads the request body** before the route handler — Hono streams the body once. Use `await c.req.json()` inside the route handler, not in middleware.
+- **Middleware signature**:
+  ```ts
+  {
+    handler: async (c, next) => {
+      // pre-processing
+      await next();
+      // post-processing (optional)
+    },
+  }
+  ```
+
+#### The Composition Root (`src/mastra/index.ts`)
+
+`index.ts` must remain ≤ 400 lines. It is **only** for:
+- Core Mastra imports and `new Mastra({...})` config
+- Importing and spreading route arrays
+- `ProductionPinoLogger` class definition
+- `registerCronTrigger` call
+- Sanity checks and the cache pre-warmer IIFE
+
+**Never add inline route handlers directly to `index.ts`**. Extract them into the appropriate route file.
+
+### 12.5 Utility Modules (47)
 
 | Utility | Purpose |
 |---------|---------|

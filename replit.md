@@ -8,6 +8,25 @@ I prefer clear and concise communication. For development, I favor iterative pro
 
 ## Recent Changes
 
+### April 24, 2026 — God-file refactor: thin composition root
+`src/mastra/index.ts` was a 4,433-line god file. It has been refactored into a 251-line thin composition root. All inline route handlers and middleware were extracted:
+
+**New files created:**
+- `src/mastra/middleware/index.ts` — `globalMiddleware` array (CORS, auth, RBAC, rate-limit, sanitizer, CSP, error handler)
+- `src/mastra/routes/dashboardApiRoutes.ts` — `/api/dashboard/*`, `/api/audit/*`, `/api/agents/performance`, `/api/inngest`, `/api/scorecard`, `/api/governance`, `/api/crm/*`, `/api/integrations/*`
+- `src/mastra/routes/adminApiRoutes.ts` — `/api/admin/*`, `/api/workflow/*`, `/api/system/*`, `/api/activity/*`
+- `src/mastra/routes/qmsApiRoutes.ts` — `/api/qms/*` (dashboard, evaluations, CAPA, NC, training, framework)
+- `src/mastra/routes/sandboxApiRoutes.ts` — `/api/sandbox/*`
+- `src/mastra/routes/tablefApiRoutes.ts` — `/api/tablef/*` (departments, KPIs, performance, users)
+- `src/mastra/routes/staticPageRoutes.ts` — all HTML page shells
+- `src/mastra/routes/staticAssetRoutes.ts` — CSS/JS assets
+- `src/mastra/routes/feedbackApiRoutes.ts` — `/api/feedback/*`
+- `src/mastra/routes/sopRoutes.ts` — `/api/sop`, `/api/sop/download`
+- `src/mastra/routeManifest.ts` — full route inventory with guidance on where to add new routes
+- SOP §12.4 "Engineering SOP: Where to Add New Routes and Middleware" added to `docs/WalaPlus_Platform_SOP.md`
+
+All 66 platform tests green.
+
 ### April 21, 2026 — Side rail navigation
 Replaced the horizontal top-bar nav (`dashboard/js/navigation.js`) with a fixed left side rail (256px ↔ 64px collapsible, persisted in `localStorage['walaplus-nav-collapsed']`) plus a 48px top strip that retains the WalaPlus logo, refresh button, notification bell, and user menu. Single-file change picked up by all 36 dashboards via the existing `<div id="walaplus-nav">` mount point. Includes a menu search filter, mobile off-canvas rail with backdrop + Esc-to-close + focus management, and `aria-expanded`/`aria-controls` on toggles. Layout offsets injected via `#walaplus-nav-layout-style` style block; responsive visibility uses custom CSS classes (`.wp-rail-toggle-btn`, `.wp-mobile-menu-btn`, `.wp-desktop-only`, `.wp-tagline`) because the precompiled `dashboard/tailwind.css` does not ship `sm:`/`md:` variants. All preserved IDs/contracts: `#nav-alert-badge`, `#nav-notifications-list`, `#nav-user-info`, `#lastUpdated`, `navigationGroups`, `getColorClasses`, `getItemIcon`. e2e verified: auth → policies → toggle collapse/expand → search "audit" filter → click Health Pulse → navigate with active highlight.
 
