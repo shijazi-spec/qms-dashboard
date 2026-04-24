@@ -205,6 +205,9 @@
                 <button data-on-click="applyFilters" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
                     Apply Filters
                 </button>
+                <button id="exportLogsBtn" data-on-click="exportCSV" data-pass-event="true" data-testid="button-export-logs-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition font-medium">
+                    Export CSV <span data-size-hint class="ml-1 text-xs opacity-90"></span>
+                </button>
             </div>
         </div>
 
@@ -538,8 +541,40 @@
             document.getElementById('nextPage').disabled = currentPage >= totalPagesCount;
         }
 
+        function buildLogsExportUrl() {
+            const params = new URLSearchParams();
+            const fromDate = document.getElementById('filterFromDate').value;
+            const toDate = document.getElementById('filterToDate').value;
+            const actionType = document.getElementById('filterActionType').value;
+            const entityType = document.getElementById('filterEntityType').value;
+            const module = document.getElementById('filterModule').value;
+            const severity = document.getElementById('filterSeverity').value;
+            const aiInvolved = document.getElementById('filterAI').value;
+            const search = document.getElementById('filterSearch').value;
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (actionType) params.append('actionType', actionType);
+            if (entityType) params.append('entityType', entityType);
+            if (module) params.append('module', module);
+            if (severity) params.append('severity', severity);
+            if (aiInvolved) params.append('aiInvolved', aiInvolved);
+            if (search) params.append('search', search);
+            return `/api/logs/export${params.toString() ? '?' + params.toString() : ''}`;
+        }
+
+        function refreshLogsExportHint() {
+            if (!window.streamingDownload || !streamingDownload.fetchEstimate) return;
+            const btn = document.getElementById('exportLogsBtn');
+            if (!btn) return;
+            const url = buildLogsExportUrl();
+            streamingDownload.fetchEstimate(url)
+                .then((est) => streamingDownload.applySizeHint(btn, est))
+                .catch(() => { /* hint is best-effort */ });
+        }
+
         function applyFilters() {
             loadLogs(1);
+            refreshLogsExportHint();
         }
 
         function clearFilters() {
@@ -552,30 +587,11 @@
             document.getElementById('filterAI').value = '';
             document.getElementById('filterSearch').value = '';
             loadLogs(1);
+            refreshLogsExportHint();
         }
 
         function exportCSV(event) {
-            const params = new URLSearchParams();
-            
-            const fromDate = document.getElementById('filterFromDate').value;
-            const toDate = document.getElementById('filterToDate').value;
-            const actionType = document.getElementById('filterActionType').value;
-            const entityType = document.getElementById('filterEntityType').value;
-            const module = document.getElementById('filterModule').value;
-            const severity = document.getElementById('filterSeverity').value;
-            const aiInvolved = document.getElementById('filterAI').value;
-            const search = document.getElementById('filterSearch').value;
-            
-            if (fromDate) params.append('fromDate', fromDate);
-            if (toDate) params.append('toDate', toDate);
-            if (actionType) params.append('actionType', actionType);
-            if (entityType) params.append('entityType', entityType);
-            if (module) params.append('module', module);
-            if (severity) params.append('severity', severity);
-            if (aiInvolved) params.append('aiInvolved', aiInvolved);
-            if (search) params.append('search', search);
-            
-            const url = `/api/logs/export${params.toString() ? '?' + params.toString() : ''}`;
+            const url = buildLogsExportUrl();
             const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             return streamingDownloadFromEvent(event || null, url, { filename: `event-logs-${ts}.csv` });
         }
@@ -583,6 +599,13 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadStats();
             loadLogs(1);
+            refreshLogsExportHint();
+
+            const filterIds = ['filterFromDate', 'filterToDate', 'filterActionType', 'filterEntityType', 'filterModule', 'filterSeverity', 'filterAI', 'filterSearch'];
+            filterIds.forEach(function(id) {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', refreshLogsExportHint);
+            });
         });
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
