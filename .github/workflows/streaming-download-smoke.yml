@@ -1,0 +1,101 @@
+name: Streaming download — cross-browser smoke
+
+# Runs the real-browser streaming-download smoke test (Chromium, Firefox,
+# WebKit) against a freshly booted dev server. The Vitest jsdom suite covers
+# the JavaScript control flow but cannot catch real-browser regressions in
+# transferable ReadableStream over postMessage, the SW iframe trigger, or
+# CSP changes that block the SW. This workflow does — and fails CI for any
+# engine that regresses.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: streaming-download-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Streaming-download smoke (chromium + firefox + webkit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: walaplus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/walaplus_test
+      SESSION_SECRET: ci-session-secret-do-not-use-in-prod
+      ADMIN_API_KEY: ci-admin-key-streaming-smoke
+      TEST_ADMIN_KEY: ci-admin-key-streaming-smoke
+      BASE_URL: http://localhost:5000
+      PORT: "5000"
+      DATA_MODE: REAL
+      CI: "true"
+      # Picked up by tests/runIntegrationTests.ts so contributors who run
+      # `npm test` inside this same CI job opt into the playwright leg too.
+      RUN_STREAMING_DOWNLOAD_E2E: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium, firefox, webkit)
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Start dev server
+        run: |
+          npm run dev > server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Wait for /api/health to come up (max 90 s).
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:5000/api/health > /dev/null; then
+              echo "Server ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become healthy in time" >&2
+          tail -200 server.log >&2 || true
+          exit 1
+
+      - name: Run streaming-download smoke (all 3 engines)
+        run: npx playwright test tests/streamingDownload.spec.ts --reporter=list
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: server.log
+          if-no-files-found: ignore
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "${SERVER_PID}" 2>/dev/null || true
+          fi

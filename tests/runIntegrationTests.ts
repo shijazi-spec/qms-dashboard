@@ -26,6 +26,14 @@
  * Override the worker count with TEST_CONCURRENCY (e.g. TEST_CONCURRENCY=1
  * for fully serial debugging).
  *
+ * Cross-browser Playwright smoke (streaming downloads): if the env var
+ * `RUN_STREAMING_DOWNLOAD_E2E=1` is set we additionally run the streaming
+ * download spec across Chromium/Firefox/WebKit. This needs the dev server
+ * running and the requested browsers installed (`npx playwright install`).
+ * The dedicated CI workflow `.github/workflows/streaming-download-smoke.yml`
+ * sets that env after standing up the prerequisites, so a regression in
+ * any browser engine fails CI for that workflow.
+ *
  * Usage:    npm test
  *           npx tsx tests/runIntegrationTests.ts
  *           TEST_CONCURRENCY=1 npx tsx tests/runIntegrationTests.ts
@@ -144,6 +152,35 @@ function resolveConcurrency(fileCount: number): number {
   return Math.max(1, Math.min(4, cpus, Math.max(1, fileCount)));
 }
 
+function runStreamingDownloadSmoke(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingDownload.spec.ts (chromium+firefox+webkit)";
+    const child = spawn(
+      "npx",
+      ["playwright", "test", "tests/streamingDownload.spec.ts", "--reporter=list"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(`Failed to spawn playwright: ${(err as Error).message}`);
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 async function main(): Promise<void> {
   const overallStart = Date.now();
   const files = await discoverTestFiles();
@@ -170,6 +207,15 @@ async function main(): Promise<void> {
   const vitestResult = await vitestPromise;
 
   const results: RunResult[] = [...tsxResults, vitestResult];
+
+  if (process.env.RUN_STREAMING_DOWNLOAD_E2E === "1") {
+    console.log(`\n──── tests/streamingDownload.spec.ts (playwright, all engines) ────`);
+    results.push(await runStreamingDownloadSmoke());
+  } else {
+    console.log(
+      `\n[skip] streamingDownload.spec.ts — set RUN_STREAMING_DOWNLOAD_E2E=1 with the dev server running and Playwright browsers installed to include it.`,
+    );
+  }
 
   const passed = results.filter((r) => r.ok).length;
   const failed = results.length - passed;
