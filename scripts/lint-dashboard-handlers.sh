@@ -23,4 +23,4 @@
 
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec node "$DIR/.local/scripts/check-handlers.cjs" "$@"
+exec node "$DIR/scripts/check-handlers.cjs" "$@"
