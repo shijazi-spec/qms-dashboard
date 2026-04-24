@@ -5,6 +5,118 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+/* -------------------------------------------------------------------------
+ * Sensitive-field redaction
+ * -------------------------------------------------------------------------
+ * DENY LIST — any key that matches one of these patterns will have its value
+ * replaced with REDACTED_SENTINEL before it is written to event_logs or
+ * change_history.  New patterns must be added here; the allow-list is
+ * "everything not on the deny list".
+ *
+ * Pattern rules (matched case-insensitively against the field / key name):
+ *   1. Exact names listed in SENSITIVE_EXACT_FIELDS
+ *   2. Suffix patterns: key ends with one of SENSITIVE_SUFFIXES
+ *   3. Prefix patterns: key starts with one of SENSITIVE_PREFIXES
+ * -------------------------------------------------------------------------*/
+
+export const REDACTED_SENTINEL = '***REDACTED***';
+
+const SENSITIVE_EXACT_FIELDS = new Set([
+  'password',
+  'password_hash',
+  'passwordhash',
+  'hashed_password',
+  'mfa_secret',
+  'mfa_code',
+  'mfa_token',
+  'mfa_backup_codes',
+  'secret',
+  'token',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'bot_token',
+  'api_key',
+  'apikey',
+  'client_secret',
+  'private_key',
+  'signing_key',
+  'session_secret',
+  'encryption_key',
+  'zoho_refresh_token',
+  'zoho_access_token',
+  'slack_bot_token',
+  'resend_api_key',
+  'openai_api_key',
+]);
+
+const SENSITIVE_SUFFIXES = [
+  '_token',
+  '_secret',
+  '_key',
+  '_hash',
+  '_password',
+  '_credential',
+  '_credentials',
+];
+
+const SENSITIVE_PREFIXES = [
+  'password',
+  'mfa_',
+  'secret_',
+  'token_',
+];
+
+export function isSensitiveField(key: string): boolean {
+  const lower = key.toLowerCase();
+  if (SENSITIVE_EXACT_FIELDS.has(lower)) return true;
+  for (const suffix of SENSITIVE_SUFFIXES) {
+    if (lower.endsWith(suffix)) return true;
+  }
+  for (const prefix of SENSITIVE_PREFIXES) {
+    if (lower.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+/**
+ * Recursively walks a payload object and replaces the *values* of any keys
+ * that match the deny list with REDACTED_SENTINEL.  Non-object primitives are
+ * returned unchanged.  Arrays are walked element-by-element.
+ *
+ * @param payload   - The value to sanitize (may be any JSON-serialisable type)
+ * @param fieldName - When the payload IS the secret (e.g. a plain string
+ *                    stored under a sensitive column name in change_history),
+ *                    pass the column name here and the whole value is redacted.
+ */
+export function redactSensitiveFields(payload: any, fieldName?: string): any {
+  if (payload === null || payload === undefined) return payload;
+
+  if (fieldName && isSensitiveField(fieldName)) {
+    return REDACTED_SENTINEL;
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.map(item => redactSensitiveFields(item));
+  }
+
+  if (typeof payload === 'object') {
+    const redacted: Record<string, any> = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (isSensitiveField(key)) {
+        redacted[key] = REDACTED_SENTINEL;
+      } else if (value !== null && typeof value === 'object') {
+        redacted[key] = redactSensitiveFields(value);
+      } else {
+        redacted[key] = value;
+      }
+    }
+    return redacted;
+  }
+
+  return payload;
+}
+
 export interface EventLog {
   id: number;
   timestamp: Date;
@@ -335,8 +447,8 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
         input.entityId || null,
         input.entityName || null,
         input.description || null,
-        input.oldValue ? JSON.stringify(input.oldValue) : null,
-        input.newValue ? JSON.stringify(input.newValue) : null,
+        input.oldValue ? JSON.stringify(redactSensitiveFields(input.oldValue)) : null,
+        input.newValue ? JSON.stringify(redactSensitiveFields(input.newValue)) : null,
         input.aiInvolved || false,
         input.severity || 'INFO',
         input.correlationId || null,

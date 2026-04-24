@@ -21,6 +21,7 @@
 
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
+import { redactSensitiveFields } from './eventLogsDatabase';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -158,7 +159,8 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   await initAIApprovalTable();
 
   const ttlHours = input.ttlHours ?? 24;
-  const checksum = checksumPayload(input.payload);
+  const safePayload = redactSensitiveFields(input.payload);
+  const checksum = checksumPayload(safePayload);
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateActionCode();
@@ -175,7 +177,7 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
           code,
           input.toolId,
           input.toolLabel,
-          JSON.stringify(input.payload),
+          JSON.stringify(safePayload),
           input.payloadPreview,
           checksum,
           input.riskLevel,
@@ -342,7 +344,7 @@ export async function recordExecutionResult(
     [
       code,
       result.success,
-      JSON.stringify({ data: result.data, error: result.error }),
+      JSON.stringify({ data: redactSensitiveFields(result.data), error: result.error }),
       result.entityType || null,
       result.entityId || null,
     ]

@@ -374,6 +374,93 @@ This document serves as:
 
 ---
 
+### 4.8 Audit Log Sensitive Field Masking (Post-Assessment Enhancement)
+
+**Effective Date:** April 24, 2026
+**Classification:** Security Enhancement — Proactive
+
+#### Background
+
+Prior to this enhancement, the `event_logs` and `change_history` tables stored `old_value` / `new_value` columns as raw JSON snapshots of the changed entity. No deny list existed, so any update to `platform_users`, API key tables, integration credentials (Zoho refresh token, Slack bot token, Resend API key, OpenAI key), MFA secrets, or password hashes would write the secret material into the audit table. Because the audit log is readable by `admin` and `auditor` roles and is routinely shared during external assessments, sensitive material was on a credible path to disclosure.
+
+#### Remediation
+
+A central `redactSensitiveFields(payload, fieldName?)` helper was implemented in `src/utils/eventLogsDatabase.ts` and wired into every write path that records `old_value`/`new_value`. The helper uses a three-level deny list and replaces matching values with the sentinel string `***REDACTED***` before any data reaches the database.
+
+**Files Modified:**
+- `src/utils/eventLogsDatabase.ts` — helper implementation + wired into `logEvent()`
+- `src/utils/changeHistoryDatabase.ts` — wired into `logNCChange()` and `logCAPAChange()`
+- `src/utils/aiApprovalDatabase.ts` — wired into `enqueuePendingAction()` and `recordExecutionResult()`
+- `src/utils/redactHistoricalLogs.ts` — one-off sweep script for historical rows (includes ai_pending_actions)
+- `src/utils/redactSensitiveFields.test.ts` — automated regression tests
+
+#### Deny-List Rules (matched case-insensitively against the key name)
+
+**Tier 1 — Exact field names:**
+
+| Field | Reason |
+|-------|--------|
+| `password`, `password_hash`, `passwordhash`, `hashed_password` | User credentials |
+| `mfa_secret`, `mfa_code`, `mfa_token`, `mfa_backup_codes` | MFA material |
+| `secret`, `token` | Generic secret tokens |
+| `access_token`, `refresh_token`, `id_token`, `bot_token` | OAuth / API tokens |
+| `api_key`, `apikey`, `client_secret`, `private_key` | API credentials |
+| `signing_key`, `session_secret`, `encryption_key` | Cryptographic keys |
+| `zoho_refresh_token`, `zoho_access_token` | Zoho CRM integration |
+| `slack_bot_token` | Slack integration |
+| `resend_api_key`, `openai_api_key` | Email / AI integration keys |
+
+**Tier 2 — Suffix patterns (any key ending with):**
+
+`_token`, `_secret`, `_key`, `_hash`, `_password`, `_credential`, `_credentials`
+
+**Tier 3 — Prefix patterns (any key starting with):**
+
+`password`, `mfa_`, `secret_`, `token_`
+
+#### Redaction Behaviour
+
+- Matching key values are replaced with `***REDACTED***`.
+- Non-matching sibling keys in the same object are stored unmodified.
+- Redaction is recursive — nested objects and arrays are walked fully.
+- The `description` field (human-readable event summary) is **not** affected; it must already describe the action in plain English without embedding secrets (e.g. "password updated", not the hash value).
+- The `change_history` tables store values as plain strings. When `field_changed` matches the deny list, both `old_value` and `new_value` are set to `***REDACTED***`.
+
+#### Historical Data Sweep
+
+A one-off migration script (`src/utils/redactHistoricalLogs.ts`) scans all existing `event_logs`, `nc_change_history`, and `capa_change_history` rows for matching keys and rewrites them to `***REDACTED***`. Each swept `event_logs` JSON object gains a `_redacted_at` breadcrumb key recording the sweep timestamp (ISO-8601). The script is idempotent and safe to re-run.
+
+**To execute the sweep:**
+```bash
+npx tsx src/utils/redactHistoricalLogs.ts
+```
+
+#### Testing
+
+`src/utils/redactSensitiveFields.test.ts` includes 14 unit tests covering:
+- Null / undefined pass-through
+- Non-sensitive object pass-through
+- All three deny-list tiers
+- Recursive object and array redaction
+- Plain-string redaction via `fieldName` param (change_history path)
+- Password-change scenario: asserts `new_value` does not contain plaintext password or bcrypt hash
+
+Run tests with: `npx jest src/utils/redactSensitiveFields.test.ts`
+
+#### Extending the Deny List
+
+To add a new sensitive field:
+1. If it is an exact name, add it to `SENSITIVE_EXACT_FIELDS` in `src/utils/eventLogsDatabase.ts`.
+2. If it follows a pattern, add the suffix to `SENSITIVE_SUFFIXES` or the prefix to `SENSITIVE_PREFIXES`.
+3. Add a corresponding test case in `src/utils/redactSensitiveFields.test.ts`.
+4. Re-run the historical sweep script to cover any existing rows.
+
+#### Pentest Reference
+
+This enhancement proactively closes the audit-log secret-exposure vector identified during internal review (April 2026). It should be referenced in the next pentest scope document and retest evidence package as a proactive control.
+
+---
+
 ## 5. Security Policies & Procedures
 
 ### 5.1 Role-Based Access Control (RBAC) Policy
@@ -656,6 +743,10 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 | Rate Limiter | `src/utils/rateLimiter.ts` | Path-aware rate limiting |
 | Auth Routes | `src/mastra/routes/authRoutes.ts` | OAuth flow, session management |
 | Main Server | `src/mastra/index.ts` | Global middleware, CSP, CORS, security headers |
+| Sensitive Field Redaction | `src/utils/eventLogsDatabase.ts` | `redactSensitiveFields()` helper + deny-list rules |
+| Change History Redaction | `src/utils/changeHistoryDatabase.ts` | Redaction wired into NC/CAPA change history |
+| Historical Redaction Sweep | `src/utils/redactHistoricalLogs.ts` | One-off migration to mask existing audit rows |
+| Redaction Tests | `src/utils/redactSensitiveFields.test.ts` | 14 unit tests for the redaction helper |
 
 ---
 
@@ -666,7 +757,7 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 | 1.0 | March 12, 2026 | WalaPlus Security Team | Initial VAPT remediation (19 findings) |
 | 2.0 | March 15, 2026 | WalaPlus Security Team | Security Assessment Response document |
 | 3.0 | March 24, 2026 | WalaPlus Security Team | Pentest v3.0 full remediation (39 findings), comprehensive SOP |
-| 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes (capa-effectiveness, compliance-posture); in-handler requireRole() defense-in-depth; updated §5.1 Report Route Access Control table; added unit test (tests/rbacReportRoutes.test.ts) |
+| 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes; Added section 4.8: Audit Log Sensitive Field Masking. Implemented `redactSensitiveFields()` deny-list helper, wired into all event_logs and change_history write paths, retroactive sweep script, regression tests, and updated References. |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.
