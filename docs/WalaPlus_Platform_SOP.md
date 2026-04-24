@@ -2178,7 +2178,170 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 ---
 
-## 25. Recent Changes Log
+## 25. Engineering Patterns — Exports & Bulk Writes
+
+> **Audience:** Backend engineers working on GRC route files and database utilities.
+
+### 25.1 Streaming XLSX Exports
+
+All XLSX exports use the `streamXlsx` helper in `src/utils/excelExport.ts`. This helper wraps ExcelJS's streaming `WorkbookWriter`, piping data through a Node.js `PassThrough` stream into a Web-API `ReadableStream` that is returned directly as the Hono/Fetch `Response`. No intermediate `Buffer` is assembled in memory.
+
+The `rows` field of each `SheetSpec` accepts either a **plain array** (result already loaded) or an **`AsyncIterable`** (e.g. a `pg-query-stream` cursor) — the helper consumes it with `for await`, enabling O(1)-RSS streaming for arbitrarily large datasets.
+
+**Signature**
+
+```ts
+streamXlsx(
+  sheets: Array<{ name: string; columns: Column[]; rows: Record<string, any>[]; headerFill?: string }>,
+  filename: string,
+  meta?: { title?: string; subject?: string; author?: string }
+): Promise<Response>
+```
+
+**Usage in a route handler**
+
+```ts
+return await streamXlsx(
+  [{ name: 'Sheet1', columns: [...], rows: [...] }],
+  `report_${Date.now()}.xlsx`,
+  { title: 'My Report' }
+);
+```
+
+**Rules**
+- `return await streamXlsx(...)` — do **not** pass the result to `c.body()`.
+- Column `key` values must match the property names in each row object.
+- Use the `headerFill` property (hex colour, e.g. `'#2563EB'`) to theme sheets.
+
+---
+
+### 25.2 Streaming CSV Exports
+
+All CSV exports use the `streamCsv` helper in `src/utils/excelExport.ts`. Data is pushed into a `ReadableStream` controller in chunks; the stream is returned synchronously so the HTTP layer can begin transferring data before all rows are serialised.
+
+Like `streamXlsx`, `rows` accepts either a **plain array** (emitted in chunks of 1 000) or an **`AsyncIterable`** (rows are pushed into the controller as they arrive from the generator/cursor).
+
+**Signature**
+
+```ts
+streamCsv(
+  filename: string,
+  headers: string[],
+  rows: string[][]
+): Response
+```
+
+**Usage in a route handler**
+
+```ts
+const { escapeCSVValue } = await import('../../utils/inputSanitizer');
+const { streamCsv } = await import('../../utils/excelExport');
+
+const csvRows = items.map(item =>
+  [item.id, item.name, item.value].map(v => escapeCSVValue(String(v ?? '')))
+);
+return streamCsv(`export_${Date.now()}.csv`, ['ID', 'Name', 'Value'], csvRows);
+```
+
+**Rules**
+- `return streamCsv(...)` — synchronous, no `await`. Do **not** pass to `c.body()`.
+- Always sanitise cell values with `escapeCSVValue` before passing `rows`.
+
+---
+
+### 25.3 Bulk INSERT Helper
+
+Loop-based single-row INSERTs (`for (const row of rows) pool.query(INSERT ...)`) are prohibited for any write of more than ~10 rows.  Use the `bulkInsert` utility in `src/utils/database.ts` instead.
+
+**Signature**
+
+```ts
+bulkInsert(
+  table: string,
+  columns: string[],
+  rows: Record<string, any>[],
+  options?: {
+    chunkSize?: number;       // default 500
+    _queryFn?: (sql: string, values: any[]) => Promise<any>;  // test injection only
+  }
+): Promise<void>
+```
+
+**Usage**
+
+```ts
+import { bulkInsert } from '../../utils/database';
+
+await bulkInsert(
+  'quality_trends',
+  ['audit_id', 'metric_name', 'metric_value', 'dimension'],
+  metricsArray,           // any length — automatically chunked
+  { chunkSize: 500 }      // optional override
+);
+```
+
+**Rules**
+- The helper builds parameterised `INSERT INTO … VALUES ($1, $2, …)` statements; one statement per chunk.
+- Column order in the `columns` array must match the property order in each row object.
+- NULL-safe: missing or `undefined` fields are sent as `null`.
+- Utility functions in other database modules (`auditDatabase.ts`, `checklistDatabase.ts`, etc.) that cannot import from `database.ts` should implement the same chunked pattern inline using their local pool.
+
+---
+
+### 25.4 Anti-Patterns (Prohibited)
+
+| Anti-pattern | Replacement |
+|---|---|
+| `buildWorkbook(sheets)` + `c.body(buf, 200, xlsxResponseHeaders(...))` | `return await streamXlsx(sheets, filename)` |
+| `new Response(csvString, { headers: { 'Content-Type': 'text/csv' } })` | `return streamCsv(filename, headers, rows)` |
+| `for (row of rows) pool.query('INSERT INTO t VALUES ($1)', [row.x])` | `await bulkInsert('t', ['x'], rows)` |
+| Assembling a full CSV string in memory before responding | Use `streamCsv` — rows are pushed to the stream one at a time |
+
+---
+
+### 25.5 `pagedQuery` — Cursor-Like DB Paging
+
+`pagedQuery` in `src/utils/excelExport.ts` provides cursor-style iteration over any paginated SQL query using LIMIT/OFFSET, without requiring `pg-query-stream`.
+
+```ts
+const source = pagedQuery(
+  (limit, offset) => pool.query(
+    `SELECT ... FROM t WHERE ... ORDER BY id LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  ),
+  500   // rows per page (default)
+);
+return streamCsv(filename, headers, mapToStrings(source));
+```
+
+The generator stops as soon as a page returns fewer rows than `pageSize`.  Use this pattern in all new route exports that query unbounded tables.
+
+---
+
+### 25.6 Regression Tests
+
+Location: `src/utils/__tests__/streamingExports.test.ts`
+
+Run manually with:
+
+```bash
+npx tsx src/utils/__tests__/streamingExports.test.ts
+```
+
+The suite (9 assertions) verifies:
+1. `streamCsv` (array): `ReadableStream`-backed `Response` in < 1 s for 50 k rows; header verified; row count matches.
+2. `streamXlsx` (array): resolves to a `ReadableStream`-backed `Response` for 50 k rows; body non-empty.
+3. `streamCsv` (AsyncIterable): 1 k rows consumed from an async generator correctly.
+4. `streamXlsx` (AsyncIterable): 1 k rows from async generator → valid XLSX bytes.
+5. `bulkInsert` 1 000 rows → exactly 2 INSERT statements (chunkSize=500) — verified via `_queryFn` injection.
+6. `bulkInsert` 100 rows < chunkSize → 1 INSERT.
+7. `bulkInsert` empty rows → 0 SQL statements.
+8. `pagedQuery` yields all 1 300 rows across 3 pages in insertion order.
+9. `streamCsv` first-byte latency: header arrives before any row is generated (0 ms for header line).
+
+---
+
+## 26. Recent Changes Log
 
 | Date | Change | Impact |
 |------|--------|--------|

@@ -506,16 +506,28 @@ export async function getAuditSummary(): Promise<any> {
 }
 
 export async function createChecklist(items: AuditChecklist[]): Promise<AuditChecklist[]> {
-  const results: AuditChecklist[] = [];
-  for (const item of items) {
-    const result = await pool.query(`
-      INSERT INTO audit_checklists (audit_id, category, question, expected_evidence, status, order_index)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `, [item.audit_id, item.category, item.question, item.expected_evidence, item.status || 'pending', item.order_index]);
-    results.push(result.rows[0]);
+  if (items.length === 0) return [];
+  const COLS = ['audit_id', 'category', 'question', 'expected_evidence', 'status', 'order_index'] as const;
+  const chunkSize = 500;
+  const allRows: AuditChecklist[] = [];
+  for (let start = 0; start < items.length; start += chunkSize) {
+    const chunk = items.slice(start, start + chunkSize);
+    const n = COLS.length;
+    const values: any[] = [];
+    const placeholders = chunk.map((item, ri) => {
+      values.push(
+        item.audit_id, item.category, item.question,
+        item.expected_evidence, item.status || 'pending', item.order_index
+      );
+      return `(${COLS.map((_, ci) => `$${ri * n + ci + 1}`).join(', ')})`;
+    });
+    const result = await pool.query(
+      `INSERT INTO audit_checklists (${COLS.join(', ')}) VALUES ${placeholders.join(', ')} RETURNING *`,
+      values
+    );
+    allRows.push(...result.rows);
   }
-  return results;
+  return allRows;
 }
 
 export async function getChecklist(auditId: number): Promise<AuditChecklist[]> {

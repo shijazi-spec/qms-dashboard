@@ -658,7 +658,7 @@ export const auditRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          const { getAuditById, getFindingsByAudit, initAuditTables } = await import('../../utils/auditDatabase');
+          const { getAuditById, initAuditTables } = await import('../../utils/auditDatabase');
           await initAuditTables();
 
           const rawId = c.req.param('id');
@@ -668,61 +668,97 @@ export const auditRoutes = [
           const audit = await getAuditById(id);
           if (!audit) return c.json({ error: 'Audit not found' }, 404);
 
-          const findings = await getFindingsByAudit(id);
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const pg = await import("pg");
 
-          const formatDate = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+          const formatDate = (d: unknown) => d ? new Date(String(d)).toISOString().substring(0, 10) : '';
 
-          const buf = await buildWorkbook([
-            {
-              name: 'Summary',
-              columns: [
-                { header: 'Field', key: 'field', width: 28 },
-                { header: 'Value', key: 'value', width: 60 },
-              ],
-              rows: [
-                { field: 'Audit Code', value: audit.audit_code || '(none)' },
-                { field: 'Title', value: audit.title || '' },
-                { field: 'Type', value: audit.audit_type || '' },
-                { field: 'Status', value: audit.status || '' },
-                { field: 'Lead Auditor', value: audit.lead_auditor || '' },
-                { field: 'Scope', value: audit.scope || '' },
-                { field: 'Start Date', value: formatDate(audit.start_date) },
-                { field: 'End Date', value: formatDate(audit.end_date) },
-                { field: 'Created', value: formatDate(audit.created_at) },
-                { field: 'Total Findings', value: findings.length },
-                { field: 'Critical Findings', value: findings.filter((f: any) => f.severity === 'critical').length },
-                { field: 'High Findings', value: findings.filter((f: any) => f.severity === 'high').length },
-                { field: 'CAPA Required', value: findings.filter((f: any) => f.capa_required).length },
-              ],
-            },
-            {
-              name: 'Findings',
-              columns: [
-                { header: 'No.', key: 'finding_number', width: 12 },
-                { header: 'Severity', key: 'severity', width: 10 },
-                { header: 'Status', key: 'status', width: 12 },
-                { header: 'Dimension', key: 'dimension', width: 14 },
-                { header: 'Criteria', key: 'criteria_name', width: 28 },
-                { header: 'Description', key: 'description', width: 50 },
-                { header: 'Evidence', key: 'evidence', width: 35 },
-                { header: 'Recommendation', key: 'recommendation', width: 40 },
-                { header: 'CAPA Required', key: 'capa_required_label', width: 14 },
-                { header: 'Owner', key: 'owner', width: 22 },
-                { header: 'Target Date', key: 'target_date_str', width: 14 },
-                { header: 'Resolution Date', key: 'resolution_date_str', width: 16 },
-              ],
-              rows: findings.map((f: any) => ({
-                ...f,
-                capa_required_label: f.capa_required ? 'Yes' : 'No',
-                target_date_str: formatDate(f.target_date),
-                resolution_date_str: formatDate(f.resolution_date),
-              })),
-            },
-          ], { title: `Audit Report ${audit.audit_code || id}` });
+          let auditPool: InstanceType<(typeof pg.default)['Pool']> | null = null;
+          let streaming = false;
+          try {
+            auditPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
-          const safeCode = String(audit.audit_code || id).replace(/[^A-Za-z0-9._-]/g, '_');
-          return c.body(buf, 200, xlsxResponseHeaders(`${safeCode}_audit_report.xlsx`));
+            // Aggregate counts for summary sheet — avoids loading all rows into memory
+            const aggRes = await auditPool.query(
+              `SELECT
+                 COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE severity = 'critical')::int AS critical,
+                 COUNT(*) FILTER (WHERE severity = 'high')::int AS high,
+                 COUNT(*) FILTER (WHERE capa_required = true)::int AS capa_req
+               FROM grc_audit_findings WHERE audit_id = $1`,
+              [id]
+            );
+            const agg = aggRes.rows[0] ?? { total: 0, critical: 0, high: 0, capa_req: 0 };
+
+            // Paged findings source
+            const findingsSrc = pagedQuery((limit, offset) => auditPool!.query(
+              `SELECT finding_number, severity, status, dimension, criteria_name, description, evidence,
+                      recommendation, capa_required, owner, target_date, resolution_date
+               FROM grc_audit_findings WHERE audit_id = $1
+               ORDER BY severity DESC, created_at DESC LIMIT $2 OFFSET $3`,
+              [id, limit, offset]
+            ));
+            const findingsRows = (async function* () {
+              try {
+                for await (const r of findingsSrc) {
+                  const f = r as Record<string, unknown>;
+                  yield {
+                    ...f,
+                    capa_required_label: f['capa_required'] ? 'Yes' : 'No',
+                    target_date_str: formatDate(f['target_date']),
+                    resolution_date_str: formatDate(f['resolution_date']),
+                  };
+                }
+              } finally { auditPool && await auditPool.end(); }
+            })();
+
+            streaming = true;
+            return await streamXlsx([
+              {
+                name: 'Summary',
+                columns: [
+                  { header: 'Field', key: 'field', width: 28 },
+                  { header: 'Value', key: 'value', width: 60 },
+                ],
+                rows: [
+                  { field: 'Audit Code', value: audit.audit_code || '(none)' },
+                  { field: 'Title', value: audit.title || '' },
+                  { field: 'Type', value: audit.audit_type || '' },
+                  { field: 'Status', value: audit.status || '' },
+                  { field: 'Lead Auditor', value: audit.lead_auditor || '' },
+                  { field: 'Scope', value: audit.scope || '' },
+                  { field: 'Start Date', value: formatDate(audit.start_date) },
+                  { field: 'End Date', value: formatDate(audit.end_date) },
+                  { field: 'Created', value: formatDate(audit.created_at) },
+                  { field: 'Total Findings', value: agg.total },
+                  { field: 'Critical Findings', value: agg.critical },
+                  { field: 'High Findings', value: agg.high },
+                  { field: 'CAPA Required', value: agg.capa_req },
+                ],
+              },
+              {
+                name: 'Findings',
+                columns: [
+                  { header: 'No.', key: 'finding_number', width: 12 },
+                  { header: 'Severity', key: 'severity', width: 10 },
+                  { header: 'Status', key: 'status', width: 12 },
+                  { header: 'Dimension', key: 'dimension', width: 14 },
+                  { header: 'Criteria', key: 'criteria_name', width: 28 },
+                  { header: 'Description', key: 'description', width: 50 },
+                  { header: 'Evidence', key: 'evidence', width: 35 },
+                  { header: 'Recommendation', key: 'recommendation', width: 40 },
+                  { header: 'CAPA Required', key: 'capa_required_label', width: 14 },
+                  { header: 'Owner', key: 'owner', width: 22 },
+                  { header: 'Target Date', key: 'target_date_str', width: 14 },
+                  { header: 'Resolution Date', key: 'resolution_date_str', width: 16 },
+                ],
+                rows: findingsRows,
+              },
+            ], (() => { const safeCode = String(audit.audit_code || id).replace(/[^A-Za-z0-9._-]/g, '_'); return `${safeCode}_audit_report.xlsx`; })(), { title: `Audit Report ${audit.audit_code || id}` });
+          } catch (innerErr) {
+            if (!streaming && auditPool) await auditPool.end();
+            throw innerErr;
+          }
         } catch (error) {
           console.error('❌ [AuditAPI] Error exporting audit XLSX:', error);
           return c.json({ error: 'Failed to export audit report to XLSX', details: String(error) }, 500);

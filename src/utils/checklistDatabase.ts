@@ -114,18 +114,39 @@ export async function createChecklist(checklist: Omit<ComplianceChecklist, 'id' 
 }
 
 export async function addChecklistItems(checklistId: number, items: Omit<ChecklistItem, 'id' | 'checklist_id' | 'created_at'>[]): Promise<ChecklistItem[]> {
-  const results: ChecklistItem[] = [];
-  for (const item of items) {
+  if (items.length === 0) return [];
+  const COLS = [
+    'checklist_id', 'item_number', 'clause_reference', 'question', 'expected_result',
+    'check_type', 'module_to_query', 'query_config', 'weight', 'is_critical',
+  ] as const;
+  const chunkSize = 500;
+  const allRows: ChecklistItem[] = [];
+  for (let start = 0; start < items.length; start += chunkSize) {
+    const chunk = items.slice(start, start + chunkSize);
+    const n = COLS.length;
+    const values: any[] = [];
+    const placeholders = chunk.map((item, ri) => {
+      values.push(
+        checklistId,
+        item.item_number,
+        item.clause_reference || null,
+        item.question,
+        item.expected_result || null,
+        item.check_type || 'manual',
+        item.module_to_query || null,
+        item.query_config ? JSON.stringify(item.query_config) : '{}',
+        item.weight ?? 1.0,
+        item.is_critical || false
+      );
+      return `(${COLS.map((_, ci) => `$${ri * n + ci + 1}`).join(', ')})`;
+    });
     const result = await pool.query(
-      `INSERT INTO checklist_items (checklist_id, item_number, clause_reference, question, expected_result, check_type, module_to_query, query_config, weight, is_critical)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [checklistId, item.item_number, item.clause_reference || null, item.question,
-       item.expected_result || null, item.check_type || 'manual', item.module_to_query || null,
-       item.query_config ? JSON.stringify(item.query_config) : '{}', item.weight || 1.0, item.is_critical || false]
+      `INSERT INTO checklist_items (${COLS.join(', ')}) VALUES ${placeholders.join(', ')} RETURNING *`,
+      values
     );
-    results.push(result.rows[0]);
+    allRows.push(...result.rows);
   }
-  return results;
+  return allRows;
 }
 
 export async function getChecklists(filters?: { standard?: string; is_active?: boolean }): Promise<ComplianceChecklist[]> {

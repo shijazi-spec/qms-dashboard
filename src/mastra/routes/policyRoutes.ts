@@ -1,3 +1,4 @@
+import type { Pool as PgPool } from 'pg';
 import { requireRoleOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
 
 const POLICY_READ_ROLES = ['admin', 'grc_manager', 'quality_manager', 'head_of_operations_quality', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead', 'ai_specialist'] as const;
@@ -155,39 +156,56 @@ export const policyRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        let exportPool: PgPool | null = null;
         try {
           const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
           if (!admin) return unauthorizedResponse(c);
 
-          const { getAllPolicies, initPolicyTables } = await import('../../utils/policyDatabase');
+          const { initPolicyTables } = await import('../../utils/policyDatabase');
           await initPolicyTables();
 
           const url = new URL(c.req.url);
           const document_type = url.searchParams.get('document_type') || undefined;
           const status = url.searchParams.get('status') || undefined;
-          const { policies } = await getAllPolicies({ document_type, status, limit: 10000, offset: 0 });
 
           const { escapeCSVValue } = await import('../../utils/inputSanitizer');
-          const headers = ['ID','Doc Number','Policy Number','Title','Type','Category','Status','Confidentiality','Owner','Department','Version','Effective Date','Review Date','Tags','Created'];
-          const rows = [headers.join(',')];
-          for (const p of policies) {
-            rows.push([
-              p.id, p.document_number || '', p.policy_number, p.title,
-              p.document_type || 'policy', p.category, p.status,
-              p.confidentiality || 'internal', p.owner_name || '', p.owner_department || '',
-              p.version, p.effective_date || '', p.review_date || '',
-              (p.tags || []).join('; '), p.created_at || ''
-            ].map(escapeCSVValue).join(','));
-          }
+          const { streamCsv, pagedQuery } = await import('../../utils/excelExport');
+          const pg = await import('pg');
+          exportPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
-          return new Response(rows.join('\n'), {
-            headers: {
-              'Content-Type': 'text/csv',
-              'Content-Disposition': `attachment; filename="qms_documents_${new Date().toISOString().split('T')[0]}.csv"`,
-            },
-          });
+          const conditions: string[] = [];
+          const filterParams: unknown[] = [];
+          if (document_type) { filterParams.push(document_type); conditions.push(`document_type = $${filterParams.length}`); }
+          if (status) { filterParams.push(status); conditions.push(`status = $${filterParams.length}`); }
+          const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+          const limIdx = filterParams.length + 1;
+          const offIdx = filterParams.length + 2;
+
+          const source = pagedQuery((limit, offset) => exportPool.query(
+            `SELECT id, document_number, policy_number, title, document_type, category, status, confidentiality, owner_name, owner_department, version, effective_date, review_date, tags, created_at FROM policies ${where} ORDER BY id ASC LIMIT $${limIdx} OFFSET $${offIdx}`,
+            [...filterParams, limit, offset]
+          ));
+
+          const headers = ['ID','Doc Number','Policy Number','Title','Type','Category','Status','Confidentiality','Owner','Department','Version','Effective Date','Review Date','Tags','Created'];
+          const rows = (async function* () {
+            try {
+              for await (const p of source) {
+                const row = p as Record<string, unknown>;
+                yield [
+                  row['id'], row['document_number'] ?? '', row['policy_number'], row['title'],
+                  row['document_type'] ?? 'policy', row['category'], row['status'],
+                  row['confidentiality'] ?? 'internal', row['owner_name'] ?? '', row['owner_department'] ?? '',
+                  row['version'], row['effective_date'] ?? '', row['review_date'] ?? '',
+                  Array.isArray(row['tags']) ? (row['tags'] as string[]).join('; ') : String(row['tags'] ?? ''),
+                  row['created_at'] ?? ''
+                ].map(v => escapeCSVValue(String(v ?? '')));
+              }
+            } finally { await exportPool.end(); }
+          })();
+          return streamCsv(`qms_documents_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
         } catch (error) {
           console.error('❌ [PolicyAPI] Error exporting:', error);
+          if (exportPool) await exportPool.end();
           return c.json({ error: 'Failed to export' }, 500);
         }
       };

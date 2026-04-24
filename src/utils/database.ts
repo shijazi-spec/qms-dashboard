@@ -229,6 +229,52 @@ export async function saveAuditResult(audit: QualityAuditResult): Promise<Qualit
   return auditResult;
 }
 
+/**
+ * Bulk insert helper — issues a single multi-row INSERT … VALUES (…),(…),…
+ * chunked at `chunkSize` rows (default 500) to stay within Postgres parameter limits.
+ *
+ * Engineering SOP rule (Exports & Bulk Writes):
+ *   All write paths that insert multiple rows MUST use this helper (or an
+ *   equivalent) instead of looping single-row INSERTs.
+ *
+ * @param table     Target table name (trusted — never built from user input).
+ * @param columns   Column names in insertion order.
+ * @param rows      Objects whose keys match `columns`.
+ * @param chunkSize Max rows per statement (default 500).
+ */
+export async function bulkInsert(
+  table: string,
+  columns: string[],
+  rows: Record<string, any>[],
+  {
+    chunkSize = 500,
+    _queryFn,
+  }: {
+    chunkSize?: number;
+    /** For testing only: inject a mock query function instead of the real pool. */
+    _queryFn?: (sql: string, values: any[]) => Promise<any>;
+  } = {}
+): Promise<void> {
+  if (rows.length === 0) return;
+  const queryFn = _queryFn ?? ((sql: string, values: any[]) => pool.query(sql, values));
+  const n = columns.length;
+  for (let start = 0; start < rows.length; start += chunkSize) {
+    const chunk = rows.slice(start, start + chunkSize);
+    const values: any[] = [];
+    const placeholders = chunk.map((row, ri) => {
+      const ph = columns.map((col, ci) => {
+        values.push(row[col] ?? null);
+        return `$${ri * n + ci + 1}`;
+      });
+      return `(${ph.join(', ')})`;
+    });
+    await queryFn(
+      `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders.join(', ')}`,
+      values
+    );
+  }
+}
+
 async function saveTrendMetrics(auditId: number, audit: QualityAuditResult) {
   const metrics = [
     { name: 'overall_score', value: audit.overall_score, dimension: 'overall' },
@@ -238,14 +284,12 @@ async function saveTrendMetrics(auditId: number, audit: QualityAuditResult) {
     { name: 'total_issues', value: audit.total_issues_found, dimension: 'overall' },
     { name: 'records_audited', value: audit.total_records_audited, dimension: 'overall' },
   ];
-  
-  for (const metric of metrics) {
-    await pool.query(
-      `INSERT INTO quality_trends (audit_id, metric_name, metric_value, dimension)
-       VALUES ($1, $2, $3, $4)`,
-      [auditId, metric.name, metric.value, metric.dimension]
-    );
-  }
+
+  await bulkInsert(
+    'quality_trends',
+    ['audit_id', 'metric_name', 'metric_value', 'dimension'],
+    metrics.map(m => ({ audit_id: auditId, metric_name: m.name, metric_value: m.value, dimension: m.dimension }))
+  );
 }
 
 export async function getLatestAuditResult(): Promise<QualityAuditResult | null> {
@@ -544,17 +588,27 @@ export async function cloneScorecard(id: number, newName: string, newVersion?: s
   );
   
   const newScorecard = result.rows[0];
-  
+
   const attrsResult = await pool.query('SELECT * FROM scorecard_attributes WHERE scorecard_id = $1 ORDER BY order_index', [id]);
-  for (const attr of attrsResult.rows) {
-    await pool.query(
-      `INSERT INTO scorecard_attributes (scorecard_id, dimension, attribute_name, description, weight, severity, evaluation_logic, evidence_fields, is_active, order_index)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [newScorecard.id, attr.dimension, attr.attribute_name, attr.description, attr.weight, 
-       attr.severity, attr.evaluation_logic, attr.evidence_fields, attr.is_active, attr.order_index]
+  if (attrsResult.rows.length > 0) {
+    await bulkInsert(
+      'scorecard_attributes',
+      ['scorecard_id', 'dimension', 'attribute_name', 'description', 'weight', 'severity', 'evaluation_logic', 'evidence_fields', 'is_active', 'order_index'],
+      attrsResult.rows.map(attr => ({
+        scorecard_id:     newScorecard.id,
+        dimension:        attr.dimension,
+        attribute_name:   attr.attribute_name,
+        description:      attr.description,
+        weight:           attr.weight,
+        severity:         attr.severity,
+        evaluation_logic: attr.evaluation_logic,
+        evidence_fields:  attr.evidence_fields,
+        is_active:        attr.is_active,
+        order_index:      attr.order_index,
+      }))
     );
   }
-  
+
   return newScorecard;
 }
 

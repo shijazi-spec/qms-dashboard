@@ -1,4 +1,6 @@
-import { toCSV } from "../../utils/exportUtils";
+import type { Pool as PgPool } from 'pg';
+import { streamCsv } from "../../utils/excelExport";
+import { escapeCSVValue } from "../../utils/inputSanitizer";
 
 const evidenceRoutes = [
   {
@@ -147,19 +149,21 @@ export const qmsEnhancedRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        const pg = await import("pg");
+        const ncPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const { getNonconformances } = await import("../../utils/qmsDatabase");
-          const { records } = await getNonconformances({ limit: 10000, offset: 0 });
-          const csv = toCSV(records.map((r: any) => ({
-            nc_number: r.nc_number, title: r.title, nc_type: r.nc_type,
-            severity: r.severity, status: r.status, detected_by: r.detected_by,
-            detected_date: r.detected_date, category: r.category,
-            closure_approved_by: r.closure_approved_by || '',
-          })));
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', 'attachment; filename="nonconformances.csv"');
-          return c.body(csv);
+          const { pagedQuery } = await import("../../utils/excelExport");
+          const cols = ['nc_number','title','nc_type','severity','status','detected_by','detected_date','category','closure_approved_by'];
+          const source = pagedQuery(
+            (limit, offset) => ncPool.query(`SELECT ${cols.join(',')} FROM nonconformance_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset])
+          );
+          const rows = (async function* () {
+            try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
+            finally { await ncPool.end(); }
+          })();
+          return streamCsv('nonconformances.csv', cols, rows);
         } catch (error) {
+          await ncPool.end();
           return c.json({ error: "Export failed" }, 500);
         }
       };
@@ -170,19 +174,21 @@ export const qmsEnhancedRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        const pg = await import("pg");
+        const capaPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const { getCapaRecords } = await import("../../utils/qmsDatabase");
-          const { records } = await getCapaRecords({ limit: 10000, offset: 0 });
-          const csv = toCSV(records.map((r: any) => ({
-            capa_number: r.capa_number, title: r.title, capa_type: r.capa_type,
-            severity: r.severity, status: r.status, assigned_to: r.assigned_to,
-            target_date: r.target_date, effectiveness_result: r.effectiveness_result || '',
-            closure_approved_by: r.closure_approved_by || '',
-          })));
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', 'attachment; filename="capa_records.csv"');
-          return c.body(csv);
+          const { pagedQuery } = await import("../../utils/excelExport");
+          const cols = ['capa_number','title','capa_type','severity','status','assigned_to','target_date','effectiveness_result','closure_approved_by'];
+          const source = pagedQuery(
+            (limit, offset) => capaPool.query(`SELECT ${cols.join(',')} FROM capa_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset])
+          );
+          const rows = (async function* () {
+            try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
+            finally { await capaPool.end(); }
+          })();
+          return streamCsv('capa_records.csv', cols, rows);
         } catch (error) {
+          await capaPool.end();
           return c.json({ error: "Export failed" }, 500);
         }
       };
@@ -198,15 +204,19 @@ export const qmsEnhancedRoutes = [
         try {
           const { initComplianceTables } = await import("../../utils/complianceDatabase");
           await initComplianceTables();
-          const result = await pool.query(`SELECT id, obligation_code, title, regulation_id, status, requirement_type, responsible_department, compliance_frequency FROM obligations ORDER BY id ASC LIMIT 10000`);
-          const csv = toCSV(result.rows);
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', 'attachment; filename="compliance_obligations.csv"');
-          return c.body(csv);
+          const { pagedQuery } = await import("../../utils/excelExport");
+          const cols = ['id','obligation_code','title','regulation_id','status','requirement_type','responsible_department','compliance_frequency'];
+          const source = pagedQuery((limit, offset) => pool.query(`SELECT ${cols.join(',')} FROM obligations ORDER BY id ASC LIMIT $1 OFFSET $2`, [limit, offset]));
+          const rows = (async function* () {
+            try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
+            finally { await pool.end(); }
+          })();
+          return streamCsv('compliance_obligations.csv', cols, rows);
         } catch (error) {
           console.error('Compliance export error:', error);
+          await pool.end();
           return c.json({ error: "Export failed" }, 500);
-        } finally { await pool.end(); }
+        }
       };
     },
   },
@@ -220,15 +230,19 @@ export const qmsEnhancedRoutes = [
         try {
           const { initPdplTables } = await import("../../utils/pdplDatabase");
           await initPdplTables();
-          const result = await pool.query(`SELECT id, field_name, data_category, module, table_name, purpose, legal_basis, storage_location, retention_days, is_encrypted, is_masked, pii_type FROM data_inventory ORDER BY created_at DESC LIMIT 10000`);
-          const csv = toCSV(result.rows);
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', 'attachment; filename="pdpl_inventory.csv"');
-          return c.body(csv);
+          const { pagedQuery } = await import("../../utils/excelExport");
+          const cols = ['id','field_name','data_category','module','table_name','purpose','legal_basis','storage_location','retention_days','is_encrypted','is_masked','pii_type'];
+          const source = pagedQuery((limit, offset) => pool.query(`SELECT ${cols.join(',')} FROM data_inventory ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]));
+          const rows = (async function* () {
+            try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
+            finally { await pool.end(); }
+          })();
+          return streamCsv('pdpl_inventory.csv', cols, rows);
         } catch (error) {
           console.error('PDPL export error:', error);
+          await pool.end();
           return c.json({ error: "Export failed" }, 500);
-        } finally { await pool.end(); }
+        }
       };
     },
   },
@@ -240,14 +254,21 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const result = await pool.query(`SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.kpi_name, kv.period_end DESC LIMIT 10000`);
-          const csv = toCSV(result.rows);
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', 'attachment; filename="kpi_values.csv"');
-          return c.body(csv);
+          const { pagedQuery } = await import("../../utils/excelExport");
+          const cols = ['kpi_name','target_value','actual_value','period_start','period_end','calculated_by'];
+          const source = pagedQuery((limit, offset) => pool.query(
+            `SELECT kd.kpi_name, kd.target_value, kv.actual_value, kv.period_start, kv.period_end, kv.calculated_by FROM kpi_definitions kd LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id ORDER BY kd.kpi_name, kv.period_end DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const rows = (async function* () {
+            try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
+            finally { await pool.end(); }
+          })();
+          return streamCsv('kpi_values.csv', cols, rows);
         } catch (error) {
+          await pool.end();
           return c.json({ error: "Export failed" }, 500);
-        } finally { await pool.end(); }
+        }
       };
     },
   },
@@ -259,75 +280,86 @@ export const qmsEnhancedRoutes = [
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
-          const defs = await pool.query(`
-            SELECT id, kpi_name, kpi_code, category, target_value, unit, owner_name AS owner, frequency, formula,
-                   threshold_green, threshold_amber, threshold_red, threshold_direction
-            FROM kpi_definitions WHERE is_active = true ORDER BY category, kpi_name
-          `);
-          const values = await pool.query(`
-            SELECT kpi_id, actual_value, target_value, period_start, period_end, calculated_by, created_at
-            FROM kpi_values ORDER BY period_end DESC, kpi_id LIMIT 50000
-          `);
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
 
-          // Group definitions by category, one sheet per category
-          const byCategory: Record<string, any[]> = {};
-          for (const d of defs.rows) {
-            const cat = d.category || 'Uncategorised';
-            (byCategory[cat] = byCategory[cat] || []).push(d);
-          }
+          // Aggregate summary stats and distinct categories — small results
+          const [kpiTotR, valTotR, catsR] = await Promise.all([
+            pool.query(`SELECT COUNT(*)::int AS total FROM kpi_definitions WHERE is_active = true`),
+            pool.query(`SELECT COUNT(*)::int AS total FROM kpi_values`),
+            pool.query(`SELECT DISTINCT COALESCE(category, 'Uncategorised') AS cat FROM kpi_definitions WHERE is_active = true ORDER BY cat`),
+          ]);
+          const kpiTotal = kpiTotR.rows[0]?.total ?? 0;
+          const valTotal = valTotR.rows[0]?.total ?? 0;
+          const kpiCats = catsR.rows.map(r => r.cat as string);
 
-          // Pivot values per kpi for the per-category sheets
-          const valuesByKpi: Record<number, any[]> = {};
-          for (const v of values.rows) (valuesByKpi[v.kpi_id] = valuesByKpi[v.kpi_id] || []).push(v);
+          const kpiDefCols = [
+            { header: 'Code', key: 'kpi_code', width: 12 },
+            { header: 'KPI Name', key: 'kpi_name', width: 36 },
+            { header: 'Target', key: 'target_value', width: 12 },
+            { header: 'Unit', key: 'unit', width: 8 },
+            { header: 'Green ≥', key: 'threshold_green', width: 10 },
+            { header: 'Amber ≥', key: 'threshold_amber', width: 10 },
+            { header: 'Red <', key: 'threshold_red', width: 10 },
+            { header: 'Direction', key: 'threshold_direction', width: 18 },
+            { header: 'Frequency', key: 'frequency', width: 12 },
+            { header: 'Owner', key: 'owner', width: 22 },
+            { header: 'Latest Actual', key: 'latest_actual', width: 14 },
+            { header: 'Latest Period End', key: 'latest_period', width: 16 },
+            { header: 'Formula', key: 'formula', width: 40 },
+          ];
 
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
-          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+          // Per-category sheets use a LATERAL join to get latest value per KPI definition
+          // — bounded by number of KPI defs (typically small), not number of kpi_values
+          const catDefSql = `
+            SELECT kd.kpi_code, kd.kpi_name, kd.target_value, kd.unit, kd.owner_name AS owner,
+                   kd.frequency, kd.formula, kd.threshold_green, kd.threshold_amber,
+                   kd.threshold_red, kd.threshold_direction,
+                   lat.actual_value AS latest_actual,
+                   TO_CHAR(lat.period_end, 'YYYY-MM-DD') AS latest_period
+            FROM kpi_definitions kd
+            LEFT JOIN LATERAL (
+              SELECT actual_value, period_end
+              FROM kpi_values WHERE kpi_id = kd.id ORDER BY period_end DESC LIMIT 1
+            ) lat ON true
+            WHERE kd.is_active = true AND COALESCE(kd.category, 'Uncategorised') = $3
+            ORDER BY kd.kpi_name LIMIT $1 OFFSET $2`;
 
-          const sheets: any[] = [
+          const sheets: Array<{ name: string; columns: { header: string; key: string; width: number }[]; rows: AsyncIterable<Record<string,unknown>> | Array<Record<string,unknown>> }> = [
             {
               name: 'Summary',
-              columns: [
-                { header: 'Metric', key: 'metric', width: 32 },
-                { header: 'Value', key: 'value', width: 18 },
-              ],
+              columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
               rows: [
-                { metric: 'Total KPI definitions', value: defs.rows.length },
-                { metric: 'Total recorded values', value: values.rows.length },
-                { metric: 'Categories', value: Object.keys(byCategory).length },
+                { metric: 'Total KPI definitions', value: kpiTotal },
+                { metric: 'Total recorded values', value: valTotal },
+                { metric: 'Categories', value: kpiCats.length },
                 { metric: 'Generated', value: new Date().toISOString() },
               ],
             },
           ];
 
-          for (const [cat, list] of Object.entries(byCategory)) {
-            sheets.push({
-              name: cat,
-              columns: [
-                { header: 'Code', key: 'kpi_code', width: 12 },
-                { header: 'KPI Name', key: 'kpi_name', width: 36 },
-                { header: 'Target', key: 'target_value', width: 12 },
-                { header: 'Unit', key: 'unit', width: 8 },
-                { header: 'Green ≥', key: 'threshold_green', width: 10 },
-                { header: 'Amber ≥', key: 'threshold_amber', width: 10 },
-                { header: 'Red <', key: 'threshold_red', width: 10 },
-                { header: 'Direction', key: 'threshold_direction', width: 18 },
-                { header: 'Frequency', key: 'frequency', width: 12 },
-                { header: 'Owner', key: 'owner', width: 22 },
-                { header: 'Latest Actual', key: 'latest_actual', width: 14 },
-                { header: 'Latest Period End', key: 'latest_period', width: 16 },
-                { header: 'Formula', key: 'formula', width: 40 },
-              ],
-              rows: list.map((d: any) => {
-                const vs = (valuesByKpi[d.id] || []).sort((a, b) => new Date(b.period_end).getTime() - new Date(a.period_end).getTime());
-                const latest = vs[0];
-                return {
-                  ...d,
-                  latest_actual: latest?.actual_value ?? '',
-                  latest_period: fmt(latest?.period_end),
-                };
-              }),
-            });
+          for (const cat of kpiCats) {
+            const catSource = pagedQuery((limit, offset) => pool.query(catDefSql, [limit, offset, cat]));
+            const catRows = (async function* () {
+              for await (const r of catSource) yield r as Record<string, unknown>;
+            })();
+            sheets.push({ name: cat, columns: kpiDefCols, rows: catRows });
           }
+
+          // All Values sheet — paged via JOIN to include kpi_name; closes pool when done
+          const allValSource = pagedQuery((limit, offset) => pool.query(`
+            SELECT kv.kpi_id, COALESCE(kd.kpi_name, '') AS kpi_name,
+                   kv.actual_value, kv.target_value,
+                   TO_CHAR(kv.period_start, 'YYYY-MM-DD') AS period_start_str,
+                   TO_CHAR(kv.period_end,   'YYYY-MM-DD') AS period_end_str,
+                   kv.calculated_by
+            FROM kpi_values kv LEFT JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+            ORDER BY kv.period_end DESC, kv.kpi_id LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const allValRows = (async function* () {
+            try { for await (const r of allValSource) yield r as Record<string, unknown>; }
+            finally { await pool.end(); }
+          })();
 
           sheets.push({
             name: 'All Values',
@@ -340,23 +372,15 @@ export const qmsEnhancedRoutes = [
               { header: 'Period End', key: 'period_end_str', width: 14 },
               { header: 'Calculated By', key: 'calculated_by', width: 22 },
             ],
-            rows: values.rows.map((v: any) => {
-              const def = defs.rows.find((d: any) => d.id === v.kpi_id);
-              return {
-                ...v,
-                kpi_name: def?.kpi_name || '',
-                period_start_str: fmt(v.period_start),
-                period_end_str: fmt(v.period_end),
-              };
-            }),
+            rows: allValRows,
           });
 
-          const buf = await buildWorkbook(sheets, { title: 'KPI Scorecard Export' });
-          return c.body(buf, 200, xlsxResponseHeaders(`kpi_scorecard_${Date.now()}.xlsx`));
+          return await streamXlsx(sheets, `kpi_scorecard_${Date.now()}.xlsx`, { title: 'KPI Scorecard Export' });
         } catch (error) {
           console.error('Error exporting KPIs XLSX:', error);
+          await pool.end();
           return c.json({ error: "Export failed" }, 500);
-        } finally { await pool.end(); }
+        }
       };
     },
   },
@@ -370,14 +394,21 @@ export const qmsEnhancedRoutes = [
         try {
           const { initVendorTables } = await import("../../utils/vendorDatabase");
           await initVendorTables();
-          const result = await pool.query(`SELECT v.name, v.category, v.overall_risk_level, va.assessment_type, va.status, va.overall_score, va.assessment_date FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id ORDER BY v.name LIMIT 10000`);
-          const csv = toCSV(result.rows);
-          c.header('Content-Type', 'text/csv');
-          c.header('Content-Disposition', 'attachment; filename="vendor_assessments.csv"');
-          return c.body(csv);
+          const { pagedQuery } = await import("../../utils/excelExport");
+          const cols = ['name','category','overall_risk_level','assessment_type','status','overall_score','assessment_date'];
+          const source = pagedQuery((limit, offset) => pool.query(
+            `SELECT v.name, v.category, v.overall_risk_level, va.assessment_type, va.status, va.overall_score, va.assessment_date FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id ORDER BY v.name LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const rows = (async function* () {
+            try { for await (const r of source) yield cols.map(k => escapeCSVValue(String((r as Record<string,unknown>)[k] ?? ''))); }
+            finally { await pool.end(); }
+          })();
+          return streamCsv('vendor_assessments.csv', cols, rows);
         } catch (error) {
+          await pool.end();
           return c.json({ error: "Export failed" }, 500);
-        } finally { await pool.end(); }
+        }
       };
     },
   },
@@ -386,29 +417,51 @@ export const qmsEnhancedRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        let ncXlsxPool: PgPool | null = null;
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
           if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
-          const { getNonconformances } = await import("../../utils/qmsDatabase");
-          const { records } = await getNonconformances({ limit: 50000, offset: 0 });
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
-          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const pg = await import("pg");
+          ncXlsxPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
-          const bySeverity = (sev: string) => records.filter((r: any) => r.severity === sev).length;
-          const byStatus = (st: string) => records.filter((r: any) => r.status === st).length;
+          // Aggregate summary stats — small result, no large array
+          const [totR, statR, sevR] = await Promise.all([
+            ncXlsxPool.query(`SELECT COUNT(*)::int AS total FROM nonconformance_records`),
+            ncXlsxPool.query(`SELECT status, COUNT(*)::int AS cnt FROM nonconformance_records GROUP BY status`),
+            ncXlsxPool.query(`SELECT severity, COUNT(*)::int AS cnt FROM nonconformance_records GROUP BY severity`),
+          ]);
+          const ncTotal = totR.rows[0]?.total ?? 0;
+          const ncByStat = (s: string) => statR.rows.find(r => r.status === s)?.cnt ?? 0;
+          const ncBySev  = (s: string) => sevR.rows.find(r => r.severity === s)?.cnt ?? 0;
 
-          const buf = await buildWorkbook([
+          // Stream data rows — O(1) RSS via pagedQuery
+          const ncDataSource = pagedQuery((limit, offset) => ncXlsxPool.query(
+            `SELECT nc_number, title, nc_type, category, severity, status, disposition, source_type, source_reference, detected_by,
+                    TO_CHAR(detected_date, 'YYYY-MM-DD') AS detected_date_str,
+                    reviewed_by, closed_by,
+                    TO_CHAR(closed_date, 'YYYY-MM-DD') AS closed_date_str,
+                    description, disposition_notes
+             FROM nonconformance_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const ncDataRows = (async function* () {
+            try { for await (const r of ncDataSource) yield r as Record<string, unknown>; }
+            finally { if (ncXlsxPool) await ncXlsxPool.end(); }
+          })();
+
+          return await streamXlsx([
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
               rows: [
-                { metric: 'Total nonconformances', value: records.length },
-                { metric: 'Open', value: byStatus('open') },
-                { metric: 'Acknowledged', value: byStatus('acknowledged') },
-                { metric: 'Closed', value: byStatus('closed') },
-                { metric: 'Critical', value: bySeverity('critical') },
-                { metric: 'Major', value: bySeverity('major') },
-                { metric: 'Minor', value: bySeverity('minor') },
+                { metric: 'Total nonconformances', value: ncTotal },
+                { metric: 'Open', value: ncByStat('open') },
+                { metric: 'Acknowledged', value: ncByStat('acknowledged') },
+                { metric: 'Closed', value: ncByStat('closed') },
+                { metric: 'Critical', value: ncBySev('critical') },
+                { metric: 'Major', value: ncBySev('major') },
+                { metric: 'Minor', value: ncBySev('minor') },
                 { metric: 'Generated', value: new Date().toISOString() },
               ],
             },
@@ -432,17 +485,12 @@ export const qmsEnhancedRoutes = [
                 { header: 'Description', key: 'description', width: 50 },
                 { header: 'Disposition Notes', key: 'disposition_notes', width: 40 },
               ],
-              rows: records.map((r: any) => ({
-                ...r,
-                detected_date_str: fmt(r.detected_date),
-                closed_date_str: fmt(r.closed_date),
-              })),
+              rows: ncDataRows,
             },
-          ], { title: 'Nonconformance Records Export' });
-
-          return c.body(buf, 200, xlsxResponseHeaders(`nonconformances_${Date.now()}.xlsx`));
+          ], `nonconformances_${Date.now()}.xlsx`, { title: 'Nonconformance Records Export' });
         } catch (error) {
           console.error('Error exporting NC XLSX:', error);
+          if (ncXlsxPool) await ncXlsxPool.end();
           return c.json({ error: "Export failed" }, 500);
         }
       };
@@ -456,30 +504,53 @@ export const qmsEnhancedRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        let capaXlsxPool: PgPool | null = null;
         try {
           const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
           if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
-          const { getCapaRecords } = await import("../../utils/qmsDatabase");
-          const { records } = await getCapaRecords({ limit: 50000, offset: 0 });
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
-          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const pg = await import("pg");
+          capaXlsxPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
 
-          const byStatus = (st: string) => records.filter((r: any) => r.status === st).length;
-          const overdue = records.filter((r: any) => r.target_date && r.status !== 'closed' && new Date(r.target_date) < new Date()).length;
+          // Aggregate summary stats — small result, no large array
+          const [capaTotR, capaStatR, capaOvR] = await Promise.all([
+            capaXlsxPool.query(`SELECT COUNT(*)::int AS total FROM capa_records`),
+            capaXlsxPool.query(`SELECT status, COUNT(*)::int AS cnt FROM capa_records GROUP BY status`),
+            capaXlsxPool.query(`SELECT COUNT(*)::int AS cnt FROM capa_records WHERE status != 'closed' AND target_date IS NOT NULL AND target_date < NOW()`),
+          ]);
+          const capaTotal = capaTotR.rows[0]?.total ?? 0;
+          const capaByStat = (s: string) => capaStatR.rows.find(r => r.status === s)?.cnt ?? 0;
+          const capaOverdue = capaOvR.rows[0]?.cnt ?? 0;
 
-          const buf = await buildWorkbook([
+          // Stream data rows — O(1) RSS via pagedQuery
+          const capaDataSource = pagedQuery((limit, offset) => capaXlsxPool.query(
+            `SELECT capa_number, title, capa_type, severity, priority, status, assigned_to,
+                    TO_CHAR(target_date, 'YYYY-MM-DD') AS target_date_str,
+                    TO_CHAR(completion_date, 'YYYY-MM-DD') AS completion_date_str,
+                    TO_CHAR(verification_date, 'YYYY-MM-DD') AS verification_date_str,
+                    effectiveness_result, closure_approved_by, source_type, source_reference,
+                    root_cause, corrective_action, preventive_action
+             FROM capa_records ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const capaDataRows = (async function* () {
+            try { for await (const r of capaDataSource) yield r as Record<string, unknown>; }
+            finally { if (capaXlsxPool) await capaXlsxPool.end(); }
+          })();
+
+          return await streamXlsx([
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
               rows: [
-                { metric: 'Total CAPAs', value: records.length },
-                { metric: 'Open', value: byStatus('open') },
-                { metric: 'Investigation', value: byStatus('investigation') },
-                { metric: 'Action Plan', value: byStatus('action_plan') },
-                { metric: 'Implementation', value: byStatus('implementation') },
-                { metric: 'Verification', value: byStatus('verification') },
-                { metric: 'Closed', value: byStatus('closed') },
-                { metric: 'Overdue (open + past target date)', value: overdue },
+                { metric: 'Total CAPAs', value: capaTotal },
+                { metric: 'Open', value: capaByStat('open') },
+                { metric: 'Investigation', value: capaByStat('investigation') },
+                { metric: 'Action Plan', value: capaByStat('action_plan') },
+                { metric: 'Implementation', value: capaByStat('implementation') },
+                { metric: 'Verification', value: capaByStat('verification') },
+                { metric: 'Closed', value: capaByStat('closed') },
+                { metric: 'Overdue (open + past target date)', value: capaOverdue },
                 { metric: 'Generated', value: new Date().toISOString() },
               ],
             },
@@ -504,18 +575,12 @@ export const qmsEnhancedRoutes = [
                 { header: 'Corrective Action', key: 'corrective_action', width: 40 },
                 { header: 'Preventive Action', key: 'preventive_action', width: 40 },
               ],
-              rows: records.map((r: any) => ({
-                ...r,
-                target_date_str: fmt(r.target_date),
-                completion_date_str: fmt(r.completion_date),
-                verification_date_str: fmt(r.verification_date),
-              })),
+              rows: capaDataRows,
             },
-          ], { title: 'CAPA Records Export' });
-
-          return c.body(buf, 200, xlsxResponseHeaders(`capa_records_${Date.now()}.xlsx`));
+          ], `capa_records_${Date.now()}.xlsx`, { title: 'CAPA Records Export' });
         } catch (error) {
           console.error('Error exporting CAPA XLSX:', error);
+          if (capaXlsxPool) await capaXlsxPool.end();
           return c.json({ error: "Export failed" }, 500);
         }
       };
@@ -534,38 +599,60 @@ export const qmsEnhancedRoutes = [
           const { initVendorTables } = await import("../../utils/vendorDatabase");
           await initVendorTables();
 
-          const vendors = await pool.query(`
-            SELECT id, vendor_code, name, category, criticality, status,
-                   contract_start, contract_end, contract_value,
-                   primary_contact_name, primary_contact_email, primary_contact_phone,
-                   country, data_access_level, last_assessment_date
-            FROM vendors ORDER BY name LIMIT 10000
-          `);
-          const assessments = await pool.query(`
-            SELECT va.vendor_id, v.name AS vendor_name, va.assessment_type, va.assessment_date,
-                   va.assessed_by, va.status, va.security_score, va.financial_score,
-                   va.operational_score, va.compliance_score, va.overall_score, va.risk_level,
-                   va.recommendations
-            FROM vendor_assessments va LEFT JOIN vendors v ON v.id = va.vendor_id
-            ORDER BY va.assessment_date DESC LIMIT 50000
-          `);
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
 
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
-          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
+          // Aggregate summary stats — small results, no large arrays
+          const [vTotR, vCritR, aTotR, aRiskR] = await Promise.all([
+            pool.query(`SELECT COUNT(*)::int AS total FROM vendors`),
+            pool.query(`SELECT criticality, COUNT(*)::int AS cnt FROM vendors GROUP BY criticality`),
+            pool.query(`SELECT COUNT(*)::int AS total FROM vendor_assessments`),
+            pool.query(`SELECT risk_level, COUNT(*)::int AS cnt FROM vendor_assessments GROUP BY risk_level`),
+          ]);
+          const vTotal = vTotR.rows[0]?.total ?? 0;
+          const vByCrit = (c: string) => vCritR.rows.find(r => r.criticality === c)?.cnt ?? 0;
+          const aTotal = aTotR.rows[0]?.total ?? 0;
+          const aByRisk = (l: string) => aRiskR.rows.find(r => r.risk_level === l)?.cnt ?? 0;
 
-          const byCrit = (c: string) => vendors.rows.filter((v: any) => v.criticality === c).length;
-          const byRisk = (l: string) => assessments.rows.filter((a: any) => a.risk_level === l).length;
+          // Stream Vendors sheet — O(1) RSS via pagedQuery
+          const vendorSource = pagedQuery((limit, offset) => pool.query(
+            `SELECT vendor_code, name, category, criticality, status, country, data_access_level,
+                    TO_CHAR(contract_start, 'YYYY-MM-DD') AS contract_start_str,
+                    TO_CHAR(contract_end, 'YYYY-MM-DD') AS contract_end_str,
+                    contract_value, primary_contact_name, primary_contact_email, primary_contact_phone,
+                    TO_CHAR(last_assessment_date, 'YYYY-MM-DD') AS last_assessment_str
+             FROM vendors ORDER BY name LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const vendorRows = (async function* () {
+            for await (const r of vendorSource) yield r as Record<string, unknown>;
+          })();
 
-          const buf = await buildWorkbook([
+          // Stream Assessments sheet — O(1) RSS via pagedQuery
+          const assessSource = pagedQuery((limit, offset) => pool.query(
+            `SELECT v.name AS vendor_name, va.assessment_type,
+                    TO_CHAR(va.assessment_date, 'YYYY-MM-DD') AS assessment_date_str,
+                    va.status, va.risk_level, va.overall_score, va.security_score,
+                    va.financial_score, va.operational_score, va.compliance_score,
+                    va.assessed_by, va.recommendations
+             FROM vendor_assessments va LEFT JOIN vendors v ON v.id = va.vendor_id
+             ORDER BY va.assessment_date DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const assessRows = (async function* () {
+            try { for await (const r of assessSource) yield r as Record<string, unknown>; }
+            finally { await pool.end(); }
+          })();
+
+          return await streamXlsx([
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
               rows: [
-                { metric: 'Total vendors', value: vendors.rows.length },
-                { metric: 'Critical criticality', value: byCrit('critical') },
-                { metric: 'High criticality', value: byCrit('high') },
-                { metric: 'Total assessments', value: assessments.rows.length },
-                { metric: 'High-risk assessments', value: byRisk('high') + byRisk('critical') },
+                { metric: 'Total vendors', value: vTotal },
+                { metric: 'Critical criticality', value: vByCrit('critical') },
+                { metric: 'High criticality', value: vByCrit('high') },
+                { metric: 'Total assessments', value: aTotal },
+                { metric: 'High-risk assessments', value: aByRisk('high') + aByRisk('critical') },
                 { metric: 'Generated', value: new Date().toISOString() },
               ],
             },
@@ -587,12 +674,7 @@ export const qmsEnhancedRoutes = [
                 { header: 'Phone', key: 'primary_contact_phone', width: 18 },
                 { header: 'Last Assessment', key: 'last_assessment_str', width: 16 },
               ],
-              rows: vendors.rows.map((v: any) => ({
-                ...v,
-                contract_start_str: fmt(v.contract_start),
-                contract_end_str: fmt(v.contract_end),
-                last_assessment_str: fmt(v.last_assessment_date),
-              })),
+              rows: vendorRows,
             },
             {
               name: 'Assessments',
@@ -610,18 +692,15 @@ export const qmsEnhancedRoutes = [
                 { header: 'Assessed By', key: 'assessed_by', width: 22 },
                 { header: 'Recommendations', key: 'recommendations', width: 40 },
               ],
-              rows: assessments.rows.map((a: any) => ({
-                ...a,
-                assessment_date_str: fmt(a.assessment_date),
-              })),
+              rows: assessRows,
             },
-          ], { title: 'Vendor Risk Export' });
-
-          return c.body(buf, 200, xlsxResponseHeaders(`vendors_${Date.now()}.xlsx`));
+          ], `vendors_${Date.now()}.xlsx`, { title: 'Vendor Risk Export' });
         } catch (error) {
           console.error('Error exporting vendors XLSX:', error);
+          await pool.end();
           return c.json({ error: "Export failed" }, 500);
-        } finally { await pool.end(); }
+        }
+        // pool is closed by the Assessments sheet generator's finally block after full stream
       };
     },
   },

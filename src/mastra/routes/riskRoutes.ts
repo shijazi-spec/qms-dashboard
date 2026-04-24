@@ -6,15 +6,34 @@ export const riskRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          const { exportRisksCSV, initRiskTables } = await import('../../utils/riskDatabase');
+          const { initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
-
           logger?.info('📊 [RiskAPI] GET /api/risks/export');
-          const csv = await exportRisksCSV();
-          return c.text(csv, 200, {
-            'Content-Type': 'text/csv',
-            'Content-Disposition': 'attachment; filename="risks_export.csv"'
-          });
+
+          const pg = await import("pg");
+          const localPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          const { escapeCSVValue } = await import('../../utils/inputSanitizer');
+          const { streamCsv, pagedQuery } = await import('../../utils/excelExport');
+          const headers = ['Public ID','Title','Category','Source','Identified Date','Identified By','Owner','Department','Impact','Likelihood','Score','Level','Treatment','Status','Created','Updated'];
+          const cols = ['public_id','risk_title','risk_category','risk_source','identified_date','identified_by',
+                        'risk_owner','owner_department','impact_score','likelihood_score','risk_score','risk_level',
+                        'treatment_strategy','status','created_at','updated_at'];
+          const source = pagedQuery(
+            (limit, offset) => localPool.query(
+              `SELECT ${cols.join(',')} FROM enterprise_risks ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+              [limit, offset]
+            )
+          );
+          const mappedRows = (async function* () {
+            try {
+              for await (const r of source) {
+                yield cols.map(k => escapeCSVValue(String((r as Record<string, unknown>)[k] ?? '')));
+              }
+            } finally {
+              await localPool.end();
+            }
+          })();
+          return streamCsv(`risks_${Date.now()}.csv`, headers, mappedRows);
         } catch (error) {
           console.error('❌ [RiskAPI] Error exporting risks:', error);
           return c.json({ error: 'Failed to export risks' }, 500);
@@ -37,31 +56,21 @@ export const riskRoutes = [
           await initRiskTables();
           logger?.info('📊 [RiskAPI] GET /api/risks/export-xlsx');
 
-          const risks = await pool.query(`
-            SELECT id, risk_title, risk_description, risk_category, risk_source,
-                   identified_date, identified_by, risk_owner, owner_department,
-                   impact_score, likelihood_score, risk_score, risk_level,
-                   treatment_strategy, treatment_owner, treatment_deadline,
-                   residual_impact, residual_likelihood, residual_risk_score
-            FROM enterprise_risks ORDER BY risk_score DESC, id LIMIT 10000
-          `);
-          const actions = await pool.query(`
-            SELECT rta.risk_id, er.risk_title, rta.action_title, rta.action_description,
-                   rta.action_type, rta.assigned_to, rta.due_date, rta.status,
-                   rta.completion_date, rta.percent_complete, rta.evidence_required, rta.evidence_attached
-            FROM risk_treatment_actions rta LEFT JOIN enterprise_risks er ON er.id = rta.risk_id
-            ORDER BY rta.due_date ASC LIMIT 50000
-          `);
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
 
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
-          const fmt = (d: any) => d ? new Date(d).toISOString().substring(0, 10) : '';
-
-          const byLevel = (l: string) => risks.rows.filter((r: any) => r.risk_level === l).length;
-          const byCategory: Record<string, any[]> = {};
-          for (const r of risks.rows) {
-            const cat = r.risk_category || 'Uncategorised';
-            (byCategory[cat] = byCategory[cat] || []).push(r);
-          }
+          // Aggregate summary stats and distinct categories — small results
+          const [rTotR, rLevR, aTotR, aOvR, catsR] = await Promise.all([
+            pool.query(`SELECT COUNT(*)::int AS total FROM enterprise_risks`),
+            pool.query(`SELECT risk_level, COUNT(*)::int AS cnt FROM enterprise_risks GROUP BY risk_level`),
+            pool.query(`SELECT COUNT(*)::int AS total FROM risk_treatment_actions`),
+            pool.query(`SELECT COUNT(*)::int AS cnt FROM risk_treatment_actions WHERE due_date IS NOT NULL AND status != 'completed' AND due_date < NOW()`),
+            pool.query(`SELECT DISTINCT COALESCE(risk_category, 'Uncategorised') AS cat FROM enterprise_risks ORDER BY cat`),
+          ]);
+          const rTotal  = rTotR.rows[0]?.total ?? 0;
+          const rByLev  = (l: string) => rLevR.rows.find(r => r.risk_level === l)?.cnt ?? 0;
+          const aTotal  = aTotR.rows[0]?.total ?? 0;
+          const aOverdue = aOvR.rows[0]?.cnt ?? 0;
+          const categories = catsR.rows.map(r => r.cat as string);
 
           const riskColumns = [
             { header: 'ID', key: 'id', width: 6 },
@@ -82,34 +91,70 @@ export const riskRoutes = [
             { header: 'Description', key: 'risk_description', width: 50 },
           ];
 
-          const enrich = (r: any) => ({
-            ...r,
-            identified_str: fmt(r.identified_date),
-            treatment_deadline_str: fmt(r.treatment_deadline),
-          });
+          const riskSql = `
+            SELECT id, risk_title, risk_description, risk_category, risk_source, identified_by,
+                   risk_owner, owner_department, impact_score, likelihood_score, risk_score, risk_level,
+                   treatment_strategy, treatment_owner, residual_impact, residual_likelihood, residual_risk_score,
+                   TO_CHAR(identified_date, 'YYYY-MM-DD')     AS identified_str,
+                   TO_CHAR(treatment_deadline, 'YYYY-MM-DD')  AS treatment_deadline_str
+            FROM enterprise_risks`;
 
-          const sheets: any[] = [
+          // All Risks sheet — paged, O(1) RSS
+          const allRisksSource = pagedQuery((limit, offset) => pool.query(
+            `${riskSql} ORDER BY risk_score DESC, id LIMIT $1 OFFSET $2`, [limit, offset]
+          ));
+          const allRisksRows = (async function* () {
+            for await (const r of allRisksSource) yield r as Record<string, unknown>;
+          })();
+
+          const sheets: Array<{ name: string; columns: typeof riskColumns; rows: AsyncIterable<Record<string,unknown>> | Array<Record<string,unknown>> }> = [
             {
               name: 'Summary',
               columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
               rows: [
-                { metric: 'Total enterprise risks', value: risks.rows.length },
-                { metric: 'Critical', value: byLevel('critical') },
-                { metric: 'High', value: byLevel('high') },
-                { metric: 'Medium', value: byLevel('medium') },
-                { metric: 'Low', value: byLevel('low') },
-                { metric: 'Treatment actions total', value: actions.rows.length },
-                { metric: 'Actions overdue', value: actions.rows.filter((a: any) => a.due_date && a.status !== 'completed' && new Date(a.due_date) < new Date()).length },
-                { metric: 'Categories', value: Object.keys(byCategory).length },
+                { metric: 'Total enterprise risks', value: rTotal },
+                { metric: 'Critical', value: rByLev('critical') },
+                { metric: 'High', value: rByLev('high') },
+                { metric: 'Medium', value: rByLev('medium') },
+                { metric: 'Low', value: rByLev('low') },
+                { metric: 'Treatment actions total', value: aTotal },
+                { metric: 'Actions overdue', value: aOverdue },
+                { metric: 'Categories', value: categories.length },
                 { metric: 'Generated', value: new Date().toISOString() },
               ],
             },
-            { name: 'All Risks', columns: riskColumns, rows: risks.rows.map(enrich) },
+            { name: 'All Risks', columns: riskColumns, rows: allRisksRows },
           ];
 
-          for (const [cat, list] of Object.entries(byCategory)) {
-            sheets.push({ name: cat, columns: riskColumns, rows: list.map(enrich) });
+          // Per-category sheets — one pagedQuery per category, no full materialisation
+          for (const cat of categories) {
+            const catSource = pagedQuery((limit, offset) => pool.query(
+              `${riskSql} WHERE COALESCE(risk_category, 'Uncategorised') = $3 ORDER BY risk_score DESC, id LIMIT $1 OFFSET $2`,
+              [limit, offset, cat]
+            ));
+            const catRows = (async function* () {
+              for await (const r of catSource) yield r as Record<string, unknown>;
+            })();
+            sheets.push({ name: cat, columns: riskColumns, rows: catRows });
           }
+
+          // Treatment Actions sheet — paged, closes pool when done
+          const actSource = pagedQuery((limit, offset) => pool.query(`
+            SELECT rta.risk_id, er.risk_title, rta.action_title, rta.action_description,
+                   rta.action_type, rta.assigned_to, rta.status, rta.percent_complete,
+                   TO_CHAR(rta.due_date, 'YYYY-MM-DD')        AS due_date_str,
+                   TO_CHAR(rta.completion_date, 'YYYY-MM-DD') AS completion_date_str,
+                   CASE WHEN rta.evidence_required THEN 'Yes' ELSE 'No' END AS evidence_required_str,
+                   CASE WHEN rta.evidence_attached THEN 'Yes' ELSE 'No' END AS evidence_attached_str
+            FROM risk_treatment_actions rta
+            LEFT JOIN enterprise_risks er ON er.id = rta.risk_id
+            ORDER BY rta.due_date ASC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          ));
+          const actRows = (async function* () {
+            try { for await (const r of actSource) yield r as Record<string, unknown>; }
+            finally { await pool.end(); }
+          })();
 
           sheets.push({
             name: 'Treatment Actions',
@@ -127,21 +172,16 @@ export const riskRoutes = [
               { header: 'Evidence Attached', key: 'evidence_attached_str', width: 18 },
               { header: 'Description', key: 'action_description', width: 40 },
             ],
-            rows: actions.rows.map((a: any) => ({
-              ...a,
-              due_date_str: fmt(a.due_date),
-              completion_date_str: fmt(a.completion_date),
-              evidence_required_str: a.evidence_required ? 'Yes' : 'No',
-              evidence_attached_str: a.evidence_attached ? 'Yes' : 'No',
-            })),
+            rows: actRows,
           });
 
-          const buf = await buildWorkbook(sheets, { title: 'Enterprise Risk Register Export' });
-          return c.body(buf, 200, xlsxResponseHeaders(`risks_${Date.now()}.xlsx`));
+          return await streamXlsx(sheets, `risks_${Date.now()}.xlsx`, { title: 'Enterprise Risk Register Export' });
         } catch (error) {
           console.error('❌ [RiskAPI] Error exporting risks XLSX:', error);
+          await pool.end();
           return c.json({ error: 'Failed to export risks XLSX' }, 500);
-        } finally { await pool.end(); }
+        }
+        // pool is closed by the Treatment Actions sheet generator's finally block after full stream
       };
     }
   },

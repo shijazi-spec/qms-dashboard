@@ -1044,32 +1044,69 @@ export const duplicateRadarRoutes = [
           const startDate = url.searchParams.get('start_date') || undefined;
           const endDate = url.searchParams.get('end_date') || undefined;
 
-          const records = await getExportRecords({
-            owner,
-            start_date: startDate,
-            end_date: endDate,
-            status: 'active'
-          });
-
-          await createExportLog({
-            export_type: exportType as any,
-            filter_criteria: { owner, startDate, endDate },
-            total_records_exported: records.length,
-            file_format: 'csv',
-            exported_by: 'User'
-          });
-
+          const pg = await import("pg");
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const csvHeader = 'Record ID,Type,Name,Company,Domain,Owner,Status/Stage,Value,Source,Created Date,Confidence,Recommendation\n';
-          const csvRows = records.map(r => 
-            [r.zoho_record_id || r.id, r.record_type, r.record_name, r.company_name, r.domain, r.owner_name, r.status || r.stage, r.deal_value || '', r.source, r.created_date, `${r.confidence_score}%`, r.ai_recommendation || 'Review manually'].map(escapeCSVValue).join(',')
-          ).join('\n');
+          const { streamCsv, pagedQuery } = await import("../../utils/excelExport");
 
-          // c.text() forces text/plain; use c.body() so the explicit text/csv MIME survives
-          return c.body(csvHeader + csvRows, 200, {
-            'Content-Type': 'text/csv; charset=utf-8',
-            'Content-Disposition': `attachment; filename="duplicate_radar_export_${Date.now()}.csv"`,
-          });
+          // Build WHERE clause matching getExportRecords filter logic
+          const filterParams: unknown[] = ['active'];
+          let whereClause = 'WHERE dc.status = $1';
+          if (owner) { filterParams.push(owner); whereClause += ` AND (dr.owner_name = $${filterParams.length} OR dr.owner_email = $${filterParams.length})`; }
+          if (startDate) { filterParams.push(startDate); whereClause += ` AND dr.created_date >= $${filterParams.length}`; }
+          if (endDate) { filterParams.push(endDate + 'T23:59:59Z'); whereClause += ` AND dr.created_date <= $${filterParams.length}`; }
+          const limIdx = filterParams.length + 1;
+          const offIdx = filterParams.length + 2;
+
+          let drCsvPool: InstanceType<(typeof pg.default)['Pool']> | null = null;
+          let streaming = false;
+          try {
+            drCsvPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+
+            // Count query for the export log (fast aggregate, not a full materialisation)
+            const countRes = await drCsvPool.query(
+              `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
+              filterParams
+            );
+            const totalCount: number = countRes.rows[0]?.total ?? 0;
+
+            await createExportLog({
+              export_type: exportType as any,
+              filter_criteria: { owner, startDate, endDate },
+              total_records_exported: totalCount,
+              file_format: 'csv',
+              exported_by: 'User'
+            });
+
+            const csvHeaders = ['Record ID','Type','Name','Company','Domain','Owner','Status/Stage','Value','Source','Created Date','Confidence','Recommendation'];
+            const source = pagedQuery((limit, offset) => drCsvPool!.query(
+              `SELECT dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
+                      dr.owner_name, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
+                      dr.confidence_score, dr.ai_recommendation
+               FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+               ${whereClause}
+               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC LIMIT $${limIdx} OFFSET $${offIdx}`,
+              [...filterParams, limit, offset]
+            ));
+            const rows = (async function* () {
+              try {
+                for await (const r of source) {
+                  const rec = r as Record<string, unknown>;
+                  yield [
+                    rec['zoho_record_id'] ?? rec['id'], rec['record_type'], rec['record_name'],
+                    rec['company_name'], rec['domain'], rec['owner_name'],
+                    rec['status'] ?? rec['stage'], rec['deal_value'] ?? '',
+                    rec['source'], rec['created_date'],
+                    `${rec['confidence_score']}%`, rec['ai_recommendation'] ?? 'Review manually'
+                  ].map(v => escapeCSVValue(String(v ?? '')));
+                }
+              } finally { drCsvPool && await drCsvPool.end(); }
+            })();
+            streaming = true;
+            return streamCsv(`duplicate_radar_export_${Date.now()}.csv`, csvHeaders, rows);
+          } catch (innerErr) {
+            if (!streaming && drCsvPool) await drCsvPool.end();
+            throw innerErr;
+          }
         } catch (error: any) {
           console.error('Error exporting data:', error);
           return c.json({ error: 'An internal error occurred' }, 500);
@@ -1091,97 +1128,147 @@ export const duplicateRadarRoutes = [
           const end_date = url.searchParams.get('end_date') || undefined;
           const includeRaw = url.searchParams.get('include_raw') === '1';
 
-          const { getExportRecords, getEnhancedSummary } = await import('../../utils/duplicateRadarDatabase');
-          const [rawRecords, summary] = await Promise.all([
-            getExportRecords({ start_date, end_date }),
-            getEnhancedSummary(),
-          ]);
-          // getExportRecords returns dr.* which includes a large raw_data JSONB blob.
-          // We never write that column to Excel, so strip it eagerly to free heap before
-          // exceljs serialises ~40K rows in-process.
-          const records = rawRecords.map(({ raw_data, cluster_domain, cluster_confidence, ...rest }: any) => rest);
+          const { streamXlsx, pagedQuery } = await import('../../utils/excelExport');
+          const pg2 = await import("pg");
 
-          // Parity with /api/duplicates/export (CSV): log every export so the audit trail
-          // captures who pulled what data and when. Failure to log must not block the export.
+          // Build WHERE clause for date filters (no status filter — XLSX exports all active)
+          const xlsxFilterParams: unknown[] = [];
+          let xlsxWhere = "WHERE dc.status = 'active'";
+          if (start_date) { xlsxFilterParams.push(start_date); xlsxWhere += ` AND dr.created_date >= $${xlsxFilterParams.length}`; }
+          if (end_date) { xlsxFilterParams.push(end_date + 'T23:59:59Z'); xlsxWhere += ` AND dr.created_date <= $${xlsxFilterParams.length}`; }
+
+          let drXlsxPool: InstanceType<(typeof pg2.default)['Pool']> | null = null;
+          let streaming = false;
           try {
-            await createExportLog({
-              export_type: 'all',
-              filter_criteria: { start_date, end_date, include_raw: includeRaw },
-              total_records_exported: records.length,
-              file_format: 'xlsx',
-              exported_by: 'User',
-            });
-          } catch (logErr) {
-            console.warn('[DuplicateRadar] export-xlsx log write failed (non-blocking):', logErr);
+            drXlsxPool = new pg2.default.Pool({ connectionString: process.env.DATABASE_URL });
+
+            // Aggregate summary counts and enhanced summary — small results
+            const [typeCntRes, summary] = await Promise.all([
+              drXlsxPool.query(
+                `SELECT COALESCE(dr.record_type, 'other') AS rtype, COUNT(*)::int AS cnt
+                 FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+                 ${xlsxWhere} GROUP BY dr.record_type`,
+                xlsxFilterParams
+              ),
+              getEnhancedSummary(),
+            ]);
+
+            const countByType: Record<string, number> = {};
+            let totalXlsx = 0;
+            for (const row of typeCntRes.rows) { countByType[row.rtype] = row.cnt; totalXlsx += row.cnt; }
+
+            // Log export (non-blocking)
+            try {
+              await createExportLog({
+                export_type: 'all',
+                filter_criteria: { start_date, end_date, include_raw: includeRaw },
+                total_records_exported: totalXlsx,
+                file_format: 'xlsx',
+                exported_by: 'User',
+              });
+            } catch (logErr) {
+              console.warn('[DuplicateRadar] export-xlsx log write failed (non-blocking):', logErr);
+            }
+
+            const recordColumns = [
+              { header: 'Cluster ID', key: 'cluster_id', width: 12 },
+              { header: 'Zoho ID', key: 'zoho_record_id', width: 22 },
+              { header: 'Name', key: 'record_name', width: 30 },
+              { header: 'Company', key: 'company_name', width: 30 },
+              { header: 'Email', key: 'email', width: 28 },
+              { header: 'Domain', key: 'domain', width: 22 },
+              { header: 'Phone', key: 'phone', width: 18 },
+              { header: 'Owner', key: 'owner_name', width: 22 },
+              { header: 'Status / Stage', key: 'status_or_stage', width: 18 },
+              { header: 'Value', key: 'deal_value', width: 14 },
+              { header: 'Source', key: 'source', width: 18 },
+              { header: 'Confidence', key: 'confidence_score', width: 12 },
+              { header: 'Recommendation', key: 'ai_recommendation', width: 40 },
+              { header: 'Created', key: 'created_str', width: 14 },
+            ];
+
+            // SQL template for per-type paged queries — avoids raw_data JSONB blob
+            const typeIdx = xlsxFilterParams.length + 1;
+            const limIdx2 = xlsxFilterParams.length + 2;
+            const offIdx2 = xlsxFilterParams.length + 3;
+            const recSql = `
+              SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email,
+                     dr.domain, dr.phone, dr.owner_name,
+                     COALESCE(dr.status, dr.stage, '') AS status_or_stage,
+                     dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
+                     TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str
+              FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+              ${xlsxWhere} AND dr.record_type = $${typeIdx}
+              ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
+              LIMIT $${limIdx2} OFFSET $${offIdx2}`;
+
+            const makeTypeRows = (rtype: string) => {
+              const src = pagedQuery((limit, offset) => drXlsxPool!.query(recSql, [...xlsxFilterParams, rtype, limit, offset]));
+              return (async function* () {
+                for await (const r of src) yield r as Record<string, unknown>;
+              })();
+            };
+
+            const sheets: Array<{ name: string; columns: typeof recordColumns; rows: AsyncIterable<Record<string,unknown>> | Array<Record<string,unknown>> }> = [
+              {
+                name: 'Summary',
+                columns: [{ header: 'Metric', key: 'metric', width: 32 }, { header: 'Value', key: 'value', width: 18 }],
+                rows: [
+                  { metric: 'Total clusters', value: summary?.totalClusters ?? 0 },
+                  { metric: 'Total duplicate records', value: totalXlsx },
+                  { metric: 'Singletons', value: summary?.singletonCount ?? 0 },
+                  { metric: 'Resolution rate', value: summary?.resolutionRate ? `${summary.resolutionRate}%` : 'n/a' },
+                  { metric: 'Low-confidence clusters', value: summary?.lowConfidence ?? 0 },
+                  { metric: 'Leads with duplicates', value: countByType['lead'] ?? 0 },
+                  { metric: 'Deals with duplicates', value: countByType['deal'] ?? 0 },
+                  { metric: 'Contacts with duplicates', value: countByType['contact'] ?? 0 },
+                  { metric: 'Accounts with duplicates', value: countByType['account'] ?? 0 },
+                  { metric: 'Date range start', value: start_date || '(all)' },
+                  { metric: 'Date range end', value: end_date || '(all)' },
+                  { metric: 'Generated', value: new Date().toISOString() },
+                ],
+              },
+              { name: 'Leads', columns: recordColumns, rows: makeTypeRows('lead') },
+              { name: 'Deals', columns: recordColumns, rows: makeTypeRows('deal') },
+              { name: 'Contacts', columns: recordColumns, rows: makeTypeRows('contact') },
+            ];
+
+            // Accounts is the last type sheet — used as the pool-close anchor when !includeRaw
+            const accountsSrc = pagedQuery((limit, offset) => drXlsxPool!.query(recSql, [...xlsxFilterParams, 'account', limit, offset]));
+            const accountsRows = includeRaw
+              ? (async function* () { for await (const r of accountsSrc) yield r as Record<string, unknown>; })()
+              : (async function* () {
+                  try { for await (const r of accountsSrc) yield r as Record<string, unknown>; }
+                  finally { drXlsxPool && await drXlsxPool.end(); }
+                })();
+            sheets.push({ name: 'Accounts', columns: recordColumns, rows: accountsRows });
+
+            if (includeRaw) {
+              const allLim = xlsxFilterParams.length + 1;
+              const allOff = xlsxFilterParams.length + 2;
+              const allSrc = pagedQuery((limit, offset) => drXlsxPool!.query(
+                `SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email, dr.domain,
+                        dr.phone, dr.owner_name, COALESCE(dr.status, dr.stage, '') AS status_or_stage,
+                        dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
+                        TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str
+                 FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+                 ${xlsxWhere} ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
+                 LIMIT $${allLim} OFFSET $${allOff}`,
+                [...xlsxFilterParams, limit, offset]
+              ));
+              const allRows = (async function* () {
+                try { for await (const r of allSrc) yield r as Record<string, unknown>; }
+                finally { drXlsxPool && await drXlsxPool.end(); }
+              })();
+              sheets.push({ name: 'All Records', columns: recordColumns, rows: allRows });
+            }
+
+            streaming = true;
+            return await streamXlsx(sheets, `duplicate_radar_${Date.now()}.xlsx`, { title: 'Duplicate Radar Export' });
+          } catch (innerErr) {
+            if (!streaming && drXlsxPool) await drXlsxPool.end();
+            throw innerErr;
           }
-
-          const { buildWorkbook, xlsxResponseHeaders } = await import('../../utils/excelExport');
-
-          // Group records by type so each module gets its own sheet
-          const byType: Record<string, any[]> = { lead: [], deal: [], contact: [], account: [] };
-          for (const r of records) (byType[r.record_type] || (byType[r.record_type] = [])).push(r);
-
-          const recordColumns = [
-            { header: 'Cluster ID', key: 'cluster_id', width: 12 },
-            { header: 'Zoho ID', key: 'zoho_record_id', width: 22 },
-            { header: 'Name', key: 'record_name', width: 30 },
-            { header: 'Company', key: 'company_name', width: 30 },
-            { header: 'Email', key: 'email', width: 28 },
-            { header: 'Domain', key: 'domain', width: 22 },
-            { header: 'Phone', key: 'phone', width: 18 },
-            { header: 'Owner', key: 'owner_name', width: 22 },
-            { header: 'Status / Stage', key: 'status_or_stage', width: 18 },
-            { header: 'Value', key: 'deal_value', width: 14 },
-            { header: 'Source', key: 'source', width: 18 },
-            { header: 'Confidence', key: 'confidence_score', width: 12 },
-            { header: 'Recommendation', key: 'ai_recommendation', width: 40 },
-            { header: 'Created', key: 'created_str', width: 14 },
-          ];
-
-          const buildRow = (r: any) => ({
-            ...r,
-            status_or_stage: r.status || r.stage || '',
-            created_str: r.created_date ? new Date(r.created_date).toISOString().substring(0, 10) : '',
-          });
-
-          const sheets = [
-            {
-              name: 'Summary',
-              columns: [
-                { header: 'Metric', key: 'metric', width: 32 },
-                { header: 'Value', key: 'value', width: 18 },
-              ],
-              rows: [
-                { metric: 'Total clusters', value: summary?.totalClusters ?? 0 },
-                { metric: 'Total duplicate records', value: records.length },
-                { metric: 'Singletons', value: summary?.singletonCount ?? 0 },
-                { metric: 'Resolution rate', value: summary?.resolutionRate ? `${summary.resolutionRate}%` : 'n/a' },
-                { metric: 'Low-confidence clusters', value: summary?.lowConfidence ?? 0 },
-                { metric: 'Leads with duplicates', value: byType.lead?.length ?? 0 },
-                { metric: 'Deals with duplicates', value: byType.deal?.length ?? 0 },
-                { metric: 'Contacts with duplicates', value: byType.contact?.length ?? 0 },
-                { metric: 'Accounts with duplicates', value: byType.account?.length ?? 0 },
-                { metric: 'Date range start', value: start_date || '(all)' },
-                { metric: 'Date range end', value: end_date || '(all)' },
-                { metric: 'Generated', value: new Date().toISOString() },
-              ],
-            },
-            { name: 'Leads', columns: recordColumns, rows: (byType.lead || []).map(buildRow) },
-            { name: 'Deals', columns: recordColumns, rows: (byType.deal || []).map(buildRow) },
-            { name: 'Contacts', columns: recordColumns, rows: (byType.contact || []).map(buildRow) },
-            { name: 'Accounts', columns: recordColumns, rows: (byType.account || []).map(buildRow) },
-          ];
-
-          if (includeRaw) {
-            sheets.push({
-              name: 'All Records',
-              columns: recordColumns,
-              rows: records.map(buildRow),
-            });
-          }
-
-          const buf = await buildWorkbook(sheets, { title: 'Duplicate Radar Export' });
-          return c.body(buf, 200, xlsxResponseHeaders(`duplicate_radar_${Date.now()}.xlsx`));
         } catch (error: any) {
           console.error('Error exporting duplicates XLSX:', error);
           return c.json({ error: 'An internal error occurred' }, 500);

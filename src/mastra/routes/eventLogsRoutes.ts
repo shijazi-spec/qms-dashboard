@@ -95,36 +95,70 @@ export const eventLogsRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Exporting logs as CSV");
 
-          const { exportEventLogs, initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          const { initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
           const userId = c.req.query("userId") ? parseInt(c.req.query("userId")) : undefined;
           const userName = c.req.query("userName");
           const actionType = c.req.query("actionType");
           const entityType = c.req.query("entityType");
-          const module = c.req.query("module");
+          const logModule = c.req.query("module");
           const severity = c.req.query("severity");
-          const aiInvolved = c.req.query("aiInvolved") !== undefined 
-            ? c.req.query("aiInvolved") === "true" 
+          const aiInvolved = c.req.query("aiInvolved") !== undefined
+            ? c.req.query("aiInvolved") === "true"
             : undefined;
           const fromDate = c.req.query("fromDate");
           const toDate = c.req.query("toDate");
           const search = c.req.query("search");
           const correlationId = c.req.query("correlationId");
 
-          const logs = await exportEventLogs({
-            userId,
-            userName,
-            actionType,
-            entityType,
-            module,
-            severity,
-            aiInvolved,
-            fromDate,
-            toDate,
-            search,
-            correlationId
-          });
+          // Build dynamic WHERE conditions (mirrors exportEventLogs logic)
+          const conditions: string[] = [];
+          const baseParams: unknown[] = [];
+          let paramIndex = 1;
+
+          if (userId !== undefined)       { conditions.push(`user_id = $${paramIndex++}`);          baseParams.push(userId); }
+          if (userName)                   { conditions.push(`user_name ILIKE $${paramIndex++}`);    baseParams.push(`%${userName}%`); }
+          if (actionType)                 { conditions.push(`action_type = $${paramIndex++}`);      baseParams.push(actionType); }
+          if (entityType)                 { conditions.push(`entity_type = $${paramIndex++}`);      baseParams.push(entityType); }
+          if (logModule)                  { conditions.push(`module = $${paramIndex++}`);           baseParams.push(logModule); }
+          if (severity)                   { conditions.push(`severity = $${paramIndex++}`);         baseParams.push(severity); }
+          if (aiInvolved !== undefined)   { conditions.push(`ai_involved = $${paramIndex++}`);      baseParams.push(aiInvolved); }
+          if (fromDate)                   { conditions.push(`timestamp >= $${paramIndex++}`);       baseParams.push(fromDate); }
+          if (toDate)                     { conditions.push(`timestamp <= $${paramIndex++}`);       baseParams.push(toDate); }
+          if (correlationId)              { conditions.push(`correlation_id = $${paramIndex++}`);   baseParams.push(correlationId); }
+          if (search) {
+            conditions.push(`(description ILIKE $${paramIndex} OR entity_name ILIKE $${paramIndex} OR user_name ILIKE $${paramIndex})`);
+            baseParams.push(`%${search}%`);
+            paramIndex++;
+          }
+
+          const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          const baseSql = `SELECT id,timestamp,user_id,user_name,user_email,user_role,action_type,entity_type,entity_id,entity_name,description,old_value,new_value,ai_involved,severity,correlation_id,ip_address,user_agent,module,checksum,created_at FROM event_logs ${where} ORDER BY timestamp DESC`;
+          const limitParamIdx = paramIndex;
+
+          const pg = await import("pg");
+          const logPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          const { escapeCSVValue } = await import("../../utils/inputSanitizer");
+          const { streamCsv, pagedQuery } = await import("../../utils/excelExport");
+          const logCols = ['id','timestamp','user_id','user_name','user_email','user_role','action_type','entity_type','entity_id','entity_name','description','old_value','new_value','ai_involved','severity','correlation_id','ip_address','user_agent','module','checksum','created_at'];
+
+          const source = pagedQuery(
+            (limit, offset) => logPool.query(
+              `${baseSql} LIMIT $${limitParamIdx} OFFSET $${limitParamIdx + 1}`,
+              [...baseParams, limit, offset]
+            )
+          );
+          const mappedRows = (async function* () {
+            try {
+              for await (const log of source) {
+                const r = log as Record<string, unknown>;
+                yield logCols.map(k => escapeCSVValue(String(r[k] ?? '')));
+              }
+            } finally {
+              await logPool.end();
+            }
+          })();
 
           const headers = [
             'ID', 'Timestamp', 'User ID', 'User Name', 'User Email', 'User Role',
@@ -133,47 +167,8 @@ export const eventLogsRoutes = [
             'IP Address', 'User Agent', 'Module', 'Checksum', 'Created At'
           ];
 
-          const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const escapeCSV = escapeCSVValue;
-
-          const csvRows = [headers.join(',')];
-          for (const log of logs) {
-            const row = [
-              log.id,
-              log.timestamp,
-              log.user_id,
-              log.user_name,
-              log.user_email,
-              log.user_role,
-              log.action_type,
-              log.entity_type,
-              log.entity_id,
-              log.entity_name,
-              log.description,
-              log.old_value,
-              log.new_value,
-              log.ai_involved,
-              log.severity,
-              log.correlation_id,
-              log.ip_address,
-              log.user_agent,
-              log.module,
-              log.checksum,
-              log.created_at
-            ].map(escapeCSV);
-            csvRows.push(row.join(','));
-          }
-
-          const csvContent = csvRows.join('\n');
-
-          logger?.info("📋 [EventLogs API] CSV export completed", { rowCount: logs.length });
-
-          return new Response(csvContent, {
-            headers: {
-              'Content-Type': 'text/csv',
-              'Content-Disposition': `attachment; filename="event_logs_${new Date().toISOString().split('T')[0]}.csv"`
-            }
-          });
+          logger?.info("📋 [EventLogs API] CSV export streaming started (paged)");
+          return streamCsv(`event_logs_${new Date().toISOString().split('T')[0]}.csv`, headers, mappedRows);
         } catch (error) {
           console.error("Error exporting event logs:", error);
           return c.json({ 
