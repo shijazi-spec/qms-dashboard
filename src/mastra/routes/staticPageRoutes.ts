@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { getSessionFromCookie } from "./authRoutes";
-import { hasValidAdminApiKey, isAdminKeyConfigured } from "../../utils/rbacMiddleware";
+import { isAdminKeyConfigured, isAdminAuthorized } from "../../utils/rbacMiddleware";
 
 const STATIC_MIME: Record<string, string> = {
   css: 'text/css; charset=utf-8',
@@ -100,14 +100,20 @@ export const staticPageRoutes = [
     },
   },
   {
+    // Access semantics: serve the admin dashboard shell when EITHER the
+    // caller has a valid admin API key (cookie/header — for service and
+    // automation use) OR the caller has a Replit-OIDC session whose role
+    // is 'admin' (for normal browser navigation, which cannot send custom
+    // headers). The backing `/api/admin/*` routes perform their own
+    // per-route RBAC via `requireAdminOrKey` / `enforceRoutePermission`,
+    // which is the actual authorization boundary for admin data.
     path: "/admin",
     method: "GET",
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const session = getSessionFromCookie(c.req.header('Cookie'));
-          if (!hasValidAdminApiKey(c) || !session || session.role !== 'admin') {
-            return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the admin panel, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
+          if (!isAdminAuthorized(c)) {
+            return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the admin panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
           }
           const filePath = resolveDashboardFile("admin.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
@@ -120,9 +126,9 @@ export const staticPageRoutes = [
     },
   },
   {
-    // Access semantics: this is a *platform-configured* gate, not a true
-    // admin-role gate. The page is shown when the deployment has an
-    // ADMIN_API_KEY configured OR the caller has any valid session — the
+    // Access semantics: same OR-style gate as `/admin` for consistency —
+    // the page shell is served when EITHER the caller has a valid admin
+    // API key (cookie/header) OR a session with role='admin'. The
     // underlying `/api/users`, `/api/invitations`, and `/api/rbac` routes
     // perform their own per-role RBAC via `enforceRoutePermission`, which
     // is the actual authorization boundary for user-management data.
@@ -131,9 +137,8 @@ export const staticPageRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const session = getSessionFromCookie(c.req.header('Cookie'));
-          if (!isAdminKeyConfigured() && !session) {
-            return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the Users &amp; Access panel, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
+          if (!isAdminAuthorized(c)) {
+            return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the Users &amp; Access panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
           }
           const filePath = resolveDashboardFile("users.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
