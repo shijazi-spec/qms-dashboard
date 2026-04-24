@@ -496,40 +496,41 @@
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="quality-trend" data-name="Data Quality Trend">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
-                                    Data Quality Trend
+                                    <span data-i18n="index.trend_title">Data Quality Trend</span>
                                     <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
                                           data-tip="Tracks the actual health of your CRM records over the last 30 days — compliance %, records with issues, duplicate clusters, and pipeline at risk."
+                                          data-i18n-title="index.trend_tip"
                                           data-testid="info-quality-trend">i</span>
                                 </span>
-                                <span class="text-xs text-gray-600" id="qualityTrendSubtitle">Last 30 audits & duplicate scans</span>
+                                <span class="text-xs text-gray-600" id="qualityTrendSubtitle" data-i18n="index.trend_subtitle">Last 30 audits & duplicate scans</span>
                             </div>
                             <div class="p-6">
                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                     <div class="bg-green-50 rounded-xl p-3 text-center">
                                         <div class="text-xl font-bold text-green-700" id="trendComplianceNow" data-testid="text-trend-compliance">--</div>
-                                        <div class="text-xs text-gray-500">Compliance %</div>
+                                        <div class="text-xs text-gray-500" data-i18n="index.trend_compliance_pct">Compliance %</div>
                                         <div class="text-xs font-medium" id="trendComplianceDelta">--</div>
                                     </div>
                                     <div class="bg-orange-50 rounded-xl p-3 text-center">
                                         <div class="text-xl font-bold text-orange-700" id="trendIssuesNow" data-testid="text-trend-issues">--</div>
-                                        <div class="text-xs text-gray-500">Records w/ Issues</div>
+                                        <div class="text-xs text-gray-500" data-i18n="index.trend_records_with_issues">Records w/ Issues</div>
                                         <div class="text-xs font-medium" id="trendIssuesDelta">--</div>
                                     </div>
                                     <div class="bg-purple-50 rounded-xl p-3 text-center">
                                         <div class="text-xl font-bold text-purple-700" id="trendClustersNow" data-testid="text-trend-clusters">--</div>
-                                        <div class="text-xs text-gray-500">Duplicate Clusters</div>
+                                        <div class="text-xs text-gray-500" data-i18n="index.trend_duplicate_clusters">Duplicate Clusters</div>
                                         <div class="text-xs font-medium" id="trendClustersDelta">--</div>
                                     </div>
                                     <div class="bg-red-50 rounded-xl p-3 text-center">
                                         <div class="text-xl font-bold text-red-700" id="trendInflationNow" data-testid="text-trend-inflation">--</div>
-                                        <div class="text-xs text-gray-700">Pipeline Inflation (SAR)</div>
+                                        <div class="text-xs text-gray-700" data-i18n="index.trend_pipeline_inflation_sar">Pipeline Inflation (SAR)</div>
                                         <div class="text-xs font-medium" id="trendInflationDelta">--</div>
                                     </div>
                                 </div>
                                 <div class="chart-container chart-h-240">
                                     <canvas id="qualityTrendChart"></canvas>
                                 </div>
-                                <div class="text-xs text-gray-400 mt-2 text-center hidden" id="qualityTrendEmpty">
+                                <div class="text-xs text-gray-400 mt-2 text-center hidden" id="qualityTrendEmpty" data-i18n="index.trend_empty">
                                     Not enough audit history yet. Trend will populate as more audits run.
                                 </div>
                                 <div class="text-[11px] text-gray-600 mt-1 text-center" id="qualityTrendAsOf" data-testid="text-trend-asof"></div>

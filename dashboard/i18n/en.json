@@ -2165,7 +2165,15 @@
     "col_layouts": "Layouts",
     "col_products": "Products",
     "col_created_by": "Created By",
-    "col_issues": "Issues"
+    "col_issues": "Issues",
+    "trend_title": "Data Quality Trend",
+    "trend_subtitle": "Last 30 audits & duplicate scans",
+    "trend_tip": "Tracks the actual health of your CRM records over the last 30 days — compliance %, records with issues, duplicate clusters, and pipeline at risk.",
+    "trend_compliance_pct": "Compliance %",
+    "trend_records_with_issues": "Records w/ Issues",
+    "trend_duplicate_clusters": "Duplicate Clusters",
+    "trend_pipeline_inflation_sar": "Pipeline Inflation (SAR)",
+    "trend_empty": "Not enough audit history yet. Trend will populate as more audits run."
   },
   "accept_invite": {
     "title": "WalaPlus Platform",

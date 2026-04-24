@@ -348,16 +348,6 @@ const WalaPlusNav = {
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}"
                       data-testid="button-lang-ar">العربية</button>
                   </div>
-                  ${isAr ? `<div class="mt-2">
-                  <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.numerals">${_t('nav.numerals')}</p>
-                  <div class="flex gap-2" id="nav-numeral-btns">
-                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[true, "@this"]'
-                      class="flex-1 text-xs px-2 py-1 rounded border transition ${(window.WalaPlusI18n && !window.WalaPlusI18n.getUseEasternNumerals()) ? 'border-gray-200 text-gray-600' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
-                      data-testid="button-numerals-eastern">${_t('nav.numerals_eastern')}</button>
-                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[false, "@this"]'
-                      class="flex-1 text-xs px-2 py-1 rounded border transition ${(window.WalaPlusI18n && !window.WalaPlusI18n.getUseEasternNumerals()) ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600'}"
-                      data-testid="button-numerals-western">${_t('nav.numerals_western')}</button>
-                  </div></div>` : ''}
                 </div>
                 <button data-on-click="WalaPlusNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
