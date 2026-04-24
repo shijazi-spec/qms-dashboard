@@ -1,13 +1,5 @@
 import { getSessionFromCookie } from "./authRoutes";
-
-function isAdminAuthorized(c: any): boolean {
-  const adminKey = c.req.header("X-Admin-Key") || (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
-  const expectedKey = process.env.ADMIN_API_KEY;
-  const hasValidAdminKey = !!(expectedKey && adminKey === expectedKey);
-  const session = getSessionFromCookie(c.req.header('Cookie'));
-  const isAdminRole = session?.role === 'admin';
-  return hasValidAdminKey || isAdminRole;
-}
+import { isAdminAuthorized } from "../../utils/rbacMiddleware";
 
 export const adminApiRoutes = [
   {

@@ -159,6 +159,15 @@ function getAdminKey(c: any): string | null {
   return null;
 }
 
+export function isAdminAuthorized(c: any): boolean {
+  const adminKey = getAdminKey(c) || '';
+  const expectedKey = process.env.ADMIN_API_KEY;
+  const hasValidAdminKey = !!(expectedKey && adminKey === expectedKey);
+  if (hasValidAdminKey) return true;
+  const session = getSessionFromCookie(c.req.header('Cookie'));
+  return session?.role === 'admin';
+}
+
 export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
   const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
