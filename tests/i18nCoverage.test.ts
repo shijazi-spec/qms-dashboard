@@ -1,12 +1,12 @@
 /**
- * i18n guardrail (Task #125)
+ * i18n guardrail (Task #125 / #150)
  * ----------------------------------------------------------------------------
  * Wraps `scripts/check-i18n.cjs` so it runs on every `npm test` invocation
  * (and therefore on every merge through `scripts/post-merge.sh`). The script
  * itself is the source of truth for the rules + allowlist; this file just
  * makes sure the integration-test runner picks it up.
  *
- * The guardrail blocks three classes of regression:
+ * The guardrail blocks five classes of regression:
  *
  *   1. A new `dashboard/*.html` page that forgets to load `/js/i18n.js` or
  *      forgets to call `WalaPlusI18n.init().then(applyToDOM)`. Without that
@@ -20,6 +20,15 @@
  *
  *   3. A drift between `en.json` and `ar.json` key trees (orphans on either
  *      side, or a leaf turning into a sub-object on one side only).
+ *
+ *   4. A SW dictionary string in `dashboard/streaming-download-sw.js` that
+ *      diverges from its mirror under `downloads.sw_expired_*` in the JSON
+ *      files.
+ *
+ *   5. (Task #150) A static `WalaPlusI18n.t('ns.key')` call in
+ *      `dashboard/js/*.js` or an inline <script> block whose key is missing
+ *      from `en.json` or `ar.json`. Dynamic `t(variable)` calls are surfaced
+ *      as non-blocking ⚠ warnings (cannot be statically verified).
  *
  * Run:  npx tsx tests/i18nCoverage.test.ts
  *       node scripts/check-i18n.cjs              # equivalent
@@ -68,7 +77,7 @@ if (result.error) {
   }
   assert(
     result.status === 0,
-    "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, and the two trees are identical",
+    "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, the two trees are identical, the SW dictionary is in sync, and every static WalaPlusI18n.t() key resolves in both JSON files",
   );
 }
 

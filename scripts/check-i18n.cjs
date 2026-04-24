@@ -442,6 +442,191 @@ function checkSwDictionaryParity(en, ar) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Check 5 — WalaPlusI18n.t() key coverage in JS files and inline scripts
+ * (Task #150)
+ *
+ * Static string-literal calls like `WalaPlusI18n.t('ns.key')` are extracted
+ * from `dashboard/js/*.js` AND from inline <script> blocks in every
+ * `dashboard/*.html` page. Each key is then asserted to resolve to a string
+ * in BOTH en.json and ar.json — the same guarantee the HTML attribute check
+ * (Check 2) provides for `data-i18n` attributes.
+ *
+ * Dynamic key construction (e.g. `t('foo.' + bar)` or `t(variable)`) cannot
+ * be statically verified and is surfaced as a non-blocking ⚠ warning so
+ * reviewers know those branches need manual care.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Return the concatenated text of every inline <script> block (i.e. <script>
+ * tags WITHOUT a `src` attribute) found in an HTML string.
+ */
+function extractInlineScripts(html) {
+  const INLINE_SCRIPT_RE = /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi;
+  const blocks = [];
+  let m;
+  while ((m = INLINE_SCRIPT_RE.exec(html)) !== null) {
+    blocks.push(m[1]);
+  }
+  return blocks.join('\n');
+}
+
+/**
+ * Scan `source` for every `(window.)WalaPlusI18n.t(...)` call and classify:
+ *   - static  : first argument is a single- or double-quoted string literal
+ *               (any content, no unescaped matching quote inside) — the key
+ *               is extracted verbatim and validated against the JSON trees.
+ *   - dynamic : anything else (variable, concatenation, template literal …)
+ *               → cannot be statically verified; surface as a warning.
+ *
+ * Returns { staticKeys: [{key, source}], dynamicRefs: [{snippet, source}] }
+ */
+function extractTCalls(source, sourceName) {
+  const staticKeys = [];
+  const dynamicSnippets = new Set();
+
+  const T_CALL_RE = /(?:window\.)?WalaPlusI18n\.t\s*\(\s*/g;
+  let m;
+  while ((m = T_CALL_RE.exec(source)) !== null) {
+    const rest = source.slice(m.index + m[0].length);
+    // Static: first argument is a complete quoted string literal — nothing
+    // follows the closing quote except optional whitespace then `,` or `)`.
+    // This correctly rejects concatenations like t('foo.' + bar) and template
+    // literals, classifying them as dynamic instead.
+    const staticMatch = /^(["'])((?:[^\\]|\\.)*?)\1/.exec(rest);
+    if (staticMatch) {
+      const afterStr = rest.slice(staticMatch[0].length).trimStart();
+      if (afterStr.startsWith(',') || afterStr.startsWith(')')) {
+        // True static literal: the key is fully known at authoring time.
+        staticKeys.push({ key: staticMatch[2], source: sourceName });
+      } else {
+        // Dynamic expression: e.g. t('foo.' + bar) — the opening token
+        // happened to be a string but the full argument is not.
+        const snippet = rest.slice(0, 60).split('\n')[0].trimEnd();
+        dynamicSnippets.add(`t(${snippet}`);
+      }
+    } else {
+      // Dynamic: capture a short single-line snippet for the warning message.
+      const snippet = rest.slice(0, 60).split('\n')[0].trimEnd();
+      dynamicSnippets.add(`t(${snippet}`);
+    }
+  }
+
+  const dynamicRefs = [...dynamicSnippets].map((snippet) => ({ snippet, source: sourceName }));
+  return { staticKeys, dynamicRefs };
+}
+
+/**
+ * Recursively collect all *.js file paths under `dir`, returning them as
+ * paths relative to `DASHBOARD_DIR` (e.g. "js/navigation.js").
+ */
+function collectJsFiles(dir, base) {
+  let results = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    const relPath = base ? `${base}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      results = results.concat(collectJsFiles(path.join(dir, entry.name), relPath));
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      results.push(relPath);
+    }
+  }
+  return results.sort();
+}
+
+function checkJsKeyCoverage(pages, en, ar) {
+  const allStatic = []; // [{key, source}]
+  const allDynamic = []; // [{snippet, source}]
+
+  // 1. Scan dashboard/js/**/*.js (recursively)
+  const jsDir = path.join(DASHBOARD_DIR, 'js');
+  for (const relPath of collectJsFiles(jsDir, '')) {
+    const src = fs.readFileSync(path.join(jsDir, relPath), 'utf8');
+    const { staticKeys, dynamicRefs } = extractTCalls(src, `dashboard/js/${relPath}`);
+    allStatic.push(...staticKeys);
+    allDynamic.push(...dynamicRefs);
+  }
+
+  // 2. Scan inline <script> blocks in dashboard/*.html
+  for (const page of pages) {
+    const html = fs.readFileSync(path.join(DASHBOARD_DIR, page), 'utf8');
+    const inlineJs = extractInlineScripts(html);
+    if (!inlineJs.trim()) continue;
+    const { staticKeys, dynamicRefs } = extractTCalls(inlineJs, `dashboard/${page} (inline <script>)`);
+    allStatic.push(...staticKeys);
+    allDynamic.push(...dynamicRefs);
+  }
+
+  // 3. Validate static keys against both JSON trees.
+  const missingEn = [];
+  const missingAr = [];
+  const seen = new Set();
+
+  for (const { key, source } of allStatic) {
+    const dedupKey = `${source}::${key}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    if (typeof getDeep(en, key) !== 'string') missingEn.push({ source, key });
+    if (typeof getDeep(ar, key) !== 'string') missingAr.push({ source, key });
+  }
+
+  const passed = missingEn.length === 0 && missingAr.length === 0;
+
+  if (passed) {
+    console.log(
+      `✓ JS t() key coverage (${seen.size} unique static key reference(s)) — every WalaPlusI18n.t() key resolves in en.json and ar.json`,
+    );
+  } else {
+    if (missingEn.length) {
+      fail(
+        `JS t() key coverage: ${missingEn.length} WalaPlusI18n.t() call(s) reference keys missing from dashboard/i18n/en.json`,
+        [
+          ...missingEn.slice(0, 50).map(({ source, key }) => `${source} :: "${key}"`),
+          ...(missingEn.length > 50 ? [`... and ${missingEn.length - 50} more`] : []),
+          '',
+          'Fix: add the missing key in dashboard/i18n/en.json (and the matching ar.json entry).',
+        ],
+      );
+    }
+    if (missingAr.length) {
+      fail(
+        `JS t() key coverage: ${missingAr.length} WalaPlusI18n.t() call(s) reference keys missing from dashboard/i18n/ar.json`,
+        [
+          ...missingAr.slice(0, 50).map(({ source, key }) => `${source} :: "${key}"`),
+          ...(missingAr.length > 50 ? [`... and ${missingAr.length - 50} more`] : []),
+          '',
+          'Fix: add the Arabic translation for each key in dashboard/i18n/ar.json.',
+          'The page silently falls back to the last key segment when the translation is missing.',
+        ],
+      );
+    }
+  }
+
+  // 4. Surface dynamic key warnings (non-blocking — just informational).
+  if (allDynamic.length) {
+    const shown = new Set();
+    const unique = [];
+    for (const ref of allDynamic) {
+      const id = `${ref.source}::${ref.snippet}`;
+      if (!shown.has(id)) { shown.add(id); unique.push(ref); }
+    }
+    console.warn(
+      `\n⚠  JS t() dynamic keys — ${unique.length} WalaPlusI18n.t() call(s) use non-literal keys and cannot be statically verified:`,
+    );
+    for (const { snippet, source } of unique) {
+      console.warn(`    ${source}  →  ${snippet}`);
+    }
+    console.warn('    Review these manually when the surrounding key set changes.\n');
+  }
+
+  return passed;
+}
+
+/* ---------------------------------------------------------------------------
  * Main
  * ------------------------------------------------------------------------ */
 
@@ -460,9 +645,10 @@ function main() {
   const ok2 = checkReferenceCoverage(pages, en, ar);
   const ok3 = checkTreeParity(en, ar);
   const ok4 = checkSwDictionaryParity(en, ar);
+  const ok5 = checkJsKeyCoverage(pages, en, ar);
 
-  if (ok1 && ok2 && ok3 && ok4) {
-    console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, and SW dictionary are all in sync.');
+  if (ok1 && ok2 && ok3 && ok4 && ok5) {
+    console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, SW dictionary, and JS t() calls are all in sync.');
     process.exit(0);
   }
   console.error('\n✗ i18n guardrail FAILED — see diagnostics above. Re-run with `npm run check:i18n` after fixing.');

@@ -55,7 +55,7 @@ echo "▶ CI gate: ai_pending_actions historical sweep backfill (Task #85)"
 npx tsx tests/aiApprovalSweepBackfill.test.ts
 
 # ----------------------------------------------------------------------------
-# CI gate — i18n coverage guardrail (Task #125)
+# CI gate — i18n coverage guardrail (Task #125 / #150)
 #
 # Blocks merges that:
 #   * Add a `dashboard/*.html` page without `/js/i18n.js` + the
@@ -64,12 +64,15 @@ npx tsx tests/aiApprovalSweepBackfill.test.ts
 #     `dashboard/i18n/en.json` or `dashboard/i18n/ar.json`.
 #   * Drift the `en.json` / `ar.json` key trees apart (orphans either way,
 #     or a leaf turning into a sub-object on one side only).
+#   * Use a static `WalaPlusI18n.t('ns.key')` call in `dashboard/js/*.js` or
+#     an inline <script> block whose key is missing from en.json / ar.json.
+#     Dynamic t(variable) calls are surfaced as non-blocking ⚠ warnings.
 #
-# All three checks live in `scripts/check-i18n.cjs` and are also covered by
+# All five checks live in `scripts/check-i18n.cjs` and are also covered by
 # `tests/i18nCoverage.test.ts` (auto-discovered by `npm test`).
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: i18n coverage (Task #125)"
+echo "▶ CI gate: i18n coverage (Task #125 / #150)"
 node scripts/check-i18n.cjs
 
 # ----------------------------------------------------------------------------
