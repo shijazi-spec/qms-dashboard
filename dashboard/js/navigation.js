@@ -539,7 +539,7 @@ const WalaPlusNav = {
         <nav class="flex-1 overflow-y-auto py-2" id="wp-rail-nav">
           ${this.navigationGroups.map(group => this.renderRailGroup(group)).join('')}
         </nav>
-        <div class="wp-label border-t border-gray-100 px-3 py-2 text-center" style="flex-shrink:0;">
+        <div class="wp-label border-t border-gray-100 px-3 py-2 text-center flex-shrink-0">
           <a href="/a11y" class="text-xs text-gray-600 hover:text-indigo-700 underline" aria-label="Accessibility statement">Accessibility</a>
         </div>
       </aside>

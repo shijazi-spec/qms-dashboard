@@ -620,6 +620,21 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 
 **Note on Nonce Mechanism:** The platform generates a unique `cspNonce` for every request. All `<script>` and `<style>` tags in the dashboard HTML files are injected with this nonce at serve time. Inline event handlers (e.g., `onclick="..."`) and inline `style="..."` attributes are blocked by this policy. Inline event handlers must be converted to `addEventListener`; static inline styles must be moved to external CSS (`/css/utilities.css`); dynamic per-element styles use the `data-style="prop:val;..."` pattern, applied at runtime by `/js/csp-styles.js` via `el.style.setProperty()` (CSSOM property assignment is permitted under strict `style-src`).
 
+#### Inline-Style Guardrail (automated regression check)
+
+A pre-commit / CI guardrail blocks new ` style="..."` attributes from re-entering the dashboard pages or the platform server code, so the strict `style-src` directive above cannot be silently broken by an unrelated edit:
+
+| Item | Value |
+|------|-------|
+| Script | `scripts/check-no-inline-styles.sh` |
+| Scope | `dashboard/` and `src/mastra/` (recursive) |
+| Pattern | literal ` style="` (leading space anchors to the HTML attribute form) |
+| Skipped | `*.css` files; HTML-email and PNG/PDF generators that are never served to a browser (see `ALLOWLIST_FILES` in the script — currently `userAccessRoutes.ts`, `infographicRoutes.ts`, `emailReportTool.ts`, `qualityAuditWorkflow.ts`); any single line annotated with the marker `csp-safe-inline-style` (e.g. in a trailing `<!-- csp-safe-inline-style: reason -->` or `// csp-safe-inline-style: reason` comment). Use the marker sparingly and document the reason. |
+| Exit | `0` if clean, `1` (with a remediation hint pointing to `dashboard/css/utilities.css`, Tailwind utilities, or the `data-style="…"` + `/js/csp-styles.js` pattern) if any forbidden match is found. |
+| Wiring | Wrapped by `tests/noInlineStyles.test.ts`, which is auto-discovered by `tests/runIntegrationTests.ts` and therefore runs on every `npm test` (the same command CI invokes on every push). The script can also be run standalone: `bash scripts/check-no-inline-styles.sh`. |
+
+When a developer needs to add a genuinely safe inline style (e.g. an HTML email body that will be rendered by Outlook, not by a CSP-controlled browser context), they have three options: (1) add the file to `ALLOWLIST_FILES` in the guardrail script with a short comment justifying it, (2) annotate the specific line with `csp-safe-inline-style: <reason>`, or (3) refactor the markup so the styles live in `dashboard/css/utilities.css` or the `data-style="…"` pattern instead.
+
 #### CORS Configuration
 
 | Property | Value |
@@ -641,6 +656,9 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 
 #### Implementation Files
 - `src/mastra/index.ts` — CSP, CORS, and security header middleware
+- `src/mastra/middleware/index.ts` — `cspMiddleware` (per-request nonce + header emission)
+- `scripts/check-no-inline-styles.sh` — guardrail that blocks new inline `style="..."` attributes
+- `tests/noInlineStyles.test.ts` — integration-test wrapper that runs the guardrail under `npm test` / CI
 
 ---
 
