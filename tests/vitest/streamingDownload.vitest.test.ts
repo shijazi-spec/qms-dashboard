@@ -705,4 +705,95 @@ describe('streamingDownload (browser helper)', () => {
       expect(notices.length).toBe(1);
     });
   });
+
+  it('Cancel button aborts an in-flight slow download, marks the card cancelled, shows an info toast, and never alerts', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    // Capture the AbortSignal handed to fetch so the test can prove it fired.
+    let capturedSignal: AbortSignal | null = null;
+
+    // Stalled fetch: never resolves on its own. Only rejects with AbortError
+    // when the caller's AbortSignal fires. This deterministically reproduces
+    // the "slow export" the dev DB cannot produce on its own.
+    env.win.fetch = vi.fn(async (_url: string, init: any) => {
+      capturedSignal = (init && init.signal) || null;
+      return await new Promise((_resolve, reject) => {
+        const signal = init && init.signal;
+        if (signal && signal.aborted) {
+          const err: any = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+          return;
+        }
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            const err: any = new Error('Aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }
+      });
+    });
+
+    // Kick off the download but don't await — we want to interact with the
+    // progress card while the fetch is still pending.
+    const downloadPromise = env.win.streamingDownload('/api/exports/slow.csv', {
+      skipEstimate: true,
+      filename: 'slow.csv',
+    });
+
+    // streamingDownload creates the progress card synchronously before its
+    // first await; flushing one microtask is enough to be safe across
+    // future refactors that move the card creation past an await.
+    await Promise.resolve();
+
+    const cancelBtn = env.win.document.querySelector(
+      '[data-testid="button-cancel-download"]'
+    ) as HTMLButtonElement | null;
+    expect(cancelBtn).not.toBeNull();
+
+    const bar = env.win.document.querySelector(
+      '[data-testid="progress-download-bar"]'
+    ) as HTMLElement;
+    // Sanity check: the bar starts in the in-flight (blue) state.
+    expect(bar.className).toContain('bg-blue-600');
+
+    // Trigger the cancel — this is the path the user takes when an export
+    // is taking too long.
+    cancelBtn!.click();
+
+    // The download must reject as a cancellation, not a generic failure.
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+
+    // The fetch's AbortSignal actually fired — the cancel reached the network.
+    expect(capturedSignal).not.toBeNull();
+    expect((capturedSignal as AbortSignal).aborted).toBe(true);
+
+    // The progress card now reflects the cancelled state: gray bar, "Cancelled"
+    // status, and disabled cancel button.
+    expect(bar.className).toContain('bg-gray-400');
+    expect(bar.className).not.toContain('bg-blue-600');
+
+    const status = env.win.document.querySelector(
+      '[data-testid="text-download-status"]'
+    ) as HTMLElement;
+    expect(status.textContent).toBe('Cancelled');
+
+    expect((cancelBtn as HTMLButtonElement).disabled).toBe(true);
+
+    // An info-style toast (not an error toast) confirms the cancellation.
+    const infoToast = env.win.document.querySelector(
+      '[data-testid="toast-download-info"]'
+    );
+    expect(infoToast).not.toBeNull();
+    expect((infoToast as HTMLElement).textContent || '').toContain('Download cancelled');
+    expect((infoToast as HTMLElement).textContent || '').toContain('slow.csv');
+
+    // Cancellation must NOT use the disruptive native alert UX, and must
+    // NOT raise an error toast (which would imply the download "failed").
+    expect(env.win.alert).not.toHaveBeenCalled();
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-error"]')
+    ).toBeNull();
+  });
 });
