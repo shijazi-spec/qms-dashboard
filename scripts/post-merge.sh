@@ -49,3 +49,7 @@ npx tsx tests/rbacRouteLockdown.test.ts
 echo ""
 echo "▶ CI gate: admin-auth helper unit tests"
 npx tsx tests/adminAuthHelpers.test.ts
+
+echo ""
+echo "▶ CI gate: ai_pending_actions historical sweep backfill (Task #85)"
+npx tsx tests/aiApprovalSweepBackfill.test.ts

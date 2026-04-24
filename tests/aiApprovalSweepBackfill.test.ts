@@ -1,0 +1,228 @@
+/**
+ * Tests for the historical ai_pending_actions backfill sweep.
+ *
+ * Covers Task #85 — verifies that `redactAiPendingActions()` in
+ * `src/utils/redactHistoricalLogs.ts` rewrites pre-fix `payload_preview`
+ * rows that contain credential-shaped substrings, leaves clean rows
+ * untouched, is idempotent on a second pass, and reports the per-column
+ * scanned/changed counters the audit-log entry consumes.
+ *
+ * Run:  npx tsx tests/aiApprovalSweepBackfill.test.ts
+ */
+
+import {
+  redactAiPendingActions,
+  type AiPendingActionsSweepResult,
+} from "../src/utils/redactHistoricalLogs";
+import { REDACTED_SENTINEL } from "../src/utils/eventLogsDatabase";
+
+let passed = 0;
+let failed = 0;
+
+function assert(condition: boolean, label: string): void {
+  if (condition) {
+    console.log(`  ✓ ${label}`);
+    passed++;
+  } else {
+    console.error(`  ✗ ${label}`);
+    failed++;
+  }
+}
+
+interface RowState {
+  id: number;
+  payload: any;
+  payload_preview: string;
+  execution_result: any | null;
+}
+
+interface CapturedUpdate {
+  sql: string;
+  params: ReadonlyArray<unknown>;
+}
+
+function makeStubClient(initialRows: RowState[]): {
+  client: { query: (sql: string, params?: ReadonlyArray<unknown>) => Promise<any> };
+  updates: CapturedUpdate[];
+  rows: RowState[];
+} {
+  const rows = initialRows.map(r => ({ ...r, payload: structuredClone(r.payload), execution_result: r.execution_result === null ? null : structuredClone(r.execution_result) }));
+  const updates: CapturedUpdate[] = [];
+
+  const query = async (sql: string, params: ReadonlyArray<unknown> = []) => {
+    if (/^\s*SELECT/i.test(sql)) {
+      return { rows: rows.map(r => ({ ...r })), rowCount: rows.length };
+    }
+    if (/^\s*UPDATE\s+ai_pending_actions/i.test(sql)) {
+      updates.push({ sql, params });
+      const id = params[3] as number;
+      const target = rows.find(r => r.id === id);
+      if (target) {
+        target.payload = params[0] != null ? JSON.parse(String(params[0])) : null;
+        target.payload_preview = params[1] as string;
+        target.execution_result = params[2] != null ? JSON.parse(String(params[2])) : null;
+      }
+      return { rows: [], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  };
+
+  return { client: { query }, updates, rows };
+}
+
+async function run(): Promise<void> {
+  console.log("\n[redactHistoricalLogs] ai_pending_actions backfill sweep");
+
+  const SECRET_KEY = "sk-live-LEAKED_PREVIEW_KEY_ABCDEFGHIJKLMNOP";
+  const SECRET_GH = "ghp_leakedTokenInPreview1234567890abcdef";
+  const SECRET_BCRYPT = "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU";
+  const SECRET_JWT =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5OTk5OTkifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const SAFE_PROSE = "Rotate API key for zoho_books integration";
+
+  const initial: RowState[] = [
+    {
+      id: 1,
+      payload: { target_integration: "zoho_books", note: SAFE_PROSE },
+      payload_preview: `${SAFE_PROSE} — new key=${SECRET_KEY}, gh=${SECRET_GH}`,
+      execution_result: null,
+    },
+    {
+      id: 2,
+      payload: { target: "auth_session" },
+      payload_preview: `Replay session token=${SECRET_JWT}; legacy_hash=${SECRET_BCRYPT}`,
+      execution_result: null,
+    },
+    {
+      id: 3,
+      payload: { target_integration: "stripe", note: "no secret here" },
+      payload_preview: "Rotate Stripe webhook signing key (id=we_abc123)",
+      execution_result: null,
+    },
+    {
+      id: 4,
+      payload: { target_integration: "zoho_books" },
+      payload_preview: `Already redacted preview — key=${REDACTED_SENTINEL}`,
+      execution_result: null,
+    },
+  ];
+
+  const stub1 = makeStubClient(initial);
+  const result1: AiPendingActionsSweepResult = await redactAiPendingActions(stub1.client);
+
+  assert(result1.scanned === 4, `scanned all 4 rows (got ${result1.scanned})`);
+  assert(
+    result1.previewChanged === 2,
+    `payload_preview rewritten on the 2 leaky rows (got ${result1.previewChanged})`,
+  );
+  assert(
+    result1.rowsUpdated === 2,
+    `total rows updated = 2 (got ${result1.rowsUpdated})`,
+  );
+  assert(
+    result1.payloadChanged === 0 && result1.executionResultChanged === 0,
+    "JSONB columns untouched in this fixture (no key-deny-list matches)",
+  );
+  assert(stub1.updates.length === 2, "exactly 2 UPDATE statements issued");
+
+  const row1 = stub1.rows.find(r => r.id === 1)!;
+  assert(
+    !row1.payload_preview.includes(SECRET_KEY) &&
+      !row1.payload_preview.includes(SECRET_GH),
+    "row 1 preview no longer contains sk-… or ghp_… tokens",
+  );
+  assert(
+    row1.payload_preview.includes(REDACTED_SENTINEL),
+    "row 1 preview contains the redaction sentinel",
+  );
+  assert(
+    row1.payload_preview.includes("Rotate API key") &&
+      row1.payload_preview.includes("zoho_books"),
+    "row 1 preview preserves the surrounding human-readable prose",
+  );
+
+  const row2 = stub1.rows.find(r => r.id === 2)!;
+  assert(
+    !row2.payload_preview.includes(SECRET_JWT) &&
+      !row2.payload_preview.includes(SECRET_BCRYPT) &&
+      !row2.payload_preview.includes("$2b$12$"),
+    "row 2 preview no longer contains the JWT or bcrypt hash",
+  );
+
+  const row3 = stub1.rows.find(r => r.id === 3)!;
+  assert(
+    row3.payload_preview === "Rotate Stripe webhook signing key (id=we_abc123)",
+    "row 3 (clean control) preview is byte-identical — no UPDATE issued",
+  );
+
+  const row4 = stub1.rows.find(r => r.id === 4)!;
+  assert(
+    row4.payload_preview === `Already redacted preview — key=${REDACTED_SENTINEL}`,
+    "row 4 (already-redacted) preview is byte-identical — no UPDATE issued",
+  );
+
+  // ---- Idempotency: a second pass over the now-clean dataset must be a no-op
+  const stub2 = makeStubClient(stub1.rows);
+  const result2 = await redactAiPendingActions(stub2.client);
+
+  assert(result2.scanned === 4, "second pass still scans all 4 rows");
+  assert(
+    result2.rowsUpdated === 0,
+    `second pass updates 0 rows (got ${result2.rowsUpdated}) — script is idempotent`,
+  );
+  assert(
+    result2.previewChanged === 0 &&
+      result2.payloadChanged === 0 &&
+      result2.executionResultChanged === 0,
+    "second pass reports zero per-column changes",
+  );
+  assert(stub2.updates.length === 0, "second pass issues no UPDATE statements");
+
+  // ---- Combined column changes: payload + preview both dirty in same row
+  const combined: RowState[] = [
+    {
+      id: 10,
+      payload: { api_key: SECRET_KEY, note: SAFE_PROSE },
+      payload_preview: `Issued key ${SECRET_GH}`,
+      execution_result: { data: { access_token: "eyJhbGci_freshtoken" } },
+    },
+  ];
+  const stub3 = makeStubClient(combined);
+  const result3 = await redactAiPendingActions(stub3.client);
+
+  assert(
+    result3.payloadChanged === 1 &&
+      result3.previewChanged === 1 &&
+      result3.executionResultChanged === 1,
+    "combined-fixture row reports change on payload, preview, AND execution_result",
+  );
+  assert(
+    result3.rowsUpdated === 1,
+    "combined-fixture row counts as a single UPDATE",
+  );
+  const combinedRow = stub3.rows[0];
+  assert(
+    combinedRow.payload.api_key === REDACTED_SENTINEL &&
+      combinedRow.payload.note === SAFE_PROSE,
+    "key-based deny-list still scrubs JSONB payload sensitive keys",
+  );
+  assert(
+    !combinedRow.payload_preview.includes(SECRET_GH) &&
+      combinedRow.payload_preview.includes(REDACTED_SENTINEL),
+    "preview regex deny-list scrubs ghp_… tokens",
+  );
+  assert(
+    combinedRow.execution_result?.data?.access_token === REDACTED_SENTINEL,
+    "execution_result.data.access_token redacted by key-based deny-list",
+  );
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+  if (failed > 0) {
+    process.exit(1);
+  }
+}
+
+run().catch(err => {
+  console.error("Unexpected error:", err);
+  process.exit(1);
+});
