@@ -84,6 +84,13 @@
         </button>
         <button
           type="button"
+          class="shrink-0 px-2 py-1 text-xs font-medium rounded hover:bg-black/10"
+          id="tool-health-override-banner-snooze"
+          aria-label="Snooze override expiry banner for 1 hour"
+          data-testid="button-tool-health-override-banner-snooze"
+        >Snooze 1h</button>
+        <button
+          type="button"
           class="shrink-0 p-1 rounded hover:bg-black/10"
           id="tool-health-override-banner-dismiss"
           aria-label="Dismiss override expiry banner"
@@ -685,6 +692,14 @@
     // so operators reading the dashboard for several minutes still see
     // accurate guidance without having to hit Refresh.
     const TOOL_HEALTH_OVERRIDE_BANNER_DISMISS_KEY = 'wp.toolHealthOverrideBanner.dismissedFor';
+    // Snooze (Task #223): Dismiss is "I see it, hide it for the rest of this
+    // override window." Snooze is the middle-ground "quiet me for an hour
+    // while I focus." Both are keyed to the current `expires_at` so a fresh
+    // schedule resets them; the difference is that snooze auto-expires after
+    // SNOOZE_MS and the banner reappears (without a reload) so the impending
+    // revert remains visible.
+    const TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY = 'wp.toolHealthOverrideBanner.snoozedUntilFor';
+    const TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS = 60 * 60 * 1000;
     const TOOL_HEALTH_OVERRIDE_BANNER_AMBER_MS = 30 * 60 * 1000;
     const TOOL_HEALTH_OVERRIDE_BANNER_NEUTRAL_CLASSES =
       'rounded-lg border p-3 flex items-center justify-between gap-3 transition-colors bg-blue-50 border-blue-200 text-blue-900';
@@ -692,6 +707,7 @@
       'rounded-lg border p-3 flex items-center justify-between gap-3 transition-colors bg-amber-50 border-amber-300 text-amber-900';
     let toolHealthOverrideBannerExpiresAtMs = null;
     let toolHealthOverrideBannerTimer = null;
+    let toolHealthOverrideBannerSnoozeTimer = null;
 
     // Fetches the current tool-health config and applies the result. Quietly
     // hides on auth failure so non-AI-Ops viewers don't see a misleading
@@ -726,6 +742,38 @@
         hideToolHealthOverrideBanner();
         return;
       }
+      // Snooze check (Task #223). Stored as JSON {expiresAtMs, snoozedUntilMs}
+      // so reschedules silently invalidate (expiresAtMs mismatch) and stale
+      // entries from prior windows don't quietly suppress the next override.
+      let snoozedRaw = null;
+      try { snoozedRaw = localStorage.getItem(TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY); } catch (_e) { /* private mode */ }
+      if (snoozedRaw) {
+        let parsed = null;
+        try { parsed = JSON.parse(snoozedRaw); } catch (_e) { parsed = null; }
+        const matchesExpiry = !!parsed && parsed.expiresAtMs === expiresAtMs;
+        const stillSnoozed = !!parsed && Number.isFinite(parsed.snoozedUntilMs) && parsed.snoozedUntilMs > Date.now();
+        if (matchesExpiry && stillSnoozed) {
+          // Track expires_at *before* hiding so the re-show timer below has
+          // the value it needs (hide nulls toolHealthOverrideBannerExpiresAtMs).
+          toolHealthOverrideBannerExpiresAtMs = expiresAtMs;
+          hideToolHealthOverrideBanner();
+          // Re-show automatically when the snooze elapses, capped at the
+          // remaining override lifetime so we never re-show post-expiry.
+          const reShowInMs = Math.min(
+            parsed.snoozedUntilMs - Date.now(),
+            Math.max(0, expiresAtMs - Date.now()),
+          );
+          if (reShowInMs > 0) {
+            toolHealthOverrideBannerSnoozeTimer = setTimeout(loadToolHealthOverrideBanner, reShowInMs);
+          }
+          return;
+        }
+        // Stale snooze (different window or already elapsed) — drop it so we
+        // don't keep parsing the same dead entry on every refresh.
+        if (!matchesExpiry || !stillSnoozed) {
+          try { localStorage.removeItem(TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY); } catch (_e) { /* noop */ }
+        }
+      }
       toolHealthOverrideBannerExpiresAtMs = expiresAtMs;
       const section = document.getElementById('tool-health-override-banner-section');
       const absoluteEl = document.getElementById('tool-health-override-banner-absolute');
@@ -746,6 +794,10 @@
       if (toolHealthOverrideBannerTimer != null) {
         clearInterval(toolHealthOverrideBannerTimer);
         toolHealthOverrideBannerTimer = null;
+      }
+      if (toolHealthOverrideBannerSnoozeTimer != null) {
+        clearTimeout(toolHealthOverrideBannerSnoozeTimer);
+        toolHealthOverrideBannerSnoozeTimer = null;
       }
     }
 
@@ -815,6 +867,33 @@
         }
       } catch (_e) { /* private mode — best-effort only */ }
       hideToolHealthOverrideBanner();
+    }
+
+    // Snooze for SNOOZE_MS (Task #223). Same click-target shielding as
+    // dismiss, since both buttons live inside the banner-as-a-button. We
+    // capture expires_at *before* hiding because hideToolHealthOverrideBanner
+    // nulls toolHealthOverrideBannerExpiresAtMs as part of its teardown.
+    function snoozeToolHealthOverrideBanner(e) {
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      const expiresAtMs = toolHealthOverrideBannerExpiresAtMs;
+      if (expiresAtMs == null) return;
+      const snoozedUntilMs = Date.now() + TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS;
+      try {
+        localStorage.setItem(
+          TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY,
+          JSON.stringify({ expiresAtMs, snoozedUntilMs }),
+        );
+      } catch (_e) { /* private mode — best-effort only */ }
+      hideToolHealthOverrideBanner();
+      // Re-show automatically when the snooze elapses, capped at the
+      // remaining override lifetime so we never re-show post-expiry.
+      const reShowInMs = Math.min(
+        TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS,
+        Math.max(0, expiresAtMs - Date.now()),
+      );
+      if (reShowInMs > 0) {
+        toolHealthOverrideBannerSnoozeTimer = setTimeout(loadToolHealthOverrideBanner, reShowInMs);
+      }
     }
 
     function goToThresholdsTabFromBanner() {
@@ -1948,6 +2027,8 @@
       if (overrideDeeplinkBtn) overrideDeeplinkBtn.addEventListener('click', goToThresholdsTabFromBanner);
       const overrideDismissBtn = document.getElementById('tool-health-override-banner-dismiss');
       if (overrideDismissBtn) overrideDismissBtn.addEventListener('click', dismissToolHealthOverrideBanner);
+      const overrideSnoozeBtn = document.getElementById('tool-health-override-banner-snooze');
+      if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', snoozeToolHealthOverrideBanner);
       loadSummary();
       loadToolHealthAlerts();
       loadToolHealthOverrideBanner();

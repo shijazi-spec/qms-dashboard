@@ -244,6 +244,91 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
     await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
   });
 
+  test('Snooze hides for 60 min, persists per-expiry across reloads, expires back, and clears on reschedule', async ({ page }) => {
+    if (!ADMIN_KEY) {
+      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      return;
+    }
+
+    // Long-lived schedule (8h) so the snooze cap never trims our 60 min and
+    // the rescheduled-expiry assertion at the end has plenty of headroom.
+    await putConfig(apiCtx, {
+      overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
+      expires_at: isoOffsetFromNow(8 * 60 * 60 * 1000),
+      note: 'Task #223 e2e — snooze',
+    });
+
+    await page.goto(`${BASE_URL}/ai-ops`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+
+    // Click "Snooze 1h" → banner hides immediately and the snooze record is
+    // written to localStorage keyed to the current expires_at.
+    await page.locator('[data-testid="button-tool-health-override-banner-snooze"]').click();
+    await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
+      .toHaveClass(/hidden/);
+
+    const snoozedRaw = await page.evaluate(
+      () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
+    );
+    expect(snoozedRaw, 'snooze record should be persisted to localStorage').toBeTruthy();
+    const snoozedParsed = JSON.parse(snoozedRaw as string);
+    expect(typeof snoozedParsed.expiresAtMs, 'snooze record carries expires_at ms').toBe('number');
+    expect(typeof snoozedParsed.snoozedUntilMs, 'snooze record carries snoozed-until ms').toBe('number');
+    expect(snoozedParsed.snoozedUntilMs - Date.now(), 'snooze should last ~60 min')
+      .toBeGreaterThan(55 * 60 * 1000);
+
+    // Reload — same expires_at, snooze still in window → banner stays hidden.
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForResponse(
+      r => r.url().includes('/api/ai-ops/tool-health-config') && r.request().method() === 'GET',
+      { timeout: 15000 },
+    );
+    await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
+      .toHaveClass(/hidden/);
+
+    // Simulate the 1h elapsing by rewinding snoozedUntilMs into the past
+    // (deterministic and instant; we don't want to wait 60 min in CI).
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      parsed.snoozedUntilMs = Date.now() - 1000;
+      localStorage.setItem('wp.toolHealthOverrideBanner.snoozedUntilFor', JSON.stringify(parsed));
+    });
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForResponse(
+      r => r.url().includes('/api/ai-ops/tool-health-config') && r.request().method() === 'GET',
+      { timeout: 15000 },
+    );
+    // Snooze elapsed → banner is back so the impending revert remains visible.
+    await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+    // The stale snooze record should also have been pruned to avoid quietly
+    // suppressing some future window if its expires_at happens to match.
+    const afterElapseRaw = await page.evaluate(
+      () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
+    );
+    expect(afterElapseRaw, 'stale snooze record should be cleared').toBeNull();
+
+    // Snooze again, then *reschedule* expires_at — the new value mismatches
+    // the snoozed expiresAtMs key, so the banner reappears (matching dismiss
+    // semantics: a new schedule is treated as a fresh nudge).
+    await page.locator('[data-testid="button-tool-health-override-banner-snooze"]').click();
+    await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
+      .toHaveClass(/hidden/);
+
+    await putConfig(apiCtx, {
+      overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
+      expires_at: isoOffsetFromNow(7 * 60 * 60 * 1000), // different expiry
+      note: 'Task #223 e2e — snooze + reschedule',
+    });
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+  });
+
   test('Banner turns amber when <30 minutes remain', async ({ page }) => {
     if (!ADMIN_KEY) {
       test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
