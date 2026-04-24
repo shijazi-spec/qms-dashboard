@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "fs";
 import { randomUUID } from "crypto";
 import {
   initAIAlertsTable,
+  initToolHealthNotificationsTable,
   getAIAlerts,
   getUnreadAlertCount,
   acknowledgeAlert,
@@ -30,6 +31,7 @@ interface AgentTextResult { text: string }
 const CONSULTANT_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
 
 initAIAlertsTable().catch(console.error);
+initToolHealthNotificationsTable().catch(console.error);
 initAIFeedbackTable().catch(console.error);
 
 /**

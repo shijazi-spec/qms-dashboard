@@ -47,7 +47,10 @@
 
 import { sendSlackNotification } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
-import type { AlertSeverity } from "./aiAlertsDatabase";
+import {
+  type AlertSeverity,
+  claimToolHealthNotifySlot,
+} from "./aiAlertsDatabase";
 import type { ToolHealthConfigOverrides } from "./toolHealthConfigDatabase";
 
 export type ToolHealthReason = "error_rate" | "p95_latency";
@@ -93,6 +96,14 @@ export interface ToolHealthNotifierDeps {
   sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
   /** Defaults to `Date.now`. Tests inject a deterministic clock. */
   now?: () => number;
+  /**
+   * Atomically claim the "notify slot" in the DB for the given key.
+   * Returns `true` when this caller wins the slot and may send the page;
+   * `false` when a sibling already paged within the throttle window.
+   * Tests inject a stub so no real DB connection is required.
+   * Defaults to `claimToolHealthNotifySlot`.
+   */
+  claimDb?: (notificationKey: string, nowMs: number, throttleMs: number) => Promise<boolean>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -315,6 +326,7 @@ export async function notifyToolHealthBreach(
   const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
   const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
   const nowFn = depsOverride.now ?? Date.now;
+  const claimDb = depsOverride.claimDb ?? claimToolHealthNotifySlot;
 
   const result: NotifyToolHealthBreachResult = {
     slackSent: false,
@@ -329,13 +341,41 @@ export async function notifyToolHealthBreach(
     return result;
   }
 
-  // Belt-and-braces throttle: if we already paged this key inside the
-  // configured window, do not page again (DB-level dedupe is still primary).
   const now = nowFn();
-  const lastAt = lastNotifiedAt.get(notification.related_record_id);
-  if (cfg.throttleMs > 0 && lastAt != null && now - lastAt < cfg.throttleMs) {
-    result.throttled = true;
-    return result;
+  const key = notification.related_record_id;
+
+  if (cfg.throttleMs > 0) {
+    // Fast path: in-process map has a recent timestamp for THIS instance.
+    // Avoids the DB round-trip when we know we just paged this key.
+    const inProcessLastAt = lastNotifiedAt.get(key);
+    if (inProcessLastAt != null && now - inProcessLastAt < cfg.throttleMs) {
+      result.throttled = true;
+      return result;
+    }
+
+    // Atomic DB claim: a single statement both checks and records the intent
+    // to page, serialised by Postgres so that sibling instances (or this
+    // instance after a restart) cannot double-page within the throttle window.
+    // If claimDb returns false, a sibling already holds the slot — skip.
+    // If the DB is unavailable we fall through and send (in-process cache
+    // remains as the safety net for this instance's session).
+    let claimed = true;
+    try {
+      claimed = await claimDb(key, now, cfg.throttleMs);
+    } catch (err) {
+      console.error(`[ToolHealthNotifier] DB claimDb threw for ${key}:`, err);
+    }
+    if (!claimed) {
+      // Update in-process map with the approximate time another instance paged
+      // so subsequent calls skip the DB round-trip for the rest of this window.
+      lastNotifiedAt.set(key, now);
+      result.throttled = true;
+      return result;
+    }
+
+    // Slot claimed in DB — update in-process map immediately so subsequent
+    // calls on this instance take the fast path for the rest of the window.
+    lastNotifiedAt.set(key, now);
   }
 
   if (cfg.slackChannel) {
@@ -374,10 +414,6 @@ export async function notifyToolHealthBreach(
       );
       result.emailSent = false;
     }
-  }
-
-  if ((result.slackSent || result.emailSent) && cfg.throttleMs > 0) {
-    lastNotifiedAt.set(notification.related_record_id, now);
   }
 
   return result;

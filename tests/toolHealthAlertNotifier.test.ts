@@ -46,17 +46,27 @@ interface EmailCall {
   text?: string;
 }
 
+interface DbClaimCall { key: string; nowMs: number; throttleMs: number }
+
 function makeStubs(opts: {
   slackResult?: boolean | Error;
   emailResult?: { success: boolean; id?: string; error?: string } | Error;
   now?: number;
+  /**
+   * Value returned by the injected claimDb stub.
+   * `true` (default) = this caller wins the slot and may send.
+   * `false`           = a sibling already paged within the window (throttled).
+   */
+  claimDbResult?: boolean;
 } = {}): {
   deps: ToolHealthNotifierDeps;
   slackCalls: SlackCall[];
   emailCalls: EmailCall[];
+  dbClaimCalls: DbClaimCall[];
 } {
   const slackCalls: SlackCall[] = [];
   const emailCalls: EmailCall[] = [];
+  const dbClaimCalls: DbClaimCall[] = [];
   const deps: ToolHealthNotifierDeps = {
     sendSlack: async (channel, text, blocks) => {
       slackCalls.push({ channel, text, blocks });
@@ -74,8 +84,12 @@ function makeStubs(opts: {
       return opts.emailResult ?? { success: true, id: "stub-id" };
     },
     now: opts.now != null ? () => opts.now! : undefined,
+    claimDb: async (key, nowMs, throttleMs) => {
+      dbClaimCalls.push({ key, nowMs, throttleMs });
+      return opts.claimDbResult ?? true;
+    },
   };
-  return { deps, slackCalls, emailCalls };
+  return { deps, slackCalls, emailCalls, dbClaimCalls };
 }
 
 function sample(
@@ -315,7 +329,11 @@ await suite.test(
 );
 
 await suite.test(
-  "throttle: failed Slack send does NOT poison throttle (next call retries)",
+  "throttle: failed Slack send still consumes throttle slot (atomic claim happens before send)",
+  // With the DB-backed atomic claim design, the slot is claimed in the DB
+  // BEFORE any Slack/email call is attempted. A failed send therefore still
+  // consumes the throttle window — this prevents a sibling instance from
+  // paging again within the same window if the first pod's send failed.
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
@@ -328,19 +346,18 @@ await suite.test(
       now: () => now,
     });
     suite.expectEqual(first.slackSent, false, "send reported as failed");
-    suite.expectEqual(first.throttled, false, "not throttled");
-    suite.expectEqual(slackCalls.length, 1, "one slack attempt");
+    suite.expectEqual(first.throttled, false, "first attempt not throttled");
+    suite.expectEqual(slackCalls.length, 1, "one slack attempt was made");
 
-    // Next call (succeeds) should NOT be throttled, since the previous
-    // attempt failed and never recorded into the throttle map.
+    // In-window retry IS throttled — the slot was claimed before the failed send.
     const { deps: okDeps, slackCalls: okCalls } = makeStubs();
     const second = await notifyToolHealthBreach(sample(), {
       ...okDeps,
       now: () => now,
     });
-    suite.expectEqual(second.slackSent, true, "retry goes through");
-    suite.expectEqual(second.throttled, false, "retry not throttled");
-    suite.expectEqual(okCalls.length, 1, "retry made one slack call");
+    suite.expectEqual(second.throttled, true, "in-window retry IS throttled — slot was claimed before failed send");
+    suite.expectEqual(second.slackSent, false, "no slack send on throttled retry");
+    suite.expectEqual(okCalls.length, 0, "no retry slack call made within throttle window");
   },
 );
 
@@ -365,6 +382,155 @@ await suite.test(
     } finally {
       console.error = origErr;
     }
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DB persistence tests (Task #168)
+// Verify that the atomic `claimDb` hook is called correctly, gating sending
+// so restarts and multi-instance deployments cannot double-page within the
+// throttle window.
+// ──────────────────────────────────────────────────────────────────────────────
+
+await suite.test(
+  "DB persistence: claimDb is called when in-process map is empty (simulates restart)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    const now = 1_000_000;
+    const { deps, dbClaimCalls } = makeStubs({ now });
+    await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    suite.expectEqual(dbClaimCalls.length, 1, "claimDb called once");
+    suite.expectEqual(
+      dbClaimCalls[0]?.key,
+      "qms_create_nc:error_rate",
+      "claimDb called with the dedupe key",
+    );
+    suite.expectEqual(dbClaimCalls[0]?.nowMs, now, "claimDb receives current epoch-ms");
+    suite.expectEqual(
+      dbClaimCalls[0]?.throttleMs,
+      60 * 60_000,
+      "claimDb receives configured throttle window in ms",
+    );
+  },
+);
+
+await suite.test(
+  "DB persistence: claimDb returns false → throttled even with empty in-process map (sibling already paged)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    const now = 1_000_000;
+    const { deps, slackCalls } = makeStubs({ now, claimDbResult: false });
+    const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    suite.expectEqual(result.throttled, true, "throttled — sibling holds the slot");
+    suite.expectEqual(result.slackSent, false, "no slack sent");
+    suite.expectEqual(slackCalls.length, 0, "no slack calls made");
+  },
+);
+
+await suite.test(
+  "DB persistence: claimDb returns true → send goes through",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    const now = 1_000_000;
+    const { deps, slackCalls } = makeStubs({ now, claimDbResult: true });
+    const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    suite.expectEqual(result.throttled, false, "not throttled — slot successfully claimed");
+    suite.expectEqual(result.slackSent, true, "slack sent after successful claim");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+  },
+);
+
+await suite.test(
+  "DB persistence: in-process cache is fast path — claimDb NOT called on second call within window",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    let now = 1_000_000;
+    const { deps, dbClaimCalls } = makeStubs({ now });
+
+    await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    const firstClaimCount = dbClaimCalls.length;
+
+    now = 1_000_000 + 30 * 60_000;
+    const second = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    suite.expectEqual(second.throttled, true, "second call throttled by in-process map");
+    suite.expectEqual(
+      dbClaimCalls.length,
+      firstClaimCount,
+      "claimDb NOT called again — in-process map served as fast path",
+    );
+  },
+);
+
+await suite.test(
+  "DB persistence: claimDb throws → swallowed; send still goes through (DB unavailable fallback)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    const now = 1_000_000;
+    const { deps, slackCalls } = makeStubs({ now });
+    const throwingDeps = {
+      ...deps,
+      claimDb: async (_key: string, _nowMs: number, _throttleMs: number): Promise<boolean> => {
+        throw new Error("db unavailable");
+      },
+      now: () => now,
+    };
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthBreach(sample(), throwingDeps);
+      suite.expectEqual(result.slackSent, true, "slack sent despite claimDb failure");
+      suite.expectEqual(result.throttled, false, "not throttled");
+      suite.expectEqual(slackCalls.length, 1, "one slack call");
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "DB persistence: slot is claimed before sending — DB slot consumed even if send fails (atomic guarantee)",
+  // With the atomic-claim design, the DB slot is claimed BEFORE Slack/email is
+  // attempted. A failed send means the slot is consumed for the rest of the
+  // throttle window. This is intentional: it prevents double-paging by a
+  // sibling or restart-recovering instance even when the network call fails.
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    const now = 1_000_000;
+    const { deps, dbClaimCalls } = makeStubs({ now, slackResult: false });
+    const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    suite.expectEqual(result.slackSent, false, "slack send failed");
+    suite.expectEqual(dbClaimCalls.length, 1, "claimDb WAS called before send attempt");
+    // Second call within window must be throttled (in-process cache was set after claim)
+    const secondNow = now + 30 * 60_000;
+    const second = await notifyToolHealthBreach(sample(), { ...deps, now: () => secondNow });
+    suite.expectEqual(second.throttled, true, "in-window call throttled after a failed-send claim");
+  },
+);
+
+await suite.test(
+  "DB persistence: TOOL_HEALTH_NOTIFY_THROTTLE_MIN=0 → claimDb is never called (throttle disabled)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "0";
+    const now = 1_000_000;
+    const { deps, dbClaimCalls, slackCalls } = makeStubs({ now });
+    const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    suite.expectEqual(result.slackSent, true, "slack sent when throttle is disabled");
+    suite.expectEqual(dbClaimCalls.length, 0, "claimDb not called when throttleMs=0");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
   },
 );
 

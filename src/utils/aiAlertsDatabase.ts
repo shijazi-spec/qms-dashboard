@@ -196,6 +196,64 @@ export async function openAlertExistsByKey(
   return result.rows.length > 0;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// tool_health_notifications — persistent throttle store
+//
+// Backs the belt-and-braces throttle in toolHealthAlertNotifier.ts so that
+// the "do not double-page within TOOL_HEALTH_NOTIFY_THROTTLE_MIN" guarantee
+// survives server restarts and is shared across multiple instances.
+//
+// Schema is intentionally minimal: only the epoch-ms timestamp of the last
+// successful page is stored. The composite key is the `related_record_id`
+// value used everywhere else (`<tool_name>:<reason>`).
+// ──────────────────────────────────────────────────────────────────────────────
+
+export async function initToolHealthNotificationsTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tool_health_notifications (
+      notification_key VARCHAR(200) PRIMARY KEY,
+      last_notified_at BIGINT NOT NULL
+    )
+  `);
+}
+
+/**
+ * Atomically attempt to claim the "notify slot" for a given notification key.
+ *
+ * How it works:
+ *   • INSERT the key with `nowMs` as the timestamp (first-ever page for this key).
+ *   • On conflict (key already exists), UPDATE the timestamp only when the
+ *     stored timestamp is *older* than the throttle window — i.e. the previous
+ *     page was far enough in the past that a new page is allowed.
+ *   • RETURNING the key: a row is returned iff the INSERT or UPDATE actually
+ *     modified the row, meaning this caller "won" the slot.
+ *
+ * Returns `true` if the caller claimed the slot (may send the page), or
+ * `false` if another instance already paged this key within the throttle
+ * window (caller must NOT send).
+ *
+ * Because the decision and the write happen in a single statement, concurrent
+ * calls from different pods on the same key are serialised by Postgres:
+ * exactly one will get the row back; all others will be throttled.
+ */
+export async function claimToolHealthNotifySlot(
+  notificationKey: string,
+  nowMs: number,
+  throttleMs: number,
+): Promise<boolean> {
+  const thresholdMs = nowMs - throttleMs;
+  const result = await pool.query(
+    `INSERT INTO tool_health_notifications (notification_key, last_notified_at)
+     VALUES ($1, $2)
+     ON CONFLICT (notification_key)
+     DO UPDATE SET last_notified_at = EXCLUDED.last_notified_at
+     WHERE tool_health_notifications.last_notified_at < $3
+     RETURNING notification_key`,
+    [notificationKey, nowMs, thresholdMs],
+  );
+  return result.rows.length > 0;
+}
+
 /**
  * Fetch every open / acknowledged alert for the given
  * (alert_type, related_record_id) pair. Used by the tool-health auto-resolve
