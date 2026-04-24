@@ -1,10 +1,29 @@
 /**
  * WalaPlus Unified Navigation Component
  * Enterprise-grade grouped dropdown navigation for scalability
+ * v4.6: Arabic/RTL support via WalaPlusI18n
  */
+
+// Helper: load i18n module before navigation renders.
+// Falls back gracefully if i18n.js is not yet loaded.
+(function loadI18nIfNeeded() {
+  if (window.WalaPlusI18n) return;
+  var script = document.createElement('script');
+  script.src = '/js/i18n.js?v=1.0';
+  script.async = false;
+  document.head.appendChild(script);
+})();
 
 const WalaPlusNav = {
   currentPage: '',
+
+  // Short-circuit translation helper — falls back to key fragment if i18n not ready
+  _t(key) {
+    if (window.WalaPlusI18n && window.WalaPlusI18n.t) {
+      return window.WalaPlusI18n.t(key);
+    }
+    return key.split('.').pop();
+  },
 
   escapeHtml(str) {
     return String(str)
@@ -143,10 +162,29 @@ const WalaPlusNav = {
 
   init(currentPageId) {
     this.currentPage = currentPageId;
-    this.render();
-    this.bindEvents();
-    this.loadUserInfo();
-    this.pollAlertCount();
+    const doInit = () => {
+      this.render();
+      this.bindEvents();
+      this.loadUserInfo();
+      this.pollAlertCount();
+    };
+    if (window.WalaPlusI18n) {
+      window.WalaPlusI18n.init().then(doInit);
+    } else {
+      // i18n script may still be loading — wait for it
+      var maxWait = 30;
+      var waited = 0;
+      var check = setInterval(() => {
+        waited++;
+        if (window.WalaPlusI18n) {
+          clearInterval(check);
+          window.WalaPlusI18n.init().then(doInit);
+        } else if (waited >= maxWait) {
+          clearInterval(check);
+          doInit();
+        }
+      }, 50);
+    }
   },
 
   pollAlertCount() {
@@ -174,7 +212,7 @@ const WalaPlusNav = {
           if (!list) return;
           const items = data.notifications || [];
           if (items.length === 0) {
-            list.innerHTML = '<p class="text-center text-sm text-gray-600 py-4">No new notifications</p>';
+            list.innerHTML = `<p class="text-center text-sm text-gray-400 py-4">${window.WalaPlusI18n ? window.WalaPlusI18n.t('notifications.no_notifications') : 'No new notifications'}</p>`;
             return;
           }
           list.innerHTML = items.map(n => {
@@ -205,14 +243,16 @@ const WalaPlusNav = {
   },
 
   timeAgo(date) {
+    const _i18n = window.WalaPlusI18n;
+    const _t = (k) => _i18n ? _i18n.t(k) : k.split('.').pop();
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-    if (seconds < 60) return 'just now';
+    if (seconds < 60) return _t('nav.time.just_now');
     const mins = Math.floor(seconds / 60);
-    if (mins < 60) return mins + 'm ago';
+    if (mins < 60) return mins + _t('nav.time.minutes_ago');
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return hrs + 'h ago';
+    if (hrs < 24) return hrs + _t('nav.time.hours_ago');
     const days = Math.floor(hrs / 24);
-    return days + 'd ago';
+    return days + _t('nav.time.days_ago');
   },
 
   markRead(id) {
@@ -231,6 +271,8 @@ const WalaPlusNav = {
           const u = data.user;
 
           // Static skeleton only — no user data interpolated here
+          const _t = (k) => (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop());
+          const isAr = window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar';
           container.innerHTML = `
             <div class="relative nav-dropdown" data-group="user-menu">
               <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="User menu" aria-haspopup="true" aria-expanded="false" data-testid="button-user-menu">
@@ -242,9 +284,30 @@ const WalaPlusNav = {
                   <p class="text-sm font-medium text-gray-900" data-testid="text-user-name"></p>
                   <p class="text-xs text-gray-500" data-testid="text-user-email"></p>
                 </div>
+                <div class="px-4 py-2 border-b border-gray-100">
+                  <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.language">${_t('nav.language')}</p>
+                  <div class="flex gap-2">
+                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setLang('en')"
+                      class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
+                      data-testid="button-lang-en">English</button>
+                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setLang('ar')"
+                      class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}"
+                      data-testid="button-lang-ar">العربية</button>
+                  </div>
+                  ${isAr ? `<div class="mt-2">
+                  <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.numerals">${_t('nav.numerals')}</p>
+                  <div class="flex gap-2" id="nav-numeral-btns">
+                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setUseEasternNumerals(true); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium')); this.classList.add('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium');"
+                      class="flex-1 text-xs px-2 py-1 rounded border transition ${(window.WalaPlusI18n && !window.WalaPlusI18n.getUseEasternNumerals()) ? 'border-gray-200 text-gray-600' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
+                      data-testid="button-numerals-eastern">${_t('nav.numerals_eastern')}</button>
+                    <button onclick="window.WalaPlusI18n && window.WalaPlusI18n.setUseEasternNumerals(false); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium')); this.classList.add('border-indigo-500','bg-indigo-50','text-indigo-700','font-medium');"
+                      class="flex-1 text-xs px-2 py-1 rounded border transition ${(window.WalaPlusI18n && !window.WalaPlusI18n.getUseEasternNumerals()) ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-600'}"
+                      data-testid="button-numerals-western">${_t('nav.numerals_western')}</button>
+                  </div></div>` : ''}
+                </div>
                 <button onclick="(async()=>{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});window.location.href='/api/logout';})()" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                  Sign out
+                  <span data-i18n="common.sign_out">${_t('common.sign_out')}</span>
                 </button>
               </div>
             </div>`;
@@ -289,10 +352,10 @@ const WalaPlusNav = {
       const style = document.createElement('style');
       style.id = 'walaplus-nav-layout-style';
       style.textContent = `
-        body { padding-top: 48px; padding-left: 256px; transition: padding-left .2s ease; }
+        body { padding-top: 48px; padding-left: 256px; transition: padding-left .2s ease, padding-right .2s ease; }
         body.wp-rail-collapsed { padding-left: 64px; }
         @media (max-width: 767px) {
-          body, body.wp-rail-collapsed { padding-left: 0 !important; }
+          body, body.wp-rail-collapsed { padding-left: 0 !important; padding-right: 0 !important; }
         }
         .wp-topstrip { position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 30; }
         .wp-rail { position: fixed; top: 48px; bottom: 0; left: 0; width: 256px; z-index: 30;
@@ -332,6 +395,54 @@ const WalaPlusNav = {
           .wp-desktop-only,
           .wp-tagline         { display: none; }
         }
+
+        /* ===== RTL / Arabic Layout Overrides ===== */
+        html[dir="rtl"] body {
+          padding-left: 0;
+          padding-right: 256px;
+          font-family: 'Noto Sans Arabic', 'Inter', sans-serif;
+        }
+        html[dir="rtl"] body.wp-rail-collapsed {
+          padding-left: 0;
+          padding-right: 64px;
+        }
+        @media (max-width: 767px) {
+          html[dir="rtl"] body,
+          html[dir="rtl"] body.wp-rail-collapsed {
+            padding-right: 0 !important;
+          }
+        }
+        html[dir="rtl"] .wp-rail {
+          left: auto;
+          right: 0;
+          border-right: none;
+          border-left: 1px solid #e5e7eb;
+        }
+        @media (max-width: 767px) {
+          html[dir="rtl"] .wp-rail {
+            transform: translateX(100%);
+            right: 0;
+            left: auto;
+          }
+          html[dir="rtl"] body.wp-mobile-open .wp-rail {
+            transform: translateX(0);
+          }
+        }
+        html[dir="rtl"] .wp-rail-item { flex-direction: row-reverse; text-align: right; }
+        html[dir="rtl"] .wp-rail-item .wp-label { text-align: right; }
+        html[dir="rtl"] .wp-group-toggle { flex-direction: row-reverse; }
+        html[dir="rtl"] .wp-group-toggle .wp-label { text-align: right; }
+        html[dir="rtl"] .wp-search-wrap input { direction: rtl; text-align: right; }
+        html[dir="rtl"] .dropdown-menu { right: auto; left: 0; }
+        html[dir="rtl"] #nav-user-info .dropdown-menu { left: 0; right: auto; }
+        html[dir="rtl"] .wp-topstrip { direction: rtl; }
+        html[dir="rtl"] .wp-topstrip .flex.items-center.space-x-2 { flex-direction: row-reverse; }
+        html[dir="rtl"] #ai-consultant-widget { right: auto; left: 24px; }
+        html[dir="rtl"] #ai-widget-panel { right: auto; left: 0; }
+        html[dir="rtl"] #ai-widget-input-area { flex-direction: row-reverse; }
+        html[dir="rtl"] .widget-msg-user { flex-direction: row-reverse; }
+        html[dir="rtl"] .widget-msg-user .bubble { border-radius: 14px 14px 14px 4px; }
+        html[dir="rtl"] .widget-msg-ai .bubble { border-radius: 14px 14px 4px 14px; }
       `;
       document.head.appendChild(style);
     }
@@ -345,6 +456,7 @@ const WalaPlusNav = {
     const activeGroup = this.navigationGroups.find(g => this.isInGroup(g.id));
     this._defaultOpenGroupId = activeGroup ? activeGroup.id : (this.navigationGroups[0] && this.navigationGroups[0].id);
 
+    const isRTL = window.WalaPlusI18n && window.WalaPlusI18n.isRTL && window.WalaPlusI18n.isRTL();
     navContainer.innerHTML = `
       <div class="wp-topstrip bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-3">
         <div class="flex items-center space-x-2">
@@ -355,28 +467,28 @@ const WalaPlusNav = {
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
           </button>
           <a href="/" class="flex items-center" data-testid="link-home">
-            <span class="text-lg font-bold text-indigo-600 leading-none">WalaPlus</span>
-            <span class="wp-tagline ml-2 text-xs text-gray-500">Enterprise GRC &amp; Quality</span>
+            <span class="text-lg font-bold text-indigo-600 leading-none" data-i18n="nav.brand">${this._t('nav.brand')}</span>
+            <span class="wp-tagline ml-2 rtl:mr-2 rtl:ml-0 text-xs text-gray-500" data-i18n="nav.tagline">${this._t('nav.tagline')}</span>
           </a>
         </div>
         <div class="flex items-center space-x-2">
           <span id="lastUpdated" class="wp-tagline text-xs text-gray-600"></span>
           <button onclick="typeof refreshDashboard === 'function' && refreshDashboard()" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
             <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            <span>Refresh</span>
+            <span data-i18n="nav.refresh">${this._t('nav.refresh')}</span>
           </button>
           <div class="relative nav-dropdown" data-group="notifications">
-            <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" aria-controls="nav-notifications-list" data-testid="button-notifications">
+            <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="${this._t('nav.notifications')}" aria-haspopup="true" aria-expanded="false" aria-controls="nav-notifications-list" data-testid="button-notifications">
               <svg class="w-5 h-5 text-gray-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
               <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold" aria-live="polite" style="font-size:10px"></span>
             </button>
             <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
               <div class="p-3 border-b border-gray-100 flex justify-between items-center">
-                <span class="font-semibold text-sm text-gray-900">Notifications</span>
-                <a href="/consultant" class="text-xs text-indigo-600 hover:text-indigo-800">View All</a>
+                <span class="font-semibold text-sm text-gray-900" data-i18n="notifications.title">${this._t('notifications.title')}</span>
+                <a href="/consultant" class="text-xs text-indigo-600 hover:text-indigo-800" data-i18n="nav.view_all">${this._t('nav.view_all')}</a>
               </div>
               <div id="nav-notifications-list" class="overflow-y-auto max-h-72 p-2 space-y-1">
-                <p class="text-center text-sm text-gray-600 py-4">Loading...</p>
+                <p class="text-center text-sm text-gray-400 py-4" data-i18n="common.loading">${this._t('common.loading')}</p>
               </div>
             </div>
           </div>
@@ -386,11 +498,11 @@ const WalaPlusNav = {
 
       <div class="wp-backdrop" id="wp-backdrop"></div>
 
-      <aside class="wp-rail bg-white border-r border-gray-200 flex flex-col" aria-label="Primary navigation">
+      <aside class="wp-rail bg-white border-r border-gray-200 flex flex-col" aria-label="Primary navigation" data-testid="nav-rail">
         <div class="wp-search-wrap p-3 border-b border-gray-100">
           <div class="relative">
             <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>
-            <input id="wp-rail-search" type="search" placeholder="Search menu..." aria-label="Search menu" data-testid="input-nav-search" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+            <input id="wp-rail-search" type="search" placeholder="${this._t('nav.search_placeholder')}" aria-label="${this._t('nav.search_placeholder')}" data-testid="input-nav-search" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
           </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-2" id="wp-rail-nav">
@@ -406,12 +518,13 @@ const WalaPlusNav = {
   renderRailGroup(group) {
     const colors = this.getColorClasses(group.color);
     const groupActive = this.isInGroup(group.id);
-    const open = group.id === this._defaultOpenGroupId; // current page's group, else first group
+    const open = group.id === this._defaultOpenGroupId;
+    const label = this._t('nav.groups.' + group.id) || group.label;
     return `
       <div class="wp-rail-group px-2 mb-1" data-group="${this.escapeHtml(group.id)}" data-open="${open ? 'true' : 'false'}">
-        <button type="button" class="wp-group-toggle w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 transition" aria-expanded="${open ? 'true' : 'false'}" title="${this.escapeHtml(group.label)}" data-testid="button-group-${this.escapeHtml(group.id)}">
+        <button type="button" class="wp-group-toggle w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 transition" aria-expanded="${open ? 'true' : 'false'}" title="${this.escapeHtml(label)}" data-testid="button-group-${this.escapeHtml(group.id)}">
           <span class="${colors.text} mr-2 flex-shrink-0">${group.icon}</span>
-          <span class="wp-label flex-1 text-left text-xs font-semibold uppercase tracking-wide ${groupActive ? colors.text : 'text-gray-500'}">${this.escapeHtml(group.label)}</span>
+          <span class="wp-label flex-1 text-left text-xs font-semibold uppercase tracking-wide ${groupActive ? colors.text : 'text-gray-500'}">${this.escapeHtml(label)}</span>
           <svg class="wp-label wp-group-chevron w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </button>
         <div class="wp-group-items mt-0.5 space-y-0.5 pl-1">
@@ -424,16 +537,18 @@ const WalaPlusNav = {
   renderRailItem(item, colors) {
     const isActive = item.id === this.currentPage;
     const target = item.external ? 'target="_blank"' : '';
+    const label = this._t('nav.items.' + item.id) || item.label;
     return `
       <a href="${this.escapeHtml(item.href)}" ${target}
          class="wp-rail-item flex items-center space-x-2 px-2 py-2 rounded-lg text-sm transition
            ${isActive ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-700 hover:bg-gray-50'}"
-         title="${this.escapeHtml(item.label)}"
+         title="${this.escapeHtml(label)}"
          data-nav-item
-         data-label="${this.escapeHtml(item.label.toLowerCase())}"
+         data-label="${this.escapeHtml(label.toLowerCase())}"
+         data-i18n-nav-item="${this.escapeHtml(item.id)}"
          data-testid="link-nav-${this.escapeHtml(item.id)}">
         <span class="flex-shrink-0">${this.getItemIcon(item.icon)}</span>
-        <span class="wp-label truncate">${this.escapeHtml(item.label)}</span>
+        <span class="wp-label truncate">${this.escapeHtml(label)}</span>
         ${item.external ? '<svg class="wp-label w-3 h-3 text-gray-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
       </a>
     `;

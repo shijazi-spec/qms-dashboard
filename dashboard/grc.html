@@ -61,11 +61,12 @@
             }
         </style>
         <link rel="stylesheet" href="/css/navigation.css" />
+        <script src="/js/i18n.js?v=1.0"></script>
     </head>
     <body class="bg-gray-100 min-h-screen">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
-        <script src="/js/navigation.js?v=4.5.2"></script>
+        <script src="/js/navigation.js?v=4.6"></script>
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 WalaPlusNav.init("grc");
@@ -75,10 +76,10 @@
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex justify-between items-center mb-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">
+                    <h1 class="text-2xl font-bold text-gray-900" data-i18n="grc.title">
                         GRC Control Tower
                     </h1>
-                    <p class="text-sm text-gray-700 mt-1">
+                    <p class="text-sm text-gray-500 mt-1" data-i18n="grc.subtitle">
                         Enterprise governance, risk, and compliance dashboard
                     </p>
                 </div>
@@ -87,13 +88,14 @@
                         id="periodFilter" aria-label="Filter by period"
                         class="border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white"
                     >
-                        <option value="mtd">Month to Date</option>
-                        <option value="qtd">Quarter to Date</option>
-                        <option value="ytd">Year to Date</option>
+                        <option value="mtd" data-i18n="grc.period_mtd">Month to Date</option>
+                        <option value="qtd" data-i18n="grc.period_qtd">Quarter to Date</option>
+                        <option value="ytd" data-i18n="grc.period_ytd">Year to Date</option>
                     </select>
                     <button
                         onclick="refreshAll()"
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
+                        data-testid="button-grc-refresh"
                     >
                         <svg
                             class="w-4 h-4"
@@ -108,7 +110,7 @@
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                             ></path>
                         </svg>
-                        Refresh
+                        <span data-i18n="grc.refresh">Refresh</span>
                     </button>
                 </div>
             </div>
@@ -119,7 +121,7 @@
                 <div
                     class="bg-white rounded-lg shadow p-4 border-l-4 module-risks"
                 >
-                    <div class="text-sm text-gray-500">Active Risks</div>
+                    <div class="text-sm text-gray-500" data-i18n="grc.active_risks">Active Risks</div>
                     <div
                         id="totalRisks"
                         class="text-2xl font-bold text-red-600"
@@ -133,7 +135,7 @@
                 <div
                     class="bg-white rounded-lg shadow p-4 border-l-4 module-policies"
                 >
-                    <div class="text-sm text-gray-500">Active Policies</div>
+                    <div class="text-sm text-gray-500" data-i18n="grc.active_policies">Active Policies</div>
                     <div
                         id="totalPolicies"
                         class="text-2xl font-bold text-blue-800"
@@ -147,7 +149,7 @@
                 <div
                     class="bg-white rounded-lg shadow p-4 border-l-4 module-compliance"
                 >
-                    <div class="text-sm text-gray-500">Compliance Score</div>
+                    <div class="text-sm text-gray-500" data-i18n="grc.compliance_score">Compliance Score</div>
                     <div
                         id="complianceScore"
                         class="text-2xl font-bold text-green-700"
@@ -161,7 +163,7 @@
                 <div
                     class="bg-white rounded-lg shadow p-4 border-l-4 module-audits"
                 >
-                    <div class="text-sm text-gray-500">Open Findings</div>
+                    <div class="text-sm text-gray-500" data-i18n="grc.open_findings">Open Findings</div>
                     <div
                         id="openFindings"
                         class="text-2xl font-bold text-purple-700"
@@ -175,7 +177,7 @@
                 <div
                     class="bg-white rounded-lg shadow p-4 border-l-4 module-vendors"
                 >
-                    <div class="text-sm text-gray-500">Active Vendors</div>
+                    <div class="text-sm text-gray-500" data-i18n="grc.active_vendors">Active Vendors</div>
                     <div
                         id="activeVendors"
                         class="text-2xl font-bold text-orange-600"
@@ -189,14 +191,14 @@
                 <div
                     class="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500"
                 >
-                    <div class="text-sm text-gray-500">Controls Active</div>
+                    <div class="text-sm text-gray-500" data-i18n="grc.controls_active">Controls Active</div>
                     <div
                         id="totalControls"
                         class="text-2xl font-bold text-indigo-600"
                     >
                         -
                     </div>
-                    <div id="effectiveControls" class="text-xs text-green-700">
+                    <div id="effectiveControls" class="text-xs text-green-600" data-i18n="grc.effective_controls_placeholder">
                         - effective
                     </div>
                 </div>
@@ -217,25 +219,25 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                             </svg>
-                            <h3 class="text-base font-semibold">External Audits</h3>
-                            <span class="text-xs px-2 py-0.5 rounded bg-white/20">Regulatory · Certification · Surveillance</span>
+                            <h3 class="text-base font-semibold" data-i18n="grc.external_audits">External Audits</h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-white/20" data-i18n="grc.external_audits_types">Regulatory · Certification · Surveillance</span>
                         </div>
-                        <p class="text-sm text-purple-100 mt-1">
+                        <p class="text-sm text-purple-100 mt-1" data-i18n="grc.external_audits_desc">
                             Next audit, active certificates, expiring certifications, and readiness checklists — all in one place.
                         </p>
                     </div>
                     <div class="flex gap-6 text-right">
                         <div>
-                            <div class="text-xs uppercase text-purple-100">Next Audit</div>
+                            <div class="text-xs uppercase text-purple-100" data-i18n="grc.next_audit">Next Audit</div>
                             <div id="grcNextAudit" class="font-semibold mt-0.5">—</div>
                             <div id="grcNextAuditDate" class="text-xs text-purple-100 mt-0.5">—</div>
                         </div>
                         <div>
-                            <div class="text-xs uppercase text-purple-100">Active Certs</div>
+                            <div class="text-xs uppercase text-purple-100" data-i18n="grc.active_certs">Active Certs</div>
                             <div id="grcCertsActive" class="text-2xl font-bold">—</div>
                         </div>
                         <div>
-                            <div class="text-xs uppercase text-purple-100">Expiring ≤ 90d</div>
+                            <div class="text-xs uppercase text-purple-100" data-i18n="grc.expiring_certs">Expiring ≤ 90d</div>
                             <div id="grcCertsExpiring" class="text-2xl font-bold">—</div>
                         </div>
                     </div>
@@ -259,9 +261,9 @@
                             titleEl.textContent = d.next_audit.title;
                             dateEl.textContent  = d.next_audit.planned_start
                                 ? new Date(d.next_audit.planned_start).toLocaleDateString()
-                                : 'Date TBD';
+                                : (window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.date_tbd') : 'Date TBD');
                         } else {
-                            titleEl.textContent = 'None scheduled';
+                            titleEl.textContent = window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.none_scheduled') : 'None scheduled';
                             dateEl.textContent  = '—';
                         }
                         activeEl.textContent = d.certs_active ?? 0;
@@ -272,24 +274,25 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="grc.risk_heat_map">
                         Risk Heat Map
                     </h2>
                     <div id="riskHeatmap" class="grid grid-cols-5 gap-1">
                         <div
                             class="text-xs text-center font-medium text-gray-500 col-span-1"
                         ></div>
-                        <div class="text-xs text-center text-gray-500">Low</div>
-                        <div class="text-xs text-center text-gray-500">Med</div>
-                        <div class="text-xs text-center text-gray-500">
+                        <div class="text-xs text-center text-gray-500" data-i18n="grc.risk_low">Low</div>
+                        <div class="text-xs text-center text-gray-500" data-i18n="grc.risk_med">Med</div>
+                        <div class="text-xs text-center text-gray-500" data-i18n="grc.risk_high">
                             High
                         </div>
-                        <div class="text-xs text-center text-gray-500">
+                        <div class="text-xs text-center text-gray-500" data-i18n="grc.risk_crit">
                             Crit
                         </div>
 
                         <div
                             class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            data-i18n="grc.risk_crit"
                         >
                             Crit
                         </div>
@@ -320,6 +323,7 @@
 
                         <div
                             class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            data-i18n="grc.risk_high"
                         >
                             High
                         </div>
@@ -350,6 +354,7 @@
 
                         <div
                             class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            data-i18n="grc.risk_med"
                         >
                             Med
                         </div>
@@ -380,6 +385,7 @@
 
                         <div
                             class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            data-i18n="grc.risk_low"
                         >
                             Low
                         </div>
@@ -408,24 +414,24 @@
                             0
                         </div>
                     </div>
-                    <div class="mt-3 text-xs text-gray-500 text-center">
+                    <div class="mt-3 text-xs text-gray-500 text-center" data-i18n="grc.likelihood_x_impact">
                         Likelihood (L) x Impact (I)
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="grc.module_status">
                         GRC Module Status
                     </h2>
                     <canvas id="moduleChart" height="200"></canvas>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="grc.compliance_by_framework">
                         Compliance by Framework
                     </h2>
                     <div id="frameworkCompliance" class="space-y-3">
-                        <div class="text-gray-600 text-center py-4">
+                        <div class="text-gray-400 text-center py-4" data-i18n="grc.loading">
                             Loading...
                         </div>
                     </div>
@@ -437,11 +443,12 @@
                     <div
                         class="p-4 border-b border-gray-200 flex justify-between items-center"
                     >
-                        <h2 class="text-lg font-semibold text-gray-900">
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="grc.handoff_rules">
                             Handoff Rules
                         </h2>
                         <span
                             class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full"
+                            data-i18n="grc.quality_grc_integration"
                             >Quality-GRC Integration</span
                         >
                     </div>
@@ -451,26 +458,31 @@
                                 <tr>
                                     <th
                                         class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_rule"
                                     >
                                         Rule
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_source"
                                     >
                                         Source
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_target"
                                     >
                                         Target
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_triggers"
                                     >
                                         Triggers
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_status"
                                     >
                                         Status
                                     </th>
@@ -484,6 +496,7 @@
                                     <td
                                         colspan="5"
                                         class="px-4 py-4 text-center text-gray-400"
+                                        data-i18n="grc.loading"
                                     >
                                         Loading...
                                     </td>
@@ -497,11 +510,12 @@
                     <div
                         class="p-4 border-b border-gray-200 flex justify-between items-center"
                     >
-                        <h2 class="text-lg font-semibold text-gray-900">
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="grc.control_effectiveness">
                             Control Effectiveness
                         </h2>
                         <span
                             class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full"
+                            data-i18n="grc.control_mapping"
                             >Control Mapping</span
                         >
                     </div>
@@ -511,21 +525,25 @@
                                 <tr>
                                     <th
                                         class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_control"
                                     >
                                         Control
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_type"
                                     >
                                         Type
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_domain"
                                     >
                                         Domain
                                     </th>
                                     <th
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
+                                        data-i18n="grc.col_effectiveness"
                                     >
                                         Effectiveness
                                     </th>
@@ -539,6 +557,7 @@
                                     <td
                                         colspan="4"
                                         class="px-4 py-4 text-center text-gray-400"
+                                        data-i18n="grc.loading"
                                     >
                                         Loading...
                                     </td>
@@ -551,30 +570,30 @@
 
             <div class="bg-white rounded-lg shadow mb-6">
                 <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-900">Audit Readiness</h2>
-                    <a href="/audits" class="text-sm text-blue-600 hover:text-blue-800">View Full Audit Dashboard</a>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="grc.audit_readiness">Audit Readiness</h2>
+                    <a href="/audits" class="text-sm text-blue-600 hover:text-blue-800" data-i18n="grc.view_full_audit">View Full Audit Dashboard</a>
                 </div>
                 <div class="p-6">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div class="text-center p-4 bg-purple-50 rounded-lg">
-                            <p class="text-sm text-gray-500">Readiness Score</p>
+                            <p class="text-sm text-gray-500" data-i18n="grc.readiness_score">Readiness Score</p>
                             <p class="text-2xl font-bold text-purple-700" id="auditReadinessScore">-%</p>
                         </div>
                         <div class="text-center p-4 bg-green-50 rounded-lg">
-                            <p class="text-sm text-gray-500">Completed Audits</p>
+                            <p class="text-sm text-gray-500" data-i18n="grc.completed_audits">Completed Audits</p>
                             <p class="text-2xl font-bold text-green-700" id="completedAudits">-</p>
                         </div>
                         <div class="text-center p-4 bg-amber-50 rounded-lg">
-                            <p class="text-sm text-gray-500">Upcoming Audits</p>
+                            <p class="text-sm text-gray-500" data-i18n="grc.upcoming_audits">Upcoming Audits</p>
                             <p class="text-2xl font-bold text-amber-700" id="upcomingAudits">-</p>
                         </div>
                         <div class="text-center p-4 bg-red-50 rounded-lg">
-                            <p class="text-sm text-gray-700">Overdue Findings</p>
+                            <p class="text-sm text-gray-500" data-i18n="grc.overdue_findings">Overdue Findings</p>
                             <p class="text-2xl font-bold text-red-700" id="overdueFindings">-</p>
                         </div>
                     </div>
                     <div id="auditReadinessDetails" class="space-y-2">
-                        <p class="text-gray-600 text-center py-2 text-sm">Loading audit readiness data...</p>
+                        <p class="text-gray-400 text-center py-2 text-sm" data-i18n="grc.loading_readiness">Loading audit readiness data...</p>
                     </div>
                 </div>
             </div>
@@ -583,17 +602,18 @@
                 <div
                     class="p-4 border-b border-gray-200 flex justify-between items-center"
                 >
-                    <h2 class="text-lg font-semibold text-gray-900">
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="grc.recent_handoff_events">
                         Recent Handoff Events
                     </h2>
                     <a
                         href="/logs"
                         class="text-sm text-blue-600 hover:text-blue-800"
+                        data-i18n="grc.view_all_logs"
                         >View All Logs</a
                     >
                 </div>
                 <div id="recentEvents" class="p-4 space-y-2">
-                    <div class="text-gray-600 text-center py-4">
+                    <div class="text-gray-400 text-center py-4" data-i18n="grc.loading_events">
                         Loading recent events...
                     </div>
                 </div>
@@ -602,6 +622,7 @@
 
         <script>
             let moduleChart = null;
+            const _gt = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
 
             async function loadRiskSummary() {
                 try {
@@ -610,7 +631,7 @@
                     document.getElementById("totalRisks").textContent =
                         data.summary?.total_risks || 0;
                     document.getElementById("criticalRisks").textContent =
-                        (data.summary?.critical || 0) + " critical";
+                        (data.summary?.critical || 0) + " " + _gt('grc.critical_count');
 
                     if (data.heatmap_data) {
                         for (const cell of data.heatmap_data) {
@@ -632,7 +653,7 @@
                     document.getElementById("totalPolicies").textContent =
                         data.policies?.total_policies || 0;
                     document.getElementById("draftPolicies").textContent =
-                        (data.policies?.draft || 0) + " in draft";
+                        (data.policies?.draft || 0) + " " + _gt('grc.in_draft');
                 } catch (error) {
                     console.error("Error loading policy summary:", error);
                 }
@@ -645,7 +666,7 @@
                     document.getElementById("complianceScore").textContent =
                         (data.compliance_score || 0) + "%";
                     document.getElementById("openObligations").textContent =
-                        (data.summary?.total_obligations || 0) + " obligations";
+                        (data.summary?.total_obligations || 0) + " " + _gt('grc.obligations_count');
 
                     renderFrameworkCompliance(data.by_regulation || []);
                 } catch (error) {
@@ -660,7 +681,7 @@
                     document.getElementById("openFindings").textContent =
                         data.findings?.open || 0;
                     document.getElementById("criticalFindings").textContent =
-                        (data.findings?.critical || 0) + " critical";
+                        (data.findings?.critical || 0) + " " + _gt('grc.critical_count');
 
                     const completed = data.audits?.completed || 0;
                     const upcoming = data.audits?.scheduled || 0;
@@ -676,11 +697,11 @@
 
                     const detailsEl = document.getElementById("auditReadinessDetails");
                     if (readiness >= 80) {
-                        detailsEl.innerHTML = '<p class="text-sm text-green-700 bg-green-50 p-3 rounded-lg">Audit readiness is strong. Continue maintaining documentation and evidence collection.</p>';
+                        detailsEl.innerHTML = `<p class="text-sm text-green-700 bg-green-50 p-3 rounded-lg">${_gt('grc.audit_readiness_strong')}</p>`;
                     } else if (readiness >= 50) {
-                        detailsEl.innerHTML = '<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Audit readiness needs improvement. Review open findings and ensure corrective actions are on track.</p>';
+                        detailsEl.innerHTML = `<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">${_gt('grc.audit_readiness_improve')}</p>`;
                     } else {
-                        detailsEl.innerHTML = '<p class="text-sm text-red-700 bg-red-50 p-3 rounded-lg">Audit readiness is low. Prioritize closing critical findings and preparing evidence packages.</p>';
+                        detailsEl.innerHTML = `<p class="text-sm text-red-700 bg-red-50 p-3 rounded-lg">${_gt('grc.audit_readiness_low')}</p>`;
                     }
                 } catch (error) {
                     console.error("Error loading audit summary:", error);
@@ -694,7 +715,7 @@
                     document.getElementById("activeVendors").textContent =
                         data.vendors?.active || 0;
                     document.getElementById("highRiskVendors").textContent =
-                        (data.vendors?.critical_vendors || 0) + " high risk";
+                        (data.vendors?.critical_vendors || 0) + " " + _gt('grc.high_risk_count');
                 } catch (error) {
                     console.error("Error loading vendor summary:", error);
                 }
@@ -708,7 +729,7 @@
                     document.getElementById("totalControls").textContent =
                         data.controls?.total_controls || 0;
                     document.getElementById("effectiveControls").textContent =
-                        (data.controls?.effective || 0) + " effective";
+                        (data.controls?.effective || 0) + " " + _gt("grc.effective_label");
 
                     renderRulesTable(
                         data.rules,
@@ -745,7 +766,7 @@
                 const tbody = document.getElementById("rulesTableBody");
                 if (!rules || rules.length === 0) {
                     tbody.innerHTML =
-                        '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No handoff rules configured</td></tr>';
+                        `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">${_gt("grc.no_rules")}</td></tr>`;
                     return;
                 }
 
@@ -766,7 +787,7 @@
                     </td>
                     <td class="px-4 py-3 text-center text-sm font-semibold text-gray-600">${r.trigger_count || 0}</td>
                     <td class="px-4 py-3 text-center">
-                        <span class="text-xs px-2 py-1 rounded-full ${r.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}">${r.is_active ? "Active" : "Inactive"}</span>
+                        <span class="text-xs px-2 py-1 rounded-full ${r.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}">${r.is_active ? _gt("grc.active") : _gt("grc.inactive")}</span>
                     </td>
                 </tr>
             `,
@@ -778,7 +799,7 @@
                 const tbody = document.getElementById("controlsTableBody");
                 if (!controls || controls.length === 0) {
                     tbody.innerHTML =
-                        '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">No controls mapped</td></tr>';
+                        `<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">${_gt("grc.no_controls")}</td></tr>`;
                     return;
                 }
 
@@ -810,7 +831,7 @@
                             </div>
                             <span class="text-xs text-gray-500">${c.effectiveness_score}%</span>
                         `
-                                : '<span class="text-xs text-gray-400">Not tested</span>'
+                                : `<span class="text-xs text-gray-400">${_gt("grc.not_tested")}</span>`
                         }
                     </td>
                 </tr>
@@ -823,7 +844,7 @@
                 const container = document.getElementById("recentEvents");
                 if (!events || events.length === 0) {
                     container.innerHTML =
-                        '<div class="text-gray-600 text-center py-4">No recent handoff events</div>';
+                        `<div class="text-gray-400 text-center py-4">${_gt("grc.no_events")}</div>`;
                     return;
                 }
 
@@ -834,13 +855,13 @@
                     <div class="flex items-center gap-3">
                         <div class="w-2 h-2 rounded-full ${e.status === "completed" ? "bg-green-500" : e.status === "failed" ? "bg-red-500" : "bg-amber-500"}"></div>
                         <div>
-                            <div class="text-sm font-medium text-gray-900">${e.rule_name || "Manual Event"}</div>
+                            <div class="text-sm font-medium text-gray-900">${e.rule_name || _gt("grc.manual_event")}</div>
                             <div class="text-xs text-gray-500">${e.source_module} → ${e.target_module}</div>
                         </div>
                     </div>
                     <div class="text-right">
-                        <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${e.status}</span>
-                        <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString()}</div>
+                        <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_gt("grc.status_" + e.status) || e.status}</span>
+                        <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString(WalaPlusI18n.currentLang())}</div>
                     </div>
                 </div>
             `,
@@ -854,7 +875,7 @@
                 );
                 if (!frameworks || frameworks.length === 0) {
                     container.innerHTML =
-                        '<div class="text-gray-600 text-center py-4">No compliance data</div>';
+                        `<div class="text-gray-400 text-center py-4">${_gt("grc.no_compliance_data")}</div>`;
                     return;
                 }
 
@@ -866,7 +887,7 @@
                         const score = Math.round((compliant / total) * 100);
                         return `
                     <div class="flex items-center justify-between">
-                        <span class="text-sm font-medium text-gray-700">${f.regulation_name || "Unknown"}</span>
+                        <span class="text-sm font-medium text-gray-700">${f.regulation_name || _gt("grc.unknown")}</span>
                         <div class="flex items-center gap-2">
                             <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div class="${score >= 80 ? "bg-green-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"} h-full rounded-full" style="width: ${score}%"></div>
@@ -952,8 +973,13 @@
             }
 
             refreshAll();
+
+            // i18n init for GRC page
+            if (window.WalaPlusI18n) {
+                window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+            }
         </script>
 
-        <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+        <script src="/js/ai-consultant-widget.js?v=4.6"></script>
     </body>
 </html>

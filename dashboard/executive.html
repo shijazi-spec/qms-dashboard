@@ -14,11 +14,12 @@
         .health-critical { background: linear-gradient(135deg, #B91C1C, #EF4444); }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
+    <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
-        <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/navigation.js?v=4.6"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('executive');
@@ -28,22 +29,23 @@
     <div class="max-w-7xl mx-auto px-4 py-6">
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">CEO / Board Dashboard</h1>
-                <p class="text-gray-600">Enterprise health overview with MBR/QBR/ABR summaries</p>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="executive.title">CEO / Board Dashboard</h1>
+                <p class="text-gray-600" data-i18n="executive.subtitle">Enterprise health overview with MBR/QBR/ABR summaries</p>
+                <p class="text-xs text-gray-400 mt-1" id="hijri-date-display"></p>
             </div>
             <div class="flex space-x-2">
-                <button onclick="generateReport('mbr')" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Generate MBR</button>
-                <button onclick="generateReport('qbr')" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Generate QBR</button>
+                <button onclick="generateReport('mbr')" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700" data-i18n="executive.generate_mbr">Generate MBR</button>
+                <button onclick="generateReport('qbr')" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700" data-i18n="executive.generate_qbr">Generate QBR</button>
             </div>
         </div>
 
         <div class="mb-6 border-b bg-white rounded-t-xl">
             <nav class="flex space-x-6 px-4">
-                <button onclick="showTab('overview')" id="tab-overview" class="py-3 text-sm font-medium tab-active">Overview</button>
-                <button onclick="showTab('kpis')" id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">KPI Health</button>
-                <button onclick="showTab('risks')" id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">Risk Exposure</button>
-                <button onclick="showTab('compliance')" id="tab-compliance" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">Compliance</button>
-                <button onclick="showTab('reports')" id="tab-reports" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900">Reports Archive</button>
+                <button onclick="showTab('overview')" id="tab-overview" class="py-3 text-sm font-medium tab-active" data-i18n="executive.tabs.overview">Overview</button>
+                <button onclick="showTab('kpis')" id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.kpis">KPI Health</button>
+                <button onclick="showTab('risks')" id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.risks">Risk Exposure</button>
+                <button onclick="showTab('compliance')" id="tab-compliance" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.compliance">Compliance</button>
+                <button onclick="showTab('reports')" id="tab-reports" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.reports">Reports Archive</button>
             </nav>
         </div>
 
@@ -51,14 +53,14 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div id="healthCard" class="rounded-xl shadow-lg p-6 text-white health-good">
                     <div class="text-4xl font-bold" id="healthScore">--</div>
-                    <div class="text-lg opacity-90">Overall Health Score</div>
-                    <div class="text-sm opacity-75 mt-2" id="healthLabel">Loading...</div>
+                    <div class="text-lg opacity-90" data-i18n="executive.health_score">Overall Health Score</div>
+                    <div class="text-sm opacity-75 mt-2" id="healthLabel" data-i18n="common.loading">Loading...</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-4">
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-3xl font-bold text-gray-900" id="kpiOnTarget">--</div>
-                            <div class="text-sm text-gray-600">KPIs On Target</div>
+                            <div class="text-sm text-gray-600" data-i18n="executive.kpis_on_target">KPIs On Target</div>
                         </div>
                         <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                             <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +73,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-3xl font-bold text-gray-900" id="openRisks">--</div>
-                            <div class="text-sm text-gray-600">Open Risks</div>
+                            <div class="text-sm text-gray-600" data-i18n="executive.open_risks">Open Risks</div>
                         </div>
                         <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
                             <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +86,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-3xl font-bold text-gray-900" id="complianceScore">--</div>
-                            <div class="text-sm text-gray-600">Compliance Score</div>
+                            <div class="text-sm text-gray-600" data-i18n="executive.compliance_score">Compliance Score</div>
                         </div>
                         <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                             <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,33 +99,33 @@
 
             <div class="bg-white rounded-xl shadow p-5 mb-6" data-testid="quality-health-index">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-semibold text-gray-900">Quality Health Index</h3>
-                    <span class="text-xs text-gray-600" id="qhiTimestamp"></span>
+                    <h3 class="font-semibold text-gray-900" data-i18n="executive.quality_health_index">Quality Health Index</h3>
+                    <span class="text-xs text-gray-400" id="qhiTimestamp"></span>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4" id="qhiDimensions">
                     <div class="text-center p-3 rounded-lg bg-blue-50">
                         <div class="text-2xl font-bold text-blue-700" id="qhi-audit">--</div>
-                        <div class="text-xs text-gray-600 mt-1">Audit Score</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.audit_score">Audit Score</div>
                         <div class="w-full bg-blue-200 rounded-full h-1.5 mt-2"><div id="qhi-audit-bar" class="bg-blue-600 h-1.5 rounded-full" style="width:0%"></div></div>
                     </div>
                     <div class="text-center p-3 rounded-lg bg-green-50">
                         <div class="text-2xl font-bold text-green-700" id="qhi-kpi">--</div>
-                        <div class="text-xs text-gray-600 mt-1">KPI Achievement</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.kpi_achievement">KPI Achievement</div>
                         <div class="w-full bg-green-200 rounded-full h-1.5 mt-2"><div id="qhi-kpi-bar" class="bg-green-600 h-1.5 rounded-full" style="width:0%"></div></div>
                     </div>
                     <div class="text-center p-3 rounded-lg bg-amber-50">
                         <div class="text-2xl font-bold text-amber-700" id="qhi-risk">--</div>
-                        <div class="text-xs text-gray-600 mt-1">Risk Mitigation</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.risk_mitigation">Risk Mitigation</div>
                         <div class="w-full bg-amber-200 rounded-full h-1.5 mt-2"><div id="qhi-risk-bar" class="bg-amber-600 h-1.5 rounded-full" style="width:0%"></div></div>
                     </div>
                     <div class="text-center p-3 rounded-lg bg-purple-50">
                         <div class="text-2xl font-bold text-purple-700" id="qhi-capa">--</div>
-                        <div class="text-xs text-gray-600 mt-1">CAPA Closure</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.capa_closure">CAPA Closure</div>
                         <div class="w-full bg-purple-200 rounded-full h-1.5 mt-2"><div id="qhi-capa-bar" class="bg-purple-600 h-1.5 rounded-full" style="width:0%"></div></div>
                     </div>
                     <div class="text-center p-3 rounded-lg bg-indigo-50">
                         <div class="text-2xl font-bold text-indigo-700" id="qhi-compliance">--</div>
-                        <div class="text-xs text-gray-600 mt-1">Compliance</div>
+                        <div class="text-xs text-gray-600 mt-1" data-i18n="executive.compliance">Compliance</div>
                         <div class="w-full bg-indigo-200 rounded-full h-1.5 mt-2"><div id="qhi-compliance-bar" class="bg-indigo-600 h-1.5 rounded-full" style="width:0%"></div></div>
                     </div>
                 </div>
@@ -131,19 +133,19 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-xl shadow p-4">
-                    <h3 class="font-semibold text-gray-900 mb-3">KPI Status by Owner</h3>
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.kpi_by_owner">KPI Status by Owner</h3>
                     <canvas id="kpiOwnerChart" height="200"></canvas>
                 </div>
                 <div class="bg-white rounded-xl shadow p-4">
-                    <h3 class="font-semibold text-gray-900 mb-3">Risk Distribution</h3>
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.risk_distribution">Risk Distribution</h3>
                     <canvas id="riskChart" height="200"></canvas>
                 </div>
             </div>
 
             <div class="bg-white rounded-xl shadow p-4 mb-6">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-semibold text-gray-900">AI Executive Insights</h3>
-                    <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">AI Confidence: <span id="aiConfidence">--</span>%</span>
+                    <h3 class="font-semibold text-gray-900" data-i18n="executive.ai_insights">AI Executive Insights</h3>
+                    <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded"><span data-i18n="executive.ai_confidence">AI Confidence</span>: <span id="aiConfidence">--</span>%</span>
                 </div>
                 <div id="aiInsights" class="space-y-3">
                     <div class="animate-pulse bg-gray-100 h-4 rounded w-3/4"></div>
@@ -153,13 +155,13 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white rounded-xl shadow p-4">
-                    <h3 class="font-semibold text-gray-900 mb-3">Top Risks Requiring Attention</h3>
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.top_risks">Top Risks Requiring Attention</h3>
                     <div id="topRisks" class="space-y-2">
                         <div class="animate-pulse bg-gray-100 h-12 rounded"></div>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-4">
-                    <h3 class="font-semibold text-gray-900 mb-3">KPIs Below Target</h3>
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.kpis_below">KPIs Below Target</h3>
                     <div id="kpisBelow" class="space-y-2">
                         <div class="animate-pulse bg-gray-100 h-12 rounded"></div>
                     </div>
@@ -169,21 +171,21 @@
 
         <div id="content-kpis" class="hidden">
             <div class="bg-white rounded-xl shadow p-6">
-                <h3 class="font-semibold text-gray-900 mb-4">KPI Performance Summary</h3>
+                <h3 class="font-semibold text-gray-900 mb-4" data-i18n="executive.kpi_detail">KPI Performance Summary</h3>
                 <div id="kpiDetailList" class="space-y-3"></div>
             </div>
         </div>
 
         <div id="content-risks" class="hidden">
             <div class="bg-white rounded-xl shadow p-6">
-                <h3 class="font-semibold text-gray-900 mb-4">Risk Exposure Analysis</h3>
+                <h3 class="font-semibold text-gray-900 mb-4" data-i18n="executive.risk_analysis">Risk Exposure Analysis</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <h4 class="text-sm font-medium text-gray-700 mb-2">Risk Heat Map Summary</h4>
+                        <h4 class="text-sm font-medium text-gray-700 mb-2" data-i18n="executive.risk_heatmap">Risk Heat Map Summary</h4>
                         <div id="riskHeatmap" class="grid grid-cols-5 gap-1"></div>
                     </div>
                     <div>
-                        <h4 class="text-sm font-medium text-gray-700 mb-2">Risk by Category</h4>
+                        <h4 class="text-sm font-medium text-gray-700 mb-2" data-i18n="executive.risk_by_category">Risk by Category</h4>
                         <canvas id="riskCategoryChart" height="200"></canvas>
                     </div>
                 </div>
@@ -192,7 +194,7 @@
 
         <div id="content-compliance" class="hidden">
             <div class="bg-white rounded-xl shadow p-6">
-                <h3 class="font-semibold text-gray-900 mb-4">Compliance Framework Status</h3>
+                <h3 class="font-semibold text-gray-900 mb-4" data-i18n="executive.compliance_framework">Compliance Framework Status</h3>
                 <div id="complianceList" class="space-y-3"></div>
             </div>
         </div>
@@ -200,12 +202,12 @@
         <div id="content-reports" class="hidden">
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-semibold text-gray-900">Executive Reports Archive</h3>
+                    <h3 class="font-semibold text-gray-900" data-i18n="executive.reports_archive">Executive Reports Archive</h3>
                     <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" aria-label="Filter by report type" onchange="loadReports()">
-                        <option value="">All Reports</option>
-                        <option value="mbr">Monthly (MBR)</option>
-                        <option value="qbr">Quarterly (QBR)</option>
-                        <option value="abr">Annual (ABR)</option>
+                        <option value="" data-i18n="executive.all_reports">All Reports</option>
+                        <option value="mbr" data-i18n="executive.monthly_mbr">Monthly (MBR)</option>
+                        <option value="qbr" data-i18n="executive.quarterly_qbr">Quarterly (QBR)</option>
+                        <option value="abr" data-i18n="executive.annual_abr">Annual (ABR)</option>
                     </select>
                 </div>
                 <div id="reportsList" class="divide-y"></div>
@@ -255,27 +257,29 @@
                 
                 const healthScore = Math.round((kpiScore * 0.4) + (riskScore * 0.4) + (80 * 0.2));
                 
-                document.getElementById('healthScore').textContent = healthScore;
+                document.getElementById('healthScore').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(healthScore) : String(healthScore));
                 const healthCard = document.getElementById('healthCard');
                 healthCard.className = 'rounded-xl shadow-lg p-6 text-white';
+                const _t = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
+                const _fmt = (n) => window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(n) : String(n);
                 if (healthScore >= 80) {
                     healthCard.classList.add('health-excellent');
-                    document.getElementById('healthLabel').textContent = 'Excellent - All systems performing well';
+                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.excellent');
                 } else if (healthScore >= 60) {
                     healthCard.classList.add('health-good');
-                    document.getElementById('healthLabel').textContent = 'Good - Minor attention needed';
+                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.good');
                 } else if (healthScore >= 40) {
                     healthCard.classList.add('health-warning');
-                    document.getElementById('healthLabel').textContent = 'Warning - Action required';
+                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.warning');
                 } else {
                     healthCard.classList.add('health-critical');
-                    document.getElementById('healthLabel').textContent = 'Critical - Immediate attention needed';
+                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.critical');
                 }
                 
                 document.getElementById('kpiOnTarget').textContent = `${greenKPIs}/${totalKPIs}`;
                 
                 const totalOpenRisks = risks.reduce((sum, r) => sum + parseInt(r.count), 0);
-                document.getElementById('openRisks').textContent = totalOpenRisks;
+                document.getElementById('openRisks').textContent = _fmt(totalOpenRisks);
                 
                 const compliance = mbrData.complianceSummary || [];
                 const compliantCount = compliance.find(c => c.status === 'compliant')?.count || 0;
@@ -298,7 +302,7 @@
                 setQHI('qhi-risk', riskScore);
                 setQHI('qhi-capa', capaRate);
                 setQHI('qhi-compliance', compliancePct);
-                document.getElementById('qhiTimestamp').textContent = 'Updated: ' + new Date().toLocaleString();
+                document.getElementById('qhiTimestamp').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.updated') : 'Updated') + ': ' + new Date().toLocaleString();
 
                 renderCharts(kpiData, risks);
                 renderAIInsights(healthScore, kpiData, risks);
@@ -314,12 +318,13 @@
             if (charts.kpiOwner) charts.kpiOwner.destroy();
             if (charts.risk) charts.risk.destroy();
 
+            const _exTr = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
             charts.kpiOwner = new Chart(document.getElementById('kpiOwnerChart'), {
                 type: 'bar',
                 data: {
-                    labels: ['Sara (Quality)', 'Maram (GRC)', 'Shared'],
+                    labels: [_exTr('executive.owner_quality'), _exTr('executive.owner_grc'), _exTr('executive.owner_shared')],
                     datasets: [{
-                        label: 'KPIs',
+                        label: _exTr('executive.chart_kpis'),
                         data: [kpiData.byOwner?.quality_manager || 0, kpiData.byOwner?.grc_manager || 0, kpiData.byOwner?.shared || 0],
                         backgroundColor: ['#1E3A8A', '#1E293B', '#6D28D9']
                     }]
@@ -346,30 +351,31 @@
             
             const insights = [];
             
+            const _iT = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
             if (healthScore >= 80) {
-                insights.push('Overall enterprise health is strong. Continue current governance practices.');
+                insights.push(_iT('executive.health_insight_strong'));
             } else if (healthScore < 60) {
-                insights.push('Enterprise health requires attention. Review critical risks and underperforming KPIs.');
+                insights.push(_iT('executive.health_insight_attention'));
             }
             
             const redKPIs = kpiData.byStatus?.red || 0;
             if (redKPIs > 0) {
-                insights.push(`${redKPIs} KPIs are off-target and require immediate intervention.`);
+                insights.push(_iT('executive.kpi_insight_off_target').replace('{count}', redKPIs));
             }
             
             const criticalRisks = risks.find(r => r.risk_level === 'critical')?.count || 0;
             if (criticalRisks > 0) {
-                insights.push(`${criticalRisks} critical risks identified. Recommend prioritizing risk treatment plans.`);
+                insights.push(_iT('executive.risk_insight_critical').replace('{count}', criticalRisks));
             }
             
             const greenKPIs = kpiData.byStatus?.green || 0;
             const totalKPIs = kpiData.total || 1;
             if (greenKPIs / totalKPIs >= 0.8) {
-                insights.push('KPI performance is excellent with 80%+ on target. Consider raising targets for continuous improvement.');
+                insights.push(_iT('executive.kpi_insight_excellent'));
             }
             
             if (insights.length === 0) {
-                insights.push('System analysis complete. No critical issues detected.');
+                insights.push(_iT('executive.insight_no_issues'));
             }
             
             document.getElementById('aiInsights').innerHTML = insights.map(i => `
@@ -389,7 +395,8 @@
                 
                 const riskList = risks.risks || risks || [];
                 if (!riskList.length) {
-                    document.getElementById('topRisks').innerHTML = '<p class="text-gray-500 text-sm">No open risks</p>';
+                    const _tR = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
+                    document.getElementById('topRisks').innerHTML = `<p class="text-gray-500 text-sm">${_tR('executive.no_open_risks')}</p>`;
                     return;
                 }
                 
@@ -397,10 +404,10 @@
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                             <div class="font-medium text-gray-900">${r.risk_title}</div>
-                            <div class="text-xs text-gray-500">${r.risk_category} | Owner: ${r.risk_owner || 'Unassigned'}</div>
+                            <div class="text-xs text-gray-500">${r.risk_category} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned')}</div>
                         </div>
                         <span class="px-2 py-1 rounded text-xs font-medium ${r.risk_level === 'critical' ? 'bg-red-100 text-red-700' : r.risk_level === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}">
-                            Score: ${r.risk_score}
+                            ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.score') : 'Score'}: ${r.risk_score}
                         </span>
                     </div>
                 `).join('');
@@ -413,12 +420,14 @@
             const belowTarget = (kpiData.kpiDetails || []).filter(k => k.status === 'red' || k.status === 'amber');
             
             if (!belowTarget.length) {
-                document.getElementById('kpisBelow').innerHTML = '<p class="text-gray-500 text-sm">All KPIs on target</p>';
+                const _tK = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
+                document.getElementById('kpisBelow').innerHTML = `<p class="text-gray-500 text-sm">${_tK('executive.all_kpis_target')}</p>`;
                 return;
             }
             
             document.getElementById('kpisBelow').innerHTML = belowTarget.slice(0, 5).map(k => {
-                const ownerLabel = k.owner_type === 'quality_manager' ? 'Sara' : k.owner_type === 'grc_manager' ? 'Maram' : 'Shared';
+                const _owT = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
+                const ownerLabel = k.owner_type === 'quality_manager' ? _owT('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT('executive.owner_grc').split(' ')[0] : _owT('executive.owner_shared');
                 return `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
@@ -442,7 +451,8 @@
                 const reports = await res.json();
                 
                 if (!reports.length) {
-                    document.getElementById('reportsList').innerHTML = '<div class="p-8 text-center text-gray-500">No reports found</div>';
+                    const _tRep = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
+                    document.getElementById('reportsList').innerHTML = `<div class="p-8 text-center text-gray-500">${_tRep('executive.no_reports_found')}</div>`;
                     return;
                 }
                 
@@ -471,7 +481,8 @@
                 const data = await res.json();
                 
                 document.getElementById('kpiDetailList').innerHTML = (data.kpiDetails || []).map(k => {
-                    const ownerLabel = k.owner_type === 'quality_manager' ? 'Sara' : k.owner_type === 'grc_manager' ? 'Maram' : 'Shared';
+                    const _owT2 = (key) => window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : key.split('.').pop();
+                    const ownerLabel = k.owner_type === 'quality_manager' ? _owT2('executive.owner_quality').split(' ')[0] : k.owner_type === 'grc_manager' ? _owT2('executive.owner_grc').split(' ')[0] : _owT2('executive.owner_shared');
                     const statusColor = k.status === 'green' ? 'bg-green-500' : k.status === 'amber' ? 'bg-amber-500' : k.status === 'red' ? 'bg-red-500' : 'bg-gray-400';
                     return `
                         <div class="flex items-center justify-between p-3 border rounded-lg">
@@ -484,7 +495,7 @@
                             </div>
                             <div class="text-right">
                                 <div class="font-bold text-gray-900">${k.latestValue !== null ? k.latestValue + (k.unit || '%') : '--'}</div>
-                                <div class="text-xs text-gray-500">Target: ${k.target_value || '--'}${k.unit || '%'}</div>
+                                <div class="text-xs text-gray-500">${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.target') : 'Target'}: ${k.target_value || '--'}${k.unit || '%'}</div>
                             </div>
                         </div>
                     `;
@@ -588,7 +599,38 @@
         }
 
         loadDashboard();
+
+        // i18n initialization + Hijri date
+        (function initI18nAndHijri() {
+            function showHijriDate() {
+                const el = document.getElementById('hijri-date-display');
+                if (!el) return;
+                try {
+                    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.formatDateBilingual === 'function') {
+                        const d = window.WalaPlusI18n.formatDateBilingual(new Date());
+                        // formatDateBilingual returns { gregorian, hijri }
+                        el.textContent = d.gregorian + (d.hijri ? ' / ' + d.hijri : '');
+                    } else {
+                        const hijri = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+                            day: 'numeric', month: 'long', year: 'numeric'
+                        }).format(new Date());
+                        const greg = new Intl.DateTimeFormat('en-GB', {
+                            day: 'numeric', month: 'long', year: 'numeric'
+                        }).format(new Date());
+                        el.textContent = greg + ' / ' + hijri;
+                    }
+                } catch (_) {}
+            }
+            if (window.WalaPlusI18n) {
+                window.WalaPlusI18n.init().then(() => {
+                    window.WalaPlusI18n.applyToDOM();
+                    showHijriDate();
+                });
+            } else {
+                document.addEventListener('DOMContentLoaded', showHijriDate);
+            }
+        })();
     </script>
-    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script src="/js/ai-consultant-widget.js?v=4.6"></script>
 </body>
 </html>

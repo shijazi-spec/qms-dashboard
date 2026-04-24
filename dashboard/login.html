@@ -6,6 +6,7 @@
     <title>Sign In - WalaPlus QMS</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/js/i18n.js?v=1.0"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .google-btn {
@@ -30,11 +31,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                 </svg>
             </div>
-            <h1 class="text-2xl font-bold text-gray-900">WalaPlus</h1>
-            <p class="text-sm text-gray-500 mt-1">Enterprise Quality & GRC Platform</p>
+            <h1 class="text-2xl font-bold text-gray-900" data-i18n="login.title">WalaPlus</h1>
+            <p class="text-sm text-gray-500 mt-1" data-i18n="login.subtitle">Enterprise Quality & GRC Platform</p>
             <p class="text-xs text-emerald-600 mt-2 inline-flex items-center gap-1.5" data-testid="status-app-online">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                App is online &middot; Sign in to continue
+                <span data-i18n="login.status_online">App is online &middot; Sign in to continue</span>
             </p>
         </div>
 
@@ -45,12 +46,12 @@
             <div class="flex items-start gap-3">
                 <svg class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z"/></svg>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-amber-900">Sign in once in a new tab</p>
-                    <p class="text-xs text-amber-800 mt-1">Open the app in its own tab to sign in. Once you do, this preview pane will load your dashboard automatically next time.</p>
+                    <p class="text-sm font-semibold text-amber-900" data-i18n="login.iframe_title">Sign in once in a new tab</p>
+                    <p class="text-xs text-amber-800 mt-1" data-i18n="login.iframe_body">Open the app in its own tab to sign in. Once you do, this preview pane will load your dashboard automatically next time.</p>
                     <a id="open-in-new-tab" href="/" target="_blank" rel="noopener"
                        data-testid="link-open-new-tab"
                        class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg transition-colors">
-                        Open in new tab
+                        <span data-i18n="login.open_new_tab">Open in new tab</span>
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                     </a>
                 </div>
@@ -58,8 +59,8 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-            <h2 class="text-xl font-semibold text-gray-900 text-center mb-2">Welcome back</h2>
-            <p class="text-sm text-gray-500 text-center mb-8">Sign in to access your dashboard</p>
+            <h2 class="text-xl font-semibold text-gray-900 text-center mb-2" data-i18n="login.welcome">Welcome back</h2>
+            <p class="text-sm text-gray-500 text-center mb-8" data-i18n="login.welcome_sub">Sign in to access your dashboard</p>
 
             <div id="error-banner" class="hidden mb-6 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p class="text-sm text-red-700" id="error-message"></p>
@@ -72,38 +73,39 @@
                     <polyline points="10 17 15 12 10 7"/>
                     <line x1="15" y1="12" x2="3" y2="12"/>
                 </svg>
-                Sign in to WalaPlus
+                <span data-i18n="login.sign_in_btn">Sign in to WalaPlus</span>
             </a>
-            <p class="text-xs text-gray-400 text-center mt-3">Sign in with Google, GitHub, Apple, or email</p>
+            <p class="text-xs text-gray-400 text-center mt-3" data-i18n="login.sign_in_options">Sign in with Google, GitHub, Apple, or email</p>
 
             <div class="relative my-8">
                 <div class="absolute inset-0 flex items-center">
                     <div class="w-full border-t border-gray-200"></div>
                 </div>
                 <div class="relative flex justify-center">
-                    <span class="bg-white px-4 text-xs text-gray-400 uppercase tracking-wider">or</span>
+                    <span class="bg-white px-4 text-xs text-gray-400 uppercase tracking-wider" data-i18n="login.or">or</span>
                 </div>
             </div>
 
             <div>
-                <p class="text-sm text-gray-600 mb-3 font-medium">Continue with Admin Key</p>
+                <p class="text-sm text-gray-600 mb-3 font-medium" data-i18n="login.admin_key_label">Continue with Admin Key</p>
                 <form id="admin-key-form" autocomplete="on" onsubmit="event.preventDefault(); loginWithAdminKey();">
                     <div class="flex gap-2">
                         <input type="password" id="admin-key-input" name="admin-key" data-testid="input-admin-key"
                                autocomplete="current-password"
+                               data-i18n-placeholder="login.admin_key_placeholder"
                                placeholder="Enter admin API key"
                                class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <button type="submit" data-testid="button-admin-login"
+                        <button type="submit" data-testid="button-admin-login" data-i18n="login.admin_key_enter"
                                 class="px-5 py-2.5 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
                             Enter
                         </button>
                     </div>
                 </form>
-                <p class="text-xs text-gray-400 mt-2">For admin and QMS panel access only</p>
+                <p class="text-xs text-gray-400 mt-2" data-i18n="login.admin_key_note">For admin and QMS panel access only</p>
             </div>
         </div>
 
-        <p class="text-xs text-gray-400 text-center mt-6">&copy; 2026 WalaPlus. Enterprise Quality Management.</p>
+        <p class="text-xs text-gray-400 text-center mt-6" data-i18n="login.footer">&copy; 2026 WalaPlus. Enterprise Quality Management.</p>
     </div>
 
     <script>
@@ -132,21 +134,43 @@
             }
         });
 
+        // Translate error messages using i18n if available, with English fallback
+        function _loginT(key, fallback) {
+            try {
+                if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
+                    var v = window.WalaPlusI18n.t(key);
+                    if (v && v !== key.split('.').pop()) return v;
+                }
+            } catch (_) {}
+            return fallback;
+        }
+
+        function showLoginError(msgEl, key, fallback) {
+            // Show fallback immediately; re-translate after i18n loads
+            msgEl.textContent = _loginT(key, fallback);
+            if (window.WalaPlusI18n && typeof window.WalaPlusI18n.onReady === 'function') {
+                window.WalaPlusI18n.onReady(function() {
+                    if (msgEl.isConnected) msgEl.textContent = _loginT(key, fallback);
+                });
+            }
+        }
+
         const params = new URLSearchParams(window.location.search);
         const error = params.get('error');
         if (error) {
             const banner = document.getElementById('error-banner');
             const msg = document.getElementById('error-message');
             banner.classList.remove('hidden');
-            const messages = {
-                'auth_denied': 'Sign-in was cancelled. Please try again.',
-                'no_code': 'Authentication failed. No authorization code received.',
-                'no_email': 'Could not retrieve your email. Please try again.',
-                'callback_failed': 'Authentication failed. Please try again.',
-                'invalid_state': 'Session expired. Please try signing in again.',
-                'session_expired': 'Your session has expired. Please sign in again.',
+            const errorMap = {
+                'auth_denied':      { key: 'login.errors.auth_denied',     fallback: 'Sign-in was cancelled. Please try again.' },
+                'no_code':          { key: 'login.errors.no_code',          fallback: 'Authentication failed. No authorization code received.' },
+                'no_email':         { key: 'login.errors.no_email',         fallback: 'Could not retrieve your email. Please try again.' },
+                'callback_failed':  { key: 'login.errors.callback_failed',  fallback: 'Authentication failed. Please try again.' },
+                'invalid_state':    { key: 'login.errors.invalid_state',    fallback: 'Session expired. Please try signing in again.' },
+                'session_expired':  { key: 'login.errors.session_expired',  fallback: 'Your session has expired. Please sign in again.' },
             };
-            msg.textContent = messages[error] || 'An error occurred during sign-in. Please try again.';
+            const e = errorMap[error] || { key: 'login.errors.callback_failed', fallback: 'An error occurred during sign-in. Please try again.' };
+            showLoginError(msg, e.key, e.fallback);
         }
 
         async function loginWithAdminKey() {
@@ -161,11 +185,11 @@
                     window.location.href = '/';
                 } else {
                     banner.classList.remove('hidden');
-                    msg.textContent = 'Invalid admin key. Please check and try again.';
+                    showLoginError(msg, 'login.errors.invalid_admin_key', 'Invalid admin key. Please check and try again.');
                 }
             } catch(e) {
                 banner.classList.remove('hidden');
-                msg.textContent = 'Authentication failed. Please try again.';
+                showLoginError(msg, 'login.errors.auth_failed', 'Authentication failed. Please try again.');
             }
         }
 
@@ -177,6 +201,13 @@
                 }
             })
             .catch(() => {});
+
+        // Initialize i18n on login page (no nav, standalone)
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.WalaPlusI18n) {
+                window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+            }
+        });
     </script>
 </body>
 </html>

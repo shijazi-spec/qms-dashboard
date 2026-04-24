@@ -1,8 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Standard Operating Procedure (SOP)
 
-**Version:** 4.5
-**Last Updated:** April 18, 2026
+**Version:** 4.6
+**Last Updated:** April 24, 2026
 **Classification:** Internal Use Only
 **Published URL:** https://qms-dashboard.replit.app
 **Approval Authority:** Quality Management Representative / Platform Admin
@@ -2029,6 +2029,133 @@ Use the **"Give Feedback"** floating button (bottom-right corner of every page) 
 
 ---
 
+## 26. Internationalisation (i18n) & Arabic/RTL Support
+
+**Introduced:** April 24, 2026 — Phase 1
+**Status:** Active on all Phase 1 pages (Login, Executive, GRC, AI Consultant, Navigation, Notifications)
+
+### 26.1 Overview
+
+WalaPlus supports Arabic (RTL) in addition to English. The i18n system is a lightweight vanilla-JS module (`dashboard/js/i18n.js`) with no framework dependencies. It works on all static HTML dashboard pages and the navigation rail without a build step.
+
+**Supported languages:**
+| Code | Language | Direction |
+|------|----------|-----------|
+| `en` | English | LTR (default) |
+| `ar` | Arabic | RTL |
+
+### 26.2 Language Preference Resolution
+
+Language is resolved in the following priority order (highest to lowest):
+
+1. **Server preference** — `ui_language` column on `platform_users` (persisted by the `/api/user/language-preference` POST endpoint).
+2. **localStorage** — key `walaplus_lang`, set automatically on every language switch.
+3. **`<html lang>`** attribute — allows server-side pre-rendering.
+4. **Browser navigator.language** — auto-detected if nothing else is set.
+5. **Default** — falls back to `en`.
+
+The server preference is fetched on every page load (`GET /api/user/language-preference`) and wins over localStorage if they differ. The server column is added automatically with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on first call.
+
+### 26.3 Adding a Translation Key
+
+1. Add your key to `dashboard/i18n/en.json` (English source of truth).
+2. Add the matching Arabic key to `dashboard/i18n/ar.json`.
+3. Add `data-i18n="your.key"` attribute to the HTML element you want translated.
+4. Call `WalaPlusI18n.applyToDOM()` after your content is rendered (or rely on the automatic call inside `init()`).
+
+**Key naming conventions:**
+- `nav.*` — navigation rail / topstrip
+- `nav.groups.<id>` — navigation group labels (use the group `id` field)
+- `nav.items.<id>` — navigation item labels (use the item `id` field)
+- `login.*` — login page
+- `executive.*` — CEO/Board dashboard
+- `grc.*` — GRC Control Tower
+- `consultant.*` — AI Consultant page
+- `notifications.*` — notification panel
+- `common.*` — shared/reusable strings
+
+**Special attribute shorthands:**
+- `data-i18n-placeholder="key"` — sets `placeholder` attribute on `<input>` elements
+- `data-i18n-attr="attrName"` combined with `data-i18n="key"` — sets arbitrary attributes
+
+### 26.4 Using t() in JavaScript
+
+```javascript
+// In any JS file loaded after i18n.js:
+const label = WalaPlusI18n.t('nav.groups.quality');  // → "Quality" (en) or "الجودة" (ar)
+
+// With variable interpolation:
+const msg = WalaPlusI18n.t('common.items_found', { count: 42 });
+// JSON: "common.items_found": "Found {count} items"
+```
+
+In dynamically generated HTML (e.g., navigation.js), use inline `_t()` calls instead of `data-i18n` attributes, since the HTML is built as a string and injected via `innerHTML`:
+
+```javascript
+const label = this._t('nav.groups.' + group.id) || group.label;
+// renders translated text directly into the HTML string
+```
+
+### 26.5 RTL Layout
+
+When the language is `ar`, the module sets `html[dir="rtl"]` and adds the class `wp-rtl` to `<body>`. The navigation CSS (injected by `navigation.js`) includes `html[dir="rtl"]` overrides that:
+
+- Move the side rail from `left: 0` to `right: 0`
+- Swap `padding-left` and `padding-right` on `<body>` to match the new rail position
+- Flip mobile slide-in direction (`translateX(100%)` instead of `translateX(-100%)`)
+- Mirror the AI consultant widget from the right side to the left
+- Swap message bubble border-radius so chat bubbles point in the correct direction
+
+The Noto Sans Arabic font is loaded on demand (Google Fonts CDN) only when Arabic is active, injecting a `<link>` tag into `<head>` with `id="wp-arabic-font"` to prevent duplicates.
+
+### 26.6 Hijri Date on Executive Dashboard
+
+The Executive Dashboard displays both Gregorian and Hijri (Islamic) calendar dates:
+
+```javascript
+const result = WalaPlusI18n.formatDateBilingual(new Date());
+// result.gregorian → "24 April 2026"    (en) or "٢٤ أبريل ٢٠٢٦"  (ar)
+// result.hijri     → "٢٦ شوال ١٤٤٧"   (Islamic calendar via Intl API)
+```
+
+The date appears in the `#hijri-date-display` element beneath the page title.
+
+### 26.7 Language Toggle
+
+Users can switch languages from the **user menu** (top-right avatar dropdown). The toggle renders two buttons — *English* and *العربية* — which call `WalaPlusI18n.setLang('en')` or `setLang('ar')`. This persists the preference to both localStorage and the server, then reloads the page to re-apply all translated content.
+
+### 26.8 Adding i18n to a New Page
+
+1. Add `<script src="/js/i18n.js?v=1.0"></script>` in `<head>` **before** navigation.js.
+2. Add `data-i18n` attributes to all static text elements.
+3. At the end of your page script, call:
+   ```javascript
+   if (window.WalaPlusI18n) {
+     window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+   }
+   ```
+   *(If the page has navigation, the nav's `init()` already calls `WalaPlusI18n.init()` and `applyToDOM()` — no duplication occurs because `_loaded` is guarded.)*
+4. Add all new keys to both `en.json` and `ar.json`.
+
+### 26.9 Testing
+
+E2E Playwright tests are in `tests/i18n.spec.ts`. Run with:
+
+```bash
+npx playwright test tests/i18n.spec.ts --reporter=line
+```
+
+Tests cover:
+- Default English rendering
+- Arabic translation of key UI strings
+- `html[dir="rtl"]` and `body.wp-rtl` class in Arabic mode
+- `WalaPlusI18n` module availability
+- `/api/user/language-preference` GET/POST endpoint
+- Input placeholder translation
+- `data-i18n` attribute count on login page
+
+---
+
 ## Appendix A: Glossary
 
 | Term | Definition |
@@ -2345,6 +2472,7 @@ The suite (9 assertions) verifies:
 
 | Date | Change | Impact |
 |------|--------|--------|
+| **Apr 24, 2026** | **SOP v4.6 — Arabic/RTL Support (i18n Phase 1).** New `dashboard/js/i18n.js` module with `init()`, `t(key)`, `setLang()`, `applyToDOM()`, `formatDateBilingual()`, `isRTL()`. Translation files at `dashboard/i18n/en.json` and `dashboard/i18n/ar.json` covering all Phase 1 pages (nav, login, executive, GRC, AI consultant, notifications). New API endpoints: `GET/POST /api/user/language-preference` persisting `ui_language` column on `platform_users` (auto-migrated with `ADD COLUMN IF NOT EXISTS`). Language priority: server pref → localStorage → `<html lang>` → browser → `en`. RTL CSS injected into navigation style block with `html[dir="rtl"]` overrides (rail flips right, padding swaps, mobile slide direction, AI widget mirrors). Language toggle added to user menu (user-dropdown). Hijri date display on Executive page via `Intl.DateTimeFormat` with `ca-islamic` calendar. All Phase 1 HTML pages updated with `data-i18n` attributes and `<script src="/js/i18n.js">`. E2E Playwright tests added in `tests/i18n.spec.ts` (14 test cases). New §26 i18n conventions added to SOP. | Arabic users can now switch to RTL Arabic interface persisted across sessions; platform ready for Middle East enterprise rollout; zero build-step i18n for static dashboard pages |
 | **Apr 18, 2026** | **SOP v4.5.1 — CRM Owner Roster wired (closes "Unknown activity" gap).** Replaced the empty `getUsers()` stub in `src/data/index.ts` with a two-tier resolver: (a) hard-coded **117-owner seed** in new `src/data/seedUsers.ts` loaded from `CRM_Users_Complete_117_Updated.xlsx` (dated 2026-04-18) carrying name, team, status, totalRecords, modules; (b) live `fetchZohoUsers()` in `src/utils/zohoCRM.ts` (`GET /crm/v2/users?type=AllUsers`) that bridges Zoho User IDs → display names. Seed wins on team/status/modules; Zoho fills gaps for owners not yet on the seed. `GET /api/agents/performance` now propagates `status` so the dashboard activity badge resolves to **Active/Inactive** instead of **Unknown**. New SOP §11.1 "Owner Roster" documents the data steward refresh procedure. Roster breakdown: 11 departments, 64 Active, 53 Inactive, 7 Unassigned (logged as gap). | Closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect; CRM Owner Data Quality widget is now data-true; data steward refresh path documented. |
 | **Apr 18, 2026** | **SOP v4.5 — Internal Audits re-architecture + Admin & Tools + External Audits.** New §4.26 Internal Audits Dashboard with Annual Audit Programme HITL sign-off (sole approver: new role `head_of_operations_quality`, WP-CTL-007); trigger HITL gate (≥10-char dismiss reason, 24h auto-re-evaluate, "Propose via HITL" for Critical, `trigger-auto-escalate` Inngest cron @ 03:00 UTC, stale Critical@7d / Minor@30d auto-opens `grc_audit_findings` with bi-directional `escalation_finding_id`). New §4.27 Manual Audit Intake (`/intake`) — central Quality Manager workspace, GPT-4o structured extraction with paste-fallback, per-finding accept/edit/reject, `source_quote` traceability, Finalize promotes to `grc_audit_findings` with `intake_id`. New §4.28 External Audits (`/external-audits`) split out — Calendar/Audits + Certificate Register + Readiness Checklist tabs; hero card on `/grc` (Next Audit / Active Certs / Expiring ≤90d) backed by `GET /api/external-audits/summary`. New §4.29 Admin & Tools dropdown — consolidates Migration Engine (relocated from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (relocated from Analytics); role-gated. Migration Engine expanded with 5 Quality templates (CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations). Database expanded 105→**113 tables** (+8: `audit_programmes`, `audit_programme_audits`, `manual_audit_intake`, `manual_audit_findings`, `external_audits`, `external_audit_certificates`, `external_audit_checklist`, `audit_triggers_decisions`); +3 columns on `qms_triggers` (`dismiss_reason`, `re_evaluate_at`, `escalation_finding_id`); +3 FKs on `grc_audit_findings`; +1 RBAC role; 2 new HITL action codes (`audit_programme_signoff`, `trigger_decision`). 7 new controlled documents seeded: WP-SOP-040/041/042, WP-FORM-055/056/057, WP-CTL-007. Approximate code delta: ~2,500 BE LOC + ~1,400 FE LOC. | Closes ISO 19011:2018 §5.2 sign-off gap; ends "shadow audit register" risk; gives execs a single-pane External Audits view; consolidates operator tooling away from business modules |
 | Apr 14, 2026 | **SOP v4.3 — CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich` (additive penalty scoring via `assessDataQuality()`, junk detection, duplicate cluster cross-reference via `lookupRecordsByZohoIds()`). Frontend: health summary bar, 4-tier quality badges, cluster badges, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync model with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, 2 new tables (`zoho_sync_state`, `duplicate_record_tasks`). PDPL section corrected to reflect CRM data persistence in `duplicate_records`. SOP accuracy audit: corrected 23 discrepancies (counts, formulas, function names, retention claims). | CRM data visibility with integrated quality intelligence; PDPL compliance accuracy; duplicate radar full CRM sync |

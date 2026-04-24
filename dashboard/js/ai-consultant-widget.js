@@ -2,6 +2,16 @@
     if (document.getElementById('ai-consultant-widget')) return;
     if (window.location.pathname.includes('consultant.html')) return;
 
+    // i18n helper — resolves from WalaPlusI18n if available, else falls back to English literal
+    function _t(key, fallback) {
+        if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
+            var val = window.WalaPlusI18n.t(key);
+            // t() returns last key segment when key is missing; treat as untranslated
+            if (val && val !== key.split('.').pop()) return val;
+        }
+        return fallback;
+    }
+
     var threadId = sessionStorage.getItem('widget_consultant_threadId') || '';
     var isOpen = false;
     var isStreaming = false;
@@ -179,17 +189,30 @@
 
     var widget = document.createElement('div');
     widget.id = 'ai-consultant-widget';
-    widget.innerHTML = `
+
+    // Build translated widget HTML — called once at init and again after i18n loads
+    function buildWidgetHTML() {
+        var widgetTitle    = _t('consultant.widget_title',       'AI QMS Consultant');
+        var fullView       = _t('consultant.full_view',          'Full view');
+        var welcomeTitle   = _t('consultant.widget_welcome_title','WalaPlus QMS Consultant');
+        var welcomeSub     = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
+        var qQuality       = _t('consultant.quick_quality',      'Quality Score');
+        var qCompliance    = _t('consultant.quick_compliance',   'Compliance');
+        var qCrm           = _t('consultant.quick_crm',          'CRM Issues');
+        var qIso           = _t('consultant.quick_iso',          'ISO 9001');
+        var placeholder    = _t('consultant.widget_placeholder', 'Ask anything...');
+
+        return `
         <div id="ai-widget-panel">
             <div id="ai-widget-header">
                 <h3>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                    AI QMS Consultant
+                    ${widgetTitle}
                 </h3>
                 <div style="display:flex;align-items:center;gap:8px;">
                     <a href="/consultant.html" class="widget-expand-link" data-testid="link-expand-consultant">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-                        Full view
+                        ${fullView}
                     </a>
                     <button onclick="window._closeAIWidget && window._closeAIWidget();" aria-label="Close AI Consultant chat" data-testid="button-close-widget">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -198,13 +221,13 @@
             </div>
             <div id="ai-widget-messages" role="log" aria-live="polite" aria-label="AI Consultant conversation" aria-relevant="additions">
                 <div id="ai-widget-welcome">
-                    <h4>WalaPlus QMS Consultant</h4>
-                    <p>Ask about quality management, compliance, CRM data hygiene, or SOPs.</p>
+                    <h4 data-i18n="consultant.widget_welcome_title">${welcomeTitle}</h4>
+                    <p data-i18n="consultant.widget_welcome_sub">${welcomeSub}</p>
                     <div>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What is our current quality score?')" data-testid="button-quick-quality">Quality Score</button>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Show compliance status')" data-testid="button-quick-compliance">Compliance</button>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What are the top CRM issues?')" data-testid="button-quick-crm">CRM Issues</button>
-                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Explain ISO 9001 requirements')" data-testid="button-quick-iso">ISO 9001</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What is our current quality score?')" data-testid="button-quick-quality" data-i18n="consultant.quick_quality">${qQuality}</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Show compliance status')" data-testid="button-quick-compliance" data-i18n="consultant.quick_compliance">${qCompliance}</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What are the top CRM issues?')" data-testid="button-quick-crm" data-i18n="consultant.quick_crm">${qCrm}</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Explain ISO 9001 requirements')" data-testid="button-quick-iso" data-i18n="consultant.quick_iso">${qIso}</button>
                     </div>
                 </div>
                 <div class="widget-typing" id="ai-widget-typing">
@@ -217,7 +240,7 @@
                 </div>
             </div>
             <div id="ai-widget-input-area">
-                <textarea id="ai-widget-input" placeholder="Ask anything..." rows="1" aria-label="Type your question" data-testid="input-widget-chat"></textarea>
+                <textarea id="ai-widget-input" placeholder="${placeholder}" rows="1" aria-label="Type your question" data-testid="input-widget-chat"></textarea>
                 <button id="ai-widget-send" disabled aria-label="Send message" data-testid="button-widget-send">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                 </button>
@@ -226,7 +249,10 @@
         <button id="ai-widget-btn" aria-label="Open AI Consultant chat" aria-expanded="false" aria-controls="ai-widget-panel" data-testid="button-ai-consultant">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
         </button>
-    `;
+        `;
+    }
+
+    widget.innerHTML = buildWidgetHTML();
     document.body.appendChild(widget);
 
     var btn = document.getElementById('ai-widget-btn');
@@ -280,6 +306,45 @@
         if (welcome) welcome.remove();
         widgetSendMessage(text);
     };
+
+    // Re-apply translations after WalaPlusI18n has fully loaded (async)
+    function applyWidgetTranslations() {
+        var header = widget.querySelector('#ai-widget-header h3');
+        if (header) {
+            var svgEl = header.querySelector('svg');
+            var svgHTML = svgEl ? svgEl.outerHTML : '';
+            header.innerHTML = svgHTML + ' ' + _t('consultant.widget_title', 'AI QMS Consultant');
+        }
+        var expandLink = widget.querySelector('.widget-expand-link');
+        if (expandLink) {
+            var svgEl2 = expandLink.querySelector('svg');
+            var svgHTML2 = svgEl2 ? svgEl2.outerHTML : '';
+            expandLink.innerHTML = svgHTML2 + ' ' + _t('consultant.full_view', 'Full view');
+        }
+        var wTitle = widget.querySelector('#ai-widget-welcome h4');
+        if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'WalaPlus QMS Consultant');
+        var wSub = widget.querySelector('#ai-widget-welcome p');
+        if (wSub) wSub.textContent = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
+        var qBtns = {
+            'button-quick-quality':    'consultant.quick_quality',
+            'button-quick-compliance': 'consultant.quick_compliance',
+            'button-quick-crm':        'consultant.quick_crm',
+            'button-quick-iso':        'consultant.quick_iso'
+        };
+        Object.keys(qBtns).forEach(function(tid) {
+            var el = widget.querySelector('[data-testid="' + tid + '"]');
+            if (el) el.textContent = _t(qBtns[tid], el.textContent);
+        });
+        var inp = widget.querySelector('#ai-widget-input');
+        if (inp) inp.placeholder = _t('consultant.widget_placeholder', 'Ask anything...');
+    }
+
+    // If i18n loads after the widget, re-apply translations once it's ready
+    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.onReady === 'function') {
+        window.WalaPlusI18n.onReady(applyWidgetTranslations);
+    } else {
+        document.addEventListener('walaPlusI18nReady', applyWidgetTranslations);
+    }
 
     function widgetScrollBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
