@@ -738,13 +738,143 @@
         });
     }
 
+    // ── Fallback advisory ─────────────────────────────────────────────────
+    // On very old browsers we end up using `bufferResponseAndDownload`, which
+    // holds the whole export in memory. For multi-hundred-MB exports that can
+    // crash the tab. Surface a one-time, dismissible note next to the export
+    // buttons on capable-but-not-streaming browsers so users know what to
+    // expect (and can upgrade to a modern Chrome/Firefox/Safari).
+
+    var FALLBACK_NOTICE_DISMISS_KEY = 'walaplus.streamingFallbackDismissed';
+    var FALLBACK_NOTICE_MARKER = 'streaming-download-fallback-notice';
+
+    function canStreamToDisk() {
+        return supportsFileSystemAccess() || supportsServiceWorkerStreaming();
+    }
+
+    function isFallbackNoticeDismissed() {
+        try {
+            return window.sessionStorage &&
+                window.sessionStorage.getItem(FALLBACK_NOTICE_DISMISS_KEY) === '1';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function dismissFallbackNotice(notice) {
+        try {
+            if (window.sessionStorage) {
+                window.sessionStorage.setItem(FALLBACK_NOTICE_DISMISS_KEY, '1');
+            }
+        } catch (_) { /* storage may be blocked — still hide for this view */ }
+        if (notice && notice.parentNode) {
+            notice.parentNode.removeChild(notice);
+        }
+    }
+
+    function buildFallbackNotice() {
+        var notice = document.createElement('div');
+        notice.id = FALLBACK_NOTICE_MARKER;
+        notice.setAttribute('role', 'status');
+        notice.setAttribute('data-testid', 'notice-streaming-fallback');
+        notice.className = 'mb-4 flex items-start gap-3 rounded-lg border border-amber-300 ' +
+            'bg-amber-50 px-4 py-3 text-sm text-amber-900 ' +
+            'dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100';
+
+        var icon = document.createElement('span');
+        icon.setAttribute('aria-hidden', 'true');
+        icon.className = 'mt-0.5 flex-shrink-0';
+        icon.innerHTML = '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
+            'd="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>' +
+            '</svg>';
+
+        var text = document.createElement('div');
+        text.className = 'flex-1';
+        var strong = document.createElement('strong');
+        strong.className = 'block font-semibold';
+        strong.textContent = "This browser can't stream exports directly to disk.";
+        var detail = document.createElement('span');
+        detail.className = 'block mt-0.5';
+        detail.textContent = 'Exports over ~200 MB will be buffered in memory and may be slow ' +
+            'or fail. For large downloads, use a recent Chrome, Firefox, or Safari.';
+        text.appendChild(strong);
+        text.appendChild(detail);
+
+        var dismiss = document.createElement('button');
+        dismiss.type = 'button';
+        dismiss.setAttribute('aria-label', 'Dismiss browser export advisory');
+        dismiss.setAttribute('data-testid', 'button-dismiss-streaming-fallback');
+        dismiss.className = 'flex-shrink-0 rounded p-1 text-amber-900 hover:bg-amber-100 ' +
+            'focus:outline-none focus:ring-2 focus:ring-amber-500 ' +
+            'dark:text-amber-100 dark:hover:bg-amber-900';
+        dismiss.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+        dismiss.addEventListener('click', function () {
+            dismissFallbackNotice(notice);
+        });
+
+        notice.appendChild(icon);
+        notice.appendChild(text);
+        notice.appendChild(dismiss);
+        return notice;
+    }
+
+    function findExportButton(scope) {
+        if (!scope || typeof scope.querySelector !== 'function') return null;
+        return scope.querySelector(
+            '[data-on-click="streamDownload"], ' +
+            '[data-on-click="streamingDownload"], ' +
+            '[data-on-click="streamingDownloadFromEvent"], ' +
+            '[data-estimate-url]'
+        );
+    }
+
+    function findNoticeAnchor(scope) {
+        if (!scope) return null;
+        if (typeof scope.querySelector === 'function') {
+            var main = scope.querySelector('main');
+            if (main) return main;
+        }
+        var btn = findExportButton(scope);
+        if (btn) {
+            return btn.closest('main, section, header') || btn.parentElement;
+        }
+        return null;
+    }
+
+    function attachStreamingFallbackNotice(root) {
+        var scope = root || document;
+        if (!scope || typeof scope.querySelector !== 'function') return;
+        if (scope.getElementById && scope.getElementById(FALLBACK_NOTICE_MARKER)) return;
+        if (canStreamToDisk()) return;
+        if (isFallbackNoticeDismissed()) return;
+        if (!findExportButton(scope)) return;
+        var anchor = findNoticeAnchor(scope);
+        if (!anchor) return;
+        var notice = buildFallbackNotice();
+        if (typeof anchor.insertAdjacentElement === 'function') {
+            anchor.insertAdjacentElement('afterbegin', notice);
+        } else if (anchor.firstChild) {
+            anchor.insertBefore(notice, anchor.firstChild);
+        } else {
+            anchor.appendChild(notice);
+        }
+    }
+
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function () { attachSizeHints(); });
+            document.addEventListener('DOMContentLoaded', function () {
+                attachSizeHints();
+                attachStreamingFallbackNotice();
+            });
         } else {
             // Defer to next tick so call sites that load this script late
             // still have a chance to populate buttons before we scan.
-            setTimeout(function () { attachSizeHints(); }, 0);
+            setTimeout(function () {
+                attachSizeHints();
+                attachStreamingFallbackNotice();
+            }, 0);
         }
     }
 
@@ -960,6 +1090,11 @@
     streamingDownload.clearEstimateCache = clearEstimateCache;
     streamingDownload.formatBytes = formatBytes;
     streamingDownload._shouldStreamToDisk = shouldStreamToDisk;
+    streamingDownload.canStreamToDisk = canStreamToDisk;
+    streamingDownload.supportsFileSystemAccess = supportsFileSystemAccess;
+    streamingDownload.supportsServiceWorkerStreaming = supportsServiceWorkerStreaming;
+    streamingDownload.attachStreamingFallbackNotice = attachStreamingFallbackNotice;
+    streamingDownload.FALLBACK_NOTICE_DISMISS_KEY = FALLBACK_NOTICE_DISMISS_KEY;
 
     global.streamingDownload = streamingDownload;
     global.streamingDownloadFromEvent = streamingDownloadFromEvent;

@@ -399,4 +399,83 @@ describe('streamingDownload (browser helper)', () => {
     expect(env.swCalls.filter((c) => c.msg && c.msg.type === 'register')).toHaveLength(0);
     expect(result.streamedToDisk).toBe(false);
   });
+
+  describe('streaming-fallback advisory notice', () => {
+    function seedExportButton(win: any) {
+      const main = win.document.createElement('main');
+      const btn = win.document.createElement('button');
+      btn.setAttribute('data-on-click', 'streamDownload');
+      btn.setAttribute('data-estimate-url', '/api/exports/example');
+      btn.textContent = 'Export CSV';
+      main.appendChild(btn);
+      win.document.body.appendChild(main);
+      return main;
+    }
+
+    it('exposes canStreamToDisk() that reflects browser capabilities', () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      expect(env.win.streamingDownload.canStreamToDisk()).toBe(false);
+      env.cleanup();
+
+      env = setupBrowserEnv({ enableShowSaveFilePicker: true });
+      expect(env.win.streamingDownload.canStreamToDisk()).toBe(true);
+    });
+
+    it('does not render a notice on streaming-capable browsers', () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: true });
+      seedExportButton(env.win);
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+      expect(env.win.document.getElementById('streaming-download-fallback-notice')).toBeNull();
+    });
+
+    it('renders a dismissible notice when neither streaming path is available', () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      seedExportButton(env.win);
+
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+
+      const notice = env.win.document.getElementById('streaming-download-fallback-notice');
+      expect(notice).not.toBeNull();
+      expect(notice?.getAttribute('role')).toBe('status');
+      expect(notice?.textContent).toMatch(/can't stream exports directly to disk/i);
+      expect(notice?.textContent).toMatch(/Chrome, Firefox, or Safari/i);
+
+      const dismiss = notice?.querySelector(
+        '[data-testid="button-dismiss-streaming-fallback"]'
+      ) as HTMLButtonElement | null;
+      expect(dismiss).not.toBeNull();
+
+      dismiss?.click();
+
+      expect(env.win.document.getElementById('streaming-download-fallback-notice')).toBeNull();
+      expect(
+        env.win.sessionStorage.getItem(env.win.streamingDownload.FALLBACK_NOTICE_DISMISS_KEY)
+      ).toBe('1');
+
+      // Re-attaching after dismissal must NOT bring the notice back.
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+      expect(env.win.document.getElementById('streaming-download-fallback-notice')).toBeNull();
+    });
+
+    it('does nothing when the page has no export buttons', () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      // No export buttons seeded.
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+      expect(env.win.document.getElementById('streaming-download-fallback-notice')).toBeNull();
+    });
+
+    it('only inserts a single notice even when called repeatedly', () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      seedExportButton(env.win);
+
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+      env.win.streamingDownload.attachStreamingFallbackNotice();
+
+      const notices = env.win.document.querySelectorAll(
+        '#streaming-download-fallback-notice'
+      );
+      expect(notices.length).toBe(1);
+    });
+  });
 });
