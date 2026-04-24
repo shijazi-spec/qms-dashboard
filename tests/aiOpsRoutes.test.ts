@@ -353,6 +353,107 @@ await suite.test("PUT /api/ai-ops/tool-health-config — 400 when overrides miss
   }
 });
 
+// ── Task #191: time-boxed override validation ────────────────────────────────
+// These hit the validation gate (no DB write), so they're safe to run with or
+// without a live DB. They cover the "is the wire format right?" contract that
+// the dashboard depends on.
+
+await suite.test(
+  "PUT /api/ai-ops/tool-health-config — 400 when expires_at is not parseable",
+  async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "PUT",
+      );
+      const res = await handler(
+        makeContext({
+          method: "PUT",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: { overrides: {}, expires_at: "not-a-date" },
+        }),
+      );
+      suite.expectEqual(res.status, 400, "status");
+      suite.expect(
+        typeof res.body?.error === "string"
+          && res.body.error.toLowerCase().includes("expires_at"),
+        "error mentions expires_at",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  },
+);
+
+await suite.test(
+  "PUT /api/ai-ops/tool-health-config — 400 when expires_at is in the past",
+  async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "PUT",
+      );
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const res = await handler(
+        makeContext({
+          method: "PUT",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: { overrides: {}, expires_at: yesterday },
+        }),
+      );
+      suite.expectEqual(res.status, 400, "status");
+      suite.expect(
+        typeof res.body?.error === "string"
+          && res.body.error.toLowerCase().includes("future"),
+        "error mentions future requirement",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  },
+);
+
+await suite.test(
+  "PUT /api/ai-ops/tool-health-config — 400 when expires_at exceeds 30-day horizon",
+  async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "PUT",
+      );
+      // 60 days out → well past the 30-day cap.
+      const tooFar = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+      const res = await handler(
+        makeContext({
+          method: "PUT",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: { overrides: {}, expires_at: tooFar },
+        }),
+      );
+      suite.expectEqual(res.status, 400, "status");
+      suite.expect(
+        typeof res.body?.error === "string"
+          && /at most.*days/i.test(res.body.error),
+        "error mentions max horizon",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  },
+);
+
 await suite.test("GET /api/ai-ops/tool-health-config/audit — 403 without auth", async () => {
   const original = process.env.ADMIN_API_KEY;
   process.env.ADMIN_API_KEY = ADMIN_KEY;

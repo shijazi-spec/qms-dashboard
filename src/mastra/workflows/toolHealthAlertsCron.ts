@@ -45,6 +45,8 @@ import {
 } from "../../utils/toolHealthAlertNotifier";
 import {
   getToolHealthConfigOverrides,
+  reapExpiredToolHealthOverrides,
+  type ReapExpiredToolHealthOverridesResult,
   type ToolHealthConfigOverrides,
   type ToolHealthConfigValues,
 } from "../../utils/toolHealthConfigDatabase";
@@ -294,6 +296,13 @@ export interface ToolHealthCheckResult {
   alertsCreated: number;
   alertsSkippedDuplicate: number;
   alertsAutoResolved: number;
+  /**
+   * 1 when this pass auto-cleared a time-boxed override row whose
+   * `expires_at` had passed (Task #191). 0 otherwise. Distinct from
+   * `alertsAutoResolved` so dashboards can break out the two sources of
+   * "automatic" cron activity.
+   */
+  expiredOverridesReaped: number;
   /** Counts on-call pages dispatched for newly-created breach alerts. */
   notificationsSent: number;
   /**
@@ -347,6 +356,14 @@ export interface ToolHealthDeps {
    * missing overrides table can never crash the run.
    */
   loadOverrides?: () => Promise<ToolHealthConfigOverrides>;
+  /**
+   * Clears any time-boxed override row whose `expires_at` has passed and
+   * writes a "system: override expired" audit entry (Task #191). Optional so
+   * existing stubs need no churn — the production default delegates to
+   * {@link reapExpiredToolHealthOverrides}, and a test that doesn't care
+   * about the auto-revert path can leave it unstubbed.
+   */
+  reapExpiredOverrides?: () => Promise<ReapExpiredToolHealthOverridesResult>;
 }
 
 const DEFAULT_DEPS: Required<ToolHealthDeps> = {
@@ -357,6 +374,7 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   resolveAlert,
   notifyToolHealthBreach,
   loadOverrides: getToolHealthConfigOverrides,
+  reapExpiredOverrides: reapExpiredToolHealthOverrides,
 };
 
 /**
@@ -527,7 +545,31 @@ export async function runToolHealthCheck(
     ...DEFAULT_DEPS,
     ...(depsOverride ?? {}),
     loadOverrides: depsOverride?.loadOverrides ?? DEFAULT_DEPS.loadOverrides,
+    reapExpiredOverrides:
+      depsOverride?.reapExpiredOverrides ?? DEFAULT_DEPS.reapExpiredOverrides,
   };
+
+  // Reap any expired override rows BEFORE loading the merged config so
+  // (a) the audit trail records the auto-revert at the precise moment the
+  // cron tick noticed it, and (b) the merge below sees the cleared values
+  // without relying on the read-path's defensive expired-filter. A reaper
+  // failure is logged but never blocks the pass — the read path will still
+  // hide expired values, so worst case the audit row gets written on the
+  // next tick.
+  let reaperResult: ReapExpiredToolHealthOverridesResult | null = null;
+  try {
+    reaperResult = await deps.reapExpiredOverrides();
+    if (reaperResult.reaped) {
+      console.log(
+        `[ToolHealth] Reaped expired override row (audit_id=${reaperResult.audit_id}, ` +
+          `expired_at=${reaperResult.expired_at?.toISOString?.() ?? reaperResult.expired_at}). ` +
+          `Cleared keys: ${Object.keys(reaperResult.cleared_overrides).join(", ") || "(none)"}.`,
+      );
+    }
+  } catch (err) {
+    console.error("[ToolHealth] Override reaper failed:", err);
+  }
+
   // Re-read overrides on every pass so live edits from the AI Ops panel
   // take effect at the next tick without a worker restart.
   const cfg: EffectiveToolHealthConfig = await getEffectiveToolHealthConfig(
@@ -544,6 +586,7 @@ export async function runToolHealthCheck(
     alertsCreated: 0,
     alertsSkippedDuplicate: 0,
     alertsAutoResolved: 0,
+    expiredOverridesReaped: reaperResult?.reaped ? 1 : 0,
     notificationsSent: 0,
     notificationsSkipped: 0,
     notificationsThrottled: 0,

@@ -75,6 +75,29 @@ const TOOL_HEALTH_CONFIG_FIELD_LIST = Object.keys(
 ) as ToolHealthConfigField[];
 
 /**
+ * Maximum horizon the dashboard may schedule an override expiry for. Set
+ * to 30 days because the whole point of time-boxed overrides (Task #191)
+ * is "silence the noise during this incident" — anything beyond a month
+ * is indistinguishable from a permanent change and should go through a
+ * code/config review instead. Mirrored in the UI so the picker doesn't
+ * offer values the server will reject.
+ */
+const TOOL_HEALTH_EXPIRY_MAX_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Convenience presets the AI Ops "Alert Thresholds" tab renders as a select
+ * box ("Expires in 1h / 4h / 24h / Never"). Kept on the server so tweaks
+ * to the menu propagate without a frontend redeploy. `ms = 0` is the
+ * sentinel for "never" (clear any existing expiry).
+ */
+const TOOL_HEALTH_EXPIRY_OPTIONS: Array<{ label: string; ms: number }> = [
+  { label: "Never (clear expiry)", ms: 0 },
+  { label: "1 hour",  ms: 1  * 60 * 60 * 1000 },
+  { label: "4 hours", ms: 4  * 60 * 60 * 1000 },
+  { label: "24 hours", ms: 24 * 60 * 60 * 1000 },
+];
+
+/**
  * Parse the `related_record_id` written by toolHealthAlertsCron, which uses
  * a stable `<tool_name>:<reason>` composite (see maybeCreateBreachAlert).
  * Tool names can themselves contain ':' (rare, but possible), so we split
@@ -517,6 +540,16 @@ export const aiOpsRoutes = [
             getToolHealthConfigAudit(25),
           ]);
 
+          // Surface a derived `expired` flag so the dashboard doesn't have to
+          // re-implement the timestamp comparison. The reaper sweeps these on
+          // every cron tick, so this should usually be `false` even when an
+          // expires_at is set; `true` means the dashboard caught the row in
+          // the brief window between expiry and the next reaper pass.
+          const expiresAt = row.expires_at;
+          const expired =
+            expiresAt != null &&
+            new Date(expiresAt).getTime() <= Date.now();
+
           return c.json({
             data: {
               defaults: TOOL_HEALTH_DEFAULTS,
@@ -525,6 +558,9 @@ export const aiOpsRoutes = [
               effective,
               updated_by: row.updated_by,
               updated_at: row.updated_at,
+              expires_at: expiresAt,
+              expired,
+              expiry_options: TOOL_HEALTH_EXPIRY_OPTIONS,
               bounds: TOOL_HEALTH_CONFIG_BOUNDS,
               fields: TOOL_HEALTH_CONFIG_FIELD_LIST,
               audit,
@@ -619,6 +655,55 @@ export const aiOpsRoutes = [
             note = body.note.length > 500 ? body.note.slice(0, 500) : body.note;
           }
 
+          // Time-boxed overrides (Task #191). The dashboard sends:
+          //   • expires_at omitted          → leave existing expiry alone
+          //   • expires_at: null            → clear any existing expiry
+          //   • expires_at: "<ISO 8601>"    → schedule auto-revert at that ts
+          // We accept Date objects too so server-side callers don't have to
+          // serialize. Past timestamps are rejected — if the operator wants
+          // "expire now" they should clear the overrides directly. The
+          // 30-day horizon (TOOL_HEALTH_EXPIRY_MAX_MS) keeps the feature
+          // from quietly turning into a permanent-change channel.
+          let expiresAtPatch: { provided: boolean; value: Date | null } = {
+            provided: false,
+            value: null,
+          };
+          if (Object.prototype.hasOwnProperty.call(body, "expires_at")) {
+            expiresAtPatch.provided = true;
+            const raw = body.expires_at;
+            if (raw == null) {
+              expiresAtPatch.value = null;
+            } else if (raw instanceof Date) {
+              expiresAtPatch.value = raw;
+            } else if (typeof raw === "string" || typeof raw === "number") {
+              const parsed = new Date(raw);
+              if (Number.isNaN(parsed.getTime())) {
+                return c.json({
+                  error: "expires_at must be an ISO 8601 timestamp or null",
+                }, 400);
+              }
+              expiresAtPatch.value = parsed;
+            } else {
+              return c.json({
+                error: "expires_at must be an ISO 8601 timestamp or null",
+              }, 400);
+            }
+            if (expiresAtPatch.value != null) {
+              const delta = expiresAtPatch.value.getTime() - Date.now();
+              if (delta <= 0) {
+                return c.json({
+                  error: "expires_at must be a timestamp in the future",
+                }, 400);
+              }
+              if (delta > TOOL_HEALTH_EXPIRY_MAX_MS) {
+                const days = Math.floor(TOOL_HEALTH_EXPIRY_MAX_MS / (24 * 60 * 60 * 1000));
+                return c.json({
+                  error: `expires_at must be at most ${days} days in the future`,
+                }, 400);
+              }
+            }
+          }
+
           // Compute the effective config that would result *after* applying
           // this patch, so the band-ordering invariant catches a change to
           // 'high' even when 'critical' isn't part of the same request.
@@ -674,6 +759,12 @@ export const aiOpsRoutes = [
             overrides: cleanOverrides,
             changedBy,
             note,
+            // Only forward expiresAt when the caller actually included it,
+            // so an "edit just the floor" PUT doesn't accidentally wipe a
+            // previously-scheduled auto-revert.
+            ...(expiresAtPatch.provided
+              ? { expiresAt: expiresAtPatch.value }
+              : {}),
           });
 
           const effective = await getEffectiveToolHealthConfig();
@@ -681,6 +772,8 @@ export const aiOpsRoutes = [
             success: true,
             before: result.before,
             after: result.after,
+            before_expires_at: result.before_expires_at,
+            after_expires_at: result.after_expires_at,
             effective,
             audit_id: result.audit_id,
           });

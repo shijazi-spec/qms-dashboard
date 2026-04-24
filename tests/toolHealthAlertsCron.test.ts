@@ -1417,4 +1417,106 @@ await suite.test(
   },
 );
 
+// ─── Task #191: time-boxed override reaper integration ──────────────────────
+// These tests verify that the cron tick invokes the reaper and that the
+// result feeds the `expiredOverridesReaped` summary field. The reaper itself
+// is unit-tested at the DB layer; here we only verify the wiring.
+
+await suite.test(
+  "(t1) cron invokes reapExpiredOverrides before evaluating thresholds",
+  async () => {
+    const order: string[] = [];
+    const baseDeps = makeDeps({ aggregates: [] }).deps;
+    const deps: ToolHealthDeps = {
+      ...baseDeps,
+      reapExpiredOverrides: async () => {
+        order.push("reap");
+        return {
+          reaped: false,
+          cleared_overrides: {},
+          expired_at: null,
+          audit_id: null,
+        };
+      },
+      getToolWindowAggregates: async (windowMinutes, minCalls) => {
+        order.push("aggregate");
+        return baseDeps.getToolWindowAggregates(windowMinutes, minCalls);
+      },
+    };
+    const out = await runToolHealthCheck(deps);
+    suite.expectEqual(order[0], "reap", "reaper runs first");
+    suite.expectEqual(order[1], "aggregate", "aggregator runs after reaper");
+    suite.expectEqual(
+      out.expiredOverridesReaped,
+      0,
+      "no expired overrides → counter stays at 0",
+    );
+  },
+);
+
+await suite.test(
+  "(t2) cron surfaces expiredOverridesReaped=1 when the reaper reports a sweep",
+  async () => {
+    const baseDeps = makeDeps({ aggregates: [] }).deps;
+    const deps: ToolHealthDeps = {
+      ...baseDeps,
+      reapExpiredOverrides: async () => ({
+        reaped: true,
+        cleared_overrides: { errorRatePct: 99 },
+        expired_at: new Date(Date.now() - 60_000),
+        audit_id: 12345,
+      }),
+    };
+    const out = await runToolHealthCheck(deps);
+    suite.expectEqual(
+      out.expiredOverridesReaped,
+      1,
+      "reaper sweep reflected in summary",
+    );
+  },
+);
+
+await suite.test(
+  "(t3) reaper failure is logged but does not abort the cron tick",
+  async () => {
+    const captured: string[] = [];
+    const originalErr = console.error;
+    console.error = (...args: any[]) => {
+      captured.push(args.map(String).join(" "));
+    };
+    try {
+      const baseDeps = makeDeps({
+        aggregates: [
+          makeAggregate({
+            tool_name: "still_runs",
+            agent_name: "agent",
+            call_count: 20,
+            error_count: 12,
+            error_rate_pct: 60,
+          }),
+        ],
+      }).deps;
+      const deps: ToolHealthDeps = {
+        ...baseDeps,
+        reapExpiredOverrides: async () => {
+          throw new Error("simulated reaper DB failure");
+        },
+      };
+      const out = await runToolHealthCheck(deps);
+      suite.expectEqual(out.toolsEvaluated, 1, "evaluation still ran");
+      suite.expectEqual(
+        out.expiredOverridesReaped,
+        0,
+        "failed reaper does not bump the counter",
+      );
+      suite.expect(
+        captured.some((l) => /reaper|override expired|reapExpired/i.test(l)),
+        `reaper failure logged (got: ${captured.join(" | ")})`,
+      );
+    } finally {
+      console.error = originalErr;
+    }
+  },
+);
+
 suite.finishOrExit();

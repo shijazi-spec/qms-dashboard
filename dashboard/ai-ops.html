@@ -263,6 +263,7 @@
           </div>
           <div class="text-right text-xs text-gray-500" data-testid="text-thresholds-meta">
             <div id="thresholds-updated-meta">—</div>
+            <div id="thresholds-expiry-meta" class="mt-1" data-testid="text-thresholds-expiry-meta"></div>
           </div>
         </div>
         <div id="thresholds-load-error" class="hidden mb-4 px-3 py-2 text-sm rounded border border-red-200 bg-red-50 text-red-700" data-testid="text-thresholds-load-error"></div>
@@ -1178,14 +1179,48 @@
 
     let thresholdsState = null;
 
+    // Fallback "Expires in" presets used when the server doesn't return
+    // `expiry_options` (older API, GET error, etc.). When the server *does*
+    // return options (TOOL_HEALTH_EXPIRY_OPTIONS in
+    // src/mastra/routes/aiOpsRoutes.ts), we prefer that list so tweaks to
+    // the menu propagate without a frontend redeploy.
+    //
+    // Wire-format sentinels (constant across both lists):
+    //   ms = -1 → dashboard-only "Keep current expiry" — omits expires_at
+    //             from the PUT body so unrelated edits don't wipe an active
+    //             auto-revert schedule.
+    //   ms = 0  → server "Never" — sends expires_at: null to clear any
+    //             previously-scheduled expiry.
+    //   ms > 0  → relative offset; the dashboard converts to an absolute
+    //             ISO timestamp at submit time so the audit row captures
+    //             when the operator scheduled, not when the request landed.
+    const THRESHOLD_EXPIRY_FALLBACK_PRESETS = [
+      { label: 'Never (clear expiry)', ms: 0 },
+      { label: 'Expires in 1 hour',  ms: 1  * 60 * 60 * 1000 },
+      { label: 'Expires in 4 hours', ms: 4  * 60 * 60 * 1000 },
+      { label: 'Expires in 24 hours', ms: 24 * 60 * 60 * 1000 },
+    ];
+
+    // Always prepend the dashboard-only "Keep current expiry" sentinel so
+    // operators who only want to retune a number (not the schedule) have a
+    // safe default that won't accidentally extend or clear an active expiry.
+    function buildThresholdExpiryPresets(serverOptions) {
+      const tail = Array.isArray(serverOptions) && serverOptions.length > 0
+        ? serverOptions.map(o => ({ label: o.label, ms: Number(o.ms) }))
+        : THRESHOLD_EXPIRY_FALLBACK_PRESETS;
+      return [{ label: 'Keep current expiry', ms: -1 }, ...tail];
+    }
+
     async function loadThresholdsForm() {
       const formEl = document.getElementById('thresholds-form');
       const errEl = document.getElementById('thresholds-load-error');
       const auditEl = document.getElementById('thresholds-audit');
       const metaEl = document.getElementById('thresholds-updated-meta');
+      const expiryMetaEl = document.getElementById('thresholds-expiry-meta');
       errEl.classList.add('hidden');
       formEl.innerHTML = '<p class="text-sm text-gray-400">Loading current thresholds…</p>';
       auditEl.innerHTML = '<p class="text-sm text-gray-400">Loading…</p>';
+      if (expiryMetaEl) expiryMetaEl.innerHTML = '';
       try {
         const { data } = await apiFetch('/api/ai-ops/tool-health-config');
         thresholdsState = data;
@@ -1197,11 +1232,25 @@
         } else {
           metaEl.textContent = 'No overrides yet — running on env / compile-time defaults.';
         }
+        if (expiryMetaEl) {
+          if (data.expires_at) {
+            const cls = data.expired ? 'text-amber-700' : 'text-gray-600';
+            const tag = data.expired
+              ? ' (expired — pending reaper sweep)'
+              : ' (auto-revert scheduled)';
+            expiryMetaEl.className = `mt-1 ${cls}`;
+            expiryMetaEl.textContent = `Overrides expire ${fmtDate(data.expires_at)}${tag}`;
+          } else {
+            expiryMetaEl.className = 'mt-1';
+            expiryMetaEl.textContent = '';
+          }
+        }
       } catch (e) {
         console.error('Tool-health config load error', e);
         formEl.innerHTML = '';
         auditEl.innerHTML = '';
         metaEl.textContent = '';
+        if (expiryMetaEl) expiryMetaEl.textContent = '';
         errEl.textContent = 'Failed to load tool-health config: ' + (e?.message || 'unknown error');
         errEl.classList.remove('hidden');
       }
@@ -1256,6 +1305,26 @@
           </div>`;
       }).join('');
 
+      const expiryPresets = buildThresholdExpiryPresets(data.expiry_options);
+      const expiryOptionsHtml = expiryPresets
+        .map((p, i) => `<option value="${p.ms}"${i === 0 ? ' selected' : ''}>${esc(p.label)}</option>`)
+        .join('');
+      const expiryRow = `
+        <div class="pt-4 border-t">
+          <label for="threshold-expires-in" class="block text-sm font-medium text-gray-800">Auto-revert overrides</label>
+          <p class="text-xs text-gray-500 mt-1">
+            Time-box this override so the system silently reverts to the env baseline once the
+            incident is over. A background reaper clears expired overrides on every cron pass and
+            writes an audit row attributed to "system: override expired".
+          </p>
+          <select
+            id="threshold-expires-in"
+            ${canEdit ? '' : 'disabled'}
+            class="mt-2 w-full md:w-72 px-3 py-2 border border-gray-300 rounded text-sm ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}"
+            data-testid="select-threshold-expires-in"
+          >${expiryOptionsHtml}</select>
+        </div>`;
+
       const noteRow = `
         <div class="pt-4 border-t">
           <label for="threshold-note" class="block text-sm font-medium text-gray-800">Change note (optional)</label>
@@ -1286,7 +1355,7 @@
            </div>`
         : '';
 
-      formEl.innerHTML = banner + rows + noteRow + buttons;
+      formEl.innerHTML = banner + rows + expiryRow + noteRow + buttons;
     }
 
     function resetThresholdInputs() {
@@ -1298,6 +1367,10 @@
       });
       const noteEl = document.getElementById('threshold-note');
       if (noteEl) noteEl.value = '';
+      const expiryEl = document.getElementById('threshold-expires-in');
+      // -1 == "Keep current expiry" — discarding edits should leave any
+      // already-scheduled auto-revert untouched.
+      if (expiryEl) expiryEl.value = '-1';
       setSaveStatus('', null);
     }
 
@@ -1306,6 +1379,12 @@
         const el = document.getElementById(`threshold-${f.key}`);
         if (el) el.value = '';
       });
+      // When the operator drops every override, the row itself is about to
+      // be wiped — clearing the expiry preset to "Never" keeps the dashboard
+      // honest. (The server forces a clear anyway when no overrides remain,
+      // but matching it here avoids a confusing post-save state.)
+      const expiryEl = document.getElementById('threshold-expires-in');
+      if (expiryEl) expiryEl.value = '0';
       setSaveStatus('All inputs cleared — click "Save changes" to drop overrides.', 'info');
     }
 
@@ -1342,13 +1421,28 @@
       }
       const noteEl = document.getElementById('threshold-note');
       const note = noteEl?.value?.trim() || '';
+
+      // Translate the "Expires in" preset into the wire format the route
+      // expects: -1 → omit (keep current), 0 → null (clear), >0 → ISO ts.
+      // We compute the absolute timestamp client-side so the audit row
+      // captures the exact moment the operator scheduled, not whenever the
+      // request happened to land on the server.
+      const expiryEl = document.getElementById('threshold-expires-in');
+      const expiryMs = expiryEl ? Number(expiryEl.value) : -1;
+      const requestBody = { overrides: overridesPayload, note: note || undefined };
+      if (Number.isFinite(expiryMs) && expiryMs >= 0) {
+        requestBody.expires_at = expiryMs === 0
+          ? null
+          : new Date(Date.now() + expiryMs).toISOString();
+      }
+
       setSaveStatus('Saving…', 'info');
       try {
         const r = await fetch('/api/ai-ops/tool-health-config', {
           method: 'PUT',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ overrides: overridesPayload, note: note || undefined }),
+          body: JSON.stringify(requestBody),
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) {
