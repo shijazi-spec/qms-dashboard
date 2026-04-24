@@ -35,6 +35,8 @@ import {
 import {
   openAlertExistsByKey,
   createAIAlert,
+  getOpenAlertsByKey,
+  resolveAlert,
   type AlertSeverity,
 } from "../../utils/aiAlertsDatabase";
 
@@ -73,17 +75,47 @@ function severityForLatency(p95Ms: number): AlertSeverity {
   return "medium";
 }
 
+export type ToolHealthReason = "error_rate" | "p95_latency";
+
 export interface ToolHealthCheckResult {
   toolsEvaluated: number;
   alertsCreated: number;
   alertsSkippedDuplicate: number;
+  alertsAutoResolved: number;
   breaches: Array<{
     tool_name: string;
-    reason: "error_rate" | "p95_latency";
+    reason: ToolHealthReason;
     severity: AlertSeverity;
     detail: string;
   }>;
+  recoveries: Array<{
+    tool_name: string;
+    reason: ToolHealthReason;
+    alert_id: number;
+    detail: string;
+  }>;
 }
+
+/**
+ * Pluggable IO surface for `runToolHealthCheck()`. Lets unit tests stub the
+ * DB-backed dependencies without standing up a real Postgres instance.
+ * Production callers pass nothing and get the real implementations.
+ */
+export interface ToolHealthDeps {
+  getToolWindowAggregates: typeof getToolWindowAggregates;
+  openAlertExistsByKey: typeof openAlertExistsByKey;
+  createAIAlert: typeof createAIAlert;
+  getOpenAlertsByKey: typeof getOpenAlertsByKey;
+  resolveAlert: typeof resolveAlert;
+}
+
+const DEFAULT_DEPS: ToolHealthDeps = {
+  getToolWindowAggregates,
+  openAlertExistsByKey,
+  createAIAlert,
+  getOpenAlertsByKey,
+  resolveAlert,
+};
 
 /**
  * Builds an alert row for a breach. Returns whether a new alert was
@@ -93,17 +125,18 @@ export interface ToolHealthCheckResult {
  * values to keep dedupe stable across runs).
  */
 async function maybeCreateBreachAlert(
+  deps: ToolHealthDeps,
   agg: ToolWindowAggregate,
-  reason: "error_rate" | "p95_latency",
+  reason: ToolHealthReason,
   severity: AlertSeverity,
   title: string,
   description: string,
   suggestion: string,
 ): Promise<boolean> {
   const relatedRecordId = `${agg.tool_name}:${reason}`;
-  const exists = await openAlertExistsByKey("tool_health", relatedRecordId);
+  const exists = await deps.openAlertExistsByKey("tool_health", relatedRecordId);
   if (exists) return false;
-  await createAIAlert({
+  await deps.createAIAlert({
     alert_type: "tool_health",
     severity,
     title,
@@ -116,22 +149,98 @@ async function maybeCreateBreachAlert(
 }
 
 /**
+ * Auto-resolves any open `tool_health` alert keyed on
+ * `<tool_name>:<reason>` once the matching metric has dropped back below
+ * its threshold. Returns the number of alerts closed (0 when none match
+ * or all matches are still inside the cooldown window).
+ *
+ * Cooldown: only alerts whose `created_at` is at least `cfg.windowMinutes`
+ * old are considered, so the entire current rolling window of metrics is
+ * post-recovery. This prevents a single low-traffic minute from flapping
+ * an alert closed.
+ */
+async function maybeResolveRecoveredAlert(
+  deps: ToolHealthDeps,
+  agg: ToolWindowAggregate,
+  reason: ToolHealthReason,
+  out: ToolHealthCheckResult,
+): Promise<void> {
+  const cfg = TOOL_HEALTH_THRESHOLDS;
+  const relatedRecordId = `${agg.tool_name}:${reason}`;
+  let openAlerts;
+  try {
+    openAlerts = await deps.getOpenAlertsByKey(
+      "tool_health",
+      relatedRecordId,
+      { olderThanMinutes: cfg.windowMinutes },
+    );
+  } catch (err) {
+    console.error(
+      `[ToolHealth] Failed to look up open alerts for ${relatedRecordId}:`,
+      err,
+    );
+    return;
+  }
+  if (openAlerts.length === 0) return;
+
+  const note =
+    reason === "error_rate"
+      ? `auto-resolved: error rate back below threshold ` +
+        `(${agg.error_rate_pct}% < ${cfg.errorRatePct}% over ` +
+        `${cfg.windowMinutes}m, ${agg.call_count} calls)`
+      : `auto-resolved: p95 latency back below threshold ` +
+        `(${agg.p95_latency_ms}ms < ${cfg.p95LatencyMs}ms over ` +
+        `${cfg.windowMinutes}m, ${agg.call_count} calls)`;
+
+  for (const alert of openAlerts) {
+    if (alert.id == null) continue;
+    try {
+      const resolved = await deps.resolveAlert(alert.id, note);
+      if (resolved) {
+        out.alertsAutoResolved++;
+        out.recoveries.push({
+          tool_name: agg.tool_name,
+          reason,
+          alert_id: alert.id,
+          detail: note,
+        });
+      }
+    } catch (err) {
+      console.error(
+        `[ToolHealth] Failed to auto-resolve alert ${alert.id} (${relatedRecordId}):`,
+        err,
+      );
+    }
+  }
+}
+
+/**
  * Evaluate per-tool aggregates against TOOL_HEALTH_THRESHOLDS and emit
  * `ai_alerts` rows for any breaches. Safe to call from a cron, an HTTP
  * route, or a unit test — no I/O beyond the database.
+ *
+ * After the breach pass, runs a recovery pass that auto-resolves any open
+ * `tool_health` alert whose tool's current windowed metric has dropped
+ * back below the threshold (subject to a windowMinutes cooldown to keep
+ * borderline tools from flapping).
  */
-export async function runToolHealthCheck(): Promise<ToolHealthCheckResult> {
+export async function runToolHealthCheck(
+  depsOverride?: Partial<ToolHealthDeps>,
+): Promise<ToolHealthCheckResult> {
+  const deps: ToolHealthDeps = { ...DEFAULT_DEPS, ...(depsOverride ?? {}) };
   const cfg = TOOL_HEALTH_THRESHOLDS;
   const out: ToolHealthCheckResult = {
     toolsEvaluated: 0,
     alertsCreated: 0,
     alertsSkippedDuplicate: 0,
+    alertsAutoResolved: 0,
     breaches: [],
+    recoveries: [],
   };
 
   let aggregates: ToolWindowAggregate[];
   try {
-    aggregates = await getToolWindowAggregates(cfg.windowMinutes, cfg.minCalls);
+    aggregates = await deps.getToolWindowAggregates(cfg.windowMinutes, cfg.minCalls);
   } catch (err) {
     console.error("[ToolHealth] Failed to load per-tool aggregates:", err);
     return out;
@@ -163,7 +272,7 @@ export async function runToolHealthCheck(): Promise<ToolHealthCheckResult> {
         `evaluation.`;
       try {
         const created = await maybeCreateBreachAlert(
-          agg, "error_rate", severity, title, description, suggestion,
+          deps, agg, "error_rate", severity, title, description, suggestion,
         );
         if (created) {
           out.alertsCreated++;
@@ -182,6 +291,10 @@ export async function runToolHealthCheck(): Promise<ToolHealthCheckResult> {
           err,
         );
       }
+    } else {
+      // Error-rate is back below threshold for this tool's window —
+      // close any matching open alert (subject to cooldown).
+      await maybeResolveRecoveredAlert(deps, agg, "error_rate", out);
     }
 
     // p95 latency breach
@@ -207,7 +320,7 @@ export async function runToolHealthCheck(): Promise<ToolHealthCheckResult> {
         `if this is a recurring breach.`;
       try {
         const created = await maybeCreateBreachAlert(
-          agg, "p95_latency", severity, title, description, suggestion,
+          deps, agg, "p95_latency", severity, title, description, suggestion,
         );
         if (created) {
           out.alertsCreated++;
@@ -226,15 +339,24 @@ export async function runToolHealthCheck(): Promise<ToolHealthCheckResult> {
           err,
         );
       }
+    } else {
+      // p95 latency is back below threshold for this tool's window —
+      // close any matching open alert (subject to cooldown).
+      await maybeResolveRecoveredAlert(deps, agg, "p95_latency", out);
     }
   }
 
-  if (out.alertsCreated > 0 || out.breaches.length > 0) {
+  if (
+    out.alertsCreated > 0 ||
+    out.breaches.length > 0 ||
+    out.alertsAutoResolved > 0
+  ) {
     console.log("[ToolHealth] Check complete:", out);
   } else {
     console.log(
       `[ToolHealth] Check complete — ${out.toolsEvaluated} tools evaluated, ` +
-      `0 new alerts (skipped ${out.alertsSkippedDuplicate} duplicates).`,
+      `0 new alerts (skipped ${out.alertsSkippedDuplicate} duplicates, ` +
+      `0 auto-resolved).`,
     );
   }
   return out;

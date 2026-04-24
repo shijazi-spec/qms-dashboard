@@ -29,6 +29,7 @@ export interface AIAlert {
   status: AlertStatus;
   acknowledged_by?: string;
   resolved_at?: Date;
+  resolution_note?: string | null;
   created_at?: Date;
 }
 
@@ -48,6 +49,13 @@ export async function initAIAlertsTable(): Promise<void> {
       resolved_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+
+  // Idempotent migration: add resolution_note for capturing why/how an alert
+  // was resolved (e.g. the auto-resolve cron path used by the tool-health
+  // recovery sweep). Pre-existing rows leave this NULL.
+  await pool.query(`
+    ALTER TABLE ai_alerts ADD COLUMN IF NOT EXISTS resolution_note TEXT
   `);
 
   await pool.query(`
@@ -130,10 +138,21 @@ export async function acknowledgeAlert(id: number, acknowledgedBy: string): Prom
   return result.rows[0] || null;
 }
 
-export async function resolveAlert(id: number): Promise<AIAlert | null> {
+export async function resolveAlert(
+  id: number,
+  note?: string,
+): Promise<AIAlert | null> {
+  // Only overwrite resolution_note when a note is supplied so manual
+  // resolves through the UI (which currently pass none) don't blank an
+  // existing note.
   const result = await pool.query(
-    `UPDATE ai_alerts SET status = 'resolved', resolved_at = NOW() WHERE id = $1 RETURNING *`,
-    [id]
+    `UPDATE ai_alerts
+        SET status = 'resolved',
+            resolved_at = NOW(),
+            resolution_note = COALESCE($2, resolution_note)
+      WHERE id = $1
+      RETURNING *`,
+    [id, note ?? null]
   );
   return result.rows[0] || null;
 }
@@ -174,4 +193,46 @@ export async function openAlertExistsByKey(
     [alertType, relatedRecordId],
   );
   return result.rows.length > 0;
+}
+
+/**
+ * Fetch every open / acknowledged alert for the given
+ * (alert_type, related_record_id) pair. Used by the tool-health auto-resolve
+ * sweep so it can decide which alerts to close (and apply a per-alert
+ * cooldown via `created_at`).
+ *
+ * `olderThanMinutes` adds a flap-prevention cutoff: only return alerts that
+ * were created at least that many minutes ago. The tool-health cron passes
+ * the rolling window length here so a tool is only auto-resolved once the
+ * entire window of fresh metrics is post-recovery.
+ */
+export async function getOpenAlertsByKey(
+  alertType: AlertType,
+  relatedRecordId: string,
+  options?: { olderThanMinutes?: number },
+): Promise<AIAlert[]> {
+  const olderThanMinutes = options?.olderThanMinutes;
+  if (olderThanMinutes != null) {
+    const result = await pool.query(
+      `SELECT *
+         FROM ai_alerts
+        WHERE alert_type = $1
+          AND related_record_id = $2
+          AND status IN ('open', 'acknowledged')
+          AND created_at <= NOW() - MAKE_INTERVAL(mins => $3)
+        ORDER BY created_at ASC`,
+      [alertType, relatedRecordId, olderThanMinutes],
+    );
+    return result.rows;
+  }
+  const result = await pool.query(
+    `SELECT *
+       FROM ai_alerts
+      WHERE alert_type = $1
+        AND related_record_id = $2
+        AND status IN ('open', 'acknowledged')
+      ORDER BY created_at ASC`,
+    [alertType, relatedRecordId],
+  );
+  return result.rows;
 }
