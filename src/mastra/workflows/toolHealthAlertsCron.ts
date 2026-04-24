@@ -39,6 +39,10 @@ import {
   resolveAlert,
   type AlertSeverity,
 } from "../../utils/aiAlertsDatabase";
+import {
+  notifyToolHealthBreach,
+  type NotifyToolHealthBreachResult,
+} from "../../utils/toolHealthAlertNotifier";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Single, env-overridable config block — no hard-coded thresholds elsewhere.
@@ -94,6 +98,20 @@ export interface ToolHealthCheckResult {
   alertsCreated: number;
   alertsSkippedDuplicate: number;
   alertsAutoResolved: number;
+  /** Counts on-call pages dispatched for newly-created breach alerts. */
+  notificationsSent: number;
+  /**
+   * Counts breaches where the notifier short-circuited because nothing
+   * is configured (no Slack channel, no email recipient). Useful to spot
+   * environments where the alert pipeline is not actually wired up.
+   */
+  notificationsSkipped: number;
+  /**
+   * Counts breaches where the notifier was throttled by its in-process
+   * dedupe window. Distinct from `alertsSkippedDuplicate` (which is the
+   * DB-row dedupe).
+   */
+  notificationsThrottled: number;
   breaches: Array<{
     tool_name: string;
     reason: ToolHealthReason;
@@ -119,6 +137,12 @@ export interface ToolHealthDeps {
   createAIAlert: typeof createAIAlert;
   getOpenAlertsByKey: typeof getOpenAlertsByKey;
   resolveAlert: typeof resolveAlert;
+  /**
+   * Pages on-call about a freshly-opened `tool_health` alert. Defaults to
+   * the production Slack/email pipeline; tests stub this to capture pages
+   * without touching real services.
+   */
+  notifyToolHealthBreach: typeof notifyToolHealthBreach;
 }
 
 const DEFAULT_DEPS: ToolHealthDeps = {
@@ -127,14 +151,18 @@ const DEFAULT_DEPS: ToolHealthDeps = {
   createAIAlert,
   getOpenAlertsByKey,
   resolveAlert,
+  notifyToolHealthBreach,
 };
 
 /**
- * Builds an alert row for a breach. Returns whether a new alert was
- * inserted (false means a matching open/acknowledged alert already exists
- * for the same (tool_name, reason) — keyed on `related_record_id`, NOT
- * on `title`, because titles intentionally stay free of live metric
- * values to keep dedupe stable across runs).
+ * Builds an alert row for a breach. Returns the freshly-created alert when
+ * a new row was inserted, or `null` when a matching open/acknowledged alert
+ * already exists for the same (tool_name, reason) — keyed on
+ * `related_record_id`, NOT on `title`, because titles intentionally stay
+ * free of live metric values to keep dedupe stable across runs.
+ *
+ * The returned id (when present) is forwarded into the Slack/email page so
+ * responders can correlate the message with the underlying `ai_alerts` row.
  */
 async function maybeCreateBreachAlert(
   deps: ToolHealthDeps,
@@ -144,11 +172,11 @@ async function maybeCreateBreachAlert(
   title: string,
   description: string,
   suggestion: string,
-): Promise<boolean> {
+): Promise<{ created: true; alertId: number | undefined } | { created: false }> {
   const relatedRecordId = `${agg.tool_name}:${reason}`;
   const exists = await deps.openAlertExistsByKey("tool_health", relatedRecordId);
-  if (exists) return false;
-  await deps.createAIAlert({
+  if (exists) return { created: false };
+  const inserted = await deps.createAIAlert({
     alert_type: "tool_health",
     severity,
     title,
@@ -157,7 +185,58 @@ async function maybeCreateBreachAlert(
     related_module: "ai_ops",
     related_record_id: relatedRecordId,
   });
-  return true;
+  return { created: true, alertId: inserted?.id };
+}
+
+/**
+ * Page on-call for a freshly-opened breach alert and roll the result into
+ * the cron's running counters. Notifier failures are logged but never
+ * abort the surrounding cron pass — a Slack outage must not stop us
+ * processing the remaining tools or running the auto-resolve sweep.
+ */
+async function dispatchBreachNotification(
+  deps: ToolHealthDeps,
+  agg: ToolWindowAggregate,
+  reason: ToolHealthReason,
+  severity: AlertSeverity,
+  title: string,
+  description: string,
+  suggestion: string,
+  alertId: number | undefined,
+  out: ToolHealthCheckResult,
+): Promise<void> {
+  const relatedRecordId = `${agg.tool_name}:${reason}`;
+  let result: NotifyToolHealthBreachResult;
+  try {
+    result = await deps.notifyToolHealthBreach({
+      tool_name: agg.tool_name,
+      agent_name: agg.agent_name ?? null,
+      reason,
+      severity,
+      title,
+      description,
+      suggestion,
+      related_record_id: relatedRecordId,
+      alert_id: alertId,
+    });
+  } catch (err) {
+    console.error(
+      `[ToolHealth] Notifier threw for ${relatedRecordId}:`,
+      err,
+    );
+    return;
+  }
+  if (result.skipped) {
+    out.notificationsSkipped++;
+    return;
+  }
+  if (result.throttled) {
+    out.notificationsThrottled++;
+    return;
+  }
+  if (result.slackSent || result.emailSent) {
+    out.notificationsSent++;
+  }
 }
 
 /**
@@ -246,6 +325,9 @@ export async function runToolHealthCheck(
     alertsCreated: 0,
     alertsSkippedDuplicate: 0,
     alertsAutoResolved: 0,
+    notificationsSent: 0,
+    notificationsSkipped: 0,
+    notificationsThrottled: 0,
     breaches: [],
     recoveries: [],
   };
@@ -283,10 +365,10 @@ export async function runToolHealthCheck(
         `validation failures, or rate-limit responses before the next cron ` +
         `evaluation.`;
       try {
-        const created = await maybeCreateBreachAlert(
+        const result = await maybeCreateBreachAlert(
           deps, agg, "error_rate", severity, title, description, suggestion,
         );
-        if (created) {
+        if (result.created) {
           out.alertsCreated++;
           out.breaches.push({
             tool_name: agg.tool_name,
@@ -294,6 +376,13 @@ export async function runToolHealthCheck(
             severity,
             detail: `${agg.error_rate_pct}% over ${cfg.windowMinutes}m`,
           });
+          // Page on-call now that we know this is a brand-new alert. The
+          // notifier inherits the (alert_type, related_record_id) dedupe
+          // semantics for free because we only call it on `created=true`.
+          await dispatchBreachNotification(
+            deps, agg, "error_rate", severity, title, description, suggestion,
+            result.alertId, out,
+          );
         } else {
           out.alertsSkippedDuplicate++;
         }
@@ -331,10 +420,10 @@ export async function runToolHealthCheck(
         `Operations panel. Consider raising timeouts or adding back-pressure ` +
         `if this is a recurring breach.`;
       try {
-        const created = await maybeCreateBreachAlert(
+        const result = await maybeCreateBreachAlert(
           deps, agg, "p95_latency", severity, title, description, suggestion,
         );
-        if (created) {
+        if (result.created) {
           out.alertsCreated++;
           out.breaches.push({
             tool_name: agg.tool_name,
@@ -342,6 +431,10 @@ export async function runToolHealthCheck(
             severity,
             detail: `${agg.p95_latency_ms}ms over ${cfg.windowMinutes}m`,
           });
+          await dispatchBreachNotification(
+            deps, agg, "p95_latency", severity, title, description, suggestion,
+            result.alertId, out,
+          );
         } else {
           out.alertsSkippedDuplicate++;
         }

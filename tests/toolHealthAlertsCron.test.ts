@@ -24,6 +24,10 @@ import {
 } from "../src/mastra/workflows/toolHealthAlertsCron";
 import type { ToolWindowAggregate } from "../src/utils/aiTelemetry";
 import type { AIAlert } from "../src/utils/aiAlertsDatabase";
+import type {
+  NotifyToolHealthBreachResult,
+  ToolHealthBreachNotification,
+} from "../src/utils/toolHealthAlertNotifier";
 import { TestSuite } from "./_helpers/runner";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -68,6 +72,10 @@ interface AggregateCall {
   minCalls: number;
 }
 
+interface NotifyCall {
+  notification: ToolHealthBreachNotification;
+}
+
 function makeDeps(opts: {
   aggregates: ToolWindowAggregate[];
   /**
@@ -84,6 +92,13 @@ function makeDeps(opts: {
    * "alert too young to auto-resolve".
    */
   pastCooldown?: boolean;
+  /**
+   * Override the default notifier stub. Defaults to a no-op that returns
+   * `{ slackSent: true }` so we can assert that the cron only invokes the
+   * notifier on freshly-created breaches.
+   */
+  notifierResult?: NotifyToolHealthBreachResult;
+  notifierThrows?: boolean;
 }): {
   deps: ToolHealthDeps;
   resolves: ResolveCall[];
@@ -100,18 +115,27 @@ function makeDeps(opts: {
    * dedupes.
    */
   existingDedupeKeys: Set<string>;
+  notifies: NotifyCall[];
 } {
   const resolves: ResolveCall[] = [];
   const lookups: OpenLookupCall[] = [];
   const creates: CreateCall[] = [];
   const dedupeChecks: DedupeCheck[] = [];
   const aggregateCalls: AggregateCall[] = [];
+  const notifies: NotifyCall[] = [];
   const openByKey = opts.openAlertsByKey ?? {};
   const pastCooldown = opts.pastCooldown !== false;
   // Mutable so dedupe checks against keys created earlier in the same run
   // also hit (matches the real DB's semantics — the cron's first INSERT is
   // visible to the next openAlertExistsByKey call within the same loop).
   const existingDedupeKeys = new Set<string>(opts.existingOpenDedupeKeys ?? []);
+  const defaultNotifyResult: NotifyToolHealthBreachResult =
+    opts.notifierResult ?? {
+      slackSent: true,
+      emailSent: false,
+      throttled: false,
+      skipped: false,
+    };
 
   const deps: ToolHealthDeps = {
     getToolWindowAggregates: async (windowMinutes, minCalls) => {
@@ -154,6 +178,11 @@ function makeDeps(opts: {
         resolution_note: note ?? null,
       } as AIAlert;
     },
+    notifyToolHealthBreach: async (notification) => {
+      notifies.push({ notification });
+      if (opts.notifierThrows) throw new Error("stub notifier failure");
+      return defaultNotifyResult;
+    },
   };
 
   return {
@@ -164,6 +193,7 @@ function makeDeps(opts: {
     dedupeChecks,
     aggregateCalls,
     existingDedupeKeys,
+    notifies,
   };
 }
 
@@ -634,6 +664,257 @@ await suite.test("tool not in aggregates → matching open alert is NOT auto-res
   suite.expectEqual(out.alertsAutoResolved, 0, "silent tool alert not closed");
   suite.expectEqual(resolves.length, 0, "no resolveAlert calls");
 });
+
+// ─── Task #128: on-call notification wiring ──────────────────────────────────
+
+await suite.test(
+  "(n1) new breach alert triggers exactly one Slack/email notification",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "qms_create_nc",
+      agent_name: "qms_agent",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, notifies } = makeDeps({ aggregates: [agg] });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsCreated, 1, "one alert created");
+    suite.expectEqual(notifies.length, 1, "notifier called exactly once");
+    suite.expectEqual(out.notificationsSent, 1, "notificationsSent counter");
+    suite.expectEqual(out.notificationsThrottled, 0, "no throttle");
+    suite.expectEqual(out.notificationsSkipped, 0, "no skips");
+
+    const n = notifies[0]!.notification;
+    suite.expectEqual(n.tool_name, "qms_create_nc", "notification carries tool name");
+    suite.expectEqual(n.reason, "error_rate", "notification carries reason");
+    suite.expectEqual(
+      n.related_record_id,
+      "qms_create_nc:error_rate",
+      "notification carries dedupe key matching ai_alerts row",
+    );
+    suite.expectEqual(n.severity, "high", "severity propagated");
+    suite.expectEqual(n.agent_name, "qms_agent", "agent name propagated");
+    suite.expect(
+      n.description.includes("60%") && n.description.includes("12/20"),
+      "description carries live metric values",
+    );
+  },
+);
+
+await suite.test(
+  "(n2) duplicate breach (existing open ai_alerts row) does NOT re-page",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "qms_create_nc",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, notifies } = makeDeps({
+      aggregates: [agg],
+      existingOpenDedupeKeys: ["tool_health:qms_create_nc:error_rate"],
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsCreated, 0, "no new alert created");
+    suite.expectEqual(out.alertsSkippedDuplicate, 1, "dedupe skip recorded");
+    suite.expectEqual(
+      notifies.length,
+      0,
+      "notifier NOT called when DB-level dedupe already silenced the breach",
+    );
+    suite.expectEqual(out.notificationsSent, 0, "notificationsSent stays 0");
+  },
+);
+
+await suite.test(
+  "(n3) two consecutive cron passes over same breach page only once",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "qms_create_nc",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, notifies } = makeDeps({ aggregates: [agg] });
+
+    const first = await runToolHealthCheck(deps);
+    suite.expectEqual(first.notificationsSent, 1, "first run pages on-call");
+
+    const second = await runToolHealthCheck(deps);
+    suite.expectEqual(
+      second.notificationsSent,
+      0,
+      "second run does NOT page again (DB dedupe in front of notifier)",
+    );
+    suite.expectEqual(
+      notifies.length,
+      1,
+      "notifier called exactly once across both runs",
+    );
+  },
+);
+
+await suite.test(
+  "(n4) both error_rate AND p95_latency breach → two distinct pages",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "double_breach_tool",
+      agent_name: "agent_x",
+      call_count: 20,
+      error_count: 18,
+      error_rate_pct: 90,
+      p95_latency_ms: 65_000,
+      avg_latency_ms: 30_000,
+      max_latency_ms: 70_000,
+    });
+    const { deps, notifies } = makeDeps({ aggregates: [agg] });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsCreated, 2, "both reasons created alerts");
+    suite.expectEqual(notifies.length, 2, "exactly two pages dispatched");
+    const reasons = notifies.map((n) => n.notification.reason).sort();
+    suite.expectEqual(reasons[0], "error_rate", "error_rate page dispatched");
+    suite.expectEqual(reasons[1], "p95_latency", "p95_latency page dispatched");
+    const keys = notifies.map((n) => n.notification.related_record_id).sort();
+    suite.expectEqual(
+      keys[0],
+      "double_breach_tool:error_rate",
+      "error_rate page carries matching dedupe key",
+    );
+    suite.expectEqual(
+      keys[1],
+      "double_breach_tool:p95_latency",
+      "p95_latency page carries matching dedupe key",
+    );
+  },
+);
+
+await suite.test(
+  "(n5) notifier reports 'skipped' (no channel/email configured) increments skip counter",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "unwired_tool",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, notifies } = makeDeps({
+      aggregates: [agg],
+      notifierResult: {
+        slackSent: false,
+        emailSent: false,
+        throttled: false,
+        skipped: true,
+      },
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsCreated, 1, "alert still created");
+    suite.expectEqual(out.notificationsSent, 0, "no page sent");
+    suite.expectEqual(out.notificationsSkipped, 1, "skip counter incremented");
+    suite.expectEqual(notifies.length, 1, "notifier still invoked");
+  },
+);
+
+await suite.test(
+  "(n6) notifier reports 'throttled' increments throttle counter",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "throttled_tool",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps } = makeDeps({
+      aggregates: [agg],
+      notifierResult: {
+        slackSent: false,
+        emailSent: false,
+        throttled: true,
+        skipped: false,
+      },
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsCreated, 1, "alert still created");
+    suite.expectEqual(out.notificationsSent, 0, "no page sent");
+    suite.expectEqual(out.notificationsThrottled, 1, "throttle counter incremented");
+  },
+);
+
+await suite.test(
+  "(n7) notifier throws → cron pass continues, sent counter stays 0",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "page_explodes_tool",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps } = makeDeps({
+      aggregates: [agg],
+      notifierThrows: true,
+    });
+
+    // Silence the expected error log.
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const out = await runToolHealthCheck(deps);
+      suite.expectEqual(out.alertsCreated, 1, "alert still created despite paging failure");
+      suite.expectEqual(out.notificationsSent, 0, "sent counter stays 0 when notifier throws");
+      suite.expectEqual(out.notificationsThrottled, 0, "throttle counter stays 0");
+      suite.expectEqual(out.notificationsSkipped, 0, "skipped counter stays 0");
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "(n8) auto-resolve sweep does NOT page on-call (only breaches do)",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "recovered_tool",
+      error_rate_pct: 0,
+      p95_latency_ms: 100,
+    });
+    const openAlert: AIAlert = {
+      id: 99,
+      alert_type: "tool_health",
+      severity: "high",
+      title: "stale",
+      description: "stale",
+      status: "open",
+      related_record_id: "recovered_tool:error_rate",
+    };
+    const { deps, notifies } = makeDeps({
+      aggregates: [agg],
+      openAlertsByKey: { "recovered_tool:error_rate": [openAlert] },
+      pastCooldown: true,
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsAutoResolved, 1, "stale alert auto-resolved");
+    suite.expectEqual(notifies.length, 0, "no page sent on recovery");
+    suite.expectEqual(out.notificationsSent, 0, "notificationsSent stays 0");
+  },
+);
 
 await suite.test("resolveAlert throws → counter not incremented, other alerts still close", async () => {
   const agg = makeAggregate({ tool_name: "boom", error_rate_pct: 0, p95_latency_ms: 50 });
