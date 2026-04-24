@@ -1010,6 +1010,14 @@ export interface PromptVersionAggregate {
   first_seen: string;
   last_seen: string;
   /**
+   * Unbounded all-time last seen — the most recent `started_at` across the
+   * full `ai_call_metrics` history for this (agent_name, prompt_version)
+   * pair, regardless of the query window. Allows the dashboard to show a
+   * meaningful "last used" date for archived versions that have not been
+   * active in the selected window.
+   */
+  last_seen_at: string;
+  /**
    * Echoes back the minimum-sample floor that was applied when computing
    * `meets_min_feedback` so API consumers (the AI Ops dashboard, the
    * regression cron, etc.) can render the same threshold to the user.
@@ -1051,35 +1059,50 @@ export async function getFeedbackRateByPromptVersion(
     await ensureAiMetricsTable();
     await ensureFeedbackTable();
     const result = await pool.query(
-      `SELECT
-         m.agent_name,
-         COALESCE(m.metadata ->> 'prompt_version', '(unknown)')             AS prompt_version,
-         COUNT(*)                                                            AS call_count,
-         COUNT(f.id)                                                         AS total_feedback,
-         COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_up')                  AS thumbs_up,
-         COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_down')                AS thumbs_down,
-         CASE WHEN COUNT(f.id) > 0 THEN
+      `WITH windowed AS (
+         SELECT
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)')            AS prompt_version,
+           COUNT(*)                                                           AS call_count,
+           COUNT(f.id)                                                        AS total_feedback,
+           COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_up')                 AS thumbs_up,
+           COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_down')               AS thumbs_down,
+           CASE WHEN COUNT(f.id) > 0 THEN
+             ROUND(
+               (COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_up')::FLOAT
+                / COUNT(f.id) * 100)::NUMERIC, 1
+             )
+           ELSE NULL END                                                      AS feedback_rate_pct,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY m.latency_ms)         AS p50_ms,
+           ROUND(AVG(m.latency_ms)::NUMERIC, 0)                              AS avg_ms,
            ROUND(
-             (COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_up')::FLOAT
-              / COUNT(f.id) * 100)::NUMERIC, 1
-           )
-         ELSE NULL END                                                       AS feedback_rate_pct,
-         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY m.latency_ms)          AS p50_ms,
-         ROUND(AVG(m.latency_ms)::NUMERIC, 0)                               AS avg_ms,
-         ROUND(
-           (COUNT(*) FILTER (WHERE NOT m.success)::FLOAT
-            / NULLIF(COUNT(*), 0) * 100)::NUMERIC, 1
-         )                                                                   AS error_rate_pct,
-         MIN(m.started_at)                                                   AS first_seen,
-         MAX(m.started_at)                                                   AS last_seen,
-         $2::INTEGER                                                         AS min_feedback,
-         (COUNT(f.id) >= $2)                                                 AS meets_min_feedback
-       FROM ai_call_metrics m
-       LEFT JOIN ai_call_feedback f ON f.call_id = m.id
-       WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
-         AND m.tool_name IS NULL
-       GROUP BY m.agent_name, COALESCE(m.metadata ->> 'prompt_version', '(unknown)')
-       ORDER BY m.agent_name, last_seen DESC`,
+             (COUNT(*) FILTER (WHERE NOT m.success)::FLOAT
+              / NULLIF(COUNT(*), 0) * 100)::NUMERIC, 1
+           )                                                                  AS error_rate_pct,
+           MIN(m.started_at)                                                  AS first_seen,
+           MAX(m.started_at)                                                  AS last_seen,
+           $2::INTEGER                                                        AS min_feedback,
+           (COUNT(f.id) >= $2)                                                AS meets_min_feedback
+         FROM ai_call_metrics m
+         LEFT JOIN ai_call_feedback f ON f.call_id = m.id
+         WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
+           AND m.tool_name IS NULL
+         GROUP BY m.agent_name, COALESCE(m.metadata ->> 'prompt_version', '(unknown)')
+       ),
+       global_last AS (
+         SELECT
+           agent_name,
+           COALESCE(metadata ->> 'prompt_version', '(unknown)')              AS prompt_version,
+           MAX(started_at)                                                    AS last_seen_at
+         FROM ai_call_metrics
+         WHERE tool_name IS NULL
+         GROUP BY agent_name, COALESCE(metadata ->> 'prompt_version', '(unknown)')
+       )
+       SELECT w.*, g.last_seen_at
+       FROM windowed w
+       JOIN global_last g
+         ON g.agent_name = w.agent_name AND g.prompt_version = w.prompt_version
+       ORDER BY w.agent_name, g.last_seen_at DESC`,
       [days, floor]
     );
     return result.rows;

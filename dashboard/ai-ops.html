@@ -1063,9 +1063,22 @@
           const archivedCount = activeVersion
             ? allRows.filter(r => r.prompt_version !== activeVersion).length
             : 0;
+
+          // Sort: current version first, then archived by last_seen_at descending
+          // so the most recently retired version appears immediately after the
+          // active one, making it easy to compare a just-superseded rollback.
+          const sortedRows = [...allRows].sort((a, b) => {
+            const aCur = activeVersion && a.prompt_version === activeVersion ? 1 : 0;
+            const bCur = activeVersion && b.prompt_version === activeVersion ? 1 : 0;
+            if (aCur !== bCur) return bCur - aCur;
+            const aT = a.last_seen_at ? new Date(a.last_seen_at).getTime() : 0;
+            const bT = b.last_seen_at ? new Date(b.last_seen_at).getTime() : 0;
+            return bT - aT;
+          });
+
           const rows = showArchived || !activeVersion
-            ? allRows
-            : allRows.filter(r => r.prompt_version === activeVersion);
+            ? sortedRows
+            : sortedRows.filter(r => r.prompt_version === activeVersion);
 
           // A row is comparable only once it has cleared the small-sample
           // floor — otherwise a brand-new prompt with one thumbs-down would
@@ -1121,6 +1134,13 @@
                 const currentPill = isCurrent
                   ? ` <span class="inline-block bg-green-100 text-green-700 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide align-middle" data-testid="badge-current-${esc(r.prompt_version)}">current</span>`
                   : '';
+                // For archived rows use the unbounded last_seen_at so the reviewer
+                // can tell a stale rollback from a version retired yesterday.
+                // Show relative time with the absolute timestamp on hover.
+                const lastSeenVal = r.last_seen_at || r.last_seen;
+                const lastSeenCell = isCurrent
+                  ? `<span title="${esc(fmtDate(lastSeenVal))}" data-testid="text-prompt-last-seen-${esc(r.prompt_version)}">${fmtDate(lastSeenVal)}</span>`
+                  : `<span title="${esc(fmtDate(lastSeenVal))}" data-testid="text-prompt-last-seen-${esc(r.prompt_version)}">Last seen: ${fmtRelTime(lastSeenVal)}</span>`;
                 return `
                   <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}">
                     <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}</td>
@@ -1132,7 +1152,7 @@
                     <td class="px-3 py-2 text-right">${fmtMs(r.p50_ms)}</td>
                     <td class="px-3 py-2 text-right">${fmtMs(r.avg_ms)}</td>
                     <td class="px-3 py-2 text-right ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
-                    <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.last_seen)}</td>
+                    <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${lastSeenCell}</td>
                   </tr>`;
               }).join('')
             : `<tr><td colspan="8" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
@@ -2017,6 +2037,22 @@
       if (!v) return '—';
       const d = new Date(v);
       return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtRelTime(v) {
+      if (!v) return '—';
+      const diff = Date.now() - new Date(v).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 2) return 'just now';
+      if (mins < 60) return `${mins} min ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs} hr${hrs === 1 ? '' : 's'} ago`;
+      const days = Math.floor(hrs / 24);
+      if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+      const months = Math.floor(days / 30);
+      if (months < 12) return `${months} mo ago`;
+      const years = Math.floor(months / 12);
+      return `${years} yr${years === 1 ? '' : 's'} ago`;
     }
 
     document.addEventListener('DOMContentLoaded', () => {
