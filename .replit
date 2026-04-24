@@ -48,7 +48,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npx tsx src/utils/redactSensitiveFields.test.ts"
+args = "npx tsx src/utils/redactSensitiveFields.test.ts && npx tsx tests/aiApprovalRedaction.test.ts && npx tsx tests/aiApprovalRoutesRedaction.test.ts"
 
 [workflows.workflow.metadata]
 isValidation = true

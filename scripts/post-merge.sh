@@ -16,3 +16,11 @@ npm install
 echo ""
 echo "▶ CI gate: redactSensitiveFields + logEvent write-path tests"
 npx tsx src/utils/redactSensitiveFields.test.ts
+
+echo ""
+echo "▶ CI gate: ai_pending_actions store-side redaction tests"
+npx tsx tests/aiApprovalRedaction.test.ts
+
+echo ""
+echo "▶ CI gate: AI approval queue HTTP read-path secret-leak tests"
+npx tsx tests/aiApprovalRoutesRedaction.test.ts
