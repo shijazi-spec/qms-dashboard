@@ -544,27 +544,33 @@
             avatar.className = 'w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 mt-1';
             avatar.innerHTML = '<svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>';
 
+            var column = document.createElement('div');
+            column.className = 'max-w-[75%] flex flex-col';
+
             var bubble = document.createElement('div');
-            bubble.className = 'max-w-[75%] bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3 text-sm text-gray-800 leading-relaxed shadow-sm assistant-content';
+            bubble.className = 'bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3 text-sm text-gray-800 leading-relaxed shadow-sm assistant-content';
             bubble.setAttribute('data-role', 'assistant-bubble');
 
+            column.appendChild(bubble);
             wrapper.appendChild(avatar);
-            wrapper.appendChild(bubble);
+            wrapper.appendChild(column);
             messagesContainer.appendChild(wrapper);
             scrollToBottom();
             return bubble;
         }
 
-        function attachFeedbackUI(bubble, messageId, promptText, responseText) {
-            if (!messageId || bubble.querySelector('.feedback-bar')) return;
+        function attachFeedbackUI(bubble, messageId, promptText, responseText, callId) {
+            if (bubble.querySelector('.feedback-bar')) return;
             var bar = document.createElement('div');
             bar.className = 'feedback-bar';
-            bar.setAttribute('data-message-id', messageId);
+            if (messageId) bar.setAttribute('data-message-id', messageId);
+            if (callId) bar.setAttribute('data-call-id', callId);
+
             bar.innerHTML =
-                '<button class="feedback-thumb" data-rating="up" aria-label="Helpful" title="Helpful" data-testid="button-feedback-up-' + messageId.substring(0,8) + '">' +
+                '<button class="feedback-thumb" data-rating="up" aria-label="Helpful" title="Helpful" data-testid="button-feedback-up-' + (messageId ? messageId.substring(0,8) : callId) + '">' +
                   '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905C11 6.003 9.1 7.7 7 8v12m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/></svg>' +
                 '</button>' +
-                '<button class="feedback-thumb" data-rating="down" aria-label="Not helpful" title="Not helpful" data-testid="button-feedback-down-' + messageId.substring(0,8) + '">' +
+                '<button class="feedback-thumb" data-rating="down" aria-label="Not helpful" title="Not helpful" data-testid="button-feedback-down-' + (messageId ? messageId.substring(0,8) : callId) + '">' +
                   '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905C13 14.997 14.9 13.3 17 13V1m-7 13h2M17 4h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/></svg>' +
                 '</button>' +
                 '<span class="feedback-label">Was this helpful?</span>' +
@@ -583,10 +589,19 @@
             }
 
             upBtn.addEventListener('click', function() {
-                submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected);
+                if (messageId) {
+                    submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected);
+                }
+                if (callId) {
+                    sendFeedbackByCallId(bar, 'thumbs_up', null, callId, markSelected);
+                }
             });
             downBtn.addEventListener('click', function() {
-                openThumbsDownModal(messageId, promptText, responseText, markSelected);
+                if (callId) {
+                    showCommentPrompt(bar, markSelected);
+                } else {
+                    openThumbsDownModal(messageId, promptText, responseText, markSelected);
+                }
             });
 
             bubble.appendChild(bar);
@@ -709,6 +724,98 @@
             });
         }
 
+        var FEEDBACK_COMMENT_MAX = 1000;
+        async function sendFeedbackByCallId(row, rating, comment, callId, onDone) {
+            if (row.dataset.locked === '1' && rating !== 'thumbs_down') return;
+            var cid = callId || parseInt(row.dataset.callId, 10);
+            if (!Number.isFinite(cid)) return;
+            try {
+                var payload = { callId: cid, rating: rating };
+                if (typeof comment === 'string' && comment.trim()) {
+                    payload.comment = comment.trim().slice(0, FEEDBACK_COMMENT_MAX);
+                }
+                var res = await fetch('/api/ai-ops/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+
+                if (onDone) onDone(rating === 'thumbs_up' ? 'up' : 'down');
+
+                row.dataset.locked = '1';
+                if (rating === 'thumbs_down' && !(comment && comment.trim())) {
+                    showCommentPrompt(row, onDone);
+                } else {
+                    var existing = row.parentElement.querySelector('[data-role="feedback-comment"]');
+                    if (existing) existing.remove();
+                }
+            } catch (err) {
+                console.error('Failed to send feedback:', err);
+            }
+        }
+
+        function showCommentPrompt(row, onDone) {
+            if (!row || !row.parentElement) return;
+            var existing = row.parentElement.querySelector('[data-role="feedback-comment"]');
+            if (existing) {
+                var ta = existing.querySelector('textarea');
+                if (ta) ta.focus();
+                return;
+            }
+            var callId = row.dataset.callId;
+            var box = document.createElement('div');
+            box.setAttribute('data-role', 'feedback-comment');
+            box.className = 'mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg';
+
+            var label = document.createElement('label');
+            label.className = 'block text-xs font-medium text-amber-800 mb-1';
+            label.textContent = 'What went wrong? (optional)';
+            label.setAttribute('for', 'fb-comment-' + callId);
+            box.appendChild(label);
+
+            var textarea = document.createElement('textarea');
+            textarea.id = 'fb-comment-' + callId;
+            textarea.className = 'w-full text-xs p-2 border border-amber-200 rounded resize-none focus:outline-none focus:ring-1 focus:ring-amber-400';
+            textarea.rows = 2;
+            textarea.maxLength = FEEDBACK_COMMENT_MAX;
+            textarea.placeholder = 'e.g. wrong regulation, hallucinated data, missed context...';
+            textarea.setAttribute('data-testid', 'input-feedback-comment-' + callId);
+            box.appendChild(textarea);
+
+            var actions = document.createElement('div');
+            actions.className = 'flex items-center justify-end gap-2 mt-2';
+
+            var skipBtn = document.createElement('button');
+            skipBtn.type = 'button';
+            skipBtn.className = 'text-xs text-gray-500 hover:text-gray-700 px-2 py-1';
+            skipBtn.textContent = 'Skip';
+            skipBtn.setAttribute('data-testid', 'button-feedback-skip-' + callId);
+            skipBtn.onclick = function() { box.remove(); };
+
+            var sendBtn = document.createElement('button');
+            sendBtn.type = 'button';
+            sendBtn.className = 'text-xs bg-amber-600 text-white px-3 py-1 rounded hover:bg-amber-700';
+            sendBtn.textContent = 'Send';
+            sendBtn.setAttribute('data-testid', 'button-feedback-submit-' + callId);
+            sendBtn.onclick = async function() {
+                var val = textarea.value;
+                if (!val || !val.trim()) { box.remove(); return; }
+                sendBtn.disabled = true;
+                sendBtn.textContent = 'Sending...';
+                await sendFeedbackByCallId(row, 'thumbs_down', val, null, onDone);
+                box.remove();
+            };
+
+            actions.appendChild(skipBtn);
+            actions.appendChild(sendBtn);
+            box.appendChild(actions);
+
+            row.parentElement.appendChild(box);
+            scrollToBottom();
+            setTimeout(function() { textarea.focus(); }, 0);         }
+
         function renderMarkdown(text) {
             var codeBlocks = [];
             var tableBlocks = [];
@@ -817,6 +924,7 @@
             var fullText = '';
             var streamOk = false;
             var capturedMessageId = null;
+            var assistantCallId = null;
 
             try {
                 var response = await fetch('/api/consultant/chat/stream', {
@@ -853,6 +961,7 @@
                                 if (parsed.messageId) { capturedMessageId = parsed.messageId; }
                                 if (parsed.text) { fullText += parsed.text; bubble.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                                 if (parsed.content) { fullText += parsed.content; bubble.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                                if (parsed.callId) { assistantCallId = parsed.callId; }
                                 if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; bubble.innerHTML = renderMarkdown(fullText); }
                             } catch (pe) {
                                 fullText += data;
@@ -870,8 +979,8 @@
 
                 if (isArabic(fullText)) bubble.setAttribute('dir', 'rtl');
                 chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
-                if (capturedMessageId && fullText.trim()) {
-                    attachFeedbackUI(bubble, capturedMessageId, text, fullText);
+                if (fullText.trim()) {
+                    attachFeedbackUI(bubble, capturedMessageId, text, fullText, assistantCallId);
                 }
             } catch (err) {
                 if (!streamOk) {
@@ -889,8 +998,8 @@
                         bubble.innerHTML = renderMarkdown(respText);
                         if (isArabic(respText)) bubble.setAttribute('dir', 'rtl');
                         chatMessages.push({ role: 'assistant', content: respText, time: new Date().toISOString() });
-                        if (data.messageId && respText.trim()) {
-                            attachFeedbackUI(bubble, data.messageId, text, respText);
+                        if (respText.trim()) {
+                            attachFeedbackUI(bubble, data.messageId, text, respText, data.callId);
                         }
                     } catch (fallbackErr) {
                         bubble = createAssistantMessage();

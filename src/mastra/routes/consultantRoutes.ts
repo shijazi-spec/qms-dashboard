@@ -234,7 +234,15 @@ export const consultantRoutes = [
                     );
                   }
                 });
-                streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId })}\n\n`));
+                // Surface callId on the final frame so clients can attach
+                // inline thumbs / comment feedback (POST /api/ai-ops/feedback)
+                // to this exact response. The span allocates the callId up
+                // front, so it's known here without waiting for finalize().
+                // messageId comes from main and is used by the client to
+                // address an individual assistant turn for editing/threading.
+                streamController.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined })}\n\n`)
+                );
                 streamController.close();
               } catch (err) {
                 streamSuccess = false;

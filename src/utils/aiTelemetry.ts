@@ -818,6 +818,42 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<{
   return result.rows;
 }
 
+/**
+ * Fetch a single ai_call_metrics row by id, used by the AI Ops "call detail"
+ * popover so links from Negative Feedback always resolve regardless of the
+ * filtered Recent Issues window.
+ */
+export async function getCallById(callId: number): Promise<{
+  id: string;
+  agent_name: string;
+  tool_name: string | null;
+  model: string;
+  latency_ms: number;
+  estimated_cost_usd: string;
+  success: boolean;
+  error_class: string | null;
+  error_message: string | null;
+  prompt_preview: string | null;
+  started_at: string;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+} | null> {
+  await ensureAiMetricsTable();
+  const result = await pool.query(
+    `SELECT
+       id, agent_name, tool_name, model,
+       latency_ms, estimated_cost_usd,
+       success, error_class, error_message,
+       prompt_preview,
+       started_at, prompt_tokens, completion_tokens
+     FROM ai_call_metrics
+     WHERE id = $1
+     LIMIT 1`,
+    [callId]
+  );
+  return result.rows[0] || null;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Call-level feedback (thumbs up / down) — enables feedback_rate per agent
 // ──────────────────────────────────────────────────────────────────────────────
@@ -836,6 +872,8 @@ async function ensureFeedbackTable(): Promise<void> {
           created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           CONSTRAINT uq_ai_call_feedback_call_user UNIQUE (call_id, user_hash)
         );
+        ALTER TABLE ai_call_feedback
+          ADD COLUMN IF NOT EXISTS comment TEXT;
         CREATE INDEX IF NOT EXISTS idx_ai_call_feedback_call_id
           ON ai_call_feedback (call_id);
         CREATE INDEX IF NOT EXISTS idx_ai_call_feedback_created_at
@@ -849,20 +887,41 @@ async function ensureFeedbackTable(): Promise<void> {
   return feedbackTableReady;
 }
 
+// Comments are short freeform answers to "what went wrong?".  Cap conservatively
+// to keep the row small and to discourage users from pasting prompts.
+export const FEEDBACK_COMMENT_MAX_LEN = 1000;
+
+function sanitizeFeedbackComment(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  // Strip HTML tags and common script vectors before storage.
+  let cleaned = raw.replace(/<[^>]*>/g, '');
+  cleaned = cleaned.replace(/javascript:/gi, '');
+  cleaned = cleaned.replace(/on\w+\s*=/gi, '');
+  cleaned = cleaned.trim();
+  if (!cleaned) return null;
+  if (cleaned.length > FEEDBACK_COMMENT_MAX_LEN) {
+    cleaned = cleaned.slice(0, FEEDBACK_COMMENT_MAX_LEN);
+  }
+  return cleaned;
+}
+
 export async function insertCallFeedback(
   callId: number,
   rating: 'thumbs_up' | 'thumbs_down',
-  userId?: string
+  userId?: string,
+  comment?: string | null
 ): Promise<boolean> {
   try {
     await ensureFeedbackTable();
     const userHash = userId ? hashValue(userId) : 'anonymous';
+    const cleanComment = sanitizeFeedbackComment(comment);
     await pool.query(
-      `INSERT INTO ai_call_feedback (call_id, rating, user_hash)
-       VALUES ($1, $2, $3)
+      `INSERT INTO ai_call_feedback (call_id, rating, user_hash, comment)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT ON CONSTRAINT uq_ai_call_feedback_call_user
-       DO UPDATE SET rating = EXCLUDED.rating`,
-      [callId, rating, userHash]
+       DO UPDATE SET rating  = EXCLUDED.rating,
+                     comment = COALESCE(EXCLUDED.comment, ai_call_feedback.comment)`,
+      [callId, rating, userHash, cleanComment]
     );
     return true;
   } catch (err) {
@@ -930,6 +989,49 @@ export async function getFeedbackRateByPromptVersion(days = 30): Promise<{
     return result.rows;
   } catch (err) {
     console.error('[aiTelemetry] getFeedbackRateByPromptVersion failed:', err);
+    return [];
+  }
+}
+
+export async function getRecentNegativeFeedback(limit = 25): Promise<{
+  feedback_id: string;
+  call_id: string;
+  agent_name: string;
+  model: string;
+  comment: string | null;
+  created_at: string;
+  call_started_at: string;
+  prompt_preview: string | null;
+  latency_ms: number;
+  success: boolean;
+  error_class: string | null;
+}[]> {
+  try {
+    await ensureFeedbackTable();
+    const result = await pool.query(
+      `SELECT
+         f.id           AS feedback_id,
+         f.call_id      AS call_id,
+         f.comment      AS comment,
+         f.created_at   AS created_at,
+         m.agent_name   AS agent_name,
+         m.model        AS model,
+         m.started_at   AS call_started_at,
+         m.prompt_preview,
+         m.latency_ms,
+         m.success,
+         m.error_class
+       FROM ai_call_feedback f
+       JOIN ai_call_metrics  m ON m.id = f.call_id
+       WHERE f.rating = 'thumbs_down'
+         AND f.created_at >= NOW() - INTERVAL '30 days'
+       ORDER BY f.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[aiTelemetry] getRecentNegativeFeedback failed:', err);
     return [];
   }
 }

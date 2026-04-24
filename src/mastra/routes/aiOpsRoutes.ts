@@ -7,9 +7,12 @@ import {
   getDailyCostSummary,
   getFeedbackRateByAgent,
   getFeedbackRateByPromptVersion,
+  getRecentNegativeFeedback,
+  getCallById,
   insertCallFeedback,
   getChildToolCallsForParent,
   getKnownAgentNames,
+  FEEDBACK_COMMENT_MAX_LEN,
   MODEL_PRICE_TABLE,
 } from "../../utils/aiTelemetry";
 import { join } from "path";
@@ -117,12 +120,27 @@ export const aiOpsRoutes = [
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const body = await c.req.json();
-          const { callId, rating } = body;
+          const { callId, rating, comment } = body;
           const parsedCallId = parseInt(String(callId ?? ''), 10);
           if (!Number.isFinite(parsedCallId) || parsedCallId <= 0 || !['thumbs_up', 'thumbs_down'].includes(rating)) {
             return c.json({ error: "callId (positive integer) and rating ('thumbs_up'|'thumbs_down') are required" }, 400);
           }
-          const ok = await insertCallFeedback(parsedCallId, rating as 'thumbs_up' | 'thumbs_down', user.userId);
+          let cleanComment: string | undefined;
+          if (comment != null) {
+            if (typeof comment !== 'string') {
+              return c.json({ error: "comment must be a string" }, 400);
+            }
+            if (comment.length > FEEDBACK_COMMENT_MAX_LEN) {
+              return c.json({ error: `comment exceeds ${FEEDBACK_COMMENT_MAX_LEN} character limit` }, 400);
+            }
+            cleanComment = comment;
+          }
+          const ok = await insertCallFeedback(
+            parsedCallId,
+            rating as 'thumbs_up' | 'thumbs_down',
+            user.userId,
+            cleanComment,
+          );
           return c.json({ success: ok });
         } catch (error) {
           console.error("[AI-Ops] feedback error:", error);
@@ -146,6 +164,49 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] prompt-versions error:", error);
           return c.json({ error: "Failed to fetch prompt-version comparison" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/negative-feedback",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 25, 1, 100);
+          const data = await getRecentNegativeFeedback(limit);
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] negative-feedback error:", error);
+          return c.json({ error: "Failed to fetch negative feedback" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/call/:id",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const idParam = c.req.param("id");
+          const callId = parseInt(idParam, 10);
+          if (!Number.isFinite(callId) || callId <= 0) {
+            return c.json({ error: "Invalid call id" }, 400);
+          }
+          const data = await getCallById(callId);
+          if (!data) return c.json({ error: "Call not found" }, 404);
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] call-detail error:", error);
+          return c.json({ error: "Failed to fetch call detail" }, 500);
         }
       };
     },
