@@ -1,0 +1,328 @@
+/**
+ * Unit tests for the shared admin-auth helpers in src/utils/rbacMiddleware.ts:
+ *
+ *   - getAdminKey(c)          — extracts the admin key from X-Admin-Key header
+ *                               or admin_key cookie
+ *   - hasValidAdminApiKey(c)  — true iff the extracted key matches
+ *                               process.env.ADMIN_API_KEY
+ *   - isAdminAuthorized(c)    — true iff the request has a valid admin key
+ *                               OR a signed session cookie with role=admin
+ *
+ * These helpers back every admin-key authorization site across the codebase
+ * (admin/qms/dashboard/static/health-pulse routes plus the global middleware),
+ * so a regression here would silently weaken every admin endpoint at once.
+ *
+ * No live DB is required — `c` is mocked and `getSessionFromCookie` is exercised
+ * via a locally-signed cookie using the same HMAC scheme as authRoutes.ts.
+ *
+ * Run:  npx tsx tests/adminAuthHelpers.test.ts
+ */
+
+const TEST_ADMIN_KEY = "test-admin-key-abc123";
+const TEST_SESSION_SECRET = "test-session-secret-xyz789";
+
+process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
+
+import crypto from "crypto";
+import {
+  getAdminKey,
+  hasValidAdminApiKey,
+  isAdminAuthorized,
+} from "../src/utils/rbacMiddleware";
+
+const SESSION_COOKIE_NAME = "walaplus_session";
+
+let passed = 0;
+let failed = 0;
+
+function assert(condition: boolean, label: string): void {
+  if (condition) {
+    console.log(`  ✓ ${label}`);
+    passed++;
+  } else {
+    console.error(`  ✗ ${label}`);
+    failed++;
+  }
+}
+
+function assertEquals<T>(actual: T, expected: T, label: string): void {
+  const ok = actual === expected;
+  if (ok) {
+    console.log(`  ✓ ${label}`);
+    passed++;
+  } else {
+    console.error(`  ✗ ${label}`);
+    console.error(`      expected: ${JSON.stringify(expected)}`);
+    console.error(`      actual:   ${JSON.stringify(actual)}`);
+    failed++;
+  }
+}
+
+/**
+ * Mirrors signSession() in src/mastra/routes/authRoutes.ts so the test can
+ * mint a valid session cookie without going through OIDC.
+ */
+function signSession(payload: Record<string, any>): string {
+  const secret = process.env.SESSION_SECRET!;
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto
+    .createHmac("sha256", secret)
+    .update(data)
+    .digest("base64url");
+  return `${data}.${sig}`;
+}
+
+interface MockContextOptions {
+  adminKeyHeader?: string;
+  cookies?: Record<string, string>;
+}
+
+/**
+ * Build a minimal Hono-like context object with just the `req.header(name)`
+ * surface that the helpers under test consume.
+ */
+function makeContext(opts: MockContextOptions = {}): any {
+  const headers: Record<string, string> = {};
+  if (opts.adminKeyHeader !== undefined) {
+    headers["X-Admin-Key"] = opts.adminKeyHeader;
+  }
+  if (opts.cookies && Object.keys(opts.cookies).length > 0) {
+    headers["Cookie"] = Object.entries(opts.cookies)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("; ");
+  }
+  return {
+    req: {
+      header: (name: string): string | undefined => headers[name],
+    },
+  };
+}
+
+function adminSessionCookie(role: string = "admin"): string {
+  const token = signSession({
+    userId: 1,
+    email: "admin@example.com",
+    name: "Test Admin",
+    role,
+    exp: Date.now() + 60_000,
+  });
+  return encodeURIComponent(token);
+}
+
+console.log(
+  "\n=== Admin-auth helper unit tests (rbacMiddleware) ===\n"
+);
+
+// ─── Case 1: header-only X-Admin-Key match ───
+console.log("Case: X-Admin-Key header matches ADMIN_API_KEY");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  assertEquals(getAdminKey(c), TEST_ADMIN_KEY, "getAdminKey returns the header value");
+  assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
+  assertEquals(isAdminAuthorized(c), true, "isAdminAuthorized is true");
+}
+console.log();
+
+// ─── Case 2: cookie-only admin_key match ───
+console.log("Case: admin_key cookie matches ADMIN_API_KEY (no header)");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ cookies: { admin_key: TEST_ADMIN_KEY } });
+  assertEquals(getAdminKey(c), TEST_ADMIN_KEY, "getAdminKey returns the cookie value");
+  assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
+  assertEquals(isAdminAuthorized(c), true, "isAdminAuthorized is true");
+}
+console.log();
+
+// ─── Case 2b: cookie alongside other cookies ───
+console.log("Case: admin_key cookie surrounded by other cookies");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({
+    cookies: {
+      foo: "bar",
+      admin_key: TEST_ADMIN_KEY,
+      baz: "qux",
+    },
+  });
+  assertEquals(
+    getAdminKey(c),
+    TEST_ADMIN_KEY,
+    "getAdminKey isolates admin_key from sibling cookies"
+  );
+  assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
+}
+console.log();
+
+// ─── Case 3: mismatched key → false ───
+console.log("Case: header value present but does NOT match ADMIN_API_KEY");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ adminKeyHeader: "wrong-key" });
+  assertEquals(getAdminKey(c), "wrong-key", "getAdminKey returns the (wrong) value");
+  assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
+  assertEquals(
+    isAdminAuthorized(c),
+    false,
+    "isAdminAuthorized is false (no session, bad key)"
+  );
+}
+console.log();
+
+console.log("Case: cookie value present but does NOT match ADMIN_API_KEY");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ cookies: { admin_key: "also-wrong" } });
+  assertEquals(getAdminKey(c), "also-wrong", "getAdminKey returns the (wrong) cookie value");
+  assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
+}
+console.log();
+
+// ─── Case 4: missing ADMIN_API_KEY env → always false ───
+console.log("Case: ADMIN_API_KEY env is unset — every request is rejected");
+{
+  delete process.env.ADMIN_API_KEY;
+
+  const cWithMatchingHeader = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  assertEquals(
+    hasValidAdminApiKey(cWithMatchingHeader),
+    false,
+    "hasValidAdminApiKey is false even when header carries a non-empty value"
+  );
+
+  const cWithMatchingCookie = makeContext({
+    cookies: { admin_key: TEST_ADMIN_KEY },
+  });
+  assertEquals(
+    hasValidAdminApiKey(cWithMatchingCookie),
+    false,
+    "hasValidAdminApiKey is false even when cookie carries a non-empty value"
+  );
+
+  const cEmpty = makeContext();
+  assertEquals(hasValidAdminApiKey(cEmpty), false, "hasValidAdminApiKey is false on empty request");
+  assertEquals(isAdminAuthorized(cEmpty), false, "isAdminAuthorized is false on empty request");
+
+  // restore for subsequent cases
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+}
+console.log();
+
+// ─── Case 4b: empty-string ADMIN_API_KEY env → always false ───
+console.log("Case: ADMIN_API_KEY env is empty string — every request is rejected");
+{
+  process.env.ADMIN_API_KEY = "";
+  const c = makeContext({ adminKeyHeader: "" });
+  assertEquals(
+    hasValidAdminApiKey(c),
+    false,
+    "hasValidAdminApiKey is false (empty env must never auth, even matching empty header)"
+  );
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+}
+console.log();
+
+// ─── Case 5: session-only admin (no key) ───
+console.log("Case: signed admin session cookie, no admin key");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({
+    cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("admin") },
+  });
+  assertEquals(getAdminKey(c), null, "getAdminKey returns null (no key header/cookie)");
+  assertEquals(
+    hasValidAdminApiKey(c),
+    false,
+    "hasValidAdminApiKey is false (session is not an API key)"
+  );
+  assertEquals(
+    isAdminAuthorized(c),
+    true,
+    "isAdminAuthorized is true (admin role from signed session)"
+  );
+}
+console.log();
+
+// ─── Case 6: non-admin session + no key → both false ───
+console.log("Case: signed non-admin session cookie, no admin key");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({
+    cookies: {
+      [SESSION_COOKIE_NAME]: adminSessionCookie("quality_manager"),
+    },
+  });
+  assertEquals(getAdminKey(c), null, "getAdminKey returns null");
+  assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
+  assertEquals(
+    isAdminAuthorized(c),
+    false,
+    "isAdminAuthorized is false (session role is not admin)"
+  );
+}
+console.log();
+
+// ─── Case 6b: no session, no key → both false ───
+console.log("Case: no session, no admin key");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext();
+  assertEquals(getAdminKey(c), null, "getAdminKey returns null");
+  assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
+  assertEquals(isAdminAuthorized(c), false, "isAdminAuthorized is false");
+}
+console.log();
+
+// ─── Case 7: forged session cookie (bad signature) is ignored ───
+console.log("Case: tampered session cookie with admin role is rejected");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const goodToken = signSession({
+    userId: 1,
+    email: "x@y.z",
+    name: "x",
+    role: "admin",
+    exp: Date.now() + 60_000,
+  });
+  // Flip the signature: keep the data half, append a junk signature.
+  const [data] = goodToken.split(".");
+  const forged = `${data}.deadbeefnotavalidsignature`;
+  const c = makeContext({
+    cookies: { [SESSION_COOKIE_NAME]: encodeURIComponent(forged) },
+  });
+  assertEquals(
+    isAdminAuthorized(c),
+    false,
+    "isAdminAuthorized is false on tampered session"
+  );
+}
+console.log();
+
+// ─── Case 8: header takes precedence over cookie when both present ───
+console.log("Case: header wins over cookie when both supply an admin key");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({
+    adminKeyHeader: TEST_ADMIN_KEY,
+    cookies: { admin_key: "ignored-cookie-value" },
+  });
+  assertEquals(
+    getAdminKey(c),
+    TEST_ADMIN_KEY,
+    "getAdminKey prefers the X-Admin-Key header"
+  );
+  assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
+}
+console.log();
+
+console.log(`Results: ${passed} passed, ${failed} failed`);
+
+if (failed > 0) {
+  console.error("\n❌ Admin-auth helper tests FAILED");
+  process.exit(1);
+}
+
+console.log("\n✅ All admin-auth helper tests passed");
