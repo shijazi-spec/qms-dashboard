@@ -125,27 +125,27 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="lg:col-span-2 bg-white rounded-lg shadow">
                 <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-900">Audit Schedule</h2>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="audits.audit_schedule">Audit Schedule</h2>
                     <select id="filterAuditStatus" aria-label="Filter by audit status" data-on-change="loadAudits" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">All Status</option>
-                        <option value="planned">Planned</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="fieldwork_complete">Fieldwork Complete</option>
-                        <option value="report_draft">Report Draft</option>
-                        <option value="closed">Closed</option>
+                        <option value="" data-i18n="common.all_status">All Status</option>
+                        <option value="planned" data-i18n="audits.planned">Planned</option>
+                        <option value="in_progress" data-i18n="common.in_progress">In Progress</option>
+                        <option value="fieldwork_complete" data-i18n="audits.s_fieldwork_complete">Fieldwork Complete</option>
+                        <option value="report_draft" data-i18n="audits.s_report_draft">Report Draft</option>
+                        <option value="closed" data-i18n="common.closed">Closed</option>
                     </select>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Audit</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Start Date</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Findings</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_code">Code</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_audit">Audit</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_type">Type</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_start_date">Start Date</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_findings">Findings</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_status">Status</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="auditsTableBody" class="bg-white divide-y divide-gray-200">
@@ -157,14 +157,14 @@
 
             <div class="space-y-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Findings by Severity</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="audits.findings_severity">Findings by Severity</h2>
                     <div id="bySeverityChart" class="space-y-2">
                         <div class="text-gray-600 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Upcoming Audits</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="audits.upcoming_audits">Upcoming Audits</h2>
                     <div id="upcomingAudits" class="space-y-3">
                         <div class="text-gray-600 text-center py-4">Loading...</div>
                     </div>
@@ -174,21 +174,21 @@
 
         <div class="bg-white rounded-lg shadow">
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-900">Findings Register</h2>
+                <h2 class="text-lg font-semibold text-gray-900" data-i18n="audits.findings_register">Findings Register</h2>
                 <div class="flex gap-3">
                     <select id="filterFindingSeverity" aria-label="Filter by finding severity" data-on-change="loadFindings" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">All Severity</option>
-                        <option value="critical">Critical</option>
-                        <option value="major">Major</option>
+                        <option value="" data-i18n="common.all_severity">All Severity</option>
+                        <option value="critical" data-i18n="common.critical">Critical</option>
+                        <option value="major" data-i18n="common.major">Major</option>
                         <option value="minor">Minor</option>
-                        <option value="observation">Observation</option>
+                        <option value="observation" data-i18n="common.observation">Observation</option>
                     </select>
                     <select id="filterFindingStatus" aria-label="Filter by finding status" data-on-change="loadFindings" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="">All Status</option>
-                        <option value="open">Open</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="pending_verification">Pending Verification</option>
-                        <option value="verified_closed">Verified Closed</option>
+                        <option value="" data-i18n="common.all_status">All Status</option>
+                        <option value="open" data-i18n="common.open">Open</option>
+                        <option value="in_progress" data-i18n="common.in_progress">In Progress</option>
+                        <option value="pending_verification" data-i18n="common.pending_verification">Pending Verification</option>
+                        <option value="verified_closed" data-i18n="common.verified_closed">Verified Closed</option>
                     </select>
                 </div>
             </div>
@@ -196,13 +196,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Finding</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Audit</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Severity</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_finding">Finding</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_audit">Audit</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_severity">Severity</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_responsible">Responsible</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_due_date">Due Date</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_status">Status</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="audits.col_actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="findingsTableBody" class="bg-white divide-y divide-gray-200">
@@ -216,7 +216,7 @@
     <div id="addAuditModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Schedule New Audit</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="audits.schedule_audit">Schedule New Audit</h3>
                 <button data-on-click="closeModal" data-args="[&quot;addAuditModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -226,65 +226,65 @@
             <form id="addAuditForm" data-on-submit="submitAudit" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Audit Code *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_audit_code">Audit Code *</label>
                         <input type="text" name="audit_code" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., AUD-2024-001">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Audit Type *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_audit_type">Audit Type *</label>
                         <select name="audit_type" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="internal">Internal Audit</option>
-                            <option value="external">External Audit</option>
-                            <option value="regulatory">Regulatory Audit</option>
-                            <option value="certification">Certification Audit</option>
-                            <option value="surveillance">Surveillance Audit</option>
+                            <option value="internal" data-i18n="audits.t_internal">Internal Audit</option>
+                            <option value="external" data-i18n="audits.t_external">External Audit</option>
+                            <option value="regulatory" data-i18n="audits.t_regulatory">Regulatory Audit</option>
+                            <option value="certification" data-i18n="audits.t_certification">Certification Audit</option>
+                            <option value="surveillance" data-i18n="audits.t_surveillance">Surveillance Audit</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Audit Title *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_audit_title">Audit Title *</label>
                     <input type="text" name="title" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., ISO 27001 Certification Audit">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_description">Description</label>
                     <textarea name="description" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Brief description of the audit scope"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Standard/Framework</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_standard">Standard/Framework</label>
                         <input type="text" name="audit_standard" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., ISO 27001:2022">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Lead Auditor</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_lead_auditor">Lead Auditor</label>
                         <input type="text" name="lead_auditor" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of lead auditor">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Auditee Department</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_auditee_dept">Auditee Department</label>
                         <input type="text" name="auditee_department" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Department being audited">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Auditee Contact</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_auditee_contact">Auditee Contact</label>
                         <input type="text" name="auditee_contact" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Contact person">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Planned Start Date</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_planned_start">Planned Start Date</label>
                         <input type="date" name="planned_start_date" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Planned End Date</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_planned_end">Planned End Date</label>
                         <input type="date" name="planned_end_date" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_scope">Scope</label>
                     <textarea name="scope" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Define the scope of the audit"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
                     <button type="button" data-on-click="closeModal" data-args="[&quot;addAuditModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Schedule Audit</button>
+                    <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800" data-i18n="audits.schedule_btn">Schedule Audit</button>
                 </div>
             </form>
         </div>
@@ -293,7 +293,7 @@
     <div id="addFindingModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Record Audit Finding</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="audits.record_finding">Record Audit Finding</h3>
                 <button data-on-click="closeModal" data-args="[&quot;addFindingModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -303,69 +303,69 @@
             <form id="addFindingForm" data-on-submit="submitFinding" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Finding Code *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_finding_code">Finding Code *</label>
                         <input type="text" name="finding_code" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., FND-001">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Audit *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_audit_required">Audit *</label>
                         <select name="audit_id" required id="modalAuditSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select audit</option>
+                            <option value="" data-i18n="audits.select_audit">Select audit</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Finding Title *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_finding_title">Finding Title *</label>
                     <input type="text" name="title" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Brief title of the finding">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_description_required">Description *</label>
                     <textarea name="description" required rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Detailed description of the finding"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_category_required">Category *</label>
                         <select name="category" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="nonconformity">Nonconformity</option>
-                            <option value="observation">Observation</option>
-                            <option value="opportunity_for_improvement">Opportunity for Improvement</option>
-                            <option value="good_practice">Good Practice</option>
+                            <option value="nonconformity" data-i18n="audits.c_nonconformity">Nonconformity</option>
+                            <option value="observation" data-i18n="common.observation">Observation</option>
+                            <option value="opportunity_for_improvement" data-i18n="audits.c_opportunity">Opportunity for Improvement</option>
+                            <option value="good_practice" data-i18n="audits.c_good_practice">Good Practice</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Severity *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_severity_required">Severity *</label>
                         <select name="severity" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="critical">Critical</option>
-                            <option value="major">Major</option>
-                            <option value="minor" selected>Minor</option>
-                            <option value="observation">Observation</option>
+                            <option value="critical" data-i18n="common.critical">Critical</option>
+                            <option value="major" data-i18n="common.major">Major</option>
+                            <option value="minor" selected data-i18n="common.minor">Minor</option>
+                            <option value="observation" data-i18n="common.observation">Observation</option>
                         </select>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Responsible Party</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_responsible_party">Responsible Party</label>
                         <input type="text" name="responsible_party" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Person responsible for action">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_due_date">Due Date</label>
                         <input type="date" name="due_date" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Control Reference</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_control_ref">Control Reference</label>
                     <input type="text" name="control_reference" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., ISO 27001 A.8.3">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Description</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_evidence_desc">Evidence Description</label>
                     <textarea name="evidence_description" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe the evidence that led to this finding"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Corrective Action</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="audits.f_corrective_action">Corrective Action</label>
                     <textarea name="corrective_action" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Proposed corrective action"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
                     <button type="button" data-on-click="closeModal" data-args="[&quot;addFindingModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Record Finding</button>
+                    <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800" data-i18n="audits.record_btn">Record Finding</button>
                 </div>
             </form>
         </div>
@@ -530,6 +530,15 @@
                 return;
             }
 
+            const _at = (k, fb) => (window.WalaPlusI18n && window.WalaPlusI18n.t)
+                ? (window.WalaPlusI18n.t(k) || fb) : fb;
+            const sevMap = {
+                'critical': _at('common.critical', 'Critical'),
+                'high':     _at('common.high',     'High'),
+                'medium':   _at('common.medium',   'Medium'),
+                'low':      _at('common.low',      'Low')
+            };
+            const updateLbl = _at('common.update', 'Update');
             tbody.innerHTML = findings.map(f => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3">
@@ -809,7 +818,7 @@
                     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
                         <div class="flex justify-between items-start mb-4">
                             <div>
-                                <h3 class="text-lg font-bold text-gray-900">Manual Audit Intake</h3>
+                                <h3 class="text-lg font-bold text-gray-900" data-i18n="audits.manual_audit_intake">Manual Audit Intake</h3>
                                 <p class="text-xs text-gray-500 mt-1">
                                     Upload an off-platform audit report. GPT-4o will extract
                                     findings for your review before anything is written to the
@@ -820,27 +829,27 @@
                         </div>
                         <form data-on-submit="submitManualIntake" data-pass-event="true" class="space-y-3">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Audit Title *</label>
+                                <label class="block text-sm font-medium text-gray-700" data-i18n="audits.f_audit_title">Audit Title *</label>
                                 <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                     placeholder="e.g. HR Q1 Training Records Audit">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Source Department *</label>
+                                <label class="block text-sm font-medium text-gray-700" data-i18n="audits.f_source_dept">Source Department *</label>
                                 <input name="source_department" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                     placeholder="e.g. HR, Finance, IT">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Audit Date</label>
+                                <label class="block text-sm font-medium text-gray-700" data-i18n="audits.f_audit_date">Audit Date</label>
                                 <input name="audit_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Report File *</label>
+                                <label class="block text-sm font-medium text-gray-700" data-i18n="audits.f_report_file">Report File *</label>
                                 <input name="file" type="file" required accept=".pdf,.txt,.md,.doc,.docx" class="mt-1 w-full text-sm">
                                 <p class="text-xs text-gray-500 mt-1">PDF, Word, TXT or Markdown. Max ~10 MB.</p>
                             </div>
                             <div class="pt-3 flex gap-2 justify-end">
                                 <button type="button" data-on-click="closeModal" data-args="[&quot;manualIntakeModal&quot;]" class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>
-                                <button type="submit" class="px-4 py-2 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Upload &amp; Extract</button>
+                                <button type="submit" class="px-4 py-2 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800" data-i18n="audits.upload_extract">Upload &amp; Extract</button>
                             </div>
                         </form>
                     </div>`;

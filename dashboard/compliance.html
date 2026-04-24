@@ -51,11 +51,11 @@
             </div>
             <div class="flex gap-3">
                 <select id="statusFilter" class="border rounded-lg px-3 py-2 text-sm" data-on-change="loadObligations" data-testid="select-status-filter">
-                    <option value="">All Statuses</option>
-                    <option value="compliant">Compliant</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="non_compliant">Non-Compliant</option>
-                    <option value="pending">Pending</option>
+                    <option value="" data-i18n="common.all_statuses">All Statuses</option>
+                    <option value="compliant" data-i18n="compliance.s_compliant">Compliant</option>
+                    <option value="in_progress" data-i18n="compliance.s_in_progress">In Progress</option>
+                    <option value="non_compliant" data-i18n="compliance.s_non_compliant">Non-Compliant</option>
+                    <option value="pending" data-i18n="compliance.s_pending">Pending</option>
                 </select>
                 <button data-on-click="navigateTo" data-args="[&quot;/api/compliance/export&quot;]" class="px-4 py-2 border border-green-700 text-green-700 rounded-lg hover:bg-green-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -109,19 +109,19 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <div id="compliantCount" class="text-2xl font-bold text-green-700">-</div>
-                <div class="text-sm text-green-600">Compliant</div>
+                <div class="text-sm text-green-600" data-i18n="compliance.compliant">Compliant</div>
             </div>
             <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                 <div id="partialCount" class="text-2xl font-bold text-amber-700">-</div>
-                <div class="text-sm text-amber-600">Partially Compliant</div>
+                <div class="text-sm text-amber-600" data-i18n="compliance.partially_compliant">Partially Compliant</div>
             </div>
             <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
                 <div id="nonCompliantCount" class="text-2xl font-bold text-red-700">-</div>
-                <div class="text-sm text-red-600">Non-Compliant</div>
+                <div class="text-sm text-red-600" data-i18n="compliance.non_compliant">Non-Compliant</div>
             </div>
             <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                 <div id="notAssessedCount" class="text-2xl font-bold text-gray-600">-</div>
-                <div class="text-sm text-gray-500">Not Assessed</div>
+                <div class="text-sm text-gray-500" data-i18n="compliance.not_assessed">Not Assessed</div>
             </div>
         </div>
 
@@ -140,18 +140,18 @@
                     <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                         <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.obligations_register">Obligations Register</h2>
                         <select id="filterRegulation" data-on-change="loadObligations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                            <option value="">All Regulations</option>
+                            <option value="" data-i18n="compliance.all_regulations">All Regulations</option>
                         </select>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Obligation</th>
-                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Priority</th>
-                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_code">Code</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_obligation">Obligation</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_priority">Priority</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_status">Status</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="obligationsTableBody" class="bg-white divide-y divide-gray-200">
@@ -190,20 +190,20 @@
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.gap_analysis">Gap Analysis</h2>
                 <select id="gapRegulationFilter" data-on-change="loadGapAnalysis" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-gap-regulation">
-                    <option value="">All Regulations</option>
+                    <option value="" data-i18n="compliance.all_regulations">All Regulations</option>
                 </select>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Obligation</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Priority</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Score</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Assessed</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_code">Code</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_obligation">Obligation</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_domain">Domain</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_priority">Priority</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_status">Status</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_score">Score</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_last_assessed">Last Assessed</th>
                         </tr>
                     </thead>
                     <tbody id="gapAnalysisBody" class="bg-white divide-y divide-gray-200">
@@ -227,73 +227,73 @@
             <form id="addObligationForm" data-on-submit="submitObligation" data-pass-event="true" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Obligation Code *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_obligation_code">Obligation Code *</label>
                         <input type="text" name="obligation_code" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., PDPL-001">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Regulation *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_regulation">Regulation *</label>
                         <select name="regulation_id" required id="modalRegulationSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select regulation</option>
+                            <option value="" data-i18n="compliance.select_regulation">Select regulation</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Article Reference</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_article_ref">Article Reference</label>
                     <input type="text" name="article_reference" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., Article 5, Clause 2">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_title">Title *</label>
                     <input type="text" name="title" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Obligation title">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_description">Description *</label>
                     <textarea name="description" required rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Detailed description of the compliance requirement"></textarea>
                 </div>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Priority *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_priority">Priority *</label>
                         <select name="priority" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="critical">Critical</option>
-                            <option value="high">High</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="low">Low</option>
+                            <option value="critical" data-i18n="compliance.p_critical">Critical</option>
+                            <option value="high" data-i18n="compliance.p_high">High</option>
+                            <option value="medium" selected data-i18n="compliance.p_medium">Medium</option>
+                            <option value="low" data-i18n="compliance.p_low">Low</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Requirement Type</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_requirement_type">Requirement Type</label>
                         <select name="requirement_type" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="mandatory">Mandatory</option>
-                            <option value="recommended">Recommended</option>
-                            <option value="optional">Optional</option>
+                            <option value="mandatory" data-i18n="compliance.rt_mandatory">Mandatory</option>
+                            <option value="recommended" data-i18n="compliance.rt_recommended">Recommended</option>
+                            <option value="optional" data-i18n="compliance.rt_optional">Optional</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_frequency">Frequency</label>
                         <select name="compliance_frequency" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="continuous">Continuous</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="quarterly">Quarterly</option>
-                            <option value="annual" selected>Annual</option>
+                            <option value="continuous" data-i18n="compliance.fr_continuous">Continuous</option>
+                            <option value="monthly" data-i18n="compliance.fr_monthly">Monthly</option>
+                            <option value="quarterly" data-i18n="compliance.fr_quarterly">Quarterly</option>
+                            <option value="annual" selected data-i18n="compliance.fr_annual">Annual</option>
                         </select>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Responsible Department</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_responsible_dept">Responsible Department</label>
                         <input type="text" name="responsible_department" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., IT, Legal, Compliance">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Responsible Role</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_responsible_role">Responsible Role</label>
                         <input type="text" name="responsible_role" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., DPO, CISO">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Requirements</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_evidence_req">Evidence Requirements</label>
                     <textarea name="evidence_requirements" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="What evidence is needed to demonstrate compliance?"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
                     <button type="button" data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800">Create Obligation</button>
+                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="compliance.create_obligation">Create Obligation</button>
                 </div>
             </form>
         </div>
@@ -313,28 +313,28 @@
                 <input type="hidden" name="obligation_id" id="assessmentObligationId">
                 <div id="assessmentObligationInfo" class="bg-gray-50 p-3 rounded-lg text-sm mb-4"></div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Compliance Status *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_compliance_status">Compliance Status *</label>
                     <select name="compliance_status" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                        <option value="compliant">Compliant</option>
-                        <option value="partially_compliant">Partially Compliant</option>
-                        <option value="non_compliant">Non-Compliant</option>
-                        <option value="not_assessed">Not Assessed</option>
+                        <option value="compliant" data-i18n="compliance.s_compliant">Compliant</option>
+                        <option value="partially_compliant" data-i18n="compliance.s_partially_compliant">Partially Compliant</option>
+                        <option value="non_compliant" data-i18n="compliance.s_non_compliant">Non-Compliant</option>
+                        <option value="not_assessed" data-i18n="compliance.s_not_assessed">Not Assessed</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Assessed By *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_assessed_by">Assessed By *</label>
                     <input type="text" name="assessed_by" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Your name">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Provided</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_evidence_provided">Evidence Provided</label>
                     <textarea name="evidence_provided" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe the evidence reviewed"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Gaps Identified</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_gaps">Gaps Identified</label>
                     <textarea name="gaps_identified" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe any compliance gaps found"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.f_comments">Comments</label>
                     <textarea name="comments" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Additional notes"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
@@ -467,8 +467,12 @@
             
             const options = regs.map(r => `<option value="${r.id}">${r.regulation_code} - ${r.name}</option>`).join('');
             
-            filterSelect.innerHTML = '<option value="">All Regulations</option>' + options;
-            modalSelect.innerHTML = '<option value="">Select regulation</option>' + options;
+            filterSelect.innerHTML = '<option value="" data-i18n="compliance.all_regulations">All Regulations</option>' + options;
+            modalSelect.innerHTML = '<option value="" data-i18n="compliance.select_regulation">Select regulation</option>' + options;
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) {
+                window.WalaPlusI18n.applyToDOM(filterSelect);
+                window.WalaPlusI18n.applyToDOM(modalSelect);
+            }
         }
 
         async function loadObligations() {
@@ -533,8 +537,23 @@
             return classes[status] || 'bg-gray-100';
         }
 
+        function _ct(k, fb) {
+            return (window.WalaPlusI18n && window.WalaPlusI18n.t)
+                ? (window.WalaPlusI18n.t(k) || fb)
+                : fb;
+        }
         function formatStatus(status) {
-            return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const map = {
+                'compliant':           _ct('compliance.s_compliant',           'Compliant'),
+                'partially_compliant': _ct('compliance.s_partially_compliant', 'Partially Compliant'),
+                'non_compliant':       _ct('compliance.s_non_compliant',       'Non-Compliant'),
+                'not_assessed':        _ct('compliance.s_not_assessed',        'Not Assessed'),
+                'in_progress':         _ct('compliance.s_in_progress',         'In Progress'),
+                'pending':             _ct('compliance.s_pending',             'Pending'),
+                'pending_review':      _ct('compliance.s_pending_review',      'Pending Review'),
+                'exempt':              _ct('compliance.s_exempt',              'Exempt')
+            };
+            return map[status] || String(status || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }
 
         async function loadDeadlines() {
@@ -577,7 +596,7 @@
             const infoEl = document.getElementById('assessmentObligationInfo');
             infoEl.innerHTML = '';
             const strong = document.createElement('strong');
-            strong.textContent = 'Obligation:';
+            strong.textContent = _ct('compliance.lbl_obligation', 'Obligation:');
             infoEl.appendChild(strong);
             infoEl.appendChild(document.createTextNode(' ' + title));
             document.getElementById('assessmentForm').reset();
@@ -665,10 +684,10 @@
                     'not_assessed': 'status-not-assessed'
                 };
                 const statusLabels = {
-                    'compliant': 'Compliant',
-                    'partially_compliant': 'Partial',
-                    'non_compliant': 'Non-Compliant',
-                    'not_assessed': 'Not Assessed'
+                    'compliant':           _ct('compliance.s_compliant',           'Compliant'),
+                    'partially_compliant': _ct('compliance.s_partial_short',       'Partial'),
+                    'non_compliant':       _ct('compliance.s_non_compliant',       'Non-Compliant'),
+                    'not_assessed':        _ct('compliance.s_not_assessed',        'Not Assessed')
                 };
                 tbody.innerHTML = gaps.map(g => `
                     <tr class="hover:bg-gray-50" data-testid="row-gap-${g.obligation_code}">

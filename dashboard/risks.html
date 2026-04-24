@@ -56,9 +56,9 @@
             </div>
             <div class="flex gap-3 items-center">
                 <div class="flex items-center gap-2 text-sm">
-                    <label class="text-gray-500">From:</label>
+                    <label class="text-gray-500" data-i18n="common.from">From:</label>
                     <input type="date" id="dateFrom" class="border rounded-lg px-2 py-1.5 text-sm" data-on-change="applyFilters" aria-label="Filter from date" data-testid="input-date-from" />
-                    <label class="text-gray-500">To:</label>
+                    <label class="text-gray-500" data-i18n="common.to">To:</label>
                     <input type="date" id="dateTo" class="border rounded-lg px-2 py-1.5 text-sm" data-on-change="applyFilters" aria-label="Filter to date" data-testid="input-date-to" />
                 </div>
                 <button data-on-click="streamDownload" data-args="[&quot;/api/risks/export-xlsx&quot;,&quot;risks.xlsx&quot;]" data-pass-event="true" data-estimate-url="/api/risks/export-xlsx" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-export-xlsx" title="Multi-sheet workbook (Summary, All Risks, per-category, Treatment Actions)">
@@ -137,44 +137,44 @@
                 <h2 class="text-lg font-semibold text-gray-900" data-i18n="risks.risk_register">Risk Register</h2>
                 <div class="flex-1"></div>
                 <select id="filterStatus" data-on-change="applyFilters" aria-label="Filter by status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                    <option value="">All Status</option>
-                    <option value="open">Open</option>
-                    <option value="in_treatment">In Treatment</option>
-                    <option value="monitoring">Monitoring</option>
-                    <option value="escalated">Escalated</option>
-                    <option value="closed">Closed</option>
+                    <option value="" data-i18n="common.all_status">All Status</option>
+                    <option value="open" data-i18n="common.open">Open</option>
+                    <option value="in_treatment" data-i18n="risks.s_in_treatment">In Treatment</option>
+                    <option value="monitoring" data-i18n="risks.s_monitoring">Monitoring</option>
+                    <option value="escalated" data-i18n="risks.s_escalated">Escalated</option>
+                    <option value="closed" data-i18n="common.closed">Closed</option>
                 </select>
                 <select id="filterCategory" data-on-change="applyFilters" aria-label="Filter by category" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                    <option value="">All Categories</option>
-                    <option value="operational">Operational</option>
-                    <option value="legal">Legal</option>
-                    <option value="financial">Financial</option>
-                    <option value="data_privacy">Data Privacy (PDPL)</option>
-                    <option value="information_security">Information Security</option>
-                    <option value="fraud">Fraud</option>
-                    <option value="vendor">Vendor/Third-Party</option>
+                    <option value="" data-i18n="common.all_categories">All Categories</option>
+                    <option value="operational" data-i18n="risks.cat_operational">Operational</option>
+                    <option value="legal" data-i18n="risks.cat_legal">Legal</option>
+                    <option value="financial" data-i18n="risks.cat_financial">Financial</option>
+                    <option value="data_privacy" data-i18n="risks.cat_data_privacy">Data Privacy (PDPL)</option>
+                    <option value="information_security" data-i18n="risks.cat_info_security">Information Security</option>
+                    <option value="fraud" data-i18n="risks.cat_fraud">Fraud</option>
+                    <option value="vendor" data-i18n="risks.cat_vendor">Vendor/Third-Party</option>
                 </select>
                 <select id="filterLevel" data-on-change="applyFilters" aria-label="Filter by risk level" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                    <option value="">All Levels</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
+                    <option value="" data-i18n="common.all_levels">All Levels</option>
+                    <option value="critical" data-i18n="common.critical">Critical</option>
+                    <option value="high" data-i18n="common.high">High</option>
+                    <option value="medium" data-i18n="common.medium">Medium</option>
+                    <option value="low" data-i18n="common.low">Low</option>
                 </select>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Title</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Score</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Level</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Treatment</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="risks.col_id">ID</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="risks.col_risk_title">Risk Title</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.category">Category</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.owner">Owner</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.score">Score</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="risks.col_level">Level</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="risks.col_treatment">Treatment</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="risksTableBody" class="bg-white divide-y divide-gray-200">
@@ -195,7 +195,7 @@
     <div id="addRiskModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Add New Risk</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="risks.add_new_risk">Add New Risk</h3>
                 <button data-on-click="closeModal" data-args="[&quot;addRiskModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -204,103 +204,103 @@
             </div>
             <form id="addRiskForm" data-on-submit="submitRisk" data-pass-event="true" class="p-6 space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Risk Title *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_risk_title">Risk Title *</label>
                     <input type="text" name="risk_title" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe the risk clearly">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_description">Description</label>
                     <textarea name="risk_description" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Detailed description of the risk"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_category">Category *</label>
                         <select name="risk_category" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select category</option>
-                            <option value="operational">Operational</option>
-                            <option value="legal">Legal</option>
-                            <option value="financial">Financial</option>
-                            <option value="data_privacy">Data Privacy (PDPL)</option>
-                            <option value="information_security">Information Security</option>
-                            <option value="fraud">Fraud</option>
-                            <option value="vendor">Vendor/Third-Party</option>
+                            <option value="" data-i18n="risks.select_category">Select category</option>
+                            <option value="operational" data-i18n="risks.cat_operational">Operational</option>
+                            <option value="legal" data-i18n="risks.cat_legal">Legal</option>
+                            <option value="financial" data-i18n="risks.cat_financial">Financial</option>
+                            <option value="data_privacy" data-i18n="risks.cat_data_privacy">Data Privacy (PDPL)</option>
+                            <option value="information_security" data-i18n="risks.cat_info_security">Information Security</option>
+                            <option value="fraud" data-i18n="risks.cat_fraud">Fraud</option>
+                            <option value="vendor" data-i18n="risks.cat_vendor">Vendor/Third-Party</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Risk Source</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_risk_source">Risk Source</label>
                         <input type="text" name="risk_source" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., Audit finding, Incident">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Impact Score (1-5) *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_impact">Impact Score (1-5) *</label>
                         <select name="impact_score" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select impact</option>
-                            <option value="1">1 - Negligible</option>
-                            <option value="2">2 - Minor</option>
-                            <option value="3">3 - Moderate</option>
-                            <option value="4">4 - Significant</option>
-                            <option value="5">5 - Catastrophic</option>
+                            <option value="" data-i18n="risks.select_impact">Select impact</option>
+                            <option value="1" data-i18n="risks.i_1">1 - Negligible</option>
+                            <option value="2" data-i18n="risks.i_2">2 - Minor</option>
+                            <option value="3" data-i18n="risks.i_3">3 - Moderate</option>
+                            <option value="4" data-i18n="risks.i_4">4 - Significant</option>
+                            <option value="5" data-i18n="risks.i_5">5 - Catastrophic</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Likelihood Score (1-5) *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_likelihood">Likelihood Score (1-5) *</label>
                         <select name="likelihood_score" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select likelihood</option>
-                            <option value="1">1 - Rare</option>
-                            <option value="2">2 - Unlikely</option>
-                            <option value="3">3 - Possible</option>
-                            <option value="4">4 - Likely</option>
-                            <option value="5">5 - Almost Certain</option>
+                            <option value="" data-i18n="risks.select_likelihood">Select likelihood</option>
+                            <option value="1" data-i18n="risks.l_1">1 - Rare</option>
+                            <option value="2" data-i18n="risks.l_2">2 - Unlikely</option>
+                            <option value="3" data-i18n="risks.l_3">3 - Possible</option>
+                            <option value="4" data-i18n="risks.l_4">4 - Likely</option>
+                            <option value="5" data-i18n="risks.l_5">5 - Almost Certain</option>
                         </select>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Risk Owner</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_owner">Risk Owner</label>
                         <input type="text" name="risk_owner" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of risk owner">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Owner Department</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_owner_dept">Owner Department</label>
                         <select name="owner_department" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select department</option>
-                            <option value="Operations">Operations</option>
-                            <option value="IT">IT</option>
-                            <option value="Finance">Finance</option>
-                            <option value="Legal">Legal</option>
-                            <option value="HR">HR</option>
-                            <option value="Quality">Quality</option>
-                            <option value="Compliance">Compliance</option>
+                            <option value="" data-i18n="risks.select_department">Select department</option>
+                            <option value="Operations" data-i18n="risks.dept_operations">Operations</option>
+                            <option value="IT" data-i18n="risks.dept_it">IT</option>
+                            <option value="Finance" data-i18n="risks.dept_finance">Finance</option>
+                            <option value="Legal" data-i18n="risks.dept_legal">Legal</option>
+                            <option value="HR" data-i18n="risks.dept_hr">HR</option>
+                            <option value="Quality" data-i18n="risks.dept_quality">Quality</option>
+                            <option value="Compliance" data-i18n="risks.dept_compliance">Compliance</option>
                         </select>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Treatment Strategy</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_treatment_strategy">Treatment Strategy</label>
                         <select name="treatment_strategy" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Select treatment</option>
-                            <option value="mitigate">Mitigate - Reduce impact/likelihood</option>
-                            <option value="accept">Accept - Acknowledge and monitor</option>
-                            <option value="transfer">Transfer - Insurance/outsource</option>
-                            <option value="avoid">Avoid - Eliminate the activity</option>
+                            <option value="" data-i18n="risks.opt_select_treatment">Select treatment</option>
+                            <option value="mitigate" data-i18n="risks.opt_mitigate_full">Mitigate - Reduce impact/likelihood</option>
+                            <option value="accept" data-i18n="risks.opt_accept_full">Accept - Acknowledge and monitor</option>
+                            <option value="transfer" data-i18n="risks.opt_transfer_full">Transfer - Insurance/outsource</option>
+                            <option value="avoid" data-i18n="risks.opt_avoid_full">Avoid - Eliminate the activity</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Review Frequency</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_review_frequency">Review Frequency</label>
                         <select name="review_frequency" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="quarterly">Quarterly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="semi_annual">Semi-Annual</option>
-                            <option value="annual">Annual</option>
+                            <option value="quarterly" data-i18n="risks.f_quarterly">Quarterly</option>
+                            <option value="monthly" data-i18n="risks.f_monthly">Monthly</option>
+                            <option value="semi_annual" data-i18n="risks.f_semi_annual">Semi-Annual</option>
+                            <option value="annual" data-i18n="risks.f_annual">Annual</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Treatment Description</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="risks.f_treatment_desc">Treatment Description</label>
                     <textarea name="treatment_description" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="How will this risk be treated?"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
                     <button type="button" data-on-click="closeModal" data-args="[&quot;addRiskModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Add Risk</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" data-i18n="risks.add_risk">Add Risk</button>
                 </div>
             </form>
         </div>
@@ -309,7 +309,7 @@
     <div id="riskDetailModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Risk Details</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="risks.risk_details">Risk Details</h3>
                 <button data-on-click="closeModal" data-args="[&quot;riskDetailModal&quot;]" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

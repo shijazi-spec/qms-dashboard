@@ -138,7 +138,7 @@ The platform is built on the Mastra AI agent framework and Hono HTTP server.
 -   **Replit AI Integrations / OpenAI**: For GPT-4o AI capabilities.
 -   **Inngest**: Event-driven workflow orchestration.
 -   **Resend**: For outgoing email services.
--   **Zoho CRM**: Integrated for live CRM data, enrichment, and duplicate detection.
+-   **Zoho CRM**: Integrated for live CRM data.
 -   **Slack**: For notifications and infographic sharing.
 -   **exceljs**: Library for generating XLSX data exports.
 -   **ImageMagick**: Used for converting SVG infographics to PNG.

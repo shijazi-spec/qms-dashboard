@@ -44,17 +44,17 @@
             </div>
             <div class="flex space-x-2">
                 <select id="ownerFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs">
-                    <option value="">All Owners</option>
-                    <option value="quality_manager">Sara (Quality Manager)</option>
-                    <option value="grc_manager">Maram (GRC Manager)</option>
-                    <option value="governance_officer">Mohammed (Governance Officer)</option>
-                    <option value="shared">Shared KPIs</option>
+                    <option value="" data-i18n="kpis.all_owners">All Owners</option>
+                    <option value="quality_manager" data-i18n="kpis.o_quality_manager">Sara (Quality Manager)</option>
+                    <option value="grc_manager" data-i18n="kpis.o_grc_manager">Maram (GRC Manager)</option>
+                    <option value="governance_officer" data-i18n="kpis.o_governance_officer">Mohammed (Governance Officer)</option>
+                    <option value="shared" data-i18n="kpis.o_shared_kpis">Shared KPIs</option>
                 </select>
                 <select id="statusFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
-                    <option value="">All Statuses</option>
-                    <option value="green">On Target</option>
-                    <option value="yellow">At Risk</option>
-                    <option value="red">Below Target</option>
+                    <option value="" data-i18n="common.all_statuses">All Statuses</option>
+                    <option value="green" data-i18n="kpis.s_on_target">On Target</option>
+                    <option value="yellow" data-i18n="kpis.s_at_risk">At Risk</option>
+                    <option value="red" data-i18n="kpis.s_below_target">Below Target</option>
                 </select>
                 <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export-xlsx&quot;]" class="border border-emerald-700 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" data-testid="button-export-xlsx" title="Multi-sheet workbook by category">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -124,63 +124,63 @@
                 <input type="hidden" id="kpiId">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">KPI Name</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_kpi_name">KPI Name</label>
                         <input type="text" id="kpiName" required class="w-full border rounded px-3 py-2">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">KPI Code</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_kpi_code">KPI Code</label>
                         <input type="text" id="kpiCode" required class="w-full border rounded px-3 py-2" placeholder="e.g., QM-GOV-002">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_description">Description</label>
                     <textarea id="kpiDescription" rows="2" class="w-full border rounded px-3 py-2"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Owner</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_owner">Owner</label>
                         <select id="kpiOwnerType" required class="w-full border rounded px-3 py-2">
-                            <option value="quality_manager">Sara (Quality Manager)</option>
-                            <option value="grc_manager">Maram (GRC Manager)</option>
-                            <option value="governance_officer">Mohammed (Governance Officer)</option>
-                            <option value="shared">Shared</option>
+                            <option value="quality_manager" data-i18n="kpis.o_quality_manager">Sara (Quality Manager)</option>
+                            <option value="grc_manager" data-i18n="kpis.o_grc_manager">Maram (GRC Manager)</option>
+                            <option value="governance_officer" data-i18n="kpis.o_governance_officer">Mohammed (Governance Officer)</option>
+                            <option value="shared" data-i18n="kpis.o_shared">Shared</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_category">Category</label>
                         <select id="kpiCategory" required class="w-full border rounded px-3 py-2">
-                            <option value="governance">Governance</option>
-                            <option value="risk">Risk</option>
-                            <option value="compliance">Compliance</option>
-                            <option value="audit">Audit</option>
-                            <option value="quality">Quality</option>
-                            <option value="vendor">Vendor</option>
-                            <option value="training">Training</option>
-                            <option value="ai">AI</option>
+                            <option value="governance" data-i18n="kpis.c_governance">Governance</option>
+                            <option value="risk" data-i18n="kpis.c_risk">Risk</option>
+                            <option value="compliance" data-i18n="kpis.c_compliance">Compliance</option>
+                            <option value="audit" data-i18n="kpis.c_audit">Audit</option>
+                            <option value="quality" data-i18n="kpis.c_quality">Quality</option>
+                            <option value="vendor" data-i18n="kpis.c_vendor">Vendor</option>
+                            <option value="training" data-i18n="kpis.c_training">Training</option>
+                            <option value="ai" data-i18n="kpis.c_ai">AI</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Formula</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_formula">Formula</label>
                     <input type="text" id="kpiFormula" class="w-full border rounded px-3 py-2" placeholder="e.g., (Completed / Total) × 100">
                 </div>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_unit">Unit</label>
                         <input type="text" id="kpiUnit" class="w-full border rounded px-3 py-2" value="%">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_frequency">Frequency</label>
                         <select id="kpiFrequency" class="w-full border rounded px-3 py-2">
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly" selected>Monthly</option>
-                            <option value="quarterly">Quarterly</option>
-                            <option value="annual">Annual</option>
+                            <option value="daily" data-i18n="kpis.fr_daily">Daily</option>
+                            <option value="weekly" data-i18n="kpis.fr_weekly">Weekly</option>
+                            <option value="monthly" selected data-i18n="kpis.fr_monthly">Monthly</option>
+                            <option value="quarterly" data-i18n="kpis.fr_quarterly">Quarterly</option>
+                            <option value="annual" data-i18n="kpis.fr_annual">Annual</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Target</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_target">Target</label>
                         <input type="number" id="kpiTarget" class="w-full border rounded px-3 py-2" step="0.01">
                     </div>
                 </div>
@@ -198,10 +198,10 @@
                         <input type="number" id="thresholdRed" required class="w-full border rounded px-3 py-2" step="0.01">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Direction</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_direction">Direction</label>
                         <select id="thresholdDirection" class="w-full border rounded px-3 py-2">
-                            <option value="higher_is_better">Higher is Better</option>
-                            <option value="lower_is_better">Lower is Better</option>
+                            <option value="higher_is_better" data-i18n="kpis.d_higher">Higher is Better</option>
+                            <option value="lower_is_better" data-i18n="kpis.d_lower">Lower is Better</option>
                         </select>
                     </div>
                 </div>

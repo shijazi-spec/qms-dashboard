@@ -89,6 +89,76 @@ function section(tag, cls, text, key) {
 function h2lg(text, key) { return section('h2', 'text-lg font-semibold text-gray-900', text, key); }
 function h2xl(text, key) { return section('h2', 'text-xl font-semibold text-gray-900', text, key); }
 function h3lg(text, key) { return section('h3', 'text-lg font-semibold text-gray-900', text, key); }
+function h3xl(text, key) { return section('h3', 'text-xl font-semibold text-gray-900', text, key); }
+function h3bold(text, key) { return section('h3', 'text-lg font-bold text-gray-900', text, key); }
+
+// Table header helpers (left & center align variants used across the dashboard)
+function thLeft(text, key) {
+  return {
+    from: '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">' + text + '</th>',
+    to: '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="' + key + '">' + text + '</th>',
+  };
+}
+function thCenter(text, key) {
+  return {
+    from: '<th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">' + text + '</th>',
+    to: '<th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="' + key + '">' + text + '</th>',
+  };
+}
+
+// Form label helpers
+function lbl(text, key) {
+  return {
+    from: '<label class="block text-sm font-medium text-gray-700 mb-1">' + text + '</label>',
+    to: '<label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="' + key + '">' + text + '</label>',
+  };
+}
+function lblPlain(text, key) {
+  return {
+    from: '<label class="block text-sm font-medium text-gray-700">' + text + '</label>',
+    to: '<label class="block text-sm font-medium text-gray-700" data-i18n="' + key + '">' + text + '</label>',
+  };
+}
+function lblGray(text, key) {
+  return {
+    from: '<label class="block text-sm text-gray-600 mb-1">' + text + '</label>',
+    to: '<label class="block text-sm text-gray-600 mb-1" data-i18n="' + key + '">' + text + '</label>',
+  };
+}
+function lblColored(cls, text, key) {
+  return {
+    from: '<label class="' + cls + '">' + text + '</label>',
+    to: '<label class="' + cls + '" data-i18n="' + key + '">' + text + '</label>',
+  };
+}
+
+// <option> wrappers
+function opt(value, text, key) {
+  return {
+    from: '<option value="' + value + '">' + text + '</option>',
+    to: '<option value="' + value + '" data-i18n="' + key + '">' + text + '</option>',
+  };
+}
+function optSelected(value, text, key) {
+  return {
+    from: '<option value="' + value + '" selected>' + text + '</option>',
+    to: '<option value="' + value + '" selected data-i18n="' + key + '">' + text + '</option>',
+  };
+}
+function optEmpty(text, key) {
+  return {
+    from: '<option value="">' + text + '</option>',
+    to: '<option value="" data-i18n="' + key + '">' + text + '</option>',
+  };
+}
+
+// <button type="submit"> wrapper
+function btnSubmit(cls, text, key) {
+  return {
+    from: '<button type="submit" class="' + cls + '">' + text + '</button>',
+    to: '<button type="submit" class="' + cls + '" data-i18n="' + key + '">' + text + '</button>',
+  };
+}
 
 // Per-page replacements -------------------------------------------------------
 const PAGES = {
@@ -107,6 +177,86 @@ const PAGES = {
     { from: '                    Manual Intake\n', to: '                    <span data-i18n="audits.manual_intake">Manual Intake</span>\n' },
     { from: '                    + Finding\n', to: '                    <span data-i18n="audits.new_finding">+ Finding</span>\n' },
     { from: '                    New Audit\n', to: '                    <span data-i18n="audits.new_audit">New Audit</span>\n' },
+    // Section h2 titles (Audit Schedule, Findings by Severity, Upcoming Audits, Findings Register)
+    h2lg('Audit Schedule', 'audits.audit_schedule'),
+    section('h2', 'text-lg font-semibold text-gray-900 mb-4', 'Findings by Severity', 'audits.findings_severity'),
+    section('h2', 'text-lg font-semibold text-gray-900 mb-4', 'Upcoming Audits', 'audits.upcoming_audits'),
+    h2lg('Findings Register', 'audits.findings_register'),
+    // Modal h3 titles
+    h3lg('Schedule New Audit', 'audits.schedule_audit'),
+    h3lg('Record Audit Finding', 'audits.record_finding'),
+    h3bold('Manual Audit Intake', 'audits.manual_audit_intake'),
+    // Annual programme table headers
+    thLeft('Code', 'audits.col_code'),
+    thLeft('Audit', 'audits.col_audit'),
+    thCenter('Type', 'audits.col_type'),
+    thCenter('Start Date', 'audits.col_start_date'),
+    thCenter('Findings', 'audits.col_findings'),
+    thCenter('Status', 'audits.col_status'),
+    thCenter('Actions', 'audits.col_actions'),
+    // Findings register table headers
+    thLeft('Finding', 'audits.col_finding'),
+    thCenter('Severity', 'audits.col_severity'),
+    thLeft('Responsible', 'audits.col_responsible'),
+    thCenter('Due Date', 'audits.col_due_date'),
+    // Schedule audit form labels
+    lbl('Audit Code *', 'audits.f_audit_code'),
+    lbl('Audit Type *', 'audits.f_audit_type'),
+    lbl('Audit Title *', 'audits.f_audit_title'),
+    lbl('Description', 'audits.f_description'),
+    lbl('Standard/Framework', 'audits.f_standard'),
+    lbl('Lead Auditor', 'audits.f_lead_auditor'),
+    lbl('Auditee Department', 'audits.f_auditee_dept'),
+    lbl('Auditee Contact', 'audits.f_auditee_contact'),
+    lbl('Planned Start Date', 'audits.f_planned_start'),
+    lbl('Planned End Date', 'audits.f_planned_end'),
+    lbl('Scope', 'audits.f_scope'),
+    // Record finding form labels
+    lbl('Finding Code *', 'audits.f_finding_code'),
+    lbl('Audit *', 'audits.f_audit_required'),
+    lbl('Finding Title *', 'audits.f_finding_title'),
+    lbl('Description *', 'audits.f_description_required'),
+    lbl('Category *', 'audits.f_category_required'),
+    lbl('Severity *', 'audits.f_severity_required'),
+    lbl('Responsible Party', 'audits.f_responsible_party'),
+    lbl('Due Date', 'audits.f_due_date'),
+    lbl('Control Reference', 'audits.f_control_ref'),
+    lbl('Evidence Description', 'audits.f_evidence_desc'),
+    lbl('Corrective Action', 'audits.f_corrective_action'),
+    // Manual intake form labels
+    lblPlain('Audit Title *', 'audits.f_audit_title'),
+    lblPlain('Source Department *', 'audits.f_source_dept'),
+    lblPlain('Audit Date', 'audits.f_audit_date'),
+    lblPlain('Report File *', 'audits.f_report_file'),
+    // Submit buttons
+    btnSubmit('px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800', 'Schedule Audit', 'audits.schedule_btn'),
+    btnSubmit('px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800', 'Record Finding', 'audits.record_btn'),
+    { from: '<button type="submit" class="px-4 py-2 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Upload &amp; Extract</button>',
+      to: '<button type="submit" class="px-4 py-2 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800" data-i18n="audits.upload_extract">Upload &amp; Extract</button>' },
+    // Filter & form select options
+    optEmpty('All Status', 'common.all_status'),
+    optEmpty('All Severity', 'common.all_severity'),
+    optEmpty('Select audit', 'audits.select_audit'),
+    opt('planned', 'Planned', 'audits.planned'),
+    opt('in_progress', 'In Progress', 'common.in_progress'),
+    opt('fieldwork_complete', 'Fieldwork Complete', 'audits.s_fieldwork_complete'),
+    opt('report_draft', 'Report Draft', 'audits.s_report_draft'),
+    opt('closed', 'Closed', 'common.closed'),
+    opt('critical', 'Critical', 'common.critical'),
+    opt('major', 'Major', 'common.major'),
+    optSelected('minor', 'Minor', 'common.minor'),
+    opt('observation', 'Observation', 'common.observation'),
+    opt('open', 'Open', 'common.open'),
+    opt('pending_verification', 'Pending Verification', 'common.pending_verification'),
+    opt('verified_closed', 'Verified Closed', 'common.verified_closed'),
+    opt('internal', 'Internal Audit', 'audits.t_internal'),
+    opt('external', 'External Audit', 'audits.t_external'),
+    opt('regulatory', 'Regulatory Audit', 'audits.t_regulatory'),
+    opt('certification', 'Certification Audit', 'audits.t_certification'),
+    opt('surveillance', 'Surveillance Audit', 'audits.t_surveillance'),
+    opt('nonconformity', 'Nonconformity', 'audits.c_nonconformity'),
+    opt('opportunity_for_improvement', 'Opportunity for Improvement', 'audits.c_opportunity'),
+    opt('good_practice', 'Good Practice', 'audits.c_good_practice'),
   ],
   'kpis.html': [
     setI18n('<h1 class="text-2xl font-bold text-gray-900">', 'kpis.title', 'KPI Engine'),
@@ -119,6 +269,52 @@ const PAGES = {
     { from: '>Status Distribution</h3>', to: ' data-i18n="kpis.status_distribution">Status Distribution</h3>' },
     { from: '>KPIs by Category</h3>', to: ' data-i18n="kpis.kpis_by_category">KPIs by Category</h3>' },
     { from: '>KPI Catalog</h2>', to: ' data-i18n="kpis.kpi_catalog">KPI Catalog</h2>' },
+    // Modal h3 titles (kpis.html uses id="modalTitle" for one)
+    { from: '<h3 id="modalTitle" class="text-lg font-semibold text-gray-900">Add KPI</h3>',
+      to: '<h3 id="modalTitle" class="text-lg font-semibold text-gray-900" data-i18n="kpis.add_kpi_modal">Add KPI</h3>' },
+    h3lg('KPI Details', 'kpis.kpi_details'),
+    // Form labels (Add KPI modal)
+    lbl('KPI Name', 'kpis.f_kpi_name'),
+    lbl('KPI Code', 'kpis.f_kpi_code'),
+    lbl('Description', 'kpis.f_description'),
+    lbl('Owner', 'kpis.f_owner'),
+    lbl('Category', 'kpis.f_category'),
+    lbl('Formula', 'kpis.f_formula'),
+    lbl('Unit', 'kpis.f_unit'),
+    lbl('Frequency', 'kpis.f_frequency'),
+    lbl('Target', 'kpis.f_target'),
+    lbl('Green ≥', 'kpis.f_green'),
+    lbl('Amber ≥', 'kpis.f_amber'),
+    lbl('Red Below', 'kpis.f_red'),
+    lbl('Direction', 'kpis.f_direction'),
+    // Submit button
+    btnSubmit('px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800', 'Save KPI', 'kpis.save_kpi'),
+    // Filter & form select options
+    optEmpty('All Owners', 'kpis.all_owners'),
+    optEmpty('All Statuses', 'common.all_statuses'),
+    opt('quality_manager', 'Sara (Quality Manager)', 'kpis.o_quality_manager'),
+    opt('grc_manager', 'Maram (GRC Manager)', 'kpis.o_grc_manager'),
+    opt('governance_officer', 'Mohammed (Governance Officer)', 'kpis.o_governance_officer'),
+    opt('shared', 'Shared KPIs', 'kpis.o_shared_kpis'),
+    opt('shared', 'Shared', 'kpis.o_shared'),
+    opt('green', 'On Target', 'kpis.s_on_target'),
+    opt('yellow', 'At Risk', 'kpis.s_at_risk'),
+    opt('red', 'Below Target', 'kpis.s_below_target'),
+    opt('governance', 'Governance', 'kpis.c_governance'),
+    opt('risk', 'Risk', 'kpis.c_risk'),
+    opt('compliance', 'Compliance', 'kpis.c_compliance'),
+    opt('audit', 'Audit', 'kpis.c_audit'),
+    opt('quality', 'Quality', 'kpis.c_quality'),
+    opt('vendor', 'Vendor', 'kpis.c_vendor'),
+    opt('training', 'Training', 'kpis.c_training'),
+    opt('ai', 'AI', 'kpis.c_ai'),
+    opt('daily', 'Daily', 'kpis.fr_daily'),
+    opt('weekly', 'Weekly', 'kpis.fr_weekly'),
+    optSelected('monthly', 'Monthly', 'kpis.fr_monthly'),
+    opt('quarterly', 'Quarterly', 'kpis.fr_quarterly'),
+    opt('annual', 'Annual', 'kpis.fr_annual'),
+    opt('higher_is_better', 'Higher is Better', 'kpis.d_higher'),
+    opt('lower_is_better', 'Lower is Better', 'kpis.d_lower'),
   ],
   'risks.html': [
     setI18n('<h1 class="text-2xl font-bold text-gray-900">', 'risks.title', 'Enterprise Risk Register'),
@@ -132,6 +328,65 @@ const PAGES = {
     { from: '>Risk Heatmap</h2>', to: ' data-i18n="risks.risk_heatmap">Risk Heatmap</h2>' },
     { from: '>Top 5 Risks</h2>', to: ' data-i18n="risks.top_risks">Top 5 Risks</h2>' },
     { from: '>Risk Register</h2>', to: ' data-i18n="risks.risk_register">Risk Register</h2>' },
+    // Modal h3 titles
+    h3lg('Add New Risk', 'risks.add_new_risk'),
+    h3lg('Risk Details', 'risks.risk_details'),
+    // Risk register table headers
+    thLeft('ID', 'risks.col_id'),
+    thLeft('Risk Title', 'risks.col_risk_title'),
+    thLeft('Category', 'common.category'),
+    thLeft('Owner', 'common.owner'),
+    thCenter('Score', 'common.score'),
+    thCenter('Level', 'risks.col_level'),
+    thCenter('Treatment', 'risks.col_treatment'),
+    thCenter('Status', 'common.status'),
+    thCenter('Actions', 'common.actions'),
+    // From / To labels above filters
+    { from: '<label class="text-gray-500">From:</label>', to: '<label class="text-gray-500" data-i18n="common.from">From:</label>' },
+    { from: '<label class="text-gray-500">To:</label>', to: '<label class="text-gray-500" data-i18n="common.to">To:</label>' },
+    // Form labels - add risk modal
+    lbl('Risk Title *', 'risks.f_risk_title'),
+    lbl('Description', 'risks.f_description'),
+    lbl('Category *', 'risks.f_category'),
+    lbl('Risk Source', 'risks.f_risk_source'),
+    lbl('Impact Score (1-5) *', 'risks.f_impact'),
+    lbl('Likelihood Score (1-5) *', 'risks.f_likelihood'),
+    lbl('Risk Owner', 'risks.f_owner'),
+    lbl('Owner Department', 'risks.f_owner_dept'),
+    lbl('Treatment Strategy', 'risks.f_treatment_strategy'),
+    lbl('Review Frequency', 'risks.f_review_frequency'),
+    lbl('Treatment Description', 'risks.f_treatment_desc'),
+    // Submit button
+    btnSubmit('px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700', 'Add Risk', 'risks.add_risk'),
+    // Filter & form select options
+    optEmpty('All Status', 'common.all_status'),
+    optEmpty('All Categories', 'common.all_categories'),
+    optEmpty('All Levels', 'common.all_levels'),
+    optEmpty('Select category', 'risks.select_category'),
+    optEmpty('Select impact', 'risks.select_impact'),
+    optEmpty('Select likelihood', 'risks.select_likelihood'),
+    optEmpty('Select department', 'risks.select_department'),
+    opt('open', 'Open', 'common.open'),
+    opt('in_treatment', 'In Treatment', 'risks.s_in_treatment'),
+    opt('monitoring', 'Monitoring', 'risks.s_monitoring'),
+    opt('escalated', 'Escalated', 'risks.s_escalated'),
+    opt('closed', 'Closed', 'common.closed'),
+    opt('critical', 'Critical', 'common.critical'),
+    opt('high', 'High', 'common.high'),
+    opt('medium', 'Medium', 'common.medium'),
+    opt('low', 'Low', 'common.low'),
+    opt('operational', 'Operational', 'risks.cat_operational'),
+    opt('legal', 'Legal', 'risks.cat_legal'),
+    opt('financial', 'Financial', 'risks.cat_financial'),
+    opt('data_privacy', 'Data Privacy (PDPL)', 'risks.cat_data_privacy'),
+    opt('information_security', 'Information Security', 'risks.cat_info_security'),
+    opt('fraud', 'Fraud', 'risks.cat_fraud'),
+    opt('vendor', 'Vendor/Third-Party', 'risks.cat_vendor'),
+    opt('1', '1 - Negligible', 'risks.i_1'),
+    opt('2', '2 - Minor', 'risks.i_2'),
+    opt('3', '3 - Moderate', 'risks.i_3'),
+    opt('4', '4 - Significant', 'risks.i_4'),
+    opt('5', '5 - Catastrophic', 'risks.i_5'),
   ],
   'compliance.html': [
     setI18n('<h1 class="text-2xl font-bold text-gray-900">', 'compliance.title', 'Regulatory Compliance'),
@@ -146,6 +401,64 @@ const PAGES = {
     { from: '>By Priority</h2>', to: ' data-i18n="compliance.by_priority">By Priority</h2>' },
     { from: '>Upcoming Deadlines</h2>', to: ' data-i18n="compliance.upcoming_deadlines">Upcoming Deadlines</h2>' },
     { from: '>Gap Analysis</h2>', to: ' data-i18n="compliance.gap_analysis">Gap Analysis</h2>' },
+    // Compliance status pills (KPI tiles)
+    { from: '>Compliant</div>', to: ' data-i18n="compliance.compliant">Compliant</div>' },
+    { from: '>Partially Compliant</div>', to: ' data-i18n="compliance.partially_compliant">Partially Compliant</div>' },
+    { from: '>Non-Compliant</div>', to: ' data-i18n="compliance.non_compliant">Non-Compliant</div>' },
+    { from: '>Not Assessed</div>', to: ' data-i18n="compliance.not_assessed">Not Assessed</div>' },
+    // Modal h3 titles
+    h3xl('Add Compliance Obligation', 'compliance.add_obligation_modal'),
+    h3xl('Record Compliance Assessment', 'compliance.record_assessment'),
+    // Obligations Register table headers
+    thLeft('Code', 'compliance.col_code'),
+    thLeft('Obligation', 'compliance.col_obligation'),
+    thLeft('Domain', 'compliance.col_domain'),
+    thCenter('Priority', 'compliance.col_priority'),
+    thCenter('Status', 'compliance.col_status'),
+    thCenter('Score', 'compliance.col_score'),
+    thLeft('Last Assessed', 'compliance.col_last_assessed'),
+    thCenter('Actions', 'compliance.col_actions'),
+    // Form labels - add obligation modal
+    lbl('Obligation Code *', 'compliance.f_obligation_code'),
+    lbl('Regulation *', 'compliance.f_regulation'),
+    lbl('Article Reference', 'compliance.f_article_ref'),
+    lbl('Title *', 'compliance.f_title'),
+    lbl('Description *', 'compliance.f_description'),
+    lbl('Priority *', 'compliance.f_priority'),
+    lbl('Requirement Type', 'compliance.f_requirement_type'),
+    lbl('Frequency', 'compliance.f_frequency'),
+    lbl('Responsible Department', 'compliance.f_responsible_dept'),
+    lbl('Responsible Role', 'compliance.f_responsible_role'),
+    lbl('Evidence Requirements', 'compliance.f_evidence_req'),
+    // Form labels - record assessment modal
+    lbl('Compliance Status *', 'compliance.f_compliance_status'),
+    lbl('Assessed By *', 'compliance.f_assessed_by'),
+    lbl('Evidence Provided', 'compliance.f_evidence_provided'),
+    lbl('Gaps Identified', 'compliance.f_gaps'),
+    lbl('Comments', 'compliance.f_comments'),
+    // Submit button
+    btnSubmit('px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800', 'Create Obligation', 'compliance.create_obligation'),
+    // Filter & form select options
+    optEmpty('All Statuses', 'common.all_statuses'),
+    optEmpty('All Regulations', 'compliance.all_regulations'),
+    optEmpty('Select regulation', 'compliance.select_regulation'),
+    opt('compliant', 'Compliant', 'compliance.s_compliant'),
+    opt('in_progress', 'In Progress', 'compliance.s_in_progress'),
+    opt('non_compliant', 'Non-Compliant', 'compliance.s_non_compliant'),
+    opt('pending', 'Pending', 'compliance.s_pending'),
+    opt('partially_compliant', 'Partially Compliant', 'compliance.s_partially_compliant'),
+    opt('not_assessed', 'Not Assessed', 'compliance.s_not_assessed'),
+    opt('critical', 'Critical', 'compliance.p_critical'),
+    opt('high', 'High', 'compliance.p_high'),
+    optSelected('medium', 'Medium', 'compliance.p_medium'),
+    opt('low', 'Low', 'compliance.p_low'),
+    opt('mandatory', 'Mandatory', 'compliance.rt_mandatory'),
+    opt('recommended', 'Recommended', 'compliance.rt_recommended'),
+    opt('optional', 'Optional', 'compliance.rt_optional'),
+    opt('continuous', 'Continuous', 'compliance.fr_continuous'),
+    opt('monthly', 'Monthly', 'compliance.fr_monthly'),
+    opt('quarterly', 'Quarterly', 'compliance.fr_quarterly'),
+    optSelected('annual', 'Annual', 'compliance.fr_annual'),
   ],
   'crm.html': [
     setI18n('<h1 class="text-2xl font-bold text-gray-900">', 'crm.title', 'CRM Data Hub'),
@@ -182,6 +495,85 @@ const PAGES = {
     { from: '>Expiring Contracts</h2>', to: ' data-i18n="vendors.expiring_contracts">Expiring Contracts</h2>' },
     { from: '>Overdue Assessments</h2>', to: ' data-i18n="vendors.overdue_assessments">Overdue Assessments</h2>' },
     { from: '>Remediation Tracker</h2>', to: ' data-i18n="vendors.remediation_tracker">Remediation Tracker</h2>' },
+    // Modal h3 titles
+    h3xl('Register New Vendor', 'vendors.register_new'),
+    h3xl('Vendor Risk Assessment', 'vendors.assessment_modal'),
+    // Vendor registry table headers
+    thLeft('Code', 'vendors.col_code'),
+    thLeft('Vendor', 'vendors.col_vendor'),
+    thCenter('Category', 'vendors.col_category'),
+    thCenter('Criticality', 'vendors.col_criticality'),
+    thCenter('Risk Score', 'vendors.col_risk_score'),
+    thCenter('Status', 'vendors.col_status'),
+    // Remediation tracker table headers
+    thLeft('Remediation', 'vendors.col_remediation'),
+    thCenter('Priority', 'vendors.col_priority'),
+    thLeft('Assigned To', 'vendors.col_assigned_to'),
+    thCenter('Due Date', 'vendors.col_due_date'),
+    // Form labels - register vendor modal
+    lbl('Vendor Code *', 'vendors.f_vendor_code'),
+    lbl('Vendor Name *', 'vendors.f_vendor_name'),
+    lbl('Description', 'vendors.f_description'),
+    lbl('Category *', 'vendors.f_category'),
+    lbl('Criticality *', 'vendors.f_criticality'),
+    lbl('Data Access Level', 'vendors.f_data_access'),
+    lbl('Contract Start', 'vendors.f_contract_start'),
+    lbl('Contract End', 'vendors.f_contract_end'),
+    lbl('Contract Value', 'vendors.f_contract_value'),
+    lbl('Contact Name', 'vendors.f_contact_name'),
+    lbl('Contact Email', 'vendors.f_contact_email'),
+    lbl('Country', 'vendors.f_country'),
+    lbl('Services Provided', 'vendors.f_services'),
+    lbl('Owner Name', 'vendors.f_owner_name'),
+    lbl('Owner Department', 'vendors.f_owner_dept'),
+    // Form labels - assessment modal
+    lbl('Vendor *', 'vendors.f_vendor_required'),
+    lbl('Assessment Type *', 'vendors.f_assessment_type'),
+    lbl('Assessor *', 'vendors.f_assessor'),
+    lbl('Next Assessment Date', 'vendors.f_next_assessment'),
+    lblGray('Security', 'vendors.f_security'),
+    lblGray('Financial', 'vendors.f_financial'),
+    lblGray('Operational', 'vendors.f_operational'),
+    lblGray('Compliance', 'vendors.f_compliance'),
+    lbl('Security Findings', 'vendors.f_security_findings'),
+    lbl('Financial Findings', 'vendors.f_financial_findings'),
+    lbl('Operational Findings', 'vendors.f_operational_findings'),
+    lbl('Compliance Findings', 'vendors.f_compliance_findings'),
+    lbl('Recommendations', 'vendors.f_recommendations'),
+    lbl('Status', 'vendors.f_status'),
+    // Submit buttons
+    btnSubmit('px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700', 'Register Vendor', 'vendors.register_vendor'),
+    // Filter & form select options
+    optEmpty('All Criticality', 'vendors.all_criticality'),
+    optEmpty('All Status', 'vendors.all_status'),
+    optEmpty('All Priority', 'vendors.all_priority'),
+    optEmpty('Select vendor...', 'vendors.select_vendor'),
+    opt('critical', 'Critical', 'common.critical'),
+    opt('high', 'High', 'common.high'),
+    optSelected('medium', 'Medium', 'common.medium'),
+    opt('medium', 'Medium', 'common.medium'),
+    opt('low', 'Low', 'common.low'),
+    opt('active', 'Active', 'vendors.s_active'),
+    opt('pending_approval', 'Pending', 'vendors.s_pending'),
+    opt('probation', 'Probation', 'vendors.s_probation'),
+    opt('open', 'Open', 'common.open'),
+    opt('in_progress', 'In Progress', 'common.in_progress'),
+    opt('pending_verification', 'Pending Verification', 'common.pending_verification'),
+    opt('closed', 'Closed', 'common.closed'),
+    opt('technology', 'Technology', 'vendors.cat_technology'),
+    opt('consulting', 'Consulting', 'vendors.cat_consulting'),
+    opt('manufacturing', 'Manufacturing', 'vendors.cat_manufacturing'),
+    opt('logistics', 'Logistics', 'vendors.cat_logistics'),
+    opt('financial', 'Financial', 'vendors.cat_financial'),
+    opt('professional_services', 'Professional Services', 'vendors.cat_professional'),
+    opt('other', 'Other', 'vendors.cat_other'),
+    opt('none', 'None', 'vendors.da_none'),
+    opt('limited', 'Limited', 'vendors.da_limited'),
+    opt('sensitive', 'Sensitive', 'vendors.da_sensitive'),
+    opt('initial', 'Initial Assessment', 'vendors.at_initial'),
+    opt('periodic', 'Periodic Review', 'vendors.at_periodic'),
+    opt('triggered', 'Triggered (Incident)', 'vendors.at_triggered'),
+    opt('exit', 'Exit Assessment', 'vendors.at_exit'),
   ],
   'reviews.html': [
     setI18n('<h1 class="text-2xl font-bold text-gray-900">', 'reviews.title', 'Management Review'),
