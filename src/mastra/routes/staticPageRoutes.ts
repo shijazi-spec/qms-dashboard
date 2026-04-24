@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { getSessionFromCookie } from "./authRoutes";
-import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
+import { hasValidAdminApiKey, isAdminKeyConfigured } from "../../utils/rbacMiddleware";
 
 const STATIC_MIME: Record<string, string> = {
   css: 'text/css; charset=utf-8',
@@ -120,14 +120,19 @@ export const staticPageRoutes = [
     },
   },
   {
+    // Access semantics: this is a *platform-configured* gate, not a true
+    // admin-role gate. The page is shown when the deployment has an
+    // ADMIN_API_KEY configured OR the caller has any valid session — the
+    // underlying `/api/users`, `/api/invitations`, and `/api/rbac` routes
+    // perform their own per-role RBAC via `enforceRoutePermission`, which
+    // is the actual authorization boundary for user-management data.
     path: "/users",
     method: "GET",
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const adminKey = process.env.ADMIN_API_KEY;
           const session = getSessionFromCookie(c.req.header('Cookie'));
-          if (!adminKey && !session) {
+          if (!isAdminKeyConfigured() && !session) {
             return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the Users &amp; Access panel, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
           }
           const filePath = resolveDashboardFile("users.html");
@@ -146,14 +151,19 @@ export const staticPageRoutes = [
     createHandler: async () => serveDashboardPage("accept-invite.html"),
   },
   {
+    // Access semantics: this is a *platform-configured* gate, not a true
+    // admin-role gate. The page is shown when the deployment has an
+    // ADMIN_API_KEY configured OR the caller has any valid session — the
+    // QMS-backing API routes (audits, policies, compliance, risks, etc.)
+    // perform their own per-role RBAC via `enforceRoutePermission`, which
+    // is the actual authorization boundary for QMS data.
     path: "/qms",
     method: "GET",
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const adminKey = process.env.ADMIN_API_KEY;
           const session = getSessionFromCookie(c.req.header('Cookie'));
-          if (!adminKey && !session) {
+          if (!isAdminKeyConfigured() && !session) {
             return c.html(`<!DOCTYPE html><html><head><title>QMS Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">QMS Setup Required</h1><p class="text-gray-600 mb-4">To access the QMS dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
           }
           const filePath = resolveDashboardFile("qms.html");

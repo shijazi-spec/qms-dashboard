@@ -163,6 +163,23 @@ export function hasValidAdminApiKey(c: any): boolean {
   return !!(expectedKey && adminKey === expectedKey);
 }
 
+/**
+ * Returns true when an ADMIN_API_KEY environment value is configured for
+ * this deployment. This is a *platform-configuration* check — it tells you
+ * whether admin operations are wired up at all. It does NOT verify that
+ * the current caller is an admin (use `isAdminAuthorized` or
+ * `requireAdminOrKey` for that).
+ *
+ * Intended use: gating static page handlers (e.g. `/users`, `/qms`) that
+ * render dashboards whose backing APIs perform their own per-route RBAC.
+ * The page should only be shown once the platform has been configured;
+ * the API layer is the source of truth for "may this user actually see
+ * this data?".
+ */
+export function isAdminKeyConfigured(): boolean {
+  return !!process.env.ADMIN_API_KEY;
+}
+
 export function isAdminAuthorized(c: any): boolean {
   if (hasValidAdminApiKey(c)) return true;
   const session = getSessionFromCookie(c.req.header('Cookie'));
