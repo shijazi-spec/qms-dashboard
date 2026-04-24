@@ -4,6 +4,11 @@
  * v4.6: Arabic/RTL support via WalaPlusI18n
  */
 
+// Capture this script's CSP nonce while document.currentScript is still set,
+// so dynamically created <style>/<script> tags can be authorized under the
+// strict style-src/script-src 'nonce-...' policy.
+const WALAPLUS_NAV_NONCE = (document.currentScript && document.currentScript.nonce) || '';
+
 // Helper: load i18n module before navigation renders.
 // Falls back gracefully if i18n.js is not yet loaded.
 (function loadI18nIfNeeded() {
@@ -11,6 +16,7 @@
   var script = document.createElement('script');
   script.src = '/js/i18n.js?v=1.0';
   script.async = false;
+  if (WALAPLUS_NAV_NONCE) script.setAttribute('nonce', WALAPLUS_NAV_NONCE);
   document.head.appendChild(script);
 })();
 
@@ -293,8 +299,13 @@ const WalaPlusNav = {
   },
 
   loadUserInfo() {
+    const tryAdminFallback = () =>
+      fetch('/api/auth/admin-status', { credentials: 'same-origin' })
+        .then(r => (r.ok ? r.json() : { authenticated: false }))
+        .catch(() => ({ authenticated: false }));
     fetch('/api/auth/me')
-      .then(r => { if (!r.ok) return { authenticated: false }; return r.json(); })
+      .then(r => (r.ok ? r.json() : { authenticated: false }))
+      .then(data => (data.authenticated ? data : tryAdminFallback()))
       .then(data => {
         const container = document.getElementById('nav-user-info');
         if (!container) return;
@@ -382,6 +393,7 @@ const WalaPlusNav = {
     if (!document.getElementById('walaplus-nav-layout-style')) {
       const style = document.createElement('style');
       style.id = 'walaplus-nav-layout-style';
+      if (WALAPLUS_NAV_NONCE) style.setAttribute('nonce', WALAPLUS_NAV_NONCE);
       style.textContent = `
         body { padding-top: 48px; padding-left: 256px; transition: padding-left .2s ease, padding-right .2s ease; }
         body.wp-rail-collapsed { padding-left: 64px; }
@@ -529,7 +541,7 @@ const WalaPlusNav = {
 
       <div class="wp-backdrop" id="wp-backdrop"></div>
 
-      <aside class="wp-rail bg-white border-r border-gray-200 flex flex-col" aria-label="Primary navigation" data-testid="nav-rail">
+      <aside id="nav-rail" class="wp-rail bg-white border-r border-gray-200 flex flex-col" aria-label="Primary navigation" data-testid="nav-rail">
         <div class="wp-search-wrap p-3 border-b border-gray-100">
           <div class="relative">
             <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>

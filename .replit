@@ -61,6 +61,10 @@ ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
 MANUAL_INTAKE_DIR = "./data/manual-intake"
 
+[userenv.development]
+RATE_LIMIT_DISABLED = "true"
+TEST_ADMIN_KEY = "WalaPlus-QMS-Admin-2026"
+
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
 

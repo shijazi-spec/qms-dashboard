@@ -29,6 +29,9 @@ export default defineConfig({
     video: 'off',
     trace: 'off',
     ignoreHTTPSErrors: true,
+    extraHTTPHeaders: process.env.TEST_ADMIN_KEY
+      ? { 'X-Admin-Key': process.env.TEST_ADMIN_KEY }
+      : undefined,
   },
   projects: [
     {

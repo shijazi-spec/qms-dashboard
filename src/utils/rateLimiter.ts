@@ -130,6 +130,9 @@ export async function checkRateLimit(
   isAuthenticated: boolean = true,
   userId?: string,
 ): Promise<{ allowed: boolean; retryAfter?: number }> {
+  if (process.env.RATE_LIMIT_DISABLED === 'true') {
+    return { allowed: true };
+  }
   const category = getCategory(path);
 
   const identifier = userId && isAuthenticated ? `user:${userId}` : `ip:${ip}`;

@@ -28,8 +28,15 @@ import { test, expect, Page } from '@playwright/test';
 const BASE_URL = 'http://localhost:5000';
 
 async function setLanguage(page: Page, lang: 'en' | 'ar') {
+  // Only seed when the user has not already chosen a language. This allows
+  // setLang() in-app reloads to take effect without being clobbered by the
+  // init script on every navigation.
   await page.addInitScript((l: string) => {
-    localStorage.setItem('walaplus_lang', l);
+    try {
+      if (!localStorage.getItem('walaplus_lang')) {
+        localStorage.setItem('walaplus_lang', l);
+      }
+    } catch (_) { /* noop */ }
   }, lang);
 }
 

@@ -338,6 +338,28 @@ export const authRoutes = [
     },
   },
   {
+    path: "/api/auth/admin-status",
+    method: "GET" as const,
+    createHandler: async () => {
+      const { hasValidAdminApiKey } = await import("../../utils/rbacMiddleware");
+      return async (c: any) => {
+        if (!hasValidAdminApiKey(c)) {
+          return c.json({ authenticated: false }, 401);
+        }
+        return c.json({
+          authenticated: true,
+          user: {
+            id: 'admin',
+            email: 'admin@walaplus.local',
+            name: 'Admin',
+            picture: null,
+            role: 'admin',
+          },
+        });
+      };
+    },
+  },
+  {
     path: "/api/auth/logout",
     method: "POST" as const,
     createHandler: async () => {

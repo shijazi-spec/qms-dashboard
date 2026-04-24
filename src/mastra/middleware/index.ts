@@ -113,6 +113,7 @@ const PUBLIC_PATHS = [
   // before reaching the network, so the public allowlist is just defensive
   // 404 plumbing for browsers without SW support.
   '/streaming-download-sw.js', '/_stream-download/',
+  '/api/user/language-preference',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];

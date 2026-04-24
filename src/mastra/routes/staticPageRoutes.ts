@@ -200,6 +200,10 @@ export const staticPageRoutes = [
   { path: "/vendors", method: "GET", createHandler: async () => serveDashboardPage("vendors.html") },
   { path: "/tablef", method: "GET", createHandler: async () => serveDashboardPage("tablef.html") },
   { path: "/infographic", method: "GET", createHandler: async () => serveDashboardPage("infographic.html") },
+  { path: "/executive.html", method: "GET", createHandler: async () => serveDashboardPage("executive.html") },
+  { path: "/grc.html", method: "GET", createHandler: async () => serveDashboardPage("grc.html") },
+  { path: "/consultant.html", method: "GET", createHandler: async () => serveDashboardPage("consultant.html") },
+  { path: "/login.html", method: "GET", createHandler: async () => serveDashboardPage("login.html") },
   {
     path: "/docs/SCOPE_OF_WORK.html",
     method: "GET",
