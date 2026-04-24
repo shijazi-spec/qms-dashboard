@@ -276,6 +276,227 @@ async function testPagedQueryYieldsAllRowsInOrder() {
   console.log(`  ✓ pagedQuery: yielded all ${DATA.length} rows (${Math.ceil(DATA.length / PAGE_SIZE)} pages)`);
 }
 
+// ─── (e2) pagedQuery safety cap — runaway queries are aborted ───────────────
+
+async function testPagedQueryRunawayQueryThrows() {
+  const { pagedQuery } = await import('../excelExport');
+
+  // Simulate a misbehaving query that always returns a full page (never
+  // signals end-of-result). Without the safety cap this would loop forever.
+  const PAGE = 100;
+  const fetchPage = async (limit: number, _offset: number) => ({
+    rows: Array.from({ length: limit }, (_, i) => ({ i })),
+  });
+
+  // Override the cap to a small value for the test. The helper reads the
+  // env on each call, so this takes effect immediately.
+  const prev = process.env.EXPORT_MAX_PAGES;
+  process.env.EXPORT_MAX_PAGES = '5';
+
+  let rowsConsumed = 0;
+  let threw = false;
+  try {
+    for await (const _row of pagedQuery(fetchPage, PAGE)) {
+      rowsConsumed++;
+      if (rowsConsumed > 10_000) break; // hard fail-safe
+    }
+  } catch (err: any) {
+    threw = true;
+    assert.ok(
+      /refusing to stream more than/.test(err.message),
+      `Expected runaway-cap error, got: ${err.message}`
+    );
+  } finally {
+    if (prev === undefined) delete process.env.EXPORT_MAX_PAGES;
+    else process.env.EXPORT_MAX_PAGES = prev;
+  }
+
+  assert.ok(threw, 'pagedQuery must throw when a runaway query exceeds the page cap');
+  assert.strictEqual(rowsConsumed, 5 * PAGE, `Expected exactly 5 × ${PAGE} rows before the cap fires`);
+  console.log(`  ✓ pagedQuery safety cap: aborted runaway query after ${rowsConsumed} rows (cap=5 pages × ${PAGE} rows)`);
+}
+
+// Invalid EXPORT_MAX_PAGES values (NaN, "", negative, zero) must NOT silently
+// disable the cap — they should fall back to the safe default.
+async function testPagedQueryInvalidEnvFallsBackToDefault() {
+  const { pagedQuery } = await import('../excelExport');
+  const PAGE = 10;
+  const fetchPage = async (limit: number, _offset: number) => ({
+    rows: Array.from({ length: limit }, (_, i) => ({ i })),
+  });
+  const prev = process.env.EXPORT_MAX_PAGES;
+
+  for (const bad of ['not-a-number', '', '-5', '0', '   ']) {
+    process.env.EXPORT_MAX_PAGES = bad;
+    let drained = 0;
+    let threw = false;
+    try {
+      // Drain just a few iterations — we only need to confirm the cap is
+      // active (i.e., NOT disabled by NaN). With the default cap of 50 000,
+      // a few hundred iterations definitely won't trip it.
+      for await (const _row of pagedQuery(fetchPage, PAGE)) {
+        drained++;
+        if (drained >= 250) break;
+      }
+    } catch (err: any) {
+      threw = true;
+    }
+    assert.ok(!threw, `EXPORT_MAX_PAGES="${bad}" must fall back to default, not throw early`);
+    assert.strictEqual(drained, 250, `Expected 250 rows drained for EXPORT_MAX_PAGES="${bad}"`);
+  }
+
+  if (prev === undefined) delete process.env.EXPORT_MAX_PAGES;
+  else process.env.EXPORT_MAX_PAGES = prev;
+  console.log(`  ✓ pagedQuery: invalid EXPORT_MAX_PAGES values fall back to default (cap stays active)`);
+}
+
+// ─── (f') Memory bound — 500 000-row paged export stays under 128 MB ────────
+// Simulates the production export path: pagedQuery feeds an AsyncIterable into
+// streamCsv / streamXlsx. We measure heap-used delta + RSS delta during a full
+// drain of 500 000 rows and assert the per-stream peak stays well below 128 MB.
+//
+// Each "page" is freshly allocated and discarded once consumed, mirroring how
+// pg.Pool.query() returns a Result that becomes garbage immediately after the
+// for-await loop yields the rows.
+
+async function testStreamCsvMemoryUnder128MBFor500kRows() {
+  const { streamCsv, pagedQuery } = await import('../excelExport');
+
+  const TOTAL_ROWS = 500_000;
+  const PAGE_SIZE  = 500;
+  const MAX_MB     = 128;
+
+  const fetchPage = async (limit: number, offset: number) => {
+    const end = Math.min(offset + limit, TOTAL_ROWS);
+    const rows: string[][] = [];
+    for (let i = offset; i < end; i++) {
+      rows.push([String(i), `name_${i}`, `value_${(i * 31) % 1000}`, `extra_${i}_payload_xyz`]);
+    }
+    return { rows };
+  };
+
+  // Warm-up pass: JIT-compile streamCsv, allocate V8 internals, prime allocator.
+  // Without this, the first cold call inflates the RSS baseline measurement.
+  {
+    const warmRdr = streamCsv('warm.csv', ['a','b'], pagedQuery(async () => ({ rows: [['1','2']] }), 100)).body!.getReader();
+    while (!(await warmRdr.read()).done) {}
+  }
+
+  if (typeof global.gc === 'function') { global.gc(); global.gc(); }
+  const baselineRss  = process.memoryUsage().rss;
+  const baselineHeap = process.memoryUsage().heapUsed;
+  let peakRss  = baselineRss;
+  let peakHeap = baselineHeap;
+
+  const source = pagedQuery<string[]>(fetchPage, PAGE_SIZE);
+  const response = streamCsv('mem_500k.csv', ['id', 'name', 'val', 'extra'], source);
+  const reader = response.body!.getReader();
+
+  let bytesRead = 0;
+  let chunks    = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks++;
+    if (typeof value === 'string') bytesRead += value.length;
+    else if (value instanceof Uint8Array) bytesRead += value.byteLength;
+    if ((chunks & 0x3F) === 0) {
+      const m = process.memoryUsage();
+      if (m.rss      > peakRss)  peakRss  = m.rss;
+      if (m.heapUsed > peakHeap) peakHeap = m.heapUsed;
+    }
+  }
+
+  const rssDeltaMB  = (peakRss  - baselineRss)  / (1024 * 1024);
+  const heapDeltaMB = (peakHeap - baselineHeap) / (1024 * 1024);
+
+  assert.ok(bytesRead > 0, 'must drain non-empty CSV body');
+  assert.ok(
+    rssDeltaMB < MAX_MB,
+    `streamCsv RSS delta for ${TOTAL_ROWS} rows must stay under ${MAX_MB} MB — measured ${rssDeltaMB.toFixed(1)} MB`
+  );
+  console.log(
+    `  ✓ streamCsv 500k rows: RSS Δ ${rssDeltaMB.toFixed(1)} MB / heap Δ ${heapDeltaMB.toFixed(1)} MB / ${(bytesRead/1024/1024).toFixed(1)} MB streamed`
+  );
+}
+
+async function testStreamXlsxMemoryUnder128MBFor500kRows() {
+  const { streamXlsx, pagedQuery } = await import('../excelExport');
+
+  const TOTAL_ROWS = 500_000;
+  const PAGE_SIZE  = 500;
+  const MAX_MB     = 128;
+
+  const fetchPage = async (limit: number, offset: number) => {
+    const end = Math.min(offset + limit, TOTAL_ROWS);
+    const rows: Record<string, unknown>[] = [];
+    for (let i = offset; i < end; i++) {
+      rows.push({ id: i, name: `name_${i}`, val: (i * 31) % 1000, extra: `extra_${i}_payload_xyz` });
+    }
+    return { rows };
+  };
+
+  // Warm-up pass: JIT-compile ExcelJS WorkbookWriter, prime zlib, allocator.
+  // The cold first invocation otherwise dominates the RSS measurement.
+  {
+    const warm = await streamXlsx(
+      [{ name: 'W', columns: [{ header: 'A', key: 'a', width: 4 }], rows: [{ a: 1 }] }],
+      'warm.xlsx'
+    );
+    const wr = warm.body!.getReader();
+    while (!(await wr.read()).done) {}
+  }
+
+  if (typeof global.gc === 'function') { global.gc(); global.gc(); }
+  const baselineRss  = process.memoryUsage().rss;
+  const baselineHeap = process.memoryUsage().heapUsed;
+  let peakRss  = baselineRss;
+  let peakHeap = baselineHeap;
+
+  const source = pagedQuery<Record<string, unknown>>(fetchPage, PAGE_SIZE);
+  const response = await streamXlsx(
+    [{
+      name: 'Data',
+      columns: [
+        { header: 'ID',    key: 'id',    width: 10 },
+        { header: 'Name',  key: 'name',  width: 24 },
+        { header: 'Val',   key: 'val',   width: 10 },
+        { header: 'Extra', key: 'extra', width: 30 },
+      ],
+      rows: source,
+    }],
+    'mem_500k.xlsx',
+    { title: 'Memory benchmark' }
+  );
+
+  const reader = response.body!.getReader();
+  let bytesRead = 0;
+  let chunks    = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks++;
+    if (value instanceof Uint8Array) bytesRead += value.byteLength;
+    if ((chunks & 0x3F) === 0) {
+      const m = process.memoryUsage();
+      if (m.rss      > peakRss)  peakRss  = m.rss;
+      if (m.heapUsed > peakHeap) peakHeap = m.heapUsed;
+    }
+  }
+
+  const rssDeltaMB  = (peakRss  - baselineRss)  / (1024 * 1024);
+  const heapDeltaMB = (peakHeap - baselineHeap) / (1024 * 1024);
+
+  assert.ok(bytesRead > 0, 'must drain non-empty XLSX body');
+  assert.ok(
+    rssDeltaMB < MAX_MB,
+    `streamXlsx RSS delta for ${TOTAL_ROWS} rows must stay under ${MAX_MB} MB — measured ${rssDeltaMB.toFixed(1)} MB`
+  );
+  console.log(
+    `  ✓ streamXlsx 500k rows: RSS Δ ${rssDeltaMB.toFixed(1)} MB / heap Δ ${heapDeltaMB.toFixed(1)} MB / ${(bytesRead/1024/1024).toFixed(1)} MB streamed`
+  );
+}
+
 // ─── (f) First-byte latency — stream responds before all rows are generated ──
 
 async function testStreamCsvFirstByteFasterThanFullDrain() {
@@ -330,9 +551,15 @@ async function main() {
 
     console.log('— pagedQuery generator —');
     await testPagedQueryYieldsAllRowsInOrder();
+    await testPagedQueryRunawayQueryThrows();
+    await testPagedQueryInvalidEnvFallsBackToDefault();
 
     console.log('— Streaming first-byte latency —');
     await testStreamCsvFirstByteFasterThanFullDrain();
+
+    console.log('— Memory bound: 500 000-row paged export under 128 MB —');
+    await testStreamCsvMemoryUnder128MBFor500kRows();
+    await testStreamXlsxMemoryUnder128MBFor500kRows();
 
     console.log('\n✅  All regression tests passed\n');
     process.exit(0);

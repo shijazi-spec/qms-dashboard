@@ -126,6 +126,35 @@ function autoSize(ws: ExcelJS.Worksheet, columns: ColumnSpec[]) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Hard upper bound on the number of pages a single export may stream.
+ * Defends against:
+ *   - misbehaving queries that never stop returning full pages (e.g. an
+ *     ORDER BY over a column with a duplicate-row infinite-scroll bug)
+ *   - LIMIT/OFFSET drift if the underlying table mutates mid-export
+ *
+ * At pageSize = 500 this caps a single export at 500 × 50 000 = 25 000 000
+ * rows, which is well above any realistic legitimate export size for the
+ * tables we serve (event_logs, duplicate_records, enterprise_risks) and
+ * comfortably below anything that could OOM a 512 MB worker.
+ *
+ * Override via env EXPORT_MAX_PAGES if a future bulk-archive use case
+ * legitimately needs more.
+ */
+const PAGED_QUERY_MAX_PAGES_DEFAULT = 50_000;
+
+function pagedQueryMaxPages(): number {
+  // Read at call time (not module load) so tests / ops can override via env
+  // without restarting the worker.
+  const raw = process.env.EXPORT_MAX_PAGES;
+  if (raw === undefined || raw === "") return PAGED_QUERY_MAX_PAGES_DEFAULT;
+  const n = parseInt(raw, 10);
+  // Reject NaN, negatives, and zero — any of these would silently disable
+  // the cap (`pagesFetched >= NaN` is always false).
+  if (!Number.isFinite(n) || n <= 0) return PAGED_QUERY_MAX_PAGES_DEFAULT;
+  return n;
+}
+
+/**
  * Yields rows from a paginated DB query without loading the full result set.
  *
  * Usage — feed directly into streamCsv or streamXlsx:
@@ -136,15 +165,29 @@ function autoSize(ws: ExcelJS.Worksheet, columns: ColumnSpec[]) {
  *   );
  *   return streamCsv(filename, headers, mapToStringRows(source));
  *
- * The generator stops when the final page returns fewer rows than `pageSize`.
+ * The generator stops when the final page returns fewer rows than `pageSize`,
+ * OR when PAGED_QUERY_MAX_PAGES has been reached (whichever comes first).
+ * Hitting the cap throws to surface the runaway condition to the caller
+ * rather than silently truncating the export — silent truncation would be
+ * a data-integrity issue, not a fix.
  */
 export async function* pagedQuery<T = Record<string, unknown>>(
   queryFn: (limit: number, offset: number) => Promise<{ rows: T[] }>,
   pageSize = 500
 ): AsyncGenerator<T> {
+  const maxPages = pagedQueryMaxPages();
   let offset = 0;
+  let pagesFetched = 0;
   while (true) {
+    if (pagesFetched >= maxPages) {
+      throw new Error(
+        `pagedQuery: refusing to stream more than ${maxPages} pages ` +
+        `(${maxPages * pageSize} rows at pageSize=${pageSize}). ` +
+        `If this is a legitimate large export, raise EXPORT_MAX_PAGES.`
+      );
+    }
     const { rows } = await queryFn(pageSize, offset);
+    pagesFetched++;
     for (const row of rows) yield row;
     if (rows.length < pageSize) break;
     offset += pageSize;
