@@ -828,7 +828,7 @@
                             <h4 class="font-semibold text-gray-900">${escapeHtml(c.domain)}</h4>
                             <p class="text-sm text-gray-500">${escapeHtml(c.company_name || '')}</p>
                         </div>
-                        <span class="confidence-${c.confidence_level} px-2 py-1 rounded text-xs font-medium">${c.confidence_score}%</span>
+                        <span class="confidence-${['high','medium','low'].includes(c.confidence_level)?c.confidence_level:'low'} px-2 py-1 rounded text-xs font-medium">${c.confidence_score}%</span>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div><span class="text-gray-500">Leads:</span> <span class="font-medium text-amber-600">${c.total_leads}</span></div>
@@ -947,7 +947,7 @@
                     <td class="px-6 py-3 text-sm">${o.total_records}</td>
                     <td class="px-6 py-3 text-sm font-medium">${o.duplicate_records}</td>
                     <td class="px-6 py-3 text-sm font-bold">${o.duplicate_rate}%</td>
-                    <td class="px-6 py-3 text-sm"><span class="rag-${o.rag_status} px-2 py-1 rounded text-xs font-medium">${o.rag_status === 'green' ? '≤2% ✓' : o.rag_status === 'amber' ? '2-5% ⚠' : '>5% ✗'}</span></td>
+                    <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${o.rag_status === 'green' ? '≤2% ✓' : o.rag_status === 'amber' ? '2-5% ⚠' : '>5% ✗'}</span></td>
                     <td class="px-6 py-3 text-sm">${o.high_confidence_duplicates}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
                     <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">Export</a></td>
@@ -957,17 +957,21 @@
 
         function renderLogs(logs) {
             const tbody = document.getElementById('logsTable');
-            tbody.innerHTML = logs.map(l => `
+            const ALLOWED_STATUSES = ['completed', 'failed', 'running', 'pending'];
+            tbody.innerHTML = logs.map(l => {
+                const safeStatus = ALLOWED_STATUSES.includes(String(l.status || '')) ? String(l.status) : 'unknown';
+                const statusClass = safeStatus === 'completed' ? 'bg-green-100 text-green-800' : safeStatus === 'failed' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
+                return `
                 <tr>
                     <td class="px-6 py-3 text-sm text-gray-500">${formatDate(l.created_at)}</td>
-                    <td class="px-6 py-3 text-sm capitalize">${l.detection_type || l.triggered_by || '-'}</td>
+                    <td class="px-6 py-3 text-sm capitalize">${escapeHtml(l.detection_type || l.triggered_by || '-')}</td>
                     <td class="px-6 py-3 text-sm">${l.total_records_scanned || 0}</td>
                     <td class="px-6 py-3 text-sm">${l.total_clusters_found || 0}</td>
                     <td class="px-6 py-3 text-sm">${l.total_duplicates_detected || 0}</td>
                     <td class="px-6 py-3 text-sm">${l.detection_duration_ms ? (l.detection_duration_ms / 1000).toFixed(1) + 's' : '-'}</td>
-                    <td class="px-6 py-3 text-sm"><span class="px-2 py-1 rounded text-xs ${l.status === 'completed' ? 'bg-green-100 text-green-800' : l.status === 'failed' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${l.status}</span></td>
-                </tr>
-            `).join('') || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No scan logs</td></tr>';
+                    <td class="px-6 py-3 text-sm"><span class="px-2 py-1 rounded text-xs ${statusClass}">${escapeHtml(safeStatus)}</span></td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No scan logs</td></tr>';
         }
 
         // D2: Enhanced cluster modal with side-by-side comparison + AI recommendations
@@ -986,7 +990,7 @@
             (recommendations || []).forEach(r => { recMap[r.record_id] = r; });
 
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
-                <span class="confidence-${cluster.confidence_level} px-3 py-1 rounded-full text-sm font-medium">${cluster.confidence_score}% match</span>
+                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${cluster.confidence_score}% match</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${records.length} records</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${formatCurrency(cluster.estimated_pipeline_value||0)} inflation</span>
                 ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">Primary: ${escapeHtml(primary_type)}</span>` : ''}

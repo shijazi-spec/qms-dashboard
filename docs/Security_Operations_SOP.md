@@ -585,12 +585,15 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 | Directive | Value |
 |-----------|-------|
 | default-src | 'self' |
-| script-src | 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net |
-| style-src | 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com |
-| font-src | 'self' https://fonts.gstatic.com |
-| img-src | 'self' data: https: |
-| connect-src | 'self' |
-| frame-ancestors | 'none' |
+| script-src | 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net | Restricts scripts to same origin + specific nonce (Tailwind CDN allowed) |
+| style-src | 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com | Allows internal styles + Tailwind inline styles + Google Fonts |
+| font-src | 'self' https://fonts.gstatic.com | Restricts fonts to same origin + Google Fonts |
+| img-src | 'self' data: https: | Allows local images + data URIs + https images |
+| frame-ancestors | 'none' | Equivalent to X-Frame-Options: DENY; prevents clickjacking |
+| base-uri | 'self' | Prevents base tag hijacking |
+| form-action | 'self' | Restricts form submissions to the same origin |
+
+**Note on Nonce Mechanism:** The platform generates a unique `cspNonce` for every request. All `<script>` tags in the dashboard HTML files are injected with this nonce. Inline event handlers (e.g., `onclick="..."`) are blocked by this policy unless converted to `addEventListener` or moved to external scripts.
 
 #### CORS Configuration
 
@@ -680,6 +683,61 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 
 ---
 
+### 5.9 Safe Rendering Rules (Stored XSS Prevention)
+
+These rules apply to all dashboard JavaScript that renders API-sourced data into the DOM. A violation creates a stored XSS vulnerability.
+
+#### Core Rules
+
+| Rule | Required Practice | Violation |
+|------|-------------------|-----------|
+| **SR-1** | Use `element.textContent = value` for all plain-text output | `element.innerHTML = value` with API data |
+| **SR-2** | HTML-escape every API field used in a template literal inside `.innerHTML` | Unescaped `${field}` in innerHTML template |
+| **SR-3** | Validate numeric IDs as safe integers before embedding in event attributes | `onclick="fn(${n.id})"` without integer validation |
+| **SR-4** | CSS class names derived from API data must be validated against an allowlist | `class="status-${o.status}"` without allowlist check |
+| **SR-5** | Use `SafeRender.escape()` or the local `escapeHtml()` function; never roll your own ad-hoc escaping | Custom regex that misses edge cases |
+| **SR-6** | `SafeRender.setHtml()` (and `.innerHTML =`) is only permitted for **static, developer-authored** markup | Using `setHtml` / `.innerHTML` with any computed or API-derived string |
+
+#### Shared Helper — `dashboard/js/safe-render.js`
+
+All dashboard pages should load this file. It provides:
+- `SafeRender.escape(str)` — HTML-escape for use in template literals inside `.innerHTML`
+- `SafeRender.setText(el, value)` — safe equivalent of `.textContent =`
+- `SafeRender.safeInt(value)` — validates a value is a non-negative integer (for IDs in event attributes)
+- `SafeRender.allow(value, allowedList, fallback)` — allowlist validation for class names / enum fields
+- `SafeRender.appendText(parent, tag, text, className)` — creates and appends an element safely
+- `SafeRender.setHtml(el, staticHtml)` — explicitly named to make unsafe use visible in code review
+
+#### Already-fixed locations (April 2026)
+
+| File | Field(s) Fixed | Technique |
+|------|---------------|-----------|
+| `dashboard/js/navigation.js` | `n.module` (CSS class + text), `n.id` (onclick attribute) | Allowlist for module; `safeInt` pattern for ID |
+| `dashboard/duplicates.html` | `l.detection_type`, `l.triggered_by`, `l.status` (log table) | `escapeHtml()` + status allowlist |
+| `dashboard/duplicates.html` | `o.rag_status` (CSS class), `c.confidence_level`, `cluster.confidence_level` | Inline allowlist `['green','amber','red']` / `['high','medium','low']` |
+| `dashboard/feedback.html` | All user-visible fields | `escapeHtml()` already applied before this task |
+| `dashboard/tablef.html` | All user-visible fields | `escapeHtml()` already applied before this task |
+
+#### AI-generated content — `ai-consultant-widget.js`
+
+The `renderMarkdown()` function in `ai-consultant-widget.js` HTML-escapes all text content before rendering. AI responses are rendered safely. Static error strings in this file are developer-authored (no escaping needed).
+
+#### Code Review Checklist for Stored XSS
+
+When reviewing any PR that touches dashboard JavaScript:
+- [ ] Search for `.innerHTML =` — every instance must use only static markup or `escapeHtml()`-escaped data
+- [ ] Search for `` `<`` in template literals — confirm all interpolated fields are escaped
+- [ ] Search for `onclick=` with interpolated values — confirm IDs are validated as integers
+- [ ] Search for `class="${` — confirm class name values are allowlist-validated
+- [ ] Confirm new API fields are not implicitly trusted as safe
+
+#### Implementation Files
+- `dashboard/js/safe-render.js` — Shared safe-render helpers (canonical `escapeHtml`, `safeInt`, `allow`, etc.)
+- `dashboard/js/navigation.js` — Notification list rendering (fixed April 2026)
+- `dashboard/duplicates.html` — Log table and owner RAG status rendering (fixed April 2026)
+
+---
+
 ## 6. Cross-Reference Table — All 39 Findings
 
 | # | Finding ID | Title | Severity | CVSS | Domain | Status | Primary Files Modified |
@@ -723,8 +781,9 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 | 37 | QMS-036 | Broken Export Endpoints (500 Errors) | Low | 3.5 | Low-Risk | Fixed | Various route files |
 | 38 | QMS-037 | DELETE Operations Not Implemented | Info | — | Low-Risk | Acknowledged | N/A |
 | 39 | QMS-038 | 22 PRD-Documented Endpoints Not Implemented | Info | — | Low-Risk | Acknowledged | N/A |
+| 40 | QMS-040 | Stored XSS in Dashboard | High | 8.1 | Input Validation | Fixed | safe-render.js, navigation.js, duplicates.html |
 
-**Severity Distribution Verification:** Critical=8 (rows 1–8), High=10 (rows 9–18), Medium=11 (rows 19–29), Low=8 (rows 30–37), Info=2 (rows 38–39). **Total: 39 findings.**
+**Severity Distribution Verification:** Critical=8 (rows 1–8), High=11 (rows 9–18, 40), Medium=11 (rows 19–29), Low=8 (rows 30–37), Info=2 (rows 38–39). **Total: 40 findings.**
 
 **Note:** QMS-022 was reported as two distinct sub-findings (QMS-022/ROI covering unauthorized financial data injection, and QMS-022/SQL covering SQL error disclosure), counted as two separate findings in this table.
 
@@ -757,7 +816,8 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 | 1.0 | March 12, 2026 | WalaPlus Security Team | Initial VAPT remediation (19 findings) |
 | 2.0 | March 15, 2026 | WalaPlus Security Team | Security Assessment Response document |
 | 3.0 | March 24, 2026 | WalaPlus Security Team | Pentest v3.0 full remediation (39 findings), comprehensive SOP |
-| 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes; Added section 4.8: Audit Log Sensitive Field Masking. Implemented `redactSensitiveFields()` deny-list helper, wired into all event_logs and change_history write paths, retroactive sweep script, regression tests, and updated References. |
+| 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes; Added section 4.8: Audit Log Sensitive Field Masking. Implemented `redactSensitiveFields()` deny-list helper, wired into all event_logs and change_history write paths, retroactive sweep script, regression tests. In-handler requireRole() defense-in-depth; updated §5.1 Report Route Access Control table. |
+| 4.0 | April 24, 2026 | WalaPlus Security Team | Stored XSS remediation: shared safe-render helper, innerHTML escaping fixes (navigation.js, duplicates.html), CSP nonce enforcement (removed unsafe-inline from script-src), Safe Rendering Rules (§5.9) |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.

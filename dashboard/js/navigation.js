@@ -179,14 +179,16 @@ const WalaPlusNav = {
           list.innerHTML = items.map(n => {
             const time = new Date(n.created_at);
             const ago = this.timeAgo(time);
-            const icons = {NC:'text-red-500',CAPA:'text-amber-500',RISK:'text-orange-500',COMPLIANCE:'text-blue-500',KPI:'text-green-500'};
-            const iconColor = icons[n.module] || 'text-gray-500';
-            return `<div class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer" onclick="WalaPlusNav.markRead(${n.id})">
+            const KNOWN_MODULES = {NC:'text-red-500',CAPA:'text-amber-500',RISK:'text-orange-500',COMPLIANCE:'text-blue-500',KPI:'text-green-500'};
+            const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
+            const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
+            const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
+            return `<div class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer" onclick="WalaPlusNav.markRead(${safeId})">
               <div class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</p>
                 <p class="text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</p>
-                <p class="text-xs ${iconColor} mt-0.5">${n.module||'System'} · ${ago}</p>
+                <p class="text-xs ${iconColor} mt-0.5">${this.escapeHtml(safeModule)} · ${this.escapeHtml(ago)}</p>
               </div>
             </div>`;
           }).join('');
