@@ -137,6 +137,30 @@ export function redactSecretLikeStrings(input: unknown): unknown {
   return out;
 }
 
+/**
+ * Recursively walks a JSON-serialisable payload and applies
+ * `redactSecretLikeStrings` to every string leaf.  Object keys are NOT
+ * altered (they are field names, not user data); only values are scrubbed.
+ *
+ * Used by `logEvent()` to defend against callers that build human-readable
+ * audit summaries via string interpolation and accidentally embed a
+ * credential in a value that the key-based deny-list cannot catch (because
+ * the surrounding key is something innocuous like `summary` or `note`).
+ */
+export function deepRedactSecretLikeStrings(payload: any): any {
+  if (payload === null || payload === undefined) return payload;
+  if (typeof payload === 'string') return redactSecretLikeStrings(payload);
+  if (Array.isArray(payload)) return payload.map(item => deepRedactSecretLikeStrings(item));
+  if (typeof payload === 'object') {
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(payload)) {
+      out[key] = deepRedactSecretLikeStrings(value);
+    }
+    return out;
+  }
+  return payload;
+}
+
 export function isSensitiveField(key: string): boolean {
   const lower = key.toLowerCase();
   if (SENSITIVE_EXACT_FIELDS.has(lower)) return true;
@@ -495,7 +519,31 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
   console.log('📋 [EventLogs] Logging event:', input.actionType, input.entityType, input.entityId || 'N/A');
   
   try {
-    const checksum = generateChecksum(input);
+    // Free-form TEXT columns (description, entity_name) are populated by
+    // callers that often interpolate runtime data into a human-readable
+    // summary.  redactSensitiveFields() is key-based and cannot see inside a
+    // string — run the regex scrubber here so a leaked credential in a
+    // summary string never reaches the database.  The same scrubber is
+    // applied recursively to string leaves inside oldValue/newValue JSON
+    // after the key-based redaction has masked the obvious cases.
+    const safeEntityName =
+      input.entityName != null ? (redactSecretLikeStrings(input.entityName) as string) : null;
+    const safeDescription =
+      input.description != null ? (redactSecretLikeStrings(input.description) as string) : null;
+    const safeOldValue = input.oldValue
+      ? deepRedactSecretLikeStrings(redactSensitiveFields(input.oldValue))
+      : null;
+    const safeNewValue = input.newValue
+      ? deepRedactSecretLikeStrings(redactSensitiveFields(input.newValue))
+      : null;
+
+    const checksum = generateChecksum({
+      ...input,
+      entityName: safeEntityName ?? undefined,
+      description: safeDescription ?? undefined,
+      oldValue: safeOldValue,
+      newValue: safeNewValue,
+    });
     console.log('📋 [EventLogs] Generated checksum:', checksum.substring(0, 16) + '...');
 
     const result = await pool.query(
@@ -515,10 +563,10 @@ export async function logEvent(input: EventLogInput): Promise<EventLog> {
         input.actionType,
         input.entityType,
         input.entityId || null,
-        input.entityName || null,
-        input.description || null,
-        input.oldValue ? JSON.stringify(redactSensitiveFields(input.oldValue)) : null,
-        input.newValue ? JSON.stringify(redactSensitiveFields(input.newValue)) : null,
+        safeEntityName,
+        safeDescription,
+        safeOldValue ? JSON.stringify(safeOldValue) : null,
+        safeNewValue ? JSON.stringify(safeNewValue) : null,
         input.aiInvolved || false,
         input.severity || 'INFO',
         input.correlationId || null,

@@ -93,6 +93,8 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 
 const {
   redactSensitiveFields,
+  redactSecretLikeStrings,
+  deepRedactSecretLikeStrings,
   REDACTED_SENTINEL,
   isSensitiveField,
   pool,
@@ -234,6 +236,89 @@ for (const key of REQUIRED_DENY_KEYS) {
 }
 assert(!isSensitiveField("email"), "isSensitiveField: 'email' is NOT sensitive");
 assert(!isSensitiveField("full_name"), "isSensitiveField: 'full_name' is NOT sensitive");
+
+// Section 1b — redactSecretLikeStrings / deepRedactSecretLikeStrings unit tests
+//
+// Task #84: ensure regex scrubber catches sk_, ghp_, eyJ, bcrypt patterns and
+// is applied recursively to string leaves so audit-log free-text never leaks
+// freshly-rotated credentials.
+
+console.log("\n=== redactSecretLikeStrings — unit tests ===\n");
+
+assert(redactSecretLikeStrings(null) === null, "regex: null returned unchanged");
+assert(redactSecretLikeStrings(undefined) === undefined, "regex: undefined returned unchanged");
+assert(redactSecretLikeStrings(42) === 42, "regex: non-string primitive returned unchanged");
+assert(redactSecretLikeStrings("") === "", "regex: empty string returned unchanged");
+
+{
+  const out = redactSecretLikeStrings(
+    "Stripe key sk_live_AbCdEfGhIjKlMnOpQrStUvWx rotated",
+  ) as string;
+  assert(!out.includes("sk_live_AbCdEfGhIjKlMnOpQrStUvWx"), "regex: sk_live_ key scrubbed");
+  assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of sk_ key");
+}
+
+{
+  const out = redactSecretLikeStrings(
+    "GitHub PAT ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234 leaked",
+  ) as string;
+  assert(
+    !out.includes("ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234"),
+    "regex: ghp_ token scrubbed",
+  );
+  assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of ghp_ token");
+}
+
+{
+  const jwt =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NSJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const out = redactSecretLikeStrings(`Bearer issued: ${jwt}`) as string;
+  assert(!out.includes(jwt), "regex: JWT scrubbed (eyJ pattern)");
+  assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of JWT");
+}
+
+{
+  const bcrypt = "$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy";
+  const out = redactSecretLikeStrings(`hash=${bcrypt}`) as string;
+  assert(!out.includes(bcrypt), "regex: bcrypt hash scrubbed");
+  assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of bcrypt");
+}
+
+{
+  // Boring prose with no credentials must pass through unchanged so the
+  // scrubber doesn't false-positive on ordinary audit descriptions.
+  const safe = "User Alice updated project ID 42 (status=active)";
+  assert(redactSecretLikeStrings(safe) === safe, "regex: ordinary prose untouched");
+}
+
+console.log("\n=== deepRedactSecretLikeStrings — unit tests ===\n");
+
+{
+  const out = deepRedactSecretLikeStrings({
+    note: "rotated key sk_live_AbCdEfGhIjKlMnOpQrStUvWx today",
+    nested: {
+      summary: "Bearer ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234",
+      list: ["safe value", "sk-proj-AAABBBCCCDDDEEEFFFGGGHHHIIIJJJKKK"],
+    },
+    count: 7,
+    enabled: true,
+  });
+  assert(
+    !JSON.stringify(out).includes("sk_live_AbCdEfGhIjKlMnOpQrStUvWx"),
+    "deep: top-level string leaf scrubbed",
+  );
+  assert(
+    !JSON.stringify(out).includes("ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234"),
+    "deep: nested object string leaf scrubbed",
+  );
+  assert(
+    !JSON.stringify(out).includes("sk-proj-AAABBBCCCDDDEEEFFFGGGHHHIIIJJJKKK"),
+    "deep: array string element scrubbed",
+  );
+  assert(out.count === 7, "deep: numeric leaf preserved");
+  assert(out.enabled === true, "deep: boolean leaf preserved");
+  assert(out.nested.list[0] === "safe value", "deep: non-secret string preserved");
+}
 
 // Section 2 — logEvent write-path integration test (the CI gate).
 
@@ -400,6 +485,149 @@ await runWritePathTest(
     assert(
       json.includes("bob@example.com"),
       "non-sensitive: email is preserved verbatim",
+    );
+  }
+}
+
+// Section 3 — Task #84: free-text TEXT columns must be regex-scrubbed.
+//
+// description and entity_name are populated by callers that interpolate
+// runtime data into a human-readable summary.  redactSensitiveFields() is
+// key-based and cannot see inside a string, so a freshly-rotated key
+// embedded in a description would otherwise leak through the events viewer
+// and any audit export.
+
+console.log("\n=== Task #84 — TEXT column + JSON-leaf scrubbing ===\n");
+
+const TEXT_LEAK_SECRETS = {
+  sk: "sk_live_AbCdEfGhIjKlMnOpQrStUvWx9876",
+  ghp: "ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234",
+  jwt:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+  bcrypt: "$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy",
+} as const;
+
+{
+  captured.length = 0;
+  await logEvent({
+    actionType: "UPDATE",
+    entityType: "SYSTEM",
+    entityId: "stripe-config",
+    entityName: `Stripe key ${TEXT_LEAK_SECRETS.sk}`,
+    description: `Rotated Stripe live key to ${TEXT_LEAK_SECRETS.sk} for finance team`,
+    severity: "WARNING",
+    module: "integrations",
+  });
+  const params = findInsertCallParams();
+  assert(params !== null, "task-84 description: pool.query was called");
+  if (params) {
+    const entityName = String(params[7] ?? "");
+    const description = String(params[8] ?? "");
+    assert(
+      !entityName.includes(TEXT_LEAK_SECRETS.sk),
+      "task-84: sk_live_ in entity_name is scrubbed before INSERT",
+    );
+    assert(
+      !description.includes(TEXT_LEAK_SECRETS.sk),
+      "task-84: sk_live_ in description is scrubbed before INSERT",
+    );
+    assert(
+      description.includes(REDACTED_SENTINEL),
+      "task-84: REDACTED sentinel present in description",
+    );
+    assert(
+      entityName.includes(REDACTED_SENTINEL),
+      "task-84: REDACTED sentinel present in entity_name",
+    );
+    assert(
+      description.includes("Rotated Stripe live key"),
+      "task-84: surrounding prose preserved in description",
+    );
+  }
+}
+
+{
+  captured.length = 0;
+  await logEvent({
+    actionType: "CREATE",
+    entityType: "SYSTEM",
+    entityName: `GitHub PAT issued: ${TEXT_LEAK_SECRETS.ghp}`,
+    description: `JWT minted: ${TEXT_LEAK_SECRETS.jwt}`,
+    severity: "INFO",
+    module: "auth",
+  });
+  const params = findInsertCallParams();
+  assert(params !== null, "task-84 ghp+jwt: pool.query was called");
+  if (params) {
+    const entityName = String(params[7] ?? "");
+    const description = String(params[8] ?? "");
+    assert(
+      !entityName.includes(TEXT_LEAK_SECRETS.ghp),
+      "task-84: ghp_ token in entity_name is scrubbed",
+    );
+    assert(
+      !description.includes(TEXT_LEAK_SECRETS.jwt),
+      "task-84: JWT (eyJ pattern) in description is scrubbed",
+    );
+  }
+}
+
+{
+  // The KEY-based redactor would NOT mask `summary` / `note` because they
+  // aren't on the deny list.  This case proves that the deep regex scrubber
+  // catches secrets that callers stuff into innocuously-named JSON fields.
+  captured.length = 0;
+  await logEvent({
+    actionType: "UPDATE",
+    entityType: "SYSTEM",
+    description: "Integration sync run",
+    severity: "INFO",
+    module: "integrations",
+    oldValue: {
+      summary: `previous key was ${TEXT_LEAK_SECRETS.sk}`,
+      note: `bcrypt of legacy admin: ${TEXT_LEAK_SECRETS.bcrypt}`,
+    },
+    newValue: {
+      provider: "github",
+      headers: {
+        authorization: `Bearer ${TEXT_LEAK_SECRETS.jwt}`,
+      },
+      audit_trail: [
+        `issued ghp_${TEXT_LEAK_SECRETS.ghp.slice(4)} for octocat`,
+        "no further changes",
+      ],
+      account_id: "acct-public-ZZZ",
+    },
+  });
+  const params = findInsertCallParams();
+  assert(params !== null, "task-84 deep JSON: pool.query was called");
+  if (params) {
+    const oldJson = String(params[9] ?? "");
+    const newJson = String(params[10] ?? "");
+    const combined = `${oldJson}${newJson}`;
+    assert(
+      !combined.includes(TEXT_LEAK_SECRETS.sk),
+      "task-84 deep: sk_live_ buried in `summary` JSON leaf is scrubbed",
+    );
+    assert(
+      !combined.includes(TEXT_LEAK_SECRETS.bcrypt),
+      "task-84 deep: bcrypt buried in `note` JSON leaf is scrubbed",
+    );
+    assert(
+      !combined.includes(TEXT_LEAK_SECRETS.jwt),
+      "task-84 deep: JWT buried in nested headers.authorization JSON leaf is scrubbed",
+    );
+    assert(
+      !combined.includes(TEXT_LEAK_SECRETS.ghp),
+      "task-84 deep: ghp_ buried in audit_trail array element is scrubbed",
+    );
+    assert(
+      newJson.includes("acct-public-ZZZ"),
+      "task-84 deep: non-secret JSON leaf preserved (not a tautology)",
+    );
+    assert(
+      combined.includes(REDACTED_SENTINEL),
+      "task-84 deep: REDACTED sentinel present in JSON column",
     );
   }
 }
