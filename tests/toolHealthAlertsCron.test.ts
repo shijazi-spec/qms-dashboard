@@ -91,6 +91,15 @@ function makeDeps(opts: {
   creates: CreateCall[];
   dedupeChecks: DedupeCheck[];
   aggregateCalls: AggregateCall[];
+  /**
+   * Mutable view of the in-stub dedupe-key set that
+   * `openAlertExistsByKey()` consults. Tests can mutate this between
+   * runs to simulate an operator resolving/dismissing the underlying
+   * `ai_alerts` row — the real SQL filters
+   * `status IN ('open','acknowledged')` so a resolved alert no longer
+   * dedupes.
+   */
+  existingDedupeKeys: Set<string>;
 } {
   const resolves: ResolveCall[] = [];
   const lookups: OpenLookupCall[] = [];
@@ -147,7 +156,15 @@ function makeDeps(opts: {
     },
   };
 
-  return { deps, resolves, lookups, creates, dedupeChecks, aggregateCalls };
+  return {
+    deps,
+    resolves,
+    lookups,
+    creates,
+    dedupeChecks,
+    aggregateCalls,
+    existingDedupeKeys,
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -645,5 +662,201 @@ await suite.test("resolveAlert throws → counter not incremented, other alerts 
     console.error = origErr;
   }
 });
+
+// ─── Task #127: severity-band boundaries & reopen-after-resolve lifecycle ────
+
+/**
+ * Drive `runToolHealthCheck` once with a single aggregate that breaches the
+ * given metric and return the severity assigned to the resulting alert.
+ * Lets the boundary tests assert the exact rung produced by
+ * `severityForErrorRate` / `severityForLatency` (which are module-private)
+ * without poking at internals.
+ */
+async function severityForErrorRateBreach(pct: number): Promise<string | undefined> {
+  const agg = makeAggregate({
+    tool_name: `er_${pct}`,
+    call_count: 100,
+    error_count: Math.round(pct),
+    error_rate_pct: pct,
+    p95_latency_ms: 100, // healthy on the latency side
+    avg_latency_ms: 50,
+    max_latency_ms: 200,
+  });
+  const { deps, creates } = makeDeps({ aggregates: [agg] });
+  await runToolHealthCheck(deps);
+  return creates[0]?.alert.severity;
+}
+
+async function severityForLatencyBreach(p95Ms: number): Promise<string | undefined> {
+  const agg = makeAggregate({
+    tool_name: `lat_${p95Ms}`,
+    call_count: 100,
+    error_count: 0,         // healthy on the error-rate side
+    error_rate_pct: 0,
+    p95_latency_ms: p95Ms,
+    avg_latency_ms: Math.floor(p95Ms / 2),
+    max_latency_ms: p95Ms + 1000,
+  });
+  const { deps, creates } = makeDeps({ aggregates: [agg] });
+  await runToolHealthCheck(deps);
+  return creates[0]?.alert.severity;
+}
+
+await suite.test(
+  "(e) severityForErrorRate boundaries — 25/49/50/74/75/100 map to medium/high/critical",
+  // Pinning each rung at and around its boundary catches a future
+  // `>=` → `>` slip (or vice versa) in `severityForErrorRate`. Inputs at
+  // and just above the breach floor (25%) stay 'medium'; the high band
+  // opens at exactly 50% and the critical band opens at exactly 75%.
+  async () => {
+    const cases: Array<[number, "medium" | "high" | "critical"]> = [
+      [25, "medium"],   // breach floor — lowest input that ever reaches the helper
+      [49, "medium"],   // just below the high boundary
+      [50, "high"],     // exact high boundary
+      [74, "high"],     // just below the critical boundary
+      [75, "critical"], // exact critical boundary
+      [100, "critical"],
+    ];
+    for (const [pct, expected] of cases) {
+      const sev = await severityForErrorRateBreach(pct);
+      suite.expectEqual(
+        sev,
+        expected,
+        `error_rate_pct=${pct} → severity='${expected}'`,
+      );
+    }
+  },
+);
+
+await suite.test(
+  "(f) severityForLatency boundaries — 15000/29999/30000/59999/60000 map to medium/high/critical",
+  // Same idea as (e) but for the p95 latency ladder. The high band opens
+  // at exactly 30000ms and the critical band at exactly 60000ms; values
+  // one ms below each boundary must stay in the lower band.
+  async () => {
+    const cases: Array<[number, "medium" | "high" | "critical"]> = [
+      [15000, "medium"],   // breach floor
+      [29999, "medium"],   // just below the high boundary
+      [30000, "high"],     // exact high boundary
+      [59999, "high"],     // just below the critical boundary
+      [60000, "critical"], // exact critical boundary
+      [120000, "critical"],
+    ];
+    for (const [p95Ms, expected] of cases) {
+      const sev = await severityForLatencyBreach(p95Ms);
+      suite.expectEqual(
+        sev,
+        expected,
+        `p95_latency_ms=${p95Ms} → severity='${expected}'`,
+      );
+    }
+  },
+);
+
+await suite.test(
+  "(g) breach reopens after the previous alert is resolved/dismissed",
+  // Lifecycle contract: `openAlertExistsByKey` only matches
+  // `status IN ('open','acknowledged')`. Once an operator resolves (or
+  // dismisses) the alert, the next cron pass over the same breach MUST
+  // insert a brand-new row — otherwise the feed would go silent forever
+  // after the first resolve, even while the underlying tool keeps
+  // failing. We simulate the resolve by clearing the dedupe-key set the
+  // stub uses to back `openAlertExistsByKey()`; that mirrors what the
+  // real SQL filter does once the row's status flips to 'resolved'.
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "reopen_tool",
+      agent_name: "ops_agent",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+      avg_latency_ms: 500,
+      max_latency_ms: 1_500,
+    });
+    const { deps, creates, dedupeChecks, existingDedupeKeys } = makeDeps({
+      aggregates: [agg],
+    });
+
+    // Run 1 — clean slate, alert is inserted.
+    const first = await runToolHealthCheck(deps);
+    suite.expectEqual(first.alertsCreated, 1, "first run inserts the alert");
+    suite.expectEqual(
+      first.alertsSkippedDuplicate,
+      0,
+      "first run does not skip anything as a duplicate",
+    );
+    suite.expectEqual(creates.length, 1, "exactly one createAIAlert call so far");
+    suite.expect(
+      existingDedupeKeys.has("tool_health:reopen_tool:error_rate"),
+      "after run 1 the stub's dedupe set knows about the open alert",
+    );
+
+    // Sanity check: a second pass with the alert STILL OPEN must dedupe
+    // (re-establishing the baseline before we simulate the resolve).
+    const second = await runToolHealthCheck(deps);
+    suite.expectEqual(
+      second.alertsCreated,
+      0,
+      "while the prior alert is still open, the second pass dedupes",
+    );
+    suite.expectEqual(
+      second.alertsSkippedDuplicate,
+      1,
+      "second pass reports the dedupe skip",
+    );
+    suite.expectEqual(
+      creates.length,
+      1,
+      "no extra createAIAlert call while the alert is still open",
+    );
+
+    // Operator resolves (or dismisses) the alert. The real
+    // `openAlertExistsByKey` filters `status IN ('open','acknowledged')`,
+    // so a resolved row drops out of the dedupe lookup. Mirror that here.
+    existingDedupeKeys.delete("tool_health:reopen_tool:error_rate");
+
+    // Run 3 — same fixture, but now the prior alert is resolved. A fresh
+    // alert MUST be inserted; the dedupe counter must NOT tick up.
+    const dedupeChecksBefore = dedupeChecks.length;
+    const third = await runToolHealthCheck(deps);
+    suite.expectEqual(
+      third.alertsCreated,
+      1,
+      "third run inserts a brand-new alert after the prior one was resolved",
+    );
+    suite.expectEqual(
+      third.alertsSkippedDuplicate,
+      0,
+      "third run does NOT count the breach as a duplicate",
+    );
+    suite.expectEqual(
+      creates.length,
+      2,
+      "exactly two createAIAlert calls across the full lifecycle",
+    );
+    suite.expectEqual(
+      third.breaches.length,
+      1,
+      "third run reports a fresh breach in the result payload",
+    );
+    suite.expectEqual(
+      third.breaches[0]?.reason,
+      "error_rate",
+      "fresh breach is the same reason as the original",
+    );
+    // The third run must have actually consulted the dedupe lookup —
+    // proves we didn't accidentally short-circuit the breach branch.
+    suite.expect(
+      dedupeChecks.length > dedupeChecksBefore,
+      "third run performed a fresh dedupe lookup",
+    );
+    const newKey = `tool_health:reopen_tool:error_rate`;
+    suite.expect(
+      existingDedupeKeys.has(newKey),
+      "after run 3 the new alert is once again present in the dedupe set",
+    );
+  },
+);
 
 suite.finishOrExit();
