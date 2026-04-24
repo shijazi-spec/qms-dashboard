@@ -6,6 +6,7 @@ import {
   getRecentSlowFailedCalls,
   getDailyCostSummary,
   getFeedbackRateByAgent,
+  getFeedbackRateByPromptVersion,
   insertCallFeedback,
   getChildToolCallsForParent,
   getKnownAgentNames,
@@ -126,6 +127,25 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] feedback error:", error);
           return c.json({ error: "Failed to record feedback" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/prompt-versions",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const days = safeInt(c.req.query("days"), 30, 1, 90);
+          const data = await getFeedbackRateByPromptVersion(days);
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] prompt-versions error:", error);
+          return c.json({ error: "Failed to fetch prompt-version comparison" }, 500);
         }
       };
     },

@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createHash } from "crypto";
 
 import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
 import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
@@ -15,10 +16,7 @@ const openai = createOpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 
-export const qualitySpecialistAgent = new Agent({
-  name: "WalaPlus Quality Specialist",
-
-  instructions: `
+const QUALITY_SPECIALIST_INSTRUCTIONS = `
 You are the WalaPlus Agentic AI Quality Specialist - an autonomous, AI-powered quality auditor designed to ensure data hygiene, governance compliance, and operational excellence across WalaPlus's commercial ecosystem.
 
 ## YOUR CORE RESPONSIBILITIES
@@ -108,7 +106,21 @@ When generating reports:
 - Highlight both problems and improvements
 
 Remember: You are the digital backbone for quality governance at WalaPlus. Your audits help maintain accuracy, consistency, and operational excellence across the entire commercial ecosystem.
-`,
+`;
+
+/**
+ * Stable identifier for the prompt revision. Computed as a content hash so it
+ * automatically changes whenever QUALITY_SPECIALIST_INSTRUCTIONS is edited.
+ * Surfaced in ai_call_metrics.metadata.prompt_version for A/B comparison
+ * (see getFeedbackRateByPromptVersion in src/utils/aiTelemetry.ts).
+ */
+export const QUALITY_SPECIALIST_PROMPT_VERSION =
+  `quality-specialist@${createHash("sha256").update(QUALITY_SPECIALIST_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+
+export const qualitySpecialistAgent = new Agent({
+  name: "WalaPlus Quality Specialist",
+
+  instructions: QUALITY_SPECIALIST_INSTRUCTIONS,
 
   model: openai.chat("gpt-4o"),
 

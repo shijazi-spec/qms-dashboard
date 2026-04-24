@@ -116,6 +116,13 @@ export async function ensureAiMetricsTable(): Promise<void> {
 
         CREATE INDEX IF NOT EXISTS idx_ai_call_metrics_started_at
           ON ai_call_metrics (started_at DESC);
+
+        -- Speeds up the per-prompt-version aggregate used by the
+        -- AI Operations panel's Prompt Version comparison view
+        -- (see getFeedbackRateByPromptVersion below).
+        CREATE INDEX IF NOT EXISTS idx_ai_call_metrics_agent_prompt_version
+          ON ai_call_metrics (agent_name, (metadata ->> 'prompt_version'), started_at DESC)
+          WHERE tool_name IS NULL;
       `);
     } catch (err) {
       tableReady = null;
@@ -502,6 +509,7 @@ export async function recordStreamTelemetry(params: {
   promptText?: string;
   userId?: string;
   sessionId?: string;
+  metadata?: Record<string, unknown>;
 }): Promise<number | null> {
   const latencyMs = Date.now() - params.startedAt;
   const promptPreview = params.promptText
@@ -541,6 +549,7 @@ export async function recordStreamTelemetry(params: {
     prompt_preview: promptPreview,
     user_hash: params.userId ? hashValue(params.userId) : undefined,
     session_hash: params.sessionId ? hashValue(params.sessionId) : undefined,
+    metadata: params.metadata,
   });
 }
 
@@ -811,6 +820,69 @@ export async function insertCallFeedback(
   } catch (err) {
     console.error('[aiTelemetry] Failed to insert feedback:', err);
     return false;
+  }
+}
+
+/**
+ * Per-(agent, prompt_version) aggregate that backs the "Prompt Version"
+ * comparison view in the AI Operations panel. Joins ai_call_feedback to
+ * ai_call_metrics so a regression caused by a prompt edit (lower thumbs-up
+ * rate, higher latency, more errors) is visible at a glance.
+ *
+ * Calls without a recorded prompt_version are bucketed as "(unknown)" so
+ * legacy rows recorded before this column existed do not silently disappear.
+ */
+export async function getFeedbackRateByPromptVersion(days = 30): Promise<{
+  agent_name: string;
+  prompt_version: string;
+  call_count: number;
+  total_feedback: number;
+  thumbs_up: number;
+  thumbs_down: number;
+  feedback_rate_pct: number | null;
+  p50_ms: number | null;
+  avg_ms: number | null;
+  error_rate_pct: number;
+  first_seen: string;
+  last_seen: string;
+}[]> {
+  try {
+    await ensureAiMetricsTable();
+    await ensureFeedbackTable();
+    const result = await pool.query(
+      `SELECT
+         m.agent_name,
+         COALESCE(m.metadata ->> 'prompt_version', '(unknown)')             AS prompt_version,
+         COUNT(*)                                                            AS call_count,
+         COUNT(f.id)                                                         AS total_feedback,
+         COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_up')                  AS thumbs_up,
+         COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_down')                AS thumbs_down,
+         CASE WHEN COUNT(f.id) > 0 THEN
+           ROUND(
+             (COUNT(f.id) FILTER (WHERE f.rating = 'thumbs_up')::FLOAT
+              / COUNT(f.id) * 100)::NUMERIC, 1
+           )
+         ELSE NULL END                                                       AS feedback_rate_pct,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY m.latency_ms)          AS p50_ms,
+         ROUND(AVG(m.latency_ms)::NUMERIC, 0)                               AS avg_ms,
+         ROUND(
+           (COUNT(*) FILTER (WHERE NOT m.success)::FLOAT
+            / NULLIF(COUNT(*), 0) * 100)::NUMERIC, 1
+         )                                                                   AS error_rate_pct,
+         MIN(m.started_at)                                                   AS first_seen,
+         MAX(m.started_at)                                                   AS last_seen
+       FROM ai_call_metrics m
+       LEFT JOIN ai_call_feedback f ON f.call_id = m.id
+       WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
+         AND m.tool_name IS NULL
+       GROUP BY m.agent_name, COALESCE(m.metadata ->> 'prompt_version', '(unknown)')
+       ORDER BY m.agent_name, last_seen DESC`,
+      [days]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[aiTelemetry] getFeedbackRateByPromptVersion failed:', err);
+    return [];
   }
 }
 

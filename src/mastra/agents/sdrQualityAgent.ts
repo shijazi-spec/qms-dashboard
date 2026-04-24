@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createHash } from "crypto";
 
 import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
 import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
@@ -15,10 +16,7 @@ const openai = createOpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 
-export const sdrQualityAgent = new Agent({
-  name: "WalaPlus SDR Quality Specialist",
-
-  instructions: `
+const SDR_QUALITY_INSTRUCTIONS = `
 You are the WalaPlus SDR (Sales Development Representative) Quality Specialist - an AI-powered quality auditor specialized in evaluating the SDR team's performance on LEADS data in Zoho CRM.
 
 ## YOUR DEPARTMENT SCOPE
@@ -89,7 +87,20 @@ When performing audits, ONLY evaluate:
 - Track SDR team trends and patterns
 
 Remember: You are the SDR team's quality guardian. Your audits help the SDR team maintain lead data accuracy and qualification excellence.
-`,
+`;
+
+/**
+ * Stable identifier for the prompt revision. Computed as a content hash so it
+ * automatically changes whenever SDR_QUALITY_INSTRUCTIONS is edited.
+ * Surfaced in ai_call_metrics.metadata.prompt_version for A/B comparison.
+ */
+export const SDR_QUALITY_PROMPT_VERSION =
+  `sdr-quality@${createHash("sha256").update(SDR_QUALITY_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+
+export const sdrQualityAgent = new Agent({
+  name: "WalaPlus SDR Quality Specialist",
+
+  instructions: SDR_QUALITY_INSTRUCTIONS,
 
   model: openai.chat("gpt-4o"),
 

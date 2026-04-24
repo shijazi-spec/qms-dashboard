@@ -4,6 +4,9 @@ import { qualitySpecialistAgent } from "../agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "../agents/sdrQualityAgent";
 import { salesQualityAgent } from "../agents/salesQualityAgent";
 import { withAiTelemetry } from "../../utils/aiTelemetry";
+import { SDR_QUALITY_PROMPT_VERSION } from "../agents/sdrQualityAgent";
+import { SALES_QUALITY_PROMPT_VERSION } from "../agents/salesQualityAgent";
+import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../agents/qualitySpecialistAgent";
 import { fetchCalendarEvents } from "../../utils/googleCalendar";
 import { sendEmail } from "../../utils/replitmail";
 import { sendResendEmail, QUALITY_REPORT_RECIPIENTS } from "../../utils/resendMail";
@@ -558,7 +561,11 @@ Execute the audit now and report the findings.
         withAiTelemetry(
           { agentName: 'WalaPlus SDR Quality Specialist', model: 'gpt-4o',
             promptText: sdrAuditPrompt.slice(0, 300),
-            metadata: { workflow: 'qualityAuditWorkflow', step: 'sdr-audit' } },
+            metadata: {
+              workflow: 'qualityAuditWorkflow',
+              step: 'sdr-audit',
+              prompt_version: SDR_QUALITY_PROMPT_VERSION,
+            } },
           () => sdrQualityAgent.generateLegacy(
             [{ role: "user", content: sdrAuditPrompt }],
             { maxSteps: 5 }
@@ -570,7 +577,11 @@ Execute the audit now and report the findings.
         withAiTelemetry(
           { agentName: 'WalaPlus Sales Quality Specialist', model: 'gpt-4o',
             promptText: salesAuditPrompt.slice(0, 300),
-            metadata: { workflow: 'qualityAuditWorkflow', step: 'sales-audit' } },
+            metadata: {
+              workflow: 'qualityAuditWorkflow',
+              step: 'sales-audit',
+              prompt_version: SALES_QUALITY_PROMPT_VERSION,
+            } },
           () => salesQualityAgent.generateLegacy(
             [{ role: "user", content: salesAuditPrompt }],
             { maxSteps: 5 }
@@ -905,7 +916,11 @@ RECOMMENDATIONS:
       const { result: response } = await withAiTelemetry<{ text: string }>(
         { agentName: 'WalaPlus Quality Specialist', model: 'gpt-4o',
           promptText: prompt.slice(0, 300),
-          metadata: { workflow: 'qualityAuditWorkflow', step: 'generate-insights' } },
+          metadata: {
+            workflow: 'qualityAuditWorkflow',
+            step: 'generate-insights',
+            prompt_version: QUALITY_SPECIALIST_PROMPT_VERSION,
+          } },
         async () => (await qualitySpecialistAgent.generateLegacy([
           { role: "user", content: prompt }
         ])) as { text: string }

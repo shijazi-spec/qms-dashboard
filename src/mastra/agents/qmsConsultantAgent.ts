@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createHash } from "crypto";
 
 import { queryPlatformDataTool } from "../tools/queryPlatformDataTool";
 import { analyzeNonconformitiesTool } from "../tools/analyzeNonconformitiesTool";
@@ -26,10 +27,7 @@ const openai = createOpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 
-export const qmsConsultantAgent = new Agent({
-  name: "WalaPlus QMS Consultant",
-
-  instructions: `
+const QMS_CONSULTANT_INSTRUCTIONS = `
 You are the WalaPlus QMS AI Consultant & Assistant — an expert Quality Assurance brain embedded inside the WalaPlus Enterprise GRC & Quality Platform. You serve as an always-available consultant for quality management, regulatory compliance, risk monitoring, and continuous improvement.
 
 ## YOUR IDENTITY
@@ -219,7 +217,21 @@ Additional capabilities:
 - Evidence Management: Structured evidence upload and retrieval across all modules
 - Notification Hub: Unified notifications with email and Slack delivery
 - Quality Health Index: Composite quality metric for management review
-`,
+`;
+
+/**
+ * Stable identifier for the prompt revision. Computed as a content hash so it
+ * automatically changes whenever QMS_CONSULTANT_INSTRUCTIONS is edited, which
+ * is what enables prompt A/B comparison in the AI Operations panel
+ * (see getFeedbackRateByPromptVersion in src/utils/aiTelemetry.ts).
+ */
+export const QMS_CONSULTANT_PROMPT_VERSION =
+  `qms-consultant@${createHash("sha256").update(QMS_CONSULTANT_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+
+export const qmsConsultantAgent = new Agent({
+  name: "WalaPlus QMS Consultant",
+
+  instructions: QMS_CONSULTANT_INSTRUCTIONS,
 
   model: openai.responses("gpt-4o"),
 

@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createHash } from "crypto";
 
 import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
 import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
@@ -15,10 +16,7 @@ const openai = createOpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 
-export const salesQualityAgent = new Agent({
-  name: "WalaPlus Sales Quality Specialist",
-
-  instructions: `
+const SALES_QUALITY_INSTRUCTIONS = `
 You are the WalaPlus Sales Quality Specialist - an AI-powered quality auditor specialized in evaluating the Sales team's performance on DEALS data in Zoho CRM.
 
 ## YOUR DEPARTMENT SCOPE
@@ -89,7 +87,20 @@ When performing audits, ONLY evaluate:
 - Track Sales team trends and pipeline health
 
 Remember: You are the Sales team's quality guardian. Your audits help the Sales team maintain deal data accuracy and revenue forecasting excellence.
-`,
+`;
+
+/**
+ * Stable identifier for the prompt revision. Computed as a content hash so it
+ * automatically changes whenever SALES_QUALITY_INSTRUCTIONS is edited.
+ * Surfaced in ai_call_metrics.metadata.prompt_version for A/B comparison.
+ */
+export const SALES_QUALITY_PROMPT_VERSION =
+  `sales-quality@${createHash("sha256").update(SALES_QUALITY_INSTRUCTIONS).digest("hex").slice(0, 8)}`;
+
+export const salesQualityAgent = new Agent({
+  name: "WalaPlus Sales Quality Specialist",
+
+  instructions: SALES_QUALITY_INSTRUCTIONS,
 
   model: openai.chat("gpt-4o"),
 

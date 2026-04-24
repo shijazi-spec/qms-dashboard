@@ -23,6 +23,7 @@ import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
 import type { AutoApproveTier } from "../../utils/aiToolGovernance";
 import { withAiTelemetry, startTelemetrySpan } from "../../utils/aiTelemetry";
+import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
 
 interface AgentTextResult { text: string }
 
@@ -97,7 +98,8 @@ export const consultantRoutes = [
             const { result: response, callId } = await withAiTelemetry<AgentTextResult>(
               { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
                 promptText: message,
-                userId: user.userId, sessionId: resolvedThreadId },
+                userId: user.userId, sessionId: resolvedThreadId,
+                metadata: { prompt_version: QMS_CONSULTANT_PROMPT_VERSION } },
               async () => {
                 const res = await withAgentUserContext(
                   {
@@ -180,6 +182,7 @@ export const consultantRoutes = [
             promptText: message,
             userId: user.userId,
             sessionId: resolvedThreadId,
+            metadata: { prompt_version: QMS_CONSULTANT_PROMPT_VERSION },
           });
           const messageId = randomUUID();
           let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
@@ -221,7 +224,6 @@ export const consultantRoutes = [
               let streamSuccess = true;
               let streamError: Error | undefined;
               try {
-<<<<<<< HEAD
                 // Run the stream consumption INSIDE span.run() so the
                 // parent_call_id ALS context is visible to tools invoked
                 // during streaming (tools execute lazily as chunks flow).
@@ -232,15 +234,7 @@ export const consultantRoutes = [
                     );
                   }
                 });
-                streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId })}\n\n`));
-=======
-                for await (const chunk of stream.textStream) {
-                  streamController.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`)
-                  );
-                }
                 streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId })}\n\n`));
->>>>>>> a5a43e1 (feat: Inline AI feedback thumbs up/down on consultant responses (#32))
                 streamController.close();
               } catch (err) {
                 streamSuccess = false;
@@ -524,7 +518,11 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
             const { result } = await withAiTelemetry<AgentTextResult>(
               { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
                 promptText: scanPrompt.slice(0, 300),
-                userId: user.userId, metadata: { type: 'platform_scan' } },
+                userId: user.userId,
+                metadata: {
+                  type: 'platform_scan',
+                  prompt_version: QMS_CONSULTANT_PROMPT_VERSION,
+                } },
               async () => (await agent.generateLegacy(scanPrompt, {
                 threadId: `scan-${Date.now()}`,
                 resourceId: "system-scanner",
