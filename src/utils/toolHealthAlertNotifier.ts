@@ -48,6 +48,7 @@
 import { sendSlackNotification } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
 import type { AlertSeverity } from "./aiAlertsDatabase";
+import type { ToolHealthConfigOverrides } from "./toolHealthConfigDatabase";
 
 export type ToolHealthReason = "error_rate" | "p95_latency";
 
@@ -377,6 +378,257 @@ export async function notifyToolHealthBreach(
 
   if ((result.slackSent || result.emailSent) && cfg.throttleMs > 0) {
     lastNotifiedAt.set(notification.related_record_id, now);
+  }
+
+  return result;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tool-health threshold-tuning notifier (Task #190)
+//
+// When an admin tunes the per-tool health alert thresholds via the AI Ops
+// panel, post a Slack message to the same on-call channel the breach
+// notifier uses so changes don't sit silently in the DB audit log.
+//
+// Gating:
+//   • `TOOL_HEALTH_CONFIG_NOTIFY=1` opts the behavior in. Any other value
+//     (including unset) skips the post — matches the breach notifier's
+//     "safe in dev/test by default" stance.
+//   • Slack channel resolution reuses `readConfig()` (above), so the
+//     `TOOL_HEALTH_SLACK_CHANNEL` / `TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL`
+//     env-var rules apply identically.
+//
+// Best-effort:
+//   • Caller awaits but never throws — Slack outages must not block a
+//     successful threshold save.
+// ──────────────────────────────────────────────────────────────────────────────
+
+const CONFIG_FIELD_LABELS: Record<keyof ToolHealthConfigOverrides, string> = {
+  windowMinutes:        "Rolling window (min)",
+  minCalls:             "Min calls in window",
+  errorRatePct:         "Error rate floor (%)",
+  errorRateHighPct:     "Error rate HIGH (%)",
+  errorRateCriticalPct: "Error rate CRITICAL (%)",
+  p95LatencyMs:         "p95 latency floor (ms)",
+  latencyHighMs:        "p95 latency HIGH (ms)",
+  latencyCriticalMs:    "p95 latency CRITICAL (ms)",
+};
+
+const CONFIG_FIELD_ORDER: Array<keyof ToolHealthConfigOverrides> = [
+  "windowMinutes",
+  "minCalls",
+  "errorRatePct",
+  "errorRateHighPct",
+  "errorRateCriticalPct",
+  "p95LatencyMs",
+  "latencyHighMs",
+  "latencyCriticalMs",
+];
+
+export interface ToolHealthConfigChangeNotification {
+  /** Operator who made the change (display name / email / "user:<id>"). */
+  changedBy: string;
+  /** Override blob *before* the change (only fields that had an override). */
+  before: ToolHealthConfigOverrides;
+  /** Override blob *after* the change (only fields that have an override). */
+  after: ToolHealthConfigOverrides;
+  /** Optional free-form note from the operator (already length-capped). */
+  note?: string | null;
+  /** Audit-row id from `tool_health_config_audit` for traceability. */
+  audit_id?: number | null;
+}
+
+export interface NotifyToolHealthConfigChangeResult {
+  slackSent: boolean;
+  /** True when no override field actually changed (no message posted). */
+  noChanges: boolean;
+  /** True when `TOOL_HEALTH_CONFIG_NOTIFY` is not opted in. */
+  disabled: boolean;
+  /** True when no Slack channel is configured. */
+  skipped: boolean;
+}
+
+export interface ToolHealthConfigChangeNotifierDeps {
+  sendSlack?: typeof sendSlackNotification;
+}
+
+/**
+ * Compute the diff between the override blob before and after a tuning
+ * operation. A field appears in the diff iff its effective override value
+ * changed — including transitions to/from "default (env baseline)" when an
+ * override is cleared or first set.
+ *
+ * Exported only for unit tests.
+ */
+export function _diffToolHealthConfigOverridesForTests(
+  before: ToolHealthConfigOverrides,
+  after: ToolHealthConfigOverrides,
+): Array<{ field: keyof ToolHealthConfigOverrides; before: number | null; after: number | null }> {
+  const changes: Array<{
+    field: keyof ToolHealthConfigOverrides;
+    before: number | null;
+    after: number | null;
+  }> = [];
+  for (const f of CONFIG_FIELD_ORDER) {
+    const b = before[f] ?? null;
+    const a = after[f] ?? null;
+    if (b !== a) changes.push({ field: f, before: b, after: a });
+  }
+  return changes;
+}
+
+function formatOverrideValue(v: number | null): string {
+  return v == null ? "_default (env baseline)_" : `\`${v}\``;
+}
+
+function buildConfigChangeBlocks(
+  n: ToolHealthConfigChangeNotification,
+  changes: ReturnType<typeof _diffToolHealthConfigOverridesForTests>,
+  link: string,
+  linkIsAbsolute: boolean,
+): any[] {
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: ":wrench: Tool-health alert thresholds updated",
+        emoji: true,
+      },
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Changed by:*\n${n.changedBy || "—"}` },
+        {
+          type: "mrkdwn",
+          text: `*Audit row:*\n${n.audit_id != null ? `#${n.audit_id}` : "—"}`,
+        },
+      ],
+    },
+  ];
+
+  const diffLines = changes.map(
+    (c) =>
+      `• *${CONFIG_FIELD_LABELS[c.field]}*: ${formatOverrideValue(c.before)} → ${formatOverrideValue(c.after)}`,
+  );
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*Changes (${changes.length}):*\n${diffLines.join("\n")}`,
+    },
+  });
+
+  if (n.note) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Note:*\n${n.note}` },
+    });
+  }
+
+  // Slack rejects relative URLs in actions.button.url; degrade to a plain
+  // mrkdwn link section in that case (mirrors the breach notifier).
+  if (linkIsAbsolute) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Open Alert Thresholds",
+            emoji: true,
+          },
+          url: link,
+          style: "primary",
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:link: Alert Thresholds tab: \`${link}\`\n` +
+          `_Set \`TOOL_HEALTH_APP_URL\` to enable a clickable link._`,
+      },
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: ":robot_face: _WalaPlus tool-health monitor | threshold tuning_",
+      },
+    ],
+  });
+  return blocks;
+}
+
+/**
+ * Post a Slack message summarising a successful tool-health-config tuning
+ * operation. Best-effort: never throws, returns a result object so the
+ * caller can log/count.
+ *
+ * Safe to call unconditionally — when `TOOL_HEALTH_CONFIG_NOTIFY` is not
+ * set to "1", or when no Slack channel is configured, the function returns
+ * `{ disabled: true }` / `{ skipped: true }` without sending anything.
+ */
+export async function notifyToolHealthConfigChange(
+  notification: ToolHealthConfigChangeNotification,
+  depsOverride: ToolHealthConfigChangeNotifierDeps = {},
+): Promise<NotifyToolHealthConfigChangeResult> {
+  const result: NotifyToolHealthConfigChangeResult = {
+    slackSent: false,
+    noChanges: false,
+    disabled: false,
+    skipped: false,
+  };
+
+  if (process.env.TOOL_HEALTH_CONFIG_NOTIFY !== "1") {
+    result.disabled = true;
+    return result;
+  }
+
+  const cfg = readConfig();
+  if (!cfg.slackChannel) {
+    result.skipped = true;
+    return result;
+  }
+
+  const changes = _diffToolHealthConfigOverridesForTests(
+    notification.before ?? {},
+    notification.after ?? {},
+  );
+  if (changes.length === 0) {
+    result.noChanges = true;
+    return result;
+  }
+
+  // Deep-link straight to the Alert Thresholds tab — see the
+  // `?tab=…` switch in dashboard/ai-ops.html (DOMContentLoaded handler).
+  const link = `${cfg.link}?tab=thresholds`;
+  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+  const fallback =
+    `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
+    `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
+  try {
+    result.slackSent = await sendSlack(
+      cfg.slackChannel,
+      fallback,
+      buildConfigChangeBlocks(notification, changes, link, cfg.linkIsAbsolute),
+    );
+  } catch (err) {
+    console.error(
+      "[ToolHealthNotifier] Slack send threw for config change notification:",
+      err,
+    );
+    result.slackSent = false;
   }
 
   return result;

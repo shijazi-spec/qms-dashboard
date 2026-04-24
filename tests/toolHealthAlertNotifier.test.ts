@@ -19,9 +19,12 @@
 
 import {
   notifyToolHealthBreach,
+  notifyToolHealthConfigChange,
+  _diffToolHealthConfigOverridesForTests,
   _resetToolHealthNotifierThrottleForTests,
   type ToolHealthBreachNotification,
   type ToolHealthNotifierDeps,
+  type ToolHealthConfigChangeNotification,
 } from "../src/utils/toolHealthAlertNotifier";
 import { TestSuite } from "./_helpers/runner";
 
@@ -96,6 +99,7 @@ const ENV_KEYS = [
   "TOOL_HEALTH_ALERT_EMAIL",
   "TOOL_HEALTH_NOTIFY_THROTTLE_MIN",
   "TOOL_HEALTH_APP_URL",
+  "TOOL_HEALTH_CONFIG_NOTIFY",
   "SLACK_CHANNEL_ID",
 ];
 
@@ -439,6 +443,237 @@ await suite.test(
       "https://qms.example.com/dashboard/ai-ops.html",
       "button URL is absolute and points to AI Ops panel",
     );
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tool-health threshold-tuning notifier (Task #190)
+// ──────────────────────────────────────────────────────────────────────────────
+function makeConfigChangeStubs(opts: {
+  slackResult?: boolean | Error;
+} = {}): {
+  deps: { sendSlack: ToolHealthNotifierDeps["sendSlack"] };
+  slackCalls: SlackCall[];
+} {
+  const slackCalls: SlackCall[] = [];
+  return {
+    slackCalls,
+    deps: {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks });
+        if (opts.slackResult instanceof Error) throw opts.slackResult;
+        return opts.slackResult ?? true;
+      },
+    },
+  };
+}
+
+function sampleConfigChange(
+  overrides: Partial<ToolHealthConfigChangeNotification> = {},
+): ToolHealthConfigChangeNotification {
+  return {
+    changedBy: "Alice Admin",
+    before: { errorRateHighPct: 25 },
+    after: { errorRateHighPct: 15, latencyHighMs: 2000 },
+    note: "Sev-2 incident #4321",
+    audit_id: 99,
+    ...overrides,
+  };
+}
+
+await suite.test(
+  "config change: TOOL_HEALTH_CONFIG_NOTIFY unset → disabled, no slack call",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.disabled, true, "disabled");
+    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "config change: TOOL_HEALTH_CONFIG_NOTIFY=0 → disabled, no slack call",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "0";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.disabled, true, "disabled");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "config change: opted in but no Slack channel → skipped, no slack call",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.skipped, true, "skipped");
+    suite.expectEqual(result.disabled, false, "not disabled");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "config change: identical before/after → noChanges, no slack call",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(
+      sampleConfigChange({
+        before: { errorRateHighPct: 20 },
+        after: { errorRateHighPct: 20 },
+      }),
+      deps,
+    );
+    suite.expectEqual(result.noChanges, true, "noChanges");
+    suite.expectEqual(result.slackSent, false, "no slack send");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "config change: opted in with channel → posts diff to Slack with deep-link",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    process.env.TOOL_HEALTH_APP_URL = "https://qms.example.com";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.disabled, false, "not disabled");
+    suite.expectEqual(result.skipped, false, "not skipped");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL", "channel");
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("Alice Admin"),
+      "blocks mention operator name",
+    );
+    suite.expect(
+      blocks.includes("Error rate HIGH"),
+      "blocks list field labels for changed fields",
+    );
+    suite.expect(
+      blocks.includes("p95 latency HIGH"),
+      "blocks list newly-set field as well",
+    );
+    suite.expect(
+      blocks.includes("Sev-2 incident #4321"),
+      "operator note surfaced",
+    );
+    suite.expect(
+      blocks.includes("https://qms.example.com/dashboard/ai-ops.html?tab=thresholds"),
+      `blocks include deep-link to Alert Thresholds tab (got: ${blocks.slice(0, 200)}...)`,
+    );
+    suite.expect(
+      slackCalls[0]?.text.includes("thresholds"),
+      "fallback text mentions thresholds",
+    );
+  },
+);
+
+await suite.test(
+  "config change: no TOOL_HEALTH_APP_URL → no actions button, still surfaces relative path",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    const blocks = slackCalls[0]?.blocks ?? [];
+    const hasButton = blocks.some(
+      (b: any) =>
+        b?.type === "actions" &&
+        Array.isArray(b.elements) &&
+        b.elements.some((e: any) => e?.type === "button"),
+    );
+    suite.expectEqual(hasButton, false, "no actions button when URL is relative");
+    const json = JSON.stringify(blocks);
+    suite.expect(
+      json.includes("/dashboard/ai-ops.html?tab=thresholds"),
+      "still surfaces relative path",
+    );
+    suite.expect(
+      json.includes("TOOL_HEALTH_APP_URL"),
+      "tells operator how to enable a clickable link",
+    );
+  },
+);
+
+await suite.test(
+  "config change: Slack send throws → swallowed, slackSent=false (does not crash caller)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps } = makeConfigChangeStubs({ slackResult: new Error("slack down") });
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+      suite.expectEqual(result.slackSent, false, "slack failed");
+      suite.expectEqual(result.disabled, false, "not disabled");
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "config change: clearing an override is rendered as 'default (env baseline)'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, slackCalls } = makeConfigChangeStubs();
+    await notifyToolHealthConfigChange(
+      sampleConfigChange({
+        before: { errorRateHighPct: 25 },
+        after: {}, // override cleared
+        note: null,
+      }),
+      deps,
+    );
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("default (env baseline)"),
+      `cleared override rendered with baseline label (got: ${blocks.slice(0, 200)}...)`,
+    );
+    suite.expect(
+      !blocks.includes("Note:"),
+      "no Note section when note is null",
+    );
+  },
+);
+
+await suite.test(
+  "diff helper: only fields whose values change are returned, in declared order",
+  async () => {
+    const diff = _diffToolHealthConfigOverridesForTests(
+      { errorRateHighPct: 20, latencyHighMs: 2000, windowMinutes: 60 },
+      { errorRateHighPct: 25, latencyHighMs: 2000, minCalls: 50 },
+    );
+    // Changes: windowMinutes 60→null, errorRateHighPct 20→25, minCalls null→50
+    suite.expectEqual(diff.length, 3, "three changed fields");
+    suite.expectEqual(diff[0]?.field, "windowMinutes", "windowMinutes first (declared order)");
+    suite.expectEqual(diff[0]?.before, 60, "windowMinutes before");
+    suite.expectEqual(diff[0]?.after, null, "windowMinutes after (cleared)");
+    suite.expectEqual(diff[1]?.field, "minCalls", "minCalls second");
+    suite.expectEqual(diff[1]?.before, null, "minCalls before (unset)");
+    suite.expectEqual(diff[1]?.after, 50, "minCalls after");
+    suite.expectEqual(diff[2]?.field, "errorRateHighPct", "errorRateHighPct third");
+    suite.expectEqual(diff[2]?.before, 20, "errorRateHighPct before");
+    suite.expectEqual(diff[2]?.after, 25, "errorRateHighPct after");
   },
 );
 

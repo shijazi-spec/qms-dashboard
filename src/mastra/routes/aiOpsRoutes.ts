@@ -768,6 +768,30 @@ export const aiOpsRoutes = [
           });
 
           const effective = await getEffectiveToolHealthConfig();
+
+          // Best-effort Slack notification so on-call sees who changed the
+          // alert thresholds — the DB write itself is silent and audit rows
+          // tend to be checked only after something has already gone wrong
+          // (Task #190). Gated by TOOL_HEALTH_CONFIG_NOTIFY=1; never blocks
+          // or fails the save.
+          try {
+            const { notifyToolHealthConfigChange } = await import(
+              "../../utils/toolHealthAlertNotifier"
+            );
+            await notifyToolHealthConfigChange({
+              changedBy,
+              before: result.before,
+              after: result.after,
+              note,
+              audit_id: result.audit_id,
+            });
+          } catch (notifyErr) {
+            console.error(
+              "[AI-Ops] tool-health-config notify error (best-effort):",
+              notifyErr,
+            );
+          }
+
           return c.json({
             success: true,
             before: result.before,

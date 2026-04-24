@@ -588,6 +588,81 @@ if (HAS_DB) {
     }
   });
 
+  await suite.test(
+    "PUT /api/ai-ops/tool-health-config — TOOL_HEALTH_CONFIG_NOTIFY=1 still saves successfully when Slack send fails",
+    // Regression guard for Task #190: the notifier hook is best-effort.
+    // When the env gate is on but Slack is misconfigured (no bot token,
+    // unreachable channel), the threshold save MUST still return 200 and
+    // persist the override. We exercise the real notify path (no stub) so
+    // the route's try/catch wrapper is what's under test.
+    async () => {
+      const originalKey = process.env.ADMIN_API_KEY;
+      const originalNotify = process.env.TOOL_HEALTH_CONFIG_NOTIFY;
+      const originalChannel = process.env.TOOL_HEALTH_SLACK_CHANNEL;
+      const originalToken = process.env.SLACK_BOT_TOKEN;
+      const originalApiToken = process.env.SLACK_API_TOKEN;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+      process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-NONEXISTENT";
+      // Force the underlying Slack client to bail (no token → returns false,
+      // no throw); proves the route still returns 200 either way.
+      delete process.env.SLACK_BOT_TOKEN;
+      delete process.env.SLACK_API_TOKEN;
+
+      // Silence the expected "no bot token" log so the test output stays clean.
+      const origLog = console.log;
+      console.log = () => {};
+      try {
+        const putHandler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/tool-health-config",
+          "PUT",
+        );
+        const res = await putHandler(
+          makeContext({
+            method: "PUT",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: { overrides: { windowMinutes: 30 }, note: "task-190 regression" },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "PUT still 200 when Slack send is a no-op");
+        suite.expect(res.body?.success === true, "success flag still true");
+        suite.expect(
+          typeof res.body?.audit_id === "number" && res.body.audit_id > 0,
+          "audit row still written",
+        );
+      } finally {
+        console.log = origLog;
+        // Cleanup: clear the override and restore env.
+        try {
+          const putHandler = await buildHandler(
+            aiOpsRoutes,
+            "/api/ai-ops/tool-health-config",
+            "PUT",
+          );
+          await putHandler(
+            makeContext({
+              method: "PUT",
+              headers: { "X-Admin-Key": ADMIN_KEY },
+              body: {
+                overrides: { windowMinutes: null },
+                note: "task-190 regression cleanup",
+              },
+            }),
+          );
+        } catch { /* best-effort cleanup */ }
+        if (originalKey === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = originalKey;
+        if (originalNotify === undefined) delete process.env.TOOL_HEALTH_CONFIG_NOTIFY;
+        else process.env.TOOL_HEALTH_CONFIG_NOTIFY = originalNotify;
+        if (originalChannel === undefined) delete process.env.TOOL_HEALTH_SLACK_CHANNEL;
+        else process.env.TOOL_HEALTH_SLACK_CHANNEL = originalChannel;
+        if (originalToken !== undefined) process.env.SLACK_BOT_TOKEN = originalToken;
+        if (originalApiToken !== undefined) process.env.SLACK_API_TOKEN = originalApiToken;
+      }
+    },
+  );
+
   await suite.test("PUT /api/ai-ops/tool-health-config — 400 on band ordering violation", async () => {
     const original = process.env.ADMIN_API_KEY;
     process.env.ADMIN_API_KEY = ADMIN_KEY;
