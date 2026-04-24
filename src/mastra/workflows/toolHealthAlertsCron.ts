@@ -43,9 +43,16 @@ import {
   notifyToolHealthBreach,
   type NotifyToolHealthBreachResult,
 } from "../../utils/toolHealthAlertNotifier";
+import {
+  getToolHealthConfigOverrides,
+  type ToolHealthConfigOverrides,
+  type ToolHealthConfigValues,
+} from "../../utils/toolHealthConfigDatabase";
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Single, env-overridable config block — no hard-coded thresholds elsewhere.
+// Env-overridable baseline. Operators can also tune these from the AI
+// Operations panel without a redeploy — see getEffectiveToolHealthConfig()
+// below for the merge order (DB override > env > built-in default).
 // ──────────────────────────────────────────────────────────────────────────────
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -54,56 +61,134 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/**
+ * Compile-time defaults applied when the env doesn't override and the DB
+ * override row is absent. Kept in one place so the AI Ops panel can show
+ * "default = X" next to every tunable.
+ */
+export const TOOL_HEALTH_DEFAULTS: ToolHealthConfigValues = {
+  windowMinutes: 60,
+  minCalls: 5,
+  errorRatePct: 25,
+  errorRateHighPct: 50,
+  errorRateCriticalPct: 75,
+  p95LatencyMs: 15_000,
+  latencyHighMs: 30_000,
+  latencyCriticalMs: 60_000,
+};
+
+/**
+ * Env-only baseline. This is the floor of the merge stack — what the
+ * cron used to read directly before per-instance DB overrides existed.
+ * Persisted overrides from the AI Ops panel sit on top of this; see
+ * `getEffectiveToolHealthConfig()`.
+ *
+ * NOTE: This object is computed at module-load time (env vars are read
+ * once). The DB override layer, by contrast, is read on every cron pass
+ * so live edits take effect at the next tick.
+ */
+export const TOOL_HEALTH_ENV_BASELINE: ToolHealthConfigValues = {
+  windowMinutes: envInt("TOOL_HEALTH_WINDOW_MIN", TOOL_HEALTH_DEFAULTS.windowMinutes),
+  minCalls: envInt("TOOL_HEALTH_MIN_CALLS", TOOL_HEALTH_DEFAULTS.minCalls),
+  errorRatePct: envInt("TOOL_HEALTH_ERROR_RATE_PCT", TOOL_HEALTH_DEFAULTS.errorRatePct),
+  errorRateHighPct: envInt(
+    "TOOL_HEALTH_ERROR_RATE_HIGH_PCT",
+    TOOL_HEALTH_DEFAULTS.errorRateHighPct,
+  ),
+  errorRateCriticalPct: envInt(
+    "TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT",
+    TOOL_HEALTH_DEFAULTS.errorRateCriticalPct,
+  ),
+  p95LatencyMs: envInt(
+    "TOOL_HEALTH_P95_LATENCY_MS",
+    TOOL_HEALTH_DEFAULTS.p95LatencyMs,
+  ),
+  latencyHighMs: envInt(
+    "TOOL_HEALTH_P95_LATENCY_HIGH_MS",
+    TOOL_HEALTH_DEFAULTS.latencyHighMs,
+  ),
+  latencyCriticalMs: envInt(
+    "TOOL_HEALTH_P95_LATENCY_CRITICAL_MS",
+    TOOL_HEALTH_DEFAULTS.latencyCriticalMs,
+  ),
+};
+
+/**
+ * @deprecated Use {@link TOOL_HEALTH_ENV_BASELINE} for the env-only floor
+ * or {@link getEffectiveToolHealthConfig} for the merged live config.
+ * Kept as an alias so existing tests/imports continue to compile. The
+ * `cron` field is retained here because it doesn't have a per-instance
+ * override (changing the cron schedule still requires a redeploy).
+ */
 export const TOOL_HEALTH_THRESHOLDS = {
-  /** Rolling window (minutes) over which metrics are aggregated. */
-  windowMinutes: envInt("TOOL_HEALTH_WINDOW_MIN", 60),
-  /** Minimum sample size before a tool can trigger an alert. */
-  minCalls: envInt("TOOL_HEALTH_MIN_CALLS", 5),
-  /** Error-rate (%) at or above which a tool is considered failing. */
-  errorRatePct: envInt("TOOL_HEALTH_ERROR_RATE_PCT", 25),
-  /** p95 latency (ms) at or above which a tool is considered slow. */
-  p95LatencyMs: envInt("TOOL_HEALTH_P95_LATENCY_MS", 15000),
-  /**
-   * Severity-band cutoffs — at or above which a breach escalates from
-   * 'medium' → 'high' or 'high' → 'critical'. Defaults match the
-   * historic hard-coded constants so behavior is unchanged unless an
-   * operator opts in. Operators tightening the breach floor (e.g.
-   * errorRatePct=10) typically want to drop these too so the
-   * 'high'/'critical' rungs stay proportional.
-   */
-  errorRateHighPct: envInt("TOOL_HEALTH_ERROR_RATE_HIGH_PCT", 50),
-  errorRateCriticalPct: envInt("TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT", 75),
-  latencyHighMs: envInt("TOOL_HEALTH_P95_LATENCY_HIGH_MS", 30_000),
-  latencyCriticalMs: envInt("TOOL_HEALTH_P95_LATENCY_CRITICAL_MS", 60_000),
+  ...TOOL_HEALTH_ENV_BASELINE,
   /** Cron expression — every 15 min by default. */
   cron: process.env.TOOL_HEALTH_ALERT_CRON || "*/15 * * * *",
 } as const;
+
+/**
+ * Final, merged config used by `runToolHealthCheck` on each pass. Identical
+ * shape to the env baseline but reflects any operator overrides currently
+ * persisted in `tool_health_config_overrides`.
+ */
+export type EffectiveToolHealthConfig = ToolHealthConfigValues;
+
+/**
+ * Merges the env baseline with the persisted overrides loaded via
+ * `loadOverrides()` (defaulting to the DB-backed loader). Per-field merge:
+ * a defined override wins; an undefined override falls through to the
+ * env baseline. Failures inside `loadOverrides` are not handled here —
+ * the default loader logs and resolves to `{}` so production never
+ * crashes a cron pass over a transient DB issue.
+ */
+export async function getEffectiveToolHealthConfig(
+  loadOverrides: () => Promise<ToolHealthConfigOverrides> = getToolHealthConfigOverrides,
+): Promise<EffectiveToolHealthConfig> {
+  const overrides = await loadOverrides();
+  return {
+    windowMinutes: overrides.windowMinutes ?? TOOL_HEALTH_ENV_BASELINE.windowMinutes,
+    minCalls: overrides.minCalls ?? TOOL_HEALTH_ENV_BASELINE.minCalls,
+    errorRatePct: overrides.errorRatePct ?? TOOL_HEALTH_ENV_BASELINE.errorRatePct,
+    errorRateHighPct:
+      overrides.errorRateHighPct ?? TOOL_HEALTH_ENV_BASELINE.errorRateHighPct,
+    errorRateCriticalPct:
+      overrides.errorRateCriticalPct ?? TOOL_HEALTH_ENV_BASELINE.errorRateCriticalPct,
+    p95LatencyMs: overrides.p95LatencyMs ?? TOOL_HEALTH_ENV_BASELINE.p95LatencyMs,
+    latencyHighMs: overrides.latencyHighMs ?? TOOL_HEALTH_ENV_BASELINE.latencyHighMs,
+    latencyCriticalMs:
+      overrides.latencyCriticalMs ?? TOOL_HEALTH_ENV_BASELINE.latencyCriticalMs,
+  };
+}
 
 /**
  * Cutoffs for error-rate / p95-latency must form a non-decreasing ladder:
  *   breach floor ≤ high cutoff ≤ critical cutoff
  *
  * If an operator inverts these (e.g. `HIGH_PCT=80` and `CRITICAL_PCT=70`),
- * `severityForErrorRate()` will short-circuit on the first
- * `>=` test and silently downgrade every breach — the "critical" rung
- * becomes unreachable. This validator surfaces that misconfiguration as a
- * warning at boot so an on-call engineer can fix the env vars before the
- * next paging window, instead of discovering the downgrade after a real
- * incident is undercalled.
+ * `severityForErrorRate()` will short-circuit on the first `>=` test and
+ * silently downgrade every breach — the "critical" rung becomes
+ * unreachable. This validator surfaces that misconfiguration as a warning
+ * so an on-call engineer can fix it before the next paging window, instead
+ * of discovering the downgrade after a real incident is undercalled.
  *
  * Pure function; consumers wire the warnings into `console.warn`. Equal
  * values are allowed (a flat ladder still preserves correct ordering).
+ *
+ * Operates on the merged `EffectiveToolHealthConfig` so it catches both
+ * env-var misconfiguration AND a bad override pushed through the AI Ops
+ * panel. (The PUT endpoint also enforces this server-side, but we keep
+ * the runtime check as a defense in depth.)
  */
 export function validateToolHealthThresholds(
   cfg: Pick<
-    typeof TOOL_HEALTH_THRESHOLDS,
+    EffectiveToolHealthConfig,
     | "errorRatePct"
     | "errorRateHighPct"
     | "errorRateCriticalPct"
     | "p95LatencyMs"
     | "latencyHighMs"
     | "latencyCriticalMs"
-  > = TOOL_HEALTH_THRESHOLDS,
+  > = TOOL_HEALTH_ENV_BASELINE,
 ): string[] {
   const warnings: string[] = [];
   if (
@@ -118,7 +203,8 @@ export function validateToolHealthThresholds(
         `≤ critical (${cfg.errorRateCriticalPct}%). Severity will be silently ` +
         `downgraded for some breaches — adjust ` +
         `TOOL_HEALTH_ERROR_RATE_PCT / TOOL_HEALTH_ERROR_RATE_HIGH_PCT / ` +
-        `TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT so they are non-decreasing.`,
+        `TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT (or the matching AI Ops ` +
+        `overrides) so they are non-decreasing.`,
     );
   }
   if (
@@ -133,7 +219,8 @@ export function validateToolHealthThresholds(
         `≤ critical (${cfg.latencyCriticalMs}ms). Severity will be silently ` +
         `downgraded for some breaches — adjust ` +
         `TOOL_HEALTH_P95_LATENCY_MS / TOOL_HEALTH_P95_LATENCY_HIGH_MS / ` +
-        `TOOL_HEALTH_P95_LATENCY_CRITICAL_MS so they are non-decreasing.`,
+        `TOOL_HEALTH_P95_LATENCY_CRITICAL_MS (or the matching AI Ops ` +
+        `overrides) so they are non-decreasing.`,
     );
   }
   return warnings;
@@ -141,40 +228,62 @@ export function validateToolHealthThresholds(
 
 /**
  * Emits the misconfiguration warnings (if any) via `console.warn`.
- * Idempotent — only fires the first time per process so repeated cron
- * passes don't spam the log. Use `__resetThresholdValidationForTests()`
- * to clear the flag from a unit test.
+ * Idempotent — only fires the first time per process for a given config so
+ * repeated cron passes don't spam the log. The dedupe is keyed on the
+ * stringified warnings, so a *new* misconfiguration introduced via an
+ * AI Ops override during the same process lifetime will still surface
+ * exactly once. Use `__resetThresholdValidationForTests()` to clear the
+ * cache from a unit test.
  */
-let _thresholdValidationLogged = false;
-function ensureThresholdValidationLogged(): void {
-  if (_thresholdValidationLogged) return;
-  _thresholdValidationLogged = true;
-  for (const w of validateToolHealthThresholds()) {
+const _thresholdValidationLogged = new Set<string>();
+function ensureThresholdValidationLogged(
+  cfg: Pick<
+    EffectiveToolHealthConfig,
+    | "errorRatePct"
+    | "errorRateHighPct"
+    | "errorRateCriticalPct"
+    | "p95LatencyMs"
+    | "latencyHighMs"
+    | "latencyCriticalMs"
+  > = TOOL_HEALTH_ENV_BASELINE,
+): void {
+  const warnings = validateToolHealthThresholds(cfg);
+  if (warnings.length === 0) return;
+  const key = warnings.join("\n");
+  if (_thresholdValidationLogged.has(key)) return;
+  _thresholdValidationLogged.add(key);
+  for (const w of warnings) {
     console.warn(w);
   }
 }
 
-/** @internal Test-only: reset the one-shot validation flag. */
+/** @internal Test-only: reset the one-shot validation cache. */
 export function __resetThresholdValidationForTests(): void {
-  _thresholdValidationLogged = false;
+  _thresholdValidationLogged.clear();
 }
 
-// Validate at module load so misconfiguration is visible at boot — even
-// before the first cron tick fires. The in-process `runToolHealthCheck`
-// re-checks via `ensureThresholdValidationLogged()` (no-op after this
-// initial run) so tests that import the module after mutating env can
-// still observe the warning by resetting the flag.
+// Validate the env baseline at module load so misconfiguration is visible
+// at boot — even before the first cron tick fires. `runToolHealthCheck`
+// re-runs the check against the merged effective config (env + DB
+// overrides) so a bad override pushed through the AI Ops panel also gets
+// surfaced on the next pass.
 ensureThresholdValidationLogged();
 
-function severityForErrorRate(pct: number): AlertSeverity {
-  if (pct >= TOOL_HEALTH_THRESHOLDS.errorRateCriticalPct) return "critical";
-  if (pct >= TOOL_HEALTH_THRESHOLDS.errorRateHighPct) return "high";
+function severityForErrorRate(
+  cfg: EffectiveToolHealthConfig,
+  pct: number,
+): AlertSeverity {
+  if (pct >= cfg.errorRateCriticalPct) return "critical";
+  if (pct >= cfg.errorRateHighPct) return "high";
   return "medium";
 }
 
-function severityForLatency(p95Ms: number): AlertSeverity {
-  if (p95Ms >= TOOL_HEALTH_THRESHOLDS.latencyCriticalMs) return "critical";
-  if (p95Ms >= TOOL_HEALTH_THRESHOLDS.latencyHighMs) return "high";
+function severityForLatency(
+  cfg: EffectiveToolHealthConfig,
+  p95Ms: number,
+): AlertSeverity {
+  if (p95Ms >= cfg.latencyCriticalMs) return "critical";
+  if (p95Ms >= cfg.latencyHighMs) return "high";
   return "medium";
 }
 
@@ -230,15 +339,24 @@ export interface ToolHealthDeps {
    * without touching real services.
    */
   notifyToolHealthBreach: typeof notifyToolHealthBreach;
+  /**
+   * Loads the per-instance threshold overrides set from the AI Operations
+   * panel. Optional so legacy stubs (which only care about breach plumbing)
+   * stay backwards-compatible — the cron falls back to the DB-backed loader
+   * when this is omitted, and that loader resolves to `{}` on failure so a
+   * missing overrides table can never crash the run.
+   */
+  loadOverrides?: () => Promise<ToolHealthConfigOverrides>;
 }
 
-const DEFAULT_DEPS: ToolHealthDeps = {
+const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   getToolWindowAggregates,
   openAlertExistsByKey,
   createAIAlert,
   getOpenAlertsByKey,
   resolveAlert,
   notifyToolHealthBreach,
+  loadOverrides: getToolHealthConfigOverrides,
 };
 
 /**
@@ -339,11 +457,11 @@ async function dispatchBreachNotification(
  */
 async function maybeResolveRecoveredAlert(
   deps: ToolHealthDeps,
+  cfg: EffectiveToolHealthConfig,
   agg: ToolWindowAggregate,
   reason: ToolHealthReason,
   out: ToolHealthCheckResult,
 ): Promise<void> {
-  const cfg = TOOL_HEALTH_THRESHOLDS;
   const relatedRecordId = `${agg.tool_name}:${reason}`;
   let openAlerts;
   try {
@@ -405,11 +523,22 @@ async function maybeResolveRecoveredAlert(
 export async function runToolHealthCheck(
   depsOverride?: Partial<ToolHealthDeps>,
 ): Promise<ToolHealthCheckResult> {
-  const deps: ToolHealthDeps = { ...DEFAULT_DEPS, ...(depsOverride ?? {}) };
-  // Re-check on first invocation in case the module-load validation was
-  // suppressed (e.g. running under a test harness that resets the flag).
-  ensureThresholdValidationLogged();
-  const cfg = TOOL_HEALTH_THRESHOLDS;
+  const deps: Required<ToolHealthDeps> = {
+    ...DEFAULT_DEPS,
+    ...(depsOverride ?? {}),
+    loadOverrides: depsOverride?.loadOverrides ?? DEFAULT_DEPS.loadOverrides,
+  };
+  // Re-read overrides on every pass so live edits from the AI Ops panel
+  // take effect at the next tick without a worker restart.
+  const cfg: EffectiveToolHealthConfig = await getEffectiveToolHealthConfig(
+    deps.loadOverrides,
+  );
+  // Validate the *merged* config (env + DB overrides). This catches both
+  // env-var misconfiguration that was suppressed at module load (e.g. tests
+  // that mutate env after import) and a bad override pushed through the
+  // AI Ops panel. Idempotent: only logs new misconfigurations once per
+  // process to avoid log spam.
+  ensureThresholdValidationLogged(cfg);
   const out: ToolHealthCheckResult = {
     toolsEvaluated: 0,
     alertsCreated: 0,
@@ -435,7 +564,7 @@ export async function runToolHealthCheck(
   for (const agg of aggregates) {
     // Error-rate breach
     if (agg.error_rate_pct >= cfg.errorRatePct) {
-      const severity = severityForErrorRate(agg.error_rate_pct);
+      const severity = severityForErrorRate(cfg, agg.error_rate_pct);
       // Title intentionally OMITS live metric values so dedupe via
       // related_record_id stays meaningful across cron runs while the
       // breach is ongoing. Live values live in `description`.
@@ -485,12 +614,12 @@ export async function runToolHealthCheck(
     } else {
       // Error-rate is back below threshold for this tool's window —
       // close any matching open alert (subject to cooldown).
-      await maybeResolveRecoveredAlert(deps, agg, "error_rate", out);
+      await maybeResolveRecoveredAlert(deps, cfg, agg, "error_rate", out);
     }
 
     // p95 latency breach
     if (agg.p95_latency_ms >= cfg.p95LatencyMs) {
-      const severity = severityForLatency(agg.p95_latency_ms);
+      const severity = severityForLatency(cfg, agg.p95_latency_ms);
       // Title intentionally OMITS the live p95 value so dedupe via
       // related_record_id stays stable across cron runs while the breach
       // is ongoing. Live values live in `description`.
@@ -537,7 +666,7 @@ export async function runToolHealthCheck(
     } else {
       // p95 latency is back below threshold for this tool's window —
       // close any matching open alert (subject to cooldown).
-      await maybeResolveRecoveredAlert(deps, agg, "p95_latency", out);
+      await maybeResolveRecoveredAlert(deps, cfg, agg, "p95_latency", out);
     }
   }
 

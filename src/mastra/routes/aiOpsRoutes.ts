@@ -26,6 +26,11 @@ import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
 import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../agents/qualitySpecialistAgent";
 import { SDR_QUALITY_PROMPT_VERSION } from "../agents/sdrQualityAgent";
 import { SALES_QUALITY_PROMPT_VERSION } from "../agents/salesQualityAgent";
+import {
+  TOOL_HEALTH_DEFAULTS,
+  TOOL_HEALTH_ENV_BASELINE,
+  getEffectiveToolHealthConfig,
+} from "../workflows/toolHealthAlertsCron";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 
@@ -37,6 +42,37 @@ const ACTIVE_PROMPT_VERSIONS: { agent_name: string; prompt_version: string }[] =
 ];
 
 const AI_OPS_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
+
+/**
+ * Tuning the thresholds is a privileged action — it directly changes which
+ * tools page on-call. Restrict the write/audit endpoints to admins; the
+ * read endpoint stays open to the broader AI_OPS_ROLES so non-admin ops
+ * can still see the live floor when triaging an alert.
+ */
+const TOOL_HEALTH_CONFIG_WRITE_ROLES: UserRole[] = ['admin'];
+
+/**
+ * Per-field validation bounds for the tool-health threshold form. Picked to
+ * cover every legitimate tuning operators have asked for (e.g. 5%–90% error
+ * floors, 1s–10min p95 ceilings) while still rejecting obviously broken
+ * inputs (negative numbers, days-long windows). Mirrored in the UI so the
+ * server is the source of truth either way.
+ */
+const TOOL_HEALTH_CONFIG_BOUNDS = {
+  windowMinutes:        { min: 5,   max: 1440 },
+  minCalls:             { min: 1,   max: 10_000 },
+  errorRatePct:         { min: 1,   max: 100 },
+  errorRateHighPct:     { min: 1,   max: 100 },
+  errorRateCriticalPct: { min: 1,   max: 100 },
+  p95LatencyMs:         { min: 100, max: 600_000 },
+  latencyHighMs:        { min: 100, max: 600_000 },
+  latencyCriticalMs:    { min: 100, max: 600_000 },
+} as const;
+
+type ToolHealthConfigField = keyof typeof TOOL_HEALTH_CONFIG_BOUNDS;
+const TOOL_HEALTH_CONFIG_FIELD_LIST = Object.keys(
+  TOOL_HEALTH_CONFIG_BOUNDS,
+) as ToolHealthConfigField[];
 
 /**
  * Parse the `related_record_id` written by toolHealthAlertsCron, which uses
@@ -442,6 +478,244 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] alert resolve error:", error);
           return c.json({ error: "Failed to resolve alert" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Tool-health threshold tuning — read endpoint.
+   *
+   * Returns the merged effective config plus the underlying layers so the
+   * AI Ops panel can render "currently effective", "your override", "env
+   * baseline", and "compile-time default" side-by-side. Available to all
+   * AI_OPS_ROLES so non-admin ops can verify the live floor while triaging,
+   * even if they can't edit it.
+   */
+  {
+    path: "/api/ai-ops/tool-health-config",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          // Lazy-load the DB module so the handler can still answer 403/auth
+          // checks without a Postgres connection (matches the pattern other
+          // routes in this file use for new tables).
+          const {
+            getToolHealthConfigRow,
+            getToolHealthConfigAudit,
+          } = await import("../../utils/toolHealthConfigDatabase");
+
+          // Pull the same number of audit rows the dashboard advertises in
+          // its "Recent threshold changes" header so the two stay in sync.
+          const [row, effective, audit] = await Promise.all([
+            getToolHealthConfigRow(),
+            getEffectiveToolHealthConfig(),
+            getToolHealthConfigAudit(25),
+          ]);
+
+          return c.json({
+            data: {
+              defaults: TOOL_HEALTH_DEFAULTS,
+              env_baseline: TOOL_HEALTH_ENV_BASELINE,
+              overrides: row.overrides,
+              effective,
+              updated_by: row.updated_by,
+              updated_at: row.updated_at,
+              bounds: TOOL_HEALTH_CONFIG_BOUNDS,
+              fields: TOOL_HEALTH_CONFIG_FIELD_LIST,
+              audit,
+              can_edit: TOOL_HEALTH_CONFIG_WRITE_ROLES.includes(
+                user.role as UserRole,
+              ),
+            },
+          });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-config GET error:", error);
+          return c.json({ error: "Failed to load tool-health config" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Tool-health threshold tuning — write endpoint.
+   *
+   * Body: { overrides: { <field>: number | null, ... }, note?: string }
+   * - A `number` sets/replaces the override for that field.
+   * - `null` clears the override (falls back to env baseline).
+   * - Fields not listed in `overrides` are left as-is.
+   *
+   * Validates each provided field against TOOL_HEALTH_CONFIG_BOUNDS and also
+   * enforces the cross-field invariant that 'high' < 'critical' for both
+   * the error-rate and latency severity bands. The cross-field check is
+   * computed against the effective config that *would* result from applying
+   * this patch (not just the patch in isolation), so changing only the
+   * 'high' value while the existing 'critical' override stays in place is
+   * still validated correctly.
+   *
+   * Audit-logged via setToolHealthConfigOverrides() — every successful
+   * write inserts a `tool_health_config_audit` row capturing the
+   * before/after JSON and the operator's name/email.
+   */
+  {
+    path: "/api/ai-ops/tool-health-config",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, TOOL_HEALTH_CONFIG_WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          let body: any;
+          try {
+            body = await c.req.json();
+          } catch {
+            return c.json({ error: "Request body must be valid JSON" }, 400);
+          }
+          if (!body || typeof body !== 'object') {
+            return c.json({ error: "Request body must be an object" }, 400);
+          }
+          const rawOverrides = body.overrides;
+          if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) {
+            return c.json({ error: "overrides must be an object" }, 400);
+          }
+
+          // Validate each field that was provided. Missing fields are left
+          // alone (existing override is preserved).
+          const cleanOverrides: { [K in ToolHealthConfigField]?: number | null } = {};
+          const errors: string[] = [];
+          for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
+            if (!Object.prototype.hasOwnProperty.call(rawOverrides, field)) continue;
+            const v = rawOverrides[field];
+            if (v === null) {
+              cleanOverrides[field] = null;
+              continue;
+            }
+            const n = Number(v);
+            const { min, max } = TOOL_HEALTH_CONFIG_BOUNDS[field];
+            if (!Number.isFinite(n) || !Number.isInteger(n)) {
+              errors.push(`${field} must be an integer or null`);
+              continue;
+            }
+            if (n < min || n > max) {
+              errors.push(`${field} must be between ${min} and ${max}`);
+              continue;
+            }
+            cleanOverrides[field] = n;
+          }
+          if (errors.length > 0) {
+            return c.json({ error: "Validation failed", details: errors }, 400);
+          }
+
+          let note: string | null = null;
+          if (body.note != null) {
+            if (typeof body.note !== 'string') {
+              return c.json({ error: "note must be a string" }, 400);
+            }
+            note = body.note.length > 500 ? body.note.slice(0, 500) : body.note;
+          }
+
+          // Compute the effective config that would result *after* applying
+          // this patch, so the band-ordering invariant catches a change to
+          // 'high' even when 'critical' isn't part of the same request.
+          const {
+            getToolHealthConfigRow: peekRow,
+            setToolHealthConfigOverrides,
+          } = await import("../../utils/toolHealthConfigDatabase");
+          const currentRow = await peekRow();
+          const merged = { ...TOOL_HEALTH_ENV_BASELINE };
+          for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
+            const ovr = currentRow.overrides[field];
+            if (ovr != null) merged[field] = ovr;
+          }
+          for (const field of TOOL_HEALTH_CONFIG_FIELD_LIST) {
+            if (Object.prototype.hasOwnProperty.call(cleanOverrides, field)) {
+              const v = cleanOverrides[field];
+              merged[field] = v == null
+                ? TOOL_HEALTH_ENV_BASELINE[field]
+                : v;
+            }
+          }
+          if (merged.errorRateHighPct >= merged.errorRateCriticalPct) {
+            return c.json({
+              error:
+                "errorRateHighPct must be less than errorRateCriticalPct " +
+                `(would be ${merged.errorRateHighPct} ≥ ${merged.errorRateCriticalPct})`,
+            }, 400);
+          }
+          if (merged.errorRatePct > merged.errorRateHighPct) {
+            return c.json({
+              error:
+                "errorRatePct (breach floor) must not exceed errorRateHighPct " +
+                `(would be ${merged.errorRatePct} > ${merged.errorRateHighPct})`,
+            }, 400);
+          }
+          if (merged.latencyHighMs >= merged.latencyCriticalMs) {
+            return c.json({
+              error:
+                "latencyHighMs must be less than latencyCriticalMs " +
+                `(would be ${merged.latencyHighMs} ≥ ${merged.latencyCriticalMs})`,
+            }, 400);
+          }
+          if (merged.p95LatencyMs > merged.latencyHighMs) {
+            return c.json({
+              error:
+                "p95LatencyMs (breach floor) must not exceed latencyHighMs " +
+                `(would be ${merged.p95LatencyMs} > ${merged.latencyHighMs})`,
+            }, 400);
+          }
+
+          const changedBy = user.name || user.email || `user:${user.userId}`;
+          const result = await setToolHealthConfigOverrides({
+            overrides: cleanOverrides,
+            changedBy,
+            note,
+          });
+
+          const effective = await getEffectiveToolHealthConfig();
+          return c.json({
+            success: true,
+            before: result.before,
+            after: result.after,
+            effective,
+            audit_id: result.audit_id,
+          });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-config PUT error:", error);
+          return c.json({ error: "Failed to update tool-health config" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Tool-health threshold tuning — audit endpoint.
+   *
+   * Returns the most recent N change rows, newest first. Same role gate as
+   * the GET endpoint so non-admin ops can audit the change history while
+   * triaging an alert without being able to flip the floor themselves.
+   */
+  {
+    path: "/api/ai-ops/tool-health-config/audit",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 25, 1, 200);
+          const { getToolHealthConfigAudit } = await import(
+            "../../utils/toolHealthConfigDatabase"
+          );
+          const data = await getToolHealthConfigAudit(limit);
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-config audit error:", error);
+          return c.json({ error: "Failed to load config audit" }, 500);
         }
       };
     },

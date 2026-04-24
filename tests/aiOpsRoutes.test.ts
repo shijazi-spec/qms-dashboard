@@ -238,4 +238,285 @@ if (!HAS_DB) {
   });
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Tool-health threshold tuning endpoints (Task #177)
+//
+// The structural / 403 / 400 boundary tests run without a live DB — those
+// checks fire before the lazy `await import(toolHealthConfigDatabase)`. The
+// happy-path PUT/GET tests are gated on HAS_DB so CI can still smoke them.
+// ───────────────────────────────────────────────────────────────────────────
+
+await suite.test("threshold routes are wired into aiOpsRoutes", async () => {
+  const paths = aiOpsRoutes.map((r) => `${r.method} ${r.path}`);
+  suite.expect(
+    paths.includes("GET /api/ai-ops/tool-health-config"),
+    "GET tool-health-config registered",
+  );
+  suite.expect(
+    paths.includes("PUT /api/ai-ops/tool-health-config"),
+    "PUT tool-health-config registered",
+  );
+  suite.expect(
+    paths.includes("GET /api/ai-ops/tool-health-config/audit"),
+    "GET tool-health-config/audit registered",
+  );
+});
+
+await suite.test("GET /api/ai-ops/tool-health-config — 403 without auth", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = ADMIN_KEY;
+  try {
+    const handler = await buildHandler(
+      aiOpsRoutes,
+      "/api/ai-ops/tool-health-config",
+      "GET",
+    );
+    const res = await handler(makeContext({ method: "GET" }));
+    suite.expectEqual(res.status, 403, "status");
+    suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
+await suite.test("PUT /api/ai-ops/tool-health-config — 403 without admin", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = ADMIN_KEY;
+  try {
+    const handler = await buildHandler(
+      aiOpsRoutes,
+      "/api/ai-ops/tool-health-config",
+      "PUT",
+    );
+    // Pass no key at all — the requireRole gate fires before we reach
+    // the JSON body parser, so we never need a body to assert 403.
+    const res = await handler(
+      makeContext({ method: "PUT", body: { overrides: {} } }),
+    );
+    suite.expectEqual(res.status, 403, "status");
+    suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
+await suite.test("PUT /api/ai-ops/tool-health-config — 400 when body is not an object", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = ADMIN_KEY;
+  try {
+    const handler = await buildHandler(
+      aiOpsRoutes,
+      "/api/ai-ops/tool-health-config",
+      "PUT",
+    );
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: { "X-Admin-Key": ADMIN_KEY },
+        body: "not-an-object",
+      }),
+    );
+    suite.expectEqual(res.status, 400, "status");
+    suite.expect(
+      typeof res.body?.error === "string" && res.body.error.length > 0,
+      "error message present",
+    );
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
+await suite.test("PUT /api/ai-ops/tool-health-config — 400 when overrides missing", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = ADMIN_KEY;
+  try {
+    const handler = await buildHandler(
+      aiOpsRoutes,
+      "/api/ai-ops/tool-health-config",
+      "PUT",
+    );
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: { "X-Admin-Key": ADMIN_KEY },
+        body: { note: "no overrides field at all" },
+      }),
+    );
+    suite.expectEqual(res.status, 400, "status");
+    suite.expectEqual(res.body?.error, "overrides must be an object", "error");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
+await suite.test("GET /api/ai-ops/tool-health-config/audit — 403 without auth", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = ADMIN_KEY;
+  try {
+    const handler = await buildHandler(
+      aiOpsRoutes,
+      "/api/ai-ops/tool-health-config/audit",
+      "GET",
+    );
+    const res = await handler(makeContext({ method: "GET" }));
+    suite.expectEqual(res.status, 403, "status");
+    suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
+if (HAS_DB) {
+  // Happy-path coverage: a full read → write → read cycle that proves the
+  // PUT actually persists, the GET reflects the merged result, and the
+  // audit log captures the change. Cleans up after itself by clearing all
+  // overrides at the end so the live DB row is left in a known-good state.
+  await suite.test("happy: GET → PUT → GET round-trips an override and writes audit row", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const getHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "GET",
+      );
+      const putHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "PUT",
+      );
+
+      // Snapshot the env baseline so we can pick override values that are
+      // (a) within bounds and (b) safely satisfy the cross-field invariants.
+      const initial = await getHandler(
+        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+      );
+      suite.expectEqual(initial.status, 200, "initial GET status");
+      const baseline = initial.body?.data?.env_baseline;
+      suite.expect(baseline && typeof baseline === "object", "env_baseline present");
+
+      // Pick safe values that satisfy: floor <= high < critical for both bands.
+      const patch = {
+        windowMinutes: 15,
+        minCalls: 10,
+        errorRatePct: 5,
+        errorRateHighPct: 20,
+        errorRateCriticalPct: 80,
+        p95LatencyMs: 500,
+        latencyHighMs: 2000,
+        latencyCriticalMs: 8000,
+      };
+
+      const putRes = await putHandler(
+        makeContext({
+          method: "PUT",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: { overrides: patch, note: "integration test #177" },
+        }),
+      );
+      suite.expectEqual(putRes.status, 200, "PUT status");
+      suite.expect(putRes.body?.success === true, "success flag");
+      suite.expectEqual(
+        putRes.body?.effective?.errorRateHighPct,
+        20,
+        "effective reflects new override",
+      );
+      suite.expect(
+        typeof putRes.body?.audit_id === "number" && putRes.body.audit_id > 0,
+        "audit_id returned",
+      );
+
+      // Re-GET and assert the override is now visible alongside the audit row.
+      const reread = await getHandler(
+        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+      );
+      suite.expectEqual(reread.status, 200, "re-read status");
+      suite.expectEqual(
+        reread.body?.data?.overrides?.errorRateHighPct,
+        20,
+        "override persisted",
+      );
+      suite.expect(
+        Array.isArray(reread.body?.data?.audit) && reread.body.data.audit.length > 0,
+        "audit log non-empty",
+      );
+      const last = reread.body.data.audit[0];
+      suite.expectEqual(last?.note, "integration test #177", "note round-trips");
+      suite.expectEqual(
+        last?.after_values?.errorRateHighPct,
+        20,
+        "audit captured after-state",
+      );
+    } finally {
+      // Cleanup: clear every override so the live DB returns to baseline.
+      try {
+        const putHandler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/tool-health-config",
+          "PUT",
+        );
+        await putHandler(
+          makeContext({
+            method: "PUT",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              overrides: {
+                windowMinutes: null,
+                minCalls: null,
+                errorRatePct: null,
+                errorRateHighPct: null,
+                errorRateCriticalPct: null,
+                p95LatencyMs: null,
+                latencyHighMs: null,
+                latencyCriticalMs: null,
+              },
+              note: "integration test #177 cleanup",
+            },
+          }),
+        );
+      } catch {
+        /* best-effort cleanup */
+      }
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
+  await suite.test("PUT /api/ai-ops/tool-health-config — 400 on band ordering violation", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const putHandler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-config",
+        "PUT",
+      );
+      // High >= critical → must be rejected with a clear 400.
+      const res = await putHandler(
+        makeContext({
+          method: "PUT",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          body: {
+            overrides: { errorRateHighPct: 90, errorRateCriticalPct: 90 },
+          },
+        }),
+      );
+      suite.expectEqual(res.status, 400, "status");
+      suite.expect(
+        typeof res.body?.error === "string"
+          && res.body.error.includes("errorRateHighPct"),
+        "error mentions field",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+}
+
 suite.finishOrExit();

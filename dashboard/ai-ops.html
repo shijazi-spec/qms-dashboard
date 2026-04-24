@@ -99,6 +99,7 @@
         <button onclick="switchTab('issues')" id="tab-issues" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-issues">Recent Issues</button>
         <button onclick="switchTab('feedback')" id="tab-feedback" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-feedback">Consultant Feedback</button>
         <button onclick="switchTab('negative')" id="tab-negative" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-negative">Negative Feedback</button>
+        <button onclick="switchTab('thresholds')" id="tab-thresholds" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-thresholds">Alert Thresholds</button>
       </nav>
     </div>
 
@@ -244,6 +245,41 @@
       </div>
     </div>
 
+    <!-- Alert Thresholds Tab -->
+    <!-- Lets ops drop the breach floor / severity cutoffs from
+         toolHealthAlertsCron in real time during an incident, without a
+         redeploy. Every save writes an audit row visible in the history
+         table at the bottom of this tab. -->
+    <div id="content-thresholds" class="hidden fade-in">
+      <div class="bg-white rounded-xl shadow-sm border p-6 mb-6" data-testid="section-thresholds-form">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">Tool-health alert thresholds</h2>
+            <p class="text-sm text-gray-500 mt-1">
+              Tune the breach floors and severity cutoffs that drive the per-tool
+              error/latency monitor. Changes apply on the next cron pass — no
+              redeploy needed.
+            </p>
+          </div>
+          <div class="text-right text-xs text-gray-500" data-testid="text-thresholds-meta">
+            <div id="thresholds-updated-meta">—</div>
+          </div>
+        </div>
+        <div id="thresholds-load-error" class="hidden mb-4 px-3 py-2 text-sm rounded border border-red-200 bg-red-50 text-red-700" data-testid="text-thresholds-load-error"></div>
+        <div id="thresholds-form" class="space-y-4" data-testid="form-thresholds">
+          <p class="text-sm text-gray-400">Loading current thresholds…</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border p-6" data-testid="section-thresholds-audit">
+        <h3 class="text-base font-semibold text-gray-900 mb-1">Recent threshold changes</h3>
+        <p class="text-xs text-gray-500 mb-4">Audit log of who tuned the thresholds and when. Latest 25 changes.</p>
+        <div id="thresholds-audit" class="space-y-2" data-testid="list-thresholds-audit">
+          <p class="text-sm text-gray-400">Loading…</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Price Table Info -->
     <div class="bg-white rounded-xl shadow-sm border p-5 mt-6" data-testid="section-price-table">
       <h3 class="text-sm font-semibold text-gray-700 mb-2">Model Price Table</h3>
@@ -259,7 +295,7 @@
 
   <script>
     let costChart = null;
-    const TABS = ['cost', 'latency', 'prompts', 'tools', 'issues', 'feedback', 'negative'];
+    const TABS = ['cost', 'latency', 'prompts', 'tools', 'issues', 'feedback', 'negative', 'thresholds'];
 
     function switchTab(tab) {
       TABS.forEach(t => {
@@ -279,6 +315,7 @@
       if (tab === 'issues') loadIssues();
       if (tab === 'feedback') loadAIFeedback();
       if (tab === 'negative') loadNegativeFeedback();
+      if (tab === 'thresholds') loadThresholdsForm();
     }
 
     function aiOpsEscapeHtml(str) {
@@ -1123,17 +1160,250 @@
       document.body.appendChild(modal);
     }
 
+    // ── Tool-health alert thresholds ─────────────────────────────────────
+    // The form mirrors the per-field bounds the server enforces in
+    // TOOL_HEALTH_CONFIG_BOUNDS — the labels are intentionally human, but
+    // the input names match the server field names exactly so we don't have
+    // to maintain a translation layer.
+    const THRESHOLD_FIELDS = [
+      { key: 'windowMinutes',        label: 'Evaluation window (minutes)',   help: 'How many minutes of history each pass looks back over. Lower = faster reaction, higher = less noise.' },
+      { key: 'minCalls',             label: 'Minimum calls in window',        help: 'A tool needs at least this many calls in the window before we will alert on it. Filters out flaky one-off failures.' },
+      { key: 'errorRatePct',         label: 'Error-rate breach floor (%)',    help: 'Floor below which we will not alert at all, regardless of severity bands.' },
+      { key: 'errorRateHighPct',     label: 'Error-rate "high" cutoff (%)',   help: 'Error rate ≥ this value escalates an alert from medium to high severity.' },
+      { key: 'errorRateCriticalPct', label: 'Error-rate "critical" cutoff (%)', help: 'Error rate ≥ this value escalates an alert to critical severity (pages on-call).' },
+      { key: 'p95LatencyMs',         label: 'p95 latency breach floor (ms)',  help: 'Floor below which we will not alert on latency at all.' },
+      { key: 'latencyHighMs',        label: 'p95 latency "high" cutoff (ms)', help: 'p95 latency ≥ this value escalates a latency alert to high severity.' },
+      { key: 'latencyCriticalMs',    label: 'p95 latency "critical" cutoff (ms)', help: 'p95 latency ≥ this value escalates a latency alert to critical severity.' },
+    ];
+
+    let thresholdsState = null;
+
+    async function loadThresholdsForm() {
+      const formEl = document.getElementById('thresholds-form');
+      const errEl = document.getElementById('thresholds-load-error');
+      const auditEl = document.getElementById('thresholds-audit');
+      const metaEl = document.getElementById('thresholds-updated-meta');
+      errEl.classList.add('hidden');
+      formEl.innerHTML = '<p class="text-sm text-gray-400">Loading current thresholds…</p>';
+      auditEl.innerHTML = '<p class="text-sm text-gray-400">Loading…</p>';
+      try {
+        const { data } = await apiFetch('/api/ai-ops/tool-health-config');
+        thresholdsState = data;
+        renderThresholdsForm(data);
+        renderThresholdsAudit(data.audit || []);
+        if (data.updated_at) {
+          const who = data.updated_by ? ` by ${esc(data.updated_by)}` : '';
+          metaEl.innerHTML = `Last edited ${esc(fmtDate(data.updated_at))}${who}`;
+        } else {
+          metaEl.textContent = 'No overrides yet — running on env / compile-time defaults.';
+        }
+      } catch (e) {
+        console.error('Tool-health config load error', e);
+        formEl.innerHTML = '';
+        auditEl.innerHTML = '';
+        metaEl.textContent = '';
+        errEl.textContent = 'Failed to load tool-health config: ' + (e?.message || 'unknown error');
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function renderThresholdsForm(data) {
+      const formEl = document.getElementById('thresholds-form');
+      const canEdit = !!data.can_edit;
+      const overrides = data.overrides || {};
+      const effective = data.effective || {};
+      const envBaseline = data.env_baseline || {};
+      const defaults = data.defaults || {};
+      const bounds = data.bounds || {};
+
+      const rows = THRESHOLD_FIELDS.map(f => {
+        const ovr = overrides[f.key];
+        const eff = effective[f.key];
+        const baseline = envBaseline[f.key];
+        const def = defaults[f.key];
+        const b = bounds[f.key] || {};
+        const placeholder = baseline != null ? `env: ${baseline}` : `default: ${def}`;
+        const fallbackNote = ovr == null
+          ? `<span class="text-xs text-gray-400" data-testid="text-threshold-fallback-${f.key}">Using ${baseline === def ? 'compile-time default' : 'env baseline'} (${baseline ?? def})</span>`
+          : `<span class="text-xs text-blue-600" data-testid="text-threshold-override-${f.key}">Override active — env baseline is ${baseline ?? def}</span>`;
+        return `
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start py-3 border-t first:border-t-0" data-testid="row-threshold-${f.key}">
+            <div class="md:col-span-5">
+              <label for="threshold-${f.key}" class="block text-sm font-medium text-gray-800">${esc(f.label)}</label>
+              <p class="text-xs text-gray-500 mt-1">${esc(f.help)}</p>
+            </div>
+            <div class="md:col-span-3">
+              <input
+                type="number"
+                step="1"
+                min="${b.min ?? ''}"
+                max="${b.max ?? ''}"
+                id="threshold-${f.key}"
+                name="${f.key}"
+                value="${ovr == null ? '' : ovr}"
+                placeholder="${esc(placeholder)}"
+                ${canEdit ? '' : 'disabled'}
+                class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}"
+                data-testid="input-threshold-${f.key}"
+              />
+              <p class="text-xs text-gray-400 mt-1">Allowed: ${b.min ?? '?'}–${b.max ?? '?'}</p>
+            </div>
+            <div class="md:col-span-2 text-sm">
+              <div class="text-xs text-gray-500 uppercase tracking-wide">Effective</div>
+              <div class="font-mono text-gray-900" data-testid="text-threshold-effective-${f.key}">${eff != null ? esc(eff) : '—'}</div>
+            </div>
+            <div class="md:col-span-2 text-xs text-gray-500">${fallbackNote}</div>
+          </div>`;
+      }).join('');
+
+      const noteRow = `
+        <div class="pt-4 border-t">
+          <label for="threshold-note" class="block text-sm font-medium text-gray-800">Change note (optional)</label>
+          <p class="text-xs text-gray-500 mt-1">Captured in the audit log so future-you knows why this was tuned.</p>
+          <input
+            type="text"
+            id="threshold-note"
+            maxlength="500"
+            ${canEdit ? '' : 'disabled'}
+            placeholder="e.g. INC-1234 — temporarily lowering p95 floor to silence flaky tool"
+            class="mt-2 w-full px-3 py-2 border border-gray-300 rounded text-sm ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}"
+            data-testid="input-threshold-note"
+          />
+        </div>`;
+
+      const banner = canEdit
+        ? ''
+        : `<div class="px-3 py-2 mb-3 text-sm rounded border border-amber-200 bg-amber-50 text-amber-800" data-testid="text-thresholds-readonly-banner">
+             Read-only view — only admins can edit these thresholds.
+           </div>`;
+
+      const buttons = canEdit
+        ? `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
+             <button type="button" onclick="saveThresholds()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-thresholds-save">Save changes</button>
+             <button type="button" onclick="resetThresholdInputs()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-reset">Discard edits</button>
+             <button type="button" onclick="clearAllThresholdOverrides()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-clear-all">Clear all overrides</button>
+             <span id="thresholds-save-status" class="text-sm ml-2" data-testid="text-thresholds-save-status"></span>
+           </div>`
+        : '';
+
+      formEl.innerHTML = banner + rows + noteRow + buttons;
+    }
+
+    function resetThresholdInputs() {
+      if (!thresholdsState) return;
+      const overrides = thresholdsState.overrides || {};
+      THRESHOLD_FIELDS.forEach(f => {
+        const el = document.getElementById(`threshold-${f.key}`);
+        if (el) el.value = overrides[f.key] == null ? '' : overrides[f.key];
+      });
+      const noteEl = document.getElementById('threshold-note');
+      if (noteEl) noteEl.value = '';
+      setSaveStatus('', null);
+    }
+
+    function clearAllThresholdOverrides() {
+      THRESHOLD_FIELDS.forEach(f => {
+        const el = document.getElementById(`threshold-${f.key}`);
+        if (el) el.value = '';
+      });
+      setSaveStatus('All inputs cleared — click "Save changes" to drop overrides.', 'info');
+    }
+
+    function setSaveStatus(text, kind) {
+      const el = document.getElementById('thresholds-save-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-sm ml-2 ' + (
+        kind === 'error' ? 'text-red-600'
+        : kind === 'ok'  ? 'text-green-700'
+        : kind === 'info' ? 'text-gray-600'
+        : ''
+      );
+    }
+
+    async function saveThresholds() {
+      if (!thresholdsState) return;
+      const overridesPayload = {};
+      for (const f of THRESHOLD_FIELDS) {
+        const el = document.getElementById(`threshold-${f.key}`);
+        if (!el) continue;
+        const raw = (el.value ?? '').trim();
+        if (raw === '') {
+          // Empty input means "clear this override and fall back to env baseline".
+          overridesPayload[f.key] = null;
+          continue;
+        }
+        const n = Number(raw);
+        if (!Number.isFinite(n) || !Number.isInteger(n)) {
+          setSaveStatus(`${f.label} must be an integer.`, 'error');
+          return;
+        }
+        overridesPayload[f.key] = n;
+      }
+      const noteEl = document.getElementById('threshold-note');
+      const note = noteEl?.value?.trim() || '';
+      setSaveStatus('Saving…', 'info');
+      try {
+        const r = await fetch('/api/ai-ops/tool-health-config', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ overrides: overridesPayload, note: note || undefined }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const detail = body?.details ? ` (${body.details.join('; ')})` : '';
+          setSaveStatus(`Save failed: ${body?.error || 'HTTP ' + r.status}${detail}`, 'error');
+          return;
+        }
+        setSaveStatus('Saved. Next cron pass will pick up the new thresholds.', 'ok');
+        await loadThresholdsForm();
+      } catch (e) {
+        console.error('Threshold save error', e);
+        setSaveStatus(`Save failed: ${e?.message || 'unknown error'}`, 'error');
+      }
+    }
+
+    function renderThresholdsAudit(rows) {
+      const el = document.getElementById('thresholds-audit');
+      if (!rows || rows.length === 0) {
+        el.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-thresholds-audit-empty">No threshold changes recorded yet.</p>';
+        return;
+      }
+      el.innerHTML = rows.map((r, i) => {
+        const before = r.before_values || {};
+        const after = r.after_values || {};
+        const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+        const diffs = keys
+          .filter(k => before[k] !== after[k])
+          .map(k => `${esc(k)}: ${before[k] == null ? '—' : esc(before[k])} → ${after[k] == null ? '—' : esc(after[k])}`);
+        const diffStr = diffs.length
+          ? diffs.join(' · ')
+          : '<span class="text-gray-400 italic">no field changed</span>';
+        return `
+          <div class="px-3 py-2 border border-gray-200 rounded text-xs" data-testid="row-thresholds-audit-${i}">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="font-medium text-gray-800">${esc(r.changed_by || 'unknown')}</div>
+              <div class="text-gray-500">${esc(fmtDate(r.changed_at))}</div>
+            </div>
+            <div class="mt-1 text-gray-700 font-mono break-words">${diffStr}</div>
+            ${r.note ? `<div class="mt-1 text-gray-500 italic">${esc(r.note)}</div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
     function refreshAll() {
       loadSummary();
       loadToolHealthAlerts();
       loadCostTrend();
       const active = TABS.find(t => !document.getElementById(`content-${t}`).classList.contains('hidden'));
-      if (active === 'latency')  loadLatency();
-      if (active === 'prompts')  loadPromptVersions();
-      if (active === 'tools')    loadTools();
-      if (active === 'issues')   loadIssues();
-      if (active === 'feedback') loadAIFeedback();
-      if (active === 'negative') loadNegativeFeedback();
+      if (active === 'latency')    loadLatency();
+      if (active === 'prompts')    loadPromptVersions();
+      if (active === 'tools')      loadTools();
+      if (active === 'issues')     loadIssues();
+      if (active === 'feedback')   loadAIFeedback();
+      if (active === 'negative')   loadNegativeFeedback();
+      if (active === 'thresholds') loadThresholdsForm();
     }
 
     function esc(s) {
