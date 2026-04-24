@@ -8,6 +8,9 @@ I prefer clear and concise communication. For development, I favor iterative pro
 
 ## Recent Changes
 
+### April 24, 2026 — Feedback ratings linked to AI observability
+Documented the contract that ties inline thumbs-up/down ratings on AI Consultant responses back to the originating `ai_call_metrics` row for prompt-quality A/B tracking. The plumbing already exists: `withAiTelemetry()` returns `{ result, callId }`, the QMS Consultant chat route surfaces `callId` on its JSON response, `/api/ai-ops/feedback` stores ratings in `ai_call_feedback` (FK to `ai_call_metrics.id`), and the AI Operations panel's Agent Latency tab joins them via `getFeedbackRateByAgent()` to show a per-agent "Feedback Rate %" column. This task added an explicit downstream-linking section to the price-table doc block at the top of `src/utils/aiTelemetry.ts` so future contributors know that `callId` is the contract for any feedback / evaluation pipelines built on top of AI telemetry.
+
 ### April 24, 2026 — God-file refactor: thin composition root
 `src/mastra/index.ts` was a 4,433-line god file. It has been refactored into a 251-line thin composition root. All inline route handlers and middleware were extracted:
 

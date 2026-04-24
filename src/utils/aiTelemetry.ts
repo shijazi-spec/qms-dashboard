@@ -11,6 +11,21 @@
  * How to update: Edit the inputPer1k / outputPer1k values (USD per 1 000 tokens)
  *   to match https://openai.com/api/pricing  whenever OpenAI changes rates.
  * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * ── Downstream linking via callId ────────────────────────────────────────────
+ * withAiTelemetry() returns { result, callId } where `callId` is the
+ * ai_call_metrics.id of the row inserted for this LLM call (or null if the
+ * insert failed). Route handlers should surface `callId` on their JSON
+ * response payload (e.g. the QMS Consultant chat returns it as `callId`)
+ * so that:
+ *   • Inline thumbs-up/down feedback can POST { callId, rating } to
+ *     /api/ai-ops/feedback → ai_call_feedback (FK to ai_call_metrics.id).
+ *   • The AI Operations panel can join feedback back to the original call
+ *     via getFeedbackRateByAgent() and display a per-agent feedback_rate_pct
+ *     alongside latency / cost metrics for prompt A/B evaluation.
+ * Streaming responses use recordStreamTelemetry() which also returns the
+ * inserted row id for the same purpose.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import pg from 'pg';
