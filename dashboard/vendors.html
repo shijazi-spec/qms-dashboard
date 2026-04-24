@@ -45,11 +45,11 @@
                 <p class="text-sm text-gray-500 mt-1" data-i18n="vendors.subtitle">Manage third-party vendors, risk assessments, and remediation tracking</p>
             </div>
             <div class="flex gap-3">
-                <button data-on-click="streamDownload" data-args="[&quot;/api/vendors/export-xlsx&quot;,&quot;vendors.xlsx&quot;]" data-pass-event="true" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-export-xlsx" title="Multi-sheet workbook (Summary, Vendors, Assessments)">
+                <button data-on-click="streamDownload" data-args="[&quot;/api/vendors/export-xlsx&quot;,&quot;vendors.xlsx&quot;]" data-pass-event="true" data-estimate-url="/api/vendors/export-xlsx" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-export-xlsx" title="Multi-sheet workbook (Summary, Vendors, Assessments)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Excel
                 </button>
-                <button data-on-click="streamDownload" data-args="[&quot;/api/vendors/export&quot;,&quot;vendors.csv&quot;]" data-pass-event="true" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
+                <button data-on-click="streamDownload" data-args="[&quot;/api/vendors/export&quot;,&quot;vendors.csv&quot;]" data-pass-event="true" data-estimate-url="/api/vendors/export" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Export CSV
                 </button>

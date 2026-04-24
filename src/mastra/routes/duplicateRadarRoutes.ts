@@ -1028,6 +1028,90 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    path: "/api/duplicates/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        let pool: InstanceType<(typeof import('pg'))['default']['Pool']> | null = null;
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const owner = url.searchParams.get('owner') || undefined;
+          const startDate = url.searchParams.get('start_date') || undefined;
+          const endDate = url.searchParams.get('end_date') || undefined;
+
+          const filterParams: unknown[] = ['active'];
+          let whereClause = 'WHERE dc.status = $1';
+          if (owner) { filterParams.push(owner); whereClause += ` AND (dr.owner_name = $${filterParams.length} OR dr.owner_email = $${filterParams.length})`; }
+          if (startDate) { filterParams.push(startDate); whereClause += ` AND dr.created_date >= $${filterParams.length}`; }
+          if (endDate) { filterParams.push(endDate + 'T23:59:59Z'); whereClause += ` AND dr.created_date <= $${filterParams.length}`; }
+
+          const pg = await import("pg");
+          pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          const r = await pool.query(
+            `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
+            filterParams
+          );
+          const { estimateFromCount, estimateResponse } = await import("../../utils/exportEstimate");
+          return estimateResponse(estimateFromCount(r.rows[0]?.total, 'csv', 240));
+        } catch (error: any) {
+          console.error('Error estimating duplicates CSV export:', error);
+          return c.json({ error: 'Failed to estimate export size' }, 500);
+        } finally {
+          if (pool) await pool.end();
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        let pool: InstanceType<(typeof import('pg'))['default']['Pool']> | null = null;
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const start_date = url.searchParams.get('start_date') || undefined;
+          const end_date = url.searchParams.get('end_date') || undefined;
+          const includeRaw = url.searchParams.get('include_raw') === '1';
+
+          const filterParams: unknown[] = [];
+          let whereClause = "WHERE dc.status = 'active'";
+          if (start_date) { filterParams.push(start_date); whereClause += ` AND dr.created_date >= $${filterParams.length}`; }
+          if (end_date) { filterParams.push(end_date + 'T23:59:59Z'); whereClause += ` AND dr.created_date <= $${filterParams.length}`; }
+
+          const pg = await import("pg");
+          pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          const r = await pool.query(
+            `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
+            filterParams
+          );
+          // Type-split sheets duplicate the per-record overhead 4x; All Records
+          // adds a 5th copy when include_raw=1. Bump the per-row average so the
+          // estimate stays conservative against the picker threshold.
+          const baseRows = r.rows[0]?.total ?? 0;
+          const sheetMultiplier = includeRaw ? 5 : 4;
+          const { estimateBytesFromRows, estimateResponse } = await import("../../utils/exportEstimate");
+          return estimateResponse({
+            rows: baseRows,
+            bytes: estimateBytesFromRows(baseRows * sheetMultiplier, 'xlsx', 140),
+            format: 'xlsx',
+          });
+        } catch (error: any) {
+          console.error('Error estimating duplicates XLSX export:', error);
+          return c.json({ error: 'Failed to estimate export size' }, 500);
+        } finally {
+          if (pool) await pool.end();
+        }
+      };
+    },
+  },
   // B5: JOIN-based export (no N+1)
   {
     path: "/api/duplicates/export",

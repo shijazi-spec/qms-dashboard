@@ -98,7 +98,7 @@
                     </svg>
                     Scan from Zoho
                 </button>
-                <button data-on-click="exportData" data-pass-event="true" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
+                <button data-on-click="exportData" data-pass-event="true" data-estimate-url="/api/duplicates/export" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
@@ -557,7 +557,7 @@
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" aria-label="Export start date" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" aria-label="Export end date" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
                 </div>
-                <button data-on-click="downloadExport" data-pass-event="true" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export</button>
+                <button id="downloadExportBtn" data-on-click="downloadExport" data-pass-event="true" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export <span data-size-hint class="ml-1 text-xs opacity-90"></span></button>
             </div>
         </div>
 
@@ -1231,6 +1231,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             const lm = document.getElementById('listModal');
             if (lm) lm.addEventListener('click', (e) => { if (e.target === lm) closeListModal(); });
+
+            // Refresh the size hint on the dynamic export form whenever the
+            // user changes type/date filters; also seed it on first load.
+            ['exportType', 'exportStartDate', 'exportEndDate'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', refreshDownloadExportHint);
+            });
+            refreshDownloadExportHint();
         });
 
         // D1: Scan with progress bar
@@ -1369,13 +1377,29 @@
             return streamingDownloadFromEvent(event, anchor.href, { filename: `duplicates-owner-${safe}.csv` });
         }
 
-        function downloadExport(event) {
-            const type = document.getElementById('exportType').value;
-            const start = document.getElementById('exportStartDate').value;
-            const end = document.getElementById('exportEndDate').value;
+        function buildDownloadExportUrl() {
+            const type = (document.getElementById('exportType') || {}).value || 'all';
+            const start = (document.getElementById('exportStartDate') || {}).value || '';
+            const end = (document.getElementById('exportEndDate') || {}).value || '';
             let url = `/api/duplicates/export?type=${type}`;
             if (start) url += `&start_date=${start}`;
             if (end) url += `&end_date=${end}`;
+            return { url, type };
+        }
+
+        function refreshDownloadExportHint() {
+            if (!window.streamingDownload || !streamingDownload.fetchEstimate) return;
+            const btn = document.getElementById('downloadExportBtn');
+            if (!btn) return;
+            const { url } = buildDownloadExportUrl();
+            btn.dataset.estimateUrl = url;
+            streamingDownload.fetchEstimate(url)
+                .then((est) => streamingDownload.applySizeHint(btn, est))
+                .catch(() => { /* hint is best-effort */ });
+        }
+
+        function downloadExport(event) {
+            const { url, type } = buildDownloadExportUrl();
             const safeType = String(type || 'export').replace(/[^a-zA-Z0-9_-]/g, '_');
             return streamingDownloadFromEvent(event, url, { filename: `duplicates-${safeType}.csv` });
         }

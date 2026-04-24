@@ -87,6 +87,68 @@ export const eventLogsRoutes = [
     }
   },
   {
+    path: "/api/logs/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const { initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          await initializeEventLogsTable();
+
+          const userId = c.req.query("userId") ? parseInt(c.req.query("userId")) : undefined;
+          const userName = c.req.query("userName");
+          const actionType = c.req.query("actionType");
+          const entityType = c.req.query("entityType");
+          const logModule = c.req.query("module");
+          const severity = c.req.query("severity");
+          const aiInvolved = c.req.query("aiInvolved") !== undefined
+            ? c.req.query("aiInvolved") === "true"
+            : undefined;
+          const fromDate = c.req.query("fromDate");
+          const toDate = c.req.query("toDate");
+          const search = c.req.query("search");
+          const correlationId = c.req.query("correlationId");
+
+          // Mirrors the WHERE construction used by /api/logs/export so the
+          // estimate matches the body the client will actually receive.
+          const conditions: string[] = [];
+          const params: unknown[] = [];
+          let i = 1;
+          if (userId !== undefined)     { conditions.push(`user_id = $${i++}`);          params.push(userId); }
+          if (userName)                 { conditions.push(`user_name ILIKE $${i++}`);    params.push(`%${userName}%`); }
+          if (actionType)               { conditions.push(`action_type = $${i++}`);      params.push(actionType); }
+          if (entityType)               { conditions.push(`entity_type = $${i++}`);      params.push(entityType); }
+          if (logModule)                { conditions.push(`module = $${i++}`);           params.push(logModule); }
+          if (severity)                 { conditions.push(`severity = $${i++}`);         params.push(severity); }
+          if (aiInvolved !== undefined) { conditions.push(`ai_involved = $${i++}`);      params.push(aiInvolved); }
+          if (fromDate)                 { conditions.push(`timestamp >= $${i++}`);       params.push(fromDate); }
+          if (toDate)                   { conditions.push(`timestamp <= $${i++}`);       params.push(toDate); }
+          if (correlationId)            { conditions.push(`correlation_id = $${i++}`);   params.push(correlationId); }
+          if (search) {
+            conditions.push(`(description ILIKE $${i} OR entity_name ILIKE $${i} OR user_name ILIKE $${i})`);
+            params.push(`%${search}%`);
+            i++;
+          }
+
+          const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          const r = await pool.query(`SELECT COUNT(*)::int AS total FROM event_logs ${where}`, params);
+          const { estimateFromCount, estimateResponse } = await import("../../utils/exportEstimate");
+          // Event-log rows carry full description / old_value / new_value JSON
+          // payloads, so the per-row average is materially higher than a
+          // typical thin CSV row.
+          return estimateResponse(estimateFromCount(r.rows[0]?.total, 'csv', 600));
+        } catch (error) {
+          console.error("Error estimating event logs export:", error);
+          return c.json({ error: "Failed to estimate export size" }, 500);
+        } finally {
+          await pool.end();
+        }
+      };
+    }
+  },
+  {
     path: "/api/logs/export",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {

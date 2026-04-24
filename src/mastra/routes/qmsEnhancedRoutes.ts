@@ -142,8 +142,211 @@ const evidenceRoutes = [
   },
 ];
 
+/**
+ * Helper that runs a single COUNT(*) and returns an estimate Response.
+ * Falls back to a zero-row estimate if the COUNT itself fails (e.g. table
+ * not yet provisioned), so the client UX still works on empty installs.
+ */
+async function qmsEstimateResponse(
+  countSql: string,
+  params: unknown[],
+  format: 'csv' | 'xlsx',
+  avgBytesPerRow?: number,
+): Promise<Response> {
+  const pg = await import("pg");
+  const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const { estimateFromCount, estimateResponse } = await import("../../utils/exportEstimate");
+    const r = await pool.query(countSql, params);
+    return estimateResponse(estimateFromCount(r.rows[0]?.total, format, avgBytesPerRow));
+  } finally {
+    await pool.end();
+  }
+}
+
 export const qmsEnhancedRoutes = [
   ...evidenceRoutes,
+  {
+    path: "/api/qms/nc/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        return await qmsEstimateResponse(`SELECT COUNT(*)::int AS total FROM nonconformance_records`, [], 'csv');
+      } catch (e) {
+        console.error('NC CSV estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/qms/capa/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        return await qmsEstimateResponse(`SELECT COUNT(*)::int AS total FROM capa_records`, [], 'csv');
+      } catch (e) {
+        console.error('CAPA CSV estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/compliance/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { initComplianceTables } = await import("../../utils/complianceDatabase");
+        await initComplianceTables();
+        return await qmsEstimateResponse(`SELECT COUNT(*)::int AS total FROM obligations`, [], 'csv');
+      } catch (e) {
+        console.error('Compliance estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/pdpl/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { initPdplTables } = await import("../../utils/pdplDatabase");
+        await initPdplTables();
+        return await qmsEstimateResponse(`SELECT COUNT(*)::int AS total FROM data_inventory`, [], 'csv');
+      } catch (e) {
+        console.error('PDPL estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/kpis/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        // Mirrors the LEFT JOIN row shape of /api/kpis/export — one row per
+        // (kpi_definition × kpi_value), with at least one row per definition.
+        return await qmsEstimateResponse(
+          `SELECT COUNT(*)::int AS total
+             FROM kpi_definitions kd
+             LEFT JOIN kpi_values kv ON kd.id = kv.kpi_id`,
+          [],
+          'csv'
+        );
+      } catch (e) {
+        console.error('KPI CSV estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/kpis/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const [defR, valR] = await Promise.all([
+            pool.query(`SELECT COUNT(*)::int AS total FROM kpi_definitions WHERE is_active = true`),
+            pool.query(`SELECT COUNT(*)::int AS total FROM kpi_values`),
+          ]);
+          const totalRows = (defR.rows[0]?.total ?? 0) + (valR.rows[0]?.total ?? 0);
+          const { estimateBytesFromRows, estimateResponse } = await import("../../utils/exportEstimate");
+          return estimateResponse({
+            rows: totalRows,
+            bytes: estimateBytesFromRows(totalRows, 'xlsx', 140),
+            format: 'xlsx',
+          });
+        } finally {
+          await pool.end();
+        }
+      } catch (e) {
+        console.error('KPI XLSX estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/vendors/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { initVendorTables } = await import("../../utils/vendorDatabase");
+        await initVendorTables();
+        // Same LEFT JOIN row shape as /api/vendors/export.
+        return await qmsEstimateResponse(
+          `SELECT COUNT(*)::int AS total FROM vendors v LEFT JOIN vendor_assessments va ON v.id = va.vendor_id`,
+          [],
+          'csv'
+        );
+      } catch (e) {
+        console.error('Vendor CSV estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/vendors/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+        if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
+        const { initVendorTables } = await import("../../utils/vendorDatabase");
+        await initVendorTables();
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const [vR, aR] = await Promise.all([
+            pool.query(`SELECT COUNT(*)::int AS total FROM vendors`),
+            pool.query(`SELECT COUNT(*)::int AS total FROM vendor_assessments`),
+          ]);
+          const totalRows = (vR.rows[0]?.total ?? 0) + (aR.rows[0]?.total ?? 0);
+          const { estimateBytesFromRows, estimateResponse } = await import("../../utils/exportEstimate");
+          return estimateResponse({
+            rows: totalRows,
+            bytes: estimateBytesFromRows(totalRows, 'xlsx', 160),
+            format: 'xlsx',
+          });
+        } finally {
+          await pool.end();
+        }
+      } catch (e) {
+        console.error('Vendor XLSX estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/qms/nc/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+        if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
+        return await qmsEstimateResponse(`SELECT COUNT(*)::int AS total FROM nonconformance_records`, [], 'xlsx', 200);
+      } catch (e) {
+        console.error('NC XLSX estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
+  {
+    // Mirrors the hyphenated CAPA XLSX path used by /api/qms/capa-export-xlsx
+    // — see the comment on that route for why it is not /capa/export-xlsx.
+    path: "/api/qms/capa-export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+        if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
+        return await qmsEstimateResponse(`SELECT COUNT(*)::int AS total FROM capa_records`, [], 'xlsx', 220);
+      } catch (e) {
+        console.error('CAPA XLSX estimate error:', e);
+        return c.json({ error: 'Failed to estimate export size' }, 500);
+      }
+    },
+  },
   {
     path: "/api/qms/nc/export",
     method: "GET" as const,

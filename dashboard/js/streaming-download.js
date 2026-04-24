@@ -209,6 +209,136 @@
         return totalLength >= threshold;
     }
 
+    // Estimate helpers: each export endpoint exposes a sibling `/estimate`
+    // route returning { rows, bytes, format }. We cache results briefly and
+    // use the bytes to (a) skip the picker for small downloads and (b) show
+    // an "≈ X MB" hint on the button.
+    var ESTIMATE_TTL_MS = 60 * 1000;
+    var estimateCache = Object.create(null);
+
+    function estimateUrlFor(exportUrl) {
+        // Insert "/estimate" before the query string so filter params carry over.
+        if (typeof exportUrl !== 'string' || !exportUrl) return null;
+        var qIdx = exportUrl.indexOf('?');
+        if (qIdx === -1) return exportUrl + '/estimate';
+        return exportUrl.substring(0, qIdx) + '/estimate' + exportUrl.substring(qIdx);
+    }
+
+    async function fetchExportEstimate(exportUrl, fetchInit) {
+        var key = exportUrl;
+        var cached = estimateCache[key];
+        if (cached && (Date.now() - cached.at) < ESTIMATE_TTL_MS) {
+            return cached.value;
+        }
+        var url = estimateUrlFor(exportUrl);
+        if (!url) return null;
+        try {
+            var init = Object.assign({ credentials: 'same-origin' }, fetchInit || {});
+            var resp = await fetch(url, init);
+            if (!resp.ok) return null;
+            // Prefer JSON body; fall back to headers if the server short-circuited.
+            var bytes = Number(resp.headers.get('x-estimated-bytes'));
+            var rows  = Number(resp.headers.get('x-estimated-rows'));
+            var format = resp.headers.get('x-export-format') || null;
+            try {
+                var body = await resp.json();
+                if (body && typeof body === 'object') {
+                    if (typeof body.bytes === 'number') bytes = body.bytes;
+                    if (typeof body.rows  === 'number') rows  = body.rows;
+                    if (typeof body.format === 'string') format = body.format;
+                }
+            } catch (_) { /* JSON optional */ }
+            if (!Number.isFinite(bytes)) bytes = 0;
+            if (!Number.isFinite(rows))  rows  = 0;
+            var value = { bytes: bytes, rows: rows, format: format };
+            estimateCache[key] = { at: Date.now(), value: value };
+            return value;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function clearEstimateCache(exportUrl) {
+        if (exportUrl) {
+            delete estimateCache[exportUrl];
+        } else {
+            estimateCache = Object.create(null);
+        }
+    }
+
+    /**
+     * Render a human-friendly size hint next to or inside a button.
+     *
+     * Looks for a child `[data-size-hint]` element and updates its text. If
+     * one is not present, appends a `<span data-size-hint>` to the button so
+     * existing pages can opt in just by adding `data-estimate-url=…`.
+     *
+     * Also updates the button's `title` and `aria-label` so screen-reader
+     * users hear the size hint too.
+     */
+    function applySizeHint(el, estimate) {
+        if (!el || !estimate) return;
+        var label;
+        if (!estimate.bytes || estimate.bytes <= 0 || estimate.rows === 0) {
+            label = 'empty';
+        } else {
+            label = '≈ ' + formatBytes(estimate.bytes);
+        }
+        var hint = el.querySelector('[data-size-hint]');
+        if (!hint) {
+            hint = document.createElement('span');
+            hint.setAttribute('data-size-hint', '');
+            hint.className = 'ml-2 text-xs text-gray-500 dark:text-gray-400';
+            el.appendChild(hint);
+        }
+        hint.textContent = '(' + label + ')';
+        var rowText = estimate.rows ? estimate.rows.toLocaleString() + ' rows' : 'no rows';
+        var titleSuffix = 'Estimated ' + label + ' · ' + rowText;
+        var existingTitle = el.getAttribute('data-original-title') || el.getAttribute('title') || '';
+        if (!el.getAttribute('data-original-title') && existingTitle) {
+            el.setAttribute('data-original-title', existingTitle);
+        }
+        var baseTitle = el.getAttribute('data-original-title') || '';
+        el.setAttribute('title', baseTitle ? (baseTitle + ' · ' + titleSuffix) : titleSuffix);
+        var ariaBase = el.getAttribute('data-original-aria-label') || el.getAttribute('aria-label') || el.textContent.trim();
+        if (!el.getAttribute('data-original-aria-label') && ariaBase) {
+            el.setAttribute('data-original-aria-label', ariaBase);
+        }
+        el.setAttribute('aria-label', (el.getAttribute('data-original-aria-label') || '') + ' (' + titleSuffix + ')');
+    }
+
+    /**
+     * Scan the DOM for elements with `data-estimate-url` and asynchronously
+     * fetch each estimate, rendering "(≈ X MB)" hints on each button.
+     *
+     * Safe to call multiple times — estimates are cached for a short TTL.
+     * Called automatically on DOMContentLoaded; pages can also call it after
+     * dynamically inserting buttons (e.g. after rendering a list of owners).
+     */
+    function attachSizeHints(root) {
+        var scope = root || document;
+        if (!scope || typeof scope.querySelectorAll !== 'function') return;
+        var nodes = scope.querySelectorAll('[data-estimate-url]:not([data-estimate-attached])');
+        nodes.forEach(function (el) {
+            el.setAttribute('data-estimate-attached', '1');
+            var url = el.getAttribute('data-estimate-url');
+            if (!url) return;
+            fetchExportEstimate(url).then(function (est) {
+                if (est) applySizeHint(el, est);
+            }).catch(function () { /* swallow — hints are best-effort */ });
+        });
+    }
+
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () { attachSizeHints(); });
+        } else {
+            // Defer to next tick so call sites that load this script late
+            // still have a chance to populate buttons before we scan.
+            setTimeout(function () { attachSizeHints(); }, 0);
+        }
+    }
+
     async function streamingDownload(url, options) {
         options = options || {};
         var button = options.button || null;
@@ -219,6 +349,20 @@
         if (button) {
             originalContent = button.innerHTML;
             setBusy(button, 'Preparing…');
+        }
+
+        // Best-effort pre-flight estimate so shouldStreamToDisk can skip the
+        // picker for small downloads. Skipped when the caller forced a choice
+        // or passed `skipEstimate: true`.
+        var preflightEstimate = options.estimate || null;
+        var estimateRequested = options.streamToDisk !== true &&
+            options.streamToDisk !== 'always' &&
+            options.skipEstimate !== true &&
+            !preflightEstimate;
+        if (estimateRequested) {
+            try {
+                preflightEstimate = await fetchExportEstimate(url);
+            } catch (_) { /* fall through — estimate is best-effort */ }
         }
 
         try {
@@ -244,6 +388,11 @@
             var contentType = response.headers.get('content-type') || 'application/octet-stream';
             var disposition = response.headers.get('content-disposition') || '';
             var totalLength = Number(response.headers.get('content-length')) || 0;
+            // Streaming exports have no Content-Length; use the pre-flight
+            // estimate so progress reporting and shouldStreamToDisk work.
+            if ((!totalLength || totalLength <= 0) && preflightEstimate && preflightEstimate.bytes > 0) {
+                totalLength = preflightEstimate.bytes;
+            }
 
             var filename = options.filename ||
                 parseContentDispositionFilename(disposition) ||
@@ -319,6 +468,13 @@
     }
 
     streamingDownload.DEFAULT_STREAM_TO_DISK_THRESHOLD = DEFAULT_STREAM_TO_DISK_THRESHOLD;
+    streamingDownload.fetchEstimate = fetchExportEstimate;
+    streamingDownload.estimateUrlFor = estimateUrlFor;
+    streamingDownload.attachSizeHints = attachSizeHints;
+    streamingDownload.applySizeHint = applySizeHint;
+    streamingDownload.clearEstimateCache = clearEstimateCache;
+    streamingDownload.formatBytes = formatBytes;
+    streamingDownload._shouldStreamToDisk = shouldStreamToDisk;
 
     global.streamingDownload = streamingDownload;
     global.streamingDownloadFromEvent = streamingDownloadFromEvent;

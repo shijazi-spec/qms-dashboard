@@ -152,6 +152,43 @@ export const policyRoutes = [
     }
   },
   {
+    path: "/api/policies/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        let pool: PgPool | null = null;
+        try {
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
+          if (!admin) return unauthorizedResponse(c);
+
+          const { initPolicyTables } = await import('../../utils/policyDatabase');
+          await initPolicyTables();
+
+          const url = new URL(c.req.url);
+          const document_type = url.searchParams.get('document_type') || undefined;
+          const status = url.searchParams.get('status') || undefined;
+
+          const conditions: string[] = [];
+          const filterParams: unknown[] = [];
+          if (document_type) { filterParams.push(document_type); conditions.push(`document_type = $${filterParams.length}`); }
+          if (status) { filterParams.push(status); conditions.push(`status = $${filterParams.length}`); }
+          const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+          const pg = await import('pg');
+          pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          const r = await pool.query(`SELECT COUNT(*)::int AS total FROM policies ${where}`, filterParams);
+          const { estimateFromCount, estimateResponse } = await import('../../utils/exportEstimate');
+          return estimateResponse(estimateFromCount(r.rows[0]?.total, 'csv'));
+        } catch (error) {
+          console.error('❌ [PolicyAPI] Error estimating export:', error);
+          return c.json({ error: 'Failed to estimate export size' }, 500);
+        } finally {
+          if (pool) await pool.end();
+        }
+      };
+    }
+  },
+  {
     path: "/api/policies/export",
     method: "GET" as const,
     createHandler: async () => {

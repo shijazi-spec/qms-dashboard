@@ -1,5 +1,61 @@
 export const riskRoutes = [
   {
+    path: "/api/risks/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const { initRiskTables } = await import('../../utils/riskDatabase');
+          await initRiskTables();
+          const { estimateFromCount, estimateResponse } = await import('../../utils/exportEstimate');
+          const r = await pool.query(`SELECT COUNT(*)::int AS total FROM enterprise_risks`);
+          return estimateResponse(estimateFromCount(r.rows[0]?.total, 'csv'));
+        } catch (error) {
+          console.error('❌ [RiskAPI] Error estimating CSV export:', error);
+          return c.json({ error: 'Failed to estimate export size' }, 500);
+        } finally {
+          await pool.end();
+        }
+      };
+    }
+  },
+  {
+    path: "/api/risks/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const { requireAdminOrKey, unauthorizedResponse } = await import('../../utils/rbacMiddleware');
+        if (!await requireAdminOrKey(c)) return unauthorizedResponse(c);
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          const { initRiskTables } = await import('../../utils/riskDatabase');
+          await initRiskTables();
+          const { estimateBytesFromRows, estimateResponse } = await import('../../utils/exportEstimate');
+          // XLSX includes Summary + All Risks + per-category sheets + Treatment Actions.
+          // Approximate as risks + treatment actions rows; sheet/zip overhead is bundled.
+          const [rRes, aRes] = await Promise.all([
+            pool.query(`SELECT COUNT(*)::int AS total FROM enterprise_risks`),
+            pool.query(`SELECT COUNT(*)::int AS total FROM risk_treatment_actions`),
+          ]);
+          const totalRows = (rRes.rows[0]?.total ?? 0) + (aRes.rows[0]?.total ?? 0);
+          return estimateResponse({
+            rows: totalRows,
+            bytes: estimateBytesFromRows(totalRows, 'xlsx', 180),
+            format: 'xlsx',
+          });
+        } catch (error) {
+          console.error('❌ [RiskAPI] Error estimating XLSX export:', error);
+          return c.json({ error: 'Failed to estimate export size' }, 500);
+        } finally {
+          await pool.end();
+        }
+      };
+    }
+  },
+  {
     path: "/api/risks/export",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
