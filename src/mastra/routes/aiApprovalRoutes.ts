@@ -42,7 +42,11 @@ import {
 } from '../../utils/aiToolGovernance';
 import { resolveControlledDocuments } from '../../utils/controlledDocumentRegistry';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../utils/rbacMiddleware';
-import { logEvent } from '../../utils/eventLogsDatabase';
+import {
+  logEvent,
+  redactSensitiveDeep,
+  redactSecretLikeStrings,
+} from '../../utils/eventLogsDatabase';
 
 // Lazily initialize the table on first request to this route set.
 let tableReady = false;
@@ -327,18 +331,41 @@ export const aiApprovalRoutes = [
           // ai_pending_actions.status becomes 'failed' (recorded inside).
           const outcome = await executeApprovedAction(claimed);
 
+          // SECURITY (PDPL Art. 16 / PCI DSS §3.5 / ISO 27001 A.5.34):
+          // The synchronous response is the freshest possible exposure of a
+          // rotation/refresh tool's output — it goes straight back to the
+          // browser even though the JSONB row is masked on the way to
+          // ai_pending_actions.execution_result. Run the data graph through
+          // the same combined deny-list (key-based + regex-based) used for
+          // the stored row, and scrub any free-form error string the same
+          // way so that a thrown exception cannot echo a key either. This
+          // is the only path where the secret is most fresh and most
+          // dangerous, so it must NEVER be returned in plaintext.
+          const safeResult = redactSensitiveDeep(outcome.data);
+          const safeError =
+            typeof outcome.error === 'string'
+              ? (redactSecretLikeStrings(outcome.error) as string)
+              : outcome.error;
+
           // Return everything the UI needs to update the inline chat card.
           return c.json({
             success: outcome.ok,
             actionCode: claimed.action_code,
             entityType: outcome.entityType,
             entityId: outcome.entityId,
-            result: outcome.data,
-            error: outcome.error,
+            result: safeResult,
+            error: safeError,
           }, outcome.ok ? 200 : 500);
         } catch (error: any) {
           console.error('[AI-Approval] approve error:', error);
-          return c.json({ error: 'Failed to approve', details: error.message }, 500);
+          // Same redaction guarantee as the success path: a thrown error
+          // message can carry the freshly-minted credential the failing
+          // tool was trying to handle.
+          const safeDetails =
+            typeof error?.message === 'string'
+              ? (redactSecretLikeStrings(error.message) as string)
+              : undefined;
+          return c.json({ error: 'Failed to approve', details: safeDetails }, 500);
         }
       };
     },

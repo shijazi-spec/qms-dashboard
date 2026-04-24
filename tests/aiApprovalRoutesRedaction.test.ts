@@ -25,6 +25,8 @@ import {
 } from '../src/utils/aiApprovalDatabase';
 import { REDACTED_SENTINEL, pool as eventLogsPool } from '../src/utils/eventLogsDatabase';
 import { aiApprovalRoutes } from '../src/mastra/routes/aiApprovalRoutes';
+import { TOOL_GOVERNANCE_POLICIES } from '../src/utils/aiToolGovernance';
+import { withApprovalGate } from '../src/utils/withApprovalGate';
 
 let passed = 0;
 let failed = 0;
@@ -104,6 +106,21 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
 
   if (/UPDATE ai_pending_actions/i.test(sql)) {
     if (!storedRow || storedRow.action_code !== String(params[0])) return empty;
+    // claimForApproval: SET status = 'approved', reviewed_by_user_id = $2, ...
+    if (/SET\s+status\s*=\s*'approved'/i.test(sql)) {
+      storedRow.status = 'approved';
+      storedRow.reviewed_by_user_id = params[1] as number | null;
+      storedRow.reviewed_by_email = params[2] as string | null;
+      storedRow.reviewed_by_name = params[3] as string | null;
+      storedRow.reviewed_at = new Date();
+      return {
+        ...empty,
+        command: 'UPDATE',
+        rowCount: 1,
+        rows: [storedRow as unknown as R],
+      };
+    }
+    // recordExecutionResult: SET status = CASE WHEN $2 THEN 'executed' ELSE 'failed' END
     storedRow.status = (params[1] === true ? 'executed' : 'failed') as PendingAction['status'];
     storedRow.executed_at = new Date();
     storedRow.execution_result = JSON.parse(String(params[2]));
@@ -343,6 +360,247 @@ function findLeakedSecret(body: unknown, allowed: string[] = []): string | null 
     if (text.includes(sec)) return sec;
   }
   return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* POST /approve — synthetic gated tool that returns FRESH secrets.   */
+/* ------------------------------------------------------------------ */
+/* These secrets are intentionally distinct from SECRETS[] above so   */
+/* the guard can pinpoint exactly which path leaked, and so the read- */
+/* path tests cannot accidentally satisfy the approve-path assertion. */
+/* ------------------------------------------------------------------ */
+
+const APPROVE_RESULT_SK_KEY = 'sk-live-LEAK_DETECTOR_APPROVE_RESPkey_aabbccddeeff';
+const APPROVE_RESULT_GH_TOKEN = 'ghp_LEAKDETECTORAPPROVERESPONSEghp998877665544aabbcc';
+// 53 chars after `$2b$12$` so it matches the bcrypt regex exactly.
+const APPROVE_RESULT_BCRYPT =
+  '$2b$12$ABCDEFGHIJKLMNOPQRSTUAPPROVELEAKDETECTOR1234567890XYZ';
+const APPROVE_RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORAPPROVE_freshaccesstoken';
+const APPROVE_THROW_SK_KEY = 'sk-live-LEAK_DETECTOR_APPROVE_THROW_excmsg_99887766554433';
+
+const APPROVE_SECRETS = [
+  APPROVE_RESULT_SK_KEY,
+  APPROVE_RESULT_GH_TOKEN,
+  APPROVE_RESULT_BCRYPT,
+  APPROVE_RESULT_ACCESS_TOKEN,
+  APPROVE_THROW_SK_KEY,
+];
+
+function findApproveLeak(body: unknown): string | null {
+  const text = JSON.stringify(body);
+  for (const sec of APPROVE_SECRETS) {
+    if (text.includes(sec)) return sec;
+  }
+  return null;
+}
+
+const APPROVE_OK_TOOL_ID = 'rotate-fake-secret-key__redaction-test-ok';
+const APPROVE_THROW_TOOL_ID = 'rotate-fake-secret-key__redaction-test-throws';
+
+function registerFakeGatedTools(): void {
+  // Add minimal governance entries so withApprovalGate accepts the wrap.
+  // Both are 'high' risk so any role check downstream sees a realistic gate.
+  TOOL_GOVERNANCE_POLICIES[APPROVE_OK_TOOL_ID] = {
+    toolId: APPROVE_OK_TOOL_ID,
+    label: 'Test: Rotate Fake Secret Key (success)',
+    riskLevel: 'high',
+    requiresApproval: true,
+    complianceRefs: ['REDACTION-TEST'],
+    entityType: 'integration',
+    buildPreview: () => 'Rotate fake secret key (redaction test)',
+  };
+  TOOL_GOVERNANCE_POLICIES[APPROVE_THROW_TOOL_ID] = {
+    toolId: APPROVE_THROW_TOOL_ID,
+    label: 'Test: Rotate Fake Secret Key (throws)',
+    riskLevel: 'high',
+    requiresApproval: true,
+    complianceRefs: ['REDACTION-TEST'],
+    entityType: 'integration',
+    buildPreview: () => 'Rotate fake secret key (throw path)',
+  };
+
+  // Synthetic tool whose returned `data` carries fresh secrets across BOTH
+  // attack surfaces: object keys flagged by the deny list (`new_api_key`,
+  // `access_token`) AND free-form string leaves whose interpolated content
+  // is credential-shaped (caught only by the regex deny list).
+  withApprovalGate({
+    id: APPROVE_OK_TOOL_ID,
+    description: 'redaction test tool — returns fresh credentials',
+    execute: async () => ({
+      success: true,
+      rotated: true,
+      // Key-deny-list path: `_key` suffix and `access_token` exact match.
+      new_api_key: APPROVE_RESULT_SK_KEY,
+      access_token: APPROVE_RESULT_ACCESS_TOKEN,
+      nested: {
+        // String-deny-list path: a non-sensitive key whose VALUE happens to
+        // contain a credential-shaped substring (the most realistic leak —
+        // a tool author dumps the response body into a `notes` field).
+        free_form_note: `Vendor returned: ${APPROVE_RESULT_GH_TOKEN}`,
+        legacy_password_hash_blob: APPROVE_RESULT_BCRYPT,
+      },
+      audit_note: 'Approve-response rotation completed',
+    }),
+  });
+
+  // Synthetic tool that throws; the catch block must scrub `error.message`
+  // so a thrown exception cannot smuggle the secret out as `details`.
+  withApprovalGate({
+    id: APPROVE_THROW_TOOL_ID,
+    description: 'redaction test tool — throws with secret in message',
+    execute: async () => {
+      throw new Error(`Vendor refused rotation; offending key was ${APPROVE_THROW_SK_KEY}`);
+    },
+  });
+}
+
+async function makePostContext(opts: {
+  url: string;
+  param: string;
+}): Promise<unknown> {
+  return {
+    req: {
+      url: opts.url,
+      header: (name: string): string | undefined =>
+        name.toLowerCase() === 'cookie' ? adminCookie() : undefined,
+      param: (_name: string): string | undefined => opts.param,
+      json: async () => ({}),
+    },
+    json(body: unknown, status = 200): FakeResponse {
+      return { status, body };
+    },
+    html(body: string): FakeResponse {
+      return { status: 200, body };
+    },
+    text(body: string, status = 200): FakeResponse {
+      return { status, body };
+    },
+  };
+}
+
+async function runApproveResponseLeakTests(): Promise<void> {
+  registerFakeGatedTools();
+
+  /* ---------- Happy path: tool succeeds, returns fresh secrets ---------- */
+  // Reset storedRow by enqueuing a fresh action for the success-tool.
+  // enqueuePendingAction overwrites storedRow, so the prior 'executed' row
+  // from the read-path tests no longer interferes.
+  const okAction = await enqueuePendingAction({
+    toolId: APPROVE_OK_TOOL_ID,
+    toolLabel: 'Test: Rotate Fake Secret Key (success)',
+    payload: { target_integration: 'redaction_test', reason: 'approve-test' },
+    payloadPreview: 'rotate fake key',
+    riskLevel: 'high',
+    complianceRefs: ['REDACTION-TEST'],
+    requestedByUserId: 99, // != admin (42) → SOD passes
+    requestedByEmail: 'requester@walaplus.test',
+    requestedByName: 'Requester User',
+    threadId: 'thr_approve_redaction_test',
+  });
+
+  const okPostRes = await callRoute(
+    '/api/ai/approvals/:code/approve',
+    'POST',
+    await makePostContext({
+      url: `https://test.local/api/ai/approvals/${okAction.action_code}/approve`,
+      param: okAction.action_code,
+    }),
+  );
+
+  assert(
+    okPostRes.status === 200,
+    `POST /api/ai/approvals/:code/approve (success) → 200 (got ${okPostRes.status}, body=${JSON.stringify(okPostRes.body).slice(0, 200)})`,
+  );
+
+  const okBodyText = JSON.stringify(okPostRes.body);
+  const okLeak = findApproveLeak(okPostRes.body);
+  assert(
+    okLeak === null,
+    `POST /approve response contains no plaintext secret (leaked: ${okLeak ?? 'none'})`,
+  );
+  assert(
+    okBodyText.includes(REDACTED_SENTINEL),
+    'POST /approve response contains the redaction sentinel',
+  );
+  assert(
+    okBodyText.includes('Approve-response rotation completed'),
+    'POST /approve response preserves the safe audit_note field',
+  );
+
+  // Defense-in-depth — every distinct attack surface is exercised.
+  const okBody = okPostRes.body as {
+    success: boolean;
+    actionCode: string;
+    result?: { new_api_key?: string; access_token?: string; nested?: { free_form_note?: string; legacy_password_hash_blob?: string } };
+  };
+  assert(
+    okBody.success === true && okBody.actionCode === okAction.action_code,
+    'POST /approve response success=true with actionCode echoed back',
+  );
+  assert(
+    okBody.result?.new_api_key === REDACTED_SENTINEL,
+    `POST /approve key-deny-list redacts result.new_api_key (got: ${okBody.result?.new_api_key})`,
+  );
+  assert(
+    okBody.result?.access_token === REDACTED_SENTINEL,
+    `POST /approve key-deny-list redacts result.access_token (got: ${okBody.result?.access_token})`,
+  );
+  assert(
+    okBody.result?.nested?.free_form_note?.includes(REDACTED_SENTINEL) === true &&
+      okBody.result?.nested?.free_form_note?.includes(APPROVE_RESULT_GH_TOKEN) === false,
+    `POST /approve regex-deny-list scrubs interpolated GH token in free-form string (got: ${okBody.result?.nested?.free_form_note})`,
+  );
+  assert(
+    okBody.result?.nested?.legacy_password_hash_blob === REDACTED_SENTINEL,
+    `POST /approve key-deny-list redacts nested *_hash field (got: ${okBody.result?.nested?.legacy_password_hash_blob})`,
+  );
+
+  /* ---------- Throw path: tool throws with secret in message ---------- */
+  const throwAction = await enqueuePendingAction({
+    toolId: APPROVE_THROW_TOOL_ID,
+    toolLabel: 'Test: Rotate Fake Secret Key (throws)',
+    payload: { target_integration: 'redaction_test', reason: 'throw-test' },
+    payloadPreview: 'rotate fake key (throws)',
+    riskLevel: 'high',
+    complianceRefs: ['REDACTION-TEST'],
+    requestedByUserId: 99,
+    requestedByEmail: 'requester@walaplus.test',
+    requestedByName: 'Requester User',
+    threadId: 'thr_approve_redaction_throw',
+  });
+
+  const throwPostRes = await callRoute(
+    '/api/ai/approvals/:code/approve',
+    'POST',
+    await makePostContext({
+      url: `https://test.local/api/ai/approvals/${throwAction.action_code}/approve`,
+      param: throwAction.action_code,
+    }),
+  );
+
+  // executeApprovedAction catches inner errors and returns ok=false with
+  // error=message, so the route returns 500 with `success:false`. The body
+  // must NOT contain the plaintext secret embedded in the exception.
+  assert(
+    throwPostRes.status === 500,
+    `POST /approve (tool throws) → 500 (got ${throwPostRes.status})`,
+  );
+  const throwLeak = findApproveLeak(throwPostRes.body);
+  assert(
+    throwLeak === null,
+    `POST /approve (tool throws) response contains no plaintext secret (leaked: ${throwLeak ?? 'none'})`,
+  );
+  const throwBody = throwPostRes.body as { success: boolean; error?: string };
+  assert(
+    throwBody.success === false,
+    'POST /approve (tool throws) response success=false',
+  );
+  assert(
+    typeof throwBody.error === 'string' &&
+      throwBody.error.includes(REDACTED_SENTINEL) &&
+      !throwBody.error.includes(APPROVE_THROW_SK_KEY),
+    `POST /approve (tool throws) response.error scrubs the embedded secret (got: ${throwBody.error})`,
+  );
 }
 
 async function run(): Promise<void> {
@@ -625,6 +883,19 @@ async function run(): Promise<void> {
     JSON.stringify(listExecRes.body).includes(REDACTED_SENTINEL),
     'GET /api/ai/approvals?status=executed contains the redaction sentinel for execution_result',
   );
+
+  /* ================================================================== */
+  /* POST /api/ai/approvals/:code/approve                                */
+  /* ------------------------------------------------------------------ */
+  /* The approve handler echoes the underlying tool's return value back  */
+  /* to the browser. For rotation/refresh tools that means the freshly-  */
+  /* minted credential is one synchronous response away from the         */
+  /* attacker. The DB-side `recordExecutionResult` already redacts the   */
+  /* JSONB column, but the HTTP response is the most-fresh, most-        */
+  /* dangerous exposure of the same value, so it MUST also be scrubbed.  */
+  /* ================================================================== */
+
+  await runApproveResponseLeakTests();
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

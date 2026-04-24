@@ -211,6 +211,52 @@ export function redactSensitiveFields(payload: any, fieldName?: string): any {
   return payload;
 }
 
+/**
+ * Deep redaction that combines BOTH defenses in a single pass:
+ *   1. Key-based deny list (`isSensitiveField`)        — values under
+ *      sensitive field names are replaced with REDACTED_SENTINEL.
+ *   2. Regex deny list (`SECRET_LIKE_PATTERNS`)        — every string leaf
+ *      is scrubbed of credential-shaped substrings.
+ *
+ * Use this whenever a value leaves the server in a context where BOTH
+ * a tool/library author may have named a field carelessly (e.g. `apiKey`
+ * vs `api_key`) AND free-form strings may contain interpolated secrets
+ * (e.g. an error message that includes the new token, or a `notes` field
+ * that pasted the credential into prose).
+ *
+ * Invariant: this function returns a NEW value graph; the input is never
+ * mutated, so it is safe to apply to objects shared with other callers.
+ */
+export function redactSensitiveDeep(payload: any, fieldName?: string): any {
+  if (payload === null || payload === undefined) return payload;
+
+  if (fieldName && isSensitiveField(fieldName)) {
+    return REDACTED_SENTINEL;
+  }
+
+  if (typeof payload === 'string') {
+    return redactSecretLikeStrings(payload);
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.map(item => redactSensitiveDeep(item));
+  }
+
+  if (typeof payload === 'object') {
+    const redacted: Record<string, any> = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (isSensitiveField(key)) {
+        redacted[key] = REDACTED_SENTINEL;
+      } else {
+        redacted[key] = redactSensitiveDeep(value);
+      }
+    }
+    return redacted;
+  }
+
+  return payload;
+}
+
 export interface EventLog {
   id: number;
   timestamp: Date;
