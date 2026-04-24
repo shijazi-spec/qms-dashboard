@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { getSessionFromCookie } from "../routes/authRoutes";
 import { sanitizeRequestBody } from "../../utils/inputSanitizer";
 import { checkRateLimit, parseClientIp } from "../../utils/rateLimiter";
+import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
 const PUBLIC_PATHS = [
   '/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout',
@@ -29,12 +30,6 @@ function isPublicPath(urlPath: string): boolean {
 function isMastraInternal(urlPath: string): boolean {
   return MASTRA_INTERNAL_PREFIXES.some(p => urlPath.startsWith(p)) ||
     (urlPath.startsWith('/api/agents/') && !urlPath.startsWith('/api/agents/performance'));
-}
-
-function getAdminKeyFromRequest(c: any): string {
-  return c.req.header('X-Admin-Key') ||
-    (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim())
-      .find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
 }
 
 function handleCors(c: any, allowedOrigins: string[]): Response | null {
@@ -70,9 +65,7 @@ function applySecurityHeaders(c: any, cspNonce: string): void {
 
 function checkInngestAccess(c: any, urlPath: string): Response | null {
   if (urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest')) {
-    const adminKey = c.req.header('X-Admin-Key');
-    const expectedKey = process.env.ADMIN_API_KEY;
-    if (!(expectedKey && adminKey === expectedKey)) {
+    if (!hasValidAdminApiKey(c)) {
       return c.json({ error: 'Access denied' }, 403);
     }
   }
@@ -81,12 +74,7 @@ function checkInngestAccess(c: any, urlPath: string): Response | null {
 
 function checkPageAuth(c: any): Response | null {
   const session = getSessionFromCookie(c.req.header('Cookie'));
-  const adminKeyCookieVal = (c.req.header('Cookie') || '').split(';')
-    .map((s: string) => s.trim())
-    .find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
-  const expectedKey = process.env.ADMIN_API_KEY;
-  const hasAdminCookie = expectedKey && adminKeyCookieVal === expectedKey;
-  if (!session && !hasAdminCookie) {
+  if (!session && !hasValidAdminApiKey(c)) {
     return c.redirect('/login');
   }
   return null;
@@ -94,9 +82,7 @@ function checkPageAuth(c: any): Response | null {
 
 async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Response | null> {
   const session = getSessionFromCookie(c.req.header('Cookie'));
-  const adminKey = getAdminKeyFromRequest(c);
-  const expectedAdminKey = process.env.ADMIN_API_KEY;
-  const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
+  const hasAdminKey = hasValidAdminApiKey(c);
 
   const isAuthenticated = !!(session || hasAdminKey);
 

@@ -104,9 +104,7 @@ export function requireAuth(c: any): SessionUser | null {
 export async function requireRole(c: any, allowedRoles: UserRole[]): Promise<SessionUser | null> {
   const user = getSessionUser(c);
   if (!user) return null;
-  const adminKey = getAdminKey(c);
-  const expectedKey = process.env.ADMIN_API_KEY;
-  if (!(expectedKey && adminKey === expectedKey)) {
+  if (!hasValidAdminApiKey(c)) {
     const platformUser = await getPlatformUser(user.email);
     if (!platformUser || platformUser.status !== 'active') return null;
     user.role = platformUser.role;
@@ -150,7 +148,7 @@ export function isDepartmentViewer(c: any): boolean {
   return user?.role === 'department_viewer';
 }
 
-function getAdminKey(c: any): string | null {
+export function getAdminKey(c: any): string | null {
   const headerKey = c.req.header('X-Admin-Key');
   if (headerKey) return headerKey;
   const cookies = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim());
@@ -159,19 +157,20 @@ function getAdminKey(c: any): string | null {
   return null;
 }
 
-export function isAdminAuthorized(c: any): boolean {
-  const adminKey = getAdminKey(c) || '';
+export function hasValidAdminApiKey(c: any): boolean {
+  const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
-  const hasValidAdminKey = !!(expectedKey && adminKey === expectedKey);
-  if (hasValidAdminKey) return true;
+  return !!(expectedKey && adminKey === expectedKey);
+}
+
+export function isAdminAuthorized(c: any): boolean {
+  if (hasValidAdminApiKey(c)) return true;
   const session = getSessionFromCookie(c.req.header('Cookie'));
   return session?.role === 'admin';
 }
 
 export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
-  const adminKey = getAdminKey(c);
-  const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKey === expectedKey) {
+  if (hasValidAdminApiKey(c)) {
     return { userId: 0, email: 'api-key@system', name: 'API Key Access', role: 'admin' };
   }
   const user = getSessionUser(c);
@@ -184,18 +183,14 @@ export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
 }
 
 export async function requireRoleOrKey(c: any, allowedRoles: UserRole[]): Promise<SessionUser | null> {
-  const adminKey = getAdminKey(c);
-  const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKey === expectedKey) {
+  if (hasValidAdminApiKey(c)) {
     return { userId: 0, email: 'api-key@system', name: 'API Key Access', role: 'admin' };
   }
   return requireRole(c, allowedRoles);
 }
 
 export function requireAuthOrKey(c: any): SessionUser | null {
-  const adminKey = getAdminKey(c);
-  const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKey === expectedKey) {
+  if (hasValidAdminApiKey(c)) {
     return { userId: 0, email: 'api-key@system', name: 'API Key Access', role: 'admin' };
   }
   return getSessionUser(c);

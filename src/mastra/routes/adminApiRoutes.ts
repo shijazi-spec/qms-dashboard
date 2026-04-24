@@ -1,5 +1,5 @@
 import { getSessionFromCookie } from "./authRoutes";
-import { isAdminAuthorized } from "../../utils/rbacMiddleware";
+import { isAdminAuthorized, hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
 export const adminApiRoutes = [
   {
@@ -42,11 +42,8 @@ export const adminApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const adminKey = c.req.header("X-Admin-Key");
-          const expectedKey = process.env.ADMIN_API_KEY;
-          const hasValidAdminKey = expectedKey && adminKey === expectedKey;
           const hasSession = !!getSessionFromCookie(c.req.header('Cookie'));
-          if (!hasValidAdminKey && !hasSession) return c.json({ error: "Authentication required" }, 401);
+          if (!hasValidAdminApiKey(c) && !hasSession) return c.json({ error: "Authentication required" }, 401);
           const { getAllGovernanceDocuments } = await import("../../utils/database");
           const documents = await getAllGovernanceDocuments();
           return c.json(documents);

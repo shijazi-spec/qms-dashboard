@@ -17,16 +17,7 @@ import {
   getLatestPulseRun,
   getRecentPulseRuns,
 } from "../../utils/platformHealthPulse";
-
-function hasAdminKey(c: any): boolean {
-  const adminKey = process.env.ADMIN_API_KEY;
-  if (!adminKey) return false;
-  const headerKey = c.req.header("X-Admin-Key");
-  if (headerKey === adminKey) return true;
-  const cookie = c.req.header("Cookie") || "";
-  const m = cookie.match(/admin_key=([^;]+)/);
-  return m?.[1] === adminKey;
-}
+import { hasValidAdminApiKey, requireRole } from "../../utils/rbacMiddleware";
 
 /**
  * Defense-in-depth authorization for the health-pulse routes.
@@ -41,8 +32,7 @@ function hasAdminKey(c: any): boolean {
  * diagnostics in any environment that simply forgot to set the key.
  */
 async function authorize(c: any): Promise<boolean> {
-  if (hasAdminKey(c)) return true;
-  const { requireRole } = await import("../../utils/rbacMiddleware");
+  if (hasValidAdminApiKey(c)) return true;
   const user = await requireRole(c, ['admin']);
   return !!user;
 }

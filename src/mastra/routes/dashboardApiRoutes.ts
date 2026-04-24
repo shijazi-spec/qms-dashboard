@@ -1,5 +1,6 @@
 import { getSessionFromCookie } from "./authRoutes";
 import { inngest, inngestServe } from "../inngest";
+import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
 export const dashboardApiRoutes = [
   {
@@ -338,11 +339,7 @@ export const dashboardApiRoutes = [
         try {
           const logger = mastra?.getLogger();
           const session = getSessionFromCookie(c.req.header('Cookie'));
-          const adminKeyHeader = c.req.header('X-Admin-Key');
-          const adminKeyCookie = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith('admin_key='))?.split('=')[1] || '';
-          const adminKey = adminKeyHeader || adminKeyCookie;
-          const expectedAdminKey = process.env.ADMIN_API_KEY;
-          const hasAdminKey = expectedAdminKey && adminKey === expectedAdminKey;
+          const hasAdminKey = hasValidAdminApiKey(c);
           if (!session && !hasAdminKey) return c.json({ error: 'Authentication required' }, 401);
           const now = Date.now();
           if (now - lastTriggerTime.value < MIN_INTERVAL_MS) {

@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { getSessionFromCookie } from "./authRoutes";
+import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
 const STATIC_MIME: Record<string, string> = {
   css: 'text/css; charset=utf-8',
@@ -104,10 +105,8 @@ export const staticPageRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const adminKey = process.env.ADMIN_API_KEY;
-          const providedKey = c.req.header('X-Admin-Key');
           const session = getSessionFromCookie(c.req.header('Cookie'));
-          if (!adminKey || !providedKey || providedKey !== adminKey || !session || session.role !== 'admin') {
+          if (!hasValidAdminApiKey(c) || !session || session.role !== 'admin') {
             return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the admin panel, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
           }
           const filePath = resolveDashboardFile("admin.html");
