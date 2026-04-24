@@ -42,7 +42,7 @@ The platform is built on the Mastra AI agent framework and Hono HTTP server.
 -   **Workflows**: Inngest orchestrates event-driven processes, including background scanning, KPI auto-calculation, and AI approval expiry.
 -   **Authentication**: Replit OIDC supports Google, GitHub, Apple, and email login, with HMAC-SHA256 signed cookies for session management. An Admin API key provides alternative access.
 -   **Authorization**: Role-Based Access Control (RBAC) with 11 roles ensures granular access to API endpoints and dashboards through `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
--   **Security**: Features include nonce-based Content Security Policy (CSP), tiered rate limiting, input sanitization (XSS/injection prevention), UUID resource ID obfuscation, strong password policies, generic error messages, and a Human-In-The-Loop (HITL) AI Approval Gate for AI-initiated write actions.
+-   **Security**: Features include nonce-based Content Security Policy (CSP), distributed Postgres-backed rate limiting (rate_limit_buckets table shared across all instances, fail-open with Pino telemetry), input sanitization (XSS/injection prevention), UUID resource ID obfuscation, strong password policies, generic error messages, and a Human-In-The-Loop (HITL) AI Approval Gate for AI-initiated write actions.
 -   **Key Features**:
     -   **AI Consultant**: A GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration.
     -   **Duplicate Radar**: A multi-signal duplicate detection system for CRM data with cross-module clustering, AI recommendations, and auto-resolution.

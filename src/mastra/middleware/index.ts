@@ -4,7 +4,7 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 import { getSessionFromCookie } from "../routes/authRoutes";
 import { sanitizeRequestBody } from "../../utils/inputSanitizer";
-import { checkRateLimit } from "../../utils/rateLimiter";
+import { checkRateLimit, parseClientIp } from "../../utils/rateLimiter";
 
 const PUBLIC_PATHS = [
   '/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout',
@@ -100,9 +100,9 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
 
   const isAuthenticated = !!(session || hasAdminKey);
 
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+  const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
   const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-  const rateCheck = checkRateLimit(ip, isWrite, urlPath, isAuthenticated);
+  const rateCheck = await checkRateLimit(ip, isWrite, urlPath, isAuthenticated, session?.userId ? String(session.userId) : undefined);
   if (!rateCheck.allowed) {
     c.header('Retry-After', String(rateCheck.retryAfter || 60));
     return c.json({ error: 'Too many requests' }, 429);
@@ -211,9 +211,9 @@ export const globalMiddleware = [
       const apiAuthResult = await checkApiAuth(c, urlPath, method);
       if (apiAuthResult) return apiAuthResult;
     } else if (isApi && publicPath) {
-      const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+      const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
       const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-      const rateCheck = checkRateLimit(ip, isWrite, urlPath, false);
+      const rateCheck = await checkRateLimit(ip, isWrite, urlPath, false);
       if (!rateCheck.allowed) {
         c.header('Retry-After', String(rateCheck.retryAfter || 60));
         return c.json({ error: 'Too many requests' }, 429);

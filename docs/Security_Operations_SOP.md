@@ -291,9 +291,9 @@ This document serves as:
 #### QMS-021 — Admin Authentication Endpoint Not Rate Limited
 - **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** POST /api/admin/auth endpoint was not included in the authentication rate limiting path list, allowing unlimited brute-force attempts against the admin key.
-- **Remediation:** `/api/admin/auth` added to `AUTH_PATHS` array in `rateLimiter.ts`, applying the strict 5 requests/minute authentication rate limit. The admin auth endpoint is now subject to the same brute-force protection as all other authentication endpoints.
-- **Files Modified:** `src/utils/rateLimiter.ts`
-- **Control:** Auth-tier rate limiting (5 req/min) applied to admin authentication endpoint.
+- **Remediation:** `/api/admin/auth` added to `AUTH_PATHS` array in `rateLimiter.ts`, applying the strict 5 requests/minute authentication rate limit. Rate limit state is now stored in PostgreSQL (`rate_limit_buckets` table) and shared across all instances, so the limit holds platform-wide regardless of instance count.
+- **Files Modified:** `src/utils/rateLimiter.ts`, `src/mastra/index.ts`, `src/mastra/inngest/index.ts`
+- **Control:** Distributed auth-tier rate limiting (5 req/min) applied to admin authentication endpoint, enforced via shared Postgres state.
 
 #### QMS-024 — CSP Allows unsafe-inline and unsafe-eval
 - **Severity:** MEDIUM (CVSS 5.3)
@@ -311,10 +311,10 @@ This document serves as:
 
 #### QMS-026 — Rate Limiting Too Permissive (~18 Requests)
 - **Severity:** MEDIUM (CVSS 5.3)
-- **Issue:** Rate limiting allowed ~18 requests before throttling, insufficient for auth protection.
-- **Remediation:** Path-aware rate limiting: 5 requests/minute for auth endpoints (`/api/auth/`, `/api/invitations/accept`, `/login`, `/api/admin/auth`), 10 requests/minute for export endpoints, 10 requests/minute for general write operations, 100 requests/minute for read operations.
-- **Files Modified:** `src/utils/rateLimiter.ts`
-- **Control:** Tiered, path-aware rate limiting with stricter auth limits.
+- **Issue:** Rate limiting allowed ~18 requests before throttling. The original in-memory implementation also meant each Autoscale instance had its own counters, silently multiplying the effective limit by instance count.
+- **Remediation:** Fully distributed Postgres-backed rate limiter replacing the in-memory Map. State is stored in a shared `rate_limit_buckets (key TEXT, window_start TIMESTAMPTZ, count INT, PRIMARY KEY (key, window_start))` table with an atomic `INSERT … ON CONFLICT … DO UPDATE … RETURNING count` upsert. Limits enforced: `AUTH_LIMIT=5`, `EXPORT_LIMIT=10`, `WRITE_LIMIT=10`, `READ_LIMIT=100` — identical values, now guaranteed platform-wide. Identifier strategy improved to prefer `user:{userId}` for authenticated sessions and `ip:{addr}` (with trust-boundary-aware X-Forwarded-For parsing: `ips[ips.length - TRUST_PROXY_HOPS - 1]`, default TRUST_PROXY_HOPS=0, X-Real-IP takes priority) for unauthenticated calls. Fail-open path with structured Pino warning and `failOpenCount` metric if DB is unreachable. Janitor Inngest cron (every 5 min) prunes rows older than 15 minutes. Multi-instance simulation test in `tests/testRateLimiterMultiInstance.ts` asserts the limit holds at ≤10 across 3 concurrent instances.
+- **Files Modified:** `src/utils/rateLimiter.ts`, `src/mastra/index.ts`, `src/mastra/inngest/index.ts`
+- **Control:** Distributed, Postgres-backed tiered rate limiting shared across all instances; fail-open with observability; automatic table pruning.
 
 #### QMS-027 — CSRF Logout via GET Request
 - **Severity:** MEDIUM (CVSS 5.3)

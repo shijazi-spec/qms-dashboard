@@ -625,6 +625,30 @@ const triggerAutoEscalateFunction = inngest.createFunction(
 );
 inngestFunctions.push(triggerAutoEscalateFunction);
 
+const rateLimitJanitorFunction = inngest.createFunction(
+  { id: "rate-limit-janitor" },
+  { cron: "*/5 * * * *" },
+  async ({ step }) => {
+    return await step.run("prune-expired-rate-limit-buckets", async () => {
+      const pg = await import("pg");
+      const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+      try {
+        const result = await pool.query(
+          `DELETE FROM rate_limit_buckets WHERE window_start < NOW() - INTERVAL '15 minutes'`
+        );
+        const deleted = result.rowCount ?? 0;
+        if (deleted > 0) {
+          console.log(`[RateLimitJanitor] Pruned ${deleted} expired rate_limit_buckets rows`);
+        }
+        return { deleted };
+      } finally {
+        await pool.end();
+      }
+    });
+  },
+);
+inngestFunctions.push(rateLimitJanitorFunction);
+
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },
   { cron: process.env.DIGEST_CRON || "0 7 * * 1" },
