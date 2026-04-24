@@ -693,6 +693,298 @@ if (HAS_DB) {
       else process.env.ADMIN_API_KEY = original;
     }
   });
+
+  // ── Task #214: end-to-end auto-revert against a live Postgres ─────────────
+  //
+  // This is the only test in CI that exercises the full time-boxed override
+  // path against real SQL: PUT an override with a sub-second expiry, wait
+  // for it to pass, drive `runToolHealthCheck` directly (which calls the
+  // real `reapExpiredToolHealthOverrides`), then re-GET and assert that
+  //   • the GET response no longer carries the override (or expires_at),
+  //   • the audit log has a fresh "system: override expired" row, and
+  //   • the merged effective config has reverted to the env baseline.
+  //
+  // Without this check, an off-by-one in the reaper's `WHERE expires_at <= NOW()`
+  // clause or a missing `FOR UPDATE` lock would slip past the existing
+  // route-validation tests (which never touch SQL) and the cron-wiring
+  // tests (which stub the reaper).
+  await suite.test(
+    "happy: PUT(expires_at=NOW+1s) → wait → runToolHealthCheck → GET reflects auto-revert + audit",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      // Type-only imports keep the stubs below strictly typed without
+      // forcing the production modules to load until the test actually
+      // runs (see the dynamic imports a few lines down).
+      type AIAlertT = import("../src/utils/aiAlertsDatabase").AIAlert;
+      type AlertTypeT = import("../src/utils/aiAlertsDatabase").AlertType;
+      type ToolWindowAggregateT =
+        import("../src/utils/aiTelemetry").ToolWindowAggregate;
+      type NotifyToolHealthBreachResultT =
+        import("../src/utils/toolHealthAlertNotifier").NotifyToolHealthBreachResult;
+      // Narrow shape of the audit rows surfaced in the GET response —
+      // mirrors ToolHealthConfigAuditEntry but loosened to allow the
+      // synthetic `_expires_at` key the reaper writes into before_values.
+      interface AuditRowShape {
+        changed_by: string;
+        note: string | null;
+        before_values: Record<string, unknown>;
+        after_values: Record<string, unknown>;
+      }
+      try {
+        const { runToolHealthCheck } = await import(
+          "../src/mastra/workflows/toolHealthAlertsCron"
+        );
+        const { SYSTEM_REAPER_ATTRIBUTION } = await import(
+          "../src/utils/toolHealthConfigDatabase"
+        );
+
+        const getHandler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/tool-health-config",
+          "GET",
+        );
+        const putHandler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/tool-health-config",
+          "PUT",
+        );
+
+        // 1. Snapshot the env baseline so we can assert the post-revert
+        //    effective config matches it field-for-field.
+        const initial = await getHandler(
+          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        );
+        suite.expectEqual(initial.status, 200, "initial GET status");
+        const envBaseline = initial.body?.data?.env_baseline;
+        suite.expect(
+          envBaseline && typeof envBaseline === "object",
+          "env_baseline present",
+        );
+
+        // 2. PUT an override with a near-future expires_at. The validator
+        //    rejects past timestamps, so we go ~1.2s out — comfortably
+        //    above the wall-clock jitter and still short enough to keep
+        //    CI fast.
+        const expiresAtMs = Date.now() + 1_200;
+        const expiresAtIso = new Date(expiresAtMs).toISOString();
+        const putRes = await putHandler(
+          makeContext({
+            method: "PUT",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              overrides: {
+                errorRatePct: 7,
+                errorRateHighPct: 21,
+                errorRateCriticalPct: 77,
+              },
+              expires_at: expiresAtIso,
+              note: "task #214 auto-revert e2e",
+            },
+          }),
+        );
+        suite.expectEqual(putRes.status, 200, "PUT status");
+        suite.expectEqual(
+          putRes.body?.effective?.errorRateHighPct,
+          21,
+          "effective reflects override pre-reap",
+        );
+        suite.expect(
+          putRes.body?.after_expires_at != null,
+          "after_expires_at set on the write response",
+        );
+
+        // 3. Confirm the GET picks up the override + expires_at while we
+        //    are still inside the validity window. This catches a regression
+        //    where the read path mis-treats a future expiry as already
+        //    expired (defense-in-depth filter inverted).
+        const midGet = await getHandler(
+          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        );
+        suite.expectEqual(midGet.status, 200, "mid GET status");
+        suite.expectEqual(
+          midGet.body?.data?.overrides?.errorRateHighPct,
+          21,
+          "override visible before expiry",
+        );
+        suite.expect(
+          midGet.body?.data?.expires_at != null,
+          "expires_at exposed before expiry",
+        );
+
+        // 4. Sleep just past the expiry. We add a generous buffer so the
+        //    cron's `expires_at <= NOW()` check fires deterministically
+        //    even on a slow CI box.
+        const remaining = expiresAtMs - Date.now();
+        const wait = Math.max(0, remaining) + 800;
+        await new Promise((r) => setTimeout(r, wait));
+
+        // 5. Drive a single cron pass with the REAL reaper but stubbed
+        //    breach plumbing — we don't want this test to spawn alerts
+        //    or pages just because the live DB happens to have noisy
+        //    metrics rows. The reaper itself uses the default DB-backed
+        //    implementation, so any SQL regression in
+        //    `reapExpiredToolHealthOverrides` will surface here.
+        const stubAggregates: (
+          windowMinutes: number,
+          minCalls: number,
+        ) => Promise<ToolWindowAggregateT[]> = async () => [];
+        const stubOpenAlertExists: (
+          alertType: AlertTypeT,
+          relatedRecordId: string,
+        ) => Promise<boolean> = async () => false;
+        // Aggregates is empty above, so the breach loop never runs and
+        // these stubs never actually fire. We still give them strictly
+        // typed signatures (no `as any`) so a future deps-shape change
+        // is caught at compile time instead of in a flaky test pass.
+        const stubCreateAlert = async (
+          _alert: Omit<AIAlertT, "id" | "created_at" | "status">,
+        ): Promise<AIAlertT> => {
+          throw new Error(
+            "stubCreateAlert: should not run — aggregates were empty",
+          );
+        };
+        const stubGetOpenAlertsByKey: (
+          alertType: AlertTypeT,
+          relatedRecordId: string,
+          options?: { olderThanMinutes?: number },
+        ) => Promise<AIAlertT[]> = async () => [];
+        const stubResolveAlert: (
+          id: number,
+          note?: string,
+        ) => Promise<AIAlertT | null> = async () => null;
+        const stubNotify: () => Promise<NotifyToolHealthBreachResultT> = async () => ({
+          slackSent: false,
+          emailSent: false,
+          throttled: false,
+          skipped: true,
+        });
+        const checkResult = await runToolHealthCheck({
+          getToolWindowAggregates: stubAggregates,
+          openAlertExistsByKey: stubOpenAlertExists,
+          createAIAlert: stubCreateAlert,
+          getOpenAlertsByKey: stubGetOpenAlertsByKey,
+          resolveAlert: stubResolveAlert,
+          notifyToolHealthBreach: stubNotify,
+        });
+        // Use `>= 1` instead of `=== 1` so a noisy shared CI DB that
+        // happened to have another expired override at tick time can't
+        // false-fail us — the targeted audit-row match below pins this
+        // assertion to *our* seeded override either way.
+        suite.expect(
+          checkResult.expiredOverridesReaped >= 1,
+          `cron pass reported at least one expired override reaped (got ${checkResult.expiredOverridesReaped})`,
+        );
+
+        // 6. Re-GET and assert the override + expires_at have been wiped
+        //    and the effective config matches the env baseline exactly.
+        const postGet = await getHandler(
+          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        );
+        suite.expectEqual(postGet.status, 200, "post GET status");
+        const postOverrides = postGet.body?.data?.overrides ?? {};
+        suite.expectEqual(
+          Object.keys(postOverrides).length,
+          0,
+          "all override fields cleared after auto-revert",
+        );
+        suite.expect(
+          postGet.body?.data?.expires_at == null,
+          "expires_at cleared after auto-revert",
+        );
+        suite.expectEqual(
+          postGet.body?.data?.expired,
+          false,
+          "derived expired flag false once row is reaped",
+        );
+        const postEffective = postGet.body?.data?.effective ?? {};
+        for (const field of Object.keys(envBaseline)) {
+          suite.expectEqual(
+            postEffective[field],
+            envBaseline[field],
+            `effective.${field} reverted to env baseline`,
+          );
+        }
+        suite.expectEqual(
+          postGet.body?.data?.updated_by,
+          SYSTEM_REAPER_ATTRIBUTION,
+          "updated_by attributed to the system reaper",
+        );
+
+        // 7. Audit row: must be a fresh entry written by the reaper with
+        //    the canonical attribution string and a note that flags the
+        //    auto-clear. We look up by attribution + note instead of
+        //    assuming index 0 so a noisier shared CI database (where
+        //    parallel suites might write between our PUT and our GET)
+        //    can't false-fail this assertion.
+        const audit = postGet.body?.data?.audit;
+        suite.expect(
+          Array.isArray(audit) && audit.length > 0,
+          "audit log non-empty after reap",
+        );
+        const auditRows: AuditRowShape[] = Array.isArray(audit) ? audit : [];
+        const reapEntry = auditRows.find(
+          (row) =>
+            row?.changed_by === SYSTEM_REAPER_ATTRIBUTION
+            && typeof row?.note === "string"
+            && row.note.includes("Auto-cleared")
+            && row.note.includes("expires_at")
+            // Pin to OUR seeded override so we don't latch onto an
+            // unrelated reaper row from earlier in the run.
+            && row?.before_values?.errorRateHighPct === 21,
+        );
+        suite.expect(
+          !!reapEntry,
+          "found a reaper audit row matching our seeded override",
+        );
+        suite.expect(
+          reapEntry?.before_values?._expires_at != null,
+          "audit before_values records the expiry that triggered the reap",
+        );
+        suite.expect(
+          reapEntry?.after_values
+            && Object.keys(reapEntry.after_values).length === 0,
+          "audit after_values is the empty post-clear snapshot",
+        );
+      } finally {
+        // Defensive cleanup: if any assertion above failed mid-flight, the
+        // override row could still be set. Force-clear every field so the
+        // live DB is left exactly as we found it (matches the existing
+        // happy-path test's cleanup contract).
+        try {
+          const cleanupHandler = await buildHandler(
+            aiOpsRoutes,
+            "/api/ai-ops/tool-health-config",
+            "PUT",
+          );
+          await cleanupHandler(
+            makeContext({
+              method: "PUT",
+              headers: { "X-Admin-Key": ADMIN_KEY },
+              body: {
+                overrides: {
+                  windowMinutes: null,
+                  minCalls: null,
+                  errorRatePct: null,
+                  errorRateHighPct: null,
+                  errorRateCriticalPct: null,
+                  p95LatencyMs: null,
+                  latencyHighMs: null,
+                  latencyCriticalMs: null,
+                },
+                expires_at: null,
+                note: "task #214 auto-revert e2e cleanup",
+              },
+            }),
+          );
+        } catch {
+          /* best-effort cleanup */
+        }
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
 }
 
 suite.finishOrExit();
