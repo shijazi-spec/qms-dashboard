@@ -376,6 +376,96 @@ const aiApprovalExpiryFunction = inngest.createFunction(
 );
 inngestFunctions.push(aiApprovalExpiryFunction);
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Daily AI cost summary + pruning cron
+// Emits a Slack/email alert when the trailing-24h cost exceeds
+// AI_DAILY_COST_ALERT_USD (default $10.00).
+// Also prunes ai_call_metrics rows older than 90 days.
+// ──────────────────────────────────────────────────────────────────────────────
+const aiCostSummaryFunction = inngest.createFunction(
+  { id: "ai-cost-summary" },
+  { cron: process.env.AI_COST_SUMMARY_CRON || "0 6 * * *" }, // daily @ 06:00 UTC
+  async ({ step }) => {
+    return await step.run("check-ai-cost-and-prune", async () => {
+      const { getDailyCostSummary, pruneOldAiMetrics } = await import("../../utils/aiTelemetry");
+
+      const [summary, pruned] = await Promise.all([
+        getDailyCostSummary(),
+        pruneOldAiMetrics(),
+      ]);
+
+      if (pruned > 0) {
+        console.log(`[AI-Cost] Pruned ${pruned} stale ai_call_metrics rows (>90 days)`);
+      }
+
+      const thresholdUsd = parseFloat(process.env.AI_DAILY_COST_ALERT_USD || "10");
+      console.log("[AI-Cost] Daily summary:", summary, `| threshold: $${thresholdUsd}`);
+
+      if (summary.totalCostUsd >= thresholdUsd) {
+        const msg =
+          `⚠️ *AI Cost Alert* — trailing-24h spend is *$${summary.totalCostUsd.toFixed(4)}* ` +
+          `(threshold: $${thresholdUsd}). ` +
+          `Calls: ${summary.callCount}, Errors: ${summary.errorCount}, ` +
+          `Avg latency: ${Math.round(summary.avgLatencyMs)}ms.`;
+
+        console.warn("[AI-Cost] Threshold exceeded:", msg);
+
+        try {
+          const { createNotification } = await import("../../utils/notificationHub");
+          await createNotification({
+            type: "alert",
+            title: "AI Daily Cost Threshold Exceeded",
+            message: msg.replace(/\*/g, ""),
+            link: "/ai-ops",
+            severity: "high",
+          });
+        } catch (notifErr) {
+          console.warn("[AI-Cost] Failed to create notification:", notifErr);
+        }
+
+        if (process.env.SLACK_WEBHOOK_URL) {
+          try {
+            await fetch(process.env.SLACK_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: msg }),
+            });
+          } catch (slackErr) {
+            console.warn("[AI-Cost] Slack notification failed:", slackErr);
+          }
+        }
+
+        const emailRecipients = process.env.AI_COST_ALERT_EMAIL
+          ? process.env.AI_COST_ALERT_EMAIL.split(",").map(e => e.trim()).filter(Boolean)
+          : [];
+        if (emailRecipients.length > 0) {
+          try {
+            const { sendResendEmail } = await import("../../utils/resendMail");
+            await sendResendEmail({
+              to: emailRecipients,
+              subject: `⚠️ WalaPlus AI Cost Alert — $${summary.totalCostUsd.toFixed(4)} in 24h`,
+              html: `<h2>AI Daily Cost Threshold Exceeded</h2>
+<p>Trailing-24h spend has reached <strong>$${summary.totalCostUsd.toFixed(4)}</strong>,
+exceeding the configured threshold of <strong>$${thresholdUsd}</strong>.</p>
+<ul>
+  <li>Total calls: ${summary.callCount}</li>
+  <li>Error count: ${summary.errorCount}</li>
+  <li>Avg latency: ${Math.round(summary.avgLatencyMs)} ms</li>
+</ul>
+<p><a href="/ai-ops">View AI Operations panel</a></p>`,
+            });
+          } catch (emailErr) {
+            console.warn("[AI-Cost] Email alert failed:", emailErr);
+          }
+        }
+      }
+
+      return { summary, pruned, thresholdExceeded: summary.totalCostUsd >= thresholdUsd };
+    });
+  },
+);
+inngestFunctions.push(aiCostSummaryFunction);
+
 const aiScannerFunction = inngest.createFunction(
   { id: "ai-background-scanner" },
   { cron: process.env.AI_SCANNER_CRON || "0 */6 * * *" },

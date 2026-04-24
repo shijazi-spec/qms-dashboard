@@ -15,6 +15,9 @@ import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
 import type { AutoApproveTier } from "../../utils/aiToolGovernance";
+import { withAiTelemetry, recordStreamTelemetry } from "../../utils/aiTelemetry";
+
+interface AgentTextResult { text: string }
 
 const CONSULTANT_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
 
@@ -83,27 +86,36 @@ export const consultantRoutes = [
             // Wrap agent invocation in AsyncLocalStorage so any AI write-tool
             // called during this turn can see WHO prompted it. Without this,
             // the HITL gate cannot attribute pending actions to a user.
-            const response = await withAgentUserContext(
-              {
-                user: {
-                  userId: user.userId,
-                  email: user.email,
-                  role: user.role,
-                  autoApproveTier: resolveAutoApproveTier(user.role),
-                },
-                threadId: resolvedThreadId,
-              },
-              () => agent.generateLegacy(message, {
-                threadId: resolvedThreadId,
-                resourceId: "consultant-session",
-                abortSignal: controller.signal,
-              })
+            const { result: response, callId } = await withAiTelemetry<AgentTextResult>(
+              { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
+                promptText: message,
+                userId: user.userId, sessionId: resolvedThreadId },
+              async () => {
+                const res = await withAgentUserContext(
+                  {
+                    user: {
+                      userId: user.userId,
+                      email: user.email,
+                      role: user.role,
+                      autoApproveTier: resolveAutoApproveTier(user.role),
+                    },
+                    threadId: resolvedThreadId,
+                  },
+                  () => agent.generateLegacy(message, {
+                    threadId: resolvedThreadId,
+                    resourceId: "consultant-session",
+                    abortSignal: controller.signal,
+                  })
+                );
+                return res as AgentTextResult;
+              }
             );
 
             return c.json({
               success: true,
               threadId: resolvedThreadId,
-              response: (response as any).text,
+              response: response.text,
+              callId: callId ?? undefined,
             });
           } finally {
             clearTimeout(timer);
@@ -147,22 +159,41 @@ export const consultantRoutes = [
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), streamTimeout);
 
-          const stream = await withAgentUserContext(
-            {
-              user: {
-                userId: user.userId,
-                email: user.email,
-                role: user.role,
-                autoApproveTier: resolveAutoApproveTier(user.role),
+          const streamStartedAt = Date.now();
+          let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
+          try {
+            stream = await withAgentUserContext(
+              {
+                user: {
+                  userId: user.userId,
+                  email: user.email,
+                  role: user.role,
+                  autoApproveTier: resolveAutoApproveTier(user.role),
+                },
+                threadId: resolvedThreadId,
               },
-              threadId: resolvedThreadId,
-            },
-            () => agent.streamLegacy(message, {
-              threadId: resolvedThreadId,
-              resourceId: "consultant-session",
-              abortSignal: controller.signal,
-            })
-          );
+              () => agent.streamLegacy(message, {
+                threadId: resolvedThreadId,
+                resourceId: "consultant-session",
+                abortSignal: controller.signal,
+              })
+            );
+          } catch (streamInitErr) {
+            clearTimeout(timer);
+            const e = streamInitErr instanceof Error ? streamInitErr : new Error(String(streamInitErr));
+            recordStreamTelemetry({
+              agentName: 'WalaPlus QMS Consultant',
+              model: 'gpt-4o',
+              startedAt: streamStartedAt,
+              stream: null,
+              success: false,
+              errorClass: e.constructor.name,
+              errorMessage: e.message,
+              userId: user.userId,
+              sessionId: resolvedThreadId,
+            }).catch(() => {});
+            throw streamInitErr;
+          }
 
           c.header("Content-Type", "text/event-stream");
           c.header("Cache-Control", "no-cache");
@@ -171,6 +202,8 @@ export const consultantRoutes = [
           const encoder = new TextEncoder();
           const readable = new ReadableStream({
             async start(streamController) {
+              let streamSuccess = true;
+              let streamError: Error | undefined;
               try {
                 for await (const chunk of stream.textStream) {
                   streamController.enqueue(
@@ -180,6 +213,8 @@ export const consultantRoutes = [
                 streamController.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId })}\n\n`));
                 streamController.close();
               } catch (err) {
+                streamSuccess = false;
+                streamError = err instanceof Error ? err : new Error(String(err));
                 const errMsg = err instanceof Error && err.name === 'AbortError'
                   ? 'Request timed out. Please try a simpler query.'
                   : 'Stream error';
@@ -189,6 +224,18 @@ export const consultantRoutes = [
                 streamController.close();
               } finally {
                 clearTimeout(timer);
+                recordStreamTelemetry({
+                  agentName: 'WalaPlus QMS Consultant',
+                  model: 'gpt-4o',
+                  startedAt: streamStartedAt,
+                  stream,
+                  success: streamSuccess,
+                  errorClass: streamError ? streamError.constructor.name : undefined,
+                  errorMessage: streamError?.message,
+                  promptText: message,
+                  userId: user.userId,
+                  sessionId: resolvedThreadId,
+                }).catch(() => {});
               }
             },
           });
@@ -358,20 +405,26 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
           const scanController = new AbortController();
           const scanTimer = setTimeout(() => scanController.abort(), scanTimeout);
 
-          let response;
+          let scanResult: AgentTextResult | undefined;
           try {
-            response = await agent.generateLegacy(scanPrompt, {
-              threadId: `scan-${Date.now()}`,
-              resourceId: "system-scanner",
-              abortSignal: scanController.signal,
-            });
+            const { result } = await withAiTelemetry<AgentTextResult>(
+              { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
+                promptText: scanPrompt.slice(0, 300),
+                userId: user.userId, metadata: { type: 'platform_scan' } },
+              async () => (await agent.generateLegacy(scanPrompt, {
+                threadId: `scan-${Date.now()}`,
+                resourceId: "system-scanner",
+                abortSignal: scanController.signal,
+              })) as AgentTextResult
+            );
+            scanResult = result;
           } finally {
             clearTimeout(scanTimer);
           }
 
           return c.json({
             success: true,
-            summary: response.text,
+            summary: scanResult?.text ?? '',
           });
         } catch (error) {
           console.error("[Consultant] Scan error:", error);

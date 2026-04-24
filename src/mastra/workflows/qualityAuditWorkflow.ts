@@ -3,6 +3,7 @@ import { z } from "zod";
 import { qualitySpecialistAgent } from "../agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "../agents/sdrQualityAgent";
 import { salesQualityAgent } from "../agents/salesQualityAgent";
+import { withAiTelemetry } from "../../utils/aiTelemetry";
 import { fetchCalendarEvents } from "../../utils/googleCalendar";
 import { sendEmail } from "../../utils/replitmail";
 import { sendResendEmail, QUALITY_REPORT_RECIPIENTS } from "../../utils/resendMail";
@@ -554,17 +555,27 @@ Execute the audit now and report the findings.
       // is scoped to Deals & Leads only per business requirement (2026-04-19).
 
       const [sdrResponse, salesResponse] = await Promise.all([
-        sdrQualityAgent.generateLegacy(
-          [{ role: "user", content: sdrAuditPrompt }],
-          { maxSteps: 5 }
-        ).catch(err => {
+        withAiTelemetry(
+          { agentName: 'WalaPlus SDR Quality Specialist', model: 'gpt-4o',
+            promptText: sdrAuditPrompt.slice(0, 300),
+            metadata: { workflow: 'qualityAuditWorkflow', step: 'sdr-audit' } },
+          () => sdrQualityAgent.generateLegacy(
+            [{ role: "user", content: sdrAuditPrompt }],
+            { maxSteps: 5 }
+          )
+        ).then(({ result }) => result).catch(err => {
           logger?.warn("⚠️ [Step 2] SDR audit failed", { error: err.message });
           return null;
         }),
-        salesQualityAgent.generateLegacy(
-          [{ role: "user", content: salesAuditPrompt }],
-          { maxSteps: 5 }
-        ).catch(err => {
+        withAiTelemetry(
+          { agentName: 'WalaPlus Sales Quality Specialist', model: 'gpt-4o',
+            promptText: salesAuditPrompt.slice(0, 300),
+            metadata: { workflow: 'qualityAuditWorkflow', step: 'sales-audit' } },
+          () => salesQualityAgent.generateLegacy(
+            [{ role: "user", content: salesAuditPrompt }],
+            { maxSteps: 5 }
+          )
+        ).then(({ result }) => result).catch(err => {
           logger?.warn("⚠️ [Step 2] Sales audit failed", { error: err.message });
           return null;
         })
@@ -891,9 +902,14 @@ RECOMMENDATIONS:
 5. [Fifth recommendation]
 `;
 
-      const response = await qualitySpecialistAgent.generateLegacy([
-        { role: "user", content: prompt }
-      ]);
+      const { result: response } = await withAiTelemetry<{ text: string }>(
+        { agentName: 'WalaPlus Quality Specialist', model: 'gpt-4o',
+          promptText: prompt.slice(0, 300),
+          metadata: { workflow: 'qualityAuditWorkflow', step: 'generate-insights' } },
+        async () => (await qualitySpecialistAgent.generateLegacy([
+          { role: "user", content: prompt }
+        ])) as { text: string }
+      );
 
       const responseText = response.text || "";
 

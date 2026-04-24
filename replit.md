@@ -27,6 +27,9 @@ I prefer clear and concise communication. For development, I favor iterative pro
 
 All 66 platform tests green.
 
+### April 24, 2026 — AI Observability (token, cost, latency, error telemetry)
+Added `ai_call_metrics` PostgreSQL table (append-only, auto-bootstrapped, 90-day pruning) that records every LLM call: agent name, tool name, model, prompt/completion token counts, latency ms, estimated USD cost, success/error flag, error class, and hashed user/session IDs. A per-model price table lives in `src/utils/aiTelemetry.ts → MODEL_PRICE_TABLE` (update when OpenAI changes pricing). `withAiTelemetry()` wraps all four agent's `generateLegacy` calls (QMS Consultant chat + scan, SDR Quality, Sales Quality, Quality Specialist in the audit workflow); streaming calls use `recordStreamTelemetry()` which resolves the AI SDK's `stream.usage` promise after the stream closes. An "AI Operations" panel at `/ai-ops` (Admin & Tools nav group) shows: 24h KPI summary cards, weekly cost + error trend chart, p50/p95/avg latency per agent, top tools by cost, and a recent slow/failed-call table. A daily Inngest cron `ai-cost-summary` (06:00 UTC) posts a platform notification and optional Slack webhook alert when trailing-24h cost exceeds `AI_DAILY_COST_ALERT_USD` (default $10); same job prunes rows older than 90 days.
+
 ### April 21, 2026 — Side rail navigation
 Replaced the horizontal top-bar nav (`dashboard/js/navigation.js`) with a fixed left side rail (256px ↔ 64px collapsible, persisted in `localStorage['walaplus-nav-collapsed']`) plus a 48px top strip that retains the WalaPlus logo, refresh button, notification bell, and user menu. Single-file change picked up by all 36 dashboards via the existing `<div id="walaplus-nav">` mount point. Includes a menu search filter, mobile off-canvas rail with backdrop + Esc-to-close + focus management, and `aria-expanded`/`aria-controls` on toggles. Layout offsets injected via `#walaplus-nav-layout-style` style block; responsive visibility uses custom CSS classes (`.wp-rail-toggle-btn`, `.wp-mobile-menu-btn`, `.wp-desktop-only`, `.wp-tagline`) because the precompiled `dashboard/tailwind.css` does not ship `sm:`/`md:` variants. All preserved IDs/contracts: `#nav-alert-badge`, `#nav-notifications-list`, `#nav-user-info`, `#lastUpdated`, `navigationGroups`, `getColorClasses`, `getItemIcon`. e2e verified: auth → policies → toggle collapse/expand → search "audit" filter → click Health Pulse → navigate with active highlight.
 
@@ -48,6 +51,7 @@ The platform is built on the Mastra AI agent framework and Hono HTTP server.
     -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
     -   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
     -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
+    -   **AI Observability**: `ai_call_metrics` table captures every LLM call's token usage, cost, latency, and errors. The "AI Operations" panel (`/ai-ops`) visualises cost trends, latency percentiles, and recent failures. A daily Inngest cron alerts when 24h spend exceeds a configurable threshold.
 
 ## External Dependencies
 -   **PostgreSQL**: Primary data store.
