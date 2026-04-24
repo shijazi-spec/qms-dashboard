@@ -366,7 +366,12 @@
 
     var PROGRESS_CONTAINER_ID = 'streaming-download-progress-container';
     var TOAST_CONTAINER_ID = 'streaming-download-toast-container';
+    var TRAY_CONTAINER_ID = 'streaming-download-history-tray';
+    var HISTORY_STORAGE_KEY = 'walaplus.recentDownloads.v1';
+    var TRAY_OPEN_STORAGE_KEY = 'walaplus.recentDownloads.trayOpen';
+    var HISTORY_LIMIT = 5;
     var cardCounter = 0;
+    var trayHydrated = false;
 
     function ensureProgressContainer() {
         if (typeof document === 'undefined' || !document.body) return null;
@@ -566,6 +571,349 @@
 
         container.appendChild(toast);
         setTimeout(dismiss, type === 'error' ? 6000 : 4000);
+    }
+
+    // --- Recent downloads history & tray ---------------------------------
+    //
+    // Tracks the last N download attempts in sessionStorage so the tray
+    // persists across page navigations within the dashboard for the lifetime
+    // of the session. Each entry records the URL, filename, status, byte
+    // count, error message, and a sanitised fetch init so failed/cancelled
+    // entries can be re-issued via a Retry button.
+
+    function safeSessionStorage() {
+        try {
+            if (typeof window === 'undefined') return null;
+            return window.sessionStorage || null;
+        } catch (_) { return null; }
+    }
+
+    function loadHistory() {
+        var store = safeSessionStorage();
+        if (!store) return [];
+        try {
+            var raw = store.getItem(HISTORY_STORAGE_KEY);
+            if (!raw) return [];
+            var arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) return [];
+            return arr;
+        } catch (_) { return []; }
+    }
+
+    function saveHistory(arr) {
+        var store = safeSessionStorage();
+        if (!store) return;
+        try {
+            store.setItem(HISTORY_STORAGE_KEY, JSON.stringify(arr.slice(0, HISTORY_LIMIT)));
+        } catch (_) { /* quota/etc — ignore */ }
+    }
+
+    function loadTrayOpen() {
+        var store = safeSessionStorage();
+        if (!store) return false;
+        try { return store.getItem(TRAY_OPEN_STORAGE_KEY) === '1'; }
+        catch (_) { return false; }
+    }
+
+    function saveTrayOpen(open) {
+        var store = safeSessionStorage();
+        if (!store) return;
+        try { store.setItem(TRAY_OPEN_STORAGE_KEY, open ? '1' : '0'); }
+        catch (_) { /* ignore */ }
+    }
+
+    function makeHistoryId() {
+        return 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    }
+
+    // Keep only JSON-serialisable, retry-safe parts of the original fetchInit.
+    // Strips AbortSignals, Headers/FormData/Blob bodies, etc.
+    function sanitizeFetchInit(init) {
+        if (!init || typeof init !== 'object') return null;
+        var out = {};
+        if (typeof init.method === 'string') out.method = init.method;
+        if (typeof init.credentials === 'string') out.credentials = init.credentials;
+        if (typeof init.cache === 'string') out.cache = init.cache;
+        if (typeof init.mode === 'string') out.mode = init.mode;
+        if (typeof init.redirect === 'string') out.redirect = init.redirect;
+        if (typeof init.referrerPolicy === 'string') out.referrerPolicy = init.referrerPolicy;
+        if (init.headers && typeof init.headers === 'object' &&
+            !(typeof Headers !== 'undefined' && init.headers instanceof Headers)) {
+            try {
+                var hdrs = {};
+                Object.keys(init.headers).forEach(function (k) {
+                    var v = init.headers[k];
+                    if (typeof v === 'string') hdrs[k] = v;
+                });
+                if (Object.keys(hdrs).length) out.headers = hdrs;
+            } catch (_) { /* ignore */ }
+        }
+        if (typeof init.body === 'string') out.body = init.body;
+        return Object.keys(out).length ? out : null;
+    }
+
+    // On script load, mark any "in-progress" entries as cancelled — they were
+    // interrupted by a navigation/reload and can never resolve. This also
+    // keeps the tray honest when the user lands on a new page.
+    function reconcileHistoryOnLoad() {
+        var arr = loadHistory();
+        var changed = false;
+        var nowIso = new Date().toISOString();
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i] && arr[i].status === 'in-progress') {
+                arr[i].status = 'cancelled';
+                arr[i].error = arr[i].error || 'Interrupted by navigation';
+                arr[i].finishedAt = nowIso;
+                changed = true;
+            }
+        }
+        if (changed) saveHistory(arr);
+    }
+
+    function recordHistoryEntry(entry) {
+        var arr = loadHistory();
+        arr.unshift(entry);
+        if (arr.length > HISTORY_LIMIT) arr = arr.slice(0, HISTORY_LIMIT);
+        saveHistory(arr);
+        renderHistoryTray();
+        return entry;
+    }
+
+    function updateHistoryEntry(id, patch) {
+        if (!id) return;
+        var arr = loadHistory();
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i] && arr[i].id === id) {
+                arr[i] = Object.assign({}, arr[i], patch);
+                saveHistory(arr);
+                renderHistoryTray();
+                return;
+            }
+        }
+    }
+
+    function clearHistory() {
+        saveHistory([]);
+        renderHistoryTray();
+    }
+
+    function timeAgoShort(iso) {
+        if (!iso) return '';
+        var then = Date.parse(iso);
+        if (!Number.isFinite(then)) return '';
+        var secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+        if (secs < 60) return 'just now';
+        var mins = Math.round(secs / 60);
+        if (mins < 60) return mins + 'm ago';
+        var hrs = Math.round(mins / 60);
+        if (hrs < 24) return hrs + 'h ago';
+        var days = Math.round(hrs / 24);
+        return days + 'd ago';
+    }
+
+    function statusMeta(status) {
+        switch (status) {
+            case 'in-progress':
+                return { label: 'In progress', dot: 'bg-blue-500', text: 'text-blue-700' };
+            case 'done':
+                return { label: 'Done', dot: 'bg-green-500', text: 'text-green-700' };
+            case 'failed':
+                return { label: 'Failed', dot: 'bg-red-500', text: 'text-red-700' };
+            case 'cancelled':
+                return { label: 'Cancelled', dot: 'bg-gray-400', text: 'text-gray-600' };
+            default:
+                return { label: status || 'Unknown', dot: 'bg-gray-400', text: 'text-gray-600' };
+        }
+    }
+
+    function ensureTrayContainer() {
+        if (typeof document === 'undefined' || !document.body) return null;
+        var c = document.getElementById(TRAY_CONTAINER_ID);
+        if (c) return c;
+        c = document.createElement('div');
+        c.id = TRAY_CONTAINER_ID;
+        c.className = 'fixed bottom-4 left-4 z-50 w-80 max-w-[calc(100vw-2rem)]';
+        c.setAttribute('aria-label', 'Recent downloads');
+        c.setAttribute('data-testid', 'tray-recent-downloads');
+        document.body.appendChild(c);
+        return c;
+    }
+
+    function renderHistoryTray() {
+        if (typeof document === 'undefined' || !document.body) return;
+        var entries = loadHistory();
+        var container = document.getElementById(TRAY_CONTAINER_ID);
+
+        // No history yet → don't clutter the page.
+        if (!entries.length) {
+            if (container && container.parentNode) container.parentNode.removeChild(container);
+            return;
+        }
+        container = ensureTrayContainer();
+        if (!container) return;
+
+        var open = loadTrayOpen();
+
+        var inProgress = 0;
+        var failed = 0;
+        for (var i = 0; i < entries.length; i++) {
+            if (entries[i].status === 'in-progress') inProgress++;
+            else if (entries[i].status === 'failed' || entries[i].status === 'cancelled') failed++;
+        }
+
+        var headerLabel = 'Recent downloads (' + entries.length + ')';
+        var headerSub = '';
+        if (inProgress > 0) headerSub = inProgress + ' in progress';
+        else if (failed > 0) headerSub = failed + ' need retry';
+
+        // Build header.
+        container.innerHTML = '';
+        var card = document.createElement('div');
+        card.className = 'bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden text-sm text-gray-800';
+        container.appendChild(card);
+
+        var headerBtn = document.createElement('button');
+        headerBtn.type = 'button';
+        headerBtn.className = 'w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset';
+        headerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        headerBtn.setAttribute('aria-controls', TRAY_CONTAINER_ID + '-body');
+        headerBtn.setAttribute('data-testid', 'button-recent-downloads-toggle');
+
+        var hLeft = document.createElement('span');
+        hLeft.className = 'flex items-center gap-2 min-w-0';
+        var iconSvg = '<svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>';
+        hLeft.innerHTML = iconSvg;
+        var hLabel = document.createElement('span');
+        hLabel.className = 'font-medium truncate';
+        hLabel.textContent = headerLabel;
+        hLeft.appendChild(hLabel);
+        headerBtn.appendChild(hLeft);
+
+        var hRight = document.createElement('span');
+        hRight.className = 'flex items-center gap-2 flex-shrink-0';
+        if (headerSub) {
+            var sub = document.createElement('span');
+            sub.className = 'text-xs ' + (inProgress > 0 ? 'text-blue-600' : 'text-amber-600');
+            sub.textContent = headerSub;
+            sub.setAttribute('data-testid', 'text-recent-downloads-summary');
+            hRight.appendChild(sub);
+        }
+        var chev = document.createElement('span');
+        chev.className = 'text-gray-400';
+        chev.innerHTML = open
+            ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 15l-7-7-7 7"/></svg>'
+            : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 9l7 7 7-7"/></svg>';
+        hRight.appendChild(chev);
+        headerBtn.appendChild(hRight);
+
+        headerBtn.addEventListener('click', function () {
+            saveTrayOpen(!loadTrayOpen());
+            renderHistoryTray();
+        });
+        card.appendChild(headerBtn);
+
+        if (!open) return;
+
+        var body = document.createElement('div');
+        body.id = TRAY_CONTAINER_ID + '-body';
+        body.className = 'border-t border-gray-100 max-h-80 overflow-y-auto';
+        body.setAttribute('role', 'list');
+        card.appendChild(body);
+
+        entries.forEach(function (entry) {
+            var row = document.createElement('div');
+            row.className = 'flex items-start gap-2 px-3 py-2 border-b border-gray-50 last:border-b-0';
+            row.setAttribute('role', 'listitem');
+            row.setAttribute('data-testid', 'row-recent-download-' + entry.id);
+
+            var meta = statusMeta(entry.status);
+            var dot = document.createElement('span');
+            dot.className = 'mt-1.5 inline-block w-2 h-2 rounded-full flex-shrink-0 ' + meta.dot;
+            dot.setAttribute('aria-hidden', 'true');
+            row.appendChild(dot);
+
+            var info = document.createElement('div');
+            info.className = 'flex-1 min-w-0';
+
+            var name = document.createElement('div');
+            name.className = 'text-sm font-medium truncate';
+            name.textContent = entry.filename || 'Download';
+            name.title = entry.filename || 'Download';
+            name.setAttribute('data-testid', 'text-recent-download-filename-' + entry.id);
+            info.appendChild(name);
+
+            var detail = document.createElement('div');
+            detail.className = 'text-xs ' + meta.text;
+            var detailParts = [meta.label, timeAgoShort(entry.startedAt || entry.finishedAt)];
+            if (entry.status === 'done' && typeof entry.bytes === 'number' && entry.bytes > 0) {
+                detailParts.push(formatBytes(entry.bytes));
+            }
+            if ((entry.status === 'failed' || entry.status === 'cancelled') && entry.error) {
+                detailParts.push(entry.error);
+            }
+            detail.textContent = detailParts.filter(Boolean).join(' · ');
+            detail.setAttribute('data-testid', 'text-recent-download-status-' + entry.id);
+            info.appendChild(detail);
+
+            row.appendChild(info);
+
+            if ((entry.status === 'failed' || entry.status === 'cancelled') && entry.url) {
+                var retry = document.createElement('button');
+                retry.type = 'button';
+                retry.className = 'text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded px-2 py-1 flex-shrink-0';
+                retry.textContent = 'Retry';
+                retry.setAttribute('aria-label', 'Retry download of ' + (entry.filename || 'file'));
+                retry.setAttribute('data-testid', 'button-retry-download-' + entry.id);
+                retry.addEventListener('click', function () {
+                    retryHistoryEntry(entry.id);
+                });
+                row.appendChild(retry);
+            }
+
+            body.appendChild(row);
+        });
+
+        var footer = document.createElement('div');
+        footer.className = 'flex items-center justify-end px-3 py-2 bg-gray-50 border-t border-gray-100';
+        var clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'text-xs text-gray-600 hover:text-gray-900 hover:underline focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1';
+        clearBtn.textContent = 'Clear list';
+        clearBtn.setAttribute('data-testid', 'button-clear-recent-downloads');
+        clearBtn.addEventListener('click', function () { clearHistory(); });
+        footer.appendChild(clearBtn);
+        card.appendChild(footer);
+    }
+
+    function retryHistoryEntry(id) {
+        var entries = loadHistory();
+        var match = null;
+        for (var i = 0; i < entries.length; i++) {
+            if (entries[i] && entries[i].id === id) { match = entries[i]; break; }
+        }
+        if (!match || !match.url) return;
+        var opts = { filename: match.filename };
+        if (match.fetchInit) opts.fetchInit = match.fetchInit;
+        // Run async; the new attempt records its own history entry.
+        try {
+            streamingDownload(match.url, opts).catch(function () { /* surfaced via toast/tray */ });
+        } catch (_) { /* ignore */ }
+    }
+
+    function hydrateTrayIfNeeded() {
+        if (trayHydrated) return;
+        trayHydrated = true;
+        try { reconcileHistoryOnLoad(); } catch (_) { /* ignore */ }
+        try { renderHistoryTray(); } catch (_) { /* ignore */ }
+    }
+
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', hydrateTrayIfNeeded);
+        } else {
+            setTimeout(hydrateTrayIfNeeded, 0);
+        }
     }
 
     // --- Streaming paths --------------------------------------------------
@@ -954,6 +1302,7 @@
         var showProgressUI = options.showProgressUI !== false;
         var showToastUI = options.showToast !== false;
         var cancellable = options.cancellable !== false;
+        var trackHistory = options.trackHistory !== false;
 
         var initialFilename = options.filename || 'Preparing download…';
         var card = null;
@@ -1000,6 +1349,27 @@
         }
 
         var cancelable = null;
+
+        // Record an "in-progress" history entry up front so the tray reflects
+        // the attempt the moment the user kicks it off. We update status,
+        // filename, and bytes as the request progresses.
+        var historyId = null;
+        if (trackHistory) {
+            try {
+                hydrateTrayIfNeeded();
+                historyId = makeHistoryId();
+                recordHistoryEntry({
+                    id: historyId,
+                    url: url,
+                    filename: options.filename || buildFallbackName(url, ''),
+                    status: 'in-progress',
+                    startedAt: new Date().toISOString(),
+                    bytes: 0,
+                    fetchInit: sanitizeFetchInit(options.fetchInit)
+                });
+            } catch (_) { /* tray is best-effort */ }
+        }
+
         if (button) {
             originalContent = button.innerHTML;
             cancelable = setupCancelableButton(button, cancelDownload);
@@ -1070,6 +1440,10 @@
                 card.update(0, totalLength);
             }
 
+            if (historyId) {
+                updateHistoryEntry(historyId, { filename: filename });
+            }
+
             var result = null;
 
             var wantStream = shouldStreamToDisk(options, totalLength);
@@ -1111,6 +1485,14 @@
                 showToast('Downloaded ' + filename + ' (' + formatBytes(result.bytes) + ')', 'success');
             }
 
+            if (historyId) {
+                updateHistoryEntry(historyId, {
+                    status: 'done',
+                    bytes: result.bytes,
+                    finishedAt: new Date().toISOString()
+                });
+            }
+
             return {
                 filename: filename,
                 bytes: result.bytes,
@@ -1140,6 +1522,12 @@
                 if (showToastUI) {
                     showToast('Download cancelled' + (displayName ? ' (' + displayName + ')' : ''), 'info');
                 }
+                if (historyId) {
+                    updateHistoryEntry(historyId, {
+                        status: 'cancelled',
+                        finishedAt: new Date().toISOString()
+                    });
+                }
                 if (err && err.name === 'AbortError') throw err;
                 var cancelErr = new Error((err && err.message) || 'Download cancelled');
                 cancelErr.name = 'AbortError';
@@ -1156,6 +1544,13 @@
             }
             if (showToastUI) {
                 showToast('Download failed: ' + ((err && err.message) ? err.message : 'Unknown error'), 'error');
+            }
+            if (historyId) {
+                updateHistoryEntry(historyId, {
+                    status: 'failed',
+                    error: (err && err.message) ? String(err.message).slice(0, 200) : 'Unknown error',
+                    finishedAt: new Date().toISOString()
+                });
             }
             throw err;
         } finally {
@@ -1207,6 +1602,15 @@
     streamingDownload.supportsServiceWorkerStreaming = supportsServiceWorkerStreaming;
     streamingDownload.attachStreamingFallbackNotice = attachStreamingFallbackNotice;
     streamingDownload.FALLBACK_NOTICE_DISMISS_KEY = FALLBACK_NOTICE_DISMISS_KEY;
+    streamingDownload.history = {
+        list: loadHistory,
+        clear: clearHistory,
+        retry: retryHistoryEntry,
+        renderTray: renderHistoryTray,
+        STORAGE_KEY: HISTORY_STORAGE_KEY,
+        TRAY_OPEN_KEY: TRAY_OPEN_STORAGE_KEY,
+        LIMIT: HISTORY_LIMIT
+    };
 
     global.streamingDownload = streamingDownload;
     global.streamingDownloadFromEvent = streamingDownloadFromEvent;

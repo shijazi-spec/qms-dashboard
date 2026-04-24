@@ -605,6 +605,178 @@ describe('streamingDownload (browser helper)', () => {
     expect(env.win.alert).not.toHaveBeenCalled();
   });
 
+  it('records each successful download in the recent-downloads history (sessionStorage)', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+    const payload = new Uint8Array([10, 11, 12]);
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([payload]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="report.csv"',
+        },
+      })
+    );
+
+    await env.win.streamingDownload('/api/exports/report.csv');
+
+    const list = env.win.streamingDownload.history.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      filename: 'report.csv',
+      url: '/api/exports/report.csv',
+      status: 'done',
+      bytes: payload.byteLength,
+    });
+  });
+
+  it('records failed downloads with an error message and exposes a Retry button', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response('boom', {
+        status: 500,
+        headers: { 'content-type': 'text/plain' },
+      })
+    );
+
+    await expect(
+      env.win.streamingDownload('/api/exports/broken.csv', { filename: 'broken.csv' })
+    ).rejects.toThrow();
+
+    const list = env.win.streamingDownload.history.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      filename: 'broken.csv',
+      status: 'failed',
+    });
+    expect(list[0].error).toBeTruthy();
+
+    // The tray must be auto-rendered with a Retry button on the failed row.
+    const tray = env.win.document.getElementById('streaming-download-history-tray');
+    expect(tray).not.toBeNull();
+    // Tray opens by default when there's at least one entry? It starts collapsed.
+    // Open it via the toggle, then the Retry button becomes visible.
+    const toggle = tray.querySelector('[data-testid="button-recent-downloads-toggle"]');
+    expect(toggle).not.toBeNull();
+    toggle.click();
+    const retryBtn = tray.querySelector('[data-testid^="button-retry-download-"]');
+    expect(retryBtn).not.toBeNull();
+  });
+
+  it('records cancelled downloads when the user cancels via the floating progress card', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    let resolveResp: ((r: any) => void) | null = null;
+    env.win.fetch = vi.fn(async (_url: string, init: any) => {
+      // Reject as soon as the abort signal fires so the cancel path runs.
+      return new Promise((resolve, reject) => {
+        resolveResp = resolve;
+        if (init && init.signal) {
+          init.signal.addEventListener('abort', () => {
+            const err: any = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }
+      });
+    });
+
+    const promise = env.win
+      .streamingDownload('/api/exports/slow.csv', { filename: 'slow.csv', skipEstimate: true })
+      .catch((e: any) => e);
+
+    // Wait a tick so the in-progress entry is recorded and the card mounted.
+    await new Promise((r) => setTimeout(r, 10));
+    const cancelBtn = env.win.document.querySelector(
+      '[data-testid="button-cancel-download"]'
+    ) as HTMLButtonElement | null;
+    expect(cancelBtn).not.toBeNull();
+    cancelBtn!.click();
+
+    const err = await promise;
+    expect(err.name).toBe('AbortError');
+
+    const list = env.win.streamingDownload.history.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      filename: 'slow.csv',
+      status: 'cancelled',
+    });
+
+    // Suppress unused-var lint by referencing resolveResp.
+    void resolveResp;
+  });
+
+  it('caps the history at 5 entries (most recent first)', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      })
+    );
+
+    for (let i = 0; i < 7; i++) {
+      await env.win.streamingDownload('/api/exports/file-' + i + '.csv', {
+        filename: 'file-' + i + '.csv',
+      });
+    }
+
+    const list = env.win.streamingDownload.history.list();
+    expect(list).toHaveLength(5);
+    // Most recent (file-6) must be at the top.
+    expect(list[0].filename).toBe('file-6.csv');
+    expect(list[4].filename).toBe('file-2.csv');
+  });
+
+  it('retries a failed download via streamingDownload.history.retry()', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    // Sequence of mocked responses. Pre-flight estimates always 404 so the
+    // helper falls through quickly without touching our real export slots.
+    let realCallCount = 0;
+    env.win.fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.indexOf('/estimate') !== -1) {
+        return new (globalThis as any).Response('not found', {
+          status: 404,
+          headers: { 'content-type': 'text/plain' },
+        });
+      }
+      realCallCount++;
+      if (realCallCount === 1) {
+        return new (globalThis as any).Response('boom', {
+          status: 500,
+          headers: { 'content-type': 'text/plain' },
+        });
+      }
+      return new (globalThis as any).Response(streamFromChunks([new Uint8Array([1, 2, 3])]), {
+        status: 200,
+        headers: { 'content-type': 'text/csv' },
+      });
+    });
+
+    await expect(
+      env.win.streamingDownload('/api/exports/retry.csv', { filename: 'retry.csv' })
+    ).rejects.toThrow();
+
+    const before = env.win.streamingDownload.history.list();
+    expect(before[0].status).toBe('failed');
+
+    // Use the public retry helper to re-issue the original request.
+    env.win.streamingDownload.history.retry(before[0].id);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const after = env.win.streamingDownload.history.list();
+    // A new entry is recorded for the retry attempt and reaches "done".
+    const done = after.find((e: any) => e.status === 'done');
+    expect(done).toBeTruthy();
+    expect(done.filename).toBe('retry.csv');
+    expect(realCallCount).toBe(2);
+  });
+
   it('honours useServiceWorker=false to skip the SW path entirely', async () => {
     env = setupBrowserEnv({
       enableShowSaveFilePicker: false,
