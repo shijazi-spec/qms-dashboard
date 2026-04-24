@@ -32,6 +32,8 @@ import type { AIAlert } from "../src/utils/aiAlertsDatabase";
 import type {
   NotifyToolHealthBreachResult,
   ToolHealthBreachNotification,
+  ToolHealthRecoveryNotification,
+  NotifyToolHealthRecoveryResult,
 } from "../src/utils/toolHealthAlertNotifier";
 import { TestSuite } from "./_helpers/runner";
 
@@ -104,6 +106,10 @@ function makeDeps(opts: {
    */
   notifierResult?: NotifyToolHealthBreachResult;
   notifierThrows?: boolean;
+  /** Override the default recovery notifier result. Defaults to `{ slackSent: true, emailSent: false, skipped: false }`. */
+  recoveryNotifierResult?: NotifyToolHealthRecoveryResult;
+  /** When true, the recovery notifier stub throws instead of returning. */
+  recoveryNotifierThrows?: boolean;
 }): {
   deps: ToolHealthDeps;
   resolves: ResolveCall[];
@@ -121,6 +127,7 @@ function makeDeps(opts: {
    */
   existingDedupeKeys: Set<string>;
   notifies: NotifyCall[];
+  recoveryNotifies: Array<{ notification: ToolHealthRecoveryNotification }>;
 } {
   const resolves: ResolveCall[] = [];
   const lookups: OpenLookupCall[] = [];
@@ -128,6 +135,7 @@ function makeDeps(opts: {
   const dedupeChecks: DedupeCheck[] = [];
   const aggregateCalls: AggregateCall[] = [];
   const notifies: NotifyCall[] = [];
+  const recoveryNotifies: Array<{ notification: ToolHealthRecoveryNotification }> = [];
   const openByKey = opts.openAlertsByKey ?? {};
   const pastCooldown = opts.pastCooldown !== false;
   // Mutable so dedupe checks against keys created earlier in the same run
@@ -139,6 +147,12 @@ function makeDeps(opts: {
       slackSent: true,
       emailSent: false,
       throttled: false,
+      skipped: false,
+    };
+  const defaultRecoveryNotifyResult: NotifyToolHealthRecoveryResult =
+    opts.recoveryNotifierResult ?? {
+      slackSent: true,
+      emailSent: false,
       skipped: false,
     };
 
@@ -188,6 +202,11 @@ function makeDeps(opts: {
       if (opts.notifierThrows) throw new Error("stub notifier failure");
       return defaultNotifyResult;
     },
+    notifyToolHealthRecovery: async (notification) => {
+      recoveryNotifies.push({ notification });
+      if (opts.recoveryNotifierThrows) throw new Error("stub recovery notifier failure");
+      return defaultRecoveryNotifyResult;
+    },
   };
 
   return {
@@ -199,6 +218,7 @@ function makeDeps(opts: {
     aggregateCalls,
     existingDedupeKeys,
     notifies,
+    recoveryNotifies,
   };
 }
 
@@ -1767,6 +1787,206 @@ await suite.test(
       errorRatePct: 25, errorRateHighPct: 40, errorRateCriticalPct: 50,
     }));
     suite.expectEqual(crit[0].severity, "critical", "critical band");
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Task #167: Recovery notification wiring
+// ──────────────────────────────────────────────────────────────────────────────
+
+await suite.test(
+  "(R1) auto-resolved alert triggers a recovery notification with the correct fields",
+  async () => {
+    const alertId = 777;
+    const agg = makeAggregate({
+      tool_name: "rag_search",
+      agent_name: "consultant_agent",
+      call_count: 50,
+      error_count: 2,
+      error_rate_pct: 4, // below 25% threshold → recovery path
+      p95_latency_ms: 1_000, // below 15_000ms threshold → recovery path
+    });
+    const { deps, recoveryNotifies } = makeDeps({
+      aggregates: [agg],
+      openAlertsByKey: {
+        "rag_search:error_rate": [
+          {
+            id: alertId,
+            alert_type: "tool_health",
+            severity: "medium",
+            title: "stub",
+            description: "stub",
+            status: "open",
+          } as any,
+        ],
+      },
+      pastCooldown: true,
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsAutoResolved, 1, "one alert auto-resolved");
+    suite.expectEqual(out.recoveries.length, 1, "one entry in recoveries");
+    suite.expectEqual(recoveryNotifies.length, 1, "recovery notifier called once");
+
+    const n = recoveryNotifies[0]?.notification!;
+    suite.expectEqual(n.tool_name, "rag_search", "tool_name forwarded");
+    suite.expectEqual(n.agent_name, "consultant_agent", "agent_name forwarded");
+    suite.expectEqual(n.reason, "error_rate", "reason forwarded");
+    suite.expectEqual(n.alert_id, alertId, "alert_id matches resolved row");
+    suite.expect(
+      n.detail.includes("auto-resolved"),
+      "detail carries the auto-resolve note",
+    );
+  },
+);
+
+await suite.test(
+  "(R2) recovery notifier returning { skipped: true } is a no-op — does not crash cron or count as error",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "qms_tool",
+      call_count: 50,
+      error_rate_pct: 5, // below threshold → recovery
+      p95_latency_ms: 500, // below threshold
+    });
+    const { deps, recoveryNotifies } = makeDeps({
+      aggregates: [agg],
+      openAlertsByKey: {
+        "qms_tool:error_rate": [
+          { id: 88, alert_type: "tool_health", severity: "medium", title: "s", description: "s", status: "open" } as any,
+        ],
+      },
+      recoveryNotifierResult: { slackSent: false, emailSent: false, skipped: true },
+      pastCooldown: true,
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsAutoResolved, 1, "alert was still resolved");
+    suite.expectEqual(recoveryNotifies.length, 1, "recovery notifier was called");
+    // Cron continued normally regardless of the skipped result.
+    suite.expectEqual(out.toolsEvaluated, 1, "cron completed");
+  },
+);
+
+await suite.test(
+  "(R3) recovery notifier throwing does not abort the cron or prevent other tools from being processed",
+  async () => {
+    const agg1 = makeAggregate({
+      tool_name: "tool_that_throws_on_recovery",
+      call_count: 50,
+      error_rate_pct: 2, // below threshold → recovery
+      p95_latency_ms: 500,
+    });
+    const agg2 = makeAggregate({
+      tool_name: "healthy_tool",
+      call_count: 50,
+      error_rate_pct: 0,
+      p95_latency_ms: 200,
+    });
+
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const { deps, recoveryNotifies } = makeDeps({
+        aggregates: [agg1, agg2],
+        openAlertsByKey: {
+          "tool_that_throws_on_recovery:error_rate": [
+            { id: 11, alert_type: "tool_health", severity: "medium", title: "s", description: "s", status: "open" } as any,
+          ],
+        },
+        recoveryNotifierThrows: true,
+        pastCooldown: true,
+      });
+
+      const out = await runToolHealthCheck(deps);
+
+      suite.expectEqual(out.alertsAutoResolved, 1, "alert still resolved despite notifier throw");
+      suite.expectEqual(out.toolsEvaluated, 2, "both tools evaluated — cron did not abort");
+      suite.expectEqual(recoveryNotifies.length, 1, "recovery notifier was attempted");
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "(R4) breach + recovery in the same cron pass produces a breach page and a recovery page",
+  // One tool is breaching; a different tool that had a previously open alert
+  // is now healthy → breach notifier fires for tool A, recovery notifier
+  // fires for tool B. Two distinct pages, no cross-contamination.
+  async () => {
+    const breachingAgg = makeAggregate({
+      tool_name: "tool_breaching",
+      call_count: 50,
+      error_count: 30,
+      error_rate_pct: 60, // above threshold → breach
+      p95_latency_ms: 500,
+    });
+    const recoveringAgg = makeAggregate({
+      tool_name: "tool_recovering",
+      call_count: 50,
+      error_count: 1,
+      error_rate_pct: 2, // below threshold → recovery
+      p95_latency_ms: 800,
+    });
+    const { deps, notifies, recoveryNotifies } = makeDeps({
+      aggregates: [breachingAgg, recoveringAgg],
+      openAlertsByKey: {
+        "tool_recovering:error_rate": [
+          { id: 222, alert_type: "tool_health", severity: "medium", title: "s", description: "s", status: "open" } as any,
+        ],
+      },
+      pastCooldown: true,
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsCreated, 1, "one breach alert created");
+    suite.expectEqual(out.alertsAutoResolved, 1, "one alert auto-resolved");
+    suite.expectEqual(notifies.length, 1, "one breach notification sent");
+    suite.expectEqual(recoveryNotifies.length, 1, "one recovery notification sent");
+
+    suite.expectEqual(
+      notifies[0]?.notification.tool_name,
+      "tool_breaching",
+      "breach page is for the breaching tool",
+    );
+    suite.expectEqual(
+      recoveryNotifies[0]?.notification.tool_name,
+      "tool_recovering",
+      "recovery page is for the recovering tool",
+    );
+    suite.expectEqual(
+      recoveryNotifies[0]?.notification.alert_id,
+      222,
+      "recovery page references the resolved alert id",
+    );
+  },
+);
+
+await suite.test(
+  "(R5) no open alert for a recovering tool → recovery notifier NOT called",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "clean_tool",
+      call_count: 50,
+      error_rate_pct: 1, // below threshold
+      p95_latency_ms: 500,
+    });
+    // No pre-existing open alerts → getOpenAlertsByKey returns [] → no resolve → no recovery page.
+    const { deps, recoveryNotifies, resolves } = makeDeps({
+      aggregates: [agg],
+      openAlertsByKey: {},
+      pastCooldown: true,
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    suite.expectEqual(out.alertsAutoResolved, 0, "nothing resolved");
+    suite.expectEqual(recoveryNotifies.length, 0, "recovery notifier not called when no open alert");
+    suite.expectEqual(resolves.length, 0, "no resolveAlert calls");
   },
 );
 

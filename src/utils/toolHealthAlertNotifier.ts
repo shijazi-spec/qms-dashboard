@@ -856,3 +856,224 @@ export async function notifyToolHealthOverrideExpired(
 
   return result;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tool-health recovery notification (Task #167)
+//
+// When the cron's auto-resolve sweep closes a `tool_health` alert because
+// the tool's metric dropped back below threshold, page on-call with a
+// follow-up message so they know the incident is over without having to
+// refresh the dashboard.
+//
+// Design notes:
+//   • Uses the same `TOOL_HEALTH_SLACK_CHANNEL` / `TOOL_HEALTH_ALERT_EMAIL`
+//     / `TOOL_HEALTH_APP_URL` env settings as the breach notifier — no new
+//     env vars required.
+//   • NOT throttled by the breach-side throttle map. Recovery is its own
+//     event; the cron already prevents flapping at the alert layer (an
+//     alert can only be resolved once, so there is at most one recovery
+//     notification per alert_id).
+//   • Best-effort: failures are logged but never propagate back to the cron.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface ToolHealthRecoveryNotification {
+  /** Tool whose metric recovered. */
+  tool_name: string;
+  /** Optional agent label, mirrored from the aggregate. */
+  agent_name?: string | null;
+  /** Which threshold recovered. */
+  reason: ToolHealthReason;
+  /** The `ai_alerts` row id that was just resolved. */
+  alert_id: number;
+  /** The auto-resolve note produced by `maybeResolveRecoveredAlert`. */
+  detail: string;
+}
+
+export interface NotifyToolHealthRecoveryResult {
+  slackSent: boolean;
+  emailSent: boolean;
+  /** True when neither Slack nor email is configured. */
+  skipped: boolean;
+}
+
+export interface ToolHealthRecoveryNotifierDeps {
+  /** Defaults to `sendSlackNotification`. */
+  sendSlack?: typeof sendSlackNotification;
+  /** Defaults to `sendResendEmail`. */
+  sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
+}
+
+function buildRecoverySlackBlocks(
+  n: ToolHealthRecoveryNotification,
+  link: string,
+  linkIsAbsolute: boolean,
+): any[] {
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `:white_check_mark: Tool health recovered: ${n.tool_name}`,
+        emoji: true,
+      },
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Tool:*\n\`${n.tool_name}\`` },
+        { type: "mrkdwn", text: `*Metric:*\n${reasonLabel(n.reason)}` },
+        { type: "mrkdwn", text: `*Agent:*\n${n.agent_name || "—"}` },
+        { type: "mrkdwn", text: `*Alert closed:*\n#${n.alert_id}` },
+      ],
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Details:*\n${n.detail}` },
+    },
+  ];
+
+  if (linkIsAbsolute) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Open AI Operations panel", emoji: true },
+          url: link,
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:link: AI Operations panel: \`${link}\`\n` +
+          `_Set \`TOOL_HEALTH_APP_URL\` to enable a clickable link._`,
+      },
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `:robot_face: _WalaPlus tool-health monitor | recovery | alert #${n.alert_id}_`,
+      },
+    ],
+  });
+  return blocks;
+}
+
+function buildRecoveryEmailHtml(
+  n: ToolHealthRecoveryNotification,
+  link: string,
+): string {
+  const title = `Tool "${escapeHtml(n.tool_name)}" ${reasonLabel(n.reason)} recovered`;
+  const linkHtml = `<a href="${link}">Open the AI Operations panel</a>`;
+  return [
+    `<h2 style="margin:0 0 12px 0;">${title}</h2>`,
+    `<p><strong>Tool:</strong> <code>${escapeHtml(n.tool_name)}</code><br>`,
+    `<strong>Metric:</strong> ${reasonLabel(n.reason)}<br>`,
+    n.agent_name ? `<strong>Agent:</strong> ${escapeHtml(n.agent_name)}<br>` : "",
+    `<strong>Alert closed:</strong> #${n.alert_id}</p>`,
+    `<p><strong>Details:</strong><br>${escapeHtml(n.detail)}</p>`,
+    `<p>${linkHtml}</p>`,
+  ].join("");
+}
+
+function buildRecoveryEmailText(
+  n: ToolHealthRecoveryNotification,
+  link: string,
+): string {
+  return [
+    `Tool health recovered: ${n.tool_name} — ${reasonLabel(n.reason)}`,
+    "",
+    `Tool: ${n.tool_name}`,
+    `Metric: ${reasonLabel(n.reason)}`,
+    n.agent_name ? `Agent: ${n.agent_name}` : "",
+    `Alert closed: #${n.alert_id}`,
+    "",
+    n.detail,
+    "",
+    `Open the AI Operations panel: ${link}`,
+  ]
+    .filter((s) => s !== "")
+    .join("\n");
+}
+
+/**
+ * Page on-call about a `tool_health` alert that just auto-resolved because
+ * the tool's metric dropped back below threshold.
+ *
+ * Safe to call unconditionally: when neither Slack nor email is configured
+ * the function returns `{ skipped: true }` without throwing.
+ *
+ * NOT throttled — each recovery corresponds to a unique `alert_id` that
+ * can only be resolved once, so there is naturally at most one recovery
+ * page per breach cycle.
+ */
+export async function notifyToolHealthRecovery(
+  notification: ToolHealthRecoveryNotification,
+  depsOverride: ToolHealthRecoveryNotifierDeps = {},
+): Promise<NotifyToolHealthRecoveryResult> {
+  const cfg = readConfig();
+  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+  const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+
+  const result: NotifyToolHealthRecoveryResult = {
+    slackSent: false,
+    emailSent: false,
+    skipped: false,
+  };
+
+  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+    result.skipped = true;
+    return result;
+  }
+
+  if (cfg.slackChannel) {
+    const fallback =
+      `:white_check_mark: Tool health recovered: ${notification.tool_name} — ` +
+      `${reasonLabel(notification.reason)} back below threshold (alert #${notification.alert_id})`;
+    try {
+      result.slackSent = await sendSlack(
+        cfg.slackChannel,
+        fallback,
+        buildRecoverySlackBlocks(notification, cfg.link, cfg.linkIsAbsolute),
+      );
+    } catch (err) {
+      console.error(
+        `[ToolHealthNotifier] Slack recovery send threw for alert #${notification.alert_id}:`,
+        err,
+      );
+      result.slackSent = false;
+    }
+  }
+
+  if (cfg.emailRecipients.length > 0) {
+    const subject =
+      `[Tool Health · RECOVERED] ${notification.tool_name} — ` +
+      `${reasonLabel(notification.reason)} cleared (alert #${notification.alert_id})`;
+    try {
+      const sendResult = await sendEmail({
+        to: cfg.emailRecipients,
+        subject,
+        html: buildRecoveryEmailHtml(notification, cfg.link),
+        text: buildRecoveryEmailText(notification, cfg.link),
+      });
+      result.emailSent = !!sendResult?.success;
+    } catch (err) {
+      console.error(
+        `[ToolHealthNotifier] Email recovery send threw for alert #${notification.alert_id}:`,
+        err,
+      );
+      result.emailSent = false;
+    }
+  }
+
+  return result;
+}

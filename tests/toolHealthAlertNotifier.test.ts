@@ -21,6 +21,7 @@ import {
   notifyToolHealthBreach,
   notifyToolHealthConfigChange,
   notifyToolHealthOverrideExpired,
+  notifyToolHealthRecovery,
   _diffToolHealthConfigOverridesForTests,
   _resetToolHealthNotifierThrottleForTests,
   type ToolHealthBreachNotification,
@@ -28,8 +29,9 @@ import {
   type ToolHealthConfigChangeNotification,
   type ToolHealthOverrideExpiredNotification,
   type ToolHealthOverrideNotifierDeps,
+  type ToolHealthRecoveryNotification,
+  type ToolHealthRecoveryNotifierDeps,
 } from "../src/utils/toolHealthAlertNotifier";
-import { TestSuite } from "./_helpers/runner";
 import { TestSuite } from "./_helpers/runner";
 
 interface SlackCall {
@@ -835,6 +837,217 @@ await suite.test(
     } finally {
       console.error = origErr;
     }
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Task #167 — tool-health recovery notification
+// ──────────────────────────────────────────────────────────────────────────────
+
+function makeRecoveryStubs(opts: {
+  slackResult?: boolean | Error;
+  emailResult?: { success: boolean; id?: string; error?: string } | Error;
+} = {}): {
+  deps: ToolHealthRecoveryNotifierDeps;
+  slackCalls: SlackCall[];
+  emailCalls: EmailCall[];
+} {
+  const slackCalls: SlackCall[] = [];
+  const emailCalls: EmailCall[] = [];
+  const deps: ToolHealthRecoveryNotifierDeps = {
+    sendSlack: async (channel, text, blocks) => {
+      slackCalls.push({ channel, text, blocks });
+      if (opts.slackResult instanceof Error) throw opts.slackResult;
+      return opts.slackResult ?? true;
+    },
+    sendEmail: async (mailOpts) => {
+      emailCalls.push({
+        to: mailOpts.to,
+        subject: mailOpts.subject,
+        html: mailOpts.html,
+        text: mailOpts.text,
+      });
+      if (opts.emailResult instanceof Error) throw opts.emailResult;
+      return opts.emailResult ?? { success: true, id: "stub-id" };
+    },
+  };
+  return { deps, slackCalls, emailCalls };
+}
+
+function sampleRecovery(
+  overrides: Partial<ToolHealthRecoveryNotification> = {},
+): ToolHealthRecoveryNotification {
+  return {
+    tool_name: "qms_create_nc",
+    agent_name: "qms_agent",
+    reason: "error_rate",
+    alert_id: 456,
+    detail: "auto-resolved: error rate back below threshold (10% < 25% over 60m, 50 calls)",
+    ...overrides,
+  };
+}
+
+await suite.test(
+  "recovery: no Slack channel, no email → returns { skipped: true } without sending",
+  async () => {
+    clearEnv();
+    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.skipped, true, "skipped");
+    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(result.emailSent, false, "no email");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(emailCalls.length, 0, "no email call");
+  },
+);
+
+await suite.test(
+  "recovery: Slack channel configured → posts recovery message to channel with tool name and alert id",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL-CHAN";
+    process.env.TOOL_HEALTH_APP_URL = "https://qms.example.com";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.skipped, false, "not skipped");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
+    suite.expect(
+      slackCalls[0]?.text.includes("qms_create_nc"),
+      "fallback text mentions tool",
+    );
+    suite.expect(
+      slackCalls[0]?.text.includes("456"),
+      "fallback text includes alert id",
+    );
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("qms_create_nc"),
+      "blocks mention tool name",
+    );
+    suite.expect(
+      blocks.includes("#456"),
+      "blocks reference alert id",
+    );
+    suite.expect(
+      blocks.includes("https://qms.example.com/dashboard/ai-ops.html"),
+      "blocks link to AI Ops panel",
+    );
+    suite.expect(
+      blocks.includes("white_check_mark") || blocks.toLowerCase().includes("recover"),
+      "blocks convey recovery status",
+    );
+  },
+);
+
+await suite.test(
+  "recovery: email recipient configured → sends recovery email with RECOVERED subject",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, emailCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.emailSent, true, "emailSent");
+    suite.expectEqual(result.slackSent, false, "no slack when not configured");
+    suite.expectEqual(emailCalls.length, 1, "one email call");
+    const call = emailCalls[0]!;
+    suite.expect(
+      call.subject.includes("RECOVERED"),
+      `subject includes RECOVERED (got: ${call.subject})`,
+    );
+    suite.expect(
+      call.subject.includes("qms_create_nc"),
+      "subject includes tool name",
+    );
+    suite.expect(
+      (call.html ?? "").includes("/dashboard/ai-ops.html"),
+      "email HTML links to AI Operations panel",
+    );
+    suite.expect(
+      (call.text ?? "").includes("/dashboard/ai-ops.html"),
+      "email plaintext links to AI Operations panel",
+    );
+    suite.expect(
+      (call.text ?? "").includes("456"),
+      "email text includes alert id",
+    );
+  },
+);
+
+await suite.test(
+  "recovery: both Slack and email configured → both senders are invoked",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.emailSent, true, "emailSent");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(emailCalls.length, 1, "one email call");
+  },
+);
+
+await suite.test(
+  "recovery: Slack send throws → swallowed; email still attempted; result reflects failure",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, emailCalls } = makeRecoveryStubs({ slackResult: new Error("slack down") });
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+      suite.expectEqual(result.slackSent, false, "slack failed");
+      suite.expectEqual(result.emailSent, true, "email still went through");
+      suite.expectEqual(emailCalls.length, 1, "email attempted");
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "recovery: p95_latency reason → renders 'P95 latency' in message",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    await notifyToolHealthRecovery(
+      sampleRecovery({ reason: "p95_latency", detail: "auto-resolved: p95 latency back below threshold" }),
+      deps,
+    );
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("P95 latency"),
+      `blocks reference p95 latency metric (got: ${blocks.slice(0, 200)}...)`,
+    );
+  },
+);
+
+await suite.test(
+  "recovery: no TOOL_HEALTH_APP_URL → no Slack action button; relative path surfaced as text",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    await notifyToolHealthRecovery(sampleRecovery(), deps);
+    const blocks = slackCalls[0]?.blocks ?? [];
+    const hasButton = blocks.some(
+      (b: any) =>
+        b?.type === "actions" &&
+        Array.isArray(b.elements) &&
+        b.elements.some((e: any) => e?.type === "button"),
+    );
+    suite.expectEqual(hasButton, false, "no actions button when URL is relative");
+    const json = JSON.stringify(blocks);
+    suite.expect(
+      json.includes("/dashboard/ai-ops.html"),
+      "still surfaces the relative path as text",
+    );
   },
 );
 

@@ -42,6 +42,7 @@ import {
 import {
   notifyToolHealthBreach,
   notifyToolHealthOverrideExpired,
+  notifyToolHealthRecovery,
   type NotifyToolHealthBreachResult,
 } from "../../utils/toolHealthAlertNotifier";
 import {
@@ -513,6 +514,13 @@ export interface ToolHealthDeps {
    * capture the call without touching real Slack.
    */
   notifyOverrideExpired?: typeof notifyToolHealthOverrideExpired;
+  /**
+   * Pages on-call when a `tool_health` alert auto-resolves (Task #167).
+   * Optional so existing stubs need no churn — the production default
+   * delegates to {@link notifyToolHealthRecovery}, and tests can stub
+   * it to capture recovery pages without touching real Slack/email.
+   */
+  notifyToolHealthRecovery?: typeof notifyToolHealthRecovery;
 }
 
 const DEFAULT_DEPS: Required<ToolHealthDeps> = {
@@ -525,6 +533,7 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   loadOverrides: getToolHealthConfigOverrides,
   reapExpiredOverrides: reapExpiredToolHealthOverrides,
   notifyOverrideExpired: notifyToolHealthOverrideExpired,
+  notifyToolHealthRecovery,
 };
 
 /**
@@ -622,9 +631,13 @@ async function dispatchBreachNotification(
  * old are considered, so the entire current rolling window of metrics is
  * post-recovery. This prevents a single low-traffic minute from flapping
  * an alert closed.
+ *
+ * After each successful resolution, pages on-call via
+ * `deps.notifyToolHealthRecovery` so the on-call team learns the incident
+ * is over without having to poll the dashboard (Task #167).
  */
 async function maybeResolveRecoveredAlert(
-  deps: ToolHealthDeps,
+  deps: Required<ToolHealthDeps>,
   cfg: EffectiveToolHealthConfig,
   agg: ToolWindowAggregate,
   reason: ToolHealthReason,
@@ -668,6 +681,22 @@ async function maybeResolveRecoveredAlert(
           alert_id: alert.id,
           detail: note,
         });
+        // Task #167: page on-call about the recovery. Best-effort — a
+        // Slack/email outage must not stop us processing remaining tools.
+        try {
+          await deps.notifyToolHealthRecovery({
+            tool_name: agg.tool_name,
+            agent_name: agg.agent_name ?? null,
+            reason,
+            alert_id: alert.id,
+            detail: note,
+          });
+        } catch (notifyErr) {
+          console.error(
+            `[ToolHealth] Recovery notifier threw for alert ${alert.id} (${relatedRecordId}):`,
+            notifyErr,
+          );
+        }
       }
     } catch (err) {
       console.error(
@@ -699,6 +728,8 @@ export async function runToolHealthCheck(
       depsOverride?.reapExpiredOverrides ?? DEFAULT_DEPS.reapExpiredOverrides,
     notifyOverrideExpired:
       depsOverride?.notifyOverrideExpired ?? DEFAULT_DEPS.notifyOverrideExpired,
+    notifyToolHealthRecovery:
+      depsOverride?.notifyToolHealthRecovery ?? DEFAULT_DEPS.notifyToolHealthRecovery,
   };
 
   // Reap any expired override rows BEFORE loading the merged config so
