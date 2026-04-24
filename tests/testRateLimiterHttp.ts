@@ -16,18 +16,33 @@
  *   2. POST /api/admin/auth (unauthenticated auth flow, AUTH_LIMIT=5)
  *      — fires 15 concurrent requests with a deliberately-wrong key body
  *        and unique XFF and verifies at most 5 pass the rate limiter.
+ *   3. POST /api/audit/trigger window reset
+ *      — exhausts WRITE_LIMIT for a fresh XFF, waits past the next 60s
+ *        window boundary, then fires one more request from the SAME XFF
+ *        and asserts the limiter lets it through (no 429 + Retry-After).
+ *        This catches regressions where the bucket becomes a permanent ban
+ *        or the window-floor math stops rolling over.
+ *   4. POST /api/admin/auth window reset
+ *      — same pattern for the AUTH_LIMIT=5 bucket, ensuring the auth-flow
+ *        category also resets at the next minute boundary.
+ *   Scenarios 3 and 4 run concurrently to cap the test runtime at ~60s for
+ *   the rollover wait (instead of ~120s if they were serialized).
  *
  * Distinguishing rate-limit denials from other 429s:
  *   The middleware always sets `Retry-After` when it returns 429. The
  *   /api/audit/trigger handler also has its own 60s cooldown which returns
  *   429 *without* Retry-After. We treat only 429-with-Retry-After as a true
  *   rate-limit block; everything else (200 / 401 / handler-cooldown 429) is
- *   counted as "passed the limiter".
+ *   counted as "passed the limiter". The reset scenarios therefore PASS even
+ *   if the audit handler is still in its own cooldown after rollover, as
+ *   long as the *limiter* itself stops returning 429+Retry-After.
  *
  * Window-boundary safety:
  *   The limiter buckets by floor(now / 60_000). To avoid straddling a window
  *   edge mid-burst the script waits until at least ~10s of headroom remains
- *   in the current minute window before each scenario.
+ *   in the current minute window before each scenario. The reset scenarios
+ *   then sleep for the rest of the current window plus a small buffer
+ *   (~1.5s) so the follow-up request lands in the next bucket.
  *
  * Pre-requisites:
  *   - The server must be running on PORT (default 5000), e.g. via the
@@ -40,7 +55,12 @@
  * Expected output (when passing):
  *   [HttpRateLimitTest] /api/audit/trigger: passed=10 blocked=10 (limit=10)  ✅
  *   [HttpRateLimitTest] /api/admin/auth:   passed=5  blocked=10 (limit=5)   ✅
+ *   [HttpRateLimitTest] /api/audit/trigger reset: ✅ allowed (limiter reset)
+ *   [HttpRateLimitTest] /api/admin/auth reset:    ✅ allowed (limiter reset)
  *   [HttpRateLimitTest] PASS — HTTP rate limiting holds under concurrent load
+ *
+ * Runtime: ~60–90s end-to-end (the reset scenarios dominate; they wait for
+ * the next minute boundary plus margin).
  *
  * Exit code: 0 on success, 1 on any failed assertion or fatal error.
  */
@@ -226,6 +246,138 @@ async function testAdminAuthAuthLimit(): Promise<boolean> {
   return ok;
 }
 
+async function waitForNextWindow(label: string): Promise<void> {
+  // Sleep until the current 60s bucket ends, plus a small buffer so the
+  // follow-up request lands cleanly in the next bucket (no boundary skew).
+  const now = Date.now();
+  const elapsedInWindow = now % WINDOW_MS;
+  const remaining = WINDOW_MS - elapsedInWindow;
+  const waitMs = remaining + 1500;
+  console.log(
+    `[HttpRateLimitTest] ${label}: waiting ${waitMs}ms (${(waitMs / 1000).toFixed(1)}s) ` +
+      `for the next window to begin...`,
+  );
+  await new Promise(r => setTimeout(r, waitMs));
+}
+
+async function testAuditTriggerWindowReset(): Promise<boolean> {
+  console.log('\n[HttpRateLimitTest] === Scenario 3: WRITE_LIMIT window reset (/api/audit/trigger) ===');
+  if (!ADMIN_KEY) {
+    console.error('[HttpRateLimitTest] ADMIN_API_KEY is not set — cannot authenticate audit/trigger.');
+    return false;
+  }
+  await waitForWindowHeadroom();
+
+  // Use a fresh XFF (different from scenario 1) so this bucket starts at 0.
+  const xff = uniqueXff('audit-trigger-reset');
+  const url = `${BASE_URL}/api/audit/trigger`;
+  const init: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Key': ADMIN_KEY,
+      'X-Forwarded-For': xff,
+    },
+    body: JSON.stringify({}),
+  };
+
+  // Phase A: exhaust the limit so the next request *would* be blocked.
+  const N = WRITE_LIMIT + 5;
+  console.log(`[HttpRateLimitTest] Phase A: exhaust limit with ${N} concurrent POSTs (XFF=${xff})`);
+  const burstResults = await fireConcurrent(url, init, N);
+  const { blocked: burstBlocked } = summarize('/api/audit/trigger (reset burst)', burstResults);
+  if (burstBlocked === 0) {
+    console.error(
+      `[HttpRateLimitTest]   FAIL — burst produced 0 limiter blocks (no 429 + Retry-After). ` +
+        `Cannot prove the limiter actually engaged before testing reset.`,
+    );
+    return false;
+  }
+  console.log(`[HttpRateLimitTest] Phase A confirmed: ${burstBlocked} limiter blocks during burst.`);
+
+  // Phase B: wait past the window boundary, then send one more from the SAME XFF.
+  await waitForNextWindow('Scenario 3');
+
+  console.log(`[HttpRateLimitTest] Phase B: fire 1 follow-up after rollover (XFF=${xff})`);
+  const follow = await fireOne(url, init);
+  console.log(
+    `[HttpRateLimitTest] follow-up status=${follow.status} ` +
+      `retryAfter=${follow.retryAfter ?? 'none'} ` +
+      `passedLimiter=${follow.passedLimiter}`,
+  );
+
+  const ok = follow.passedLimiter;
+  console.log(
+    `[HttpRateLimitTest] /api/audit/trigger reset: ` +
+      (ok
+        ? '✅ allowed (limiter reset at window boundary)'
+        : '❌ still blocked by limiter (429 + Retry-After) after rollover'),
+  );
+  if (!ok) {
+    console.error(
+      `[HttpRateLimitTest]   FAIL — follow-up after window rollover was still blocked by ` +
+        `the limiter. The 60s rolling window did not reset; ops "10 per minute" guarantee is broken.`,
+    );
+  }
+  return ok;
+}
+
+async function testAdminAuthWindowReset(): Promise<boolean> {
+  console.log('\n[HttpRateLimitTest] === Scenario 4: AUTH_LIMIT window reset (/api/admin/auth) ===');
+  await waitForWindowHeadroom();
+
+  const xff = uniqueXff('admin-auth-reset');
+  const url = `${BASE_URL}/api/admin/auth`;
+  const init: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Forwarded-For': xff,
+    },
+    body: JSON.stringify({ key: 'this-is-not-the-admin-key-rate-limit-reset-test' }),
+  };
+
+  // Phase A: exhaust AUTH_LIMIT.
+  const N = AUTH_LIMIT + 5;
+  console.log(`[HttpRateLimitTest] Phase A: exhaust limit with ${N} concurrent POSTs (XFF=${xff})`);
+  const burstResults = await fireConcurrent(url, init, N);
+  const { blocked: burstBlocked } = summarize('/api/admin/auth (reset burst)', burstResults);
+  if (burstBlocked === 0) {
+    console.error(
+      `[HttpRateLimitTest]   FAIL — burst produced 0 limiter blocks (no 429 + Retry-After). ` +
+        `Cannot prove the auth limiter actually engaged before testing reset.`,
+    );
+    return false;
+  }
+  console.log(`[HttpRateLimitTest] Phase A confirmed: ${burstBlocked} limiter blocks during burst.`);
+
+  // Phase B: wait past the window boundary, then send one more from the SAME XFF.
+  await waitForNextWindow('Scenario 4');
+
+  console.log(`[HttpRateLimitTest] Phase B: fire 1 follow-up after rollover (XFF=${xff})`);
+  const follow = await fireOne(url, init);
+  console.log(
+    `[HttpRateLimitTest] follow-up status=${follow.status} ` +
+      `retryAfter=${follow.retryAfter ?? 'none'} ` +
+      `passedLimiter=${follow.passedLimiter}`,
+  );
+
+  const ok = follow.passedLimiter;
+  console.log(
+    `[HttpRateLimitTest] /api/admin/auth reset:    ` +
+      (ok
+        ? '✅ allowed (limiter reset at window boundary)'
+        : '❌ still blocked by limiter (429 + Retry-After) after rollover'),
+  );
+  if (!ok) {
+    console.error(
+      `[HttpRateLimitTest]   FAIL — follow-up after window rollover was still blocked by ` +
+        `the auth limiter. AUTH_LIMIT bucket failed to roll over to a fresh window.`,
+    );
+  }
+  return ok;
+}
+
 async function ensureServerReachable(): Promise<boolean> {
   try {
     const res = await fetch(`${BASE_URL}/api/health`);
@@ -252,7 +404,19 @@ async function main() {
   const writeOk = await testAuditTriggerWriteLimit();
   const authOk = await testAdminAuthAuthLimit();
 
-  const allOk = writeOk && authOk;
+  // Scenarios 3 & 4 each need to wait ~60s for the window to roll over.
+  // They use disjoint XFFs and disjoint limiter buckets, so it's safe to
+  // run them concurrently and cap total wait at one window instead of two.
+  console.log(
+    '\n[HttpRateLimitTest] Starting window-reset scenarios (3 & 4) in parallel — ' +
+      'each waits ~60s for the next minute boundary.',
+  );
+  const [resetWriteOk, resetAuthOk] = await Promise.all([
+    testAuditTriggerWindowReset(),
+    testAdminAuthWindowReset(),
+  ]);
+
+  const allOk = writeOk && authOk && resetWriteOk && resetAuthOk;
   console.log('');
   if (allOk) {
     console.log('[HttpRateLimitTest] PASS — HTTP rate limiting holds under concurrent load');
