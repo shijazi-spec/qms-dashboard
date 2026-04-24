@@ -79,6 +79,93 @@ export const TOOL_HEALTH_THRESHOLDS = {
   cron: process.env.TOOL_HEALTH_ALERT_CRON || "*/15 * * * *",
 } as const;
 
+/**
+ * Cutoffs for error-rate / p95-latency must form a non-decreasing ladder:
+ *   breach floor ≤ high cutoff ≤ critical cutoff
+ *
+ * If an operator inverts these (e.g. `HIGH_PCT=80` and `CRITICAL_PCT=70`),
+ * `severityForErrorRate()` will short-circuit on the first
+ * `>=` test and silently downgrade every breach — the "critical" rung
+ * becomes unreachable. This validator surfaces that misconfiguration as a
+ * warning at boot so an on-call engineer can fix the env vars before the
+ * next paging window, instead of discovering the downgrade after a real
+ * incident is undercalled.
+ *
+ * Pure function; consumers wire the warnings into `console.warn`. Equal
+ * values are allowed (a flat ladder still preserves correct ordering).
+ */
+export function validateToolHealthThresholds(
+  cfg: Pick<
+    typeof TOOL_HEALTH_THRESHOLDS,
+    | "errorRatePct"
+    | "errorRateHighPct"
+    | "errorRateCriticalPct"
+    | "p95LatencyMs"
+    | "latencyHighMs"
+    | "latencyCriticalMs"
+  > = TOOL_HEALTH_THRESHOLDS,
+): string[] {
+  const warnings: string[] = [];
+  if (
+    !(
+      cfg.errorRatePct <= cfg.errorRateHighPct &&
+      cfg.errorRateHighPct <= cfg.errorRateCriticalPct
+    )
+  ) {
+    warnings.push(
+      `[ToolHealth] Misconfigured error-rate severity cutoffs: expected ` +
+        `breach floor (${cfg.errorRatePct}%) ≤ high (${cfg.errorRateHighPct}%) ` +
+        `≤ critical (${cfg.errorRateCriticalPct}%). Severity will be silently ` +
+        `downgraded for some breaches — adjust ` +
+        `TOOL_HEALTH_ERROR_RATE_PCT / TOOL_HEALTH_ERROR_RATE_HIGH_PCT / ` +
+        `TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT so they are non-decreasing.`,
+    );
+  }
+  if (
+    !(
+      cfg.p95LatencyMs <= cfg.latencyHighMs &&
+      cfg.latencyHighMs <= cfg.latencyCriticalMs
+    )
+  ) {
+    warnings.push(
+      `[ToolHealth] Misconfigured p95-latency severity cutoffs: expected ` +
+        `breach floor (${cfg.p95LatencyMs}ms) ≤ high (${cfg.latencyHighMs}ms) ` +
+        `≤ critical (${cfg.latencyCriticalMs}ms). Severity will be silently ` +
+        `downgraded for some breaches — adjust ` +
+        `TOOL_HEALTH_P95_LATENCY_MS / TOOL_HEALTH_P95_LATENCY_HIGH_MS / ` +
+        `TOOL_HEALTH_P95_LATENCY_CRITICAL_MS so they are non-decreasing.`,
+    );
+  }
+  return warnings;
+}
+
+/**
+ * Emits the misconfiguration warnings (if any) via `console.warn`.
+ * Idempotent — only fires the first time per process so repeated cron
+ * passes don't spam the log. Use `__resetThresholdValidationForTests()`
+ * to clear the flag from a unit test.
+ */
+let _thresholdValidationLogged = false;
+function ensureThresholdValidationLogged(): void {
+  if (_thresholdValidationLogged) return;
+  _thresholdValidationLogged = true;
+  for (const w of validateToolHealthThresholds()) {
+    console.warn(w);
+  }
+}
+
+/** @internal Test-only: reset the one-shot validation flag. */
+export function __resetThresholdValidationForTests(): void {
+  _thresholdValidationLogged = false;
+}
+
+// Validate at module load so misconfiguration is visible at boot — even
+// before the first cron tick fires. The in-process `runToolHealthCheck`
+// re-checks via `ensureThresholdValidationLogged()` (no-op after this
+// initial run) so tests that import the module after mutating env can
+// still observe the warning by resetting the flag.
+ensureThresholdValidationLogged();
+
 function severityForErrorRate(pct: number): AlertSeverity {
   if (pct >= TOOL_HEALTH_THRESHOLDS.errorRateCriticalPct) return "critical";
   if (pct >= TOOL_HEALTH_THRESHOLDS.errorRateHighPct) return "high";
@@ -319,6 +406,9 @@ export async function runToolHealthCheck(
   depsOverride?: Partial<ToolHealthDeps>,
 ): Promise<ToolHealthCheckResult> {
   const deps: ToolHealthDeps = { ...DEFAULT_DEPS, ...(depsOverride ?? {}) };
+  // Re-check on first invocation in case the module-load validation was
+  // suppressed (e.g. running under a test harness that resets the flag).
+  ensureThresholdValidationLogged();
   const cfg = TOOL_HEALTH_THRESHOLDS;
   const out: ToolHealthCheckResult = {
     toolsEvaluated: 0,

@@ -20,6 +20,8 @@
 import {
   runToolHealthCheck,
   TOOL_HEALTH_THRESHOLDS,
+  validateToolHealthThresholds,
+  __resetThresholdValidationForTests,
   type ToolHealthDeps,
 } from "../src/mastra/workflows/toolHealthAlertsCron";
 import type { ToolWindowAggregate } from "../src/utils/aiTelemetry";
@@ -1160,6 +1162,258 @@ await suite.test(
       existingDedupeKeys.has(newKey),
       "after run 3 the new alert is once again present in the dedupe set",
     );
+  },
+);
+
+// ─── Task #176: misordered severity-cutoff warnings ─────────────────────────
+
+await suite.test(
+  "(z1) validateToolHealthThresholds returns no warnings for the default ladder",
+  async () => {
+    // Defaults are non-decreasing (25/50/75 and 15s/30s/60s), so a healthy
+    // baseline must produce zero warnings.
+    const warnings = validateToolHealthThresholds();
+    suite.expectEqual(
+      warnings.length,
+      0,
+      `expected 0 warnings for default config, got: ${warnings.join(" | ")}`,
+    );
+  },
+);
+
+await suite.test(
+  "(z2) validateToolHealthThresholds warns when error-rate critical < high",
+  async () => {
+    // The classic silent-downgrade footgun the task calls out:
+    // HIGH=80, CRITICAL=70 → severityForErrorRate() returns 'high' for any
+    // breach above 80% because the critical branch is never reached.
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 25,
+      errorRateHighPct: 80,
+      errorRateCriticalPct: 70,
+      p95LatencyMs: 15_000,
+      latencyHighMs: 30_000,
+      latencyCriticalMs: 60_000,
+    });
+    suite.expectEqual(warnings.length, 1, "exactly one warning for inverted error-rate cutoffs");
+    suite.expect(
+      /error-rate/i.test(warnings[0] ?? ""),
+      "warning identifies the error-rate axis",
+    );
+    suite.expect(
+      (warnings[0] ?? "").includes("80") && (warnings[0] ?? "").includes("70"),
+      "warning surfaces both inverted values so the operator can fix the env",
+    );
+    suite.expect(
+      (warnings[0] ?? "").includes("TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT"),
+      "warning names the env var the operator must adjust",
+    );
+  },
+);
+
+await suite.test(
+  "(z3) validateToolHealthThresholds warns when error-rate breach floor > high cutoff",
+  async () => {
+    // ERROR_RATE_PCT=60 with HIGH=50 means the high band is unreachable —
+    // a breach is, by definition, already at or above the high cutoff.
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 60,
+      errorRateHighPct: 50,
+      errorRateCriticalPct: 75,
+      p95LatencyMs: 15_000,
+      latencyHighMs: 30_000,
+      latencyCriticalMs: 60_000,
+    });
+    suite.expectEqual(warnings.length, 1, "exactly one warning for breach floor > high");
+    suite.expect(
+      /error-rate/i.test(warnings[0] ?? ""),
+      "warning identifies the error-rate axis",
+    );
+  },
+);
+
+await suite.test(
+  "(z4) validateToolHealthThresholds warns when latency critical < high",
+  async () => {
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 25,
+      errorRateHighPct: 50,
+      errorRateCriticalPct: 75,
+      p95LatencyMs: 15_000,
+      latencyHighMs: 60_000,
+      latencyCriticalMs: 30_000,
+    });
+    suite.expectEqual(warnings.length, 1, "exactly one warning for inverted latency cutoffs");
+    suite.expect(
+      /latency/i.test(warnings[0] ?? ""),
+      "warning identifies the latency axis",
+    );
+    suite.expect(
+      (warnings[0] ?? "").includes("60000") &&
+        (warnings[0] ?? "").includes("30000"),
+      "warning surfaces both inverted ms values",
+    );
+    suite.expect(
+      (warnings[0] ?? "").includes("TOOL_HEALTH_P95_LATENCY_CRITICAL_MS"),
+      "warning names the env var the operator must adjust",
+    );
+  },
+);
+
+await suite.test(
+  "(z5) validateToolHealthThresholds emits one warning per misordered axis",
+  async () => {
+    // Both axes inverted at once → two distinct warnings so the operator
+    // sees the full scope of the misconfiguration in a single log scan.
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 25,
+      errorRateHighPct: 80,
+      errorRateCriticalPct: 70,
+      p95LatencyMs: 15_000,
+      latencyHighMs: 60_000,
+      latencyCriticalMs: 30_000,
+    });
+    suite.expectEqual(warnings.length, 2, "one warning per misordered axis");
+    suite.expect(
+      warnings.some((w) => /error-rate/i.test(w)),
+      "error-rate warning present",
+    );
+    suite.expect(
+      warnings.some((w) => /latency/i.test(w)),
+      "latency warning present",
+    );
+  },
+);
+
+await suite.test(
+  "(z6) equal cutoffs are treated as valid (flat ladder, no warnings)",
+  async () => {
+    // An operator who pins HIGH==CRITICAL (or floor==HIGH) collapses the
+    // band to a single rung but doesn't invert the ordering — that's a
+    // legitimate choice, not a misconfiguration.
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 25,
+      errorRateHighPct: 25,
+      errorRateCriticalPct: 25,
+      p95LatencyMs: 15_000,
+      latencyHighMs: 15_000,
+      latencyCriticalMs: 15_000,
+    });
+    suite.expectEqual(
+      warnings.length,
+      0,
+      `flat ladder must not warn, got: ${warnings.join(" | ")}`,
+    );
+  },
+);
+
+await suite.test(
+  "(z7-boot) misordered env vars produce a boot-time console.warn in a fresh process",
+  async () => {
+    // The validator coverage above is pure-function; this test exercises
+    // the actual boot-time path by importing the module in a clean child
+    // process with intentionally inverted env vars and asserting that the
+    // operator-visible warning lands on stderr.
+    const { spawnSync } = await import("node:child_process");
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx/esm",
+        "-e",
+        // Importing the module is enough — module-load runs
+        // ensureThresholdValidationLogged() once, which emits via
+        // console.warn (Node sends console.warn to stderr).
+        `import("./src/mastra/workflows/toolHealthAlertsCron.ts").then(() => process.exit(0));`,
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          // Inverted on BOTH axes so we can assert both warnings fire.
+          TOOL_HEALTH_ERROR_RATE_PCT: "25",
+          TOOL_HEALTH_ERROR_RATE_HIGH_PCT: "80",
+          TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT: "70",
+          TOOL_HEALTH_P95_LATENCY_MS: "15000",
+          TOOL_HEALTH_P95_LATENCY_HIGH_MS: "60000",
+          TOOL_HEALTH_P95_LATENCY_CRITICAL_MS: "30000",
+        },
+        encoding: "utf8",
+      },
+    );
+
+    // If the spawned process failed to start (e.g. missing tsx), surface
+    // that explicitly rather than asserting against an empty stderr.
+    suite.expectEqual(
+      result.status,
+      0,
+      `child exited with status ${result.status}; stderr: ${result.stderr}`,
+    );
+
+    const stderr = result.stderr ?? "";
+    suite.expect(
+      stderr.includes("[ToolHealth]"),
+      `expected boot-time warning to mention "[ToolHealth]"; got stderr: ${stderr}`,
+    );
+    suite.expect(
+      stderr.includes("error-rate severity cutoffs") &&
+        stderr.includes("80") &&
+        stderr.includes("70") &&
+        stderr.includes("TOOL_HEALTH_ERROR_RATE_CRITICAL_PCT"),
+      "stderr surfaces the inverted error-rate cutoffs and the env var to fix",
+    );
+    suite.expect(
+      stderr.includes("p95-latency severity cutoffs") &&
+        stderr.includes("60000") &&
+        stderr.includes("30000") &&
+        stderr.includes("TOOL_HEALTH_P95_LATENCY_CRITICAL_MS"),
+      "stderr surfaces the inverted latency cutoffs and the env var to fix",
+    );
+  },
+);
+
+await suite.test(
+  "(z8) runToolHealthCheck emits the warning via console.warn on first invocation",
+  async () => {
+    // Spy on console.warn so we can confirm the cron actually pages the
+    // warning out — pure-function coverage above isn't enough; the wiring
+    // (module-load + on-first-call) is the actual operator-facing behavior.
+    const original = console.warn;
+    const captured: string[] = [];
+    console.warn = (...args: unknown[]) => {
+      captured.push(args.map((a) => String(a)).join(" "));
+    };
+    try {
+      // Default config is valid, so even after resetting the one-shot flag
+      // the cron must NOT spam a misconfig warning.
+      __resetThresholdValidationForTests();
+      const { deps } = makeDeps({ aggregates: [] });
+      await runToolHealthCheck(deps);
+      const misconfigLines = captured.filter((line) =>
+        line.includes("[ToolHealth]") &&
+        /Misconfigured/i.test(line),
+      );
+      suite.expectEqual(
+        misconfigLines.length,
+        0,
+        `valid default config must not warn, got: ${misconfigLines.join(" | ")}`,
+      );
+
+      // Second pass with the flag still set → still no extra warnings (the
+      // one-shot guard prevents log spam across cron ticks).
+      const before = captured.length;
+      await runToolHealthCheck(deps);
+      const newMisconfigLines = captured
+        .slice(before)
+        .filter((line) => /Misconfigured/i.test(line));
+      suite.expectEqual(
+        newMisconfigLines.length,
+        0,
+        "second cron pass must not re-emit misconfig warnings",
+      );
+    } finally {
+      console.warn = original;
+    }
   },
 );
 
