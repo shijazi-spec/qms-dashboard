@@ -104,7 +104,7 @@
         }
         button.disabled = true;
         button.setAttribute('aria-busy', 'true');
-        button.innerHTML = SPINNER_SVG + '<span class="ml-2">' + label + '</span>';
+        button.innerHTML = SPINNER_SVG + '<span class="streaming-ms-2">' + label + '</span>';
     }
 
     function restoreButton(button, original) {
@@ -129,12 +129,12 @@
 
         var labelEl = button.ownerDocument.createElement('span');
         labelEl.setAttribute('data-streaming-label', '');
-        labelEl.className = 'ml-2';
+        labelEl.className = 'streaming-ms-2';
         labelEl.textContent = 'Preparing…';
 
         var cancelEl = button.ownerDocument.createElement('span');
         cancelEl.setAttribute('data-streaming-cancel', '');
-        cancelEl.className = 'ml-2 underline decoration-dotted opacity-90';
+        cancelEl.className = 'streaming-ms-2 underline decoration-dotted opacity-90';
         cancelEl.textContent = 'Cancel';
 
         button.innerHTML = SPINNER_SVG;
@@ -427,7 +427,7 @@
         if (c) return c;
         c = document.createElement('div');
         c.id = PROGRESS_CONTAINER_ID;
-        c.className = 'fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]';
+        c.className = 'fixed bottom-4 streaming-edge-end z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]';
         c.setAttribute('aria-live', 'polite');
         c.setAttribute('aria-label', tr('downloads.in_progress_aria', 'Downloads in progress'));
         document.body.appendChild(c);
@@ -440,7 +440,7 @@
         if (c) return c;
         c = document.createElement('div');
         c.id = TOAST_CONTAINER_ID;
-        c.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm';
+        c.className = 'fixed top-4 streaming-edge-end z-50 flex flex-col gap-2 max-w-sm';
         c.setAttribute('aria-live', 'polite');
         document.body.appendChild(c);
         return c;
