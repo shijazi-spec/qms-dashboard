@@ -294,9 +294,217 @@
         return [{ description: 'Export file', accept: accept }];
     }
 
+    // --- Progress UI / Toast helpers --------------------------------------
+
+    var PROGRESS_CONTAINER_ID = 'streaming-download-progress-container';
+    var TOAST_CONTAINER_ID = 'streaming-download-toast-container';
+    var cardCounter = 0;
+
+    function ensureProgressContainer() {
+        if (typeof document === 'undefined' || !document.body) return null;
+        var c = document.getElementById(PROGRESS_CONTAINER_ID);
+        if (c) return c;
+        c = document.createElement('div');
+        c.id = PROGRESS_CONTAINER_ID;
+        c.className = 'fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]';
+        c.setAttribute('aria-live', 'polite');
+        c.setAttribute('aria-label', 'Downloads in progress');
+        document.body.appendChild(c);
+        return c;
+    }
+
+    function ensureToastContainer() {
+        if (typeof document === 'undefined' || !document.body) return null;
+        var c = document.getElementById(TOAST_CONTAINER_ID);
+        if (c) return c;
+        c = document.createElement('div');
+        c.id = TOAST_CONTAINER_ID;
+        c.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm';
+        c.setAttribute('aria-live', 'polite');
+        document.body.appendChild(c);
+        return c;
+    }
+
+    function createProgressCard(filename, onCancel) {
+        var container = ensureProgressContainer();
+        if (!container) return null;
+        cardCounter += 1;
+        var idx = cardCounter;
+
+        var card = document.createElement('div');
+        card.id = 'streaming-download-card-' + idx;
+        card.className = 'bg-white shadow-lg rounded-lg border border-gray-200 p-3 text-sm text-gray-800';
+        card.setAttribute('role', 'group');
+        card.setAttribute('data-testid', 'card-download-progress');
+
+        var header = document.createElement('div');
+        header.className = 'flex items-center justify-between gap-2 mb-2';
+
+        var nameWrap = document.createElement('div');
+        nameWrap.className = 'flex items-center gap-2 min-w-0 flex-1';
+
+        var spinner = document.createElement('span');
+        spinner.innerHTML = '<svg class="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">' +
+            '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+            '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+        spinner.className = 'flex-shrink-0';
+        nameWrap.appendChild(spinner);
+
+        var nameText = document.createElement('span');
+        nameText.className = 'font-medium truncate';
+        nameText.textContent = filename || 'Download';
+        nameText.title = filename || 'Download';
+        nameText.setAttribute('data-testid', 'text-download-filename');
+        nameWrap.appendChild(nameText);
+
+        header.appendChild(nameWrap);
+
+        var cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'text-xs font-medium text-red-600 hover:text-red-800 hover:underline focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded px-2 py-1 flex-shrink-0';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.setAttribute('aria-label', 'Cancel download of ' + (filename || 'file'));
+        cancelBtn.setAttribute('data-testid', 'button-cancel-download');
+        cancelBtn.addEventListener('click', function () {
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = 'Cancelling…';
+            try { if (typeof onCancel === 'function') onCancel(); } catch (_) {}
+        });
+        header.appendChild(cancelBtn);
+
+        card.appendChild(header);
+
+        var barWrap = document.createElement('div');
+        barWrap.className = 'h-2 bg-gray-200 rounded overflow-hidden';
+        barWrap.setAttribute('role', 'progressbar');
+        barWrap.setAttribute('aria-valuemin', '0');
+        barWrap.setAttribute('aria-valuemax', '100');
+        barWrap.setAttribute('aria-label', 'Download progress for ' + (filename || 'file'));
+        var bar = document.createElement('div');
+        bar.className = 'h-full bg-blue-600 transition-all duration-150';
+        bar.style.width = '0%';
+        bar.setAttribute('data-testid', 'progress-download-bar');
+        barWrap.appendChild(bar);
+        card.appendChild(barWrap);
+
+        var statusEl = document.createElement('div');
+        statusEl.className = 'mt-1 text-xs text-gray-500 truncate';
+        statusEl.setAttribute('data-testid', 'text-download-status');
+        statusEl.textContent = 'Preparing…';
+        card.appendChild(statusEl);
+
+        container.appendChild(card);
+
+        function setLabel(name) {
+            nameText.textContent = name;
+            nameText.title = name;
+            barWrap.setAttribute('aria-label', 'Download progress for ' + name);
+            cancelBtn.setAttribute('aria-label', 'Cancel download of ' + name);
+        }
+
+        function update(received, total) {
+            var sizeText = formatBytes(received);
+            if (total) {
+                var pct = Math.min(100, Math.round((received / total) * 100));
+                bar.style.width = pct + '%';
+                barWrap.setAttribute('aria-valuenow', String(pct));
+                statusEl.textContent = sizeText + ' / ' + formatBytes(total) + ' (' + pct + '%)';
+            } else {
+                // Indeterminate — approach 95% asymptotically as more bytes arrive.
+                var visualPct = Math.min(95, Math.round((received / (received + 2 * 1024 * 1024)) * 100));
+                bar.style.width = visualPct + '%';
+                barWrap.removeAttribute('aria-valuenow');
+                statusEl.textContent = sizeText + ' downloaded';
+            }
+        }
+
+        function disableCancel() {
+            cancelBtn.disabled = true;
+            cancelBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
+        function hideCancel() {
+            cancelBtn.style.display = 'none';
+        }
+
+        function setStatus(text) {
+            statusEl.textContent = text;
+        }
+
+        function setBarColor(twClass) {
+            bar.className = 'h-full ' + twClass + ' transition-all duration-150';
+        }
+
+        function remove(delayMs) {
+            setTimeout(function () {
+                if (card.parentNode) card.parentNode.removeChild(card);
+            }, delayMs || 0);
+        }
+
+        return {
+            el: card,
+            setLabel: setLabel,
+            update: update,
+            setStatus: setStatus,
+            disableCancel: disableCancel,
+            hideCancel: hideCancel,
+            setBarColor: setBarColor,
+            remove: remove
+        };
+    }
+
+    function showToast(message, type) {
+        var container = ensureToastContainer();
+        if (!container) return;
+        var palette;
+        switch (type) {
+            case 'error':
+                palette = 'bg-red-600 text-white';
+                break;
+            case 'info':
+                palette = 'bg-blue-600 text-white';
+                break;
+            default:
+                palette = 'bg-green-600 text-white';
+        }
+        var toast = document.createElement('div');
+        toast.className = 'shadow-lg rounded-lg px-4 py-3 text-sm flex items-start gap-3 ' + palette;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        toast.setAttribute('data-testid', 'toast-download-' + (type || 'success'));
+
+        var msg = document.createElement('span');
+        msg.className = 'flex-1 break-words';
+        msg.textContent = message;
+        toast.appendChild(msg);
+
+        var close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'text-white/80 hover:text-white text-lg leading-none focus:outline-none focus:ring-2 focus:ring-white/60 rounded';
+        close.innerHTML = '&times;';
+        close.setAttribute('aria-label', 'Dismiss notification');
+        close.setAttribute('data-testid', 'button-dismiss-toast');
+        var dismissed = false;
+        function dismiss() {
+            if (dismissed) return;
+            dismissed = true;
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(function () {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 300);
+        }
+        close.addEventListener('click', dismiss);
+        toast.appendChild(close);
+
+        container.appendChild(toast);
+        setTimeout(dismiss, type === 'error' ? 6000 : 4000);
+    }
+
+    // --- Streaming paths --------------------------------------------------
+
     // True streaming path: pipe response.body directly to a file handle so the
     // browser never holds the full document in memory.
-    async function streamResponseToDisk(response, filename, contentType, button, onProgress, totalLength) {
+    async function streamResponseToDisk(response, filename, contentType, button, card, onProgress, totalLength) {
         var handle;
         try {
             handle = await window.showSaveFilePicker({
@@ -323,6 +531,9 @@
                 if (button) {
                     setBusy(button, progressLabel(received, totalLength));
                 }
+                if (card) {
+                    try { card.update(received, totalLength); } catch (_) { /* ignore */ }
+                }
                 if (onProgress) {
                     try { onProgress(received, totalLength); } catch (_) { /* ignore */ }
                 }
@@ -342,7 +553,7 @@
 
     // Legacy in-memory path: drain the body into an array of chunks, then
     // assemble a Blob and trigger the browser's normal download flow.
-    async function bufferResponseAndDownload(response, filename, contentType, button, onProgress, totalLength) {
+    async function bufferResponseAndDownload(response, filename, contentType, button, card, onProgress, totalLength) {
         var chunks = [];
         var received = 0;
 
@@ -357,6 +568,9 @@
                     if (button) {
                         setBusy(button, progressLabel(received, totalLength));
                     }
+                    if (card) {
+                        try { card.update(received, totalLength); } catch (_) { /* ignore */ }
+                    }
                     if (onProgress) {
                         try { onProgress(received, totalLength); } catch (_) { /* ignore */ }
                     }
@@ -366,6 +580,9 @@
             var buf = await response.arrayBuffer();
             chunks.push(new Uint8Array(buf));
             received = buf.byteLength;
+            if (card) {
+                try { card.update(received, totalLength); } catch (_) { /* ignore */ }
+            }
         }
 
         var blob = new Blob(chunks, { type: contentType });
@@ -399,10 +616,12 @@
         return totalLength >= threshold;
     }
 
-    // Estimate helpers: each export endpoint exposes a sibling `/estimate`
-    // route returning { rows, bytes, format }. We cache results briefly and
-    // use the bytes to (a) skip the picker for small downloads and (b) show
-    // an "≈ X MB" hint on the button.
+    // --- Estimate helpers -------------------------------------------------
+
+    // Each export endpoint exposes a sibling `/estimate` route returning
+    // { rows, bytes, format }. We cache results briefly and use the bytes to
+    // (a) skip the picker for small downloads and (b) show an "≈ X MB" hint
+    // on the button.
     var ESTIMATE_TTL_MS = 60 * 1000;
     var estimateCache = Object.create(null);
 
@@ -534,11 +753,33 @@
         var button = options.button || null;
         var onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
         var fetchInit = Object.assign({ credentials: 'same-origin' }, options.fetchInit || {});
+        var showProgressUI = options.showProgressUI !== false;
+        var showToastUI = options.showToast !== false;
+        var cancellable = options.cancellable !== false;
+
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        if (controller && !fetchInit.signal) {
+            fetchInit.signal = controller.signal;
+        }
+
+        var initialFilename = options.filename || 'Preparing download…';
+        var card = null;
+        var cancelled = false;
         var originalContent = null;
 
         if (button) {
             originalContent = button.innerHTML;
             setBusy(button, 'Preparing…');
+        }
+
+        if (showProgressUI) {
+            card = createProgressCard(initialFilename, function () {
+                cancelled = true;
+                if (controller) {
+                    try { controller.abort(); } catch (_) { /* ignore */ }
+                }
+            });
+            if (card && !cancellable) card.hideCancel();
         }
 
         // Best-effort pre-flight estimate so shouldStreamToDisk can skip the
@@ -588,6 +829,11 @@
                 parseContentDispositionFilename(disposition) ||
                 buildFallbackName(url, contentType);
 
+            if (card) {
+                card.setLabel(filename);
+                card.update(0, totalLength);
+            }
+
             var result = null;
 
             var wantStream = shouldStreamToDisk(options, totalLength);
@@ -595,7 +841,7 @@
 
             if (supportsFileSystemAccess() && wantStream) {
                 result = await streamResponseToDisk(
-                    response, filename, contentType, button, onProgress, totalLength
+                    response, filename, contentType, button, card, onProgress, totalLength
                 );
                 // result === null means the picker call failed in a recoverable
                 // way (e.g. lost user activation) and the body is still intact,
@@ -613,8 +859,20 @@
 
             if (!result) {
                 result = await bufferResponseAndDownload(
-                    response, filename, contentType, button, onProgress, totalLength
+                    response, filename, contentType, button, card, onProgress, totalLength
                 );
+            }
+
+            if (card) {
+                card.setBarColor('bg-green-600');
+                card.update(result.bytes, totalLength || result.bytes);
+                card.setStatus('Done — ' + formatBytes(result.bytes));
+                card.disableCancel();
+                card.remove(2500);
+            }
+
+            if (showToastUI) {
+                showToast('Downloaded ' + filename + ' (' + formatBytes(result.bytes) + ')', 'success');
             }
 
             return {
@@ -624,15 +882,40 @@
                 streamedToDisk: !!result.streamedToDisk
             };
         } catch (err) {
-            if (err && err.name === 'AbortError') {
-                // User cancelled the save dialog — quiet, no alert.
+            var isCancel = cancelled || (err && (err.name === 'AbortError' || err.cancelled === true));
+            var displayName = options.filename || (card ? null : 'file');
+
+            if (isCancel) {
+                // User cancelled — quiet, no alert. Update UI to reflect cancellation.
                 console.info('streamingDownload cancelled by user for', url);
+                if (card) {
+                    card.setBarColor('bg-gray-400');
+                    card.setStatus('Cancelled');
+                    card.disableCancel();
+                    card.remove(2500);
+                }
+                if (showToastUI) {
+                    showToast('Download cancelled' + (displayName ? ' (' + displayName + ')' : ''), 'info');
+                }
+                if (cancelled) {
+                    var cancelErr = new Error('Download cancelled');
+                    cancelErr.name = 'AbortError';
+                    cancelErr.cancelled = true;
+                    throw cancelErr;
+                }
                 throw err;
             }
+
             console.error('streamingDownload failed for', url, err);
-            try {
-                window.alert('Download failed: ' + ((err && err.message) ? err.message : 'Unknown error'));
-            } catch (_) { /* ignore */ }
+            if (card) {
+                card.setBarColor('bg-red-600');
+                card.setStatus('Failed: ' + ((err && err.message) ? err.message : 'Unknown error'));
+                card.disableCancel();
+                card.remove(6000);
+            }
+            if (showToastUI) {
+                showToast('Download failed: ' + ((err && err.message) ? err.message : 'Unknown error'), 'error');
+            }
             throw err;
         } finally {
             restoreButton(button, originalContent);
@@ -681,4 +964,7 @@
     global.streamingDownload = streamingDownload;
     global.streamingDownloadFromEvent = streamingDownloadFromEvent;
     global.streamDownload = streamDownload;
+    global.streamingDownloadProgress = {
+        showToast: showToast
+    };
 })(window);
