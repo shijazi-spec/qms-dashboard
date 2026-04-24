@@ -20,6 +20,7 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
   <div id="walaplus-nav"></div>
+  <script src="/js/safe-actions.js?v=1"></script>
   <script src="/js/navigation.js?v=4.5.2"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -34,7 +35,7 @@
         <h1 class="text-2xl font-bold text-gray-900" data-i18n="ai_ops.title">AI Operations</h1>
         <p class="text-sm text-gray-500 mt-1" data-i18n="ai_ops.subtitle">Token usage, cost trends, latency, and error telemetry across all AI agents.</p>
       </div>
-      <button onclick="refreshAll()" data-testid="button-refresh-all"
+      <button data-on-click="refreshAll" data-testid="button-refresh-all"
         class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm flex items-center space-x-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -144,14 +145,14 @@
     <!-- Tabs -->
     <div class="border-b border-gray-200 mb-6">
       <nav class="flex space-x-8">
-        <button onclick="switchTab('cost')" id="tab-cost" class="py-3 px-1 tab-active font-medium text-sm" data-testid="tab-cost">Cost Trend</button>
-        <button onclick="switchTab('latency')" id="tab-latency" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-latency">Agent Latency</button>
-        <button onclick="switchTab('prompts')" id="tab-prompts" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-prompts">Prompt Version</button>
-        <button onclick="switchTab('tools')" id="tab-tools" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-tools">Top Tools</button>
-        <button onclick="switchTab('issues')" id="tab-issues" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-issues">Recent Issues</button>
-        <button onclick="switchTab('feedback')" id="tab-feedback" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-feedback">Consultant Feedback</button>
-        <button onclick="switchTab('negative')" id="tab-negative" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-negative">Negative Feedback</button>
-        <button onclick="switchTab('thresholds')" id="tab-thresholds" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-thresholds">Alert Thresholds</button>
+        <button data-on-click="switchTab" data-args='["cost"]' id="tab-cost" class="py-3 px-1 tab-active font-medium text-sm" data-testid="tab-cost">Cost Trend</button>
+        <button data-on-click="switchTab" data-args='["latency"]' id="tab-latency" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-latency">Agent Latency</button>
+        <button data-on-click="switchTab" data-args='["prompts"]' id="tab-prompts" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-prompts">Prompt Version</button>
+        <button data-on-click="switchTab" data-args='["tools"]' id="tab-tools" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-tools">Top Tools</button>
+        <button data-on-click="switchTab" data-args='["issues"]' id="tab-issues" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-issues">Recent Issues</button>
+        <button data-on-click="switchTab" data-args='["feedback"]' id="tab-feedback" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-feedback">Consultant Feedback</button>
+        <button data-on-click="switchTab" data-args='["negative"]' id="tab-negative" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-negative">Negative Feedback</button>
+        <button data-on-click="switchTab" data-args='["thresholds"]' id="tab-thresholds" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-thresholds">Alert Thresholds</button>
       </nav>
     </div>
 
@@ -160,7 +161,7 @@
       <div class="bg-white rounded-xl shadow-sm border p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900">Weekly Cost Trend</h2>
-          <select id="cost-days" onchange="loadCostTrend()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-cost-days">
+          <select id="cost-days" data-on-change="loadCostTrend" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-cost-days">
             <option value="7">Last 7 days</option>
             <option value="14" selected>Last 14 days</option>
             <option value="30">Last 30 days</option>
@@ -191,12 +192,12 @@
           <h2 class="text-lg font-semibold text-gray-900">Prompt Version Comparison</h2>
           <div class="flex items-center gap-3 flex-wrap">
             <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none" data-testid="label-prompt-archived-toggle">
-              <input type="checkbox" id="prompt-show-archived" onchange="loadPromptVersions()"
+              <input type="checkbox" id="prompt-show-archived" data-on-change="loadPromptVersions"
                 class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 data-testid="checkbox-show-archived" />
               <span>Show archived versions</span>
             </label>
-            <select id="prompt-days" onchange="loadPromptVersions()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-prompt-days">
+            <select id="prompt-days" data-on-change="loadPromptVersions" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-prompt-days">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
               <option value="90">Last 90 days</option>
@@ -224,7 +225,7 @@
           <h2 class="text-lg font-semibold text-gray-900">Top Tool Calls by Cost — last 7 days</h2>
           <div class="flex items-center gap-2">
             <label for="tools-agent-filter" class="text-xs text-gray-500 uppercase tracking-wide">Agent</label>
-            <select id="tools-agent-filter" onchange="loadTools()"
+            <select id="tools-agent-filter" data-on-change="loadTools"
               class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500"
               data-testid="select-tools-agent-filter">
               <option value="">All agents</option>
@@ -257,7 +258,7 @@
             <p class="text-sm text-gray-500">Thumbs up/down ratings on AI Consultant responses</p>
           </div>
           <div class="flex items-center gap-3">
-            <select id="feedback-days" onchange="loadAIFeedback()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-days">
+            <select id="feedback-days" data-on-change="loadAIFeedback" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-days">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
               <option value="90">Last 90 days</option>
@@ -521,7 +522,7 @@
           const linkBtn = a.tool_name
             ? `<button type="button"
                  class="text-xs px-2 py-1 rounded border border-red-300 bg-white text-red-700 hover:bg-red-100"
-                 onclick="jumpToToolRowFromAlert(${a.id})"
+                 data-on-click="jumpToToolRowFromAlert" data-args='[${Number(a.id)}]'
                  data-testid="button-jump-tool-${a.id}">
                  View tool row →
                </button>`
@@ -543,13 +544,13 @@
                 ${linkBtn}
                 <button type="button"
                   class="text-xs px-2 py-1 rounded border border-yellow-300 bg-white text-yellow-800 hover:bg-yellow-50"
-                  onclick="acknowledgeToolHealthAlert(${a.id}, this)"
+                  data-on-click="acknowledgeToolHealthAlert" data-args='[${Number(a.id)}, "@this"]'
                   data-testid="button-acknowledge-alert-${a.id}">
                   Acknowledge
                 </button>
                 <button type="button"
                   class="text-xs px-2 py-1 rounded border border-green-300 bg-white text-green-800 hover:bg-green-50"
-                  onclick="resolveToolHealthAlert(${a.id}, this)"
+                  data-on-click="resolveToolHealthAlert" data-args='[${Number(a.id)}, "@this"]'
                   data-testid="button-resolve-alert-${a.id}">
                   Resolve
                 </button>
@@ -1147,7 +1148,7 @@
                 ? `<td class="px-3 py-2 align-top">
                      <button type="button"
                        class="w-5 h-5 inline-flex items-center justify-center rounded border border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-800 text-xs"
-                       onclick="toggleChildren('${r.id}', this)"
+                       data-on-click="toggleChildren" data-args='[${JSON.stringify(String(r.id))}, "@this"]'
                        data-expanded="false"
                        aria-label="Show child tool calls"
                        data-testid="button-expand-${r.id}">+</button>
@@ -1284,7 +1285,7 @@
                 <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.created_at)}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 text-xs">${esc(r.agent_name)}</td>
                 <td class="px-3 py-2 text-xs">
-                  <a href="#" onclick="showCallContext('${esc(r.call_id)}'); return false;"
+                  <a href="#" data-on-click="showCallContext" data-args='[${JSON.stringify(String(r.call_id))}]' data-pass-event="true"
                      class="font-mono text-blue-600 hover:text-blue-800 underline"
                      data-testid="link-call-${r.call_id}"
                      title="View original AI call row #${esc(r.call_id)}">
@@ -1310,16 +1311,22 @@
       }
     }
 
-    async function showCallContext(callId) {
+    async function showCallContext(callId, event) {
       // Always fetch the underlying ai_call_metrics row directly so the link
       // resolves regardless of whether the call appears in the (filtered)
       // Recent Issues table.
+      if (event && typeof event.preventDefault === 'function') event.preventDefault();
       try {
         const { data } = await apiFetch(`/api/ai-ops/call/${encodeURIComponent(callId)}`);
         openCallDetailModal(data);
       } catch (e) {
         alert(`Could not load call #${callId}: ${e.message || e}`);
       }
+    }
+
+    function closeCallDetailModal() {
+      const existing = document.getElementById('call-detail-modal');
+      if (existing) existing.remove();
     }
 
     function openCallDetailModal(call) {
@@ -1346,7 +1353,7 @@
               ${statusBadge}
             </div>
             <button class="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                    onclick="document.getElementById('call-detail-modal')?.remove()"
+                    data-on-click="closeCallDetailModal"
                     data-testid="button-close-call-modal">&times;</button>
           </div>
           <div class="p-5 space-y-3 text-sm">
@@ -1565,9 +1572,9 @@
 
       const buttons = canEdit
         ? `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
-             <button type="button" onclick="saveThresholds()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-thresholds-save">Save changes</button>
-             <button type="button" onclick="resetThresholdInputs()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-reset">Discard edits</button>
-             <button type="button" onclick="clearAllThresholdOverrides()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-clear-all">Clear all overrides</button>
+             <button type="button" data-on-click="saveThresholds" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-thresholds-save">Save changes</button>
+             <button type="button" data-on-click="resetThresholdInputs" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-reset">Discard edits</button>
+             <button type="button" data-on-click="clearAllThresholdOverrides" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-clear-all">Clear all overrides</button>
              <span id="thresholds-save-status" class="text-sm ml-2" data-testid="text-thresholds-save-status"></span>
            </div>`
         : '';

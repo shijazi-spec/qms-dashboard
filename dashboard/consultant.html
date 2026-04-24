@@ -1136,10 +1136,10 @@
                                 '<div class="text-xs font-medium text-gray-700 truncate">' + escapeHtml(alert.title || 'Alert') + '</div>' +
                                 '<div class="text-[10px] text-gray-400 mt-0.5">' + escapeHtml(timeAgo(alert.created_at)) + ' · ' + escapeHtml(severity) + '</div>' +
                                 '<div class="flex gap-1 mt-1">' +
-                                    '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, \'acknowledge\'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_acknowledge\') : \'Acknowledge\') + '">ACK</button>\' +
-                                    \'<button class="alert-action-btn bg-green-50 text-green-700 border-green-200 hover:bg-green-100" data-on-click="alertAction" data-args="\' + escAttr(JSON.stringify([alert.id, \'resolve\'])) + \'" title="\' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_resolve\') : \'Resolve\') + \'">✓</button>\' +
-                                    \'<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100" data-on-click="alertAction" data-args="\' + escAttr(JSON.stringify([alert.id, \'dismiss\'])) + \'" title="\' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_dismiss\') : \'Dismiss\') + \'">✕</button>\' +
-                                    \'<button class="alert-action-btn bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100" data-on-click="askAboutAlert" data-args="\' + escAttr(JSON.stringify([escapeHtml(alert.title || \'\')])) + \'" title="\' + (window.WalaPlusI18n ? window.WalaPlusI18n.t(\'consultant.alert_ask_ai\') : \'Ask AI\') + \'">?</button>\' +
+                                    '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'acknowledge'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_acknowledge') : 'Acknowledge') + '">ACK</button>' +
+                                    '<button class="alert-action-btn bg-green-50 text-green-700 border-green-200 hover:bg-green-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'resolve'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_resolve') : 'Resolve') + '">✓</button>' +
+                                    '<button class="alert-action-btn bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100" data-on-click="alertAction" data-args="' + escAttr(JSON.stringify([alert.id, 'dismiss'])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_dismiss') : 'Dismiss') + '">✕</button>' +
+                                    '<button class="alert-action-btn bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100" data-on-click="askAboutAlert" data-args="' + escAttr(JSON.stringify([escapeHtml(alert.title || '')])) + '" title="' + (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.alert_ask_ai') : 'Ask AI') + '">?</button>' +
                                 '</div>' +
                             '</div>' +
                         '</div>';
@@ -1532,18 +1532,18 @@
                     <h2 id="feedbackModalTitle" class="text-base font-semibold text-gray-800">What went wrong?</h2>
                     <p class="text-xs text-gray-500 mt-0.5">Select all that apply (optional)</p>
                 </div>
-                <button onclick="closeFeedbackModal()" aria-label="Close feedback dialog" data-testid="button-close-feedback-modal"
+                <button data-on-click="closeFeedbackModal" aria-label="Close feedback dialog" data-testid="button-close-feedback-modal"
                     class="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
             <div class="mb-4">
-                <button class="feedback-category-btn" data-cat="incorrect" onclick="toggleFeedbackCategory(this)" data-testid="cat-incorrect">Incorrect information</button>
-                <button class="feedback-category-btn" data-cat="missing_context" onclick="toggleFeedbackCategory(this)" data-testid="cat-missing-context">Missing context</button>
-                <button class="feedback-category-btn" data-cat="hallucinated" onclick="toggleFeedbackCategory(this)" data-testid="cat-hallucinated">Hallucinated</button>
-                <button class="feedback-category-btn" data-cat="off_policy" onclick="toggleFeedbackCategory(this)" data-testid="cat-off-policy">Off-policy</button>
-                <button class="feedback-category-btn" data-cat="formatting" onclick="toggleFeedbackCategory(this)" data-testid="cat-formatting">Formatting issue</button>
-                <button class="feedback-category-btn" data-cat="other" onclick="toggleFeedbackCategory(this)" data-testid="cat-other">Other</button>
+                <button class="feedback-category-btn" data-cat="incorrect" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-incorrect">Incorrect information</button>
+                <button class="feedback-category-btn" data-cat="missing_context" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-missing-context">Missing context</button>
+                <button class="feedback-category-btn" data-cat="hallucinated" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-hallucinated">Hallucinated</button>
+                <button class="feedback-category-btn" data-cat="off_policy" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-off-policy">Off-policy</button>
+                <button class="feedback-category-btn" data-cat="formatting" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-formatting">Formatting issue</button>
+                <button class="feedback-category-btn" data-cat="other" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-other">Other</button>
             </div>
             <div class="mb-4">
                 <label for="feedbackComment" class="block text-xs font-medium text-gray-700 mb-1">Additional comments (optional)</label>
@@ -1552,9 +1552,9 @@
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
             </div>
             <div class="flex justify-end gap-2">
-                <button onclick="closeFeedbackModal()" data-testid="button-feedback-skip"
+                <button data-on-click="closeFeedbackModal" data-testid="button-feedback-skip"
                     class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition">Skip</button>
-                <button onclick="submitThumbsDown()" data-testid="button-feedback-submit"
+                <button data-on-click="submitThumbsDown" data-testid="button-feedback-submit"
                     class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Submit Feedback</button>
             </div>
         </div>

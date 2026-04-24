@@ -960,7 +960,7 @@
                     <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${escapeHtml(o.rag_status === 'green' ? _t('dyn.duplicates.rag_green') : o.rag_status === 'amber' ? _t('dyn.duplicates.rag_amber') : _t('dyn.duplicates.rag_red'))}</span></td>
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
-                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" onclick="exportOwner(event, this)" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">${escapeHtml(_t('dyn.duplicates.export'))}</a></td>
+                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" data-on-click="exportOwner" data-args='["@this"]' data-pass-event="true" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">${escapeHtml(_t('dyn.duplicates.export'))}</a></td>
                 </tr>
             `).join('') || `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_owner_data'))}</td></tr>`;
         }
@@ -1368,7 +1368,7 @@
             return streamingDownloadFromEvent(event, url, { filename: 'duplicates-all.csv' });
         }
 
-        function exportOwner(event, anchor) {
+        function exportOwner(anchor, event) {
             const owner = anchor && anchor.dataset ? (anchor.dataset.owner || 'owner') : 'owner';
             const safe = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'owner';
             return streamingDownloadFromEvent(event, anchor.href, { filename: `duplicates-owner-${safe}.csv` });

@@ -71,3 +71,16 @@ npx tsx tests/aiApprovalSweepBackfill.test.ts
 echo ""
 echo "▶ CI gate: i18n coverage (Task #125)"
 node scripts/check-i18n.cjs
+
+# ----------------------------------------------------------------------------
+# CI gate — dashboard inline-handler CSP guard (Task #171)
+#
+# Blocks merges that reintroduce inline `onclick=` / `onchange=` / etc. on any
+# `dashboard/*.html` or `public/*.html` page. These would be silently dropped
+# by the strict CSP (`script-src` has no `'unsafe-inline'`), turning the
+# affected button into a no-op in production. Equivalent behaviour MUST go
+# through `dashboard/js/safe-actions.js` using the `data-on-{event}` pattern.
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: dashboard inline-handler CSP guard (Task #171)"
+bash scripts/lint-dashboard-handlers.sh
