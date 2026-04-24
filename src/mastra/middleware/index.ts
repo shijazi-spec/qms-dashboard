@@ -11,7 +11,7 @@ const PUBLIC_PATHS = [
   '/guide', '/sop', '/api/sop', '/accept-invite', '/css/', '/js/',
   '/dashboard/tailwind.css', '/api/invitations/validate/', '/api/invitations/accept',
   '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack',
-  '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview',
+  '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview', '/a11y',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];

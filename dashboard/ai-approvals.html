@@ -24,7 +24,8 @@
 </head>
 <body class="bg-gray-50">
     <div id="walaplus-nav"></div>
-    <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/a11y.js" defer></script>
+        <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             if (window.WalaPlusNav) WalaPlusNav.init('ai-approvals');
@@ -37,9 +38,9 @@
                 <h1 class="text-2xl font-semibold text-gray-900">AI Approvals Queue</h1>
                 <p class="text-sm text-gray-600 mt-1">
                     Human-in-the-loop gate for AI-proposed QMS actions.
-                    Governed by <a href="/policies?policy_number=WP-SOP-011" class="text-indigo-700 hover:underline">WP-SOP-011</a>
+                    Governed by <a href="/policies?policy_number=WP-SOP-011" class="text-indigo-700 underline">WP-SOP-011</a>
                     (Automated Decision and Processing) and
-                    <a href="/policies?policy_number=WP-DOC-004" class="text-indigo-700 hover:underline">WP-DOC-004</a>
+                    <a href="/policies?policy_number=WP-DOC-004" class="text-indigo-700 underline">WP-DOC-004</a>
                     (AI Adoption Guidelines).
                 </p>
             </div>
@@ -61,7 +62,7 @@
         <!-- Filters -->
         <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap gap-3 items-center">
             <label class="text-xs text-gray-600">Status</label>
-            <select id="fltStatus" class="border border-gray-300 rounded px-2 py-1 text-sm">
+            <select id="fltStatus" aria-label="Filter by approval status" class="border border-gray-300 rounded px-2 py-1 text-sm">
                 <option value="pending" selected>Pending</option>
                 <option value="approved">Approved (executing)</option>
                 <option value="executed">Executed</option>
@@ -72,7 +73,7 @@
             </select>
 
             <label class="text-xs text-gray-600 ml-2">Risk</label>
-            <select id="fltRisk" class="border border-gray-300 rounded px-2 py-1 text-sm">
+            <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
                 <option value="">Any</option>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
@@ -131,7 +132,7 @@
             .map(function (r) {
                 var code = /^(WP-[A-Z]+-\d+)/.exec(r);
                 return code
-                    ? '<a href="/policies?policy_number=' + code[1] + '" target="_blank" class="text-indigo-700 hover:underline">' + code[1] + '</a>'
+                    ? '<a href="/policies?policy_number=' + code[1] + '" target="_blank" class="text-indigo-700 underline">' + code[1] + '</a>'
                     : escapeHtml(r);
             }).join(' · ');
 

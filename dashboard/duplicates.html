@@ -44,7 +44,8 @@
 </head>
 <body class="bg-gray-100">
     <div id="walaplus-nav"></div>
-    <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/a11y.js" defer></script>
+        <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('duplicates');
@@ -59,7 +60,7 @@
                     <div class="flex items-center justify-between mb-1">
                         <span id="scanProgressText" class="text-sm font-medium text-gray-700">Scanning...</span>
                         <div class="flex items-center gap-2">
-                            <span id="scanElapsed" class="text-xs text-gray-400">0s</span>
+                            <span id="scanElapsed" class="text-xs text-gray-600">0s</span>
                             <span id="scanPct" class="text-xs font-bold text-blue-600">0%</span>
                         </div>
                     </div>
@@ -77,7 +78,7 @@
         <div class="flex justify-between items-center mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">Duplicate Radar</h1>
-                <p class="text-sm text-gray-500 mt-1">AI-powered duplicate detection for CRM hygiene (Zoho-aligned, Read-Only)</p>
+                <p class="text-sm text-gray-700 mt-1">AI-powered duplicate detection for CRM hygiene (Zoho-aligned, Read-Only)</p>
             </div>
             <div class="flex gap-3">
                 <button onclick="syncNowZohoCRM()" id="syncNowBtn" data-testid="button-sync-now" title="Quick sync to pull latest changes from Zoho (recommended after merging duplicates in Zoho)" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
@@ -86,13 +87,13 @@
                     </svg>
                     Sync Now
                 </button>
-                <button onclick="scanZohoCRM()" id="scanZohoBtn" data-testid="button-scan-zoho" title="Full re-scan: re-fetches every record from Zoho and rebuilds clusters (slower)" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium flex items-center gap-2">
+                <button onclick="scanZohoCRM()" id="scanZohoBtn" data-testid="button-scan-zoho" title="Full re-scan: re-fetches every record from Zoho and rebuilds clusters (slower)" class="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
                     </svg>
                     Scan from Zoho
                 </button>
-                <button onclick="exportData()" data-testid="button-export-csv" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
+                <button onclick="exportData()" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
@@ -166,7 +167,7 @@
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Module</label>
-                        <select id="filterModule" data-testid="select-filter-module" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4">
+                        <select id="filterModule" aria-label="Filter by module" data-testid="select-filter-module" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4">
                             <option value="Leads">Leads</option>
                             <option value="Deals">Deals</option>
                             <option value="Contacts">Contacts</option>
@@ -175,23 +176,23 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Owner</label>
-                        <select id="filterOwner" data-testid="select-filter-owner" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterOwner" aria-label="Filter by owner" data-testid="select-filter-owner" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Layout</label>
-                        <select id="filterLayout" data-testid="select-filter-layout" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterLayout" aria-label="Filter by layout" data-testid="select-filter-layout" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Pipeline</label>
-                        <select id="filterPipeline" data-testid="select-filter-pipeline" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterPipeline" aria-label="Filter by pipeline" data-testid="select-filter-pipeline" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Stage <span class="text-gray-400 font-normal">(Deals)</span></label>
-                        <select id="filterStage" data-testid="select-filter-stage" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
+                        <select id="filterStage" aria-label="Filter by deal stage" data-testid="select-filter-stage" multiple class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" size="4"></select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Confidence</label>
-                        <select id="filterConfidence" data-testid="select-filter-confidence" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                        <select id="filterConfidence" aria-label="Filter by confidence level" data-testid="select-filter-confidence" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
                             <option value="">All</option>
                             <option value="high">High (≥90%)</option>
                             <option value="medium">Medium (60-89%)</option>
@@ -205,9 +206,9 @@
                 </div>
                 <div class="flex gap-3 items-center">
                     <label class="text-xs font-medium text-gray-600">Date Range:</label>
-                    <input type="date" id="filterDateFrom" data-testid="input-date-from" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                    <input type="date" id="filterDateFrom" aria-label="Filter from date" data-testid="input-date-from" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
                     <span class="text-gray-400 text-xs">to</span>
-                    <input type="date" id="filterDateTo" data-testid="input-date-to" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                    <input type="date" id="filterDateTo" aria-label="Filter to date" data-testid="input-date-to" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
                 </div>
             </div>
         </div>
@@ -218,7 +219,7 @@
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-blue-600">
                     <div class="text-xs text-gray-500">True Duplicates</div>
                     <div id="totalClusters" data-testid="text-total-clusters" class="text-xl font-bold text-blue-600">-</div>
-                    <div class="text-xs text-gray-400">clusters</div>
+                    <div class="text-xs text-gray-600">clusters</div>
                     <div class="mt-1.5 flex items-end justify-between gap-1 min-h-[20px]">
                         <div id="clustersSparkline" data-testid="sparkline-clusters"></div>
                         <div id="clustersDelta" data-testid="delta-clusters"></div>
@@ -227,12 +228,12 @@
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-amber-500">
                     <div class="text-xs text-gray-500">Dup Leads</div>
                     <div id="totalLeads" data-testid="text-total-leads" class="text-xl font-bold text-amber-600">-</div>
-                    <div id="leadRate" class="text-xs text-amber-500">-% rate</div>
+                    <div id="leadRate" class="text-xs text-amber-700">-% rate</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
                     <div class="text-xs text-gray-500">Dup Deals</div>
                     <div id="totalDeals" data-testid="text-total-deals" class="text-xl font-bold text-red-600">-</div>
-                    <div id="dealRate" class="text-xs text-red-500">-% rate</div>
+                    <div id="dealRate" class="text-xs text-red-600">-% rate</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-teal-500">
                     <div class="text-xs text-gray-500">Dup Contacts</div>
@@ -245,12 +246,12 @@
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
                     <div class="text-xs text-gray-500">Strong</div>
                     <div id="highConfidence" data-testid="text-high-confidence" class="text-xl font-bold text-red-600">-</div>
-                    <div class="text-xs text-red-500">≥90%</div>
+                    <div class="text-xs text-red-600">≥90%</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-yellow-500">
                     <div class="text-xs text-gray-500">Moderate</div>
-                    <div id="mediumConfidence" data-testid="text-medium-confidence" class="text-xl font-bold text-yellow-600">-</div>
-                    <div class="text-xs text-yellow-500">60-89%</div>
+                    <div id="mediumConfidence" data-testid="text-medium-confidence" class="text-xl font-bold text-yellow-800">-</div>
+                    <div class="text-xs text-yellow-700">60-89%</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-3 border-l-4 border-purple-500">
                     <div class="text-xs text-gray-500">Pipeline Inflation</div>
@@ -279,7 +280,7 @@
                             </div>
                             <div class="flex justify-between text-xs text-gray-400 mt-1">
                                 <span>0%</span>
-                                <span class="text-red-500 font-medium">2% target</span>
+                                <span class="text-red-600 font-medium">2% target</span>
                                 <span>4%+</span>
                             </div>
                         </div>
@@ -403,19 +404,19 @@
         <!-- ═══ CLUSTERS TAB (C4: paginated 30/page) ═══ -->
         <div id="content-clusters" class="tab-content hidden">
             <div class="mb-4 flex gap-4 items-center">
-                <select id="clusterFilter" onchange="loadClusters()" data-testid="select-cluster-filter" class="border rounded-lg px-3 py-2">
+                <select id="clusterFilter" aria-label="Filter by cluster type" onchange="loadClusters()" data-testid="select-cluster-filter" class="border rounded-lg px-3 py-2">
                     <option value="">All Similarity</option>
                     <option value="high">Strong (≥90%)</option>
                     <option value="medium">Moderate (60-89%)</option>
                     <option value="low">Weak (<60%)</option>
                 </select>
-                <select id="statusFilter" onchange="loadClusters()" data-testid="select-status-filter" class="border rounded-lg px-3 py-2">
+                <select id="statusFilter" aria-label="Filter by status" onchange="loadClusters()" data-testid="select-status-filter" class="border rounded-lg px-3 py-2">
                     <option value="">All Statuses</option>
                     <option value="active">Active</option>
                     <option value="resolved">Resolved</option>
                     <option value="ignored">Ignored</option>
                 </select>
-                <select id="layoutFilter" onchange="loadClusters()" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
+                <select id="layoutFilter" aria-label="Filter by Zoho layout" onchange="loadClusters()" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
                     <option value="">All Layouts</option>
                 </select>
                 <span id="layoutFilterHint" class="text-xs text-gray-400"></span>
@@ -547,11 +548,11 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="text-lg font-semibold mb-4">Export Duplicate Data</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Export Type</label><select id="exportType" data-testid="select-export-type" class="w-full border rounded-lg px-3 py-2"><option value="all">All Duplicates</option><option value="cluster">By Domain Cluster</option><option value="owner">By Owner</option><option value="time_period">By Time Period</option></select></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Export Type</label><select id="exportType" aria-label="Export format type" data-testid="select-export-type" class="w-full border rounded-lg px-3 py-2"><option value="all">All Duplicates</option><option value="cluster">By Domain Cluster</option><option value="owner">By Owner</option><option value="time_period">By Time Period</option></select></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" aria-label="Export start date" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" aria-label="Export end date" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
                 </div>
-                <button onclick="downloadExport()" data-testid="button-download-export" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">Download CSV Export</button>
+                <button onclick="downloadExport()" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export</button>
             </div>
         </div>
 
@@ -600,7 +601,7 @@
                             <h3 id="modalTitle" class="text-xl font-bold text-gray-900">Cluster Details</h3>
                             <p id="modalDomain" class="text-sm text-gray-500"></p>
                         </div>
-                        <button onclick="closeModal()" data-testid="button-close-modal" class="text-gray-400 hover:text-gray-600">
+                        <button onclick="closeModal()" data-testid="button-close-modal" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>

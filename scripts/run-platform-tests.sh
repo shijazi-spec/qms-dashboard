@@ -232,6 +232,26 @@ DB_TELE=$(db_count access_audit_log)
 
 # ----- Build report -----
 echo
+echo "▶ Accessibility check (axe-core WCAG 2.1 AA)"
+A11Y_PASS=0; A11Y_FAIL=0
+if command -v node >/dev/null 2>&1 && [ -f "$(dirname "$0")/a11y-check.js" ]; then
+  if node "$(dirname "$0")/a11y-check.js" 2>/dev/null; then
+    A11Y_PASS=1
+    echo "  [PASS] A11Y-01 · axe-core: 0 serious/critical violations"
+    ROWS_VAL+="| A11Y-01 | axe-core WCAG 2.1 AA — top 10 dashboards | node scripts/a11y-check.js | 0 serious/critical | pass | ✅ |\n"
+    PASS=$((PASS+1))
+  else
+    A11Y_FAIL=1
+    echo "  [FAIL] A11Y-01 · axe-core: serious/critical violations found (see a11y-report.json)"
+    ROWS_VAL+="| A11Y-01 | axe-core WCAG 2.1 AA — top 10 dashboards | node scripts/a11y-check.js | 0 serious/critical | FAIL | ❌ |\n"
+    FAIL=$((FAIL+1))
+  fi
+else
+  echo "  [SKIP] A11Y-01 · node/a11y-check.js not found"
+  SKIP=$((SKIP+1))
+fi
+
+echo
 echo "▶ Writing $REPORT"
 
 {

@@ -17,7 +17,8 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div id="walaplus-nav"></div>
-    <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/a11y.js" defer></script>
+        <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('executive');
@@ -97,7 +98,7 @@
             <div class="bg-white rounded-xl shadow p-5 mb-6" data-testid="quality-health-index">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-semibold text-gray-900">Quality Health Index</h3>
-                    <span class="text-xs text-gray-400" id="qhiTimestamp"></span>
+                    <span class="text-xs text-gray-600" id="qhiTimestamp"></span>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4" id="qhiDimensions">
                     <div class="text-center p-3 rounded-lg bg-blue-50">
@@ -200,7 +201,7 @@
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-semibold text-gray-900">Executive Reports Archive</h3>
-                    <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" onchange="loadReports()">
+                    <select id="reportTypeFilter" class="border rounded px-3 py-1 text-sm" aria-label="Filter by report type" onchange="loadReports()">
                         <option value="">All Reports</option>
                         <option value="mbr">Monthly (MBR)</option>
                         <option value="qbr">Quarterly (QBR)</option>

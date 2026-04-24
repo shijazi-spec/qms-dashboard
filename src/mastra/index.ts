@@ -57,6 +57,7 @@ import { reportRoutes } from "./routes/reportRoutes";
 import { managementReviewRoutes } from "./routes/managementReviewRoutes";
 import { analyticsRoutes } from "./routes/analyticsRoutes";
 import { healthPulseRoutes } from "./routes/healthPulseRoutes";
+import { a11yRoutes } from "./routes/a11yRoutes";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
@@ -164,6 +165,9 @@ export const mastra = new Mastra({
       ...managementReviewRoutes,
       ...analyticsRoutes,
       ...healthPulseRoutes,
+
+      // ── Accessibility ─────────────────────────────────────────────────────
+      ...a11yRoutes,
 
       // ── HTML Page Shells ─────────────────────────────────────────────────
       ...staticPageRoutes,

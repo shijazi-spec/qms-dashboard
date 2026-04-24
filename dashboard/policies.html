@@ -40,7 +40,8 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
-    <script src="/js/navigation.js?v=4.5.2"></script>
+    <script src="/js/a11y.js" defer></script>
+        <script src="/js/navigation.js?v=4.5.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('policies');
@@ -130,7 +131,7 @@
                     <h2 class="text-lg font-semibold text-gray-900">Document Register</h2>
                     <div class="flex-1"></div>
                     <input type="text" id="searchInput" onkeyup="debounceSearch()" placeholder="Search..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40" data-testid="input-search">
-                    <select id="filterDocType" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-doctype">
+                    <select id="filterDocType" aria-label="Filter by document type" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-doctype">
                         <option value="">All Types</option>
                         <option value="policy">Policy</option>
                         <option value="procedure">Procedure</option>
@@ -141,7 +142,7 @@
                         <option value="manual">Manual</option>
                         <option value="guideline">Guideline</option>
                     </select>
-                    <select id="filterStatus" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-status">
+                    <select id="filterStatus" aria-label="Filter by document status" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-status">
                         <option value="">All Status</option>
                         <option value="draft">Draft</option>
                         <option value="review">In Review</option>
@@ -149,7 +150,7 @@
                         <option value="published">Published</option>
                         <option value="archived">Archived</option>
                     </select>
-                    <select id="filterCategory" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-category">
+                    <select id="filterCategory" aria-label="Filter by category" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-category">
                         <option value="">All Categories</option>
                         <option value="governance">Governance</option>
                         <option value="operational">Operational</option>
@@ -211,7 +212,7 @@
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Create New Document</h3>
-                <button onclick="closeModal('addPolicyModal')" class="text-gray-400 hover:text-gray-600">
+                <button onclick="closeModal('addPolicyModal')" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
@@ -334,7 +335,7 @@
         <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-gray-900">Document Details</h3>
-                <button onclick="closeModal('policyDetailModal')" class="text-gray-400 hover:text-gray-600" data-testid="button-close-detail">
+                <button onclick="closeModal('policyDetailModal')" class="text-gray-400 hover:text-gray-600" aria-label="Close dialog" data-testid="button-close-detail">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
@@ -371,7 +372,7 @@
                 if (data.upcoming_reviews && data.upcoming_reviews.length > 0) {
                     renderUpcomingReviews(data.upcoming_reviews);
                 } else {
-                    document.getElementById('upcomingReviews').innerHTML = '<div class="text-gray-400 text-center py-4">No upcoming reviews</div>';
+                    document.getElementById('upcomingReviews').innerHTML = '<div class="text-gray-600 text-center py-4">No upcoming reviews</div>';
                 }
                 if (data.by_category && data.by_category.length > 0) {
                     renderCategoryBreakdown(data.by_category);
@@ -501,7 +502,7 @@
                     <td class="px-4 py-3 text-center">
                         <div class="flex items-center justify-center gap-2">
                             <button onclick="viewPolicyDetail('${policy.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-document-${policy.id}">View</button>
-                            ${policy.status !== 'published' ? `<button data-title="${escAttr(policy.title)}" onclick="deleteDocument('${policy.id}', this.dataset.title)" class="text-red-400 hover:text-red-600 text-sm" data-testid="button-delete-document-${policy.id}">Del</button>` : ''}
+                            ${policy.status !== 'published' ? `<button data-title="${escAttr(policy.title)}" onclick="deleteDocument('${policy.id}', this.dataset.title)" class="text-red-600 hover:text-red-800 text-sm" data-testid="button-delete-document-${policy.id}">Del</button>` : ''}
                         </div>
                     </td>
                 </tr>`;

@@ -106,7 +106,7 @@ const WalaPlusNav = {
     const colors = {
       blue: { bg: 'bg-blue-600', hover: 'hover:bg-blue-700', text: 'text-blue-600', lightBg: 'bg-blue-50' },
       slate: { bg: 'bg-slate-700', hover: 'hover:bg-slate-800', text: 'text-slate-700', lightBg: 'bg-slate-50' },
-      amber: { bg: 'bg-amber-600', hover: 'hover:bg-amber-700', text: 'text-amber-600', lightBg: 'bg-amber-50' },
+      amber: { bg: 'bg-amber-700', hover: 'hover:bg-amber-800', text: 'text-amber-800', lightBg: 'bg-amber-50' },
       green: { bg: 'bg-green-600', hover: 'hover:bg-green-700', text: 'text-green-600', lightBg: 'bg-green-50' },
       purple: { bg: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', lightBg: 'bg-purple-50' }
     };
@@ -174,7 +174,7 @@ const WalaPlusNav = {
           if (!list) return;
           const items = data.notifications || [];
           if (items.length === 0) {
-            list.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">No new notifications</p>';
+            list.innerHTML = '<p class="text-center text-sm text-gray-600 py-4">No new notifications</p>';
             return;
           }
           list.innerHTML = items.map(n => {
@@ -184,14 +184,14 @@ const WalaPlusNav = {
             const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
             const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
             const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
-            return `<div class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer" onclick="WalaPlusNav.markRead(${safeId})">
-              <div class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</p>
-                <p class="text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</p>
-                <p class="text-xs ${iconColor} mt-0.5">${this.escapeHtml(safeModule)} · ${this.escapeHtml(ago)}</p>
-              </div>
-            </div>`;
+            return `<button type="button" class="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 w-full text-left" onclick="WalaPlusNav.markRead(${safeId})" aria-label="Mark notification as read: ${this.escapeHtml(n.subject||'Notification')}">
+              <span class="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 flex-shrink-0" aria-hidden="true"></span>
+              <span class="flex-1 min-w-0">
+                <span class="block text-sm font-medium text-gray-900 truncate">${this.escapeHtml(n.subject||'Notification')}</span>
+                <span class="block text-xs text-gray-500 truncate">${this.escapeHtml(n.message||'')}</span>
+                <span class="block text-xs ${iconColor} mt-0.5">${this.escapeHtml(safeModule)} · ${this.escapeHtml(ago)}</span>
+              </span>
+            </button>`;
           }).join('');
         })
         .catch(() => {});
@@ -233,7 +233,7 @@ const WalaPlusNav = {
           // Static skeleton only — no user data interpolated here
           container.innerHTML = `
             <div class="relative nav-dropdown" data-group="user-menu">
-              <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" data-testid="button-user-menu">
+              <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="User menu" aria-haspopup="true" aria-expanded="false" data-testid="button-user-menu">
                 <span data-slot="avatar"></span>
                 <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
               </button>
@@ -360,15 +360,15 @@ const WalaPlusNav = {
           </a>
         </div>
         <div class="flex items-center space-x-2">
-          <span id="lastUpdated" class="wp-tagline text-xs text-gray-400"></span>
-          <button onclick="typeof refreshDashboard === 'function' && refreshDashboard()" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" data-testid="button-refresh">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span id="lastUpdated" class="wp-tagline text-xs text-gray-600"></span>
+          <button onclick="typeof refreshDashboard === 'function' && refreshDashboard()" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
+            <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             <span>Refresh</span>
           </button>
           <div class="relative nav-dropdown" data-group="notifications">
-            <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" title="Notifications" data-testid="button-notifications">
-              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-              <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold" style="font-size:10px"></span>
+            <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" aria-controls="nav-notifications-list" data-testid="button-notifications">
+              <svg class="w-5 h-5 text-gray-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <span id="nav-alert-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold" aria-live="polite" style="font-size:10px"></span>
             </button>
             <div class="dropdown-menu hidden absolute right-0 top-full mt-1 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
               <div class="p-3 border-b border-gray-100 flex justify-between items-center">
@@ -376,7 +376,7 @@ const WalaPlusNav = {
                 <a href="/consultant" class="text-xs text-indigo-600 hover:text-indigo-800">View All</a>
               </div>
               <div id="nav-notifications-list" class="overflow-y-auto max-h-72 p-2 space-y-1">
-                <p class="text-center text-sm text-gray-400 py-4">Loading...</p>
+                <p class="text-center text-sm text-gray-600 py-4">Loading...</p>
               </div>
             </div>
           </div>
@@ -396,6 +396,9 @@ const WalaPlusNav = {
         <nav class="flex-1 overflow-y-auto py-2" id="wp-rail-nav">
           ${this.navigationGroups.map(group => this.renderRailGroup(group)).join('')}
         </nav>
+        <div class="wp-label border-t border-gray-100 px-3 py-2 text-center" style="flex-shrink:0;">
+          <a href="/a11y" class="text-xs text-gray-600 hover:text-indigo-700 underline" aria-label="Accessibility statement">Accessibility</a>
+        </div>
       </aside>
     `;
   },
@@ -448,6 +451,7 @@ const WalaPlusNav = {
         this.closeAllDropdowns();
         if (!isOpen) {
           menu.classList.remove('hidden');
+          btn.setAttribute('aria-expanded', 'true');
           if (arrow) arrow.classList.add('rotate-180');
         }
       });
@@ -530,8 +534,14 @@ const WalaPlusNav = {
   },
 
   closeAllDropdowns() {
-    document.querySelectorAll('.nav-dropdown .dropdown-menu').forEach(menu => menu.classList.add('hidden'));
-    document.querySelectorAll('.nav-dropdown .dropdown-arrow').forEach(arrow => arrow.classList.remove('rotate-180'));
+    document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+      const menu = dropdown.querySelector('.dropdown-menu');
+      const btn = dropdown.querySelector('button');
+      const arrow = dropdown.querySelector('.dropdown-arrow');
+      if (menu) menu.classList.add('hidden');
+      if (btn && btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
+      if (arrow) arrow.classList.remove('rotate-180');
+    });
   }
 };
 

@@ -116,7 +116,8 @@
             padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
         }
         #ai-widget-header h3 { color: white; font-size: 14px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
-        #ai-widget-header button { background: none; border: none; color: rgba(255,255,255,0.8); cursor: pointer; padding: 4px; }
+        #ai-widget-header button { background: none; border: none; color: rgba(255,255,255,0.8); cursor: pointer; padding: 4px; border-radius: 4px; }
+        #ai-widget-header button:focus-visible { outline: 3px solid rgba(255,255,255,0.8); outline-offset: 2px; }
         #ai-widget-header button:hover { color: white; }
         #ai-widget-messages {
             flex: 1; overflow-y: auto; padding: 16px; min-height: 300px; max-height: 360px;
@@ -190,20 +191,20 @@
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                         Full view
                     </a>
-                    <button onclick="document.getElementById('ai-widget-panel').classList.remove('open')" data-testid="button-close-widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <button onclick="window._closeAIWidget && window._closeAIWidget();" aria-label="Close AI Consultant chat" data-testid="button-close-widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
             </div>
-            <div id="ai-widget-messages">
+            <div id="ai-widget-messages" role="log" aria-live="polite" aria-label="AI Consultant conversation" aria-relevant="additions">
                 <div id="ai-widget-welcome">
                     <h4>WalaPlus QMS Consultant</h4>
                     <p>Ask about quality management, compliance, CRM data hygiene, or SOPs.</p>
                     <div>
-                        <span class="widget-quick-btn" onclick="widgetQuickSend('What is our current quality score?')" data-testid="button-quick-quality">Quality Score</span>
-                        <span class="widget-quick-btn" onclick="widgetQuickSend('Show compliance status')" data-testid="button-quick-compliance">Compliance</span>
-                        <span class="widget-quick-btn" onclick="widgetQuickSend('What are the top CRM issues?')" data-testid="button-quick-crm">CRM Issues</span>
-                        <span class="widget-quick-btn" onclick="widgetQuickSend('Explain ISO 9001 requirements')" data-testid="button-quick-iso">ISO 9001</span>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What is our current quality score?')" data-testid="button-quick-quality">Quality Score</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Show compliance status')" data-testid="button-quick-compliance">Compliance</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('What are the top CRM issues?')" data-testid="button-quick-crm">CRM Issues</button>
+                        <button type="button" class="widget-quick-btn" onclick="widgetQuickSend('Explain ISO 9001 requirements')" data-testid="button-quick-iso">ISO 9001</button>
                     </div>
                 </div>
                 <div class="widget-typing" id="ai-widget-typing">
@@ -216,14 +217,14 @@
                 </div>
             </div>
             <div id="ai-widget-input-area">
-                <textarea id="ai-widget-input" placeholder="Ask anything..." rows="1" data-testid="input-widget-chat"></textarea>
-                <button id="ai-widget-send" disabled data-testid="button-widget-send">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                <textarea id="ai-widget-input" placeholder="Ask anything..." rows="1" aria-label="Type your question" data-testid="input-widget-chat"></textarea>
+                <button id="ai-widget-send" disabled aria-label="Send message" data-testid="button-widget-send">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                 </button>
             </div>
         </div>
-        <button id="ai-widget-btn" data-testid="button-ai-consultant">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        <button id="ai-widget-btn" aria-label="Open AI Consultant chat" aria-expanded="false" aria-controls="ai-widget-panel" data-testid="button-ai-consultant">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
         </button>
     `;
     document.body.appendChild(widget);
@@ -235,14 +236,25 @@
     var sendBtn = document.getElementById('ai-widget-send');
     var typingEl = document.getElementById('ai-widget-typing');
 
-    btn.addEventListener('click', function() {
-        isOpen = !isOpen;
+    function setWidgetOpen(open) {
+        isOpen = open;
+        btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        btn.setAttribute('aria-label', isOpen ? 'Close AI Consultant chat' : 'Open AI Consultant chat');
         if (isOpen) {
             panel.classList.add('open');
+            panel.setAttribute('aria-hidden', 'false');
             inputEl.focus();
         } else {
             panel.classList.remove('open');
+            panel.setAttribute('aria-hidden', 'true');
+            btn.focus();
         }
+    }
+
+    window._closeAIWidget = function() { setWidgetOpen(false); };
+
+    btn.addEventListener('click', function() {
+        setWidgetOpen(!isOpen);
     });
 
     inputEl.addEventListener('input', function() {

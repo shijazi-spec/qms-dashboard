@@ -64,6 +64,7 @@
     </head>
     <body class="bg-gray-100 min-h-screen">
         <div id="walaplus-nav"></div>
+        <script src="/js/a11y.js" defer></script>
         <script src="/js/navigation.js?v=4.5.2"></script>
         <script>
             document.addEventListener("DOMContentLoaded", function () {
@@ -77,13 +78,13 @@
                     <h1 class="text-2xl font-bold text-gray-900">
                         GRC Control Tower
                     </h1>
-                    <p class="text-sm text-gray-500 mt-1">
+                    <p class="text-sm text-gray-700 mt-1">
                         Enterprise governance, risk, and compliance dashboard
                     </p>
                 </div>
                 <div class="flex gap-3">
                     <select
-                        id="periodFilter"
+                        id="periodFilter" aria-label="Filter by period"
                         class="border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white"
                     >
                         <option value="mtd">Month to Date</option>
@@ -125,7 +126,7 @@
                     >
                         -
                     </div>
-                    <div id="criticalRisks" class="text-xs text-red-500">
+                    <div id="criticalRisks" class="text-xs text-red-600">
                         - critical
                     </div>
                 </div>
@@ -139,7 +140,7 @@
                     >
                         -
                     </div>
-                    <div id="draftPolicies" class="text-xs text-amber-600">
+                    <div id="draftPolicies" class="text-xs text-amber-800">
                         - in draft
                     </div>
                 </div>
@@ -167,7 +168,7 @@
                     >
                         -
                     </div>
-                    <div id="criticalFindings" class="text-xs text-purple-500">
+                    <div id="criticalFindings" class="text-xs text-purple-700">
                         - critical
                     </div>
                 </div>
@@ -181,7 +182,7 @@
                     >
                         -
                     </div>
-                    <div id="highRiskVendors" class="text-xs text-red-500">
+                    <div id="highRiskVendors" class="text-xs text-red-600">
                         - high risk
                     </div>
                 </div>
@@ -195,7 +196,7 @@
                     >
                         -
                     </div>
-                    <div id="effectiveControls" class="text-xs text-green-600">
+                    <div id="effectiveControls" class="text-xs text-green-700">
                         - effective
                     </div>
                 </div>
@@ -424,7 +425,7 @@
                         Compliance by Framework
                     </h2>
                     <div id="frameworkCompliance" class="space-y-3">
-                        <div class="text-gray-400 text-center py-4">
+                        <div class="text-gray-600 text-center py-4">
                             Loading...
                         </div>
                     </div>
@@ -444,7 +445,7 @@
                             >Quality-GRC Integration</span
                         >
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto" tabindex="0"
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -504,7 +505,7 @@
                             >Control Mapping</span
                         >
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto" tabindex="0"
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -568,12 +569,12 @@
                             <p class="text-2xl font-bold text-amber-700" id="upcomingAudits">-</p>
                         </div>
                         <div class="text-center p-4 bg-red-50 rounded-lg">
-                            <p class="text-sm text-gray-500">Overdue Findings</p>
+                            <p class="text-sm text-gray-700">Overdue Findings</p>
                             <p class="text-2xl font-bold text-red-700" id="overdueFindings">-</p>
                         </div>
                     </div>
                     <div id="auditReadinessDetails" class="space-y-2">
-                        <p class="text-gray-400 text-center py-2 text-sm">Loading audit readiness data...</p>
+                        <p class="text-gray-600 text-center py-2 text-sm">Loading audit readiness data...</p>
                     </div>
                 </div>
             </div>
@@ -592,7 +593,7 @@
                     >
                 </div>
                 <div id="recentEvents" class="p-4 space-y-2">
-                    <div class="text-gray-400 text-center py-4">
+                    <div class="text-gray-600 text-center py-4">
                         Loading recent events...
                     </div>
                 </div>
@@ -822,7 +823,7 @@
                 const container = document.getElementById("recentEvents");
                 if (!events || events.length === 0) {
                     container.innerHTML =
-                        '<div class="text-gray-400 text-center py-4">No recent handoff events</div>';
+                        '<div class="text-gray-600 text-center py-4">No recent handoff events</div>';
                     return;
                 }
 
@@ -853,7 +854,7 @@
                 );
                 if (!frameworks || frameworks.length === 0) {
                     container.innerHTML =
-                        '<div class="text-gray-400 text-center py-4">No compliance data</div>';
+                        '<div class="text-gray-600 text-center py-4">No compliance data</div>';
                     return;
                 }
 
