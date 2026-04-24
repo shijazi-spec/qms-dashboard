@@ -322,6 +322,17 @@ export async function rejectAction(
   reviewer: { userId: number | null; email: string | null; name: string | null },
   reason: string
 ): Promise<PendingAction | null> {
+  // SECURITY (PDPL Art. 16 / PCI DSS §3.5 / ISO 27001 A.5.34):
+  // The rejection note is a free-form TEXT column that reviewers populate
+  // verbatim from a dialog box. A reviewer who pastes prose like "rejecting
+  // because the new key sk_live_… is wrong" would otherwise leak that
+  // credential to every other reviewer (via /api/ai/approvals reads) and to
+  // the audit export. Run the reason through the same regex deny-list used
+  // for `payload_preview` so credential-shaped substrings (sk-…, ghp_…,
+  // JWT, bcrypt, AWS, etc.) are replaced with the sentinel before they
+  // hit the database.
+  const safeReason = redactSecretLikeStrings(reason ?? '') as string;
+
   const res = await pool.query<PendingAction>(
     `UPDATE ai_pending_actions
         SET status              = 'rejected',
@@ -333,7 +344,7 @@ export async function rejectAction(
       WHERE action_code = $1
         AND status = 'pending'
       RETURNING *`,
-    [code, reviewer.userId, reviewer.email, reviewer.name, reason]
+    [code, reviewer.userId, reviewer.email, reviewer.name, safeReason]
   );
   return res.rows[0] || null;
 }

@@ -25,6 +25,10 @@ echo ""
 echo "▶ CI gate: AI approval queue HTTP read-path secret-leak tests"
 npx tsx tests/aiApprovalRoutesRedaction.test.ts
 
+echo ""
+echo "▶ CI gate: AI approval queue rejection-note secret-leak tests"
+npx tsx tests/aiApprovalRejectionRedaction.test.ts
+
 # ----------------------------------------------------------------------------
 # CI gate — RBAC route-lockdown + admin-auth helper tests
 #
