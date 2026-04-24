@@ -1,6 +1,7 @@
 import type { Pool as PgPool } from 'pg';
 import { streamCsv } from "../../utils/excelExport";
 import { escapeCSVValue } from "../../utils/inputSanitizer";
+import { gateApiRoute } from "../../utils/rbacMiddleware";
 
 const evidenceRoutes = [
   {
@@ -164,7 +165,7 @@ async function qmsEstimateResponse(
   }
 }
 
-export const qmsEnhancedRoutes = [
+const _qmsEnhancedRoutesRaw = [
   ...evidenceRoutes,
   {
     path: "/api/qms/nc/export/estimate",
@@ -1107,3 +1108,5 @@ export const qmsEnhancedRoutes = [
     },
   },
 ];
+
+export const qmsEnhancedRoutes = _qmsEnhancedRoutesRaw.map(gateApiRoute);

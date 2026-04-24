@@ -1,3 +1,18 @@
+/**
+ * Sandbox API routes — return mock or live CRM/calendar/calls data for the
+ * in-app sandbox dashboards. Every route requires an authenticated session
+ * (or the X-Admin-Key header) so the data is never reachable from public
+ * traffic. The handler-level gate also makes the auth boundary visible to
+ * integration tests that bypass the global middleware.
+ */
+
+async function requireSandboxAuth(c: any): Promise<{ ok: boolean; res?: any }> {
+  const { requireAuthOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+  const user = requireAuthOrKey(c);
+  if (!user) return { ok: false, res: unauthorizedResponse(c) };
+  return { ok: true };
+}
+
 export const sandboxApiRoutes = [
   {
     path: "/api/sandbox/mode",
@@ -5,6 +20,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getDataMode } = await import("../../data");
           const mode = getDataMode();
           return c.json({ mode, description: mode === 'mock' ? 'Using mock data for testing' : 'Using live CRM data' });
@@ -21,6 +38,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getLeads, getDeals, getActivities, getCalendarEvents, getFive9Calls, getDataMode } = await import("../../data");
           const mode = getDataMode();
           const [leads, deals, activities, calendarEvents, calls] = await Promise.all([getLeads(), getDeals(), getActivities(), getCalendarEvents(), getFive9Calls()]);
@@ -39,6 +58,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getLeads } = await import("../../data");
           const leads = await getLeads();
           return c.json({ leads, count: leads.length });
@@ -55,6 +76,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getDeals } = await import("../../data");
           const deals = await getDeals();
           return c.json({ deals, count: deals.length });
@@ -71,6 +94,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getActivities } = await import("../../data");
           const activities = await getActivities();
           return c.json({ activities, count: activities.length });
@@ -87,6 +112,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getUsers } = await import("../../data");
           const users = await getUsers();
           return c.json({ users, count: users.length });
@@ -103,6 +130,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getCalendarEvents } = await import("../../data");
           const events = await getCalendarEvents();
           return c.json({ events, count: events.length });
@@ -119,6 +148,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const { getFive9Calls } = await import("../../data");
           const calls = await getFive9Calls();
           return c.json({ calls, count: calls.length });
@@ -135,6 +166,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const body = await c.req.json();
           const { addLead } = await import("../../data");
           const lead = await addLead(body);
@@ -152,6 +185,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const body = await c.req.json();
           const { addDeal } = await import("../../data");
           const deal = await addDeal(body);
@@ -169,6 +204,8 @@ export const sandboxApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireSandboxAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getLeads, getDeals, getActivities, getCalendarEvents, getFive9Calls, getDataMode } = await import("../../data");
           const mode = getDataMode();

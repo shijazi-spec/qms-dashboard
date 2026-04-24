@@ -151,6 +151,9 @@ export const onboardingRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireAuthOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          if (!requireAuthOrKey(c)) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const role = c.req.query("role");
           logger?.info("🎯 [Onboarding API] Fetching tour steps", { role });
@@ -174,6 +177,9 @@ export const onboardingRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireAuthOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          if (!requireAuthOrKey(c)) return unauthorizedResponse(c);
+
           const logger = mastra?.getLogger();
           const module = c.req.query("module");
           logger?.info("💡 [Onboarding API] Fetching tooltips", { module });
@@ -197,6 +203,9 @@ export const onboardingRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const { requireAuthOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+          if (!requireAuthOrKey(c)) return unauthorizedResponse(c);
+
           const fieldId = c.req.param("fieldId");
           const logger = mastra?.getLogger();
           logger?.info("💡 [Onboarding API] Fetching tooltip", { fieldId });

@@ -3,22 +3,26 @@
  *
  * Coverage matrix:
  *   - structural      → every route exposes path/method/createHandler.
- *   - 200 happy path  → GET /api/pmp/projects and /api/pmp/portfolio/analytics
- *                       return JSON when DB is available.
+ *   - 401 unauth      → every /api/pmp/* route requires an authenticated
+ *                       session (or X-Admin-Key); without one, returns 401
+ *                       with body.error === "Authentication required".
+ *   - non-API routes  → /projects (HTML page) is not gated at the API layer;
+ *                       it falls through to the page-auth middleware.
  *
- * Note: PMP routes are intentionally not gated by an auth role (the workspace
- * is open to all authenticated users in this prototype). When that policy
- * tightens, swap the smoke tests below for 401/403 assertions.
+ * The unauthenticated tests exercise the per-handler `gateApiRoute` wrapper
+ * added to lock down the PMP APIs. They run with ADMIN_API_KEY configured in
+ * the environment so the wrapper's "admin-key bypass" branch is *available*
+ * but deliberately not exercised (no X-Admin-Key header is sent).
  *
  * Run:  npx tsx tests/pmpRoutes.test.ts
  */
 
 import { pmpRoutes } from "../src/mastra/routes/pmpRoutes";
 import { TestSuite } from "./_helpers/runner";
-import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("pmpRoutes");
-const HAS_DB = !!process.env.DATABASE_URL;
+const ADMIN_KEY = "integration-test-pmp-2026";
 
 console.log("\n=== pmpRoutes integration tests ===\n");
 
@@ -31,23 +35,31 @@ await suite.test("every route exposes path, method and createHandler", async () 
   suite.expect(pmpRoutes.length >= 20, "at least 20 routes registered");
 });
 
-if (HAS_DB) {
-  await suite.test("GET /api/pmp/projects — 200 with object payload (DB available)", async () => {
-    const handler = await buildHandler(pmpRoutes, "/api/pmp/projects", "GET", { mastra: null });
-    const res = await handler(makeContext({ method: "GET", url: "http://localhost/api/pmp/projects" }));
-    suite.expectEqual(res.status, 200, "status");
-    suite.expect(res.body && typeof res.body === "object", "body is object");
-  });
+const apiRoutes = pmpRoutes.filter((r) => r.path.startsWith("/api/"));
 
-  await suite.test("GET /api/pmp/portfolio/analytics — 200 with object payload (DB available)", async () => {
-    const handler = await buildHandler(pmpRoutes, "/api/pmp/portfolio/analytics", "GET", { mastra: null });
-    const res = await handler(makeContext({ method: "GET", url: "http://localhost/api/pmp/portfolio/analytics" }));
-    suite.expectEqual(res.status, 200, "status");
-    suite.expect(res.body && typeof res.body === "object", "body is object");
+for (const route of apiRoutes) {
+  const path = route.path;
+  const method = route.method as string;
+  await suite.test(`${method} ${path} — 401 without an authenticated session`, async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(pmpRoutes, path, method, { mastra: null });
+      const ctx = makeContext({
+        method,
+        url: `http://localhost${path.replace(/:\w+/g, "1")}`,
+        params: { id: "1", taskId: "1", projectId: "1", milestoneId: "1", riskId: "1" },
+        body: ["POST", "PUT", "PATCH", "DELETE"].includes(method) ? {} : undefined,
+      }) as FakeContext & { html?: any };
+      ctx.html = (body: string, status?: number) => ({ status: status ?? 200, body, headers: {} });
+      const res = await handler(ctx);
+      suite.expectEqual(res.status, 401, `status for ${method} ${path}`);
+      suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
   });
-} else {
-  console.log("  (skipped) GET /api/pmp/projects — DATABASE_URL not set");
-  console.log("  (skipped) GET /api/pmp/portfolio/analytics — DATABASE_URL not set");
 }
 
 suite.finishOrExit();

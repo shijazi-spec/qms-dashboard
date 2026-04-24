@@ -1,4 +1,6 @@
-export const pmpRoutes = [
+import { gateApiRoute } from "../../utils/rbacMiddleware";
+
+const _pmpRoutesRaw = [
   // ============================================
   // PMP PROJECTS ROUTES
   // ============================================
@@ -1211,3 +1213,5 @@ Ensure all content is practical, actionable, and follows PMP best practices.`;
     }
   }
 ];
+
+export const pmpRoutes = _pmpRoutesRaw.map(gateApiRoute);

@@ -213,6 +213,37 @@ export function requireAuthOrKey(c: any): SessionUser | null {
   return getSessionUser(c);
 }
 
+/**
+ * Wraps a route definition's `createHandler` with a per-handler
+ * `requireAuthOrKey` gate so unauthenticated callers always receive a 401
+ * — even when the global middleware in `src/mastra/middleware/index.ts`
+ * is not in front of the handler (e.g. when the handler is invoked
+ * directly from an integration test via tests/_helpers/fakeContext.ts).
+ *
+ * Routes whose path does not start with `/api/` are returned untouched —
+ * static page handlers (`/projects`, `/onboarding`, etc.) fall through
+ * to the page-auth middleware which redirects to `/login` rather than
+ * returning a JSON 401.
+ *
+ * Inner role checks (e.g. `requireAdminOrKey` on XLSX export endpoints)
+ * still execute for authenticated callers, so admin-only routes remain
+ * admin-only.
+ */
+export function gateApiRoute<T extends { path: string; createHandler: (deps: any) => any | Promise<any> }>(route: T): T {
+  if (!route.path.startsWith('/api/')) return route;
+  const originalCreate = route.createHandler;
+  return {
+    ...route,
+    createHandler: async (deps: any) => {
+      const inner = await originalCreate(deps);
+      return async (c: any) => {
+        if (!requireAuthOrKey(c)) return unauthorizedResponse(c);
+        return inner(c);
+      };
+    },
+  };
+}
+
 type PermissionKey = keyof RolePermission;
 
 interface RoutePermissionRule {

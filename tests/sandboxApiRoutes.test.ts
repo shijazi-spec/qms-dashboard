@@ -3,12 +3,14 @@
  *
  * Coverage matrix:
  *   - structural      → every route exposes path/method/createHandler.
- *   - 200 happy path  → GET /api/sandbox/mode returns the current data mode
- *                       without contacting any external CRM/calendar APIs.
+ *   - 401 unauth      → every /api/sandbox/* route requires an authenticated
+ *                       session (or X-Admin-Key); without one, returns 401
+ *                       with body.error === "Authentication required".
  *
- * Note: The other sandbox endpoints fan out to Zoho CRM and Google Calendar
- * which we deliberately avoid here — they're exercised by the dedicated CRM
- * and calendar integration tests.
+ * The unauthenticated tests exercise the per-handler auth gate added to lock
+ * down the sandbox APIs. They run with ADMIN_API_KEY configured in the
+ * environment so the gate's "admin-key bypass" branch is *available* but
+ * deliberately not exercised (no X-Admin-Key header is sent).
  *
  * Run:  npx tsx tests/sandboxApiRoutes.test.ts
  */
@@ -18,6 +20,7 @@ import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("sandboxApiRoutes");
+const ADMIN_KEY = "integration-test-sandbox-2026";
 
 console.log("\n=== sandboxApiRoutes integration tests ===\n");
 
@@ -30,12 +33,25 @@ await suite.test("every route exposes path, method and createHandler", async () 
   suite.expect(sandboxApiRoutes.length >= 1, "at least 1 route registered");
 });
 
-await suite.test("GET /api/sandbox/mode — 200 with mode + description", async () => {
-  const handler = await buildHandler(sandboxApiRoutes, "/api/sandbox/mode", "GET", { mastra: null });
-  const res = await handler(makeContext({ method: "GET" }));
-  suite.expectEqual(res.status, 200, "status");
-  suite.expect(typeof res.body?.mode === "string", "body.mode is string");
-  suite.expect(typeof res.body?.description === "string", "body.description is string");
-});
+for (const route of sandboxApiRoutes) {
+  const path = route.path;
+  const method = route.method as string;
+  await suite.test(`${method} ${path} — 401 without an authenticated session`, async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(sandboxApiRoutes, path, method, { mastra: null });
+      const res = await handler(makeContext({
+        method,
+        body: ["POST", "PUT", "PATCH"].includes(method) ? {} : undefined,
+      }));
+      suite.expectEqual(res.status, 401, `status for ${method} ${path}`);
+      suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+}
 
 suite.finishOrExit();

@@ -2,10 +2,10 @@
  * Integration tests for src/mastra/routes/onboardingRoutes.ts
  *
  * Coverage matrix:
- *   - 401 unauth      → status endpoints require an authenticated session.
+ *   - 401 unauth      → status, tour-steps, tooltips, and tooltip/:fieldId
+ *                       require an authenticated session.
  *   - 403 forbidden   → admin/grc_manager-only endpoints (stats, demo-link CRUD).
- *   - public/structural → tour-steps and tooltips are public; we just confirm
- *                       structural integrity for them.
+ *   - structural      → every route exposes path/method/createHandler.
  *
  * Run:  npx tsx tests/onboardingRoutes.test.ts
  */
@@ -30,6 +30,9 @@ await suite.test("every route exposes path, method and createHandler", async () 
 const SESSION_PATHS = [
   ["/api/onboarding/status", "GET"],
   ["/api/onboarding/status", "POST"],
+  ["/api/onboarding/tour-steps", "GET"],
+  ["/api/onboarding/tooltips", "GET"],
+  ["/api/onboarding/tooltip/:fieldId", "GET"],
 ] as const;
 
 const ADMIN_PATHS = [
@@ -44,6 +47,7 @@ for (const [path, method] of SESSION_PATHS) {
     const handler = await buildHandler(onboardingRoutes, path, method, { mastra: null });
     const res = await handler(makeContext({
       method,
+      params: { fieldId: "abc" },
       body: method === "POST" ? {} : undefined,
     }));
     suite.expectEqual(res.status, 401, "status");

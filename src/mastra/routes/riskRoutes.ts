@@ -1,9 +1,31 @@
+import type { UserRole } from '../../utils/rbacDatabase';
+
+/**
+ * Risk register read roles — mirrors the GET rule in
+ * src/utils/rbacMiddleware.ts ROUTE_PERMISSION_MAP for `/api/risks`. Used
+ * by the per-handler gate so the auth boundary is enforced even when the
+ * global middleware is not in front of the handler (integration tests).
+ */
+const RISK_READ_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'];
+
+async function requireRiskReadAuth(c: any): Promise<{ ok: boolean; res?: any }> {
+  const { getSessionUser, requireRoleOrKey, unauthorizedResponse, forbiddenResponse } =
+    await import('../../utils/rbacMiddleware');
+  const session = getSessionUser(c);
+  if (!session) return { ok: false, res: unauthorizedResponse(c) };
+  const allowed = await requireRoleOrKey(c, RISK_READ_ROLES);
+  if (!allowed) return { ok: false, res: forbiddenResponse(c) };
+  return { ok: true };
+}
+
 export const riskRoutes = [
   {
     path: "/api/risks/export/estimate",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        const auth = await requireRiskReadAuth(c);
+        if (!auth.ok) return auth.res;
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
@@ -61,6 +83,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -244,6 +268,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getAllRisks, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -279,6 +305,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getRiskHeatmapData, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -299,6 +327,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getRiskSummaryStats, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -319,6 +349,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getRiskTrends, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -342,6 +374,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getOverdueRisks, getOverdueTreatmentActions, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -371,6 +405,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getRiskCategories, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();
@@ -391,6 +427,8 @@ export const riskRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const auth = await requireRiskReadAuth(c);
+          if (!auth.ok) return auth.res;
           const logger = mastra?.getLogger();
           const { getRiskById, getRiskByPublicId, resolveRiskId, getTreatmentActions, getRiskAssessmentHistory, initRiskTables } = await import('../../utils/riskDatabase');
           await initRiskTables();

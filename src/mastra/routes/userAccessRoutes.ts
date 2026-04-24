@@ -243,6 +243,10 @@ export const userAccessRoutes = [
       };
     }
   },
+  // INTENTIONALLY PUBLIC: invitees follow the email link before they have an
+  // account/session. The opaque, single-use invitation token is itself the
+  // authentication credential — see PUBLIC_PATHS in src/mastra/middleware
+  // and the matching skip in tests/userAccessRoutes.test.ts.
   {
     path: "/api/invitations/validate/:token",
     method: "GET" as const,

@@ -3,13 +3,16 @@
  *
  * Coverage matrix:
  *   - structural      → every route exposes path/method/createHandler.
- *   - validation 400  → POST /api/evidence rejects an empty body.
- *   - validation 400  → POST /api/qms/nc/bulk-update rejects an empty body.
+ *   - 401 unauth      → every /api/* evidence/CAPA/export endpoint requires
+ *                       an authenticated session (or X-Admin-Key); without
+ *                       one, returns 401 with body.error === "Authentication
+ *                       required".
  *
- * Note: This module exposes evidence/CAPA/export endpoints that are
- * intentionally not gated by auth in this prototype (auth is enforced one
- * layer up in production). Tighten these to 401/403 assertions once those
- * gates land — see the route-lockdown follow-up task.
+ * The unauthenticated tests exercise the per-handler `gateApiRoute` wrapper
+ * added to lock down the QMS-enhanced APIs. Inner role checks (e.g. the
+ * admin-only XLSX exports) still apply for authenticated callers — but the
+ * outer gate ensures unauthenticated traffic is rejected before any business
+ * logic or DB access runs.
  *
  * Run:  npx tsx tests/qmsEnhancedRoutes.test.ts
  */
@@ -19,6 +22,7 @@ import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
 
 const suite = new TestSuite("qmsEnhancedRoutes");
+const ADMIN_KEY = "integration-test-qms-enh-2026";
 
 console.log("\n=== qmsEnhancedRoutes integration tests ===\n");
 
@@ -31,18 +35,29 @@ await suite.test("every route exposes path, method and createHandler", async () 
   suite.expect(qmsEnhancedRoutes.length >= 10, "at least 10 routes registered");
 });
 
-await suite.test("POST /api/evidence — 400 with empty body (validation)", async () => {
-  const handler = await buildHandler(qmsEnhancedRoutes, "/api/evidence", "POST", { mastra: null });
-  const res = await handler(makeContext({ method: "POST", body: {} }));
-  suite.expectEqual(res.status, 400, "status");
-  suite.expect(typeof res.body?.error === "string", "body.error is string");
-});
+const apiRoutes = qmsEnhancedRoutes.filter((r) => r.path.startsWith("/api/"));
 
-await suite.test("POST /api/qms/nc/bulk-update — 400 with empty body (validation)", async () => {
-  const handler = await buildHandler(qmsEnhancedRoutes, "/api/qms/nc/bulk-update", "POST", { mastra: null });
-  const res = await handler(makeContext({ method: "POST", body: {} }));
-  suite.expectEqual(res.status, 400, "status");
-  suite.expect(typeof res.body?.error === "string", "body.error is string");
-});
+for (const route of apiRoutes) {
+  const path = route.path;
+  const method = route.method as string;
+  await suite.test(`${method} ${path} — 401 without an authenticated session`, async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(qmsEnhancedRoutes, path, method, { mastra: null });
+      const res = await handler(makeContext({
+        method,
+        url: `http://localhost${path.replace(/:\w+/g, "1")}`,
+        params: { id: "1", entityType: "policy", entityId: "1" },
+        body: ["POST", "PUT", "PATCH", "DELETE"].includes(method) ? {} : undefined,
+      }));
+      suite.expectEqual(res.status, 401, `status for ${method} ${path}`);
+      suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+}
 
 suite.finishOrExit();
