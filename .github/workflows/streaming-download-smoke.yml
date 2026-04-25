@@ -171,6 +171,9 @@ jobs:
         # an intercepted ~80-byte fixture and would miss them.
         run: npx tsx tests/streamingExportLatency.integration.ts
 
+      - name: Run real-export-endpoint smoke (Chromium)
+        run: npx playwright test tests/realExportEndpoint.spec.ts --project=chromium --reporter=list
+
       - name: Summarise latency results
         if: always()
         run: |
