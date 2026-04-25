@@ -205,8 +205,15 @@ export const staticPageRoutes = [
   { path: "/grc", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("grc.html", "GRC Setup Required", `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/pdpl", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("pdpl.html", "PDPL Setup Required", `To access the PDPL dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/feedback", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("feedback.html", "Feedback Setup Required", `To access the Feedback dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
-  { path: "/guide", method: "GET", createHandler: async () => serveDashboardPage("guide.html") },
-  { path: "/migration", method: "GET", createHandler: async () => serveDashboardPage("migration.html") },
+  // Access semantics: both `/guide` and `/migration` are internal dashboard
+  // pages that integrate with the WalaPlusNav chrome and describe / expose
+  // admin-only workflows (the user guide documents internal admin features,
+  // and the migration page is a functional data-import tool with file
+  // uploads and deduplication). They are gated behind the same setup-check
+  // as every other dashboard page so that an unauthenticated visitor cannot
+  // browse them or learn about internal admin functionality.
+  { path: "/guide", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("guide.html", "Guide Setup Required", `To access the platform user guide, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/migration", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("migration.html", "Migration Setup Required", `To access the Data Migration Engine, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/logs", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("logs.html", "Logs Setup Required", `To access the Audit Logs, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/ai-approvals", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("ai-approvals.html", "AI Approvals Setup Required", `To access the AI Approvals dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/intake", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("intake.html", "Intake Setup Required", `To access the Intake dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
