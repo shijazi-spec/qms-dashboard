@@ -1388,9 +1388,12 @@ function coerceToDate(v: Date | string | number | null | undefined): Date | null
  * skew on a stubbed Date) so the renderer can simply omit the field
  * instead of showing nonsense like "−2m".
  *
- * Exported for unit tests.
+ * This is the canonical "how long was the alert open?" formatter used by
+ * the Slack/email recovery messages AND surfaced verbatim in the AI Ops
+ * dashboard recovery feed (Task #498) — keep the shape stable so the two
+ * surfaces stay visually aligned.
  */
-export function _formatRecoveryDurationForTests(
+export function formatAlertOpenDuration(
   createdAt: Date | string | number | null | undefined,
   resolvedAt: Date | string | number | null | undefined = null,
 ): string | null {
@@ -1412,6 +1415,12 @@ export function _formatRecoveryDurationForTests(
   const remHr = hr % 24;
   return remHr > 0 ? `${day}d ${remHr}h` : `${day}d`;
 }
+
+/**
+ * Back-compat alias for the existing test-suite import. Prefer
+ * `formatAlertOpenDuration` in new code.
+ */
+export const _formatRecoveryDurationForTests = formatAlertOpenDuration;
 
 function buildRecoverySlackBlocks(
   n: ToolHealthRecoveryNotification,

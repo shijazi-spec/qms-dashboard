@@ -1263,6 +1263,17 @@
           const noteLine = a.resolution_note
             ? `<p class="text-[11px] text-gray-500 italic mt-1" data-testid="text-history-note-${a.id}">${esc(a.resolution_note)}</p>`
             : '';
+          // "Open for: X" — how long the alert stayed open. Shown for
+          // resolved rows when both timestamps are available so on-call
+          // can triage post-incident reviews without subtracting the
+          // timestamps by hand. Format mirrors the Slack/email recovery
+          // message verbatim (see fmtAlertOpenDuration above) — Task #498.
+          const openFor = a.status === 'resolved'
+            ? fmtAlertOpenDuration(a.created_at, a.resolved_at)
+            : null;
+          const openForLine = openFor
+            ? `<p class="mt-0.5 text-emerald-700" data-testid="text-history-open-for-${a.id}">Open for: ${esc(openFor)}</p>`
+            : '';
           return `
           <div class="bg-white border border-gray-200 rounded-lg p-3" data-testid="card-tool-health-history-${a.id}">
             <div class="flex items-start gap-3 flex-wrap">
@@ -1280,6 +1291,7 @@
               <div class="shrink-0 text-right text-xs text-gray-500 whitespace-nowrap">
                 <p data-testid="text-history-when-${a.id}">${when}</p>
                 <p class="mt-0.5" data-testid="text-history-who-${a.id}">by ${who}</p>
+                ${openForLine}
               </div>
             </div>
           </div>`;
@@ -1330,6 +1342,39 @@
           loadToolHealthAlertsHistory();
         });
       }
+    }
+
+    /**
+     * Render the gap between an alert's `created_at` and `resolved_at`
+     * (defaulting to "now") as the same compact human string the
+     * Slack/email recovery messages use: `45s`, `12m`, `2h 15m`, `3d 4h`.
+     *
+     * Mirrors `formatAlertOpenDuration` in
+     * `src/utils/toolHealthAlertNotifier.ts` — keep the two in sync so
+     * "Open for: …" reads identically across surfaces (Task #498).
+     *
+     * Returns `null` when either timestamp is missing/unparseable or the
+     * gap is negative (clock skew) so callers can simply omit the field
+     * rather than render "Invalid Date" or "−2m".
+     */
+    function fmtAlertOpenDuration(createdAt, resolvedAt) {
+      if (createdAt == null) return null;
+      const created = new Date(createdAt);
+      if (Number.isNaN(created.getTime())) return null;
+      const resolved = resolvedAt == null ? new Date() : new Date(resolvedAt);
+      if (Number.isNaN(resolved.getTime())) return null;
+      const diffMs = resolved.getTime() - created.getTime();
+      if (diffMs < 0) return null;
+      const sec = Math.floor(diffMs / 1000);
+      if (sec < 60) return `${sec}s`;
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m`;
+      const hr = Math.floor(min / 60);
+      const remMin = min % 60;
+      if (hr < 24) return remMin > 0 ? `${hr}h ${remMin}m` : `${hr}h`;
+      const day = Math.floor(hr / 24);
+      const remHr = hr % 24;
+      return remHr > 0 ? `${day}d ${remHr}h` : `${day}d`;
     }
 
     /**
