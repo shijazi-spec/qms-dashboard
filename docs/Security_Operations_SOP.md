@@ -702,6 +702,17 @@ Both inline guardrails above also run **locally on every commit** so contributor
 | Bypass | `git commit --no-verify` (use sparingly; the same checks still run in CI via `npm test` and will block the merge). |
 | Manual install | `bash scripts/install-git-hooks.sh` — only needed if a contributor cloned without ever running `npm install`. |
 
+#### Pre-Push Hook (second safety net)
+
+The same two guardrails are re-run **locally on every push** so a violation that slipped past the per-commit hook (e.g. `git commit --no-verify`, or a commit authored before the hook was installed) cannot reach CI silently:
+
+| Item | Value |
+|------|-------|
+| Hook | `.githooks/pre-push` (version-controlled, executable) |
+| Auto-install | Same wiring as the pre-commit hook — `scripts/install-git-hooks.sh` already points `core.hooksPath` at `.githooks/`, so no extra setup is needed. |
+| Behaviour | Always invokes `bash scripts/check-no-inline-styles.sh` and `bash scripts/check-no-inline-handlers.sh` against the **full** `dashboard/` and `src/mastra/` trees (no staged-path smart-skip — the point is to catch violations the per-commit hook may have missed). Aborts the push on any violation, printing the same remediation hints that CI would. |
+| Bypass | `git push --no-verify` (use sparingly; the same checks still run in CI via `npm test` and will block the merge). |
+
 #### Implementation Files
 - `src/mastra/index.ts` — CSP, CORS, and security header middleware
 - `src/mastra/middleware/index.ts` — `cspMiddleware` (per-request nonce + header emission)
@@ -710,6 +721,7 @@ Both inline guardrails above also run **locally on every commit** so contributor
 - `scripts/check-no-inline-handlers.sh` — guardrail that blocks new inline event-handler attributes (`onclick=` etc.)
 - `tests/noInlineHandlers.test.ts` — integration-test wrapper that runs the inline-handler guardrail under `npm test` / CI
 - `.githooks/pre-commit` — local pre-commit hook that runs both guardrails before every commit (instant feedback, blocks the commit on violation)
+- `.githooks/pre-push` — local pre-push hook that re-runs both guardrails on the full tree before every push (second safety net; blocks the push on violation)
 - `scripts/install-git-hooks.sh` — auto-wires `core.hooksPath = .githooks` for the local clone; invoked by the `prepare` npm script on every `npm install`
 
 ---

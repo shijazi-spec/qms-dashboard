@@ -9,6 +9,21 @@ build.
 
 ### What runs on `git commit`
 
+- Hook: `.githooks/pre-commit` — runs `scripts/check-no-inline-styles.sh` and
+  `scripts/check-no-inline-handlers.sh` against the staged change set.
+- Hook: `.githooks/pre-push` — re-runs both scripts against the full
+  `dashboard/` and `src/mastra/` trees as a second safety net before any push,
+  so a violation that slipped past `--no-verify` (or pre-dates the commit
+  hook) cannot reach CI silently. Bypass (rare): `git push --no-verify`.
+- Auto-wired: the `prepare` script in `package.json` runs
+  `scripts/install-git-hooks.sh` on every `npm install`, which sets
+  `git config core.hooksPath .githooks` for your local clone. CI runs are
+  skipped automatically.
+- Smart-skip: if a commit touches no files under `dashboard/` or `src/mastra/`,
+  the pre-commit hook exits instantly without running the scans.
+- Bypass (rare, use a clear commit-message reason): `git commit --no-verify`.
+  The same checks still run in CI via `npm test` and will block the merge.
+
 The husky hook at `.husky/pre-commit` runs, in order:
 
 1. **`npx lint-staged`** — driven by `.lintstagedrc.cjs`, for every staged
