@@ -71,14 +71,14 @@
                                 </svg>
                                 <p class="text-lg font-medium">Introduction Video</p>
                                 <p class="text-gray-400 text-sm">2-4 minute overview of the system</p>
-                                <button data-on-click="playVideo" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition">
+                                <button data-on-click="playVideo" data-i18n="onboarding.play_video" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition">
                                     Play Video
                                 </button>
                             </div>
                         </div>
                     </div>
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                        <h3 class="font-semibold text-blue-800 mb-2">What you'll learn:</h3>
+                        <h3 class="font-semibold text-blue-800 mb-2" data-i18n="onboarding.sec_what_learn">What you'll learn:</h3>
                         <ul class="text-blue-700 space-y-1 text-sm">
                             <li>What the WalaPlus system is and why it exists</li>
                             <li>How to submit ROI/NPV initiatives</li>
@@ -88,11 +88,11 @@
                     </div>
                 </div>
                 <div class="flex justify-between items-center">
-                    <button data-on-click="skipVideo" class="text-gray-500 hover:text-gray-700 px-4 py-2 transition">
+                    <button data-on-click="skipVideo" data-i18n="onboarding.skip_now" class="text-gray-500 hover:text-gray-700 px-4 py-2 transition">
                         Skip for now
                     </button>
                     <button data-on-click="startTour" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg font-medium transition flex items-center space-x-2">
-                        <span>Start Guided Tour</span>
+                        <span data-i18n="onboarding.start_tour">Start Guided Tour</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
                     </button>
                 </div>
@@ -132,7 +132,7 @@
             <div class="flex items-center">
                 <svg class="w-6 h-6 text-amber-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 <div>
-                    <p class="font-medium text-amber-800">Demo Mode Active</p>
+                    <p class="font-medium text-amber-800" data-i18n="onboarding.demo_mode_active">Demo Mode Active</p>
                     <p class="text-amber-700 text-sm">You're viewing a demo. No data will be saved.</p>
                 </div>
             </div>
@@ -190,21 +190,21 @@
                     <button data-on-click="showWelcomeModal" class="w-full text-left p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition flex items-center justify-between">
                         <div class="flex items-center">
                             <svg class="w-5 h-5 text-indigo-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
-                            <span class="font-medium text-indigo-700">Watch Introduction Video</span>
+                            <span class="font-medium text-indigo-700" data-i18n="onboarding.watch_video">Watch Introduction Video</span>
                         </div>
                         <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </button>
                     <button data-on-click="restartTour" class="w-full text-left p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition flex items-center justify-between">
                         <div class="flex items-center">
                             <svg class="w-5 h-5 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-                            <span class="font-medium text-purple-700">Restart Guided Tour</span>
+                            <span class="font-medium text-purple-700" data-i18n="onboarding.restart_tour">Restart Guided Tour</span>
                         </div>
                         <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </button>
                     <a href="/roi" class="w-full text-left p-4 bg-green-50 hover:bg-green-100 rounded-lg transition flex items-center justify-between block">
                         <div class="flex items-center">
                             <svg class="w-5 h-5 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            <span class="font-medium text-green-700">Submit New Initiative</span>
+                            <span class="font-medium text-green-700" data-i18n="onboarding.submit_initiative">Submit New Initiative</span>
                         </div>
                         <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </a>
@@ -250,8 +250,8 @@
                 </div>
             </div>
             <div class="mb-4">
-                <h4 class="font-medium text-gray-900 mb-2">Demo Links</h4>
-                <button data-on-click="createDemoLink" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition mb-4">
+                <h4 class="font-medium text-gray-900 mb-2" data-i18n="onboarding.demo_links">Demo Links</h4>
+                <button data-on-click="createDemoLink" data-i18n="onboarding.generate_demo" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition mb-4">
                     Generate New Demo Link
                 </button>
                 <div id="demoLinksList" class="space-y-2"></div>

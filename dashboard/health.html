@@ -58,32 +58,32 @@
         <div class="flex justify-between items-start mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title" data-i18n="health.title">Platform Health Pulse</h1>
-                <p class="text-gray-600 text-sm mt-1">Continuous platform-wide health checks. Each run executes the full battery of assertions; degraded or failing runs trigger notifications automatically.</p>
+                <p class="text-gray-600 text-sm mt-1" data-i18n="health.subtitle">Continuous platform-wide health checks. Each run executes the full battery of assertions; degraded or failing runs trigger notifications automatically.</p>
             </div>
             <div class="flex items-center gap-2">
-                <button id="btn-refresh" data-testid="button-refresh" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-50">
+                <button id="btn-refresh" data-testid="button-refresh" data-i18n="common.refresh" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-50">
                     Refresh
                 </button>
-                <button id="btn-run" data-testid="button-run-now" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
+                <button id="btn-run" data-testid="button-run-now" data-i18n="health.run_now" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
                     Run now
                 </button>
             </div>
         </div>
 
         <!-- Loading state -->
-        <div id="loading-state" class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
+        <div id="loading-state" data-i18n="health.loading_pulse" class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
             Loading latest pulse...
         </div>
 
         <!-- Empty state (never run) -->
         <div id="empty-state" class="hidden bg-white rounded-xl shadow p-8 text-center">
-            <div class="text-gray-400 text-lg mb-2">No pulse runs yet</div>
+            <div class="text-gray-400 text-lg mb-2" data-i18n="health.empty_title">No pulse runs yet</div>
             <p class="text-gray-600 text-sm mb-4">Click <strong>Run now</strong> above to execute the first health pulse.</p>
         </div>
 
         <!-- Error state -->
         <div id="error-state" class="hidden bg-red-50 border border-red-200 text-red-800 rounded-xl p-4">
-            <div class="font-semibold">Couldn't load Health Pulse data</div>
+            <div class="font-semibold" data-i18n="health.error_title">Couldn't load Health Pulse data</div>
             <div id="error-message" class="text-sm mt-1"></div>
         </div>
 
@@ -92,19 +92,19 @@
             <!-- Top summary cards -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div id="overall-card" class="rounded-xl shadow-lg p-6 text-white">
-                    <div class="text-sm opacity-80 uppercase tracking-wider">Overall Status</div>
+                    <div class="text-sm opacity-80 uppercase tracking-wider" data-i18n="health.kpi_overall">Overall Status</div>
                     <div class="text-3xl font-bold mt-2" id="overall-status" data-testid="text-overall-status">--</div>
                     <div class="text-sm opacity-80 mt-2" id="overall-time">Last run --</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-6">
                     <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_passing">Passing</div>
                     <div class="text-3xl font-bold text-emerald-600 mt-2" id="count-pass" data-testid="text-pass-count">0</div>
-                    <div class="text-sm text-gray-500 mt-2">checks healthy</div>
+                    <div class="text-sm text-gray-500 mt-2" data-i18n="health.checks_healthy">checks healthy</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-6">
                     <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_warnings">Warnings</div>
                     <div class="text-3xl font-bold text-amber-600 mt-2" id="count-warn" data-testid="text-warn-count">0</div>
-                    <div class="text-sm text-gray-500 mt-2">need attention</div>
+                    <div class="text-sm text-gray-500 mt-2" data-i18n="health.need_attention">need attention</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-6">
                     <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_failures">Failures</div>
@@ -118,7 +118,7 @@
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_history">Run history</h2>
-                        <p class="text-sm text-gray-500">Last 50 runs · pass / warn / fail counts over time</p>
+                        <p class="text-sm text-gray-500" data-i18n="health.history_subtitle">Last 50 runs · pass / warn / fail counts over time</p>
                     </div>
                     <div class="text-sm text-gray-500" id="history-meta"></div>
                 </div>
@@ -131,7 +131,7 @@
             <div class="bg-white rounded-xl shadow">
                 <div class="px-6 py-4 border-b">
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_breakdown">Latest run · per-check breakdown</h2>
-                    <p class="text-sm text-gray-500">Click a row to inspect details</p>
+                    <p class="text-sm text-gray-500" data-i18n="health.click_row">Click a row to inspect details</p>
                 </div>
                 <div id="checks-list" data-testid="list-checks">
                     <!-- populated by JS -->

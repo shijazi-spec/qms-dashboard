@@ -1424,7 +1424,9 @@
     "sec_quality_scores": "Quality Scores",
     "sec_duplicate_indicators": "Duplicate Indicators",
     "sec_row_highlights": "Row Highlights",
-    "sec_record_details": "Record Details"
+    "sec_record_details": "Record Details",
+    "loading_data": "Loading CRM data...",
+    "crossref": "Cross-referencing with Duplicate Radar..."
   },
   "duplicates": {
     "title": "Duplicate Radar",
@@ -2098,7 +2100,14 @@
     "kpi_overall": "Overall Status",
     "kpi_passing": "Passing",
     "kpi_warnings": "Warnings",
-    "kpi_failures": "Failures"
+    "kpi_failures": "Failures",
+    "loading_pulse": "Loading latest pulse...",
+    "empty_title": "No pulse runs yet",
+    "error_title": "Couldn't load Health Pulse data",
+    "checks_healthy": "checks healthy",
+    "need_attention": "need attention",
+    "history_subtitle": "Last 50 runs · pass / warn / fail counts over time",
+    "click_row": "Click a row to inspect details"
   },
   "logs": {
     "title": "System Event Logs",
@@ -2166,7 +2175,9 @@
     "total_users": "Total Users",
     "video_watched": "Video Watched",
     "tour_completed": "Tour Completed",
-    "skipped": "Skipped"
+    "skipped": "Skipped",
+    "demo_mode_active": "Demo Mode Active",
+    "demo_links": "Demo Links"
   },
   "feedback": {
     "title": "Team Feedback Center",
@@ -2191,7 +2202,9 @@
     "f_ease_of_use": "Ease of Use",
     "f_comments": "Comments",
     "f_suggestions": "Suggestions",
-    "f_share_heading": "Share Your Feedback"
+    "f_share_heading": "Share Your Feedback",
+    "opt_all_dashboards": "All Dashboards",
+    "no_feedback": "No feedback yet. Ask your team to share their thoughts!"
   },
   "sop": {
     "title": "Standard Operating Procedure",

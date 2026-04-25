@@ -44,7 +44,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900" data-i18n="feedback.title">Team Feedback Center</h1>
-            <p class="text-gray-600 mt-2">View and analyze feedback from Sara, Maram, and your team members across all dashboards</p>
+            <p class="text-gray-600 mt-2" data-i18n="feedback.subtitle">View and analyze feedback from Sara, Maram, and your team members across all dashboards</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -123,7 +123,7 @@
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="feedback.sec_all">All Feedback</h2>
                     <div class="flex items-center space-x-4">
                         <select id="dashboardFilter" data-on-change="loadFeedback" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                            <option value="">All Dashboards</option>
+                            <option value="" data-i18n="feedback.opt_all_dashboards">All Dashboards</option>
                             <option value="Quality Dashboard">Quality Dashboard</option>
                             <option value="GRC Control Tower">GRC Control Tower</option>
                             <option value="Risk Register">Risk Register</option>
@@ -140,7 +140,7 @@
                             <option value="Call Intelligence">Call Intelligence</option>
                             <option value="User Guide">User Guide</option>
                         </select>
-                        <button data-on-click="loadFeedback" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition text-sm">
+                        <button data-on-click="loadFeedback" data-i18n="common.refresh" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition text-sm">
                             Refresh
                         </button>
                     </div>
@@ -151,7 +151,7 @@
                     <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                     </svg>
-                    <p>No feedback yet. Ask your team to share their thoughts!</p>
+                    <p data-i18n="feedback.no_feedback">No feedback yet. Ask your team to share their thoughts!</p>
                 </div>
             </div>
         </div>
@@ -246,8 +246,8 @@
                     <textarea id="suggestions" rows="2" placeholder="Any features you'd like to see?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"></textarea>
                 </div>
                 <div class="flex justify-end space-x-3 pt-2">
-                    <button type="button" data-on-click="closeFeedbackModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium">Submit Feedback</button>
+                    <button type="button" data-on-click="closeFeedbackModal" data-i18n="common.cancel" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" data-i18n="feedback.submit_feedback" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium">Submit Feedback</button>
                 </div>
             </form>
         </div>
@@ -480,7 +480,7 @@
                             <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                             </svg>
-                            <p>No feedback yet. Ask your team to share their thoughts!</p>
+                            <p data-i18n="feedback.no_feedback">No feedback yet. Ask your team to share their thoughts!</p>
                         </div>
                     `;
                     return;

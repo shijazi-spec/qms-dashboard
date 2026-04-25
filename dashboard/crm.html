@@ -110,7 +110,7 @@
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">CRM Data Hub</h1>
-                    <p class="text-gray-500 text-sm mt-1">Live CRM data enriched with quality scores &amp; duplicate detection</p>
+                    <p class="text-gray-500 text-sm mt-1" data-i18n="crm.subtitle">Live CRM data enriched with quality scores &amp; duplicate detection</p>
                 </div>
                 <div class="flex items-center space-x-3">
                     <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm" data-testid="status-connection">Checking...</span>
@@ -149,10 +149,10 @@
 
             <div class="border-b border-gray-200 mb-6">
                 <nav class="flex space-x-8" id="moduleTabs">
-                    <button data-on-click="switchModule" data-args="[&quot;Leads&quot;]" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads">Leads</button>
-                    <button data-on-click="switchModule" data-args="[&quot;Deals&quot;]" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals">Deals</button>
-                    <button data-on-click="switchModule" data-args="[&quot;Contacts&quot;]" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts">Contacts</button>
-                    <button data-on-click="switchModule" data-args="[&quot;Accounts&quot;]" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-accounts">Accounts</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Leads&quot;]" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads" data-i18n="crm.tab_leads">Leads</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Deals&quot;]" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals" data-i18n="crm.tab_deals">Deals</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Contacts&quot;]" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts" data-i18n="crm.tab_contacts">Contacts</button>
+                    <button data-on-click="switchModule" data-args="[&quot;Accounts&quot;]" data-module="Accounts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-accounts" data-i18n="crm.tab_accounts">Accounts</button>
                 </nav>
             </div>
 
@@ -172,12 +172,12 @@
                     <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
                         <input type="checkbox" id="highlightIssues" checked data-on-change="renderTable"
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-highlight-issues">
-                        <span>Highlight Issues</span>
+                        <span data-i18n="crm.highlight_issues">Highlight Issues</span>
                     </label>
                     <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
                         <input type="checkbox" id="hideJunk" data-on-change="filterTable"
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-hide-junk">
-                        <span>Hide Junk</span>
+                        <span data-i18n="crm.hide_junk">Hide Junk</span>
                     </label>
                     <select id="perPageSelect" data-on-change="refreshData" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500" data-testid="select-per-page">
                         <option value="25">25</option>
@@ -189,7 +189,7 @@
 
             <div id="loadingState" class="hidden py-12 text-center">
                 <div class="loading-spinner mx-auto mb-4"></div>
-                <p class="text-gray-500">Loading CRM data...</p>
+                <p class="text-gray-500" data-i18n="crm.loading_data">Loading CRM data...</p>
             </div>
             <div id="errorState" class="hidden py-12 text-center">
                 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -205,7 +205,7 @@
                 <div id="enrichingOverlay" class="enriching-overlay hidden">
                     <div class="text-center">
                         <div class="loading-spinner mx-auto mb-2"></div>
-                        <p class="text-sm text-gray-600">Cross-referencing with Duplicate Radar...</p>
+                        <p class="text-sm text-gray-600" data-i18n="crm.crossref">Cross-referencing with Duplicate Radar...</p>
                     </div>
                 </div>
                 <table class="min-w-full divide-y divide-gray-200">
@@ -233,7 +233,7 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-lg p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-3">How to Read This View</h2>
+            <h2 class="text-lg font-semibold text-gray-900 mb-3" data-i18n="crm.sec_how_to_read">How to Read This View</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div>
                     <h3 class="font-medium text-gray-700 mb-2" data-i18n="crm.sec_quality_scores">Quality Scores</h3>

@@ -1424,7 +1424,9 @@
     "sec_quality_scores": "درجات الجودة",
     "sec_duplicate_indicators": "مؤشرات التكرار",
     "sec_row_highlights": "تمييز الصفوف",
-    "sec_record_details": "تفاصيل السجل"
+    "sec_record_details": "تفاصيل السجل",
+    "loading_data": "جارٍ تحميل بيانات CRM...",
+    "crossref": "جارٍ المقارنة مع رادار التكرار..."
   },
   "duplicates": {
     "title": "رادار التكرارات",
@@ -2098,7 +2100,14 @@
     "kpi_overall": "الحالة العامة",
     "kpi_passing": "ناجحة",
     "kpi_warnings": "تحذيرات",
-    "kpi_failures": "فشل"
+    "kpi_failures": "فشل",
+    "loading_pulse": "جارٍ تحميل آخر فحص...",
+    "empty_title": "لا توجد عمليات فحص بعد",
+    "error_title": "تعذّر تحميل بيانات فحص الصحة",
+    "checks_healthy": "فحوصات سليمة",
+    "need_attention": "تحتاج إلى انتباه",
+    "history_subtitle": "آخر 50 تشغيلًا · أعداد النجاح / التحذير / الفشل عبر الزمن",
+    "click_row": "انقر على صف لعرض التفاصيل"
   },
   "logs": {
     "title": "سجلات أحداث النظام",
@@ -2166,7 +2175,9 @@
     "total_users": "إجمالي المستخدمين",
     "video_watched": "الفيديو شُوهد",
     "tour_completed": "الجولة اكتملت",
-    "skipped": "تم التخطي"
+    "skipped": "تم التخطي",
+    "demo_mode_active": "وضع العرض التوضيحي مفعّل",
+    "demo_links": "روابط العرض التوضيحي"
   },
   "feedback": {
     "title": "مركز ملاحظات الفريق",
@@ -2191,7 +2202,9 @@
     "f_ease_of_use": "سهولة الاستخدام",
     "f_comments": "التعليقات",
     "f_suggestions": "الاقتراحات",
-    "f_share_heading": "شارك تقييمك"
+    "f_share_heading": "شارك تقييمك",
+    "opt_all_dashboards": "جميع لوحات القيادة",
+    "no_feedback": "لا توجد ملاحظات بعد. اطلب من فريقك مشاركة آرائهم!"
   },
   "sop": {
     "title": "إجراء التشغيل القياسي",
