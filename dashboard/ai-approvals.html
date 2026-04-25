@@ -129,7 +129,17 @@
                 <option value="pending,executed,rejected,failed,expired" data-i18n="ai_approvals.status_all">All</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2" data-i18n="ai_approvals.filter_risk">Risk</label>
+            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
+                <span data-i18n="ai_approvals.filter_risk">Risk</span>
+                <!-- Task #619: drop-everything signal for a Critical pile-up.
+                     Re-uses the count already fetched by refreshRiskLevelCounts()
+                     so this badge costs no extra request. Hidden until the
+                     Critical bucket reaches CRITICAL_BADGE_THRESHOLD. -->
+                <span id="badgeCriticalRisk"
+                      data-testid="badge-critical-risk"
+                      class="hidden ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      title="Pending approvals at Critical risk level">0</span>
+            </label>
             <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
                 <option value="" data-i18n="ai_approvals.risk_any">Any</option>
                 <!-- Task #536: these four options own their textContent in JS so
@@ -246,6 +256,15 @@
     var fltReview = document.getElementById('fltReview');
     var fltCredWarn = document.getElementById('fltCredWarn');
     var badgeCredWarn = document.getElementById('badgeCredWarn');
+    // Task #619: header-level "drop everything" badge for Critical pile-ups.
+    // Threshold defaults to 1 (badge shows for ANY critical action) but can be
+    // raised by other queue-config code via window.WP_CRITICAL_RISK_BADGE_THRESHOLD,
+    // matching how the rest of the queue page reads optional admin overrides.
+    var badgeCriticalRisk = document.getElementById('badgeCriticalRisk');
+    var CRITICAL_BADGE_THRESHOLD = (function () {
+        var n = parseInt(window.WP_CRITICAL_RISK_BADGE_THRESHOLD, 10);
+        return (isFinite(n) && n >= 1) ? n : 1;
+    })();
     var optUnreviewedByMe = fltReview.querySelector('option[value="unreviewed_by_me"]');
     var optNoReviewers = fltReview.querySelector('option[value="no_reviewers"]');
     // Task #536: risk-dropdown options that get inline " (N)" counts.
@@ -373,6 +392,19 @@
         _setOptionCount(optRiskHigh,     lastRiskCounts.high);
         _setOptionCount(optRiskMedium,   lastRiskCounts.medium);
         _setOptionCount(optRiskLow,      lastRiskCounts.low);
+        _applyCriticalRiskBadge();
+    }
+
+    // Task #619: surface a header-level red badge whenever the Critical bucket
+    // is at or above CRITICAL_BADGE_THRESHOLD. Re-uses lastRiskCounts so we
+    // never make an extra request. Soft-fails (null counts from the catch
+    // branch above) just hide the badge — same approach as the count suffix.
+    function _applyCriticalRiskBadge() {
+        if (!badgeCriticalRisk) return;
+        var c = lastRiskCounts.critical;
+        var visible = (typeof c === 'number') && (c >= CRITICAL_BADGE_THRESHOLD);
+        badgeCriticalRisk.textContent = visible ? String(c) : '0';
+        badgeCriticalRisk.classList.toggle('hidden', !visible);
     }
 
     function refreshRiskLevelCounts() {
