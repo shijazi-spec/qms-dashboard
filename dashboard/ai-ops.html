@@ -505,6 +505,44 @@
       <div class="bg-white rounded-xl shadow-sm border p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-1">Recent Slow / Failed Calls — last 7 days</h2>
         <p class="text-sm text-gray-500 mb-4">Calls taking >30 s or that returned an error. Error messages are truncated to 500 chars.</p>
+        <!-- Filter bar (Task #722): lets ops narrow the issues / agent-traces
+             list by status (errors vs OK), agent, and tool-name substring so
+             they can zero in on the slice they're triaging. All three filters
+             are applied client-side over the most recent fetch — combining
+             several can yield zero matches, which renders a tailored empty
+             state below (named active filters + one-click reset) instead of
+             the generic "no rows" message that operators routinely mistake
+             for a broken page. -->
+        <div class="flex flex-wrap items-end gap-3 mb-4 pb-3 border-b border-gray-200" data-testid="filters-issues">
+          <div class="flex flex-col">
+            <label for="issues-filter-status" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Status</label>
+            <select id="issues-filter-status" data-on-change="applyIssuesFilters"
+                    class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    data-testid="select-issues-filter-status">
+              <option value="all">All</option>
+              <option value="error">Errors only</option>
+              <option value="ok">Successful only</option>
+            </select>
+          </div>
+          <div class="flex flex-col">
+            <label for="issues-filter-agent" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Agent</label>
+            <select id="issues-filter-agent" data-on-change="applyIssuesFilters"
+                    class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    data-testid="select-issues-filter-agent">
+              <option value="all">All agents</option>
+            </select>
+          </div>
+          <div class="flex flex-col flex-1 min-w-[160px]">
+            <label for="issues-filter-tool" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Tool name</label>
+            <input type="search" id="issues-filter-tool" data-on-input="applyIssuesFiltersDebounced"
+                   placeholder="e.g. searchTool"
+                   class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                   data-testid="input-issues-filter-tool">
+          </div>
+          <button type="button" data-on-click="resetIssuesFilters"
+                  class="text-xs font-medium text-gray-600 hover:text-gray-900 underline self-center mb-1"
+                  data-testid="button-issues-filter-reset">Reset</button>
+        </div>
         <div id="issues-table" class="overflow-x-auto">
           <p class="text-gray-400 text-sm">Loading…</p>
         </div>
@@ -1638,10 +1676,30 @@
         if (countBadge) countBadge.textContent = String(alerts.length);
         if (alerts.length === 0) {
           const filtersActive = !!severity || !!toolText || days !== 7;
-          const msg = filtersActive
-            ? _t('dyn.ai_ops.no_alert_history_filtered')
-            : _t('dyn.ai_ops.no_alert_history');
-          list.innerHTML = `<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">${esc(msg)}</p>`;
+          if (filtersActive) {
+            // Tailored empty state (Task #722): name the active filters and
+            // offer an inline one-click reset alongside the placeholder so
+            // ops can recover without scrolling back up to find the Reset
+            // button on the filter bar. Mirrors the Health Pulse
+            // `renderChecksWithFilter` pattern.
+            const parts = [];
+            if (days !== 7) parts.push(_t('dyn.ai_ops.filter_days_named', { days: String(days) }));
+            if (severity) parts.push(_t('dyn.ai_ops.filter_severity_named', { severity }));
+            if (toolText) parts.push(_t('dyn.ai_ops.filter_tool_named', { tool: toolText }));
+            const filterDesc = parts.join(_t('dyn.ai_ops.filter_join'));
+            const msg = _t('dyn.ai_ops.no_alert_history_filtered_named', { filters: filterDesc });
+            list.innerHTML =
+              '<div class="px-2 py-6 text-center text-gray-500 text-sm" data-testid="text-tool-health-history-empty">'
+              + '<div>' + esc(msg) + '</div>'
+              + '<button type="button" data-on-click="resetToolHealthHistoryFilters"'
+              + ' class="mt-3 text-sm font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"'
+              + ' data-testid="button-tool-health-history-clear-filters">'
+              + esc(_t('dyn.ai_ops.clear_filters'))
+              + '</button>'
+              + '</div>';
+            return;
+          }
+          list.innerHTML = `<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">${esc(_t('dyn.ai_ops.no_alert_history'))}</p>`;
           return;
         }
         const STATUS_BADGE = {
@@ -1755,13 +1813,21 @@
         });
       }
       if (reset) {
-        reset.addEventListener('click', () => {
-          if (daysSel) daysSel.value = '7';
-          if (sevSel)  sevSel.value  = '';
-          if (toolInp) toolInp.value = '';
-          loadToolHealthAlertsHistory();
-        });
+        reset.addEventListener('click', resetToolHealthHistoryFilters);
       }
+    }
+
+    // Used both by the Reset button on the filter bar AND by the inline
+    // "Clear filters" button rendered inside the tailored empty state when
+    // the active filters compose to zero matches (Task #722).
+    function resetToolHealthHistoryFilters() {
+      const daysSel = document.getElementById('tool-health-history-days');
+      const sevSel  = document.getElementById('tool-health-history-severity');
+      const toolInp = document.getElementById('tool-health-history-tool');
+      if (daysSel) daysSel.value = '7';
+      if (sevSel)  sevSel.value  = '';
+      if (toolInp) toolInp.value = '';
+      loadToolHealthAlertsHistory();
     }
 
     /**
@@ -2895,13 +2961,139 @@
       }
     }
 
+    // ----- Recent Issues filter state (Task #722) -------------------------
+    // Operators were mistaking the unfiltered "no rows" placeholder for a
+    // broken page when their composed Status + Agent + Tool filters
+    // happened to exclude every row. We now keep the raw fetch in
+    // `lastIssuesData` and re-render via `renderIssuesTable()` whenever a
+    // filter changes, so the tailored empty state can name the active
+    // filters and offer a one-click reset (mirrors the Health Pulse pattern
+    // from `health.html`'s `renderChecksWithFilter`).
+    let lastIssuesData = [];
+    let issuesToolFilterDebounce = null;
+
+    function getIssuesFilterState() {
+      const statusEl = document.getElementById('issues-filter-status');
+      const agentEl  = document.getElementById('issues-filter-agent');
+      const toolEl   = document.getElementById('issues-filter-tool');
+      return {
+        status: statusEl ? statusEl.value : 'all',
+        agent:  agentEl  ? agentEl.value  : 'all',
+        tool:   toolEl   ? toolEl.value.trim() : '',
+      };
+    }
+
+    function isIssuesFilterActive(state) {
+      return state.status !== 'all' || state.agent !== 'all' || state.tool !== '';
+    }
+
+    function filterIssues(rows, state) {
+      const toolText = state.tool.toLowerCase();
+      return rows.filter(r => {
+        if (state.status === 'error' && r.success) return false;
+        if (state.status === 'ok' && !r.success) return false;
+        if (state.agent !== 'all' && (r.agent_name || '') !== state.agent) return false;
+        if (toolText && !(r.tool_name || '').toLowerCase().includes(toolText)) return false;
+        return true;
+      });
+    }
+
+    function populateIssuesAgentFilter(rows) {
+      const sel = document.getElementById('issues-filter-agent');
+      if (!sel) return;
+      const current = sel.value || 'all';
+      const agents = Array.from(new Set(rows.map(r => r.agent_name).filter(Boolean))).sort();
+      sel.innerHTML = '<option value="all">All agents</option>'
+        + agents.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+      // Preserve the operator's selection across reloads when possible —
+      // otherwise fall back to "all" so we don't strand them on a stale
+      // agent that no longer appears in the latest window.
+      sel.value = agents.includes(current) ? current : 'all';
+    }
+
+    function applyIssuesFilters() {
+      renderIssuesTable();
+    }
+
+    function applyIssuesFiltersDebounced() {
+      // Tool-name search runs over the already-fetched window, so debounce
+      // re-renders rather than firing per keystroke.
+      clearTimeout(issuesToolFilterDebounce);
+      issuesToolFilterDebounce = setTimeout(renderIssuesTable, 150);
+    }
+
+    function resetIssuesFilters() {
+      const statusEl = document.getElementById('issues-filter-status');
+      const agentEl  = document.getElementById('issues-filter-agent');
+      const toolEl   = document.getElementById('issues-filter-tool');
+      if (statusEl) statusEl.value = 'all';
+      if (agentEl)  agentEl.value  = 'all';
+      if (toolEl)   toolEl.value   = '';
+      renderIssuesTable();
+    }
+
+    function describeActiveIssuesFilters(state) {
+      // Build a human-readable list of active filters for the empty-state
+      // message so operators can see at a glance WHICH filter combination
+      // is hiding everything.
+      const parts = [];
+      if (state.status === 'error') parts.push(_t('dyn.ai_ops.filter_status_error'));
+      else if (state.status === 'ok') parts.push(_t('dyn.ai_ops.filter_status_ok'));
+      if (state.agent !== 'all') {
+        parts.push(_t('dyn.ai_ops.filter_agent_named', { agent: state.agent }));
+      }
+      if (state.tool) {
+        parts.push(_t('dyn.ai_ops.filter_tool_named', { tool: state.tool }));
+      }
+      return parts.join(_t('dyn.ai_ops.filter_join'));
+    }
+
     async function loadIssues() {
       const el = document.getElementById('issues-table');
       try {
         const { data } = await apiFetch('/api/ai-ops/recent-issues?limit=25');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_slow_calls') + '</p>'; return; }
-        data.forEach(r => issueDataCache.set(String(r.id), r));
-        el.innerHTML = `
+        lastIssuesData = Array.isArray(data) ? data : [];
+        lastIssuesData.forEach(r => issueDataCache.set(String(r.id), r));
+        populateIssuesAgentFilter(lastIssuesData);
+        renderIssuesTable();
+      } catch (e) {
+        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_issues') + '</p>';
+      }
+    }
+
+    function renderIssuesTable() {
+      const el = document.getElementById('issues-table');
+      if (!el) return;
+      const allData = lastIssuesData;
+      if (!allData.length) {
+        el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-issues-empty">' + esc(_t('dyn.ai_ops.no_slow_calls')) + '</p>';
+        return;
+      }
+      const state = getIssuesFilterState();
+      const data = filterIssues(allData, state);
+      if (!data.length && isIssuesFilterActive(state)) {
+        // Tailored empty state: there ARE rows in the latest window, just
+        // none matching the composed filter. Name the active filters and
+        // offer an inline one-click reset so operators don't mistake this
+        // for a broken page or missing data (Task #722).
+        const filterDesc = describeActiveIssuesFilters(state);
+        const msg = _t('dyn.ai_ops.no_matching_issues', { filters: filterDesc });
+        el.innerHTML =
+          '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-issues">'
+          + '<div>' + esc(msg) + '</div>'
+          + '<button type="button" data-on-click="resetIssuesFilters"'
+          + ' class="mt-3 text-sm font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"'
+          + ' data-testid="button-issues-clear-filters">'
+          + esc(_t('dyn.ai_ops.clear_filters'))
+          + '</button>'
+          + '</div>';
+        return;
+      }
+      if (!data.length) {
+        el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-issues-empty">' + esc(_t('dyn.ai_ops.no_slow_calls')) + '</p>';
+        return;
+      }
+      el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-recent-issues">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2 w-6"></th>
@@ -2967,25 +3159,22 @@
             }).join('')}
             </tbody>
           </table>`;
-        el.querySelectorAll('tr[data-issue-id]').forEach(row => {
-          const id = row.getAttribute('data-issue-id');
-          row.addEventListener('click', (e) => {
+      el.querySelectorAll('tr[data-issue-id]').forEach(row => {
+        const id = row.getAttribute('data-issue-id');
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('[data-on-click="toggleChildren"]')) return;
+          const call = issueDataCache.get(id);
+          if (call) openCallDetailModal(call, row);
+        });
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
             if (e.target.closest('[data-on-click="toggleChildren"]')) return;
+            e.preventDefault();
             const call = issueDataCache.get(id);
             if (call) openCallDetailModal(call, row);
-          });
-          row.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              if (e.target.closest('[data-on-click="toggleChildren"]')) return;
-              e.preventDefault();
-              const call = issueDataCache.get(id);
-              if (call) openCallDetailModal(call, row);
-            }
-          });
+          }
         });
-      } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_issues') + '</p>';
-      }
+      });
     }
 
     const childrenCache = new Map();
