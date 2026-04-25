@@ -31,8 +31,8 @@
 
 import { sendSlackNotification } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
-
 import { logger } from "./logger";
+
 export interface AiMetricsRetentionChangeNotification {
   /** Operator who made the change (display name / email / "user:<id>"). */
   changedBy: string;
@@ -322,8 +322,8 @@ export async function notifyAiMetricsRetentionChange(
       );
     } catch (err) {
       logger.error(
-        "[AiMetricsRetentionNotifier] Slack send threw for retention change:",
-        err,
+        "[AiMetricsRetentionNotifier] Slack send threw for retention change",
+        err as Error,
       );
       result.slackSent = false;
     }
@@ -346,8 +346,8 @@ export async function notifyAiMetricsRetentionChange(
       result.emailSent = !!sendResult?.success;
     } catch (err) {
       logger.error(
-        "[AiMetricsRetentionNotifier] Email send threw for retention change:",
-        err,
+        "[AiMetricsRetentionNotifier] Email send threw for retention change",
+        err as Error,
       );
       result.emailSent = false;
     }

@@ -34,8 +34,8 @@
  */
 
 import { sharedPool as pool } from "./sharedPool";
-
 import { logger } from "./logger";
+
 /**
  * The two opt-in recipient lists this module manages. Kept narrow on
  * purpose so the admin UI / API can validate the channel server-side
@@ -191,7 +191,7 @@ export async function listAlertRecipients(
       added_at: r.added_at ?? null,
     }));
   } catch (err) {
-    logger.error("[alertEmailRecipients] list failed:", err);
+    logger.error("[alertEmailRecipients] list failed", err as Error);
     return [];
   }
 }
@@ -354,7 +354,7 @@ export async function listAlertRecipientsAudit(
       note: r.note ?? null,
     }));
   } catch (err) {
-    logger.error("[alertEmailRecipients] audit read failed:", err);
+    logger.error("[alertEmailRecipients] audit read failed", err as Error);
     return [];
   }
 }

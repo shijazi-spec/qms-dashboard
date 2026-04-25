@@ -7,8 +7,8 @@
  *
  * Pairs with the WRITE-path scrubber `redactFeedbackMetadataForStorage()`
  * — the scrubber catches the leak one layer too late (AFTER the secret
- * has been constructed in memory and typically logged via console.error
- * / Pino), this typed helper prevents the pattern at the source.
+ * has been constructed in memory and typically logged via the structured
+ * logger), this typed helper prevents the pattern at the source.
  *
  * Run:    npx tsx src/utils/__tests__/aiFeedbackMetadata.test.ts
  *
@@ -22,7 +22,7 @@
  *       `// @ts-expect-error` directive which the npm `check` (tsc) gate
  *       enforces in CI
  *   (d) Defense-in-depth: even if a caller bypasses the type system via
- *       `as any`, unexpected keys are dropped AND a `console.warn` with
+ *       `as any`, unexpected keys are dropped AND a `logger.warn` with
  *       an actionable message is emitted
  *   (e) The WRITE-path scrubber `redactFeedbackMetadataForStorage()`
  *       still scrubs credential-shaped substrings from typed values (so
@@ -35,6 +35,7 @@ import {
   buildAiCallFeedbackMetadata,
   redactFeedbackMetadataForStorage,
 } from "../aiFeedbackDatabase";
+import { logger } from "../logger";
 
 let passed = 0;
 let failed = 0;
@@ -115,9 +116,9 @@ function check(condition: boolean, label: string): void {
 // (d) defense-in-depth — bypassing the type system via `as any` is caught at runtime
 {
   const warnings: string[] = [];
-  const originalWarn = console.warn;
-  console.warn = (...args: unknown[]) => {
-    warnings.push(args.map(String).join(" "));
+  const originalWarn = logger.warn;
+  logger.warn = (...args: unknown[]) => {
+    warnings.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
   };
   try {
     const result = buildAiCallFeedbackMetadata({
@@ -133,18 +134,18 @@ function check(condition: boolean, label: string): void {
     assert.deepStrictEqual(result, { prompt_version: "qms@deadbeef" });
     check(
       warnings.some((w) => w.includes('unexpected key "note"')),
-      '(d) unexpected key "note" emits actionable console.warn',
+      '(d) unexpected key "note" emits actionable logger.warn',
     );
     check(
       warnings.some((w) => w.includes('unexpected key "debug"')),
-      '(d) unexpected key "debug" emits actionable console.warn',
+      '(d) unexpected key "debug" emits actionable logger.warn',
     );
     check(
       !("note" in result) && !("debug" in result),
       "(d) unexpected keys are dropped from the output",
     );
   } finally {
-    console.warn = originalWarn;
+    logger.warn = originalWarn;
   }
 }
 

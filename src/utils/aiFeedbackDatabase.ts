@@ -69,8 +69,8 @@ function safeRedactPreview(
  * which would land plaintext credentials in the JSONB column. The WRITE-path
  * scrubber `redactFeedbackMetadataForStorage()` defends against that one
  * layer too late: by the time it runs, the secret has already been
- * constructed in memory and (typically) logged to stdout via logger.error
- * / Pino BEFORE the scrubber redacts it for the DB. This typed shape is the
+ * constructed in memory and (typically) logged to stdout via the structured
+ * logger BEFORE the scrubber redacts it for the DB. This typed shape is the
  * source-side prevention; build it via `buildAiCallFeedbackMetadata()`.
  *
  * To add a new key:
@@ -138,9 +138,10 @@ const FEEDBACK_METADATA_KEY_MAP: Record<
  * JSONB column.
  *
  * Defense-in-depth runtime guard: even if a caller bypasses the type
- * system via `as any`, unexpected keys are dropped and a structured warn
- * is emitted with an actionable message so the regression shows up in
- * the operator console rather than silently persisting.
+ * system via `as any`, unexpected keys are dropped and a warning is
+ * emitted via the structured logger with an actionable message so the
+ * regression shows up in the operator console rather than silently
+ * persisting.
  */
 export function buildAiCallFeedbackMetadata(
   input: AiCallFeedbackMetadataInput,

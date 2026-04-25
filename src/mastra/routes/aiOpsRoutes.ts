@@ -930,7 +930,7 @@ export const aiOpsRoutes = [
           if (!alert) return c.json({ error: "Alert not found" }, 404);
           return c.json({ success: true, alert });
         } catch (error) {
-          console.error("[AI-Ops] alert dismiss error:", error);
+          logger.error("[AI-Ops] alert dismiss error", error as Error);
           return c.json({ error: "Failed to dismiss alert" }, 500);
         }
       };
@@ -978,7 +978,7 @@ export const aiOpsRoutes = [
           }));
           return c.json({ data, total });
         } catch (error) {
-          console.error("[AI-Ops] storage-health-alerts error:", error);
+          logger.error("[AI-Ops] storage-health-alerts error", error as Error);
           return c.json({ error: "Failed to fetch storage-health alerts" }, 500);
         }
       };
@@ -1049,7 +1049,7 @@ export const aiOpsRoutes = [
             });
           return c.json({ data, days, severity: severity ?? null });
         } catch (error) {
-          console.error("[AI-Ops] storage-health-alerts history error:", error);
+          logger.error("[AI-Ops] storage-health-alerts history error", error as Error);
           return c.json({ error: "Failed to fetch storage-health alert history" }, 500);
         }
       };
@@ -1837,9 +1837,9 @@ export const aiOpsRoutes = [
                 effective_days: impact.candidateDays,
               };
             } catch (previewErr) {
-              console.error(
-                "[AI-Ops] metrics-retention scheduled-preview error (non-fatal):",
-                previewErr,
+              logger.error(
+                "[AI-Ops] metrics-retention scheduled-preview error (non-fatal)",
+                previewErr as Error,
               );
               scheduledPreview = null;
             }
@@ -1935,7 +1935,7 @@ export const aiOpsRoutes = [
             },
           });
         } catch (error) {
-          console.error("[AI-Ops] metrics-retention history error:", error);
+          logger.error("[AI-Ops] metrics-retention history error", error as Error);
           return c.json({ error: "Failed to load prune-run history" }, 500);
         }
       };
@@ -2240,9 +2240,9 @@ export const aiOpsRoutes = [
             const impact = await previewAiMetricsPruneImpact(retentionDays);
             previewedRows = impact.rowCount;
           } catch (previewErr) {
-            console.error(
-              "[AI-Ops] metrics-retention prune-now preview error (continuing):",
-              previewErr,
+            logger.error(
+              "[AI-Ops] metrics-retention prune-now preview error (continuing)",
+              previewErr as Error,
             );
             previewedRows = null;
           }
@@ -2251,9 +2251,9 @@ export const aiOpsRoutes = [
           try {
             deletedRows = await pruneOldAiMetrics(retentionDays);
           } catch (pruneErr) {
-            console.error(
-              "[AI-Ops] metrics-retention prune-now prune error:",
-              pruneErr,
+            logger.error(
+              "[AI-Ops] metrics-retention prune-now prune error",
+              pruneErr as Error,
             );
             return c.json(
               {
@@ -2286,7 +2286,7 @@ export const aiOpsRoutes = [
             audit_id,
           });
         } catch (error) {
-          console.error("[AI-Ops] metrics-retention prune-now error:", error);
+          logger.error("[AI-Ops] metrics-retention prune-now error", error as Error);
           return c.json({ error: "Failed to run manual prune" }, 500);
         }
       };

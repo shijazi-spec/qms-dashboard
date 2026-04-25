@@ -436,7 +436,7 @@ export async function recordAiMetricsRetentionPruneAudit(
     );
     return { audit_id: result.rows?.[0]?.id ?? null };
   } catch (err) {
-    console.error('[aiMetricsRetentionConfig] prune-now audit write failed:', err);
+    logger.error('[aiMetricsRetentionConfig] prune-now audit write failed', err as Error);
     return { audit_id: null };
   }
 }
