@@ -771,6 +771,51 @@ export const aiOpsRoutes = [
   },
 
   /**
+   * Recently resolved tool-health alerts. Returns the last N resolved alerts
+   * of type `tool_health`, including `resolution_note` so the UI can
+   * distinguish auto-resolved (cron sweep) from manually resolved entries.
+   */
+  {
+    path: "/api/ai-ops/tool-health-alerts/resolved",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 10, 1, 50);
+          const { alerts } = await getAIAlerts({
+            alert_type: 'tool_health',
+            status: 'resolved',
+            limit,
+          });
+          const data = alerts.map((a: AIAlert) => {
+            const parsed = parseToolHealthRelatedId(a.related_record_id);
+            return {
+              id: a.id,
+              severity: a.severity,
+              title: a.title,
+              description: a.description,
+              suggestion: a.suggestion,
+              status: a.status,
+              resolution_note: a.resolution_note ?? null,
+              resolved_at: a.resolved_at,
+              related_record_id: a.related_record_id,
+              tool_name: parsed?.tool_name ?? null,
+              reason: parsed?.reason ?? null,
+              created_at: a.created_at,
+            };
+          });
+          return c.json({ data, total: data.length });
+        } catch (error) {
+          console.error("[AI-Ops] resolved tool-health-alerts error:", error);
+          return c.json({ error: "Failed to fetch resolved tool-health alerts" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
    * Tool-health threshold tuning — read endpoint.
    *
    * Returns the merged effective config plus the underlying layers so the
