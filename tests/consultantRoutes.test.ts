@@ -428,6 +428,122 @@ if (!HAS_DB) {
     },
   );
 
+  // -------------------------------------------------------------------
+  // Task #726: feedback stats endpoint also surfaces a per-client-surface
+  // breakdown so an operator who suspects "the mobile app is producing
+  // worse answers than web" can confirm without manually counting badges
+  // on the recent thumbs-down list.
+  //
+  // Locks in two regressions the typed FeedbackStats shape doesn't catch:
+  //   1. A future SQL refactor of getFeedbackStats might drop the
+  //      `client_surfaces` aggregate, leaving the new dashboard table
+  //      empty with no test failure.
+  //   2. The JSONB->>'client_surface' coalesce-to-'unknown' branch is
+  //      easy to drop accidentally; without it, legacy rows where
+  //      metadata is `{}` would silently disappear from the breakdown
+  //      and the dashboard totals would no longer add up.
+  // -------------------------------------------------------------------
+  await suite.test(
+    "GET /api/consultant/feedback/stats — returns per-client-surface breakdown including 'unknown' bucket for legacy rows",
+    async () => {
+      // Seed three rows: two on the mobile surface (one up, one down)
+      // and one on the slack surface (up). The 'down' on mobile should
+      // make mobile's ratio 50%, while slack should be 100%. A legacy
+      // row inserted directly with `{}` metadata should land in the
+      // 'unknown' bucket.
+      const mobileSurface = "mobile";
+      const slackSurface = "slack";
+      const ids = [
+        `consultant-surface-mobile-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-surface-mobile-down-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-surface-slack-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-surface-legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ];
+      seededMessageIds.push(...ids);
+
+      await postFeedback({ messageId: ids[0], rating: "up", clientSurface: mobileSurface });
+      await postFeedback({ messageId: ids[1], rating: "down", clientSurface: mobileSurface });
+      await postFeedback({ messageId: ids[2], rating: "up", clientSurface: slackSurface });
+      // Legacy row: insert directly so metadata stays `{}`. The route
+      // would normally fall back to client_surface='web' (see the
+      // "older clients keep working" test above), so we bypass it
+      // here to simulate a row written before Task #590 was deployed.
+      await pool.query(
+        `INSERT INTO ai_response_feedback (message_id, agent, rating, metadata)
+         VALUES ($1, 'qmsConsultantAgent', 'down', '{}'::jsonb)`,
+        [ids[3]],
+      );
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      let res;
+      try {
+        const handler = await buildHandler(
+          consultantRoutes,
+          "/api/consultant/feedback/stats",
+          "GET",
+        );
+        const ctx = makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "30" },
+        });
+        res = await handler(ctx);
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+
+      suite.expectEqual(res.status, 200, "status");
+      const surfaces = res.body?.stats?.client_surfaces;
+      suite.expect(Array.isArray(surfaces), "stats.client_surfaces is an array");
+
+      const findRow = (label: string) =>
+        Array.isArray(surfaces)
+          ? surfaces.find((s: any) => s.client_surface === label)
+          : undefined;
+      const rowMobile = findRow(mobileSurface);
+      const rowSlack = findRow(slackSurface);
+      const rowUnknown = findRow("unknown");
+
+      suite.expect(!!rowMobile, `breakdown contains '${mobileSurface}' surface`);
+      suite.expect(!!rowSlack, `breakdown contains '${slackSurface}' surface`);
+      suite.expect(!!rowUnknown, "breakdown contains the 'unknown' bucket for legacy rows");
+
+      if (rowMobile) {
+        suite.expect(
+          (rowMobile.thumbs_up ?? 0) >= 1,
+          "mobile thumbs_up counts the seeded up-rating",
+        );
+        suite.expect(
+          (rowMobile.thumbs_down ?? 0) >= 1,
+          "mobile thumbs_down counts the seeded down-rating",
+        );
+        suite.expect(
+          typeof rowMobile.thumbs_up_ratio === "number",
+          "mobile.thumbs_up_ratio is a number",
+        );
+        suite.expect(
+          rowMobile.thumbs_up_ratio >= 0 && rowMobile.thumbs_up_ratio <= 100,
+          "mobile.thumbs_up_ratio is a percentage between 0 and 100",
+        );
+      }
+      if (rowSlack) {
+        suite.expect(
+          (rowSlack.thumbs_up ?? 0) >= 1,
+          "slack thumbs_up counts the seeded up-rating",
+        );
+        suite.expectEqual(rowSlack.thumbs_up_ratio, 100, "slack ratio is 100%");
+      }
+      if (rowUnknown) {
+        suite.expect(
+          (rowUnknown.thumbs_down ?? 0) >= 1,
+          "'unknown' bucket counts the legacy row with empty metadata",
+        );
+      }
+    },
+  );
+
   // Best-effort cleanup: remove the rows we seeded so the test doesn't
   // pollute the DB with synthetic feedback. Wrap in try/catch so a delete
   // failure doesn't mask the real test result.

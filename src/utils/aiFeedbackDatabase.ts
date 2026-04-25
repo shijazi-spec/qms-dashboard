@@ -291,6 +291,14 @@ export interface FeedbackPromptVersionBreakdown {
   thumbs_up_ratio: number;
 }
 
+export interface FeedbackClientSurfaceBreakdown {
+  client_surface: string;
+  total: number;
+  thumbs_up: number;
+  thumbs_down: number;
+  thumbs_up_ratio: number;
+}
+
 export interface FeedbackStats {
   total: number;
   thumbs_up: number;
@@ -314,6 +322,21 @@ export interface FeedbackStats {
    * sentinel.
    */
   prompt_versions: FeedbackPromptVersionBreakdown[];
+  /**
+   * Per-client-surface breakdown for the same window as the headline totals
+   * (Task #726). Mirrors `prompt_versions` but groups by the
+   * `metadata->>'client_surface'` field — populated by
+   * `buildAiCallFeedbackMetadata()` at the /api/consultant/feedback save
+   * site (Task #590) and already shown as a per-row badge by Task #661.
+   *
+   * Lets an operator who suspects "the mobile app is producing worse
+   * answers than web" confirm that without manually counting badges on
+   * the recent thumbs-down list. Rows where `metadata->>'client_surface'`
+   * is NULL or blank are grouped under the literal `unknown` so legacy
+   * rows still contribute to the totals — same convention as the
+   * prompt-version breakdown.
+   */
+  client_surfaces: FeedbackClientSurfaceBreakdown[];
 }
 
 export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
@@ -366,6 +389,26 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
     [safeDays],
   );
 
+  // Per-client-surface breakdown (Task #726). Same shape and 'unknown'
+  // sentinel handling as the prompt-version breakdown above so the
+  // dashboard table can reuse the same rendering pattern. Cap at 12 rows
+  // — in practice we only ship a handful of surfaces (web / mobile /
+  // slack / unknown), but the limit guards against a malformed metadata
+  // value flooding the payload.
+  const surfaces = await pool.query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(metadata->>'client_surface'), ''), 'unknown') AS client_surface,
+       COUNT(*)                                                            AS total,
+       COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
+       COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
+     FROM ai_response_feedback
+     WHERE created_at >= NOW() - make_interval(days => $1)
+     GROUP BY 1
+     ORDER BY total DESC, client_surface ASC
+     LIMIT 12`,
+    [safeDays],
+  );
+
   const total = parseInt(totals.rows[0].total) || 0;
   const up = parseInt(totals.rows[0].thumbs_up) || 0;
   const down = parseInt(totals.rows[0].thumbs_down) || 0;
@@ -386,6 +429,19 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
       const rowDown = parseInt(r.thumbs_down) || 0;
       return {
         prompt_version: String(r.prompt_version),
+        total: rowTotal,
+        thumbs_up: rowUp,
+        thumbs_down: rowDown,
+        thumbs_up_ratio:
+          rowTotal > 0 ? Math.round((rowUp / rowTotal) * 100) : 0,
+      };
+    }),
+    client_surfaces: surfaces.rows.map((r) => {
+      const rowTotal = parseInt(r.total) || 0;
+      const rowUp = parseInt(r.thumbs_up) || 0;
+      const rowDown = parseInt(r.thumbs_down) || 0;
+      return {
+        client_surface: String(r.client_surface),
         total: rowTotal,
         thumbs_up: rowUp,
         thumbs_down: rowDown,

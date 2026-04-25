@@ -590,6 +590,18 @@
             <div class="text-sm text-gray-400">—</div>
           </div>
         </div>
+        <!-- Per-client-surface thumbs-up ratio breakdown (Task #726).
+             Same shape as the prompt-version table above but groups by
+             the `client_surface` metadata field already shown as a
+             per-row badge by Task #661. Lets an operator who suspects
+             "the mobile app is producing worse answers than web"
+             confirm that without manually counting badges. -->
+        <div class="mb-6" data-testid="section-feedback-client-surfaces">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">Thumbs-Up Ratio by Client Surface</h3>
+          <div id="ai-ops-feedback-client-surfaces" class="overflow-x-auto" data-testid="container-feedback-client-surfaces">
+            <div class="text-sm text-gray-400">—</div>
+          </div>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 class="text-sm font-semibold text-gray-700 mb-3">Top Thumbs-Down Categories</h3>
@@ -935,6 +947,7 @@
       const catsEl = document.getElementById('ai-ops-feedback-categories');
       const recentEl = document.getElementById('ai-ops-feedback-recent');
       const promptVersionsEl = document.getElementById('ai-ops-feedback-prompt-versions');
+      const clientSurfacesEl = document.getElementById('ai-ops-feedback-client-surfaces');
       try {
         const days = document.getElementById('feedback-days')?.value || '30';
         const promptVersion = (document.getElementById('feedback-prompt-version-filter')?.value || '').trim();
@@ -1037,6 +1050,54 @@
           }
         }
 
+        // Per-client-surface breakdown (Task #726). Mirrors the
+        // prompt-version table above — same colour scale and `unknown`
+        // sentinel handling for legacy rows where metadata is still `{}`.
+        // Source: getFeedbackStats() in src/utils/aiFeedbackDatabase.ts.
+        if (clientSurfacesEl) {
+          const surfaces = Array.isArray(data.client_surfaces) ? data.client_surfaces : [];
+          if (surfaces.length === 0) {
+            clientSurfacesEl.innerHTML = '<div class="text-sm text-gray-400">No client-surface data for this period.</div>';
+          } else {
+            const rows = surfaces.map(s => {
+              const isUnknown = s.client_surface === 'unknown';
+              const label = isUnknown
+                ? '<span class="text-gray-400 italic">unknown</span>'
+                : aiOpsEscapeHtml(s.client_surface);
+              const ratio = Number(s.thumbs_up_ratio || 0);
+              // Same regression colour scale as the prompts-tab and
+              // per-prompt-version table: <50% red, 50–80% amber,
+              // ≥80% green. Keeps the visual language consistent.
+              let ratioClass = 'text-gray-700';
+              if (Number(s.total) > 0) {
+                if (ratio < 50) ratioClass = 'text-red-600 font-semibold';
+                else if (ratio < 80) ratioClass = 'text-amber-600 font-semibold';
+                else ratioClass = 'text-green-700 font-semibold';
+              }
+              return `<tr class="border-t" data-testid="row-feedback-client-surface-${aiOpsEscapeHtml(s.client_surface)}">
+                <td class="px-3 py-2 text-xs" title="${aiOpsEscapeHtml(s.client_surface)}">${label}</td>
+                <td class="px-3 py-2 text-right text-xs">${Number(s.total) || 0}</td>
+                <td class="px-3 py-2 text-right text-xs text-emerald-700">👍 ${Number(s.thumbs_up) || 0}</td>
+                <td class="px-3 py-2 text-right text-xs text-red-700">👎 ${Number(s.thumbs_down) || 0}</td>
+                <td class="px-3 py-2 text-right text-xs ${ratioClass}" data-testid="text-feedback-client-surface-ratio-${aiOpsEscapeHtml(s.client_surface)}">${Number(s.total) > 0 ? `${ratio}%` : '<span class="text-gray-400">—</span>'}</td>
+              </tr>`;
+            }).join('');
+            clientSurfacesEl.innerHTML = `
+              <table class="min-w-full text-left text-sm" data-testid="table-feedback-client-surfaces">
+                <thead class="text-xs text-gray-500 uppercase">
+                  <tr>
+                    <th class="px-3 py-2">Client surface</th>
+                    <th class="px-3 py-2 text-right">Ratings</th>
+                    <th class="px-3 py-2 text-right">Up</th>
+                    <th class="px-3 py-2 text-right">Down</th>
+                    <th class="px-3 py-2 text-right">Up ratio</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>`;
+          }
+        }
+
         if (!isAdmin) {
           recentEl.innerHTML = '<div class="text-sm text-gray-400 italic">Recent feedback details are visible to admins only.</div>';
         } else if (recent.length > 0) {
@@ -1113,6 +1174,7 @@
       } catch (err) {
         kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">' + _t('dyn.ai_ops.failed_load_feedback') + '</div>';
         if (promptVersionsEl) promptVersionsEl.innerHTML = '<div class="text-sm text-gray-400">—</div>';
+        if (clientSurfacesEl) clientSurfacesEl.innerHTML = '<div class="text-sm text-gray-400">—</div>';
       }
       loadFeedbackTrend();
     }
