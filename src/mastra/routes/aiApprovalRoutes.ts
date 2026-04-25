@@ -100,6 +100,33 @@ function canSeeAll(role: string | null | undefined): boolean {
   return role === 'admin' || role === 'quality_manager';
 }
 
+/**
+ * Task #349: prefixes whose `tool_id` rows must never appear in the
+ * approvals dashboard outside of the dedicated `test` NODE_ENV.
+ *
+ * Task #116 permanently registered two synthetic redaction-canary tools
+ * (`integration-test-redaction-canary__ok` /
+ *  `integration-test-redaction-canary__throws`) so the live-HTTP
+ * integration test (`tests/aiApprovalRoutesRedaction.integration.ts`)
+ * can exercise the POST /approve redaction path. If a developer or QA
+ * operator ever pointed that test at production — or otherwise seeded
+ * a row for those IDs — those rows would otherwise appear alongside
+ * real approval requests in the live dashboard.
+ *
+ * We exclude any tool_id starting with `integration-test-` from the
+ * list, badge count, and credential-warning count whenever NODE_ENV is
+ * not `test`. The integration test still works because:
+ *   - It seeds the rows it asserts on with a real tool_id
+ *     (`rotate_api_key`), not an `integration-test-*` ID.
+ *   - The canary rows it does seed are only driven via POST /approve
+ *     (lookup-by-action_code), which does not apply this filter.
+ */
+function getExcludedToolIdPrefixes(): string[] {
+  return process.env.NODE_ENV === 'test'
+    ? []
+    : ['integration-test-'];
+}
+
 function aiApprovalGate<T extends { path: string; method: string; createHandler: (deps: any) => any }>(route: T): T {
   if (!route.path.startsWith('/api/')) return route;
   let roles: UserRole[];
@@ -173,6 +200,7 @@ const _aiApprovalRoutesRaw = [
             reviewerUserId: user.userId ?? undefined,
             limit,
             offset,
+            excludeToolIdPrefixes: getExcludedToolIdPrefixes(),
           });
 
           // Attach prior-viewer summaries so the list cards can show
@@ -208,7 +236,7 @@ const _aiApprovalRoutesRaw = [
 
           // Pass 0 for privileged users -> unfiltered; otherwise scope to own
           const targetUserId = canSeeAll(user.role) ? 0 : user.userId;
-          const n = await countPendingForUser(targetUserId);
+          const n = await countPendingForUser(targetUserId, getExcludedToolIdPrefixes());
           return c.json({ success: true, count: n });
         } catch (error: any) {
           console.error('[AI-Approval] count error:', error);
@@ -236,7 +264,10 @@ const _aiApprovalRoutesRaw = [
           if (!user) return unauthorizedResponse(c);
 
           const targetUserId = canSeeAll(user.role) ? 0 : user.userId;
-          const n = await countPendingWithCredentialWarnings(targetUserId);
+          const n = await countPendingWithCredentialWarnings(
+            targetUserId,
+            getExcludedToolIdPrefixes(),
+          );
           return c.json({ success: true, count: n });
         } catch (error: any) {
           console.error('[AI-Approval] credential-warning count error:', error);

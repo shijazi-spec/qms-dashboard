@@ -309,6 +309,27 @@ export interface ListFilters {
   reviewerUserId?: number;
   limit?: number;
   offset?: number;
+  /**
+   * Task #349: hide rows whose `tool_id` starts with any of the given
+   * prefixes. The approval routes pass `['integration-test-']` outside
+   * the `test` NODE_ENV so the synthetic redaction-canary tools (see
+   * `src/utils/integrationTestFixtureTools.ts`) cannot show up in the
+   * production approvals dashboard if a developer or QA operator
+   * accidentally seeds rows for them. Each prefix is escaped before
+   * being interpolated into a SQL `NOT LIKE` so callers cannot smuggle
+   * wildcards through this filter.
+   */
+  excludeToolIdPrefixes?: string[];
+}
+
+/**
+ * Escape `_` and `%` so a caller-provided prefix string is treated as
+ * literal text by SQL `LIKE` / `NOT LIKE`. Without this, a stray `_`
+ * inside a prefix like `integration-test-` would silently match a
+ * single character instead of a literal underscore.
+ */
+function escapeLikeLiteral(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 export async function listPendingActions(filters: ListFilters = {}): Promise<{
@@ -338,6 +359,12 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
   if (filters.threadId) {
     params.push(filters.threadId);
     where.push(`thread_id = $${params.length}`);
+  }
+  if (filters.excludeToolIdPrefixes && filters.excludeToolIdPrefixes.length > 0) {
+    for (const prefix of filters.excludeToolIdPrefixes) {
+      params.push(`${escapeLikeLiteral(prefix)}%`);
+      where.push(`tool_id NOT LIKE $${params.length} ESCAPE '\\'`);
+    }
   }
 
   // Task #298: review-status filter. Both branches use NOT EXISTS against
@@ -401,13 +428,23 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
   return { rows: res.rows, total };
 }
 
-export async function countPendingForUser(userId: number): Promise<number> {
+export async function countPendingForUser(
+  userId: number,
+  excludeToolIdPrefixes: string[] = []
+): Promise<number> {
+  const params: any[] = [userId];
+  const extraClauses: string[] = [];
+  for (const prefix of excludeToolIdPrefixes) {
+    params.push(`${escapeLikeLiteral(prefix)}%`);
+    extraClauses.push(`AND tool_id NOT LIKE $${params.length} ESCAPE '\\'`);
+  }
   const res = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM ai_pending_actions
       WHERE status = 'pending'
         AND (requested_by_user_id = $1 OR $1 = 0)
-        AND expires_at > NOW()`,
-    [userId]
+        AND expires_at > NOW()
+        ${extraClauses.join(' ')}`,
+    params
   );
   return parseInt(res.rows[0].n, 10);
 }
@@ -421,14 +458,24 @@ export async function countPendingForUser(userId: number): Promise<number> {
  *   - userId === 0 → all pending rows (admin / quality_manager)
  *   - userId  > 0 → only pending rows requested by that user
  */
-export async function countPendingWithCredentialWarnings(userId: number): Promise<number> {
+export async function countPendingWithCredentialWarnings(
+  userId: number,
+  excludeToolIdPrefixes: string[] = []
+): Promise<number> {
+  const params: any[] = [userId];
+  const extraClauses: string[] = [];
+  for (const prefix of excludeToolIdPrefixes) {
+    params.push(`${escapeLikeLiteral(prefix)}%`);
+    extraClauses.push(`AND tool_id NOT LIKE $${params.length} ESCAPE '\\'`);
+  }
   const res = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM ai_pending_actions
       WHERE status = 'pending'
         AND (requested_by_user_id = $1 OR $1 = 0)
         AND expires_at > NOW()
-        AND jsonb_array_length(credential_warnings) > 0`,
-    [userId]
+        AND jsonb_array_length(credential_warnings) > 0
+        ${extraClauses.join(' ')}`,
+    params
   );
   return parseInt(res.rows[0].n, 10);
 }
