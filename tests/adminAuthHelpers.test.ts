@@ -305,7 +305,53 @@ console.log("Case: tampered session cookie with admin role is rejected");
 }
 console.log();
 
-// ─── Case 8: header takes precedence over cookie when both present ───
+// ─── Case 8: admin key containing '=' characters in the cookie ───
+console.log("Case: admin_key cookie value contains embedded '=' (base64-padded / token-style key)");
+{
+  const KEY_WITH_EQUALS = "abc=def=ghi";
+  process.env.ADMIN_API_KEY = KEY_WITH_EQUALS;
+  const c = makeContext({ cookies: { admin_key: KEY_WITH_EQUALS } });
+  assertEquals(
+    getAdminKey(c),
+    KEY_WITH_EQUALS,
+    "getAdminKey returns the full value including embedded '=' characters"
+  );
+  assertEquals(
+    hasValidAdminApiKey(c),
+    true,
+    "hasValidAdminApiKey is true for a key with embedded '=' read from cookie"
+  );
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+}
+console.log();
+
+// ─── Case 8b: admin key containing '=' characters alongside other cookies ───
+console.log("Case: admin_key with '=' surrounded by sibling cookies");
+{
+  const KEY_WITH_EQUALS = "tok==padded==";
+  process.env.ADMIN_API_KEY = KEY_WITH_EQUALS;
+  const c = makeContext({
+    cookies: {
+      session: "somesessionvalue",
+      admin_key: KEY_WITH_EQUALS,
+      other: "value",
+    },
+  });
+  assertEquals(
+    getAdminKey(c),
+    KEY_WITH_EQUALS,
+    "getAdminKey isolates admin_key and preserves all '=' in the value"
+  );
+  assertEquals(
+    hasValidAdminApiKey(c),
+    true,
+    "hasValidAdminApiKey is true despite multiple '=' in the cookie value"
+  );
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+}
+console.log();
+
+// ─── Case 9: header takes precedence over cookie when both present ───
 console.log("Case: header wins over cookie when both supply an admin key");
 {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;

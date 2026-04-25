@@ -153,7 +153,7 @@ export function getAdminKey(c: any): string | null {
   if (headerKey) return headerKey;
   const cookies = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim());
   const adminCookie = cookies.find((s: string) => s.startsWith('admin_key='));
-  if (adminCookie) return adminCookie.split('=')[1] || null;
+  if (adminCookie) return adminCookie.slice(adminCookie.indexOf('=') + 1) || null;
   return null;
 }
 
