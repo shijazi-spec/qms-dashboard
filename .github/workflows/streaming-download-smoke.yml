@@ -30,12 +30,51 @@ name: Streaming download — cross-browser smoke
 # in tests/streamingDownload.spec.ts, explain the new expected range in the
 # commit message, and adjust the "Summarise latency results" step below if
 # the interpretation of the timing artifact changes.
+#
+# Cross-build trend tracking
+# ──────────────────────────
+# The hard latency budget catches single-run spikes but cannot catch a slow
+# creep — e.g. download time growing +200 ms/week and crossing the fail
+# threshold months later. To make creeping regressions visible early, the
+# "Render latency trend" step below runs `scripts/streaming-download-trend.cjs`,
+# which:
+#
+#   1. Uses the `gh` CLI to fetch the `streaming-download-timing` artifact
+#      from the last 20 successful runs of this same workflow on the
+#      default branch (artifacts have 90-day retention by default, so this
+#      gives us a free, already-authenticated time-series store with no
+#      new external service or secret).
+#   2. Combines that history with this run's per-browser timing files.
+#   3. Renders a per-browser Markdown trend table with the rolling median,
+#      Δ-vs-median for every run, and a simple linear-trend slope.
+#   4. Flags 🐢 "creeping regression suspected" when the current run is
+#      > 1.25× the median of the last 10 runs on that browser, even when
+#      still inside LATENCY_FAIL_MS.
+#
+# The report is appended to the GitHub Actions job summary on every run
+# and posted (or updated, via `gh pr comment --edit-last`) as a sticky
+# comment on pull requests, so reviewers see the trend right next to the
+# PR diff. The script never fails the build — the hard fail budget is
+# enforced in tests/streamingDownload.spec.ts; this step only surfaces
+# slow-creep regressions that the hard budget would miss.
+#
+# To tune the trend window, slow-creep threshold, or default branch, see
+# the env vars documented at the top of scripts/streaming-download-trend.cjs.
 
 on:
   push:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+
+# Required for the trend step:
+#   • actions: read         → `gh run list` / `gh run download`
+#   • pull-requests: write  → `gh pr comment` (sticky trend comment)
+#   • contents: read        → checkout
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
 
 concurrency:
   group: streaming-download-${{ github.workflow }}-${{ github.ref }}
@@ -149,6 +188,91 @@ jobs:
         with:
           name: streaming-download-timing
           path: test-results/streaming-download-timing/
+          if-no-files-found: ignore
+
+      # Cross-build trend report. See the "Cross-build trend tracking"
+      # section at the top of this workflow for the full rationale.
+      #
+      # Runs on `if: always()` so a hard latency fail in the smoke test
+      # still produces (and posts) a trend report — that is precisely
+      # when reviewers most want to see "is this a one-off spike or the
+      # tail end of a creep?".
+      #
+      # The script itself never exits non-zero; the hard fail budget is
+      # enforced earlier in the Playwright spec.
+      - name: Render latency trend (history + this run)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Defaults baked into the script can be overridden here without
+          # editing scripts/streaming-download-trend.cjs.
+          STREAMING_TREND_HISTORY_LIMIT: "20"
+          STREAMING_TREND_DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        run: |
+          node scripts/streaming-download-trend.cjs
+
+      - name: Append trend report to job summary
+        if: always()
+        run: |
+          REPORT="test-results/streaming-trend-summary.md"
+          if [ -f "$REPORT" ]; then
+            cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_(no streaming-download trend report was produced)_" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Sticky PR comment: finds the previous trend comment by its
+      # HTML marker (`<!-- streaming-download-trend -->`, emitted at
+      # the bottom of the report by scripts/streaming-download-trend.cjs)
+      # and PATCHes it in place — so the trend report becomes a single
+      # sticky comment instead of one per push, AND we never accidentally
+      # overwrite an unrelated bot comment (which `gh pr comment
+      # --edit-last` could do in repos with multiple bot integrations).
+      #
+      # `continue-on-error: true` so this step never fails the smoke
+      # job: on fork-based PRs the `GITHUB_TOKEN` is read-only and
+      # `gh api -X PATCH` will 403; the trend report is still in the
+      # job summary and as an artifact, so reviewers can still see it.
+      - name: Post / update sticky PR comment with trend
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MARKER: '<!-- streaming-download-trend -->'
+        run: |
+          REPORT="test-results/streaming-trend-summary.md"
+          if [ ! -f "$REPORT" ]; then
+            echo "No trend report to post."
+            exit 0
+          fi
+
+          # Find an existing trend comment by HTML marker. List comments
+          # paginated so we don't miss long histories. jq selects the
+          # first comment whose body contains our marker.
+          EXISTING_ID=$(
+            gh api --paginate \
+              "repos/${GH_REPO}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${MARKER}\"))][0].id"
+          )
+
+          if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
+            echo "Updating existing trend comment id=${EXISTING_ID}"
+            gh api -X PATCH \
+              "repos/${GH_REPO}/issues/comments/${EXISTING_ID}" \
+              -F body=@"$REPORT" > /dev/null
+          else
+            echo "No prior trend comment found — creating a new one."
+            gh pr comment "$PR_NUMBER" --body-file "$REPORT"
+          fi
+
+      - name: Upload trend report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streaming-download-trend
+          path: test-results/streaming-trend-summary.md
           if-no-files-found: ignore
 
       - name: Upload Playwright report
