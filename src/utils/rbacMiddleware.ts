@@ -778,6 +778,36 @@ export async function enforceRoutePermission(c: any, path: string, method: strin
 }
 
 /**
+ * Pure permission-map lookup — returns the role allowlist of the FIRST
+ * `ROUTE_PERMISSION_MAP` entry whose pattern matches `path` and whose
+ * `methods` includes `method`. Mirrors the first-match semantics of
+ * `canAccessRoute` and the dominant rule used by `enforceRoutePermission`.
+ *
+ * Returns:
+ *   - the matching rule's `roles` array (cloned) when the rule has a static
+ *     allowlist; or
+ *   - `null` when no rule matches, OR when the matching rule uses a
+ *     dynamic `permission` ACL instead of a static `roles` list (the
+ *     latter cannot be statically mirrored by a page-shell gate).
+ *
+ * Public so the page-shell <-> API allowlist drift test in
+ * `tests/staticPageRoleAllowlistDrift.test.ts` can compute the effective
+ * GET allowlist for each gated dashboard route's backing `/api/*` path
+ * without re-parsing `ROUTE_PERMISSION_MAP` itself.
+ */
+export function getRouteRoleAllowlist(
+  path: string,
+  method: string,
+): readonly UserRole[] | null {
+  for (const rule of ROUTE_PERMISSION_MAP) {
+    if (rule.pattern.test(path) && rule.methods.includes(method)) {
+      return rule.roles ? [...rule.roles] : null;
+    }
+  }
+  return null;
+}
+
+/**
  * Pure permission-map lookup — no DB calls, no session parsing.
  * Used by unit tests to assert that the ROUTE_PERMISSION_MAP is correctly
  * configured for a given (role, path, method) triple.

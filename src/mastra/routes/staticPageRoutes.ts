@@ -404,30 +404,54 @@ export const staticPageRoutes = [
 // Exported for tests so the role-gate test file can verify each route's
 // allowlist matches the matrix below without having to re-derive it from
 // `ROUTE_PERMISSION_MAP`. Not part of the public runtime surface.
+//
+// `backingApiPath` is the representative `/api/*` path whose GET allowlist
+// in `ROUTE_PERMISSION_MAP` (src/utils/rbacMiddleware.ts) the page-shell
+// gate is mirroring. Consumed by the drift test in
+// `tests/staticPageRoleAllowlistDrift.test.ts` (Task #472), which calls
+// `getRouteRoleAllowlist(backingApiPath, 'GET')` and asserts the result
+// equals `allowedRoles` — surfacing any future tightening of the API
+// allowlist that forgets to update the page gate.
+//
+// Set `backingApiPath: null` for pages that have no specific backing
+// `/api/*` rule (e.g. `/guide` is a static documentation HTML with no
+// dedicated API of its own). The drift test skips those entries; the
+// Task #461 four-case role-gate test in
+// `tests/staticPageRoutesRoleGate.test.ts` still covers them end-to-end.
 export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
   path: string;
   allowedRoles: readonly UserRole[];
+  backingApiPath: string | null;
 }> = [
-  { path: "/sandbox",         allowedRoles: ANY_DASHBOARD_ROLES },
-  { path: "/crm",             allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/audits",          allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/compliance",      allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/policies",        allowedRoles: POLICIES_READ_ROLES },
-  { path: "/reviews",         allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/risks",           allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/grc",             allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/pdpl",            allowedRoles: ADMIN_ONLY },
-  { path: "/feedback",        allowedRoles: ANY_DASHBOARD_ROLES },
-  { path: "/guide",           allowedRoles: ANY_DASHBOARD_ROLES },
-  { path: "/migration",       allowedRoles: ADMIN_ONLY },
-  { path: "/logs",            allowedRoles: ADMIN_ONLY },
-  { path: "/ai-approvals",    allowedRoles: AI_APPROVALS_ROLES },
-  { path: "/intake",          allowedRoles: ANY_DASHBOARD_ROLES },
-  { path: "/external-audits", allowedRoles: ANY_DASHBOARD_ROLES },
-  { path: "/vendors",         allowedRoles: VENDORS_READ_ROLES },
-  { path: "/tablef",          allowedRoles: TABLEF_READ_ROLES },
-  { path: "/infographic",     allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/executive.html",  allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/grc.html",        allowedRoles: GOVERNANCE_AND_EXECUTIVE },
-  { path: "/consultant.html", allowedRoles: CONSULTANT_ROLES },
+  { path: "/sandbox",         allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/sandbox/health" },
+  { path: "/crm",             allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/crm/data" },
+  { path: "/audits",          allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/audits" },
+  { path: "/compliance",      allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/compliance" },
+  { path: "/policies",        allowedRoles: POLICIES_READ_ROLES,       backingApiPath: "/api/policies" },
+  { path: "/reviews",         allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/management-reviews" },
+  { path: "/risks",           allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/risks" },
+  // /grc aggregates audits + compliance + risks + reviews; all share the
+  // same governance+executive read allowlist, so /api/audits is a faithful
+  // representative and any divergence in any of those rules will be
+  // caught individually by /audits, /compliance, /risks, /reviews.
+  { path: "/grc",             allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/audits" },
+  { path: "/pdpl",            allowedRoles: ADMIN_ONLY,                backingApiPath: "/api/pdpl/export" },
+  { path: "/feedback",        allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/feedback" },
+  // /guide is a static platform user-guide HTML; no `/api/guide` rule
+  // exists. The page-gate allowlist (`ANY_DASHBOARD_ROLES`) is asserted
+  // by the four-case role-gate test; the drift check skips it because
+  // there is no API-side rule to mirror.
+  { path: "/guide",           allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: null },
+  // /migration → /api/migration GET — admin only.
+  { path: "/migration",       allowedRoles: ADMIN_ONLY,                backingApiPath: "/api/migration/run" },
+  { path: "/logs",            allowedRoles: ADMIN_ONLY,                backingApiPath: "/api/logs" },
+  { path: "/ai-approvals",    allowedRoles: AI_APPROVALS_ROLES,        backingApiPath: "/api/ai/approvals" },
+  { path: "/intake",          allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/manual-audit-intake" },
+  { path: "/external-audits", allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/external-audits" },
+  { path: "/vendors",         allowedRoles: VENDORS_READ_ROLES,        backingApiPath: "/api/vendors" },
+  { path: "/tablef",          allowedRoles: TABLEF_READ_ROLES,         backingApiPath: "/api/tablef/kpis" },
+  { path: "/infographic",     allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/infographic" },
+  { path: "/executive.html",  allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/executive/reports" },
+  { path: "/grc.html",        allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/audits" },
+  { path: "/consultant.html", allowedRoles: CONSULTANT_ROLES,          backingApiPath: "/api/consultant/alerts" },
 ];
