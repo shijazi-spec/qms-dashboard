@@ -482,6 +482,116 @@ async function run(): Promise<void> {
   );
 
   // -----------------------------------------------------------------------
+  // Heuristic regression — edge cases surfaced by the Task #478 report
+  //
+  // The credential-heuristic-report.ts script scans historical
+  // ai_pending_actions / event_logs rows in REPORT-ONLY mode and
+  // returns counts of would-have-redacted tokens grouped by field path.
+  // Reviewing those buckets surfaces edge cases the original synthetic
+  // fixture set (`Test-Project-2026-Final-v3`, `P@ssw0rd!_FreeForm…`,
+  // `aB3xKp9zQrLm4vN2YwSdEfXyZTw`) did not cover. Pin them here so a
+  // future threshold tweak (entropy floor, length window, strong-special
+  // set) cannot silently regress these classifications.
+  // -----------------------------------------------------------------------
+  console.log("\n[aiApprovalDatabase] heuristic edge cases from credential-heuristic-report.ts");
+
+  captured.length = 0;
+
+  // MUST redact — AWS-secret-style 40-char base64 with `/` separators.
+  // No vendor prefix, so the regex layer is blind. Heuristic: high entropy
+  // + 3 character classes (U/L/D) → entropy bucket.
+  const AWS_SECRET_SHAPE = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+
+  // MUST NOT redact — SHA-256 hex digest. 64 chars but only two character
+  // classes (lowercase + digit), so isHighEntropyToken should reject it
+  // (`classes < 3`). This guards the no-false-positive promise for
+  // checksums and content hashes that legitimately appear in audit prose.
+  const SHA256_HEX_DIGEST =
+    "a3f5e9c1d2b4a6e8f0c2d4e6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6";
+
+  // MUST NOT redact — ISO 8601 UTC timestamp. Falls inside the 24-80 char
+  // entropy window after trim, but the small alphabet keeps Shannon
+  // entropy well below the 4.5 bits/char floor.
+  const ISO_TIMESTAMP = "2024-12-31T23:59:59.999Z";
+
+  // MUST NOT redact — vendor-prefixed customer ID (e.g. Stripe-style
+  // identifier). Only lowercase + digit (2 classes) → fails the
+  // entropy heuristic's `classes >= 3` filter even though length is 28.
+  const VENDOR_ID = "cust_abc123def456ghi789jkl012";
+
+  // MUST NOT redact — long memorable passphrase. Mixed case + length 27
+  // but no digit and no strong special char, so the password-strength
+  // heuristic correctly rejects it. Models the "diceware" pattern that
+  // a careful operator might paste into a `note` field as documentation.
+  const PASSPHRASE_NO_DIGIT = "MyCorrectHorseBatteryStaple";
+
+  await enqueuePendingAction({
+    toolId: "rotate_aws_credentials",
+    toolLabel: "Rotate AWS Credentials",
+    payload: {
+      action: "rotate",
+      // Innocuously-named field carrying a high-entropy AWS secret value.
+      // The regex layer is blind (no AKIA prefix); heuristic must catch it.
+      replacement_value: AWS_SECRET_SHAPE,
+      // Safe values that exercise the no-false-positive guarantees:
+      content_checksum: SHA256_HEX_DIGEST,
+      observed_at: ISO_TIMESTAMP,
+      external_customer_id: VENDOR_ID,
+      operator_note: `Documented procedure: pick a passphrase like ${PASSPHRASE_NO_DIGIT}`,
+    },
+    payloadPreview:
+      `Rotate AWS creds — replacement=${AWS_SECRET_SHAPE}, ` +
+      `checksum=${SHA256_HEX_DIGEST}, observed=${ISO_TIMESTAMP}, ` +
+      `customer=${VENDOR_ID}, hint=${PASSPHRASE_NO_DIGIT}`,
+    riskLevel: "high",
+    complianceRefs: [],
+    requestedByUserId: 1,
+    requestedByEmail: "ops@walaplus.com",
+    requestedByName: "Ops",
+    threadId: null,
+  });
+
+  const edgeInsert = captured.find(c =>
+    /INSERT INTO ai_pending_actions/i.test(c.sql),
+  );
+  assert(!!edgeInsert, "[edge] INSERT INTO ai_pending_actions was issued");
+
+  const edgePayloadJson = String(edgeInsert!.params[3]);
+  const edgePreview     = String(edgeInsert!.params[4]);
+
+  // ── Must-redact assertions ────────────────────────────────────────────
+  assert(
+    !edgePayloadJson.includes(AWS_SECRET_SHAPE),
+    "[edge] payload.replacement_value scrubs AWS-style 40-char base64 secret",
+  );
+  assert(
+    !edgePreview.includes(AWS_SECRET_SHAPE),
+    "[edge] payload_preview scrubs AWS-style 40-char base64 secret",
+  );
+
+  // ── Must-NOT-redact assertions (no-false-positive regressions) ────────
+  assert(
+    edgePayloadJson.includes(SHA256_HEX_DIGEST),
+    "[edge] SHA-256 hex digest survives (no false positive on 64-char hex)",
+  );
+  assert(
+    edgePreview.includes(SHA256_HEX_DIGEST),
+    "[edge] SHA-256 hex digest survives in preview text",
+  );
+  assert(
+    edgePayloadJson.includes(ISO_TIMESTAMP),
+    "[edge] ISO 8601 timestamp survives (entropy below 4.5 bits/char)",
+  );
+  assert(
+    edgePayloadJson.includes(VENDOR_ID),
+    "[edge] Vendor-prefixed customer ID survives (only 2 character classes)",
+  );
+  assert(
+    edgePayloadJson.includes(PASSPHRASE_NO_DIGIT),
+    "[edge] Memorable passphrase without digit/special survives",
+  );
+
+  // -----------------------------------------------------------------------
   // Regression: result.error is a plain string that may contain credential-
   // shaped text (e.g. a runtime error message that echoes the rotated key).
   // redactSecretLikeStrings must scrub it before the row is persisted
