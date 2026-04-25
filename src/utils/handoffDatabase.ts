@@ -409,7 +409,7 @@ export async function getHandoffSummary(): Promise<any> {
   `);
 
   return {
-    rules: ruleStats.rows[0],
+    rule_stats: ruleStats.rows[0],
     events: eventStats.rows[0],
     by_source_module: bySourceModule.rows,
     by_target_module: byTargetModule.rows,
