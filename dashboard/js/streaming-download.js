@@ -1647,20 +1647,51 @@
     }
 
     // Promise-based sleep that resolves early when the caller flips
-    // `streamCtx.cancelled` to true (e.g. the user clicks Cancel mid-backoff).
+    // `streamCtx.cancelled` to true (e.g. the user clicks Cancel mid-backoff)
+    // OR when the browser fires an `online` event (so resume retries don't
+    // wait through the full exponential backoff after Wi-Fi reconnects).
     // Keeps the granularity small so cancellation feels immediate without
     // burning CPU on a tight poll.
+    //
+    // Resolves with one of:
+    //   'elapsed'   — the full ms elapsed without interruption
+    //   'cancelled' — the caller flipped streamCtx.cancelled
+    //   'online'    — the browser dispatched an `online` event mid-sleep
     function delayWithCancel(ms, streamCtx) {
         return new Promise(function (resolve) {
-            if (!ms || ms <= 0) return resolve();
-            if (streamCtx && streamCtx.cancelled) return resolve();
+            if (!ms || ms <= 0) return resolve('elapsed');
+            if (streamCtx && streamCtx.cancelled) return resolve('cancelled');
+
+            var win = (typeof window !== 'undefined') ? window : null;
+            var settled = false;
+            var onlineHandler = null;
+            var timer = null;
+
+            function finish(reason) {
+                if (settled) return;
+                settled = true;
+                if (timer) { try { clearTimeout(timer); } catch (_) { /* ignore */ } }
+                if (win && onlineHandler) {
+                    try { win.removeEventListener('online', onlineHandler); } catch (_) { /* ignore */ }
+                }
+                resolve(reason);
+            }
+
+            // Wake immediately when the browser tells us it's back online.
+            if (win && typeof win.addEventListener === 'function') {
+                onlineHandler = function () { finish('online'); };
+                try { win.addEventListener('online', onlineHandler); }
+                catch (_) { onlineHandler = null; }
+            }
+
             var step = Math.min(ms, 50);
             var elapsed = 0;
             (function tick() {
-                if (streamCtx && streamCtx.cancelled) return resolve();
+                if (settled) return;
+                if (streamCtx && streamCtx.cancelled) return finish('cancelled');
                 elapsed += step;
-                if (elapsed >= ms) return resolve();
-                setTimeout(tick, step);
+                if (elapsed >= ms) return finish('elapsed');
+                timer = setTimeout(tick, step);
             })();
         });
     }
@@ -1820,6 +1851,7 @@
 
                 // Backoff *before* attempts 2..N so the first attempt fires
                 // immediately (the user just clicked Resume — no delay).
+                var wokeOnline = false;
                 if (attempt > 1 && baseDelay > 0) {
                     var waitMs = baseDelay * Math.pow(2, attempt - 2);
                     if (card && typeof card.setRetryStatus === 'function') {
@@ -1832,20 +1864,28 @@
                             });
                         } catch (_) { /* ignore */ }
                     }
-                    await delayWithCancel(waitMs, streamCtx);
+                    var wakeReason = await delayWithCancel(waitMs, streamCtx);
                     if (streamCtx && streamCtx.cancelled) break;
+                    wokeOnline = (wakeReason === 'online');
                 }
 
                 // Only flip the card into the "Retrying…" look once we're
                 // past the user's first click (attempt 1 should look like a
                 // normal in-progress download — the user clicked Resume and
-                // hasn't seen any failure yet).
+                // hasn't seen any failure yet). When we woke early on an
+                // `online` event, swap the reason copy so the user can see
+                // we noticed the network came back rather than just watching
+                // the attempt counter tick up unexplained.
                 if (attempt > 1 && card && typeof card.setRetryStatus === 'function') {
+                    var statusReason = wokeOnline
+                        ? tr('downloads.connection_restored',
+                              'Connection restored — retrying…')
+                        : describeFetchError(attemptErr);
                     try {
                         card.setRetryStatus({
                             attempt: attempt,
                             maxAttempts: maxAttempts,
-                            reason: describeFetchError(attemptErr)
+                            reason: statusReason
                         });
                     } catch (_) { /* ignore */ }
                 }

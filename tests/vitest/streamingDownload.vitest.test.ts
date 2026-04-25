@@ -1533,6 +1533,132 @@ describe('streamingDownload (browser helper)', () => {
     expect(env.fileHandle.aborted).toBe(true);
   });
 
+  it('wakes the resume backoff sleep early when the browser dispatches an `online` event and surfaces "Connection restored" before the next attempt', async () => {
+    env = setupBrowserEnv();
+    env.win.STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS = 3;
+    // Make the backoff long enough that the test would obviously hang
+    // unless `online` short-circuits the sleep — but small enough that an
+    // accidentally-skipped wake doesn't time the suite out.
+    env.win.STREAMING_DOWNLOAD_RESUME_BASE_DELAY_MS = 2000;
+
+    const HEAD = new Uint8Array([10, 11, 12, 13]);
+    const TAIL = new Uint8Array([14, 15, 16, 17]);
+    const TOTAL = HEAD.byteLength + TAIL.byteLength;
+    const ETAG = 'W/"online-wake"';
+
+    let firstBodyController: any;
+    const firstBody = new (globalThis as any).ReadableStream({
+      start(c: any) { firstBodyController = c; },
+    });
+
+    // Fail attempt #1 of the Resume cycle, then succeed on attempt #2.
+    // The test will dispatch `online` while attempt #2's backoff sleeps,
+    // proving the sleep wakes early.
+    let rangeAttempts = 0;
+    const fetchSpy = vi.fn(async (_url: string, init: any = {}) => {
+      const headers = (init && init.headers) || {};
+      const range =
+        (typeof headers.get === 'function' && headers.get('Range')) ||
+        headers['Range'] || headers['range'];
+
+      if (!range) {
+        return new (globalThis as any).Response(firstBody, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-disposition': 'attachment; filename="online.bin"',
+            'content-length': String(TOTAL),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        });
+      }
+
+      rangeAttempts += 1;
+      if (rangeAttempts === 1) {
+        throw new TypeError('Failed to fetch (offline)');
+      }
+      return new (globalThis as any).Response(
+        new (globalThis as any).Response(TAIL).body,
+        {
+          status: 206,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-range': 'bytes ' + HEAD.byteLength + '-' + (TOTAL - 1) + '/' + TOTAL,
+            'content-length': String(TAIL.byteLength),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        }
+      );
+    });
+    env.win.fetch = fetchSpy;
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/online.bin', {
+      streamToDisk: true,
+      skipEstimate: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.error(Object.assign(new Error('drop'), { name: 'TypeError' }));
+
+    let resumeBtn: any = null;
+    for (let i = 0; i < 80; i++) {
+      resumeBtn = env.win.document.querySelector('[data-testid="button-resume-download"]');
+      if (resumeBtn) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(resumeBtn).not.toBeNull();
+    resumeBtn.click();
+
+    // Wait until the loop is actually sleeping in the backoff before
+    // attempt #2 (we can detect this by the retry status showing the
+    // "waiting Ns" countdown copy).
+    let waitingObserved = false;
+    for (let i = 0; i < 200; i++) {
+      const status = env.win.document.querySelector('[data-testid="text-download-status"]');
+      const text = status && status.textContent;
+      if (rangeAttempts >= 1 && text && /waiting\s+\d+s/i.test(text)) {
+        waitingObserved = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(waitingObserved).toBe(true);
+
+    // Mark the start so we can verify the sleep aborted well before the
+    // configured 2s backoff would naturally elapse.
+    const wakeStartedAt = Date.now();
+
+    // Fire the browser's `online` event — this should short-circuit the
+    // backoff sleep inside delayWithCancel and immediately fire attempt #2.
+    const onlineEvent = new env.win.Event('online');
+    env.win.dispatchEvent(onlineEvent);
+
+    const result = await downloadPromise;
+    const elapsed = Date.now() - wakeStartedAt;
+
+    // The full backoff is 2000ms; a working early-wake should finish in a
+    // small fraction of that. Allow a generous ceiling so we're not flaky
+    // on slow CI.
+    expect(elapsed).toBeLessThan(1500);
+
+    expect(result.streamedToDisk).toBe(true);
+    expect(result.bytes).toBe(TOTAL);
+    expect(rangeAttempts).toBe(2);
+    expect(env.fileHandle.createWritable).toHaveBeenCalledTimes(1);
+
+    const merged = new Uint8Array(result.bytes);
+    let off = 0;
+    for (const w of env.writes) {
+      merged.set(w, off);
+      off += w.byteLength;
+    }
+    expect(Array.from(merged)).toEqual([10, 11, 12, 13, 14, 15, 16, 17]);
+  });
+
   describe('confirm-before-cancel for near-complete downloads', () => {
     function makeAbortableBody() {
       let bodyController: any;
