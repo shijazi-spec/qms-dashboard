@@ -32,7 +32,11 @@ import pg from 'pg';
 const { Pool } = pg;
 import { createHash } from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { redactSensitiveDeep, redactSecretLikeStrings } from './eventLogsDatabase';
+import {
+  redactSensitiveDeep,
+  redactSecretLikeStrings,
+  deepRedactSecretLikeStrings,
+} from './eventLogsDatabase';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -85,6 +89,34 @@ export function redactErrorMessageForStorage(
   if (!message) return null;
   const scrubbed = String(redactSecretLikeStrings(message));
   return scrubbed.slice(0, 500);
+}
+
+/**
+ * Scrub the caller-supplied `metadata` JSONB blob destined for
+ * `ai_call_metrics.metadata` before it is `JSON.stringify`-ed into the
+ * INSERT/OPEN parameter slot.
+ *
+ * Mirrors `redactErrorMessageForStorage()` but for structured payloads:
+ * runs every string leaf through `deepRedactSecretLikeStrings()` so a
+ * careless caller cannot land a credential-shaped substring (sk-…, ghp_…,
+ * JWT, bcrypt hash, AWS key) under an innocuous key like `metadata.note`
+ * and have it persist in plaintext until the daily
+ * `backfillAiCallMetricsRedaction()` sweep catches it (Task #475 added the
+ * `metadata` column to that sweep; this defends the WRITE path so the
+ * plaintext never reaches the table in the first place).
+ *
+ * Returns a plain object — never null — so callers can pass the result
+ * straight into `JSON.stringify` without an extra `?? {}`.
+ */
+export function redactMetadataForStorage(
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!metadata) return {};
+  const scrubbed = deepRedactSecretLikeStrings(metadata);
+  if (scrubbed && typeof scrubbed === 'object' && !Array.isArray(scrubbed)) {
+    return scrubbed as Record<string, unknown>;
+  }
+  return {};
 }
 
 export function redactPromptPreview(prompt: string, maxLen = 300): string {
@@ -263,7 +295,7 @@ export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number |
         row.tool_output_preview ?? null,
         row.user_hash ?? null,
         row.session_hash ?? null,
-        JSON.stringify(row.metadata ?? {}),
+        JSON.stringify(redactMetadataForStorage(row.metadata)),
       ]
     );
     return result.rows[0]?.id ?? null;
@@ -310,7 +342,7 @@ async function openAiCallMetric(params: {
         params.promptPreview ?? null,
         params.userId ? hashValue(params.userId) : null,
         params.sessionId ? hashValue(params.sessionId) : null,
-        JSON.stringify(params.metadata ?? {}),
+        JSON.stringify(redactMetadataForStorage(params.metadata)),
       ]
     );
     return result.rows[0]?.id ?? null;
