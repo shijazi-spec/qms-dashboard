@@ -91,6 +91,10 @@ export const eventLogsRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        const { requireAuthOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+        const user = requireAuthOrKey(c);
+        if (!user) return unauthorizedResponse(c);
+
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {

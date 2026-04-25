@@ -142,6 +142,7 @@ const AUTH_GATED: Array<{
 }> = [
   { label: "risks CSV",        routes: riskRoutes,           path: "/api/risks/export/estimate" },
   { label: "risks XLSX",       routes: riskRoutes,           path: "/api/risks/export-xlsx/estimate" },
+  { label: "event logs CSV",   routes: eventLogsRoutes,      path: "/api/logs/export/estimate" },
   { label: "policies CSV",     routes: policyRoutes,         path: "/api/policies/export/estimate" },
   { label: "duplicates CSV",   routes: duplicateRadarRoutes, path: "/api/duplicates/export/estimate" },
   { label: "duplicates XLSX",  routes: duplicateRadarRoutes, path: "/api/duplicates/export-xlsx/estimate" },
@@ -195,7 +196,7 @@ if (HAS_DB) {
     });
   });
 
-  // --- eventLogsRoutes (no auth gate on this route) ---
+  // --- eventLogsRoutes ---
 
   await suite.test("GET /api/logs/export/estimate — 200 shape (DB)", async () => {
     await withKey(async () => {
