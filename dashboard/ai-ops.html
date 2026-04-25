@@ -2142,13 +2142,8 @@
       }
     }
 
-    function renderChildren(container, rows) {
-      if (!rows || !rows.length) {
-        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">' + _t('dyn.ai_ops.no_children') + '</span>';
-        return;
-      }
-      container.innerHTML = `
-        <div class="font-semibold text-gray-700 mb-2">Child tool calls (${rows.length})</div>
+    function renderChildrenTable(rows) {
+      return `
         <table class="min-w-full text-left text-xs" data-testid="table-child-tools">
           <thead><tr class="text-gray-500 uppercase">
             <th class="px-2 py-1">Time</th>
@@ -2175,6 +2170,117 @@
             </tr>`).join('')}
           </tbody>
         </table>`;
+    }
+
+    function renderChildrenWaterfall(rows) {
+      const starts = rows.map(c => new Date(c.started_at).getTime());
+      const earliestMs = Math.min(...starts);
+      const ends = rows.map((c, i) => starts[i] + (parseInt(c.latency_ms) || 0));
+      const latestMs = Math.max(...ends);
+      const totalSpan = Math.max(latestMs - earliestMs, 1);
+
+      const axisLabels = (() => {
+        const steps = 4;
+        const labels = [];
+        for (let i = 0; i <= steps; i++) {
+          const ms = (totalSpan / steps) * i;
+          labels.push({ pct: (ms / totalSpan) * 100, label: fmtMs(Math.round(ms)) });
+        }
+        return labels;
+      })();
+
+      const bars = rows.map((c, i) => {
+        const leftPct = ((starts[i] - earliestMs) / totalSpan) * 100;
+        const widthPct = Math.max(((parseInt(c.latency_ms) || 0) / totalSpan) * 100, 0.5);
+        const color = c.success ? 'bg-green-500' : 'bg-red-500';
+        const hoverColor = c.success ? 'hover:bg-green-600' : 'hover:bg-red-600';
+        const toolLabel = esc(c.tool_name || '(agent)');
+        const errorTip = c.error_class
+          ? ` | ${esc(c.error_class)}${c.error_message ? ': ' + esc(c.error_message.slice(0, 120)) : ''}`
+          : '';
+        const tooltip = `${toolLabel} — ${fmtMs(c.latency_ms)}${errorTip}`;
+        return `
+          <div class="flex items-center gap-2 mb-1" data-testid="waterfall-row-${c.id}">
+            <div class="w-28 flex-shrink-0 text-right text-gray-600 font-mono truncate text-[10px]" title="${toolLabel}">${toolLabel}</div>
+            <div class="relative flex-1 h-5">
+              <div class="absolute h-full rounded ${color} ${hoverColor} cursor-default transition-colors"
+                   style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%"
+                   title="${tooltip}"
+                   data-testid="waterfall-bar-${c.id}">
+                <span class="sr-only">${tooltip}</span>
+              </div>
+            </div>
+            <div class="w-14 flex-shrink-0 text-right text-[10px] ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':'text-gray-500'}">${fmtMs(c.latency_ms)}</div>
+          </div>`;
+      }).join('');
+
+      const axisHtml = axisLabels.map(a =>
+        `<div class="absolute text-[9px] text-gray-400 whitespace-nowrap" style="left:${a.pct.toFixed(1)}%;transform:translateX(-50%)">${a.label}</div>`
+      ).join('');
+
+      return `
+        <div data-testid="waterfall-chart">
+          <div class="flex items-center gap-2 mb-1">
+            <div class="w-28 flex-shrink-0"></div>
+            <div class="relative flex-1 h-4">${axisHtml}</div>
+            <div class="w-14 flex-shrink-0"></div>
+          </div>
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-28 flex-shrink-0"></div>
+            <div class="flex-1 h-px bg-gray-200 relative">
+              ${axisLabels.map(a => `<div class="absolute top-0 h-2 w-px bg-gray-300" style="left:${a.pct.toFixed(1)}%;transform:translateX(-50%)"></div>`).join('')}
+            </div>
+            <div class="w-14 flex-shrink-0"></div>
+          </div>
+          ${bars}
+          <div class="mt-2 flex items-center gap-3 text-[10px] text-gray-500">
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-500 inline-block"></span> Success</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500 inline-block"></span> Error</span>
+            <span class="ml-auto">Hover bars for details</span>
+          </div>
+        </div>`;
+    }
+
+    function renderChildren(container, rows) {
+      if (!rows || !rows.length) {
+        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">' + _t('dyn.ai_ops.no_children') + '</span>';
+        return;
+      }
+
+      const containerId = container.id;
+      const currentView = container.dataset.view || 'table';
+
+      const header = `
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-semibold text-gray-700">Child tool calls (${rows.length})</span>
+          <div class="flex items-center gap-1 text-xs">
+            <button type="button"
+              data-testid="btn-view-table-${containerId}"
+              class="px-2 py-0.5 rounded border text-xs ${currentView === 'table' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}"
+              onclick="switchChildView('${containerId}', 'table')">Table</button>
+            <button type="button"
+              data-testid="btn-view-timeline-${containerId}"
+              class="px-2 py-0.5 rounded border text-xs ${currentView === 'timeline' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}"
+              onclick="switchChildView('${containerId}', 'timeline')">Timeline</button>
+          </div>
+        </div>`;
+
+      const body = currentView === 'timeline'
+        ? renderChildrenWaterfall(rows)
+        : renderChildrenTable(rows);
+
+      container.dataset.view = currentView;
+      container.innerHTML = header + body;
+    }
+
+    function switchChildView(containerId, view) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const parentId = containerId.replace('children-content-', '');
+      const rows = childrenCache.get(parentId);
+      if (!rows) return;
+      container.dataset.view = view;
+      renderChildren(container, rows);
     }
 
     async function loadNegativeFeedback() {
