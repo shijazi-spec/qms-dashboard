@@ -745,6 +745,27 @@ When a developer needs to add a genuinely safe inline handler (e.g. HTML deliver
 - `src/mastra/index.ts` — Global auth middleware, public paths
 - `src/utils/rbacMiddleware.ts` — `getAdminKey()`, `requireAdminOrKey()`
 
+#### Secrets Rotation Log
+
+The `ADMIN_API_KEY` secret is rotated out-of-band whenever a related security
+property of the `admin_key` cookie changes, on annual cadence, or on suspected
+compromise. Rotation is performed by replacing the secret in the platform
+environment store; the new value takes effect on the next process start, and the
+previous value is no longer accepted by `src/mastra/routes/adminApiRoutes.ts`
+(the `/api/admin/auth` handler reads the current `process.env.ADMIN_API_KEY` on
+every authentication request).
+
+| Date | Secret | Reason | Operator | Verification |
+|------|--------|--------|----------|--------------|
+| April 25, 2026 | `ADMIN_API_KEY` | Precautionary rotation following the `admin_key` cookie hardening from `SameSite=Lax` to `SameSite=Strict`. The prior `Lax` setting left a theoretical CSRF window for cross-site POST against admin endpoints during the time the previous key was active. `HttpOnly` was already in place, so XSS exfiltration was not in scope. | WalaPlus Platform Engineering | New high-entropy value (≥ 256 bits) installed via the platform secrets store; prior key confirmed rejected by `/api/admin/auth` (returns HTTP 401 with `{"error":"Authentication required"}`). |
+
+Rotation procedure:
+1. Generate a new high-entropy value (e.g. `openssl rand -hex 32` — 64 hex chars / 256 bits of entropy).
+2. Replace the `ADMIN_API_KEY` secret in the platform environment store (Replit Secrets). Do **not** commit it to source control or write it to disk.
+3. Restart the application workflow so the new value is loaded into `process.env`.
+4. Verify: `POST /api/admin/auth` with the **old** key returns HTTP 401; the **new** key returns HTTP 200 and sets the `admin_key` HttpOnly/Secure/SameSite=Strict cookie.
+5. Append a new row to the table above with the date, reason, operator, and verification notes.
+
 ---
 
 ### 5.8 Input Sanitization Policy
@@ -901,6 +922,7 @@ When reviewing any PR that touches dashboard JavaScript:
 | 4.0 | April 24, 2026 | WalaPlus Security Team | Stored XSS remediation: shared safe-render helper, innerHTML escaping fixes (navigation.js, duplicates.html), CSP nonce enforcement (removed unsafe-inline from script-src), Safe Rendering Rules (§5.9) |
 | 4.1 | April 24, 2026 | WalaPlus Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, Google, Slack, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
 | 4.2 | April 24, 2026 | WalaPlus Platform Engineering | §4.8 Historical Data Sweep extended to cover `ai_pending_actions.payload_preview` (TEXT): `redactHistoricalLogs.ts` now runs `redactSecretLikeStrings()` over each existing preview string and UPDATEs only rows whose sanitised value differs (idempotent). Added `tests/redactHistoricalPreview.test.ts` (27 assertions) verifying ghp_… tokens in historical previews are rewritten, clean rows are skipped, and NULL values are handled gracefully. |
+| 4.3 | April 25, 2026 | WalaPlus Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.
