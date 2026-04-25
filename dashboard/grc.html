@@ -845,6 +845,7 @@
 
             function renderRecentEvents(events) {
                 const container = document.getElementById("recentEvents");
+                if (!container) { console.error("renderRecentEvents: #recentEvents not found"); return; }
                 if (!events || events.length === 0) {
                     container.innerHTML =
                         `<div class="text-gray-400 text-center py-4">${_gt("grc.no_events")}</div>`;
@@ -876,6 +877,7 @@
                 const container = document.getElementById(
                     "frameworkCompliance",
                 );
+                if (!container) { console.error("renderFrameworkCompliance: #frameworkCompliance not found"); return; }
                 if (!frameworks || frameworks.length === 0) {
                     container.innerHTML =
                         `<div class="text-gray-400 text-center py-4">${_gt("grc.no_compliance_data")}</div>`;
@@ -904,10 +906,15 @@
             }
 
             function renderModuleChart() {
-                const ctx = document
-                    .getElementById("moduleChart")
-                    .getContext("2d");
+                const canvas = document.getElementById("moduleChart");
+                if (!canvas) { console.error("renderModuleChart: #moduleChart not found"); return; }
+                const ctx = canvas.getContext("2d");
                 if (moduleChart) moduleChart.destroy();
+
+                const readCount = (id) => {
+                    const el = document.getElementById(id);
+                    return el ? parseInt(el.textContent) || 0 : 0;
+                };
 
                 moduleChart = new Chart(ctx, {
                     type: "doughnut",
@@ -922,27 +929,11 @@
                         datasets: [
                             {
                                 data: [
-                                    parseInt(
-                                        document.getElementById("totalRisks")
-                                            .textContent,
-                                    ) || 0,
-                                    parseInt(
-                                        document.getElementById("totalPolicies")
-                                            .textContent,
-                                    ) || 0,
-                                    parseInt(
-                                        document.getElementById(
-                                            "openObligations",
-                                        ).textContent,
-                                    ) || 0,
-                                    parseInt(
-                                        document.getElementById("openFindings")
-                                            .textContent,
-                                    ) || 0,
-                                    parseInt(
-                                        document.getElementById("activeVendors")
-                                            .textContent,
-                                    ) || 0,
+                                    readCount("totalRisks"),
+                                    readCount("totalPolicies"),
+                                    readCount("openObligations"),
+                                    readCount("openFindings"),
+                                    readCount("activeVendors"),
                                 ],
                                 backgroundColor: [
                                     "#DC2626",
