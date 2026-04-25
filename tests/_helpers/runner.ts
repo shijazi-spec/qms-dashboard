@@ -67,13 +67,17 @@ export class TestSuite {
    * Print the summary and exit the process with the appropriate code.
    *
    * Always exits explicitly (0 on success, 1 on failure) instead of relying on
-   * the Node event loop to drain naturally. Many of our route handlers create
-   * long-lived module-level resources during a test (SSE keep-alive
-   * `setInterval` timers, pg `Pool` workers, etc.) that would otherwise keep
-   * the process alive for minutes after every test has reported PASS, blowing
-   * past CI's 2-minute budget. If a test cares about graceful shutdown it can
-   * still tear those resources down before this is called; otherwise this
-   * guarantees forward progress so `npm test` finishes in bounded time.
+   * the Node event loop to drain naturally. Some route handlers create
+   * long-lived module-level resources during a test (e.g. pg `Pool` workers)
+   * that would otherwise keep the process alive for minutes after every test
+   * has reported PASS, blowing past CI's 2-minute budget. If a test cares
+   * about graceful shutdown it can still tear those resources down before this
+   * is called; otherwise this guarantees forward progress so `npm test`
+   * finishes in bounded time.
+   *
+   * Note: SSE keep-alive `setInterval` timers are now `.unref()`'d at the
+   * handler level (see duplicateRadarRoutes scan-stream) and cleared in their
+   * `cancel()` callbacks, so they no longer contribute to this problem.
    */
   finishOrExit(): never {
     const { passed, failed, total } = this.summarize();

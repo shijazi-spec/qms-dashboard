@@ -967,6 +967,8 @@ export const duplicateRadarRoutes = [
         try {
           const clientId = `sse-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+          let keepAlive: ReturnType<typeof setInterval> | undefined;
+
           const stream = new ReadableStream({
             start(controller) {
               sseClients.push({ id: clientId, controller });
@@ -981,15 +983,22 @@ export const duplicateRadarRoutes = [
               })}\n\n`;
               controller.enqueue(new TextEncoder().encode(initialMsg));
 
-              const keepAlive = setInterval(() => {
+              keepAlive = setInterval(() => {
                 try {
                   controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
                 } catch {
                   clearInterval(keepAlive);
+                  keepAlive = undefined;
                 }
               }, 15000);
+              // Allow the Node event loop to exit even if this interval is still
+              // active (e.g. during in-process tests). The interval is also
+              // cleared explicitly in cancel() when the client disconnects.
+              keepAlive.unref();
             },
             cancel() {
+              clearInterval(keepAlive);
+              keepAlive = undefined;
               sseClients = sseClients.filter(c => c.id !== clientId);
             }
           });
