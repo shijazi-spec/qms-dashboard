@@ -1,6 +1,8 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { UserRole } from '../../utils/rbacDatabase';
+import { getSessionFromCookie } from "./authRoutes";
+import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
 const ONBOARDING_ADMIN_ROLES: UserRole[] = ['admin', 'head_of_operations_quality'];
 
@@ -17,6 +19,10 @@ export const onboardingRoutes = [
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
+        const session = getSessionFromCookie(c.req.header('Cookie'));
+        if (!session && !hasValidAdminApiKey(c)) {
+          return c.redirect('/login');
+        }
         try {
           const possiblePaths = [
             join(process.cwd(), "dashboard", "onboarding.html"),

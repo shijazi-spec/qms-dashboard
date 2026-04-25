@@ -1,5 +1,6 @@
-import { gateApiRoute, requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import { gateApiRoute, requireRole, forbiddenResponse, hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
+import { getSessionFromCookie } from "./authRoutes";
 
 const PMP_READ_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive', 'bu_owner'];
 const PMP_WRITE_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'bu_owner'];
@@ -1211,6 +1212,10 @@ Ensure all content is practical, actionable, and follows PMP best practices.`;
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
+        const session = getSessionFromCookie(c.req.header('Cookie'));
+        if (!session && !hasValidAdminApiKey(c)) {
+          return c.redirect('/login');
+        }
         try {
           const { readFileSync, existsSync } = await import("fs");
           const { join } = await import("path");

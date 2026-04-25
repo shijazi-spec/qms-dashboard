@@ -6,8 +6,8 @@
  *   - 401 unauth      → every /api/pmp/* route requires an authenticated
  *                       session (or X-Admin-Key); without one, returns 401
  *                       with body.error === "Authentication required".
- *   - non-API routes  → /projects (HTML page) is not gated at the API layer;
- *                       it falls through to the page-auth middleware.
+ *   - non-API routes  → /projects (HTML page) redirects unauthenticated
+ *                       visitors to /login before rendering any HTML.
  *
  * The unauthenticated tests exercise the per-handler `gateApiRoute` wrapper
  * added to lock down the PMP APIs. They run with ADMIN_API_KEY configured in
@@ -61,5 +61,21 @@ for (const route of apiRoutes) {
     }
   });
 }
+
+await suite.test("GET /projects — redirects unauthenticated visitors to /login", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  delete process.env.ADMIN_API_KEY;
+  try {
+    const handler = await buildHandler(pmpRoutes, "/projects", "GET", { mastra: null });
+    const ctx = makeContext({ method: "GET", url: "http://localhost/projects" }) as FakeContext & { html?: any };
+    ctx.html = (body: string, status?: number) => ({ status: status ?? 200, body, headers: {} });
+    const res = await handler(ctx);
+    suite.expectEqual(res.status, 302, "status should be 302 redirect");
+    suite.expectEqual(res.headers["Location"], "/login", "Location header should point to /login");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
 
 suite.finishOrExit();

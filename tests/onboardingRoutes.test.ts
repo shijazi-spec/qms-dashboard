@@ -68,4 +68,20 @@ for (const [path, method] of ADMIN_PATHS) {
   });
 }
 
+await suite.test("GET /onboarding — redirects unauthenticated visitors to /login", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  delete process.env.ADMIN_API_KEY;
+  try {
+    const handler = await buildHandler(onboardingRoutes, "/onboarding", "GET", { mastra: null });
+    const ctx = makeContext({ method: "GET", url: "http://localhost/onboarding" }) as FakeContext & { html?: any };
+    ctx.html = (body: string, status?: number) => ({ status: status ?? 200, body, headers: {} });
+    const res = await handler(ctx);
+    suite.expectEqual(res.status, 302, "status should be 302 redirect");
+    suite.expectEqual(res.headers["Location"], "/login", "Location header should point to /login");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
 suite.finishOrExit();
