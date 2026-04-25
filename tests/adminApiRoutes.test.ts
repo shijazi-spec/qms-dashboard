@@ -53,8 +53,8 @@ await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (sets 
       `Set-Cookie carries admin_key (got: ${cookie})`,
     );
     suite.expect(
-      cookie?.includes("HttpOnly") && cookie?.includes("SameSite=Lax") && cookie?.includes("Max-Age=28800"),
-      "Set-Cookie has HttpOnly + SameSite=Lax + Max-Age=28800",
+      cookie?.includes("HttpOnly") && cookie?.includes("SameSite=Strict") && cookie?.includes("Max-Age=28800"),
+      "Set-Cookie has HttpOnly + SameSite=Strict + Max-Age=28800",
     );
   } finally {
     if (original === undefined) delete process.env.ADMIN_API_KEY;
@@ -115,7 +115,7 @@ await suite.test("POST /api/admin/auth/logout — 200 with cookie cleared", asyn
   const cookie = res.headers["Set-Cookie"] ?? "";
   suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
-  suite.expect(cookie.includes("HttpOnly") && cookie.includes("SameSite=Lax"), "Set-Cookie has HttpOnly + SameSite=Lax");
+  suite.expect(cookie.includes("HttpOnly") && cookie.includes("SameSite=Strict"), "Set-Cookie has HttpOnly + SameSite=Strict");
 });
 
 await suite.test("PUT /api/admin/scorecard/weights — 403 without auth", async () => {

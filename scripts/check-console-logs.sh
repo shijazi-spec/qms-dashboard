@@ -154,6 +154,10 @@ ALLOWED_FILES["src/utils/toolHealthAlertNotifier.ts"]=1
 ALLOWED_FILES["src/utils/toolHealthConfigDatabase.ts"]=1
 ALLOWED_FILES["src/utils/userAccessDatabase.ts"]=1
 ALLOWED_FILES["src/utils/vendorDatabase.ts"]=1
+ALLOWED_FILES["src/utils/aiMetricsRetentionConfig.ts"]=1
+ALLOWED_FILES["src/utils/rateLimit429SpikeAlert.ts"]=1
+ALLOWED_FILES["src/utils/rbacMiddleware.ts"]=1
+ALLOWED_FILES["src/scripts/backfillAiCallMetricsRedaction.ts"]=1
 
 echo ""
 echo "--- Part 2: no new files outside the allow-list may use console.* ---"
