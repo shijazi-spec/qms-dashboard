@@ -1058,6 +1058,7 @@ export const DEFAULT_PROMPT_VERSION_MIN_FEEDBACK = 5;
 export async function getFeedbackRateByPromptVersion(
   days = 30,
   minFeedback: number = DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
+  _pool?: { query: (sql: string, params?: any[]) => Promise<{ rows: any[] }> },
 ): Promise<PromptVersionAggregate[]> {
   // Guard against negative/NaN floors — a zero floor effectively disables
   // the small-sample protection, which is a valid (if discouraged) choice
@@ -1065,10 +1066,13 @@ export async function getFeedbackRateByPromptVersion(
   const floor = Number.isFinite(minFeedback) && minFeedback >= 0
     ? Math.floor(minFeedback)
     : DEFAULT_PROMPT_VERSION_MIN_FEEDBACK;
+  const queryPool = _pool ?? pool;
   try {
-    await ensureAiMetricsTable();
-    await ensureFeedbackTable();
-    const result = await pool.query(
+    if (!_pool) {
+      await ensureAiMetricsTable();
+      await ensureFeedbackTable();
+    }
+    const result = await queryPool.query(
       `WITH windowed AS (
          SELECT
            m.agent_name,
