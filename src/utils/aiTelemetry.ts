@@ -868,6 +868,21 @@ export async function getKnownAgentNames(): Promise<string[]> {
   return result.rows.map(r => r.agent_name);
 }
 
+/**
+ * SQL for the per-parent child-tool-call lookup. Exported as a constant so
+ * the index-usage regression test
+ * (tests/aiTelemetryChildCallIndex.test.ts) can EXPLAIN exactly the SQL the
+ * production function runs and assert that the partial index
+ * `idx_ai_call_metrics_parent_call_id` is used. Keep this and
+ * `getChildToolCallsForParent` in sync.
+ */
+export const CHILD_TOOL_CALLS_SQL = `SELECT
+       id, agent_name, tool_name,
+       latency_ms, success, error_class, error_message, started_at
+     FROM ai_call_metrics
+     WHERE parent_call_id = $1
+     ORDER BY started_at ASC, id ASC`;
+
 export async function getChildToolCallsForParent(parentId: number): Promise<{
   id: string;
   agent_name: string;
@@ -879,15 +894,7 @@ export async function getChildToolCallsForParent(parentId: number): Promise<{
   started_at: string;
 }[]> {
   await ensureAiMetricsTable();
-  const result = await pool.query(
-    `SELECT
-       id, agent_name, tool_name,
-       latency_ms, success, error_class, error_message, started_at
-     FROM ai_call_metrics
-     WHERE parent_call_id = $1
-     ORDER BY started_at ASC, id ASC`,
-    [parentId]
-  );
+  const result = await pool.query(CHILD_TOOL_CALLS_SQL, [parentId]);
   return result.rows;
 }
 
