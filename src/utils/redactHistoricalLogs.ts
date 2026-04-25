@@ -34,9 +34,9 @@
  *   npx tsx src/utils/redactHistoricalLogs.ts
  */
 
-import fs from 'fs';
-import path from 'path';
-import { Pool } from 'pg';
+import fs from "fs";
+import path from "path";
+import { Pool } from "pg";
 import {
   redactSensitiveFields,
   redactSecretLikeStrings,
@@ -44,11 +44,11 @@ import {
   isSensitiveField,
   REDACTED_SENTINEL,
   logEvent,
-} from './eventLogsDatabase';
+} from "./eventLogsDatabase";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const REDACT_DATE = new Date().toISOString();
-const BREADCRUMB_KEY = '_redacted_at';
+const BREADCRUMB_KEY = "_redacted_at";
 
 /**
  * Resolve the project-root `audit-evidence/` directory.
@@ -63,7 +63,7 @@ const BREADCRUMB_KEY = '_redacted_at';
  * (Mastra places its own package.json inside .mastra/output/).
  */
 function resolveAuditEvidenceDir(): string {
-  return path.resolve(__dirname, '../../audit-evidence');
+  return path.resolve(__dirname, "../../audit-evidence");
 }
 
 /**
@@ -73,6 +73,130 @@ function resolveAuditEvidenceDir(): string {
  * exercise the cursor-advance path with tiny fixtures.
  */
 export const DEFAULT_SWEEP_BATCH_SIZE = 500;
+
+/**
+ * Tables the boot sweep operates on. Kept in one place so the readiness
+ * gate (waitForTablesReady) and the sweep itself can never drift apart.
+ *
+ * Order is irrelevant — the readiness check only cares that *all* of these
+ * resolve via `to_regclass()` before the sweep is allowed to run.
+ */
+export const REQUIRED_SWEEP_TABLES = [
+  "event_logs",
+  "nc_change_history",
+  "capa_change_history",
+  "ai_pending_actions",
+] as const;
+
+/**
+ * Result of waitForTablesReady(). `ready=true` means every requested table
+ * is visible to `to_regclass()` (i.e. exists in the current search_path)
+ * and the sweep is safe to run. `ready=false` means we exhausted the
+ * timeout before all tables appeared and the caller should skip the sweep
+ * rather than emit a partially-populated `table_missing` audit record.
+ */
+export interface TablesReadyResult {
+  ready: boolean;
+  missing: string[];
+  waitedMs: number;
+  attempts: number;
+}
+
+/**
+ * Default upper-bound the boot sweep waits for the four target tables to
+ * appear. 60 s comfortably covers a cold-start where Mastra is still
+ * creating its storage schema, while still failing the wait fast enough
+ * that a genuine misconfiguration (wrong DATABASE_URL, dropped tables) is
+ * surfaced in the boot log within a single boot cycle.
+ */
+export const DEFAULT_TABLE_READY_TIMEOUT_MS = 60_000;
+
+/**
+ * Default poll interval used by waitForTablesReady() between
+ * `to_regclass()` lookups. 1 s keeps the boot path responsive on a fresh
+ * deployment (sweep runs almost immediately after the last table is
+ * created) without hammering the database with sub-second polls during
+ * the steady-state case where everything is already there.
+ */
+export const DEFAULT_TABLE_READY_INTERVAL_MS = 1_000;
+
+/**
+ * Block until every requested table is resolvable via `to_regclass()` or
+ * the timeout elapses.
+ *
+ * Why `to_regclass()` rather than `information_schema.tables` or a probe
+ * `SELECT 1 FROM <t> LIMIT 0`?
+ *   - It returns NULL (instead of erroring) for missing tables, so the
+ *     boot sweep does not have to swallow `42P01` errors on every poll.
+ *   - It honours the active `search_path`, matching what the sweep itself
+ *     will see when it later issues `SELECT … FROM <table>`.
+ *   - It is a cheap pg_class lookup — safe to call every second.
+ *
+ * Behaviour is best-effort: any unexpected error from the readiness
+ * probe is logged and treated as "not ready yet" so the loop will retry
+ * rather than crash the boot path.
+ */
+export async function waitForTablesReady(
+  client: any,
+  options: {
+    timeoutMs?: number;
+    intervalMs?: number;
+    tables?: ReadonlyArray<string>;
+    sleep?: (ms: number) => Promise<void>;
+    now?: () => number;
+  } = {},
+): Promise<TablesReadyResult> {
+  const tables = options.tables ?? REQUIRED_SWEEP_TABLES;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TABLE_READY_TIMEOUT_MS;
+  const intervalMs = options.intervalMs ?? DEFAULT_TABLE_READY_INTERVAL_MS;
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const now = options.now ?? (() => Date.now());
+
+  const startedAt = now();
+  let attempts = 0;
+  let lastMissing: string[] = [...tables];
+
+  while (true) {
+    attempts++;
+    try {
+      const placeholders = tables.map((_, i) => `$${i + 1}`).join(", ");
+      const res = await client.query(
+        `SELECT t AS name, to_regclass(t) IS NOT NULL AS present
+           FROM unnest(ARRAY[${placeholders}]::text[]) AS t`,
+        tables.map((t) => t),
+      );
+      const missing: string[] = (res.rows ?? [])
+        .filter((r: any) => !r.present)
+        .map((r: any) => r.name);
+      lastMissing = missing;
+      if (missing.length === 0) {
+        return {
+          ready: true,
+          missing: [],
+          waitedMs: now() - startedAt,
+          attempts,
+        };
+      }
+    } catch (probeErr) {
+      // Treat any probe error as "not ready yet" so a transient failure
+      // (e.g. connection reset during cold-start) does not prevent the
+      // sweep from ever running. We still respect the timeout below.
+      console.warn("[Redaction] Table-readiness probe failed:", probeErr);
+    }
+
+    if (now() - startedAt >= timeoutMs) {
+      return {
+        ready: false,
+        missing: lastMissing,
+        waitedMs: now() - startedAt,
+        attempts,
+      };
+    }
+
+    await sleep(intervalMs);
+  }
+}
 
 /**
  * Result counters for the ai_pending_actions sweep. Reported in the
@@ -87,7 +211,7 @@ export interface AiPendingActionsSweepResult {
 }
 
 function addBreadcrumb(obj: any): any {
-  if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
     return { ...obj, [BREADCRUMB_KEY]: REDACT_DATE };
   }
   return obj;
@@ -119,7 +243,7 @@ export async function redactEventLogs(
       let newVal = row.new_value;
       let changed = false;
 
-      if (typeof description === 'string' && description.length > 0) {
+      if (typeof description === "string" && description.length > 0) {
         const redacted = redactSecretLikeStrings(description) as string;
         if (redacted !== description) {
           description = redacted;
@@ -127,7 +251,7 @@ export async function redactEventLogs(
         }
       }
 
-      if (typeof entityName === 'string' && entityName.length > 0) {
+      if (typeof entityName === "string" && entityName.length > 0) {
         const redacted = redactSecretLikeStrings(entityName) as string;
         if (redacted !== entityName) {
           entityName = redacted;
@@ -159,8 +283,12 @@ export async function redactEventLogs(
           [
             description,
             entityName,
-            oldVal !== null && oldVal !== undefined ? JSON.stringify(oldVal) : null,
-            newVal !== null && newVal !== undefined ? JSON.stringify(newVal) : null,
+            oldVal !== null && oldVal !== undefined
+              ? JSON.stringify(oldVal)
+              : null,
+            newVal !== null && newVal !== undefined
+              ? JSON.stringify(newVal)
+              : null,
             row.id,
           ],
         );
@@ -363,7 +491,7 @@ export async function redactAiPendingActions(
         }
       }
 
-      if (typeof preview === 'string' && preview.length > 0) {
+      if (typeof preview === "string" && preview.length > 0) {
         const redactedPreview = redactSecretLikeStrings(preview) as string;
         if (redactedPreview !== preview) {
           preview = redactedPreview;
@@ -392,9 +520,13 @@ export async function redactAiPendingActions(
                   execution_result = $3
             WHERE id = $4`,
           [
-            payload !== null && payload !== undefined ? JSON.stringify(payload) : null,
+            payload !== null && payload !== undefined
+              ? JSON.stringify(payload)
+              : null,
             preview,
-            execResult !== null && execResult !== undefined ? JSON.stringify(execResult) : null,
+            execResult !== null && execResult !== undefined
+              ? JSON.stringify(execResult)
+              : null,
             row.id,
           ],
         );
@@ -406,13 +538,19 @@ export async function redactAiPendingActions(
     if (page.rows.length < batchSize) break;
   }
 
-  return { scanned, payloadChanged, previewChanged, executionResultChanged, rowsUpdated };
+  return {
+    scanned,
+    payloadChanged,
+    previewChanged,
+    executionResultChanged,
+    rowsUpdated,
+  };
 }
 
 async function main() {
   const client = await pool.connect();
   try {
-    console.log('[Redaction] Starting historical log redaction sweep...');
+    console.log("[Redaction] Starting historical log redaction sweep...");
     console.log(`[Redaction] Sweep timestamp: ${REDACT_DATE}`);
 
     const result = await runSweepWithClient(client, REDACT_DATE);
@@ -424,10 +562,10 @@ async function main() {
     // any error is logged and swallowed.
     try {
       await logEvent({
-        actionType: 'UPDATE',
-        entityType: 'SYSTEM',
-        entityId: 'ai_pending_actions',
-        entityName: 'Historical secret-redaction sweep',
+        actionType: "UPDATE",
+        entityType: "SYSTEM",
+        entityId: "ai_pending_actions",
+        entityName: "Historical secret-redaction sweep",
         description:
           `Backfilled redactSecretLikeStrings + redactSensitiveFields across ` +
           `historical audit tables. event_logs=${result.event_logs_updated}, ` +
@@ -436,12 +574,12 @@ async function main() {
           `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
         newValue: result,
         aiInvolved: false,
-        severity: 'INFO',
-        module: 'security/redaction-sweep',
+        severity: "INFO",
+        module: "security/redaction-sweep",
       });
-      console.log('[Redaction] Audit-log entry emitted for sweep run');
+      console.log("[Redaction] Audit-log entry emitted for sweep run");
     } catch (auditErr) {
-      console.error('[Redaction] Failed to emit audit-log entry:', auditErr);
+      console.error("[Redaction] Failed to emit audit-log entry:", auditErr);
     }
   } finally {
     client.release();
@@ -498,21 +636,29 @@ export async function runSweepWithClient(
   let aiSkipReason: string | null = null;
 
   try {
-    ncCount = await redactChangeHistoryTable(client, 'nc_change_history');
+    ncCount = await redactChangeHistoryTable(client, "nc_change_history");
     console.log(`[Redaction] nc_change_history: ${ncCount} rows updated`);
   } catch (e: any) {
-    if (e.code === '42P01') {
-      console.log('[Redaction] nc_change_history table does not exist — skipped');
-    } else { throw e; }
+    if (e.code === "42P01") {
+      console.log(
+        "[Redaction] nc_change_history table does not exist — skipped",
+      );
+    } else {
+      throw e;
+    }
   }
 
   try {
-    capaCount = await redactChangeHistoryTable(client, 'capa_change_history');
+    capaCount = await redactChangeHistoryTable(client, "capa_change_history");
     console.log(`[Redaction] capa_change_history: ${capaCount} rows updated`);
   } catch (e: any) {
-    if (e.code === '42P01') {
-      console.log('[Redaction] capa_change_history table does not exist — skipped');
-    } else { throw e; }
+    if (e.code === "42P01") {
+      console.log(
+        "[Redaction] capa_change_history table does not exist — skipped",
+      );
+    } else {
+      throw e;
+    }
   }
 
   try {
@@ -525,10 +671,14 @@ export async function runSweepWithClient(
         `execution_result=${aiResult.executionResultChanged})`,
     );
   } catch (e: any) {
-    if (e.code === '42P01') {
-      aiSkipReason = 'table_missing';
-      console.log('[Redaction] ai_pending_actions table does not exist — skipped');
-    } else { throw e; }
+    if (e.code === "42P01") {
+      aiSkipReason = "table_missing";
+      console.log(
+        "[Redaction] ai_pending_actions table does not exist — skipped",
+      );
+    } else {
+      throw e;
+    }
   }
 
   const total = elCount + ncCount + capaCount + aiCount;
@@ -547,7 +697,7 @@ export async function runSweepWithClient(
           execution_result_changed: aiResult.executionResultChanged,
           rows_updated: aiResult.rowsUpdated,
         }
-      : { skipped: aiSkipReason ?? 'unknown' },
+      : { skipped: aiSkipReason ?? "unknown" },
     total_rows_updated: total,
   };
 }
@@ -574,7 +724,9 @@ export async function runSweepWithClient(
 export async function onBootRedactionSweep(): Promise<void> {
   const g = globalThis as any;
   if (g.__walaplus_bootSweepDone) {
-    console.log('[Redaction] Boot sweep already ran this process — skipping duplicate call');
+    console.log(
+      "[Redaction] Boot sweep already ran this process — skipping duplicate call",
+    );
     return;
   }
 
@@ -582,12 +734,38 @@ export async function onBootRedactionSweep(): Promise<void> {
   const bootPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
-    console.log('[Redaction] Boot sweep starting...');
+    console.log("[Redaction] Boot sweep starting...");
     console.log(`[Redaction] Sweep timestamp: ${sweepTimestamp}`);
 
     const client = await bootPool.connect();
     let result: SweepResult;
     try {
+      // Gate the sweep on table readiness. On a cold-start deployment the
+      // application can begin before Mastra/Drizzle has finished creating
+      // the audit tables, in which case the sweep would otherwise record
+      // `skipped: table_missing` for every target. Polling `to_regclass`
+      // until all four tables exist (or the timeout elapses) ensures the
+      // sweep either runs against a fully-initialised schema or backs off
+      // entirely without polluting last-sweep.json.
+      const readiness = await waitForTablesReady(client);
+      if (!readiness.ready) {
+        console.warn(
+          `[Redaction] Boot sweep aborted: tables not ready after ` +
+            `${readiness.waitedMs}ms (${readiness.attempts} probes). ` +
+            `Missing: ${readiness.missing.join(", ")}. ` +
+            `Sweep will retry on the next boot.`,
+        );
+        // Do NOT mark __walaplus_bootSweepDone — the next boot should try
+        // again. Likewise, do NOT write last-sweep.json or emit an audit
+        // entry: there is no sweep result to record yet.
+        return;
+      }
+      if (readiness.attempts > 1) {
+        console.log(
+          `[Redaction] Boot sweep tables ready after ${readiness.waitedMs}ms ` +
+            `(${readiness.attempts} probes)`,
+        );
+      }
       result = await runSweepWithClient(client, sweepTimestamp);
     } finally {
       client.release();
@@ -600,10 +778,10 @@ export async function onBootRedactionSweep(): Promise<void> {
 
     try {
       await logEvent({
-        actionType: 'UPDATE',
-        entityType: 'SYSTEM',
-        entityId: 'boot_redaction_sweep',
-        entityName: 'Boot-time secret-redaction sweep',
+        actionType: "UPDATE",
+        entityType: "SYSTEM",
+        entityId: "boot_redaction_sweep",
+        entityName: "Boot-time secret-redaction sweep",
         description:
           `Automatic on-boot redaction sweep completed. ` +
           `event_logs=${result.event_logs_updated}, ` +
@@ -612,12 +790,15 @@ export async function onBootRedactionSweep(): Promise<void> {
           `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
         newValue: result,
         aiInvolved: false,
-        severity: 'INFO',
-        module: 'security/redaction-sweep',
+        severity: "INFO",
+        module: "security/redaction-sweep",
       });
-      console.log('[Redaction] Boot sweep audit-log entry emitted');
+      console.log("[Redaction] Boot sweep audit-log entry emitted");
     } catch (auditErr) {
-      console.error('[Redaction] Failed to emit boot sweep audit-log entry:', auditErr);
+      console.error(
+        "[Redaction] Failed to emit boot sweep audit-log entry:",
+        auditErr,
+      );
     }
 
     try {
@@ -625,18 +806,30 @@ export async function onBootRedactionSweep(): Promise<void> {
       if (!fs.existsSync(evidenceDir)) {
         fs.mkdirSync(evidenceDir, { recursive: true });
       }
-      const summaryPath = path.join(evidenceDir, 'last-sweep.json');
-      fs.writeFileSync(summaryPath, JSON.stringify(result, null, 2) + '\n', 'utf8');
+      const summaryPath = path.join(evidenceDir, "last-sweep.json");
+      fs.writeFileSync(
+        summaryPath,
+        JSON.stringify(result, null, 2) + "\n",
+        "utf8",
+      );
       console.log(`[Redaction] Boot sweep summary written to ${summaryPath}`);
     } catch (fileErr) {
-      console.error('[Redaction] Failed to write boot sweep summary file:', fileErr);
+      console.error(
+        "[Redaction] Failed to write boot sweep summary file:",
+        fileErr,
+      );
     }
   } catch (err) {
-    console.error('[Redaction] Boot sweep failed — application startup continues:', err);
+    console.error(
+      "[Redaction] Boot sweep failed — application startup continues:",
+      err,
+    );
   } finally {
     try {
       await bootPool.end();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -645,7 +838,7 @@ export async function onBootRedactionSweep(): Promise<void> {
 // (it would open a real DB connection and try to logEvent against production).
 const isDirectInvocation = (() => {
   try {
-    const entry = process.argv[1] || '';
+    const entry = process.argv[1] || "";
     return /redactHistoricalLogs(\.ts|\.js)?$/.test(entry);
   } catch {
     return false;
@@ -653,8 +846,8 @@ const isDirectInvocation = (() => {
 })();
 
 if (isDirectInvocation) {
-  main().catch(err => {
-    console.error('[Redaction] Fatal error:', err);
+  main().catch((err) => {
+    console.error("[Redaction] Fatal error:", err);
     process.exit(1);
   });
 }
