@@ -117,7 +117,61 @@ jobs:
         run: npm ci
 
       - name: Run TypeScript compile check
-        run: npm run check
+        id: tsc
+        shell: bash
+        run: |
+          # Run tsc, tee its output for later parsing, but preserve the
+          # real exit code (set -eo pipefail is the GH Actions default for
+          # bash steps, so we have to explicitly capture the failure).
+          status=0
+          npm run check 2>&1 | tee tsc-output.txt || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Summarize TypeScript errors
+        if: always() && steps.tsc.outputs.status != '0'
+        shell: bash
+        run: |
+          # Pull standard tsc diagnostic lines:
+          #   path/to/file.ts(LINE,COL): error TSxxxx: message
+          grep -E '^[^[:space:]].*\([0-9]+,[0-9]+\): error TS[0-9]+:' \
+            tsc-output.txt > tsc-errors.txt || true
+          total=$(wc -l < tsc-errors.txt | tr -d ' ')
+
+          {
+            echo "## :x: TypeScript compile errors"
+            echo ""
+            if [ "$total" = "0" ]; then
+              echo "\`tsc\` exited with a non-zero status but no per-file"
+              echo "diagnostics were detected. See the raw step log for details."
+            else
+              echo "Found **${total}** type error(s). Run \`npm run check\` locally to reproduce."
+              echo ""
+              echo "### Files with errors"
+              echo ""
+              echo "| File | Errors |"
+              echo "| --- | ---: |"
+              awk -F'(' '{print $1}' tsc-errors.txt \
+                | sort \
+                | uniq -c \
+                | sort -rn \
+                | awk '{count=$1; $1=""; sub(/^ /, ""); printf "| `%s` | %d |\n", $0, count}'
+              echo ""
+              echo "### First 50 diagnostics"
+              echo ""
+              echo '```'
+              head -50 tsc-errors.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload tsc output on failure
+        if: always() && steps.tsc.outputs.status != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsc-output
+          path: tsc-output.txt
+          if-no-files-found: ignore
 
   format:
     name: Prettier formatting check (npm run check:format)
@@ -138,4 +192,53 @@ jobs:
         run: npm ci
 
       - name: Run Prettier formatting check
-        run: npm run check:format
+        id: prettier
+        shell: bash
+        run: |
+          # Same pattern as the typecheck step: tee + capture exit code so
+          # the follow-up summary step can parse the output even on failure.
+          status=0
+          npm run check:format 2>&1 | tee prettier-output.txt || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Summarize Prettier issues
+        if: always() && steps.prettier.outputs.status != '0'
+        shell: bash
+        run: |
+          # Prettier --check emits one "[warn] <file>" line per offending
+          # file, plus summary "[warn] Code style issues..." lines we
+          # explicitly drop.
+          grep -E '^\[warn\] ' prettier-output.txt \
+            | grep -vE '^\[warn\] Code style issues' \
+            | grep -vE '^\[warn\] Forgot to run Prettier' \
+            | sed -E 's/^\[warn\] //' > prettier-files.txt || true
+          total=$(wc -l < prettier-files.txt | tr -d ' ')
+
+          {
+            echo "## :x: Prettier formatting issues"
+            echo ""
+            if [ "$total" = "0" ]; then
+              echo "\`prettier --check\` exited with a non-zero status but no"
+              echo "per-file warnings were detected. See the raw step log for details."
+            else
+              echo "Found **${total}** file(s) that need reformatting."
+              echo ""
+              echo "Run \`npm run format\` locally to auto-fix, then commit the result."
+              echo ""
+              echo "### Files needing reformatting"
+              echo ""
+              while IFS= read -r f; do
+                [ -z "$f" ] && continue
+                echo "- \`$f\`"
+              done < prettier-files.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Prettier output on failure
+        if: always() && steps.prettier.outputs.status != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: prettier-output
+          path: prettier-output.txt
+          if-no-files-found: ignore
