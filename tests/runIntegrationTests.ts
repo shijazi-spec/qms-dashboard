@@ -52,8 +52,13 @@
  * approval queue's `reviewFilter` NOT EXISTS sub-query uses the
  * `idx_event_logs_view_audit` partial index rather than seq-scanning a
  * partition. The test validates `DATABASE_URL` itself and exits with a
- * clear error if it's missing. Wired so a future schema change that
- * accidentally drops or renames the index fails CI.
+ * clear error if it's missing. The dedicated CI workflow
+ * `.github/workflows/review-filter-index.yml` boots a Postgres service
+ * container plus the dev server (which initialises the event_logs and
+ * ai_pending_actions schema and creates `idx_event_logs_view_audit`) and
+ * sets the env, so a future schema change that accidentally drops or
+ * renames the index — or rewrites the NOT EXISTS sub-query into a shape
+ * the planner can no longer satisfy with the index — fails CI.
  *
  * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
  * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
