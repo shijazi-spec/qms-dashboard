@@ -854,6 +854,103 @@
             return 'bg-gray-100 text-gray-700';
         }
 
+        // Task #656: per-table sweep counts shown as inline badges on each
+        // alert row. The order here is the same as the dispatcher's
+        // detail line so operators reading the dashboard, the alert email,
+        // and the audit-log entry see the same shape everywhere.
+        const POST_RESTORE_TRIGGER_TABLES = [
+            { key: 'event_logs', label: 'event_logs' },
+            { key: 'nc_change_history', label: 'nc_change_history' },
+            { key: 'capa_change_history', label: 'capa_change_history' },
+            { key: 'ai_pending_actions', label: 'ai_pending_actions' },
+            { key: 'ai_call_metrics', label: 'ai_call_metrics' },
+        ];
+
+        function postRestoreTriggerBadgeClass(count, skipped) {
+            if (skipped) return 'bg-gray-100 text-gray-500 border border-dashed border-gray-300';
+            if (count === null || count === undefined) return 'bg-gray-100 text-gray-500 border border-dashed border-gray-300';
+            if (count === 0) return 'bg-gray-100 text-gray-500';
+            return 'bg-red-100 text-red-700';
+        }
+
+        function postRestoreTriggerBadgeText(count, skipped) {
+            if (skipped) return 'skipped';
+            if (count === null || count === undefined) return '?';
+            return String(count);
+        }
+
+        function postRestoreTriggerBadgeTitle(table, count, skipped) {
+            if (skipped) return table + ' was skipped (' + skipped + ')';
+            if (count === null || count === undefined) return table + ': count unavailable (event_logs join failed)';
+            if (count === 0) return table + ': 0 rows rewritten — table was already clean';
+            return table + ': ' + count + ' historical row(s) rewritten';
+        }
+
+        function postRestoreChannelBadgeClass(channel) {
+            const c = String(channel || '').toLowerCase();
+            if (c === 'email') return 'bg-purple-100 text-purple-800';
+            if (c === 'slack') return 'bg-emerald-100 text-emerald-800';
+            if (c === 'in_app') return 'bg-sky-100 text-sky-800';
+            return 'bg-gray-100 text-gray-700';
+        }
+
+        function postRestoreChannelLabel(channel) {
+            const c = String(channel || '').toLowerCase();
+            if (c === 'in_app') return 'In-app';
+            if (!c) return 'unknown';
+            return c.charAt(0).toUpperCase() + c.slice(1);
+        }
+
+        function copyPostRestoreSweepEventLogLink(eventLogId, sweepTimestamp) {
+            // Build a deep-link to the event_logs row that backs this alert.
+            // Operators paste this into incident tickets / Slack threads so
+            // anyone clicking it lands on the same audit row the alert was
+            // derived from. The path mirrors the existing
+            // viewPostRestoreSweepEventLog flow (module + entity_id + a
+            // narrow time window) so the shareable URL keeps working even
+            // if the row's surrogate id changes between deploys.
+            const params = new URLSearchParams();
+            params.set('module', POST_RESTORE_SWEEP_MODULE);
+            params.set('entity_id', POST_RESTORE_SWEEP_ENTITY_ID);
+            if (eventLogId) params.set('event_log_id', String(eventLogId));
+            if (sweepTimestamp) params.set('sweep_timestamp', sweepTimestamp);
+            const url = window.location.origin + window.location.pathname + '?' + params.toString();
+            const fallback = function () {
+                try {
+                    window.prompt('Copy this link to share the alert\'s event_logs entry:', url);
+                } catch (_e) { /* ignore */ }
+            };
+            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () {
+                    if (typeof showToast === 'function') {
+                        showToast('Event-log link copied to clipboard');
+                    }
+                }).catch(fallback);
+            } else {
+                fallback();
+            }
+        }
+
+        function togglePostRestoreAlertDetail(id) {
+            const row = document.querySelector('[data-testid="row-post-restore-alert-detail-' + id + '"]');
+            const chevron = document.querySelector('[data-testid="button-toggle-post-restore-alert-' + id + '"]');
+            if (!row) return;
+            const isHidden = row.classList.contains('hidden');
+            if (isHidden) {
+                row.classList.remove('hidden');
+                if (chevron) {
+                    chevron.setAttribute('aria-expanded', 'true');
+                    chevron.textContent = '▾';
+                }
+            } else {
+                row.classList.add('hidden');
+                if (chevron) {
+                    chevron.setAttribute('aria-expanded', 'false');
+                    chevron.textContent = '▸';
+                }
+            }
+        }
+
         function renderPostRestoreAlerts(payload) {
             const badge = document.getElementById('postRestoreAlertsBadge');
             const body = document.getElementById('postRestoreAlertsBody');
@@ -883,7 +980,73 @@
                 const title = (n && n.title) || 'Post-restore sweep alert';
                 const message = (n && n.message) || '';
                 const createdAtIso = createdAt ? new Date(createdAt).toISOString() : '';
-                return '<tr class="align-top" data-testid="row-post-restore-alert-' + escapeHtml(id) + '">' +
+                const triggers = (n && n.triggers) || {};
+                const triggersSource = (n && n.triggers_source) || 'none';
+                const eventLogId = (n && n.event_log_id) || '';
+                const sweepTimestamp = (n && n.sweep_timestamp) || '';
+                const recipient = (n && n.recipient) || '';
+                const channel = (n && n.channel) || '';
+
+                // Empty / zero-row marker: a fully-zero sweep should not
+                // normally produce a notification (the dispatcher gates on
+                // total>0), but if a future change ever does emit one — or
+                // if the join fails so we can't tell — make sure it's
+                // visually distinct from a real incident row.
+                const triggerCounts = POST_RESTORE_TRIGGER_TABLES.map(function (t) {
+                    const trig = triggers[t.key] || {};
+                    return { count: trig.count, skipped: trig.skipped };
+                });
+                const allKnown = triggerCounts.every(function (t) { return t.count !== null && t.count !== undefined; });
+                const totalRewritten = triggerCounts.reduce(function (sum, t) { return sum + (typeof t.count === 'number' ? t.count : 0); }, 0);
+                const isZeroRowSweep = allKnown && totalRewritten === 0;
+
+                const triggerBadgesHtml = POST_RESTORE_TRIGGER_TABLES.map(function (t) {
+                    const trig = triggers[t.key] || {};
+                    const cls = postRestoreTriggerBadgeClass(trig.count, trig.skipped);
+                    const txt = postRestoreTriggerBadgeText(trig.count, trig.skipped);
+                    const ttl = postRestoreTriggerBadgeTitle(t.label, trig.count, trig.skipped);
+                    return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono ' + cls + '" ' +
+                        'title="' + escapeHtml(ttl) + '" ' +
+                        'data-testid="badge-post-restore-alert-count-' + escapeHtml(t.key) + '-' + escapeHtml(id) + '">' +
+                        '<span class="text-[10px] uppercase tracking-wide text-gray-500">' + escapeHtml(t.label) + '</span>' +
+                        '<span class="font-semibold">' + escapeHtml(txt) + '</span>' +
+                        '</span>';
+                }).join('');
+
+                const recipientHtml = recipient
+                    ? '<div class="text-[11px] text-gray-600 mt-1 truncate max-w-[14rem]" ' +
+                        'title="' + escapeHtml(recipient) + '" ' +
+                        'data-testid="text-post-restore-alert-recipient-' + escapeHtml(id) + '">' +
+                        escapeHtml(recipient) +
+                      '</div>'
+                    : '<div class="text-[11px] text-gray-400 italic mt-1" ' +
+                        'data-testid="text-post-restore-alert-recipient-' + escapeHtml(id) + '">no recipient</div>';
+
+                const zeroRowBanner = isZeroRowSweep
+                    ? '<div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 uppercase tracking-wide" ' +
+                        'data-testid="badge-post-restore-alert-zero-' + escapeHtml(id) + '">' +
+                        'zero-row sweep' +
+                      '</div>'
+                    : '';
+
+                const sourceHint = triggersSource === 'event_logs'
+                    ? 'Counts joined from event_logs.new_value.'
+                    : (triggersSource === 'message'
+                        ? 'Counts parsed from the alert message (event_logs row not found).'
+                        : 'Per-table counts unavailable for this alert.');
+
+                const mainRow = '<tr class="align-top hover:bg-gray-50" data-testid="row-post-restore-alert-' + escapeHtml(id) + '">' +
+                    '<td class="py-3 pr-2 align-top">' +
+                        '<button type="button" ' +
+                            'class="text-gray-400 hover:text-gray-700 text-xs px-1" ' +
+                            'aria-label="Toggle alert details" ' +
+                            'aria-expanded="false" ' +
+                            'data-on-click="togglePostRestoreAlertDetail" ' +
+                            'data-args=\'["' + escapeHtml(id) + '"]\' ' +
+                            'data-testid="button-toggle-post-restore-alert-' + escapeHtml(id) + '">' +
+                            '▸' +
+                        '</button>' +
+                    '</td>' +
                     '<td class="py-3 pr-4 text-sm text-gray-900 whitespace-nowrap" data-testid="text-post-restore-alert-time-' + escapeHtml(id) + '">' +
                         escapeHtml(formatPostRestoreTimestamp(createdAt)) +
                     '</td>' +
@@ -894,17 +1057,30 @@
                         '</span>' +
                     '</td>' +
                     '<td class="py-3 pr-4">' +
-                        '<span class="px-2 py-1 rounded-full text-xs font-medium ' + postRestoreSweepStatusClass(status) + '" ' +
-                            'data-testid="badge-post-restore-alert-status-' + escapeHtml(id) + '">' +
-                            escapeHtml(String(status)) +
-                        '</span>' +
+                        '<div class="flex flex-col gap-1">' +
+                            '<span class="px-2 py-1 rounded-full text-xs font-medium self-start ' + postRestoreSweepStatusClass(status) + '" ' +
+                                'data-testid="badge-post-restore-alert-status-' + escapeHtml(id) + '">' +
+                                escapeHtml(String(status)) +
+                            '</span>' +
+                            '<span class="px-2 py-0.5 rounded text-[11px] font-medium self-start ' + postRestoreChannelBadgeClass(channel) + '" ' +
+                                'data-testid="badge-post-restore-alert-channel-' + escapeHtml(id) + '">' +
+                                escapeHtml(postRestoreChannelLabel(channel)) +
+                            '</span>' +
+                            recipientHtml +
+                        '</div>' +
+                    '</td>' +
+                    '<td class="py-3 pr-4">' +
+                        '<div class="flex flex-wrap gap-1" data-testid="group-post-restore-alert-counts-' + escapeHtml(id) + '">' +
+                            triggerBadgesHtml +
+                        '</div>' +
+                        zeroRowBanner +
                     '</td>' +
                     '<td class="py-3 pr-4 text-sm text-gray-900">' +
                         '<div class="font-medium" data-testid="text-post-restore-alert-title-' + escapeHtml(id) + '">' +
                             escapeHtml(title) +
                         '</div>' +
                         (message
-                            ? '<div class="text-xs text-gray-500 mt-1 max-w-xl" data-testid="text-post-restore-alert-message-' + escapeHtml(id) + '">' + escapeHtml(message) + '</div>'
+                            ? '<div class="text-xs text-gray-500 mt-1 max-w-md line-clamp-2 overflow-hidden" data-testid="text-post-restore-alert-message-' + escapeHtml(id) + '">' + escapeHtml(message) + '</div>'
                             : '') +
                     '</td>' +
                     '<td class="py-3 text-right whitespace-nowrap">' +
@@ -917,22 +1093,57 @@
                         '</button>' +
                     '</td>' +
                 '</tr>';
+
+                const detailRow = '<tr class="hidden bg-gray-50" data-testid="row-post-restore-alert-detail-' + escapeHtml(id) + '">' +
+                    '<td></td>' +
+                    '<td colspan="6" class="py-3 pr-4">' +
+                        '<div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Full message</div>' +
+                        '<pre class="text-xs text-gray-800 whitespace-pre-wrap font-mono bg-white border border-gray-200 rounded p-2 max-w-3xl" ' +
+                            'data-testid="text-post-restore-alert-full-message-' + escapeHtml(id) + '">' +
+                            escapeHtml(message || '(no message)') +
+                        '</pre>' +
+                        '<div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">' +
+                            (eventLogId
+                                ? '<span data-testid="text-post-restore-alert-event-log-id-' + escapeHtml(id) + '">event_logs.id: <code>' + escapeHtml(String(eventLogId)) + '</code></span>'
+                                : '<span class="italic text-gray-400" data-testid="text-post-restore-alert-event-log-id-missing-' + escapeHtml(id) + '">event_logs row not found</span>') +
+                            (sweepTimestamp
+                                ? '<span data-testid="text-post-restore-alert-sweep-ts-' + escapeHtml(id) + '">sweep_timestamp: <code>' + escapeHtml(sweepTimestamp) + '</code></span>'
+                                : '') +
+                            '<button type="button" ' +
+                                'class="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs hover:bg-gray-100 transition" ' +
+                                'data-on-click="copyPostRestoreSweepEventLogLink" ' +
+                                'data-args=\'["' + escapeHtml(String(eventLogId)) + '","' + escapeHtml(sweepTimestamp) + '"]\' ' +
+                                'data-testid="button-copy-event-log-link-' + escapeHtml(id) + '">' +
+                                'Copy event-log link' +
+                            '</button>' +
+                            '<span class="text-gray-400" data-testid="text-post-restore-alert-source-' + escapeHtml(id) + '">' +
+                                escapeHtml(sourceHint) +
+                            '</span>' +
+                        '</div>' +
+                    '</td>' +
+                '</tr>';
+
+                return mainRow + detailRow;
             }).join('');
 
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-post-restore-alerts">' +
                     '<thead><tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th class="py-2 pr-2 w-6"></th>' +
                         '<th class="py-2 pr-4">When</th>' +
                         '<th class="py-2 pr-4">Priority</th>' +
-                        '<th class="py-2 pr-4">Status</th>' +
+                        '<th class="py-2 pr-4">Status / channel</th>' +
+                        '<th class="py-2 pr-4">Per-table counts</th>' +
                         '<th class="py-2 pr-4">Alert</th>' +
                         '<th class="py-2 text-right">Action</th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
                 '</table></div>' +
                 '<p class="text-xs text-gray-500 mt-3" data-testid="text-post-restore-alerts-hint">' +
-                    'Each "View event log" button filters the table below to <code>module=' + escapeHtml(POST_RESTORE_SWEEP_MODULE) + '</code> ' +
-                    'around the alert\'s timestamp and auto-expands the closest <code>entity_id=' + escapeHtml(POST_RESTORE_SWEEP_ENTITY_ID) + '</code> row so the per-table counts in <code>new_value</code> are visible.' +
+                    'Per-table counts are joined from the matching <code>event_logs</code> row\'s <code>new_value</code>. ' +
+                    'Click the chevron on any row to see the full alert message and copy a deep-link to its <code>event_logs</code> entry. ' +
+                    '"View event log" filters the table below to <code>module=' + escapeHtml(POST_RESTORE_SWEEP_MODULE) + '</code> ' +
+                    'around the alert\'s timestamp and auto-expands the closest <code>entity_id=' + escapeHtml(POST_RESTORE_SWEEP_ENTITY_ID) + '</code> row.' +
                 '</p>';
         }
 
@@ -983,8 +1194,14 @@
             return y + '-' + m + '-' + day;
         }
 
-        function viewPostRestoreSweepEventLog(createdAtIso) {
-            const ts = createdAtIso ? new Date(createdAtIso) : null;
+        // Task #656 — extracted helper. Both `viewPostRestoreSweepEventLog`
+        // (button click) and `applyPostRestoreSweepDeepLink` (page-load
+        // query-param hydration of a copied event-log link) need to set
+        // the same filter inputs and then auto-expand the matching log
+        // row, so the logic is shared here. The function does NOT call
+        // `loadLogs` itself — callers chain that themselves so they can
+        // pass their own `.then` to wire up the auto-expand step.
+        function configurePostRestoreSweepFilters(sweepTimestampMs) {
             const moduleSelect = document.getElementById('filterModule');
             const fromInput = document.getElementById('filterFromDate');
             const toInput = document.getElementById('filterToDate');
@@ -1006,26 +1223,45 @@
             // table to exactly the matching sweep row(s).
             if (searchInput) searchInput.value = '';
 
-            if (ts && !isNaN(ts.getTime())) {
+            if (sweepTimestampMs != null && !isNaN(sweepTimestampMs)) {
                 // Widen the date filter to a full day on either side of the
                 // alert. The dashboard's <input type="date"> only carries
                 // YYYY-MM-DD; postgres parses that as midnight, which would
                 // otherwise exclude rows on the upper-bound date itself.
-                const from = new Date(ts.getTime() - 24 * 60 * 60 * 1000);
-                const to = new Date(ts.getTime() + 24 * 60 * 60 * 1000);
+                const from = new Date(sweepTimestampMs - 24 * 60 * 60 * 1000);
+                const to = new Date(sweepTimestampMs + 24 * 60 * 60 * 1000);
                 if (fromInput) fromInput.value = isoDateInputValue(from);
                 if (toInput) toInput.value = isoDateInputValue(to);
             } else {
                 if (fromInput) fromInput.value = '';
                 if (toInput) toInput.value = '';
             }
+        }
 
-            loadLogs(1).then(function () {
-                // Auto-expand the closest matching log row so the per-table
-                // counts in `new_value` are visible without an extra click.
-                const tbody = document.getElementById('logsTable');
-                if (!tbody || !ts || isNaN(ts.getTime())) return;
-                const targetMs = ts.getTime();
+        // Task #656 — auto-expand the row identified by `eventLogId` when
+        // present (exact match), falling back to the closest-by-timestamp
+        // row when only a sweep_timestamp is known. Returns the id of the
+        // row that was expanded, or null if no candidate was found.
+        function expandPostRestoreSweepLogRow(opts) {
+            const eventLogId = opts && opts.eventLogId != null ? String(opts.eventLogId) : null;
+            const sweepTimestampMs = opts && typeof opts.sweepTimestampMs === 'number' ? opts.sweepTimestampMs : null;
+            const tbody = document.getElementById('logsTable');
+            if (!tbody) return null;
+
+            let targetId = null;
+            if (eventLogId) {
+                tbody.querySelectorAll('tr.log-row').forEach(function (row) {
+                    const args = row.getAttribute('data-args');
+                    if (!args) return;
+                    try {
+                        const parsed = JSON.parse(args);
+                        const id = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+                        if (id != null && String(id) === eventLogId) targetId = id;
+                    } catch (e) { /* ignore */ }
+                });
+            }
+
+            if (targetId == null && sweepTimestampMs != null && !isNaN(sweepTimestampMs)) {
                 let bestId = null;
                 let bestDelta = Infinity;
                 tbody.querySelectorAll('tr.log-row').forEach(function (row) {
@@ -1040,12 +1276,26 @@
                     const cellText = row.querySelector('td') ? row.querySelector('td').textContent.trim() : '';
                     const rowMs = new Date(cellText).getTime();
                     if (isNaN(rowMs)) return;
-                    const delta = Math.abs(rowMs - targetMs);
+                    const delta = Math.abs(rowMs - sweepTimestampMs);
                     if (delta < bestDelta) { bestDelta = delta; bestId = id; }
                 });
-                if (bestId != null && typeof toggleLogDetails === 'function' && !expandedRows.has(bestId)) {
-                    toggleLogDetails(bestId);
-                }
+                targetId = bestId;
+            }
+
+            if (targetId != null && typeof toggleLogDetails === 'function' &&
+                typeof expandedRows !== 'undefined' && !expandedRows.has(targetId)) {
+                toggleLogDetails(targetId);
+            }
+            return targetId;
+        }
+
+        function viewPostRestoreSweepEventLog(createdAtIso) {
+            const ts = createdAtIso ? new Date(createdAtIso) : null;
+            const tsMs = ts && !isNaN(ts.getTime()) ? ts.getTime() : null;
+            configurePostRestoreSweepFilters(tsMs);
+
+            loadLogs(1).then(function () {
+                expandPostRestoreSweepLogRow({ sweepTimestampMs: tsMs });
             }).catch(function () { /* loadLogs already surfaces errors */ });
 
             const target = document.getElementById('logsTable');
@@ -1056,6 +1306,52 @@
             refreshLogsExportHint();
         }
         window.viewPostRestoreSweepEventLog = viewPostRestoreSweepEventLog;
+
+        // Task #656 — consume the query-string written by
+        // `copyPostRestoreSweepEventLogLink`. When an operator pastes a
+        // copied event-log link, the page must land on the targeted
+        // event_logs row instead of just rendering the default first
+        // page. Returns true iff the URL carried deep-link params and
+        // we therefore handled the initial loadLogs() call ourselves;
+        // the caller falls back to the normal page-load behaviour
+        // when this returns false.
+        function applyPostRestoreSweepDeepLink() {
+            let params;
+            try {
+                params = new URLSearchParams(window.location.search || '');
+            } catch (e) { return false; }
+
+            const moduleParam = params.get('module');
+            const entityIdParam = params.get('entity_id');
+            const eventLogIdParam = params.get('event_log_id');
+            const sweepTsParam = params.get('sweep_timestamp');
+
+            // Only act on links that target the post-restore sweep panel.
+            // A bare `?event_log_id=…` without the matching module is not
+            // ours to handle and the rest of the page is left alone.
+            if (moduleParam !== POST_RESTORE_SWEEP_MODULE) return false;
+            if (entityIdParam && entityIdParam !== POST_RESTORE_SWEEP_ENTITY_ID) return false;
+            if (!eventLogIdParam && !sweepTsParam) return false;
+
+            const sweepTs = sweepTsParam ? new Date(sweepTsParam) : null;
+            const sweepTsMs = sweepTs && !isNaN(sweepTs.getTime()) ? sweepTs.getTime() : null;
+            configurePostRestoreSweepFilters(sweepTsMs);
+
+            loadLogs(1).then(function () {
+                expandPostRestoreSweepLogRow({
+                    eventLogId: eventLogIdParam,
+                    sweepTimestampMs: sweepTsMs,
+                });
+                const target = document.getElementById('logsTable');
+                if (target && target.scrollIntoView) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }).catch(function () { /* loadLogs already surfaces errors */ });
+
+            refreshLogsExportHint();
+            return true;
+        }
+        window.applyPostRestoreSweepDeepLink = applyPostRestoreSweepDeepLink;
 
         const ALERT_CHANNEL_POST_RESTORE = 'post_restore_sweep';
 
@@ -1274,7 +1570,19 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             loadStats();
-            loadLogs(1);
+            // Task #656 — when the URL carries the deep-link query params
+            // written by `copyPostRestoreSweepEventLogLink` (a copied
+            // event-log link from the post-restore alerts panel), let
+            // `applyPostRestoreSweepDeepLink()` own the initial load so
+            // it can pre-fill the filters and auto-expand the targeted
+            // event_logs row. Otherwise fall back to the normal
+            // unfiltered first page.
+            const handledByDeepLink = (typeof applyPostRestoreSweepDeepLink === 'function')
+                ? applyPostRestoreSweepDeepLink()
+                : false;
+            if (!handledByDeepLink) {
+                loadLogs(1);
+            }
             loadRedactionSweepStatus();
             loadPostRestoreAlerts();
             loadAlertRecipients();

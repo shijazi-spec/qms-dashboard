@@ -967,8 +967,164 @@ export const adminApiRoutes = [
                  LIMIT $3 OFFSET $4`,
               [...params, limit, offset],
             );
+
+            // Task #656: enrich each notification with the per-table sweep
+            // counts pulled from the matching event_logs row's `new_value`
+            // (the SweepResult JSON). The dispatcher's notification message
+            // only carries 4 of the 5 counts operators want at a glance —
+            // `ai_call_metrics` lives only in the event_logs JSON — so we
+            // join here rather than have the dashboard re-parse the message.
+            //
+            // Match strategy: the sweep_timestamp string the dispatcher
+            // bakes into the message (`Boot-time redaction sweep at <iso>
+            // rewrote ...`) is the same string stored in
+            // `event_logs.new_value->>'sweep_timestamp'`. Matching on that
+            // exact string is more robust than matching on `created_at`
+            // (the audit row and the notification row are inserted by
+            // independent code paths and can be milliseconds apart).
+            const sweepTsRegex = /sweep at (\S+) rewrote/i;
+            const tsList: string[] = [];
+            const notifSweepTs = new Map<string, string | null>();
+            for (const n of rowsResult.rows) {
+              const m = sweepTsRegex.exec(String(n.message ?? ''));
+              const ts = m ? m[1] : null;
+              notifSweepTs.set(String(n.id), ts);
+              if (ts && !tsList.includes(ts)) tsList.push(ts);
+            }
+
+            const eventLogMap = new Map<
+              string,
+              { id: string; new_value: Record<string, unknown> | null }
+            >();
+            if (tsList.length > 0) {
+              try {
+                const elResult = await pool.query(
+                  `SELECT id::text AS id, new_value
+                     FROM event_logs
+                    WHERE module = $1
+                      AND entity_id = $2
+                      AND new_value->>'sweep_timestamp' = ANY($3::text[])`,
+                  [
+                    'security/redaction-sweep',
+                    'boot_redaction_sweep',
+                    tsList,
+                  ],
+                );
+                for (const row of elResult.rows) {
+                  const nv =
+                    row.new_value && typeof row.new_value === 'object'
+                      ? (row.new_value as Record<string, unknown>)
+                      : null;
+                  const ts = nv && typeof nv.sweep_timestamp === 'string'
+                    ? (nv.sweep_timestamp as string)
+                    : null;
+                  if (ts) {
+                    eventLogMap.set(ts, { id: row.id, new_value: nv });
+                  }
+                }
+              } catch (joinErr) {
+                console.warn(
+                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing):',
+                  joinErr,
+                );
+              }
+            }
+
+            const numericFromCount = (v: unknown): number | null => {
+              if (typeof v === 'number' && Number.isFinite(v)) return v;
+              return null;
+            };
+            const countFromVariant = (
+              v: unknown,
+            ): { count: number | null; skipped: string | null } => {
+              if (v && typeof v === 'object') {
+                const obj = v as Record<string, unknown>;
+                if ('rows_updated' in obj) {
+                  return {
+                    count: numericFromCount(obj.rows_updated),
+                    skipped: null,
+                  };
+                }
+                if ('skipped' in obj && typeof obj.skipped === 'string') {
+                  return { count: null, skipped: obj.skipped };
+                }
+              }
+              return { count: null, skipped: null };
+            };
+
+            const messageRegexes: Record<string, RegExp> = {
+              event_logs: /event_logs=(\d+)/,
+              nc_change_history: /nc_change_history=(\d+)/,
+              capa_change_history: /capa_change_history=(\d+)/,
+              ai_pending_actions: /ai_pending_actions=(\d+)/,
+            };
+            const triggersFromMessage = (
+              msg: string,
+            ): Record<string, { count: number | null; skipped: string | null }> => {
+              const out: Record<
+                string,
+                { count: number | null; skipped: string | null }
+              > = {};
+              for (const [key, rx] of Object.entries(messageRegexes)) {
+                const m = rx.exec(msg);
+                out[key] = {
+                  count: m ? Number.parseInt(m[1]!, 10) : null,
+                  skipped: null,
+                };
+              }
+              // ai_call_metrics is not in the dispatcher's message body —
+              // only in the event_logs new_value. Mark unknown when the
+              // join fell through so the UI can render it as such.
+              out.ai_call_metrics = { count: null, skipped: null };
+              return out;
+            };
+
+            const enriched = rowsResult.rows.map((n: any) => {
+              const ts = notifSweepTs.get(String(n.id));
+              const el = ts ? eventLogMap.get(ts) : null;
+              let triggers: Record<
+                string,
+                { count: number | null; skipped: string | null }
+              >;
+              let eventLogId: string | null = null;
+              let triggersSource: 'event_logs' | 'message' | 'none' = 'none';
+              if (el && el.new_value) {
+                eventLogId = el.id;
+                triggersSource = 'event_logs';
+                const sv = el.new_value as Record<string, unknown>;
+                triggers = {
+                  event_logs: {
+                    count: numericFromCount(sv.event_logs_updated),
+                    skipped: null,
+                  },
+                  nc_change_history: {
+                    count: numericFromCount(sv.nc_change_history_updated),
+                    skipped: null,
+                  },
+                  capa_change_history: {
+                    count: numericFromCount(sv.capa_change_history_updated),
+                    skipped: null,
+                  },
+                  ai_pending_actions: countFromVariant(sv.ai_pending_actions),
+                  ai_call_metrics: countFromVariant(sv.ai_call_metrics),
+                };
+              } else {
+                triggers = triggersFromMessage(String(n.message ?? ''));
+                if (Object.values(triggers).some((t) => t.count !== null)) {
+                  triggersSource = 'message';
+                }
+              }
+              return {
+                ...n,
+                triggers,
+                triggers_source: triggersSource,
+                sweep_timestamp: ts ?? null,
+                event_log_id: eventLogId,
+              };
+            });
+
             return c.json({
-              notifications: rowsResult.rows,
+              notifications: enriched,
               total: countResult.rows[0]?.total ?? 0,
               module: 'security/redaction-sweep',
               related_entity_id: 'boot_redaction_sweep',
