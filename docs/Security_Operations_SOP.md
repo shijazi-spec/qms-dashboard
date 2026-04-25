@@ -453,7 +453,19 @@ To extend the regex deny list, edit `SECRET_LIKE_PATTERNS` in `src/utils/eventLo
 
 #### Historical Data Sweep
 
-A one-off migration script (`src/utils/redactHistoricalLogs.ts`) scans all existing `event_logs`, `nc_change_history`, and `capa_change_history` rows for matching keys and rewrites them to `***REDACTED***`. Each swept `event_logs` JSON object gains a `_redacted_at` breadcrumb key recording the sweep timestamp (ISO-8601). The script is idempotent and safe to re-run.
+A one-off migration script (`src/utils/redactHistoricalLogs.ts`) scans all existing rows across four tables and rewrites any sensitive material to `***REDACTED***`. Each swept `event_logs` JSON object gains a `_redacted_at` breadcrumb key recording the sweep timestamp (ISO-8601). The script is idempotent and safe to re-run.
+
+| Table | Columns swept | Redaction method |
+|-------|--------------|-----------------|
+| `event_logs` | `old_value`, `new_value` (JSONB) | `redactSensitiveFields()` (key-based deny list) |
+| `nc_change_history` | `old_value`, `new_value` (TEXT) | `redactSensitiveFields()` with `field_changed` as key |
+| `capa_change_history` | `old_value`, `new_value` (TEXT) | `redactSensitiveFields()` with `field_changed` as key |
+| `ai_pending_actions` | `payload`, `execution_result` (JSONB) | `redactSensitiveFields()` (key-based deny list) |
+| `ai_pending_actions` | `payload_preview` (TEXT) | `redactSecretLikeStrings()` (regex deny list — same patterns used on the write path since Task #54) |
+
+The `payload_preview` TEXT column is free-form prose authored per-tool (built by each tool's `policy.buildPreview()` callback in `withApprovalGate.ts`). The key-based redactor cannot see credential-shaped substrings interpolated into prose, so the sweep also runs `redactSecretLikeStrings()` over every existing `payload_preview` value and UPDATEs only rows whose sanitised result differs from the stored value. This backfills pre-fix leaks for rows written before the forward-path guard was wired in (Task #54).
+
+The sweep emits an audit-log entry on completion recording per-table update counts and the sweep timestamp.
 
 **To execute the sweep:**
 ```bash
@@ -471,6 +483,15 @@ npx tsx src/utils/redactHistoricalLogs.ts
 - Password-change scenario: asserts `new_value` does not contain plaintext password or bcrypt hash
 
 Run tests with: `npx jest src/utils/redactSensitiveFields.test.ts`
+
+`tests/redactHistoricalPreview.test.ts` covers the historical sweep backfill for `ai_pending_actions.payload_preview`:
+- Row containing a `ghp_…` GitHub token is rewritten and UPDATE is issued with the sentinel in place of the token
+- Row with clean prose is not updated (idempotent — no spurious UPDATEs)
+- Row whose preview already contains the sentinel is not re-updated (safe to re-run)
+- Multiple rows: only dirty rows trigger UPDATEs; clean rows are skipped
+- `NULL` preview values are handled gracefully (no UPDATE)
+
+Run tests with: `npx tsx tests/redactHistoricalPreview.test.ts`
 
 #### Extending the Deny List
 
@@ -862,6 +883,7 @@ When reviewing any PR that touches dashboard JavaScript:
 | 3.1 | April 24, 2026 | WalaPlus Platform Engineering | RBAC lock-down of /api/reports/* routes; Added section 4.8: Audit Log Sensitive Field Masking. Implemented `redactSensitiveFields()` deny-list helper, wired into all event_logs and change_history write paths, retroactive sweep script, regression tests. In-handler requireRole() defense-in-depth; updated §5.1 Report Route Access Control table. |
 | 4.0 | April 24, 2026 | WalaPlus Security Team | Stored XSS remediation: shared safe-render helper, innerHTML escaping fixes (navigation.js, duplicates.html), CSP nonce enforcement (removed unsafe-inline from script-src), Safe Rendering Rules (§5.9) |
 | 4.1 | April 24, 2026 | WalaPlus Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, Google, Slack, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
+| 4.2 | April 24, 2026 | WalaPlus Platform Engineering | §4.8 Historical Data Sweep extended to cover `ai_pending_actions.payload_preview` (TEXT): `redactHistoricalLogs.ts` now runs `redactSecretLikeStrings()` over each existing preview string and UPDATEs only rows whose sanitised value differs (idempotent). Added `tests/redactHistoricalPreview.test.ts` (27 assertions) verifying ghp_… tokens in historical previews are rewritten, clean rows are skipped, and NULL values are handled gracefully. |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.
