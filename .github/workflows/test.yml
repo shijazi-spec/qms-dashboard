@@ -16,6 +16,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -29,5 +44,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply CI database schema
+        env:
+          PGPASSWORD: testpass
+        run: psql -h localhost -U testuser -d testdb -f tests/fixtures/ci-schema.sql
+
       - name: Run integration test suite
+        env:
+          DATABASE_URL: postgres://testuser:testpass@localhost:5432/testdb
         run: npm test
