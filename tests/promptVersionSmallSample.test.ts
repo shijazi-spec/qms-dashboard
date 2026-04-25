@@ -25,6 +25,7 @@
 
 import {
   getFeedbackRateByPromptVersion,
+  getFeedbackRateByAgent,
   DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
   type PromptVersionAggregate,
 } from "../src/utils/aiTelemetry";
@@ -588,6 +589,178 @@ if (HAS_DB) {
   }
 } else {
   console.log("  (skipped) DB-gated SQL verification — DATABASE_URL not set");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. DB-gated integration — sibling reader getFeedbackRateByAgent (Task #506)
+//
+// `getFeedbackRateByAgent` lives next to `getFeedbackRateByPromptVersion` and
+// uses the same JOIN-and-FILTER pattern (joins ai_call_feedback to
+// ai_call_metrics, splits ratings via FILTER, divides by NULLIF(COUNT(...), 0)
+// so a zero-feedback agent is null-not-NaN). It powers the dashboard's
+// per-agent feedback-rate column. The stub-pool style we use elsewhere
+// cannot catch a swapped FILTER clause, a typo'd JOIN key, a missing GROUP BY
+// column, or a NULLIF regression in this query — only running it against a
+// real Postgres can. This block seeds two synthetic agents under a unique
+// agent_name prefix (so it cannot collide with live data), one with all
+// thumbs_up and one with a known thumbs_up/thumbs_down mix that exercises
+// 1-decimal rounding (2/3 → 66.7%), then asserts every column the dashboard
+// reads. Cleanup deletes every seeded row in a `finally` so a crashed
+// assertion still leaves the database clean.
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (HAS_DB) {
+  const pg = await import("pg");
+  const { Pool } = pg.default;
+  const { ensureAiMetricsTable } = await import("../src/utils/aiTelemetry");
+
+  const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Two agents, both under a unique prefix so listing the prefix is enough
+  // to find ours among whatever live agents the DB already contains.
+  const AGENT_PREFIX = `db_agentfb_test_${RUN_ID}`;
+  const AGENT_ALLUP = `${AGENT_PREFIX}_allup`;
+  const AGENT_MIX = `${AGENT_PREFIX}_mix`;
+
+  const seedPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  // Make sure both tables exist before INSERTing directly. The production
+  // pool inside aiTelemetry does this lazily on the first read, but our
+  // seed pool is a separate Pool instance and would race with that.
+  await ensureAiMetricsTable();
+  // ensureFeedbackTable() is private; the easiest way to force it is to
+  // call the production reader once — also a no-op if the table exists.
+  await getFeedbackRateByAgent();
+
+  // Track every call_id we insert so cleanup is targeted even if something
+  // else in the same DB happens to share our agent name (defence in depth —
+  // the unique RUN_ID suffix already prevents that).
+  const seededCallIds: number[] = [];
+
+  async function seed(): Promise<void> {
+    // Cohort plan:
+    //   AGENT_ALLUP → 4 calls, all thumbs_up
+    //                 expected: total=4, up=4, down=0, rate=100.0
+    //   AGENT_MIX   → 3 calls, 2 thumbs_up + 1 thumbs_down
+    //                 expected: total=3, up=2, down=1, rate=66.7
+    //                 (2/3 * 100 = 66.666… → ROUND to 1 decimal = 66.7,
+    //                  so this also locks the rounding behaviour)
+    const cohorts: Array<{
+      agent: string;
+      calls: Array<{ rating: "thumbs_up" | "thumbs_down"; latencyMs: number }>;
+    }> = [
+      {
+        agent: AGENT_ALLUP,
+        calls: [
+          { rating: "thumbs_up", latencyMs: 100 },
+          { rating: "thumbs_up", latencyMs: 110 },
+          { rating: "thumbs_up", latencyMs: 120 },
+          { rating: "thumbs_up", latencyMs: 130 },
+        ],
+      },
+      {
+        agent: AGENT_MIX,
+        calls: [
+          { rating: "thumbs_up", latencyMs: 200 },
+          { rating: "thumbs_up", latencyMs: 210 },
+          { rating: "thumbs_down", latencyMs: 220 },
+        ],
+      },
+    ];
+
+    let userCounter = 0;
+    for (const cohort of cohorts) {
+      for (const call of cohort.calls) {
+        const metricRes = await seedPool.query(
+          `INSERT INTO ai_call_metrics
+             (agent_name, tool_name, model, latency_ms, success, started_at)
+           VALUES ($1, NULL, 'gpt-4o', $2, TRUE, NOW())
+           RETURNING id`,
+          [cohort.agent, call.latencyMs],
+        );
+        const callId = Number(metricRes.rows[0].id);
+        seededCallIds.push(callId);
+
+        // user_hash must be unique per (call_id, user_hash); a per-call
+        // counter is enough since we only insert one feedback row per call.
+        await seedPool.query(
+          `INSERT INTO ai_call_feedback (call_id, rating, user_hash)
+           VALUES ($1, $2, $3)`,
+          [callId, call.rating, `db-agent-test-${RUN_ID}-${userCounter++}`],
+        );
+      }
+    }
+  }
+
+  async function cleanup(): Promise<void> {
+    try {
+      if (seededCallIds.length > 0) {
+        // ai_call_feedback CASCADEs on call_id, so deleting metrics is enough.
+        await seedPool.query(
+          `DELETE FROM ai_call_metrics WHERE id = ANY($1::bigint[])`,
+          [seededCallIds],
+        );
+        seededCallIds.length = 0;
+      }
+      // Belt-and-braces — sweep anything that might have leaked under our
+      // unique agent prefix (e.g. a partial seed from a crashed prior run).
+      await seedPool.query(
+        `DELETE FROM ai_call_metrics WHERE agent_name LIKE $1`,
+        [`${AGENT_PREFIX}%`],
+      );
+    } finally {
+      await seedPool.end().catch(() => {});
+    }
+  }
+
+  // node-postgres returns COUNT() as a string (BIGINT). The dashboard parses
+  // these client-side; we coerce here for straightforward equality.
+  const num = (v: any): number => Number(v);
+
+  try {
+    await seed();
+
+    await suite.test("DB: getFeedbackRateByAgent — all-thumbs-up agent reports 100.0%", async () => {
+      const rows = await getFeedbackRateByAgent();
+      const row = rows.find((r) => r.agent_name === AGENT_ALLUP);
+
+      suite.expect(!!row, `${AGENT_ALLUP} cohort row present`);
+
+      // total_feedback: COUNT(f.id) — verifies the JOIN counts feedback
+      // rows, not metrics rows.
+      suite.expectEqual(num(row?.total_feedback), 4, `${AGENT_ALLUP} total_feedback`);
+
+      // FILTER clauses — must split cleanly when there are no thumbs_down.
+      // A swapped FILTER clause would surface here (down would be 4).
+      suite.expectEqual(num(row?.thumbs_up), 4, `${AGENT_ALLUP} thumbs_up`);
+      suite.expectEqual(num(row?.thumbs_down), 0, `${AGENT_ALLUP} thumbs_down`);
+
+      // 4/4 * 100 = 100, ROUND to 1 decimal = 100.0
+      suite.expectEqual(num(row?.feedback_rate_pct), 100, `${AGENT_ALLUP} feedback_rate_pct`);
+    });
+
+    await suite.test("DB: getFeedbackRateByAgent — mixed agent reports 66.7% (rounding to 1 decimal)", async () => {
+      const rows = await getFeedbackRateByAgent();
+      const row = rows.find((r) => r.agent_name === AGENT_MIX);
+
+      suite.expect(!!row, `${AGENT_MIX} cohort row present`);
+
+      suite.expectEqual(num(row?.total_feedback), 3, `${AGENT_MIX} total_feedback`);
+
+      // The headline FILTER assertion — if the up/down clauses are ever
+      // swapped this flips and is caught immediately.
+      suite.expectEqual(num(row?.thumbs_up), 2, `${AGENT_MIX} thumbs_up`);
+      suite.expectEqual(num(row?.thumbs_down), 1, `${AGENT_MIX} thumbs_down`);
+
+      // 2/3 * 100 = 66.666… ROUND to 1 decimal = 66.7. Locks both the
+      // FLOAT division (NULLIF guard) and the ROUND(..., 1) precision the
+      // dashboard depends on.
+      suite.expectEqual(num(row?.feedback_rate_pct), 66.7, `${AGENT_MIX} feedback_rate_pct`);
+    });
+  } finally {
+    await cleanup();
+  }
+} else {
+  console.log("  (skipped) DB-gated getFeedbackRateByAgent verification — DATABASE_URL not set");
 }
 
 suite.finishOrExit();
