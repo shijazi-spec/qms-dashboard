@@ -39,6 +39,26 @@
             padding: 10px 14px; border-radius: 6px; overflow-x: auto;
             margin-top: 8px; max-height: 240px;
         }
+        .filter-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 9999px;
+            font-size: 12px; font-weight: 500; line-height: 1.4;
+            border: 1px solid #E5E7EB; background: #FFFFFF; color: #374151;
+            cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .filter-chip:hover { background: #F3F4F6; border-color: #D1D5DB; }
+        .filter-chip:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+        }
+        .filter-chip[aria-pressed="true"] {
+            background: #2563EB; border-color: #2563EB; color: #FFFFFF;
+        }
+        .filter-chip[aria-pressed="true"]:hover {
+            background: #1D4ED8; border-color: #1D4ED8;
+        }
+        .filter-chip-count {
+            font-variant-numeric: tabular-nums; opacity: 0.85; font-size: 11px;
+        }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -146,6 +166,9 @@
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_breakdown">Latest run · per-check breakdown</h2>
                     <p class="text-sm text-gray-500" data-i18n="health.click_row">Click a row to inspect details</p>
                 </div>
+                <div id="checks-filter" class="hidden px-6 py-3 border-b bg-gray-50" role="group" data-testid="group-checks-filter">
+                    <!-- populated by JS -->
+                </div>
                 <div id="checks-list" data-testid="list-checks">
                     <!-- populated by JS -->
                 </div>
@@ -168,6 +191,11 @@
             get data() { return _t('dyn.health.cat_data'); },
             get integrations() { return _t('dyn.health.cat_integrations'); },
             get scheduler() { return _t('dyn.health.cat_scheduler'); },
+            get endpoints() { return _t('dyn.health.cat_endpoints'); },
+            get ai() { return _t('dyn.health.cat_ai'); },
+            get duplicates() { return _t('dyn.health.cat_duplicates'); },
+            get kpis() { return _t('dyn.health.cat_kpis'); },
+            get other() { return _t('dyn.health.cat_other'); },
         };
 
         // Sort order for category groups in the per-check breakdown.
@@ -178,7 +206,38 @@
             'duplicates', 'data', 'integrations', 'kpis', 'scheduler',
         ];
 
+        const FILTER_STORAGE_KEY = 'health.filterCategory';
+        const FILTER_QUERY_PARAM = 'category';
+
+        function readInitialFilter() {
+            try {
+                const url = new URL(window.location.href);
+                const fromQuery = url.searchParams.get(FILTER_QUERY_PARAM);
+                if (fromQuery) return fromQuery;
+            } catch { /* noop */ }
+            try {
+                return sessionStorage.getItem(FILTER_STORAGE_KEY) || 'all';
+            } catch { return 'all'; }
+        }
+
+        let selectedCategory = readInitialFilter();
+        // Cached so chip clicks can re-render without re-fetching.
+        let lastLatest = null;
         let historyChart = null;
+
+        function persistFilter(cat) {
+            try { sessionStorage.setItem(FILTER_STORAGE_KEY, cat); } catch { /* noop */ }
+            try {
+                const url = new URL(window.location.href);
+                if (cat === 'all') url.searchParams.delete(FILTER_QUERY_PARAM);
+                else url.searchParams.set(FILTER_QUERY_PARAM, cat);
+                window.history.replaceState({}, '', url.toString());
+            } catch { /* noop */ }
+        }
+
+        function categoryLabel(cat) {
+            return CATEGORY_LABELS[cat] || cat;
+        }
 
         function el(id) { return document.getElementById(id); }
 
@@ -255,6 +314,7 @@
         }
 
         function renderLatest(latest) {
+            lastLatest = latest;
             const status = latest.overall_status || 'healthy';
             const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
             el('overall-card').style.background = meta.card;
@@ -266,14 +326,23 @@
             el('count-fail').textContent = latest.fail_count ?? 0;
             el('count-skipped').textContent = (latest.skipped_count ?? 0) + ' ' + _t('dyn.health.label_skipped');
 
-            // Per-check rows
+            // Alert banner ignores the active filter so failing/warning checks
+            // are never hidden when an admin is focused on one category.
+            renderAlertBanner(latest);
+
+            renderChecksWithFilter();
+        }
+
+        function renderChecksWithFilter() {
+            const latest = lastLatest;
+            if (!latest) return;
+
+            // Group checks by category (preserving order)
             const grouped = {};
             for (const c of (latest.checks || [])) {
                 const cat = c.category || 'other';
                 (grouped[cat] = grouped[cat] || []).push(c);
             }
-
-            renderAlertBanner(latest);
 
             const orderedCats = Object.keys(grouped).sort((a, b) => {
                 const ai = CATEGORY_ORDER.indexOf(a);
@@ -284,7 +353,21 @@
                 return ai - bi;
             });
 
-            const html = orderedCats.map(cat => {
+            // If the persisted filter is for a category that no longer exists
+            // in the latest run, fall back to "all" so the user isn't stuck
+            // staring at an empty list.
+            if (selectedCategory !== 'all' && !grouped[selectedCategory]) {
+                selectedCategory = 'all';
+                persistFilter('all');
+            }
+
+            renderFilterChips(orderedCats, grouped);
+
+            const visibleCats = selectedCategory === 'all'
+                ? orderedCats
+                : orderedCats.filter(c => c === selectedCategory);
+
+            const html = visibleCats.map(cat => {
                 const rows = grouped[cat].map(c => {
                     const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
                     const message = c.message ? `<div class="text-sm text-gray-600 mt-1">${escapeHtml(c.message)}</div>` : '';
@@ -307,9 +390,9 @@
                     `;
                 }).join('');
                 return `
-                    <div>
+                    <div data-testid="group-category-${escapeHtml(cat)}">
                         <div class="px-6 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            ${escapeHtml(CATEGORY_LABELS[cat] || cat)}
+                            ${escapeHtml(categoryLabel(cat))}
                         </div>
                         ${rows}
                     </div>
@@ -317,6 +400,62 @@
             }).join('');
 
             el('checks-list').innerHTML = html || '<div class="px-6 py-8 text-center text-gray-500 text-sm">' + _t('dyn.health.no_checks') + '</div>';
+        }
+
+        function renderFilterChips(orderedCats, grouped) {
+            const container = el('checks-filter');
+            if (!orderedCats.length) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+            container.classList.remove('hidden');
+
+            const totalCount = orderedCats.reduce((n, c) => n + grouped[c].length, 0);
+
+            const chips = [];
+            const allActive = selectedCategory === 'all';
+            chips.push(
+                '<button type="button" class="filter-chip" data-cat="all"'
+                + ' aria-pressed="' + allActive + '"'
+                + ' aria-label="' + escapeHtml(_t('dyn.health.filter_all_aria')) + '"'
+                + ' data-testid="chip-filter-all">'
+                + '<span>' + escapeHtml(_t('dyn.health.filter_all')) + '</span>'
+                + '<span class="filter-chip-count">' + totalCount + '</span>'
+                + '</button>'
+            );
+            for (const cat of orderedCats) {
+                const active = selectedCategory === cat;
+                const label = categoryLabel(cat);
+                chips.push(
+                    '<button type="button" class="filter-chip" data-cat="' + escapeHtml(cat) + '"'
+                    + ' aria-pressed="' + active + '"'
+                    + ' aria-label="' + escapeHtml(_t('dyn.health.filter_aria', { category: label })) + '"'
+                    + ' data-testid="chip-filter-' + escapeHtml(cat) + '">'
+                    + '<span>' + escapeHtml(label) + '</span>'
+                    + '<span class="filter-chip-count">' + grouped[cat].length + '</span>'
+                    + '</button>'
+                );
+            }
+
+            container.innerHTML =
+                '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"'
+                + ' id="checks-filter-label">'
+                + escapeHtml(_t('dyn.health.filter_label')) + '</div>'
+                + '<div class="flex flex-wrap gap-2" role="toolbar"'
+                + ' aria-labelledby="checks-filter-label">'
+                + chips.join('')
+                + '</div>';
+
+            container.querySelectorAll('.filter-chip').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const cat = btn.getAttribute('data-cat') || 'all';
+                    if (cat === selectedCategory) return;
+                    selectedCategory = cat;
+                    persistFilter(cat);
+                    renderChecksWithFilter();
+                });
+            });
         }
 
         function renderHistory(history) {
