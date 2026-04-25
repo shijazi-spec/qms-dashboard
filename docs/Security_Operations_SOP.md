@@ -766,6 +766,30 @@ Rotation procedure:
 4. Verify: `POST /api/admin/auth` with the **old** key returns HTTP 401; the **new** key returns HTTP 200 and sets the `admin_key` HttpOnly/Secure/SameSite=Strict cookie.
 5. Append a new row to the table above with the date, reason, operator, and verification notes.
 
+##### Enforced minimum strength (startup gate)
+
+The bootstrap path in `src/mastra/index.ts` calls
+`assertAdminApiKeyStrengthOrThrow()` from `src/utils/rbacMiddleware.ts`
+**before** `new Mastra({...})` registers any `/api/admin/*` route. The check
+mirrors the rotation guidance above and refuses to start the server when a
+configured `ADMIN_API_KEY`:
+
+| Criterion | Minimum | Rationale |
+|-----------|---------|-----------|
+| Total length | ≥ **32** characters | Matches `openssl rand -hex 32` (64 hex chars / 256 bits) and tolerates other generators (base64url, urandom-derived tokens) at comparable length. |
+| Distinct characters | ≥ **10** | Catches degenerate rotations like `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` or `passwordpasswordpasswordpassword` without rejecting reasonable random tokens. |
+
+Failure mode: the process logs every failed criterion and throws, aborting
+bootstrap. A weak key therefore can never serve a single admin request.
+`ADMIN_API_KEY` being **unset** is *not* a startup failure — the dashboard's
+`Setup Required` page flow handles first-run / unconfigured platforms via
+`isAdminKeyConfigured()`. Step 1 above (`openssl rand -hex 32`) clears both
+thresholds with very high probability; if you generate a key by hand, ensure
+it meets both criteria before installing it.
+
+Coverage: `tests/adminApiKeyStrength.test.ts` exercises the accept and reject
+paths of `validateAdminApiKeyStrength()` and the wrapping startup gate.
+
 ---
 
 ### 5.8 Input Sanitization Policy

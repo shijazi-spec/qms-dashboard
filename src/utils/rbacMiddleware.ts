@@ -164,6 +164,110 @@ export function hasValidAdminApiKey(c: any): boolean {
 }
 
 /**
+ * Minimum acceptable length for ADMIN_API_KEY. Matches the rotation runbook
+ * in `docs/Security_Operations_SOP.md` §5.7, which prescribes
+ * `openssl rand -hex 32` (64 hex chars / 256 bits of entropy). We allow any
+ * key ≥ 32 characters so non-hex generators (base64url, urandom-derived
+ * tokens) are still acceptable as long as they carry a comparable length.
+ */
+export const ADMIN_API_KEY_MIN_LENGTH = 32;
+
+/**
+ * Minimum number of distinct characters in ADMIN_API_KEY. A high-entropy
+ * 64-hex string typically uses all 16 hex symbols, so a 10-distinct-char
+ * floor catches obviously degenerate values like "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+ * or "passwordpasswordpasswordpassword" without rejecting reasonable random
+ * tokens.
+ */
+export const ADMIN_API_KEY_MIN_DISTINCT_CHARS = 10;
+
+export interface AdminApiKeyValidation {
+  ok: boolean;
+  reasons: string[];
+  length: number;
+  distinctChars: number;
+}
+
+/**
+ * Validate the strength of a candidate ADMIN_API_KEY value.
+ *
+ * Returns `{ ok: true }` only if the key is non-empty, ≥ ADMIN_API_KEY_MIN_LENGTH
+ * characters long, and contains ≥ ADMIN_API_KEY_MIN_DISTINCT_CHARS distinct
+ * characters. Otherwise returns `{ ok: false }` along with one human-readable
+ * reason per failed criterion (so operators see every problem at once, not
+ * just the first one).
+ *
+ * Used at startup by `assertAdminApiKeyStrengthOrThrow()` in `src/mastra/index.ts`
+ * to refuse to boot when a weak rotation value would otherwise quietly weaken
+ * `/api/admin/*` authentication.
+ */
+export function validateAdminApiKeyStrength(
+  key: string | undefined | null,
+): AdminApiKeyValidation {
+  const reasons: string[] = [];
+  if (!key) {
+    return {
+      ok: false,
+      reasons: ["ADMIN_API_KEY is not set"],
+      length: 0,
+      distinctChars: 0,
+    };
+  }
+  const length = key.length;
+  const distinctChars = new Set(key).size;
+  if (length < ADMIN_API_KEY_MIN_LENGTH) {
+    reasons.push(
+      `ADMIN_API_KEY length is ${length}; require at least ${ADMIN_API_KEY_MIN_LENGTH} characters`,
+    );
+  }
+  if (distinctChars < ADMIN_API_KEY_MIN_DISTINCT_CHARS) {
+    reasons.push(
+      `ADMIN_API_KEY has ${distinctChars} distinct character${distinctChars === 1 ? "" : "s"}; require at least ${ADMIN_API_KEY_MIN_DISTINCT_CHARS}`,
+    );
+  }
+  return { ok: reasons.length === 0, reasons, length, distinctChars };
+}
+
+/**
+ * Startup gate for ADMIN_API_KEY. Behaviour:
+ *
+ *   - If ADMIN_API_KEY is unset, returns silently. The dashboard's
+ *     "Setup Required" pages already handle the unconfigured-platform case
+ *     (`isAdminKeyConfigured()` above), and refusing to boot in that mode
+ *     would break first-run onboarding.
+ *
+ *   - If ADMIN_API_KEY is set but fails `validateAdminApiKeyStrength`, this
+ *     logs every failed criterion and throws, aborting bootstrap *before*
+ *     `new Mastra({...})` registers any `/api/admin/*` route. A weak key can
+ *     therefore never serve a single request — the process exits instead.
+ *
+ * The thrown error message references §5.7 of `docs/Security_Operations_SOP.md`
+ * so on-call engineers see the rotation runbook in the crash log.
+ */
+export function assertAdminApiKeyStrengthOrThrow(): void {
+  const key = process.env.ADMIN_API_KEY;
+  if (!key) return;
+  const result = validateAdminApiKeyStrength(key);
+  if (result.ok) return;
+  console.error(
+    "🛑 [Bootstrap] ADMIN_API_KEY failed strength check; refusing to start.",
+  );
+  for (const reason of result.reasons) {
+    console.error(`  - ${reason}`);
+  }
+  console.error(
+    `Required: length ≥ ${ADMIN_API_KEY_MIN_LENGTH}, distinct chars ≥ ${ADMIN_API_KEY_MIN_DISTINCT_CHARS}. ` +
+      "See docs/Security_Operations_SOP.md §5.7 (Secrets Rotation Log) for the rotation procedure " +
+      "(generate with `openssl rand -hex 32`).",
+  );
+  throw new Error(
+    `ADMIN_API_KEY does not meet minimum strength requirements ` +
+      `(length ≥ ${ADMIN_API_KEY_MIN_LENGTH}, distinct chars ≥ ${ADMIN_API_KEY_MIN_DISTINCT_CHARS}). ` +
+      `See docs/Security_Operations_SOP.md §5.7.`,
+  );
+}
+
+/**
  * Returns true when an ADMIN_API_KEY environment value is configured for
  * this deployment. This is a *platform-configuration* check — it tells you
  * whether admin operations are wired up at all. It does NOT verify that
