@@ -18,6 +18,7 @@ import type {
   AdminActivity,
   GovernanceDocument,
   QualityScorecard,
+  ScorecardAttribute,
   WorkflowRun,
   SystemEvent,
   TeamFeedback,
@@ -139,6 +140,21 @@ export function makeScorecard(
     name: "Test Scorecard",
     dimensions: {},
     is_active: true,
+    ...overrides,
+  };
+}
+
+export function makeScorecardAttribute(
+  overrides: Partial<ScorecardAttribute> = {},
+): ScorecardAttribute {
+  return {
+    id: 1,
+    scorecard_id: 1,
+    dimension: "people",
+    attribute_name: "Test Attribute",
+    weight: 10,
+    is_active: true,
+    order_index: 0,
     ...overrides,
   };
 }

@@ -20,9 +20,20 @@ import {
   makeAdminActivity,
   makeGovernanceDocument,
   makeScorecard,
+  makeScorecardAttribute,
   makeSystemEvent,
   makeWorkflowRun,
 } from "../_helpers/fixtures";
+
+vi.mock("../../src/utils/governanceRules", () => ({
+  walaPlusSalesGovernanceRules: {
+    document: { name: "WalaPlus Sales Rules", version: "v1.1" },
+  },
+  qualityScorecardConfig: {
+    name: "Quality Scorecard",
+    description: "Default quality scorecard",
+  },
+}));
 
 vi.mock("../../src/utils/database", () => ({
   getAllGovernanceDocuments: vi.fn(),
@@ -409,5 +420,440 @@ describe("GET /api/activity/stats — real data path", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toBe(stats);
+  });
+});
+
+describe("POST /api/admin/documents — real data path", () => {
+  test("200 returns saved document and logs activity", async () => {
+    const doc = makeGovernanceDocument({ id: 7, name: "New Policy", version: "v2" });
+    vi.mocked(db.saveGovernanceDocument).mockResolvedValueOnce(doc);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/documents", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: AUTH_HEADERS,
+        body: {
+          name: "New Policy",
+          document_type: "sales",
+          version: "v2",
+          content_text: "...",
+          rules_json: {},
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(doc);
+    expect(db.saveGovernanceDocument).toHaveBeenCalledTimes(1);
+    const savedArgs = vi.mocked(db.saveGovernanceDocument).mock.calls[0][0];
+    expect(savedArgs.name).toBe("New Policy");
+    expect(savedArgs.version).toBe("v2");
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("document_upload");
+  });
+});
+
+describe("PUT /api/admin/documents/:id/activate — real data path", () => {
+  test("200 calls activateGovernanceDocument and logs activity", async () => {
+    vi.mocked(db.activateGovernanceDocument).mockResolvedValueOnce(undefined);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/documents/:id/activate",
+      "PUT",
+    );
+    const res = await handler(
+      makeContext({ method: "PUT", headers: AUTH_HEADERS, params: { id: "3" } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(db.activateGovernanceDocument).toHaveBeenCalledWith(3);
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("document_activate");
+  });
+});
+
+describe("POST /api/admin/scorecard/attributes — real data path", () => {
+  test("200 returns updated scorecard and logs activity", async () => {
+    const scorecard = makeScorecard({ id: 2 });
+    vi.mocked(db.addScorecardAttribute).mockResolvedValueOnce(scorecard);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecard/attributes",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: AUTH_HEADERS,
+        body: { name: "Compliance Rate", dimension: "governance", weight: 20, target: 95 },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(scorecard);
+    expect(db.addScorecardAttribute).toHaveBeenCalledTimes(1);
+    const attrArgs = vi.mocked(db.addScorecardAttribute).mock.calls[0][0];
+    expect(attrArgs.name).toBe("Compliance Rate");
+    expect(attrArgs.dimension).toBe("governance");
+    expect(attrArgs.weight).toBe(20);
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe(
+      "scorecard_attribute_add",
+    );
+  });
+
+  test("404 when no active scorecard found", async () => {
+    vi.mocked(db.addScorecardAttribute).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecard/attributes",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: AUTH_HEADERS,
+        body: { name: "Attr", dimension: "people", weight: 10 },
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "No active scorecard found" });
+    expect(db.logAdminActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/admin/scorecard/link-doc — real data path", () => {
+  test("200 returns success and linked scorecard, logs activity", async () => {
+    const scorecard = makeScorecard({ id: 5, name: "Sales SC" });
+    vi.mocked(db.linkScorecardToGovernanceDoc).mockResolvedValueOnce(scorecard);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/scorecard/link-doc", "PUT");
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        body: { governance_doc_id: 2, crm_module: "sales", team_name: "alpha" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, scorecard });
+    expect(db.linkScorecardToGovernanceDoc).toHaveBeenCalledWith(2, "sales", "alpha");
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe(
+      "scorecard_link_doc",
+    );
+  });
+
+  test("404 when no matching scorecard found", async () => {
+    vi.mocked(db.linkScorecardToGovernanceDoc).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/scorecard/link-doc", "PUT");
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        body: { governance_doc_id: 99, crm_module: "sales", team_name: "beta" },
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({
+      error: "Failed to link document - no matching scorecard found",
+    });
+    expect(db.logAdminActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/admin/scorecards/:id/activate — real data path", () => {
+  test("200 returns activated scorecard and logs activity", async () => {
+    const scorecard = makeScorecard({ id: 4, name: "Active SC" });
+    vi.mocked(db.setActiveScorecardForTeam).mockResolvedValueOnce(scorecard);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/activate",
+      "PUT",
+    );
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        params: { id: "4" },
+        body: { crm_module: "sales", team_name: "alpha" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(scorecard);
+    expect(db.setActiveScorecardForTeam).toHaveBeenCalledWith(4, "sales", "alpha");
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe(
+      "scorecard_activate",
+    );
+  });
+
+  test("404 when scorecard not found", async () => {
+    vi.mocked(db.setActiveScorecardForTeam).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/activate",
+      "PUT",
+    );
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        params: { id: "999" },
+        body: { crm_module: "sales", team_name: "gamma" },
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Scorecard not found" });
+    expect(db.logAdminActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/admin/scorecards/:id/clone — real data path", () => {
+  test("200 returns cloned scorecard and logs activity", async () => {
+    const cloned = makeScorecard({ id: 12, name: "Cloned SC" });
+    vi.mocked(db.cloneScorecard).mockResolvedValueOnce(cloned);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/clone",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: AUTH_HEADERS,
+        params: { id: "6" },
+        body: { name: "Cloned SC", version: "v2" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(cloned);
+    expect(db.cloneScorecard).toHaveBeenCalledWith(6, "Cloned SC", "v2");
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("scorecard_clone");
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].metadata).toMatchObject({
+      original_id: 6,
+      new_name: "Cloned SC",
+      version: "v2",
+    });
+  });
+
+  test("404 when original scorecard not found", async () => {
+    vi.mocked(db.cloneScorecard).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/clone",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: AUTH_HEADERS,
+        params: { id: "404" },
+        body: { name: "Ghost Clone", version: "v1" },
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Original scorecard not found" });
+    expect(db.logAdminActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/admin/scorecards/:id/attributes — real data path", () => {
+  test("200 returns attribute list for the given scorecard id", async () => {
+    const attrs = [makeScorecardAttribute({ id: 1 }), makeScorecardAttribute({ id: 2 })];
+    vi.mocked(db.getScorecardAttributes).mockResolvedValueOnce(attrs);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/attributes",
+      "GET",
+    );
+    const res = await handler(
+      makeContext({ method: "GET", headers: AUTH_HEADERS, params: { id: "7" } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(attrs);
+    expect(db.getScorecardAttributes).toHaveBeenCalledWith(7);
+  });
+});
+
+describe("POST /api/admin/scorecards/:id/attributes — real data path", () => {
+  test("200 returns created attribute and logs activity", async () => {
+    const attr = makeScorecardAttribute({ id: 5, scorecard_id: 8, attribute_name: "Close Rate" });
+    vi.mocked(db.createScorecardAttribute).mockResolvedValueOnce(attr);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/attributes",
+      "POST",
+    );
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: AUTH_HEADERS,
+        params: { id: "8" },
+        body: { attribute_name: "Close Rate", dimension: "process", weight: 15, order_index: 1, is_active: true },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(attr);
+    const createCall = vi.mocked(db.createScorecardAttribute).mock.calls[0][0];
+    expect(createCall.scorecard_id).toBe(8);
+    expect(createCall.attribute_name).toBe("Close Rate");
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("attribute_create");
+  });
+});
+
+describe("PUT /api/admin/attributes/:id — real data path", () => {
+  test("200 returns updated attribute and logs activity", async () => {
+    const attr = makeScorecardAttribute({ id: 3, attribute_name: "Updated Attr" });
+    vi.mocked(db.updateScorecardAttribute).mockResolvedValueOnce(attr);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/attributes/:id", "PUT");
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        params: { id: "3" },
+        body: { attribute_name: "Updated Attr", weight: 25 },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(attr);
+    expect(db.updateScorecardAttribute).toHaveBeenCalledWith(3, {
+      attribute_name: "Updated Attr",
+      weight: 25,
+    });
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("attribute_update");
+  });
+
+  test("404 when attribute not found", async () => {
+    vi.mocked(db.updateScorecardAttribute).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/attributes/:id", "PUT");
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        params: { id: "999" },
+        body: { weight: 5 },
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Attribute not found" });
+    expect(db.logAdminActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /api/admin/attributes/:id — real data path", () => {
+  test("200 returns success when attribute deleted", async () => {
+    vi.mocked(db.deleteScorecardAttribute).mockResolvedValueOnce(true);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/attributes/:id", "DELETE");
+    const res = await handler(
+      makeContext({ method: "DELETE", headers: AUTH_HEADERS, params: { id: "10" } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(db.deleteScorecardAttribute).toHaveBeenCalledWith(10);
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("attribute_delete");
+  });
+
+  test("404 when attribute not found", async () => {
+    vi.mocked(db.deleteScorecardAttribute).mockResolvedValueOnce(false);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/attributes/:id", "DELETE");
+    const res = await handler(
+      makeContext({ method: "DELETE", headers: AUTH_HEADERS, params: { id: "999" } }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Attribute not found" });
+    expect(db.logAdminActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/admin/scorecards/:id/attributes/reorder — real data path", () => {
+  test("200 calls reorderScorecardAttributes with correct args and logs activity", async () => {
+    vi.mocked(db.reorderScorecardAttributes).mockResolvedValueOnce(undefined);
+
+    const handler = await buildHandler(
+      adminApiRoutes,
+      "/api/admin/scorecards/:id/attributes/reorder",
+      "PUT",
+    );
+    const res = await handler(
+      makeContext({
+        method: "PUT",
+        headers: AUTH_HEADERS,
+        params: { id: "5" },
+        body: { attribute_ids: [3, 1, 2] },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(db.reorderScorecardAttributes).toHaveBeenCalledWith(5, [3, 1, 2]);
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe(
+      "attributes_reorder",
+    );
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].metadata).toMatchObject({
+      attribute_ids: [3, 1, 2],
+    });
+  });
+});
+
+describe("POST /api/admin/seed-defaults — real data path", () => {
+  test("200 calls saveGovernanceDocument, saveScorecard, logAdminActivity", async () => {
+    vi.mocked(db.saveGovernanceDocument).mockResolvedValueOnce(
+      makeGovernanceDocument({ id: 1 }),
+    );
+    vi.mocked(db.saveScorecard).mockResolvedValueOnce(makeScorecard({ id: 1 }));
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/seed-defaults", "POST");
+    const res = await handler(makeContext({ method: "POST", headers: AUTH_HEADERS }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, message: "Default data restored" });
+    expect(db.saveGovernanceDocument).toHaveBeenCalledTimes(1);
+    const docArgs = vi.mocked(db.saveGovernanceDocument).mock.calls[0][0];
+    expect(docArgs.name).toBe("WalaPlus Sales Rules");
+    expect(docArgs.version).toBe("v1.1");
+    expect(docArgs.document_type).toBe("sales");
+    expect(docArgs.is_active).toBe(true);
+    expect(db.saveScorecard).toHaveBeenCalledTimes(1);
+    const scArgs = vi.mocked(db.saveScorecard).mock.calls[0][0];
+    expect(scArgs.name).toBe("Quality Scorecard");
+    expect(scArgs.description).toBe("Default quality scorecard");
+    expect(scArgs.is_active).toBe(true);
+    expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("seed_defaults");
   });
 });
