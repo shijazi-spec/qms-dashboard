@@ -50,12 +50,12 @@ waitForPort = 5000
 name = "secret-redaction"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx tsx src/utils/redactSensitiveFields.test.ts && npx tsx tests/aiApprovalRedaction.test.ts && npx tsx tests/aiApprovalRoutesRedaction.test.ts && npx tsx tests/aiApprovalSweepBackfill.test.ts"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsx src/utils/redactSensitiveFields.test.ts && npx tsx tests/aiApprovalRedaction.test.ts && npx tsx tests/aiApprovalRoutesRedaction.test.ts && npx tsx tests/aiApprovalRejectionRedaction.test.ts && npx tsx tests/aiApprovalSweepBackfill.test.ts"
 
 [[workflows.workflow]]
 name = "i18n"
