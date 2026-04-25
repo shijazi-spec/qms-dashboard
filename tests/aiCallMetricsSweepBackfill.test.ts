@@ -45,6 +45,13 @@ interface RowState {
   prompt_preview: string | null;
   tool_input_preview: string | null;
   tool_output_preview: string | null;
+  // Task #467: breadcrumb populated by the sweep itself via `NOW()` —
+  // tracked in the stub so we can assert that swept rows acquire a
+  // timestamp and untouched rows keep `null` (= never needed sweeping).
+  // The stub mirrors the column with its own `Date` because the real
+  // UPDATE uses `NOW()` server-side and would otherwise be opaque to
+  // assertions.
+  previews_redacted_at: Date | null;
 }
 
 interface CapturedUpdate {
@@ -66,12 +73,23 @@ function makeStubClient(initialRows: RowState[]): {
     }
     if (/^\s*UPDATE\s+ai_call_metrics/i.test(sql)) {
       updates.push({ sql, params });
-      const id = params[3] as number;
+      // The id is the last bound parameter regardless of how many SET
+      // columns precede it in the UPDATE statement, so look it up by
+      // tail-index rather than a hard-coded position. This keeps the
+      // stub robust to additions like Task #467's
+      // `previews_redacted_at = NOW()` (server-side, no JS param).
+      const id = params[params.length - 1] as number;
       const target = rows.find(r => r.id === id);
       if (target) {
         target.prompt_preview = params[0] as string | null;
         target.tool_input_preview = params[1] as string | null;
         target.tool_output_preview = params[2] as string | null;
+        // Task #467: the real UPDATE writes `previews_redacted_at = NOW()`
+        // server-side. Mirror that here so assertions can verify the
+        // breadcrumb is set on swept rows but untouched rows keep null.
+        if (/previews_redacted_at\s*=\s*NOW\(\)/i.test(sql)) {
+          target.previews_redacted_at = new Date();
+        }
       }
       return { rows: [], rowCount: 1 };
     }
@@ -100,18 +118,21 @@ async function run(): Promise<void> {
       prompt_preview: `${SAFE_PROMPT} (rotated key=${SECRET_KEY})`,
       tool_input_preview: null,
       tool_output_preview: null,
+      previews_redacted_at: null,
     },
     {
       id: 2,
       prompt_preview: SAFE_PROMPT,
       tool_input_preview: `${SAFE_TOOL_INPUT} gh=${SECRET_GH}`,
       tool_output_preview: `legacy_hash=${SECRET_BCRYPT}; aws=${SECRET_AKIA}`,
+      previews_redacted_at: null,
     },
     {
       id: 3,
       prompt_preview: `bearer ${SECRET_JWT}`,
       tool_input_preview: SAFE_TOOL_INPUT,
       tool_output_preview: SAFE_TOOL_OUTPUT,
+      previews_redacted_at: null,
     },
     {
       id: 4,
@@ -119,6 +140,7 @@ async function run(): Promise<void> {
       prompt_preview: SAFE_PROMPT,
       tool_input_preview: SAFE_TOOL_INPUT,
       tool_output_preview: SAFE_TOOL_OUTPUT,
+      previews_redacted_at: null,
     },
     {
       id: 5,
@@ -129,6 +151,7 @@ async function run(): Promise<void> {
       prompt_preview: `Rotate API token (was ${REDACTED_SENTINEL})`,
       tool_input_preview: `legacy hash ${REDACTED_SENTINEL}`,
       tool_output_preview: null,
+      previews_redacted_at: null,
     },
   ];
 
@@ -212,6 +235,38 @@ async function run(): Promise<void> {
     "row 5 (already-redacted) is byte-identical — no UPDATE issued",
   );
 
+  // ---- Task #467: previews_redacted_at breadcrumb is stamped on every
+  // row the sweep actually rewrote (so the AI Operations call-detail
+  // panel can show "Preview redacted by historical sweep on …"), and
+  // remains null on rows that never needed sweeping.
+  assert(
+    row1.previews_redacted_at instanceof Date,
+    "row 1 (rewritten) acquired a previews_redacted_at breadcrumb",
+  );
+  assert(
+    row2.previews_redacted_at instanceof Date,
+    "row 2 (rewritten) acquired a previews_redacted_at breadcrumb",
+  );
+  assert(
+    row3.previews_redacted_at instanceof Date,
+    "row 3 (rewritten) acquired a previews_redacted_at breadcrumb",
+  );
+  assert(
+    row4.previews_redacted_at === null,
+    "row 4 (clean control) keeps a null previews_redacted_at — never needed sweeping",
+  );
+  assert(
+    row5.previews_redacted_at === null,
+    "row 5 (already-redacted, no further changes) is not re-stamped — sweep stays idempotent",
+  );
+
+  // The exact UPDATE issued must include the NOW() breadcrumb so the
+  // backend / dashboard contract for showing the badge cannot drift.
+  assert(
+    stub1.updates.every(u => /previews_redacted_at\s*=\s*NOW\(\)/i.test(u.sql)),
+    "every UPDATE issued sets previews_redacted_at = NOW() server-side",
+  );
+
   // ---- Idempotency: a second pass over the now-clean dataset must be a no-op
   const stub2 = makeStubClient(stub1.rows);
   const result2 = await redactAiCallMetrics(stub2.client);
@@ -236,6 +291,7 @@ async function run(): Promise<void> {
       prompt_preview: `prompt with key=${SECRET_KEY}`,
       tool_input_preview: `input with gh=${SECRET_GH}`,
       tool_output_preview: `output with jwt=${SECRET_JWT}`,
+      previews_redacted_at: null,
     },
   ];
   const stub3 = makeStubClient(combined);
@@ -270,8 +326,8 @@ async function run(): Promise<void> {
 
   // ---- Empty / null preview columns must be tolerated and not counted as changes
   const empties: RowState[] = [
-    { id: 20, prompt_preview: null, tool_input_preview: null, tool_output_preview: null },
-    { id: 21, prompt_preview: "", tool_input_preview: "", tool_output_preview: "" },
+    { id: 20, prompt_preview: null, tool_input_preview: null, tool_output_preview: null, previews_redacted_at: null },
+    { id: 21, prompt_preview: "", tool_input_preview: "", tool_output_preview: "", previews_redacted_at: null },
   ];
   const stub4 = makeStubClient(empties);
   const result4 = await redactAiCallMetrics(stub4.client);
@@ -283,9 +339,9 @@ async function run(): Promise<void> {
 
   // ---- Keyset pagination: with batchSize=1 the sweep must walk all rows
   const paginated: RowState[] = [
-    { id: 100, prompt_preview: `key=${SECRET_KEY}`, tool_input_preview: null, tool_output_preview: null },
-    { id: 101, prompt_preview: `gh=${SECRET_GH}`,  tool_input_preview: null, tool_output_preview: null },
-    { id: 102, prompt_preview: SAFE_PROMPT,        tool_input_preview: null, tool_output_preview: null },
+    { id: 100, prompt_preview: `key=${SECRET_KEY}`, tool_input_preview: null, tool_output_preview: null, previews_redacted_at: null },
+    { id: 101, prompt_preview: `gh=${SECRET_GH}`,  tool_input_preview: null, tool_output_preview: null, previews_redacted_at: null },
+    { id: 102, prompt_preview: SAFE_PROMPT,        tool_input_preview: null, tool_output_preview: null, previews_redacted_at: null },
   ];
   const stub5 = makeStubClient(paginated);
   // Override the SELECT so it honours the cursor + LIMIT, mimicking real Postgres
@@ -302,12 +358,17 @@ async function run(): Promise<void> {
     }
     if (/^\s*UPDATE\s+ai_call_metrics/i.test(sql)) {
       stub5.updates.push({ sql, params });
-      const id = params[3] as number;
+      // Tail-index lookup so the stub is robust to extra SET columns
+      // (Task #467 added `previews_redacted_at = NOW()` server-side).
+      const id = params[params.length - 1] as number;
       const target = stub5.rows.find(r => r.id === id);
       if (target) {
         target.prompt_preview = params[0] as string | null;
         target.tool_input_preview = params[1] as string | null;
         target.tool_output_preview = params[2] as string | null;
+        if (/previews_redacted_at\s*=\s*NOW\(\)/i.test(sql)) {
+          target.previews_redacted_at = new Date();
+        }
       }
       return { rows: [], rowCount: 1 };
     }

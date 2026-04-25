@@ -2653,6 +2653,28 @@
              <pre class="text-xs text-red-700 whitespace-pre-wrap break-words" data-testid="text-call-error">${esc(call.error_message || '')}</pre>
            </div>`
         : '';
+      // Task #467: when the historical preview-redaction sweep
+      // (redactAiCallMetrics in src/utils/redactHistoricalLogs.ts)
+      // rewrote any of the *_preview columns on this row, the backend
+      // returns `previews_redacted_at`. Surface a small info badge above
+      // the preview blocks so operators looking at this call know the
+      // preview text reflects a retroactive cleanup, not what the call
+      // originally wrote — matches the breadcrumb already added to
+      // event_logs JSONB rows ('_redacted_at').
+      const sweepBadge = call.previews_redacted_at
+        ? `<div class="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-start gap-2"
+                data-testid="badge-previews-redacted-${esc(String(call.id))}"
+                title="The prompt and tool input/output previews shown below were rewritten by the historical secret-redaction sweep. They reflect the cleaned text, not the value the call originally persisted.">
+             <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                     d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+             </svg>
+             <div>
+               <span class="font-semibold">Preview redacted by historical sweep on ${esc(fmtDate(call.previews_redacted_at))}.</span>
+               <span class="block text-amber-700">Previews on this row were retroactively cleaned because they were persisted before redaction shipped.</span>
+             </div>
+           </div>`
+        : '';
       const toolInputBlock = call.tool_input_preview
         ? `<div>
              <div class="text-xs text-gray-500 uppercase mb-1">Tool input (sanitized preview)</div>
@@ -2699,6 +2721,7 @@
               <div><div class="text-xs text-gray-500 uppercase">Completion tokens</div><div class="font-medium">${fmtNum(call.completion_tokens)}</div></div>
             </div>
             ${errBlock}
+            ${sweepBadge}
             <div>
               <div class="text-xs text-gray-500 uppercase mb-1">Original prompt (preview)</div>
               <pre class="p-3 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words"

@@ -799,11 +799,21 @@ export async function redactAiCallMetrics(
       if (outputDirty) toolOutputPreviewChanged++;
 
       if (promptDirty || inputDirty || outputDirty) {
+        // Task #467: stamp `previews_redacted_at = NOW()` alongside the
+        // scrubbed columns so the AI Operations call-detail UI can show
+        // an info badge ("Preview redacted by historical sweep on …")
+        // explaining why the preview differs from what the call
+        // originally wrote. Idempotency is preserved because we only
+        // reach this UPDATE branch when at least one preview column
+        // actually changed — a row that was already clean (with or
+        // without an existing timestamp) is skipped above and never
+        // re-stamped.
         await client.query(
           `UPDATE ai_call_metrics
-              SET prompt_preview      = $1,
-                  tool_input_preview  = $2,
-                  tool_output_preview = $3
+              SET prompt_preview       = $1,
+                  tool_input_preview   = $2,
+                  tool_output_preview  = $3,
+                  previews_redacted_at = NOW()
             WHERE id = $4`,
           [promptPreview, toolInputPreview, toolOutputPreview, row.id],
         );

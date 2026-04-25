@@ -201,6 +201,17 @@ export async function ensureAiMetricsTable(): Promise<void> {
           ADD COLUMN IF NOT EXISTS tool_input_preview TEXT;
         ALTER TABLE ai_call_metrics
           ADD COLUMN IF NOT EXISTS tool_output_preview TEXT;
+        -- Task #467: breadcrumb populated by the historical preview-redaction
+        -- sweep (see redactAiCallMetrics in src/utils/redactHistoricalLogs.ts)
+        -- whenever it rewrites any of prompt_preview / tool_input_preview /
+        -- tool_output_preview on a row that pre-dated the write-time redactor.
+        -- The AI Operations call-detail panel surfaces this as an info badge
+        -- so auditors can tell the preview was retroactively cleaned vs.
+        -- originally written that way. Nullable on purpose: only rows the
+        -- sweep actually touched carry a timestamp, so reads can distinguish
+        -- "swept once on YYYY-MM-DD" from "never needed sweeping".
+        ALTER TABLE ai_call_metrics
+          ADD COLUMN IF NOT EXISTS previews_redacted_at TIMESTAMPTZ;
 
         CREATE INDEX IF NOT EXISTS idx_ai_call_metrics_agent_started
           ON ai_call_metrics (agent_name, started_at DESC);
@@ -1239,6 +1250,12 @@ export async function getCallById(callId: number): Promise<{
   error_class: string | null;
   error_message: string | null;
   prompt_preview: string | null;
+  // Task #467: ISO-8601 timestamp the historical preview-redaction sweep
+  // wrote when it scrubbed any of the *_preview columns on this row, or
+  // null if the row never needed sweeping. The AI Operations call-detail
+  // modal renders an info badge whenever this is set so operators know
+  // the preview reflects a retroactive cleanup, not the original write.
+  previews_redacted_at: string | null;
   started_at: string;
   prompt_tokens: number | null;
   completion_tokens: number | null;
@@ -1249,7 +1266,7 @@ export async function getCallById(callId: number): Promise<{
        id, agent_name, tool_name, model,
        latency_ms, estimated_cost_usd,
        success, error_class, error_message,
-       prompt_preview,
+       prompt_preview, previews_redacted_at,
        started_at, prompt_tokens, completion_tokens
      FROM ai_call_metrics
      WHERE id = $1
