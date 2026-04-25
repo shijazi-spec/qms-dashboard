@@ -1,0 +1,8 @@
+npx lint-staged
+
+# Also run the CSP inline-style / inline-handler guardrails. The script
+# smart-skips when the staged change set touches no files under dashboard/
+# or src/mastra/, so unrelated commits stay instant.
+if [ -x .githooks/pre-commit ]; then
+  bash .githooks/pre-commit
+fi

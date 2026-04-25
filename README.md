@@ -1,25 +1,60 @@
 # qms-dashboard
 
-## Pre-commit guardrails (instant local feedback)
+## Pre-commit hooks
 
-The Content Security Policy guardrails described in
-`docs/Security_Operations_SOP.md §5.5` run **locally on every commit** in
-addition to CI, so violations surface immediately in your terminal instead of
-after a failed CI build.
+This repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged)
+as the single orchestrator for **all** local pre-commit checks, so every
+violation surfaces in your terminal immediately instead of after a failed CI
+build.
 
-- Hook: `.githooks/pre-commit` — runs `scripts/check-no-inline-styles.sh` and
-  `scripts/check-no-inline-handlers.sh` against the staged change set.
-- Auto-wired: the `prepare` script in `package.json` runs
-  `scripts/install-git-hooks.sh` on every `npm install`, which sets
-  `git config core.hooksPath .githooks` for your local clone. CI runs are
-  skipped automatically.
-- Smart-skip: if a commit touches no files under `dashboard/` or `src/mastra/`,
-  the hook exits instantly without running the scans.
-- Bypass (rare, use a clear commit-message reason): `git commit --no-verify`.
-  The same checks still run in CI via `npm test` and will block the merge.
+### What runs on `git commit`
 
-If you cloned the repo and have not run `npm install` yet, install the hook
-manually with `bash scripts/install-git-hooks.sh`.
+The husky hook at `.husky/pre-commit` runs, in order:
+
+1. **`npx lint-staged`** — driven by `.lintstagedrc.cjs`, for every staged
+   `*.ts` file:
+   - `prettier --write` on the staged files (auto-fixes formatting).
+   - `npm run check` (full project `tsc --noEmit`) to catch type errors that
+     span multiple files.
+2. **`bash .githooks/pre-commit`** — Content Security Policy guardrails
+   (`scripts/check-no-inline-styles.sh` and
+   `scripts/check-no-inline-handlers.sh`) described in
+   `docs/Security_Operations_SOP.md §5.5`. The script smart-skips when the
+   staged change set touches no files under `dashboard/` or `src/mastra/`, so
+   unrelated commits stay instant.
+
+If any step fails, the commit is aborted with a clear error message. Prettier
+auto-formats in place, so re-running `git add` on the affected files is usually
+all you need.
+
+### Setup for new contributors
+
+The hook is installed automatically the first time you run `npm install` (via
+the `prepare` script, which runs `husky` and sets
+`core.hooksPath = .husky/_`). No manual steps required. To verify:
+
+```sh
+git config --get core.hooksPath   # should print `.husky/_`
+ls .husky/pre-commit              # should exist and be executable
+```
+
+If it isn't set up (e.g. you cloned with `--no-scripts` or installed deps with
+a flag that skipped lifecycle scripts), run:
+
+```sh
+npm run prepare
+```
+
+### Bypassing the hook
+
+Use sparingly, and document the reason in the commit message:
+
+```sh
+git commit --no-verify
+```
+
+The same Prettier, TypeScript, and CSP checks still run in CI via `npm test` /
+the dedicated typecheck and format jobs and will block the merge.
 
 ## Integration tests
 
