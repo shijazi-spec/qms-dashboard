@@ -746,6 +746,10 @@ async function maybeResolveRecoveredAlert(
             reason,
             alert_id: alert.id,
             detail: note,
+            // Pass `created_at` so the recovery message can render the
+            // "Open for: …" duration. Optional — omitted when the column
+            // is null on legacy rows so the renderer just hides the field.
+            alert_created_at: alert.created_at ?? null,
           });
         } catch (notifyErr) {
           console.error(

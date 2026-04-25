@@ -1842,6 +1842,49 @@ await suite.test(
 );
 
 await suite.test(
+  "(R6) cron forwards alert.created_at so the recovery message can render the open-duration",
+  async () => {
+    const alertId = 901;
+    const createdAt = new Date("2026-04-25T10:00:00Z");
+    const agg = makeAggregate({
+      tool_name: "rag_search",
+      call_count: 50,
+      error_rate_pct: 4, // below threshold → recovery
+      p95_latency_ms: 500,
+    });
+    const { deps, recoveryNotifies } = makeDeps({
+      aggregates: [agg],
+      openAlertsByKey: {
+        "rag_search:error_rate": [
+          {
+            id: alertId,
+            alert_type: "tool_health",
+            severity: "medium",
+            title: "stub",
+            description: "stub",
+            status: "open",
+            created_at: createdAt,
+          } as any,
+        ],
+      },
+      pastCooldown: true,
+    });
+
+    await runToolHealthCheck(deps);
+
+    suite.expectEqual(recoveryNotifies.length, 1, "recovery notifier called");
+    const forwarded = recoveryNotifies[0]?.notification.alert_created_at;
+    const forwardedIso =
+      forwarded instanceof Date ? forwarded.toISOString() : String(forwarded);
+    suite.expectEqual(
+      forwardedIso,
+      createdAt.toISOString(),
+      "alert_created_at forwarded to recovery notifier",
+    );
+  },
+);
+
+await suite.test(
   "(R2) recovery notifier returning { skipped: true } is a no-op — does not crash cron or count as error",
   async () => {
     const agg = makeAggregate({

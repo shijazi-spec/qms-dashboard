@@ -23,6 +23,7 @@ import {
   notifyToolHealthOverrideExpired,
   notifyToolHealthRecovery,
   _diffToolHealthConfigOverridesForTests,
+  _formatRecoveryDurationForTests,
   _resetToolHealthNotifierThrottleForTests,
   type ToolHealthBreachNotification,
   type ToolHealthNotifierDeps,
@@ -1421,6 +1422,128 @@ await suite.test(
     suite.expect(
       blocks.includes("P95 latency"),
       `blocks reference p95 latency metric (got: ${blocks.slice(0, 200)}...)`,
+    );
+  },
+);
+
+await suite.test(
+  "recovery: alert_created_at present → Slack message renders 'Open for: …' duration",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const created = new Date("2026-04-25T10:00:00Z");
+    const resolved = new Date("2026-04-25T12:15:00Z"); // 2h 15m later
+    await notifyToolHealthRecovery(
+      sampleRecovery({ alert_created_at: created, resolved_at: resolved }),
+      deps,
+    );
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("Open for") && blocks.includes("2h 15m"),
+      `Slack blocks include duration "2h 15m" (got: ${blocks.slice(0, 400)})`,
+    );
+    const emailText = emailCalls[0]?.text ?? "";
+    const emailHtml = emailCalls[0]?.html ?? "";
+    suite.expect(
+      emailText.includes("Open for: 2h 15m"),
+      `email plaintext includes 'Open for: 2h 15m' (got: ${emailText})`,
+    );
+    suite.expect(
+      emailHtml.includes("Open for") && emailHtml.includes("2h 15m"),
+      `email HTML includes duration (got: ${emailHtml})`,
+    );
+  },
+);
+
+await suite.test(
+  "recovery: alert_created_at omitted → 'Open for' field is hidden (back-compat)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    await notifyToolHealthRecovery(sampleRecovery(), deps);
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      !blocks.includes("Open for"),
+      `Slack blocks omit duration when alert_created_at is missing (got: ${blocks.slice(0, 400)})`,
+    );
+  },
+);
+
+await suite.test(
+  "_formatRecoveryDurationForTests: covers seconds, minutes, hours, days, and edge cases",
+  async () => {
+    const t = (createdMsAgo: number, label: string) => {
+      const resolved = new Date("2026-04-25T12:00:00Z");
+      const created = new Date(resolved.getTime() - createdMsAgo);
+      return _formatRecoveryDurationForTests(created, resolved) === label;
+    };
+    suite.expect(t(45_000, "45s"), "45 seconds");
+    suite.expect(t(12 * 60_000, "12m"), "12 minutes");
+    suite.expect(t(2 * 3600_000 + 15 * 60_000, "2h 15m"), "2h 15m");
+    suite.expect(t(3 * 3600_000, "3h"), "3h with no remainder minutes");
+    suite.expect(t(26 * 3600_000, "1d 2h"), "1d 2h");
+    suite.expect(t(48 * 3600_000, "2d"), "2d with no remainder hours");
+    suite.expectEqual(
+      _formatRecoveryDurationForTests(null),
+      null,
+      "null createdAt → null",
+    );
+    // Negative duration (clock skew) → null, not a "−2m" string
+    suite.expectEqual(
+      _formatRecoveryDurationForTests(
+        new Date("2026-04-25T12:05:00Z"),
+        new Date("2026-04-25T12:00:00Z"),
+      ),
+      null,
+      "negative duration → null",
+    );
+    // DB layers occasionally return TIMESTAMP columns as ISO strings
+    // (or as epoch ms over an RPC boundary). The formatter must handle
+    // those shapes too.
+    suite.expectEqual(
+      _formatRecoveryDurationForTests(
+        "2026-04-25T10:00:00.000Z",
+        "2026-04-25T12:30:00.000Z",
+      ),
+      "2h 30m",
+      "ISO-string inputs are accepted",
+    );
+    suite.expectEqual(
+      _formatRecoveryDurationForTests(
+        new Date("2026-04-25T12:00:00Z").getTime(),
+        new Date("2026-04-25T12:01:30Z").getTime(),
+      ),
+      "1m",
+      "epoch-ms inputs are accepted",
+    );
+    suite.expectEqual(
+      _formatRecoveryDurationForTests("not-a-date"),
+      null,
+      "unparseable string → null (no Invalid Date crash)",
+    );
+  },
+);
+
+await suite.test(
+  "recovery: alert_created_at as ISO string (DB-row shape) still renders duration",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    await notifyToolHealthRecovery(
+      sampleRecovery({
+        alert_created_at: "2026-04-25T10:00:00.000Z",
+        resolved_at: "2026-04-25T11:30:00.000Z",
+      }),
+      deps,
+    );
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("Open for") && blocks.includes("1h 30m"),
+      `string-typed timestamps still render duration "1h 30m" (got: ${blocks.slice(0, 400)})`,
     );
   },
 );

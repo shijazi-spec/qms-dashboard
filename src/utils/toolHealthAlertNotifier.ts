@@ -1276,6 +1276,24 @@ export interface ToolHealthRecoveryNotification {
   alert_id: number;
   /** The auto-resolve note produced by `maybeResolveRecoveredAlert`. */
   detail: string;
+  /**
+   * `created_at` of the alert row that just resolved. Used to render
+   * "Open for: …" in the message so on-call learns at a glance how long
+   * the incident lasted. Optional — older alerts whose `created_at` was
+   * lost (or stubs in tests) just omit the duration line.
+   *
+   * Accepts `Date`, ISO-string, or epoch-ms — the renderer normalises
+   * before computing the duration so DB layers that return raw string
+   * timestamps still produce a valid message.
+   */
+  alert_created_at?: Date | string | number | null;
+  /**
+   * Wall-clock time at which the alert was resolved. Defaults to "now"
+   * when omitted. Exposed mostly so deterministic tests can pin both
+   * endpoints of the duration calculation without monkey-patching `Date`.
+   * Accepts the same shapes as `alert_created_at`.
+   */
+  resolved_at?: Date | string | number | null;
 }
 
 export interface NotifyToolHealthRecoveryResult {
@@ -1292,11 +1310,77 @@ export interface ToolHealthRecoveryNotifierDeps {
   sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
+/**
+ * Coerce a timestamp-shaped value into a real `Date`. The `pg` driver
+ * parses `TIMESTAMP` columns into `Date` for us in production, but DB
+ * access layers vary (raw query results, JSON-serialised rows over an
+ * RPC boundary, test fixtures) so be liberal in what we accept and
+ * strict in what we emit. Returns `null` for any input that cannot
+ * yield a finite epoch — the caller hides the duration field in that
+ * case rather than rendering "Invalid Date" or NaN.
+ */
+function coerceToDate(v: Date | string | number | null | undefined): Date | null {
+  if (v == null) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Render the gap between `created_at` and `resolved_at` (defaulting to
+ * "now") as a compact human string: `45s`, `12m`, `2h 15m`, `3d 4h`.
+ *
+ * Accepts `Date`, ISO-string, or epoch-ms inputs to be robust against
+ * DB-layer variations (e.g. a row deserialised from JSON where
+ * timestamps come back as strings).
+ *
+ * Returns `null` when `createdAt` is missing/invalid, when `resolvedAt`
+ * is invalid, or when the computed duration is negative (e.g. a clock
+ * skew on a stubbed Date) so the renderer can simply omit the field
+ * instead of showing nonsense like "−2m".
+ *
+ * Exported for unit tests.
+ */
+export function _formatRecoveryDurationForTests(
+  createdAt: Date | string | number | null | undefined,
+  resolvedAt: Date | string | number | null | undefined = null,
+): string | null {
+  const created = coerceToDate(createdAt);
+  if (created == null) return null;
+  const resolved = resolvedAt == null ? new Date() : coerceToDate(resolvedAt);
+  if (resolved == null) return null;
+  const diffMs = resolved.getTime() - created.getTime();
+  if (diffMs < 0) return null;
+
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  if (hr < 24) return remMin > 0 ? `${hr}h ${remMin}m` : `${hr}h`;
+  const day = Math.floor(hr / 24);
+  const remHr = hr % 24;
+  return remHr > 0 ? `${day}d ${remHr}h` : `${day}d`;
+}
+
 function buildRecoverySlackBlocks(
   n: ToolHealthRecoveryNotification,
   link: string,
   linkIsAbsolute: boolean,
 ): any[] {
+  const duration = _formatRecoveryDurationForTests(
+    n.alert_created_at ?? null,
+    n.resolved_at ?? null,
+  );
+  const fields: Array<{ type: "mrkdwn"; text: string }> = [
+    { type: "mrkdwn", text: `*Tool:*\n\`${n.tool_name}\`` },
+    { type: "mrkdwn", text: `*Metric:*\n${reasonLabel(n.reason)}` },
+    { type: "mrkdwn", text: `*Agent:*\n${n.agent_name || "—"}` },
+    { type: "mrkdwn", text: `*Alert closed:*\n#${n.alert_id}` },
+  ];
+  if (duration) {
+    fields.push({ type: "mrkdwn", text: `*Open for:*\n${duration}` });
+  }
   const blocks: any[] = [
     {
       type: "header",
@@ -1309,12 +1393,7 @@ function buildRecoverySlackBlocks(
     { type: "divider" },
     {
       type: "section",
-      fields: [
-        { type: "mrkdwn", text: `*Tool:*\n\`${n.tool_name}\`` },
-        { type: "mrkdwn", text: `*Metric:*\n${reasonLabel(n.reason)}` },
-        { type: "mrkdwn", text: `*Agent:*\n${n.agent_name || "—"}` },
-        { type: "mrkdwn", text: `*Alert closed:*\n#${n.alert_id}` },
-      ],
+      fields,
     },
     {
       type: "section",
@@ -1363,12 +1442,18 @@ function buildRecoveryEmailHtml(
 ): string {
   const title = `Tool "${escapeHtml(n.tool_name)}" ${reasonLabel(n.reason)} recovered`;
   const linkHtml = `<a href="${link}">Open the AI Operations panel</a>`;
+  const duration = _formatRecoveryDurationForTests(
+    n.alert_created_at ?? null,
+    n.resolved_at ?? null,
+  );
   return [
     `<h2 style="margin:0 0 12px 0;">${title}</h2>`,
     `<p><strong>Tool:</strong> <code>${escapeHtml(n.tool_name)}</code><br>`,
     `<strong>Metric:</strong> ${reasonLabel(n.reason)}<br>`,
     n.agent_name ? `<strong>Agent:</strong> ${escapeHtml(n.agent_name)}<br>` : "",
-    `<strong>Alert closed:</strong> #${n.alert_id}</p>`,
+    `<strong>Alert closed:</strong> #${n.alert_id}`,
+    duration ? `<br><strong>Open for:</strong> ${escapeHtml(duration)}` : "",
+    `</p>`,
     `<p><strong>Details:</strong><br>${escapeHtml(n.detail)}</p>`,
     `<p>${linkHtml}</p>`,
   ].join("");
@@ -1378,6 +1463,10 @@ function buildRecoveryEmailText(
   n: ToolHealthRecoveryNotification,
   link: string,
 ): string {
+  const duration = _formatRecoveryDurationForTests(
+    n.alert_created_at ?? null,
+    n.resolved_at ?? null,
+  );
   return [
     `Tool health recovered: ${n.tool_name} — ${reasonLabel(n.reason)}`,
     "",
@@ -1385,6 +1474,7 @@ function buildRecoveryEmailText(
     `Metric: ${reasonLabel(n.reason)}`,
     n.agent_name ? `Agent: ${n.agent_name}` : "",
     `Alert closed: #${n.alert_id}`,
+    duration ? `Open for: ${duration}` : "",
     "",
     n.detail,
     "",
