@@ -622,7 +622,7 @@ await suite.test(
 
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Tool-health threshold-tuning notifier (Task #190)
+// Tool-health threshold-tuning notifier (Task #190 / Task #205 / Task #206)
 // ──────────────────────────────────────────────────────────────────────────────
 
 function makeSampleAuditEntries(count: number = 2): ToolHealthConfigAuditEntry[] {
@@ -641,13 +641,17 @@ function makeConfigChangeStubs(opts: {
   slackResult?: boolean | Error;
   auditEntries?: ToolHealthConfigAuditEntry[];
   auditError?: Error;
+  emailResult?: boolean | Error;
 } = {}): {
   deps: ToolHealthConfigChangeNotifierDeps;
   slackCalls: SlackCall[];
+  emailCalls: EmailCall[];
 } {
   const slackCalls: SlackCall[] = [];
+  const emailCalls: EmailCall[] = [];
   return {
     slackCalls,
+    emailCalls,
     deps: {
       sendSlack: async (channel, text, blocks) => {
         slackCalls.push({ channel, text, blocks });
@@ -657,6 +661,11 @@ function makeConfigChangeStubs(opts: {
       getAudit: async (_limit) => {
         if (opts.auditError) throw opts.auditError;
         return opts.auditEntries ?? [];
+      },
+      sendEmail: async ({ to, subject, html, text }) => {
+        emailCalls.push({ to: Array.isArray(to) ? to : [to], subject, html, text });
+        if (opts.emailResult instanceof Error) throw opts.emailResult;
+        return { success: opts.emailResult ?? true };
       },
     },
   };
@@ -939,6 +948,136 @@ await suite.test(
     suite.expectEqual(diff[2]?.field, "errorRateHighPct", "errorRateHighPct third");
     suite.expectEqual(diff[2]?.before, 20, "errorRateHighPct before");
     suite.expectEqual(diff[2]?.after, 25, "errorRateHighPct after");
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Task #206 — config-change email notification
+// ──────────────────────────────────────────────────────────────────────────────
+
+await suite.test(
+  "config change email: opted in with email → sends email with diff and deep-link",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com,lead@example.com";
+    process.env.TOOL_HEALTH_APP_URL = "https://qms.example.com";
+    const { deps, emailCalls, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.emailSent, true, "emailSent");
+    suite.expectEqual(result.slackSent, false, "slackSent false (no slack channel)");
+    suite.expectEqual(result.skipped, false, "not skipped");
+    suite.expectEqual(result.disabled, false, "not disabled");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(emailCalls.length, 1, "one email call");
+    suite.expect(
+      JSON.stringify(emailCalls[0]?.to) === JSON.stringify(["oncall@example.com", "lead@example.com"]),
+      `both recipients (got: ${JSON.stringify(emailCalls[0]?.to)})`,
+    );
+    suite.expect(
+      emailCalls[0]?.subject.includes("Thresholds Updated"),
+      `subject mentions thresholds (got: ${emailCalls[0]?.subject})`,
+    );
+    suite.expect(
+      emailCalls[0]?.subject.includes("Alice Admin"),
+      `subject mentions operator (got: ${emailCalls[0]?.subject})`,
+    );
+    suite.expect(
+      emailCalls[0]?.html.includes("Error rate HIGH"),
+      "HTML body lists changed field label",
+    );
+    suite.expect(
+      emailCalls[0]?.html.includes("https://qms.example.com/dashboard/ai-ops.html?tab=thresholds"),
+      "HTML body includes deep-link to Alert Thresholds tab",
+    );
+    suite.expect(
+      emailCalls[0]?.text.includes("Alert Thresholds tab"),
+      "plain-text body includes link to Alert Thresholds tab",
+    );
+    suite.expect(
+      emailCalls[0]?.html.includes("Sev-2 incident #4321"),
+      "operator note surfaced in email body",
+    );
+  },
+);
+
+await suite.test(
+  "config change email: opted in with no Slack channel and no email → skipped",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, emailCalls, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.skipped, true, "skipped");
+    suite.expectEqual(emailCalls.length, 0, "no email");
+    suite.expectEqual(slackCalls.length, 0, "no slack");
+  },
+);
+
+await suite.test(
+  "config change email: opted in with both Slack and email → both sent",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, emailCalls, slackCalls } = makeConfigChangeStubs();
+    const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.emailSent, true, "emailSent");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(emailCalls.length, 1, "one email call");
+  },
+);
+
+await suite.test(
+  "config change email: email send throws → swallowed, emailSent=false, does not block Slack",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, slackCalls } = makeConfigChangeStubs({ emailResult: new Error("resend down") });
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+      suite.expectEqual(result.emailSent, false, "emailSent false");
+      suite.expectEqual(result.slackSent, true, "slackSent still succeeds");
+      suite.expectEqual(slackCalls.length, 1, "slack still called");
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "config change email: audit_id and note surfaced in email body",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, emailCalls } = makeConfigChangeStubs();
+    await notifyToolHealthConfigChange(
+      sampleConfigChange({ audit_id: 42, note: "emergency freeze" }),
+      deps,
+    );
+    suite.expect(
+      emailCalls[0]?.html.includes("#42"),
+      "audit_id in HTML body",
+    );
+    suite.expect(
+      emailCalls[0]?.text.includes("#42"),
+      "audit_id in plain-text body",
+    );
+    suite.expect(
+      emailCalls[0]?.html.includes("emergency freeze"),
+      "note in HTML body",
+    );
+    suite.expect(
+      emailCalls[0]?.text.includes("emergency freeze"),
+      "note in plain-text body",
+    );
   },
 );
 

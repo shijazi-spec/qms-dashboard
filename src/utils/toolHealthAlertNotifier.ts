@@ -476,11 +476,12 @@ export interface ToolHealthConfigChangeNotification {
 
 export interface NotifyToolHealthConfigChangeResult {
   slackSent: boolean;
+  emailSent: boolean;
   /** True when no override field actually changed (no message posted). */
   noChanges: boolean;
   /** True when `TOOL_HEALTH_CONFIG_NOTIFY` is not opted in. */
   disabled: boolean;
-  /** True when no Slack channel is configured. */
+  /** True when neither Slack nor email is configured. */
   skipped: boolean;
 }
 
@@ -492,6 +493,8 @@ export interface ToolHealthConfigChangeNotifierDeps {
    * inject a stub so no real DB connection is required.
    */
   getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
+  /** Defaults to `sendResendEmail`. */
+  sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
 /**
@@ -649,14 +652,71 @@ function buildConfigChangeBlocks(
   return blocks;
 }
 
+function buildConfigChangeEmailHtml(
+  n: ToolHealthConfigChangeNotification,
+  changes: ReturnType<typeof _diffToolHealthConfigOverridesForTests>,
+  link: string,
+): string {
+  const linkHtml = `<a href="${link}">Open the Alert Thresholds tab</a>`;
+  const diffRows = changes
+    .map(
+      (c) =>
+        `<tr><td style="padding:2px 8px 2px 0"><strong>${escapeHtml(CONFIG_FIELD_LABELS[c.field])}</strong></td>` +
+        `<td style="padding:2px 8px">${c.before == null ? "<em>default</em>" : escapeHtml(String(c.before))}</td>` +
+        `<td style="padding:2px 8px">&rarr;</td>` +
+        `<td style="padding:2px 0">${c.after == null ? "<em>default</em>" : escapeHtml(String(c.after))}</td></tr>`,
+    )
+    .join("");
+  const noteHtml = n.note
+    ? `<p><strong>Note:</strong><br>${escapeHtml(n.note)}</p>`
+    : "";
+  return [
+    `<h2 style="margin:0 0 12px 0;">Tool-health alert thresholds updated</h2>`,
+    `<p><strong>Changed by:</strong> ${escapeHtml(n.changedBy || "—")}<br>`,
+    n.audit_id != null ? `<strong>Audit row:</strong> #${n.audit_id}</p>` : `</p>`,
+    `<p><strong>Changes (${changes.length}):</strong></p>`,
+    `<table style="border-collapse:collapse;font-size:14px;">${diffRows}</table>`,
+    noteHtml,
+    `<p>${linkHtml}</p>`,
+    `<p style="color:#888;font-size:12px;">WalaPlus tool-health monitor | threshold tuning</p>`,
+  ].join("");
+}
+
+function buildConfigChangeEmailText(
+  n: ToolHealthConfigChangeNotification,
+  changes: ReturnType<typeof _diffToolHealthConfigOverridesForTests>,
+  link: string,
+): string {
+  const diffLines = changes.map(
+    (c) =>
+      `  ${CONFIG_FIELD_LABELS[c.field]}: ` +
+      `${c.before == null ? "default" : c.before} → ${c.after == null ? "default" : c.after}`,
+  );
+  return [
+    "Tool-health alert thresholds updated",
+    "",
+    `Changed by: ${n.changedBy || "—"}`,
+    n.audit_id != null ? `Audit row: #${n.audit_id}` : "",
+    "",
+    `Changes (${changes.length}):`,
+    ...diffLines,
+    "",
+    n.note ? `Note: ${n.note}` : "",
+    "",
+    `Open the Alert Thresholds tab: ${link}`,
+  ]
+    .filter((s) => s !== "")
+    .join("\n");
+}
+
 /**
- * Post a Slack message summarising a successful tool-health-config tuning
- * operation. Best-effort: never throws, returns a result object so the
- * caller can log/count.
+ * Post a Slack message and/or send an email summarising a successful
+ * tool-health-config tuning operation. Best-effort: never throws, returns a
+ * result object so the caller can log/count.
  *
  * Safe to call unconditionally — when `TOOL_HEALTH_CONFIG_NOTIFY` is not
- * set to "1", or when no Slack channel is configured, the function returns
- * `{ disabled: true }` / `{ skipped: true }` without sending anything.
+ * set to "1", or when neither Slack nor email is configured, the function
+ * returns `{ disabled: true }` / `{ skipped: true }` without sending anything.
  */
 export async function notifyToolHealthConfigChange(
   notification: ToolHealthConfigChangeNotification,
@@ -664,6 +724,7 @@ export async function notifyToolHealthConfigChange(
 ): Promise<NotifyToolHealthConfigChangeResult> {
   const result: NotifyToolHealthConfigChangeResult = {
     slackSent: false,
+    emailSent: false,
     noChanges: false,
     disabled: false,
     skipped: false,
@@ -675,7 +736,7 @@ export async function notifyToolHealthConfigChange(
   }
 
   const cfg = readConfig();
-  if (!cfg.slackChannel) {
+  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;
     return result;
   }
@@ -692,40 +753,64 @@ export async function notifyToolHealthConfigChange(
   // Deep-link straight to the Alert Thresholds tab — see the
   // `?tab=…` switch in dashboard/ai-ops.html (DOMContentLoaded handler).
   const link = `${cfg.link}?tab=thresholds`;
-  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
 
-  // Fetch the last 3 audit entries from the DB (including the one just
-  // written) so on-call can see "what's changed recently?" in a single
-  // glance. Best-effort: a DB failure must never block the Slack send.
-  // The default loader is imported lazily to avoid a circular-module risk;
-  // tests inject a stub via depsOverride.getAudit.
-  let recentAudit: ToolHealthConfigAuditEntry[] = [];
-  try {
-    const getAuditFn = depsOverride.getAudit
-      ?? (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
-    recentAudit = await getAuditFn(3);
-  } catch (auditErr) {
-    console.error(
-      "[ToolHealthNotifier] Failed to load recent audit entries for Slack block (best-effort):",
-      auditErr,
-    );
+  if (cfg.slackChannel) {
+    const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+
+    // Fetch the last 3 audit entries from the DB (including the one just
+    // written) so on-call can see "what's changed recently?" in a single
+    // glance. Best-effort: a DB failure must never block the Slack send.
+    // The default loader is imported lazily to avoid a circular-module risk;
+    // tests inject a stub via depsOverride.getAudit.
+    let recentAudit: ToolHealthConfigAuditEntry[] = [];
+    try {
+      const getAuditFn = depsOverride.getAudit
+        ?? (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
+      recentAudit = await getAuditFn(3);
+    } catch (auditErr) {
+      console.error(
+        "[ToolHealthNotifier] Failed to load recent audit entries for Slack block (best-effort):",
+        auditErr,
+      );
+    }
+
+    const fallback =
+      `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
+      `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
+    try {
+      result.slackSent = await sendSlack(
+        cfg.slackChannel,
+        fallback,
+        buildConfigChangeBlocks(notification, changes, link, cfg.linkIsAbsolute, recentAudit),
+      );
+    } catch (err) {
+      console.error(
+        "[ToolHealthNotifier] Slack send threw for config change notification:",
+        err,
+      );
+      result.slackSent = false;
+    }
   }
 
-  const fallback =
-    `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
-    `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
-  try {
-    result.slackSent = await sendSlack(
-      cfg.slackChannel,
-      fallback,
-      buildConfigChangeBlocks(notification, changes, link, cfg.linkIsAbsolute, recentAudit),
-    );
-  } catch (err) {
-    console.error(
-      "[ToolHealthNotifier] Slack send threw for config change notification:",
-      err,
-    );
-    result.slackSent = false;
+  if (cfg.emailRecipients.length > 0) {
+    const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+    const subject =
+      `[Tool Health · Thresholds Updated] ${changes.length} change${changes.length === 1 ? "" : "s"} by ${notification.changedBy || "—"}`;
+    try {
+      const sendResult = await sendEmail({
+        to: cfg.emailRecipients,
+        subject,
+        html: buildConfigChangeEmailHtml(notification, changes, link),
+        text: buildConfigChangeEmailText(notification, changes, link),
+      });
+      result.emailSent = !!sendResult?.success;
+    } catch (err) {
+      console.error(
+        "[ToolHealthNotifier] Email send threw for config change notification:",
+        err,
+      );
+      result.emailSent = false;
+    }
   }
 
   return result;
