@@ -752,22 +752,176 @@ export async function resolveEffectiveAiMetricsRetentionDays(): Promise<number> 
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Prune-run history table — bootstrap (idempotent, called from pruneOldAiMetrics)
+//
+// Records the result of every `pruneOldAiMetrics()` invocation so the AI
+// Operations dashboard can surface the most recent prune cron run alongside
+// total row count and oldest-row age. Without this, admins have no way to
+// tell whether the daily prune is keeping up with insert volume.
+// ──────────────────────────────────────────────────────────────────────────────
+let pruneRunsTableReady: Promise<void> | null = null;
+
+async function ensurePruneRunsTable(): Promise<void> {
+  if (pruneRunsTableReady) return pruneRunsTableReady;
+  pruneRunsTableReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ai_metrics_prune_runs (
+          id              BIGSERIAL PRIMARY KEY,
+          ran_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          retention_days  INTEGER     NOT NULL,
+          rows_deleted    INTEGER     NOT NULL DEFAULT 0,
+          duration_ms     INTEGER     NOT NULL DEFAULT 0,
+          success         BOOLEAN     NOT NULL DEFAULT TRUE,
+          error_message   TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ai_metrics_prune_runs_ran_at
+          ON ai_metrics_prune_runs (ran_at DESC);
+      `);
+    } catch (err) {
+      pruneRunsTableReady = null;
+      throw err;
+    }
+  })();
+  return pruneRunsTableReady;
+}
+
+async function recordPruneRun(row: {
+  retention_days: number;
+  rows_deleted: number;
+  duration_ms: number;
+  success: boolean;
+  error_message?: string | null;
+}): Promise<void> {
+  try {
+    await ensurePruneRunsTable();
+    await pool.query(
+      `INSERT INTO ai_metrics_prune_runs
+         (retention_days, rows_deleted, duration_ms, success, error_message)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        row.retention_days,
+        row.rows_deleted,
+        row.duration_ms,
+        row.success,
+        redactErrorMessageForStorage(row.error_message),
+      ],
+    );
+  } catch (err) {
+    console.error('[aiTelemetry] Failed to record prune run:', err);
+  }
+}
+
 export async function pruneOldAiMetrics(retentionDays?: number): Promise<number> {
+  const startedAt = Date.now();
+  const days =
+    typeof retentionDays === 'number' && Number.isFinite(retentionDays) && retentionDays > 0
+      ? Math.max(1, Math.floor(retentionDays))
+      : resolveAiMetricsRetentionDays();
   try {
     await ensureAiMetricsTable();
-    const days =
-      typeof retentionDays === 'number' && Number.isFinite(retentionDays) && retentionDays > 0
-        ? Math.max(1, Math.floor(retentionDays))
-        : resolveAiMetricsRetentionDays();
     const result = await pool.query(
       `DELETE FROM ai_call_metrics WHERE started_at < NOW() - MAKE_INTERVAL(days => $1)`,
       [days],
     );
-    return result.rowCount ?? 0;
+    const deleted = result.rowCount ?? 0;
+    await recordPruneRun({
+      retention_days: days,
+      rows_deleted: deleted,
+      duration_ms: Date.now() - startedAt,
+      success: true,
+    });
+    return deleted;
   } catch (err) {
     console.error('[aiTelemetry] Pruning failed:', err);
+    await recordPruneRun({
+      retention_days: days,
+      rows_deleted: 0,
+      duration_ms: Date.now() - startedAt,
+      success: false,
+      error_message: err instanceof Error ? err.message : String(err),
+    });
     return 0;
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Table-size telemetry — backs the "Storage Health" KPI tiles on /ai-ops
+// (Task #505). Surfaces total row count, oldest-row age in days, and the
+// most recent prune cron run so admins can tell at a glance whether the
+// configured retention window is keeping the table at a reasonable size.
+// ──────────────────────────────────────────────────────────────────────────────
+export interface AiMetricsTableStats {
+  rowCount: number;
+  oldestStartedAt: string | null;
+  oldestAgeDays: number | null;
+  retentionDays: number;
+  exceedsRetention: boolean;
+  lastPrune: {
+    ranAt: string;
+    retentionDays: number;
+    rowsDeleted: number;
+    durationMs: number;
+    success: boolean;
+    errorMessage: string | null;
+  } | null;
+}
+
+export async function getAiMetricsTableStats(): Promise<AiMetricsTableStats> {
+  await ensureAiMetricsTable();
+  await ensurePruneRunsTable();
+  const retentionDays = resolveAiMetricsRetentionDays();
+
+  // Single round-trip: row count + oldest started_at + age in days.
+  const sizeResult = await pool.query(
+    `SELECT
+       COUNT(*)::BIGINT                                              AS row_count,
+       MIN(started_at)                                                AS oldest_started_at,
+       EXTRACT(EPOCH FROM (NOW() - MIN(started_at))) / 86400.0        AS oldest_age_days
+     FROM ai_call_metrics`,
+  );
+  const sizeRow = sizeResult.rows[0] ?? {};
+  const rowCount = Number(sizeRow.row_count ?? 0);
+  const oldestStartedAt = sizeRow.oldest_started_at
+    ? new Date(sizeRow.oldest_started_at).toISOString()
+    : null;
+  const oldestAgeDays =
+    sizeRow.oldest_age_days != null ? Number(sizeRow.oldest_age_days) : null;
+
+  const pruneResult = await pool.query(
+    `SELECT ran_at, retention_days, rows_deleted, duration_ms, success, error_message
+       FROM ai_metrics_prune_runs
+      ORDER BY ran_at DESC
+      LIMIT 1`,
+  );
+  const lastPruneRow = pruneResult.rows[0];
+  const lastPrune = lastPruneRow
+    ? {
+        ranAt: new Date(lastPruneRow.ran_at).toISOString(),
+        retentionDays: Number(lastPruneRow.retention_days),
+        rowsDeleted: Number(lastPruneRow.rows_deleted),
+        durationMs: Number(lastPruneRow.duration_ms),
+        success: Boolean(lastPruneRow.success),
+        errorMessage: lastPruneRow.error_message ?? null,
+      }
+    : null;
+
+  // The prune is "failing or behind schedule" when at least one row exists
+  // older than the configured retention window. A small grace allowance
+  // (the cron only runs once per day) is intentionally NOT applied here —
+  // the dashboard tile owns the visual styling and can pick its own
+  // threshold for amber vs red if desired in the future.
+  const exceedsRetention = oldestAgeDays != null && oldestAgeDays > retentionDays;
+
+  return {
+    rowCount,
+    oldestStartedAt,
+    oldestAgeDays,
+    retentionDays,
+    exceedsRetention,
+    lastPrune,
+  };
 }
 
 /**

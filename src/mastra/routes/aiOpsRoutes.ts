@@ -14,6 +14,7 @@ import {
   getParentCallsForTool,
   getKnownAgentNames,
   getLastPromptVersionPurgeRun,
+  getAiMetricsTableStats,
   FEEDBACK_COMMENT_MAX_LEN,
   MODEL_PRICE_TABLE,
   DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
@@ -318,6 +319,34 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] summary error:", error);
           return c.json({ error: "Failed to fetch summary" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Storage-health KPI tile group on /ai-ops (Task #505).
+   *
+   * Returns the total `ai_call_metrics` row count, the age in days of the
+   * oldest row, the configured retention window, and the result of the
+   * most recent `pruneOldAiMetrics()` cron run. The dashboard renders an
+   * amber/red warning when `exceedsRetention` is true — i.e. there is at
+   * least one row older than `AI_METRICS_RETENTION_DAYS`, which means the
+   * daily prune is failing or behind schedule.
+   */
+  {
+    path: "/api/ai-ops/metrics-table-stats",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const data = await getAiMetricsTableStats();
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] metrics-table-stats error:", error);
+          return c.json({ error: "Failed to fetch metrics table stats" }, 500);
         }
       };
     },

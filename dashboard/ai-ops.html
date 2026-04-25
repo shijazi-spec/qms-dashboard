@@ -333,6 +333,39 @@
       </div>
     </div>
 
+    <!-- Storage Health KPI tiles (Task #505).
+
+         Surfaces total ai_call_metrics row count, the age in days of the
+         oldest row, and the result of the most recent prune cron run so
+         admins can tell at a glance whether the configured retention
+         window is keeping the table at a reasonable size. The "oldest row"
+         tile flips to amber/red when the oldest row exceeds the
+         configured AI_METRICS_RETENTION_DAYS — i.e. the daily prune is
+         failing or behind schedule. -->
+    <section class="mb-6" data-testid="section-metrics-table-stats">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" data-i18n="ai_ops.storage_health_title">AI Usage Table — Storage Health</h2>
+        <span class="text-xs text-gray-500" data-testid="text-metrics-retention-window" id="metrics-retention-window">—</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="metrics-table-stats-cards">
+        <div class="stat-card" data-testid="card-metrics-row-count">
+          <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.storage_row_count">Total Rows</p>
+          <p class="text-2xl font-bold text-gray-900 mt-1" id="metrics-row-count" data-testid="text-metrics-row-count">—</p>
+          <p class="text-xs text-gray-400 mt-1">In <code>ai_call_metrics</code></p>
+        </div>
+        <div class="stat-card" id="metrics-oldest-card" data-testid="card-metrics-oldest-row">
+          <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.storage_oldest_row">Oldest Row Age</p>
+          <p class="text-2xl font-bold text-gray-900 mt-1" id="metrics-oldest-age" data-testid="text-metrics-oldest-age">—</p>
+          <p class="text-xs text-gray-400 mt-1" id="metrics-oldest-detail" data-testid="text-metrics-oldest-detail">—</p>
+        </div>
+        <div class="stat-card" data-testid="card-metrics-last-prune">
+          <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.storage_last_prune">Last Prune Run</p>
+          <p class="text-2xl font-bold text-gray-900 mt-1" id="metrics-last-prune-deleted" data-testid="text-metrics-last-prune-deleted">—</p>
+          <p class="text-xs text-gray-400 mt-1" id="metrics-last-prune-detail" data-testid="text-metrics-last-prune-detail">—</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Tabs -->
     <div class="border-b border-gray-200 mb-6">
       <nav class="flex space-x-8">
@@ -829,6 +862,97 @@
         if (priceTable) renderPriceTable(priceTable);
       } catch (e) {
         console.error('Summary load error', e);
+      }
+    }
+
+    // Storage Health KPI tile group (Task #505).
+    //
+    // Hits /api/ai-ops/metrics-table-stats for total row count, the age in
+    // days of the oldest row, and the result of the most recent prune cron
+    // run. The "Oldest Row Age" tile flips to amber/red when the oldest
+    // row exceeds the configured retention window — i.e. the daily prune
+    // cron is failing or behind schedule. We rebuild the card's class list
+    // each load so a recovered prune (oldest age back inside the window)
+    // restores the neutral palette without a page reload.
+    function fmtAgeDays(d) {
+      if (d == null || !Number.isFinite(Number(d))) return '—';
+      const n = Number(d);
+      if (n < 1) {
+        const hrs = Math.max(0, Math.round(n * 24));
+        return hrs === 1 ? '1 hr' : `${hrs} hrs`;
+      }
+      const rounded = n < 10 ? Math.round(n * 10) / 10 : Math.round(n);
+      return `${rounded.toLocaleString()} day${rounded === 1 ? '' : 's'}`;
+    }
+
+    async function loadMetricsTableStats() {
+      const rowCountEl     = document.getElementById('metrics-row-count');
+      const oldestAgeEl    = document.getElementById('metrics-oldest-age');
+      const oldestDetailEl = document.getElementById('metrics-oldest-detail');
+      const oldestCardEl   = document.getElementById('metrics-oldest-card');
+      const lastDeletedEl  = document.getElementById('metrics-last-prune-deleted');
+      const lastDetailEl   = document.getElementById('metrics-last-prune-detail');
+      const retentionEl    = document.getElementById('metrics-retention-window');
+      if (!rowCountEl || !oldestAgeEl || !lastDeletedEl) return;
+      try {
+        const { data } = await apiFetch('/api/ai-ops/metrics-table-stats');
+        const stats = data || {};
+        rowCountEl.textContent = (stats.rowCount || 0).toLocaleString();
+        if (retentionEl) {
+          retentionEl.textContent = _t('dyn.ai_ops.storage_retention_label', { days: stats.retentionDays });
+        }
+
+        oldestAgeEl.textContent = fmtAgeDays(stats.oldestAgeDays);
+        if (stats.oldestStartedAt) {
+          oldestDetailEl.textContent = _t('dyn.ai_ops.storage_oldest_row_prefix', { ts: fmtDate(stats.oldestStartedAt) });
+        } else {
+          oldestDetailEl.textContent = _t('dyn.ai_ops.storage_no_rows');
+        }
+
+        // Reset to the neutral stat-card palette, then layer the warning
+        // border/background on top so a recovered prune cleans up after
+        // itself without a page reload.
+        oldestCardEl.className = 'stat-card';
+        oldestAgeEl.className = 'text-2xl font-bold text-gray-900 mt-1';
+        oldestDetailEl.className = 'text-xs text-gray-400 mt-1';
+        oldestCardEl.removeAttribute('data-warn');
+        if (stats.exceedsRetention) {
+          oldestCardEl.className = 'stat-card border-red-300 bg-red-50';
+          oldestAgeEl.className = 'text-2xl font-bold text-red-700 mt-1';
+          oldestDetailEl.className = 'text-xs text-red-700 mt-1 font-medium';
+          oldestCardEl.setAttribute('data-warn', 'true');
+          oldestDetailEl.textContent = _t('dyn.ai_ops.storage_oldest_exceeds', {
+            ts: fmtDate(stats.oldestStartedAt),
+            days: stats.retentionDays,
+          });
+        }
+
+        const lp = stats.lastPrune;
+        if (!lp) {
+          lastDeletedEl.textContent = '—';
+          lastDetailEl.textContent = _t('dyn.ai_ops.storage_no_prune_recorded');
+        } else {
+          const deletedLabel = _t('dyn.ai_ops.storage_rows_deleted', { n: (lp.rowsDeleted || 0).toLocaleString() });
+          lastDeletedEl.textContent = lp.success ? deletedLabel : _t('dyn.ai_ops.storage_failed_label');
+          const ago = fmtRelTime(lp.ranAt);
+          if (lp.success) {
+            lastDetailEl.textContent = _t('dyn.ai_ops.storage_last_run_meta', {
+              ago: ago,
+              days: lp.retentionDays,
+              ms: (lp.durationMs || 0).toLocaleString(),
+            });
+          } else if (lp.errorMessage) {
+            lastDetailEl.textContent = _t('dyn.ai_ops.storage_last_run_failed_with_msg', {
+              ago: ago,
+              msg: lp.errorMessage,
+            });
+          } else {
+            lastDetailEl.textContent = _t('dyn.ai_ops.storage_last_run_failed', { ago: ago });
+          }
+        }
+      } catch (e) {
+        console.error('Metrics table stats load error', e);
+        if (oldestDetailEl) oldestDetailEl.textContent = _t('dyn.ai_ops.storage_failed_load');
       }
     }
 
@@ -3713,6 +3837,7 @@
 
     function refreshAll() {
       loadSummary();
+      loadMetricsTableStats();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
       loadToolHealthAlertsTrend();
@@ -3809,6 +3934,7 @@
         }
       });
       loadSummary();
+      loadMetricsTableStats();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
       initToolHealthHistoryToggle();
