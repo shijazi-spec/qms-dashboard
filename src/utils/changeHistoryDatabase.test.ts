@@ -270,13 +270,14 @@ console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
 }
 
 // ---------------------------------------------------------------------------
-// Section 4 — credential-shaped strings under NON-sensitive field names
+// Section 4a — credential-shaped strings under NON-sensitive field names
 //
 // A caller may pass a raw credential as the value of an innocuously-named
 // field (e.g. `fieldChanged = "notes"`, value = a JWT or bcrypt hash).  The
 // key-based deny list in redactSensitiveFields() cannot see these because it
 // only inspects field names.  A second, regex-based pass over every string
-// leaf (deepRedactSecretLikeStrings) must scrub them before INSERT.
+// leaf (now consolidated into redactSensitiveDeep — Task #257) must scrub
+// them before INSERT.
 // ---------------------------------------------------------------------------
 
 console.log("\n=== credential-shaped values under innocuous field names ===\n");
@@ -418,6 +419,117 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
     assert(
       !oldParam.includes(REDACTED_SENTINEL) && !newParam.includes(REDACTED_SENTINEL),
       "NC/notes/innocuous: REDACTED sentinel NOT present (regex is targeted)",
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section 4b — credential-shaped substrings inside INNOCUOUS nested fields
+//
+// Task #257: the previous redaction chain only ran the regex deny list at the
+// top level, so a `ghp_…` / `sk-…` / JWT / bcrypt embedded inside a nested
+// non-sensitive field (e.g. `notes`, `description`, `evidence`) slipped past
+// `redactSensitiveFields()`. Switching to `redactSensitiveDeep()` walks every
+// string leaf with the regex pass, so the sentinel must now appear in the
+// stored INSERT params even when the surrounding key is innocuous.
+// ---------------------------------------------------------------------------
+
+console.log(
+  "\n=== credential-shaped substrings inside non-sensitive nested fields ===\n",
+);
+
+const GHP_TOKEN = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const SK_KEY = "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const JWT_TOKEN =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+
+{
+  captured.length = 0;
+  await logNCChange(
+    1,
+    "investigation_notes",
+    "Previous run referenced github token: ghp_OLDTOKEN0123456789ABCDEFGHIJKLMN",
+    {
+      author: "alice",
+      notes: `Reset the GitHub PAT to ${GHP_TOKEN} per playbook step 3.`,
+      attachments: [
+        { name: "post-mortem.md", contents: `Bearer ${JWT_TOKEN} was rotated.` },
+      ],
+    },
+    "test-runner",
+    `Reason of record: rotated key was ${SK_KEY}, see audit log.`,
+  );
+  const params = lastInsertParams();
+  assert(params !== null, "NC/credential-substring: pool.query was called");
+  if (params) {
+    const oldParam = String(params[2] ?? "");
+    const newParam = String(params[3] ?? "");
+    const reasonParam = String(params[5] ?? "");
+    const combined = `${oldParam}${newParam}${reasonParam}`;
+
+    assert(
+      !combined.includes(GHP_TOKEN),
+      "NC/credential-substring: ghp_… token in nested `notes` is NOT present in INSERT params",
+    );
+    assert(
+      !combined.includes(JWT_TOKEN),
+      "NC/credential-substring: JWT in nested attachments[].contents is NOT present in INSERT params",
+    );
+    assert(
+      !combined.includes(SK_KEY),
+      "NC/credential-substring: sk-… key inside `change_reason` is NOT present in INSERT params",
+    );
+    assert(
+      !oldParam.includes("ghp_OLDTOKEN0123456789ABCDEFGHIJKLMN"),
+      "NC/credential-substring: top-level string `oldValue` regex-scrubbed too",
+    );
+    assert(
+      newParam.includes(REDACTED_SENTINEL),
+      "NC/credential-substring: REDACTED sentinel IS present in serialised new_value JSON",
+    );
+    assert(
+      reasonParam.includes(REDACTED_SENTINEL),
+      "NC/credential-substring: REDACTED sentinel IS present in change_reason",
+    );
+  }
+}
+
+{
+  captured.length = 0;
+  await logCAPAChange(
+    7,
+    "evidence",
+    null,
+    {
+      submitted_by: "bob",
+      evidence: `Old AWS access key AKIAIOSFODNN7EXAMPLE rotated; new key issued via vault.`,
+      slack_thread: {
+        url: "https://example.slack.com/archives/CXYZ/p123",
+        excerpt: `Bearer ${JWT_TOKEN} was used in the broken job.`,
+      },
+    },
+    "test-runner",
+  );
+  const params = lastInsertParams();
+  assert(params !== null, "CAPA/credential-substring: pool.query was called");
+  if (params) {
+    const newParam = String(params[3] ?? "");
+
+    assert(
+      !newParam.includes("AKIAIOSFODNN7EXAMPLE"),
+      "CAPA/credential-substring: AWS access key inside nested `evidence` string is NOT present",
+    );
+    assert(
+      !newParam.includes(JWT_TOKEN),
+      "CAPA/credential-substring: JWT inside slack_thread.excerpt is NOT present",
+    );
+    assert(
+      newParam.includes(REDACTED_SENTINEL),
+      "CAPA/credential-substring: REDACTED sentinel IS present in serialised new_value JSON",
+    );
+    assert(
+      newParam.includes("submitted_by") && newParam.includes("bob"),
+      "CAPA/credential-substring: object is JSON-serialised (not collapsed to [object Object])",
     );
   }
 }
