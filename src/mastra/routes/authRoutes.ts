@@ -360,12 +360,15 @@ export const authRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         const secure = isSecureDomain();
-        const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
+        const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
+        // Security: admin_key must always carry HttpOnly + Secure + SameSite=Strict —
+        // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
+        const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
         // Clear both auth cookies so the unified /api/auth/me endpoint stops
         // reporting the caller as authenticated regardless of which auth path
         // they used (OIDC session or admin API key).
-        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`, { append: true });
-        c.header('Set-Cookie', `admin_key=; ${cookieFlags}`, { append: true });
+        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${sessionCookieFlags}`, { append: true });
+        c.header('Set-Cookie', `admin_key=; ${adminKeyCookieFlags}`, { append: true });
         try {
           const { logEvent } = await import("../../utils/eventLogsDatabase");
           await logEvent({ actionType: 'LOGOUT', entityType: 'SESSION', entityId: 'session', entityName: 'user-session', description: 'User logged out', module: 'auth', severity: 'INFO' });
@@ -380,12 +383,15 @@ export const authRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         const secure = isSecureDomain();
-        const cookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
+        const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? '; Secure' : ''}`;
+        // Security: admin_key must always carry HttpOnly + Secure + SameSite=Strict —
+        // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
+        const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
         // Clear both auth cookies (session + admin_key) so the unified
         // /api/auth/me endpoint won't keep reporting the caller as
         // authenticated after they sign out.
-        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${cookieFlags}`, { append: true });
-        c.header('Set-Cookie', `admin_key=; ${cookieFlags}`, { append: true });
+        c.header('Set-Cookie', `${SESSION_COOKIE_NAME}=; ${sessionCookieFlags}`, { append: true });
+        c.header('Set-Cookie', `admin_key=; ${adminKeyCookieFlags}`, { append: true });
 
         try {
           const config = await getOidcConfig();
