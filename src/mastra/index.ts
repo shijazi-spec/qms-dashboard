@@ -64,6 +64,7 @@ import { onBootRedactionSweep } from "../utils/redactHistoricalLogs";
 import { exportDownloadRoutes } from "./routes/exportDownloadRoutes";
 import { assertAdminApiKeyStrengthOrThrow } from "../utils/rbacMiddleware";
 
+import { logger as safeLogger } from "../utils/logger";
 // ─── ADMIN_API_KEY strength gate ──────────────────────────────────────────────
 // Runs *before* `new Mastra({...})` below registers any `/api/admin/*` route,
 // so a weak rotation value (e.g. "admin123") aborts startup instead of quietly
@@ -87,15 +88,25 @@ class ProductionPinoLogger extends MastraLogger {
       name: options.name || "app",
       level: options.level || LogLevel.INFO,
       base: {},
-      formatters: { level: (label: string, _number: number) => ({ level: label }) },
+      formatters: {
+        level: (label: string, _number: number) => ({ level: label }),
+      },
       timestamp: () => `,"time":"${new Date(Date.now()).toISOString()}"`,
     });
   }
 
-  debug(message: string, args: Record<string, any> = {}): void { this.logger.debug(args, message); }
-  info(message: string, args: Record<string, any> = {}): void { this.logger.info(args, message); }
-  warn(message: string, args: Record<string, any> = {}): void { this.logger.warn(args, message); }
-  error(message: string, args: Record<string, any> = {}): void { this.logger.error(args, message); }
+  debug(message: string, args: Record<string, any> = {}): void {
+    this.logger.debug(args, message);
+  }
+  info(message: string, args: Record<string, any> = {}): void {
+    this.logger.info(args, message);
+  }
+  warn(message: string, args: Record<string, any> = {}): void {
+    this.logger.warn(args, message);
+  }
+  error(message: string, args: Record<string, any> = {}): void {
+    this.logger.error(args, message);
+  }
 }
 
 export const mastra = new Mastra({
@@ -110,7 +121,13 @@ export const mastra = new Mastra({
     }),
   },
   bundler: {
-    externals: ["@slack/web-api", "inngest", "inngest/hono", "hono", "hono/streaming"],
+    externals: [
+      "@slack/web-api",
+      "inngest",
+      "inngest/hono",
+      "hono",
+      "hono/streaming",
+    ],
     sourcemap: true,
   },
   server: {
@@ -228,15 +245,22 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   const port = process.env.PORT || "5000";
   const adminKey = process.env.ADMIN_API_KEY;
   if (!adminKey) {
-    console.log("⏭️  [CacheWarmer] ADMIN_API_KEY not set — skipping cache pre-warm");
+    safeLogger.info(
+      "⏭️  [CacheWarmer] ADMIN_API_KEY not set — skipping cache pre-warm",
+    );
     return;
   }
-  const endpoints = ["/api/agents/performance", "/api/dashboard/layouts-breakdown"];
+  const endpoints = [
+    "/api/agents/performance",
+    "/api/dashboard/layouts-breakdown",
+  ];
   const FETCH_TIMEOUT_MS = 5 * 60 * 1000;
   let inflight = false;
   const warm = async () => {
     if (inflight) {
-      console.log("⏭️  [CacheWarmer] Previous warm still running — skipping this cycle");
+      safeLogger.info(
+        "⏭️  [CacheWarmer] Previous warm still running — skipping this cycle",
+      );
       return;
     }
     inflight = true;
@@ -252,14 +276,22 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
           });
           const dt = ((Date.now() - t0) / 1000).toFixed(1);
           if (res.ok) {
-            console.log(`🔥 [CacheWarmer] Warmed ${ep} in ${dt}s (status ${res.status})`);
+            safeLogger.info(
+              `🔥 [CacheWarmer] Warmed ${ep} in ${dt}s (status ${res.status})`,
+            );
           } else {
-            console.warn(`⚠️  [CacheWarmer] ${ep} returned ${res.status} in ${dt}s`);
+            safeLogger.warn(
+              `⚠️  [CacheWarmer] ${ep} returned ${res.status} in ${dt}s`,
+            );
           }
         } catch (err: any) {
           const dt = ((Date.now() - t0) / 1000).toFixed(1);
-          const reason = err?.name === "AbortError" ? "timeout" : (err?.message || err);
-          console.warn(`⚠️  [CacheWarmer] Failed to warm ${ep} after ${dt}s:`, reason);
+          const reason =
+            err?.name === "AbortError" ? "timeout" : err?.message || err;
+          safeLogger.warn(
+            `⚠️  [CacheWarmer] Failed to warm ${ep} after ${dt}s:`,
+            reason,
+          );
         } finally {
           clearTimeout(timeoutId);
         }
@@ -269,7 +301,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
     }
   };
   const startTimer = setTimeout(() => {
-    console.log("🔥 [CacheWarmer] Starting initial cache warm...");
+    safeLogger.info("🔥 [CacheWarmer] Starting initial cache warm...");
     warm();
   }, 30 * 1000);
   const refreshTimer = setInterval(warm, 13 * 60 * 1000);
@@ -299,13 +331,17 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
     clearInterval(g.__walaplus_scheduledJobFallback.refreshTimer);
   }
   if (!process.env.DATABASE_URL) {
-    console.log("⏭️  [ScheduledJobFallback] DATABASE_URL not set — skipping in-process fallback");
+    safeLogger.info(
+      "⏭️  [ScheduledJobFallback] DATABASE_URL not set — skipping in-process fallback",
+    );
     return;
   }
   let inflight = false;
   const tick = async () => {
     if (inflight) {
-      console.log("⏭️  [ScheduledJobFallback] Previous cycle still running — skipping this tick");
+      safeLogger.info(
+        "⏭️  [ScheduledJobFallback] Previous cycle still running — skipping this tick",
+      );
       return;
     }
     inflight = true;
@@ -317,7 +353,10 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         runQualityAuditIfStale,
         runKPIAutoCalcIfStale,
       } = await import("../utils/scheduledJobs");
-      const helpers: Array<{ name: string; fn: () => Promise<{ ran: boolean; ageHours: number }> }> = [
+      const helpers: Array<{
+        name: string;
+        fn: () => Promise<{ ran: boolean; ageHours: number }>;
+      }> = [
         { name: "RateLimit429Pruner", fn: () => runPruneRateLimit429IfStale() },
         { name: "DuplicateRadar", fn: () => runDuplicateScanIfStale() },
         { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },
@@ -328,10 +367,12 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         try {
           const out = await h.fn();
           if (out.ran) {
-            console.log(`⏰ [ScheduledJobFallback] ${h.name} ran (ageHours=${out.ageHours === Infinity ? '∞' : out.ageHours.toFixed(1)})`);
+            safeLogger.info(
+              `⏰ [ScheduledJobFallback] ${h.name} ran (ageHours=${out.ageHours === Infinity ? "∞" : out.ageHours.toFixed(1)})`,
+            );
           }
         } catch (err) {
-          console.error(`[ScheduledJobFallback] ${h.name} threw:`, err);
+          safeLogger.error(`[ScheduledJobFallback] ${h.name} threw:`, err);
         }
       }
     } finally {
@@ -342,12 +383,12 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   // becomes an unhandled rejection (timer callbacks don't await the promise).
   const safeTick = () => {
     tick().catch((err) => {
-      console.error("[ScheduledJobFallback] Unhandled tick error:", err);
+      safeLogger.error("[ScheduledJobFallback] Unhandled tick error:", err);
     });
   };
   // Initial tick ~60s after boot so DB pools and routes are fully ready.
   const startTimer = setTimeout(() => {
-    console.log("⏰ [ScheduledJobFallback] Starting initial pass...");
+    safeLogger.info("⏰ [ScheduledJobFallback] Starting initial pass...");
     safeTick();
   }, 60 * 1000);
   // Re-check every 45 minutes (between the suggested 30–60 min cadence).
@@ -367,11 +408,16 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
 (function startBootRedactionSweep() {
   if (process.env.DATABASE_URL) {
     setTimeout(() => {
-      onBootRedactionSweep().catch(err => {
-        console.error("[Redaction] Unexpected error in boot sweep wrapper:", err);
+      onBootRedactionSweep().catch((err) => {
+        safeLogger.error(
+          "[Redaction] Unexpected error in boot sweep wrapper:",
+          err,
+        );
       });
     }, 5 * 1000);
   } else {
-    console.log("[Redaction] DATABASE_URL not set — boot redaction sweep skipped");
+    safeLogger.info(
+      "[Redaction] DATABASE_URL not set — boot redaction sweep skipped",
+    );
   }
 })();

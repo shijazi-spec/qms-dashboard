@@ -31,8 +31,9 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { registerApiRoute } from "../mastra/inngest";
 import { Mastra } from "@mastra/core";
 
+import { logger as safeLogger } from "../utils/logger";
 if (!process.env.TELEGRAM_BOT_TOKEN) {
-  console.warn(
+  safeLogger.warn(
     "Trying to initialize Telegram triggers without TELEGRAM_BOT_TOKEN. Can you confirm that the Telegram integration is configured correctly?",
   );
 }
@@ -66,7 +67,7 @@ export function registerTelegramTrigger({
           const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
           if (webhookSecret) {
             const url = new URL(c.req.url);
-            const token = url.searchParams.get('secret');
+            const token = url.searchParams.get("secret");
             if (token !== webhookSecret) {
               logger?.warn("🚫 [Telegram] Invalid webhook secret");
               return c.text("Unauthorized", 403);

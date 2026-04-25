@@ -1,4 +1,5 @@
-import pg from 'pg';
+import pg from "pg";
+import { logger } from "./logger";
 const { Pool } = pg;
 
 const pool = new Pool({
@@ -8,17 +9,17 @@ const pool = new Pool({
 export interface CallRecord {
   id?: number;
   call_id: string;
-  source: 'five9' | 'twilio' | 'mobile' | 'google_meet' | 'manual' | 'api';
+  source: "five9" | "twilio" | "mobile" | "google_meet" | "manual" | "api";
   lead_id?: string;
   deal_id?: string;
   contact_name?: string;
   agent_email: string;
   agent_name?: string;
-  direction: 'inbound' | 'outbound';
+  direction: "inbound" | "outbound";
   duration_seconds?: number;
   recording_url?: string;
   call_date?: Date;
-  status: 'pending' | 'processing' | 'analyzed' | 'failed';
+  status: "pending" | "processing" | "analyzed" | "failed";
   metadata?: any;
   created_at?: Date;
   updated_at?: Date;
@@ -39,7 +40,7 @@ export interface CallAnalysis {
   id?: number;
   call_record_id: number;
   sentiment_score: number;
-  sentiment_label: 'positive' | 'neutral' | 'negative';
+  sentiment_label: "positive" | "neutral" | "negative";
   voice_of_customer?: string;
   objections_detected?: any;
   key_topics?: any;
@@ -55,7 +56,7 @@ export interface CallAnalysis {
 export interface CallQAScore {
   id?: number;
   call_record_id: number;
-  scorecard_type: 'sdr' | 'sales';
+  scorecard_type: "sdr" | "sales";
   total_score: number;
   max_score: number;
   score_percentage: number;
@@ -223,7 +224,9 @@ export async function initCallIntelligenceTables(): Promise<void> {
   `);
 }
 
-export async function createCallRecord(record: CallRecord): Promise<CallRecord> {
+export async function createCallRecord(
+  record: CallRecord,
+): Promise<CallRecord> {
   const result = await pool.query(
     `INSERT INTO call_records 
      (call_id, source, lead_id, deal_id, contact_name, agent_email, agent_name, direction, duration_seconds, recording_url, call_date, status, metadata)
@@ -240,18 +243,21 @@ export async function createCallRecord(record: CallRecord): Promise<CallRecord> 
       record.contact_name || null,
       record.agent_email,
       record.agent_name || null,
-      record.direction || 'outbound',
+      record.direction || "outbound",
       record.duration_seconds || null,
       record.recording_url || null,
       record.call_date || new Date(),
-      record.status || 'pending',
-      JSON.stringify(record.metadata || {})
-    ]
+      record.status || "pending",
+      JSON.stringify(record.metadata || {}),
+    ],
   );
   return result.rows[0];
 }
 
-export async function updateCallRecord(id: number, updates: Partial<CallRecord>): Promise<CallRecord | null> {
+export async function updateCallRecord(
+  id: number,
+  updates: Partial<CallRecord>,
+): Promise<CallRecord | null> {
   const fields: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
@@ -274,43 +280,63 @@ export async function updateCallRecord(id: number, updates: Partial<CallRecord>)
     paramIndex++;
   }
 
-  fields.push('updated_at = NOW()');
+  fields.push("updated_at = NOW()");
 
   if (fields.length === 1) return null;
 
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE call_records SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE call_records SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
   );
 
   return result.rows[0] || null;
 }
 
-export async function getCallRecordById(id: number): Promise<CallRecord | null> {
-  const result = await pool.query('SELECT * FROM call_records WHERE id = $1', [id]);
+export async function getCallRecordById(
+  id: number,
+): Promise<CallRecord | null> {
+  const result = await pool.query("SELECT * FROM call_records WHERE id = $1", [
+    id,
+  ]);
   return result.rows[0] || null;
 }
 
-export async function getCallRecordByCallId(callId: string): Promise<CallRecord | null> {
-  const result = await pool.query('SELECT * FROM call_records WHERE call_id = $1', [callId]);
+export async function getCallRecordByCallId(
+  callId: string,
+): Promise<CallRecord | null> {
+  const result = await pool.query(
+    "SELECT * FROM call_records WHERE call_id = $1",
+    [callId],
+  );
   return result.rows[0] || null;
 }
 
-export async function getCallRecords(options: {
-  limit?: number;
-  offset?: number;
-  source?: string;
-  agent_email?: string;
-  status?: string;
-  lead_id?: string;
-  startDate?: Date;
-  endDate?: Date;
-} = {}): Promise<{ records: CallRecord[]; total: number }> {
-  const { limit = 50, offset = 0, source, agent_email, status, lead_id, startDate, endDate } = options;
+export async function getCallRecords(
+  options: {
+    limit?: number;
+    offset?: number;
+    source?: string;
+    agent_email?: string;
+    status?: string;
+    lead_id?: string;
+    startDate?: Date;
+    endDate?: Date;
+  } = {},
+): Promise<{ records: CallRecord[]; total: number }> {
+  const {
+    limit = 50,
+    offset = 0,
+    source,
+    agent_email,
+    status,
+    lead_id,
+    startDate,
+    endDate,
+  } = options;
 
-  let whereClause = 'WHERE 1=1';
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
 
@@ -352,23 +378,25 @@ export async function getCallRecords(options: {
 
   const countResult = await pool.query(
     `SELECT COUNT(*) FROM call_records ${whereClause}`,
-    params
+    params,
   );
 
   const result = await pool.query(
     `SELECT * FROM call_records ${whereClause} 
      ORDER BY call_date DESC 
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset]
+    [...params, limit, offset],
   );
 
   return {
     records: result.rows,
-    total: parseInt(countResult.rows[0].count)
+    total: parseInt(countResult.rows[0].count),
   };
 }
 
-export async function saveTranscript(transcript: CallTranscript): Promise<CallTranscript> {
+export async function saveTranscript(
+  transcript: CallTranscript,
+): Promise<CallTranscript> {
   const result = await pool.query(
     `INSERT INTO call_transcripts 
      (call_record_id, transcript_text, speaker_segments, word_timestamps, language, confidence_score)
@@ -379,22 +407,26 @@ export async function saveTranscript(transcript: CallTranscript): Promise<CallTr
       transcript.transcript_text,
       JSON.stringify(transcript.speaker_segments || null),
       JSON.stringify(transcript.word_timestamps || null),
-      transcript.language || 'en',
-      transcript.confidence_score || null
-    ]
+      transcript.language || "en",
+      transcript.confidence_score || null,
+    ],
   );
   return result.rows[0];
 }
 
-export async function getTranscriptByCallId(callRecordId: number): Promise<CallTranscript | null> {
+export async function getTranscriptByCallId(
+  callRecordId: number,
+): Promise<CallTranscript | null> {
   const result = await pool.query(
-    'SELECT * FROM call_transcripts WHERE call_record_id = $1',
-    [callRecordId]
+    "SELECT * FROM call_transcripts WHERE call_record_id = $1",
+    [callRecordId],
   );
   return result.rows[0] || null;
 }
 
-export async function saveCallAnalysis(analysis: CallAnalysis): Promise<CallAnalysis> {
+export async function saveCallAnalysis(
+  analysis: CallAnalysis,
+): Promise<CallAnalysis> {
   const result = await pool.query(
     `INSERT INTO call_analysis 
      (call_record_id, sentiment_score, sentiment_label, voice_of_customer, objections_detected, 
@@ -413,16 +445,18 @@ export async function saveCallAnalysis(analysis: CallAnalysis): Promise<CallAnal
       analysis.call_summary || null,
       analysis.talk_ratio || null,
       JSON.stringify(analysis.keywords || null),
-      analysis.ai_insights || null
-    ]
+      analysis.ai_insights || null,
+    ],
   );
   return result.rows[0];
 }
 
-export async function getAnalysisByCallId(callRecordId: number): Promise<CallAnalysis | null> {
+export async function getAnalysisByCallId(
+  callRecordId: number,
+): Promise<CallAnalysis | null> {
   const result = await pool.query(
-    'SELECT * FROM call_analysis WHERE call_record_id = $1',
-    [callRecordId]
+    "SELECT * FROM call_analysis WHERE call_record_id = $1",
+    [callRecordId],
   );
   return result.rows[0] || null;
 }
@@ -444,21 +478,25 @@ export async function saveQAScore(score: CallQAScore): Promise<CallQAScore> {
       JSON.stringify(score.strengths || null),
       JSON.stringify(score.improvements || null),
       score.coaching_notes || null,
-      score.evaluator || 'AI'
-    ]
+      score.evaluator || "AI",
+    ],
   );
   return result.rows[0];
 }
 
-export async function getQAScoreByCallId(callRecordId: number): Promise<CallQAScore | null> {
+export async function getQAScoreByCallId(
+  callRecordId: number,
+): Promise<CallQAScore | null> {
   const result = await pool.query(
-    'SELECT * FROM call_qa_scores WHERE call_record_id = $1',
-    [callRecordId]
+    "SELECT * FROM call_qa_scores WHERE call_record_id = $1",
+    [callRecordId],
   );
   return result.rows[0] || null;
 }
 
-export async function saveCompliance(compliance: CallCompliance): Promise<CallCompliance> {
+export async function saveCompliance(
+  compliance: CallCompliance,
+): Promise<CallCompliance> {
   const result = await pool.query(
     `INSERT INTO call_compliance 
      (call_record_id, lead_id, deal_id, notes_updated, call_logged, task_created, 
@@ -478,28 +516,32 @@ export async function saveCompliance(compliance: CallCompliance): Promise<CallCo
       compliance.overall_compliance,
       compliance.compliance_score,
       JSON.stringify(compliance.missing_actions || null),
-      JSON.stringify(compliance.compliance_details || null)
-    ]
+      JSON.stringify(compliance.compliance_details || null),
+    ],
   );
   return result.rows[0];
 }
 
-export async function getComplianceByCallId(callRecordId: number): Promise<CallCompliance | null> {
+export async function getComplianceByCallId(
+  callRecordId: number,
+): Promise<CallCompliance | null> {
   const result = await pool.query(
-    'SELECT * FROM call_compliance WHERE call_record_id = $1',
-    [callRecordId]
+    "SELECT * FROM call_compliance WHERE call_record_id = $1",
+    [callRecordId],
   );
   return result.rows[0] || null;
 }
 
-export async function getComplianceRecords(options: {
-  limit?: number;
-  offset?: number;
-  lead_id?: string;
-  agent_email?: string;
-} = {}): Promise<{ records: CallCompliance[]; total: number }> {
+export async function getComplianceRecords(
+  options: {
+    limit?: number;
+    offset?: number;
+    lead_id?: string;
+    agent_email?: string;
+  } = {},
+): Promise<{ records: CallCompliance[]; total: number }> {
   const { limit = 50, offset = 0, lead_id, agent_email } = options;
-  
+
   let query = `
     SELECT cc.*, cr.agent_email, cr.agent_name, cr.contact_name, cr.call_date
     FROM call_compliance cc
@@ -523,7 +565,7 @@ export async function getComplianceRecords(options: {
   params.push(limit, offset);
 
   const result = await pool.query(query, params);
-  
+
   let countQuery = `
     SELECT COUNT(*) as total 
     FROM call_compliance cc
@@ -532,22 +574,22 @@ export async function getComplianceRecords(options: {
   `;
   const countParams: any[] = [];
   let countParamIndex = 1;
-  
+
   if (lead_id) {
     countQuery += ` AND cc.lead_id = $${countParamIndex++}`;
     countParams.push(lead_id);
   }
-  
+
   if (agent_email) {
     countQuery += ` AND cr.agent_email = $${countParamIndex++}`;
     countParams.push(agent_email);
   }
-  
+
   const countResult = await pool.query(countQuery, countParams);
 
   return {
     records: result.rows,
-    total: parseInt(countResult.rows[0].total)
+    total: parseInt(countResult.rows[0].total),
   };
 }
 
@@ -569,16 +611,18 @@ export async function saveMeetingMOM(mom: MeetingMOM): Promise<MeetingMOM> {
       JSON.stringify(mom.action_items || null),
       JSON.stringify(mom.follow_ups || null),
       mom.next_meeting_date || null,
-      mom.notes || null
-    ]
+      mom.notes || null,
+    ],
   );
   return result.rows[0];
 }
 
-export async function getMOMByEventId(calendarEventId: string): Promise<MeetingMOM | null> {
+export async function getMOMByEventId(
+  calendarEventId: string,
+): Promise<MeetingMOM | null> {
   const result = await pool.query(
-    'SELECT * FROM meeting_mom WHERE calendar_event_id = $1',
-    [calendarEventId]
+    "SELECT * FROM meeting_mom WHERE calendar_event_id = $1",
+    [calendarEventId],
   );
   return result.rows[0] || null;
 }
@@ -590,22 +634,26 @@ export async function getCallWithFullAnalysis(callRecordId: number): Promise<{
   qaScore: CallQAScore | null;
   compliance: CallCompliance | null;
 }> {
-  const [record, transcript, analysis, qaScore, compliance] = await Promise.all([
-    getCallRecordById(callRecordId),
-    getTranscriptByCallId(callRecordId),
-    getAnalysisByCallId(callRecordId),
-    getQAScoreByCallId(callRecordId),
-    getComplianceByCallId(callRecordId)
-  ]);
+  const [record, transcript, analysis, qaScore, compliance] = await Promise.all(
+    [
+      getCallRecordById(callRecordId),
+      getTranscriptByCallId(callRecordId),
+      getAnalysisByCallId(callRecordId),
+      getQAScoreByCallId(callRecordId),
+      getComplianceByCallId(callRecordId),
+    ],
+  );
 
   return { record, transcript, analysis, qaScore, compliance };
 }
 
-export async function getCallAnalyticsSummary(options: {
-  startDate?: Date;
-  endDate?: Date;
-  agent_email?: string;
-} = {}): Promise<{
+export async function getCallAnalyticsSummary(
+  options: {
+    startDate?: Date;
+    endDate?: Date;
+    agent_email?: string;
+  } = {},
+): Promise<{
   totalCalls: number;
   analyzedCalls: number;
   avgSentimentScore: number;
@@ -616,8 +664,8 @@ export async function getCallAnalyticsSummary(options: {
   complianceBreakdown: any;
 }> {
   const { startDate, endDate, agent_email } = options;
-  
-  let whereClause = 'WHERE 1=1';
+
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
 
@@ -639,7 +687,8 @@ export async function getCallAnalyticsSummary(options: {
     paramIndex++;
   }
 
-  const summaryResult = await pool.query(`
+  const summaryResult = await pool.query(
+    `
     SELECT 
       COUNT(DISTINCT cr.id) as total_calls,
       COUNT(DISTINCT CASE WHEN cr.status = 'analyzed' THEN cr.id END) as analyzed_calls,
@@ -651,16 +700,22 @@ export async function getCallAnalyticsSummary(options: {
     LEFT JOIN call_qa_scores cq ON cr.id = cq.call_record_id
     LEFT JOIN call_compliance cc ON cr.id = cc.call_record_id
     ${whereClause}
-  `, params);
+  `,
+    params,
+  );
 
-  const bySourceResult = await pool.query(`
+  const bySourceResult = await pool.query(
+    `
     SELECT source, COUNT(*) as count
     FROM call_records cr
     ${whereClause}
     GROUP BY source
-  `, params);
+  `,
+    params,
+  );
 
-  const byAgentResult = await pool.query(`
+  const byAgentResult = await pool.query(
+    `
     SELECT agent_email, agent_name, COUNT(*) as count, AVG(cq.score_percentage) as avg_score
     FROM call_records cr
     LEFT JOIN call_qa_scores cq ON cr.id = cq.call_record_id
@@ -668,9 +723,12 @@ export async function getCallAnalyticsSummary(options: {
     GROUP BY agent_email, agent_name
     ORDER BY count DESC
     LIMIT 10
-  `, params);
+  `,
+    params,
+  );
 
-  const complianceResult = await pool.query(`
+  const complianceResult = await pool.query(
+    `
     SELECT 
       COUNT(*) as total,
       SUM(CASE WHEN notes_updated THEN 1 ELSE 0 END) as notes_updated,
@@ -681,7 +739,9 @@ export async function getCallAnalyticsSummary(options: {
     FROM call_compliance cc
     JOIN call_records cr ON cc.call_record_id = cr.id
     ${whereClause}
-  `, params);
+  `,
+    params,
+  );
 
   const summary = summaryResult.rows[0];
 
@@ -693,20 +753,26 @@ export async function getCallAnalyticsSummary(options: {
     avgComplianceScore: parseFloat(summary.avg_compliance) || 0,
     callsBySource: bySourceResult.rows,
     callsByAgent: byAgentResult.rows,
-    complianceBreakdown: complianceResult.rows[0] || {}
+    complianceBreakdown: complianceResult.rows[0] || {},
   };
 }
 
-export async function createOrUpdateQAScore(data: Omit<CallQAScore, 'id' | 'created_at'>): Promise<CallQAScore> {
-  console.log('📝 [CallDB] Creating/updating QA score for call', data.call_record_id);
-  
+export async function createOrUpdateQAScore(
+  data: Omit<CallQAScore, "id" | "created_at">,
+): Promise<CallQAScore> {
+  logger.info(
+    "📝 [CallDB] Creating/updating QA score for call",
+    data.call_record_id,
+  );
+
   const existingResult = await pool.query(
     `SELECT id FROM call_qa_scores WHERE call_record_id = $1 AND scorecard_type = $2`,
-    [data.call_record_id, data.scorecard_type]
+    [data.call_record_id, data.scorecard_type],
   );
 
   if (existingResult.rows.length > 0) {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       UPDATE call_qa_scores SET
         total_score = $1,
         max_score = $2,
@@ -717,60 +783,68 @@ export async function createOrUpdateQAScore(data: Omit<CallQAScore, 'id' | 'crea
         evaluated_at = NOW()
       WHERE call_record_id = $7 AND scorecard_type = $8
       RETURNING *
-    `, [
+    `,
+      [
+        data.total_score,
+        data.max_score,
+        data.score_percentage,
+        JSON.stringify(data.criteria_scores || {}),
+        data.coaching_notes,
+        data.evaluator,
+        data.call_record_id,
+        data.scorecard_type,
+      ],
+    );
+    logger.info("✅ [CallDB] QA score updated", { id: result.rows[0].id });
+    return result.rows[0];
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO call_qa_scores (
+      call_record_id, scorecard_type, total_score, max_score, score_percentage,
+      criteria_scores, coaching_notes, evaluator, evaluated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    RETURNING *
+  `,
+    [
+      data.call_record_id,
+      data.scorecard_type,
       data.total_score,
       data.max_score,
       data.score_percentage,
       JSON.stringify(data.criteria_scores || {}),
       data.coaching_notes,
       data.evaluator,
-      data.call_record_id,
-      data.scorecard_type
-    ]);
-    console.log('✅ [CallDB] QA score updated', { id: result.rows[0].id });
-    return result.rows[0];
-  }
+    ],
+  );
 
-  const result = await pool.query(`
-    INSERT INTO call_qa_scores (
-      call_record_id, scorecard_type, total_score, max_score, score_percentage,
-      criteria_scores, coaching_notes, evaluator, evaluated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-    RETURNING *
-  `, [
-    data.call_record_id,
-    data.scorecard_type,
-    data.total_score,
-    data.max_score,
-    data.score_percentage,
-    JSON.stringify(data.criteria_scores || {}),
-    data.coaching_notes,
-    data.evaluator
-  ]);
-
-  console.log('✅ [CallDB] QA score created', { id: result.rows[0].id });
+  logger.info("✅ [CallDB] QA score created", { id: result.rows[0].id });
   return result.rows[0];
 }
 
-export async function updateCallStatus(callId: number, status: CallRecord['status']): Promise<void> {
-  console.log('🔄 [CallDB] Updating call status', { callId, status });
+export async function updateCallStatus(
+  callId: number,
+  status: CallRecord["status"],
+): Promise<void> {
+  logger.info("🔄 [CallDB] Updating call status", { callId, status });
   await pool.query(
     `UPDATE call_records SET status = $1, updated_at = NOW() WHERE id = $2`,
-    [status, callId]
+    [status, callId],
   );
-  console.log('✅ [CallDB] Call status updated');
+  logger.info("✅ [CallDB] Call status updated");
 }
 
 export interface SDREvaluationAttribute {
   id: string;
   name: string;
   description: string;
-  dimension: 'people' | 'process' | 'governance';
+  dimension: "people" | "process" | "governance";
   weight: number;
-  severity: 'minor' | 'major' | 'critical';
+  severity: "minor" | "major" | "critical";
   evaluation_logic: string;
   evidence_fields?: string[];
-  scoring_type: 'numeric' | 'pass_fail';
+  scoring_type: "numeric" | "pass_fail";
   target?: number;
 }
 
@@ -782,35 +856,37 @@ export interface SDRScorecardConfig {
   attributes: SDREvaluationAttribute[];
 }
 
-export async function getActiveSDRScorecard(teamName?: string): Promise<SDRScorecardConfig | null> {
-  console.log('📊 [CallDB] Fetching active SDR scorecard', { teamName });
-  
+export async function getActiveSDRScorecard(
+  teamName?: string,
+): Promise<SDRScorecardConfig | null> {
+  logger.info("📊 [CallDB] Fetching active SDR scorecard", { teamName });
+
   let query = `
     SELECT id, name, version, team_name, dimensions 
     FROM quality_scorecards 
     WHERE is_active = true
   `;
   const params: any[] = [];
-  
+
   if (teamName) {
     query += ` AND (team_name = $1 OR team_name IS NULL)`;
     params.push(teamName);
   }
-  
+
   query += ` ORDER BY team_name IS NOT NULL DESC, updated_at DESC LIMIT 1`;
-  
+
   const result = await pool.query(query, params);
-  
+
   if (result.rows.length === 0) {
-    console.log('⚠️ [CallDB] No active scorecard found');
+    logger.info("⚠️ [CallDB] No active scorecard found");
     return null;
   }
-  
+
   const row = result.rows[0];
   const dimensions = row.dimensions?.dimensions || row.dimensions;
-  
+
   const attributes: SDREvaluationAttribute[] = [];
-  
+
   if (dimensions) {
     for (const [dimKey, dimValue] of Object.entries(dimensions)) {
       const dimension = dimValue as any;
@@ -819,29 +895,39 @@ export async function getActiveSDRScorecard(teamName?: string): Promise<SDRScore
           attributes.push({
             id: attr.id || `${dimKey}_${attributes.length}`,
             name: attr.name,
-            description: attr.description || '',
-            dimension: dimKey as 'people' | 'process' | 'governance',
+            description: attr.description || "",
+            dimension: dimKey as "people" | "process" | "governance",
             weight: attr.weight || 0.1,
-            severity: attr.severityIfFailed === 'critical' ? 'critical' : 
-                     attr.severityIfFailed === 'high' ? 'major' : 'minor',
-            evaluation_logic: attr.passingCriteria || attr.evaluationLogic || '',
+            severity:
+              attr.severityIfFailed === "critical"
+                ? "critical"
+                : attr.severityIfFailed === "high"
+                  ? "major"
+                  : "minor",
+            evaluation_logic:
+              attr.passingCriteria || attr.evaluationLogic || "",
             evidence_fields: attr.zohoFields || [],
-            scoring_type: attr.scoringType === 'pass_fail' ? 'pass_fail' : 'numeric',
-            target: attr.target || 100
+            scoring_type:
+              attr.scoringType === "pass_fail" ? "pass_fail" : "numeric",
+            target: attr.target || 100,
           });
         }
       }
     }
   }
-  
-  console.log('✅ [CallDB] Loaded scorecard with', attributes.length, 'attributes');
-  
+
+  logger.info(
+    "✅ [CallDB] Loaded scorecard with",
+    attributes.length,
+    "attributes",
+  );
+
   return {
     id: row.id,
     name: row.name,
-    version: row.version || 'v1.0',
+    version: row.version || "v1.0",
     team_name: row.team_name,
-    attributes
+    attributes,
   };
 }
 
@@ -850,7 +936,7 @@ export interface SDREvaluationResult {
   attribute_name: string;
   dimension: string;
   score?: number;
-  status: 'PASS' | 'FAIL' | 'NA';
+  status: "PASS" | "FAIL" | "NA";
   severity: string;
   evidence_quotes: string[];
   evidence_timestamps?: string[];
@@ -887,9 +973,13 @@ export interface SDRCallEvaluation {
   evaluated_at: Date;
 }
 
-export async function saveSDREvaluation(evaluation: SDRCallEvaluation): Promise<number> {
-  console.log('💾 [CallDB] Saving SDR evaluation', { callRecordId: evaluation.call_record_id });
-  
+export async function saveSDREvaluation(
+  evaluation: SDRCallEvaluation,
+): Promise<number> {
+  logger.info("💾 [CallDB] Saving SDR evaluation", {
+    callRecordId: evaluation.call_record_id,
+  });
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sdr_call_evaluations (
       id SERIAL PRIMARY KEY,
@@ -912,14 +1002,15 @@ export async function saveSDREvaluation(evaluation: SDRCallEvaluation): Promise<
     );
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_call ON sdr_call_evaluations(call_record_id);
   `);
-  
+
   const existingResult = await pool.query(
     `SELECT id FROM sdr_call_evaluations WHERE call_record_id = $1`,
-    [evaluation.call_record_id]
+    [evaluation.call_record_id],
   );
-  
+
   if (existingResult.rows.length > 0) {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       UPDATE sdr_call_evaluations SET
         scorecard_id = $1,
         scorecard_name = $2,
@@ -937,7 +1028,41 @@ export async function saveSDREvaluation(evaluation: SDRCallEvaluation): Promise<
         evaluated_at = NOW()
       WHERE call_record_id = $14
       RETURNING id
-    `, [
+    `,
+      [
+        evaluation.scorecard_id,
+        evaluation.scorecard_name,
+        evaluation.overall_score,
+        JSON.stringify(evaluation.dimension_scores),
+        JSON.stringify(evaluation.attribute_evaluations),
+        JSON.stringify(evaluation.top_strengths),
+        JSON.stringify(evaluation.top_gaps),
+        JSON.stringify(evaluation.coaching_actions),
+        JSON.stringify(evaluation.critical_risks),
+        evaluation.coaching_message_ar,
+        evaluation.coaching_message_en || null,
+        JSON.stringify(evaluation.micro_training_topics),
+        JSON.stringify(evaluation.key_moments),
+        evaluation.call_record_id,
+      ],
+    );
+    logger.info("✅ [CallDB] SDR evaluation updated", {
+      id: result.rows[0].id,
+    });
+    return result.rows[0].id;
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO sdr_call_evaluations (
+      call_record_id, scorecard_id, scorecard_name, overall_score, dimension_scores,
+      attribute_evaluations, top_strengths, top_gaps, coaching_actions, critical_risks,
+      coaching_message_ar, coaching_message_en, micro_training_topics, key_moments
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    RETURNING id
+  `,
+    [
+      evaluation.call_record_id,
       evaluation.scorecard_id,
       evaluation.scorecard_name,
       evaluation.overall_score,
@@ -951,52 +1076,27 @@ export async function saveSDREvaluation(evaluation: SDRCallEvaluation): Promise<
       evaluation.coaching_message_en || null,
       JSON.stringify(evaluation.micro_training_topics),
       JSON.stringify(evaluation.key_moments),
-      evaluation.call_record_id
-    ]);
-    console.log('✅ [CallDB] SDR evaluation updated', { id: result.rows[0].id });
-    return result.rows[0].id;
-  }
-  
-  const result = await pool.query(`
-    INSERT INTO sdr_call_evaluations (
-      call_record_id, scorecard_id, scorecard_name, overall_score, dimension_scores,
-      attribute_evaluations, top_strengths, top_gaps, coaching_actions, critical_risks,
-      coaching_message_ar, coaching_message_en, micro_training_topics, key_moments
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    RETURNING id
-  `, [
-    evaluation.call_record_id,
-    evaluation.scorecard_id,
-    evaluation.scorecard_name,
-    evaluation.overall_score,
-    JSON.stringify(evaluation.dimension_scores),
-    JSON.stringify(evaluation.attribute_evaluations),
-    JSON.stringify(evaluation.top_strengths),
-    JSON.stringify(evaluation.top_gaps),
-    JSON.stringify(evaluation.coaching_actions),
-    JSON.stringify(evaluation.critical_risks),
-    evaluation.coaching_message_ar,
-    evaluation.coaching_message_en || null,
-    JSON.stringify(evaluation.micro_training_topics),
-    JSON.stringify(evaluation.key_moments)
-  ]);
-  
-  console.log('✅ [CallDB] SDR evaluation saved', { id: result.rows[0].id });
+    ],
+  );
+
+  logger.info("✅ [CallDB] SDR evaluation saved", { id: result.rows[0].id });
   return result.rows[0].id;
 }
 
-export async function getSDREvaluation(callRecordId: number): Promise<SDRCallEvaluation | null> {
-  console.log('📊 [CallDB] Fetching SDR evaluation', { callRecordId });
-  
+export async function getSDREvaluation(
+  callRecordId: number,
+): Promise<SDRCallEvaluation | null> {
+  logger.info("📊 [CallDB] Fetching SDR evaluation", { callRecordId });
+
   const result = await pool.query(
     `SELECT * FROM sdr_call_evaluations WHERE call_record_id = $1`,
-    [callRecordId]
+    [callRecordId],
   );
-  
+
   if (result.rows.length === 0) {
     return null;
   }
-  
+
   const row = result.rows[0];
   return {
     call_record_id: row.call_record_id,
@@ -1013,20 +1113,26 @@ export async function getSDREvaluation(callRecordId: number): Promise<SDRCallEva
     coaching_message_en: row.coaching_message_en,
     micro_training_topics: row.micro_training_topics,
     key_moments: row.key_moments,
-    evaluated_at: row.evaluated_at
+    evaluated_at: row.evaluated_at,
   };
 }
 
-export function buildSDREvaluationPrompt(transcript: string, scorecard: SDRScorecardConfig): string {
-  const attributesList = scorecard.attributes.map((attr, idx) => 
-    `${idx + 1}. ${attr.name} (${attr.id})
+export function buildSDREvaluationPrompt(
+  transcript: string,
+  scorecard: SDRScorecardConfig,
+): string {
+  const attributesList = scorecard.attributes
+    .map(
+      (attr, idx) =>
+        `${idx + 1}. ${attr.name} (${attr.id})
    - الوصف: ${attr.description}
-   - البُعد: ${attr.dimension === 'people' ? 'الأشخاص' : attr.dimension === 'process' ? 'العمليات' : 'الحوكمة'}
+   - البُعد: ${attr.dimension === "people" ? "الأشخاص" : attr.dimension === "process" ? "العمليات" : "الحوكمة"}
    - الوزن: ${(attr.weight * 100).toFixed(0)}%
-   - الخطورة: ${attr.severity === 'critical' ? 'حرجة' : attr.severity === 'major' ? 'عالية' : 'متوسطة'}
+   - الخطورة: ${attr.severity === "critical" ? "حرجة" : attr.severity === "major" ? "عالية" : "متوسطة"}
    - معايير التقييم: ${attr.evaluation_logic}
-   - نوع التقييم: ${attr.scoring_type === 'pass_fail' ? 'نجاح/إخفاق' : 'رقمي (1-10)'}`
-  ).join('\n\n');
+   - نوع التقييم: ${attr.scoring_type === "pass_fail" ? "نجاح/إخفاق" : "رقمي (1-10)"}`,
+    )
+    .join("\n\n");
 
   return `أنت خبير جودة مكالمات SDR (Sales Development Representative) محترف.
 مهمتك تقييم هذه المكالمة بشكل شامل وفقاً لنموذج التقييم المحدد.
@@ -1100,7 +1206,7 @@ ${attributesList}
 export async function submitAIFeedback(params: {
   callRecordId: number;
   evaluationId: number;
-  feedbackType: 'accurate' | 'partially_accurate' | 'inaccurate';
+  feedbackType: "accurate" | "partially_accurate" | "inaccurate";
   details: string;
   submittedBy: string;
 }): Promise<number> {
@@ -1108,7 +1214,13 @@ export async function submitAIFeedback(params: {
     `INSERT INTO ai_training_feedback (call_record_id, evaluation_id, feedback_type, details, submitted_by)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [params.callRecordId, params.evaluationId, params.feedbackType, params.details, params.submittedBy]
+    [
+      params.callRecordId,
+      params.evaluationId,
+      params.feedbackType,
+      params.details,
+      params.submittedBy,
+    ],
   );
   return result.rows[0].id;
 }
@@ -1126,16 +1238,16 @@ export async function getAITrainingStats(): Promise<{
       SUM(CASE WHEN feedback_type = 'inaccurate' THEN 1 ELSE 0 END) as inaccurate
     FROM ai_training_feedback
   `);
-  
+
   const row = result.rows[0];
   const total = parseInt(row.total) || 0;
   const accurate = parseInt(row.accurate) || 0;
   const inaccurate = parseInt(row.inaccurate) || 0;
-  
+
   return {
     reviewed: total,
     accuracy: total > 0 ? Math.round((accurate / total) * 100) : 0,
-    corrections: inaccurate
+    corrections: inaccurate,
   };
 }
 

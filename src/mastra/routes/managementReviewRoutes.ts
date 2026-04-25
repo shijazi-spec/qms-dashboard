@@ -5,9 +5,12 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getReviews } = await import("../../utils/managementReviewDatabase");
+          const { getReviews } =
+            await import("../../utils/managementReviewDatabase");
           const status = c.req.query("status") || undefined;
-          const year = c.req.query("year") ? parseInt(c.req.query("year")) : undefined;
+          const year = c.req.query("year")
+            ? parseInt(c.req.query("year"))
+            : undefined;
           const limit = parseInt(c.req.query("limit") || "50");
           const offset = parseInt(c.req.query("offset") || "0");
           const result = await getReviews({ status, year, limit, offset });
@@ -26,7 +29,8 @@ export const managementReviewRoutes = [
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { getReviewById } = await import("../../utils/managementReviewDatabase");
+          const { getReviewById } =
+            await import("../../utils/managementReviewDatabase");
           const review = await getReviewById(id);
           if (!review) return c.json({ error: "Not found" }, 404);
           return c.json(review);
@@ -43,14 +47,18 @@ export const managementReviewRoutes = [
       return async (c: any) => {
         try {
           const body = await c.req.json();
-          const { createReview } = await import("../../utils/managementReviewDatabase");
+          const { createReview } =
+            await import("../../utils/managementReviewDatabase");
           const review = await createReview(body);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'CREATE', entityType: 'DOCUMENT', entityId: String(review.id),
-              entityName: review.review_number, description: `Management Review created: ${review.title}`,
-              module: 'management_review'
+              actionType: "CREATE",
+              entityType: "DOCUMENT",
+              entityId: String(review.id),
+              entityName: review.review_number,
+              description: `Management Review created: ${review.title}`,
+              module: "management_review",
             });
           } catch {}
           return c.json(review, 201);
@@ -69,15 +77,19 @@ export const managementReviewRoutes = [
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const body = await c.req.json();
-          const { updateReview } = await import("../../utils/managementReviewDatabase");
+          const { updateReview } =
+            await import("../../utils/managementReviewDatabase");
           const review = await updateReview(id, body);
           if (!review) return c.json({ error: "Not found" }, 404);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'UPDATE', entityType: 'DOCUMENT', entityId: String(id),
-              entityName: review.review_number, description: `Management Review updated: ${review.title}`,
-              module: 'management_review'
+              actionType: "UPDATE",
+              entityType: "DOCUMENT",
+              entityId: String(id),
+              entityName: review.review_number,
+              description: `Management Review updated: ${review.title}`,
+              module: "management_review",
             });
           } catch {}
           return c.json(review);
@@ -95,7 +107,8 @@ export const managementReviewRoutes = [
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { deleteReview } = await import("../../utils/managementReviewDatabase");
+          const { deleteReview } =
+            await import("../../utils/managementReviewDatabase");
           const deleted = await deleteReview(id);
           if (!deleted) return c.json({ error: "Not found" }, 404);
           return c.json({ success: true });
@@ -114,7 +127,8 @@ export const managementReviewRoutes = [
           const reviewId = parseInt(c.req.param("id"));
           if (isNaN(reviewId)) return c.json({ error: "Invalid ID" }, 400);
           const body = await c.req.json();
-          const { addReviewAction } = await import("../../utils/managementReviewDatabase");
+          const { addReviewAction } =
+            await import("../../utils/managementReviewDatabase");
           const action = await addReviewAction(reviewId, body);
           return c.json(action, 201);
         } catch (error) {
@@ -132,7 +146,8 @@ export const managementReviewRoutes = [
           const actionId = parseInt(c.req.param("actionId"));
           if (isNaN(actionId)) return c.json({ error: "Invalid ID" }, 400);
           const body = await c.req.json();
-          const { updateReviewAction } = await import("../../utils/managementReviewDatabase");
+          const { updateReviewAction } =
+            await import("../../utils/managementReviewDatabase");
           const action = await updateReviewAction(actionId, body);
           if (!action) return c.json({ error: "Not found" }, 404);
           return c.json(action);
@@ -148,7 +163,8 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getReviewActionsSummary } = await import("../../utils/managementReviewDatabase");
+          const { getReviewActionsSummary } =
+            await import("../../utils/managementReviewDatabase");
           const summary = await getReviewActionsSummary();
           return c.json(summary);
         } catch (error) {
@@ -165,7 +181,8 @@ export const managementReviewRoutes = [
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { gatherReviewInputs, updateReview } = await import("../../utils/managementReviewDatabase");
+          const { gatherReviewInputs, updateReview } =
+            await import("../../utils/managementReviewDatabase");
           const inputs = await gatherReviewInputs();
           const review = await updateReview(id, { input_summary: inputs });
           return c.json({ success: true, inputs, review });

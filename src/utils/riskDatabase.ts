@@ -1,4 +1,5 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -9,7 +10,14 @@ export interface EnterpriseRisk {
   public_id?: string;
   risk_title: string;
   risk_description: string;
-  risk_category: 'operational' | 'legal' | 'financial' | 'data_privacy' | 'information_security' | 'fraud' | 'vendor';
+  risk_category:
+    | "operational"
+    | "legal"
+    | "financial"
+    | "data_privacy"
+    | "information_security"
+    | "fraud"
+    | "vendor";
   risk_source?: string;
   identified_date?: Date;
   identified_by?: string;
@@ -18,8 +26,8 @@ export interface EnterpriseRisk {
   impact_score: number;
   likelihood_score: number;
   risk_score?: number;
-  risk_level?: 'critical' | 'high' | 'medium' | 'low';
-  treatment_strategy?: 'mitigate' | 'accept' | 'transfer' | 'avoid';
+  risk_level?: "critical" | "high" | "medium" | "low";
+  treatment_strategy?: "mitigate" | "accept" | "transfer" | "avoid";
   treatment_description?: string;
   treatment_owner?: string;
   treatment_deadline?: Date;
@@ -28,10 +36,10 @@ export interface EnterpriseRisk {
   residual_risk_score?: number;
   control_ids?: number[];
   policy_ids?: number[];
-  review_frequency?: 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
+  review_frequency?: "monthly" | "quarterly" | "semi_annual" | "annual";
   last_review_date?: Date;
   next_review_date?: Date;
-  status: 'open' | 'in_treatment' | 'monitoring' | 'closed' | 'escalated';
+  status: "open" | "in_treatment" | "monitoring" | "closed" | "escalated";
   escalation_reason?: string;
   linked_audit_id?: number;
   linked_incident_id?: number;
@@ -53,10 +61,17 @@ export interface RiskTreatmentAction {
   risk_id: number;
   action_title: string;
   action_description: string;
-  action_type: 'control_implementation' | 'process_change' | 'training' | 'policy_update' | 'technology' | 'insurance' | 'other';
+  action_type:
+    | "control_implementation"
+    | "process_change"
+    | "training"
+    | "policy_update"
+    | "technology"
+    | "insurance"
+    | "other";
   assigned_to: string;
   due_date: Date;
-  status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+  status: "pending" | "in_progress" | "completed" | "overdue" | "cancelled";
   completion_date?: Date;
   completion_notes?: string;
   evidence_required?: boolean;
@@ -93,8 +108,8 @@ export interface RiskCategory {
 }
 
 export async function initRiskTables(): Promise<void> {
-  console.log('📊 [RiskDB] Initializing enterprise risk management tables...');
-  
+  logger.info("📊 [RiskDB] Initializing enterprise risk management tables...");
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS enterprise_risks (
       id SERIAL PRIMARY KEY,
@@ -203,14 +218,26 @@ export async function initRiskTables(): Promise<void> {
     ON CONFLICT (category_code) DO NOTHING
   `);
 
-  await pool.query(`ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`ALTER TABLE risk_treatment_actions ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`UPDATE enterprise_risks SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`UPDATE risk_treatment_actions SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_risks_public_id ON enterprise_risks(public_id)`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_risk_treatment_public_id ON risk_treatment_actions(public_id)`);
+  await pool.query(
+    `ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `ALTER TABLE risk_treatment_actions ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `UPDATE enterprise_risks SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `UPDATE risk_treatment_actions SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprise_risks_public_id ON enterprise_risks(public_id)`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_risk_treatment_public_id ON risk_treatment_actions(public_id)`,
+  );
 
-  console.log('✅ [RiskDB] Enterprise risk management tables initialized');
+  logger.info("✅ [RiskDB] Enterprise risk management tables initialized");
 }
 
 export async function exportRisksCSV(): Promise<string> {
@@ -220,23 +247,46 @@ export async function exportRisksCSV(): Promise<string> {
            treatment_strategy, status, created_at, updated_at
     FROM enterprise_risks ORDER BY created_at DESC
   `);
-  const header = 'Public ID,Title,Category,Source,Identified Date,Identified By,Owner,Department,Impact,Likelihood,Score,Level,Treatment,Status,Created,Updated';
-  const rows = result.rows.map(r => {
+  const header =
+    "Public ID,Title,Category,Source,Identified Date,Identified By,Owner,Department,Impact,Likelihood,Score,Level,Treatment,Status,Created,Updated";
+  const rows = result.rows.map((r) => {
     const escape = (v: any) => {
-      const s = String(v ?? '');
-      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+      const s = String(v ?? "");
+      return s.includes(",") || s.includes('"')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
     };
-    return [r.public_id, r.risk_title, r.risk_category, r.risk_source, r.identified_date, r.identified_by,
-            r.risk_owner, r.owner_department, r.impact_score, r.likelihood_score, r.risk_score, r.risk_level,
-            r.treatment_strategy, r.status, r.created_at, r.updated_at].map(escape).join(',');
+    return [
+      r.public_id,
+      r.risk_title,
+      r.risk_category,
+      r.risk_source,
+      r.identified_date,
+      r.identified_by,
+      r.risk_owner,
+      r.owner_department,
+      r.impact_score,
+      r.likelihood_score,
+      r.risk_score,
+      r.risk_level,
+      r.treatment_strategy,
+      r.status,
+      r.created_at,
+      r.updated_at,
+    ]
+      .map(escape)
+      .join(",");
   });
-  return [header, ...rows].join('\n');
+  return [header, ...rows].join("\n");
 }
 
-export async function createRisk(risk: EnterpriseRisk): Promise<EnterpriseRisk> {
-  console.log('📝 [RiskDB] Creating new enterprise risk:', risk.risk_title);
-  
-  const result = await pool.query(`
+export async function createRisk(
+  risk: EnterpriseRisk,
+): Promise<EnterpriseRisk> {
+  logger.info("📝 [RiskDB] Creating new enterprise risk:", risk.risk_title);
+
+  const result = await pool.query(
+    `
     INSERT INTO enterprise_risks (
       risk_title, risk_description, risk_category, risk_source,
       identified_by, risk_owner, owner_department,
@@ -248,48 +298,75 @@ export async function createRisk(risk: EnterpriseRisk): Promise<EnterpriseRisk> 
       ai_detected, ai_recommendations
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
     RETURNING *
-  `, [
-    risk.risk_title, risk.risk_description, risk.risk_category, risk.risk_source,
-    risk.identified_by, risk.risk_owner, risk.owner_department,
-    risk.impact_score, risk.likelihood_score,
-    risk.treatment_strategy, risk.treatment_description, risk.treatment_owner, risk.treatment_deadline,
-    risk.residual_impact, risk.residual_likelihood,
-    risk.control_ids, risk.policy_ids, risk.review_frequency || 'quarterly', risk.next_review_date,
-    risk.status || 'open', risk.linked_audit_id, risk.linked_incident_id, risk.linked_capa_id,
-    risk.ai_detected || false, JSON.stringify(risk.ai_recommendations || {})
-  ]);
+  `,
+    [
+      risk.risk_title,
+      risk.risk_description,
+      risk.risk_category,
+      risk.risk_source,
+      risk.identified_by,
+      risk.risk_owner,
+      risk.owner_department,
+      risk.impact_score,
+      risk.likelihood_score,
+      risk.treatment_strategy,
+      risk.treatment_description,
+      risk.treatment_owner,
+      risk.treatment_deadline,
+      risk.residual_impact,
+      risk.residual_likelihood,
+      risk.control_ids,
+      risk.policy_ids,
+      risk.review_frequency || "quarterly",
+      risk.next_review_date,
+      risk.status || "open",
+      risk.linked_audit_id,
+      risk.linked_incident_id,
+      risk.linked_capa_id,
+      risk.ai_detected || false,
+      JSON.stringify(risk.ai_recommendations || {}),
+    ],
+  );
 
-  console.log('✅ [RiskDB] Risk created with ID:', result.rows[0].id);
+  logger.info("✅ [RiskDB] Risk created with ID:", result.rows[0].id);
   return result.rows[0];
 }
 
-export async function updateRisk(id: number, risk: Partial<EnterpriseRisk>, assessedBy?: string): Promise<EnterpriseRisk> {
-  console.log('📝 [RiskDB] Updating risk ID:', id);
-  
+export async function updateRisk(
+  id: number,
+  risk: Partial<EnterpriseRisk>,
+  assessedBy?: string,
+): Promise<EnterpriseRisk> {
+  logger.info("📝 [RiskDB] Updating risk ID:", id);
+
   const existingRisk = await getRiskById(id);
   if (!existingRisk) {
     throw new Error(`Risk with ID ${id} not found`);
   }
 
   if (risk.impact_score !== undefined || risk.likelihood_score !== undefined) {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO risk_assessment_history (
         risk_id, assessed_by, 
         previous_impact, previous_likelihood, previous_risk_score,
         new_impact, new_likelihood, new_risk_score,
         trigger_reason
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [
-      id,
-      assessedBy || 'System',
-      existingRisk.impact_score,
-      existingRisk.likelihood_score,
-      existingRisk.risk_score,
-      risk.impact_score || existingRisk.impact_score,
-      risk.likelihood_score || existingRisk.likelihood_score,
-      (risk.impact_score || existingRisk.impact_score) * (risk.likelihood_score || existingRisk.likelihood_score),
-      'Manual update'
-    ]);
+    `,
+      [
+        id,
+        assessedBy || "System",
+        existingRisk.impact_score,
+        existingRisk.likelihood_score,
+        existingRisk.risk_score,
+        risk.impact_score || existingRisk.impact_score,
+        risk.likelihood_score || existingRisk.likelihood_score,
+        (risk.impact_score || existingRisk.impact_score) *
+          (risk.likelihood_score || existingRisk.likelihood_score),
+        "Manual update",
+      ],
+    );
   }
 
   const updateFields: string[] = [];
@@ -297,19 +374,39 @@ export async function updateRisk(id: number, risk: Partial<EnterpriseRisk>, asse
   let paramCount = 1;
 
   const allowedFields = [
-    'risk_title', 'risk_description', 'risk_category', 'risk_source',
-    'risk_owner', 'owner_department', 'impact_score', 'likelihood_score',
-    'treatment_strategy', 'treatment_description', 'treatment_owner', 'treatment_deadline',
-    'residual_impact', 'residual_likelihood', 'control_ids', 'policy_ids',
-    'review_frequency', 'last_review_date', 'next_review_date', 'status',
-    'escalation_reason', 'ai_recommendations',
-    'accepted_by', 'accepted_by_role', 'accepted_at', 'acceptance_justification', 'grc_approval_required'
+    "risk_title",
+    "risk_description",
+    "risk_category",
+    "risk_source",
+    "risk_owner",
+    "owner_department",
+    "impact_score",
+    "likelihood_score",
+    "treatment_strategy",
+    "treatment_description",
+    "treatment_owner",
+    "treatment_deadline",
+    "residual_impact",
+    "residual_likelihood",
+    "control_ids",
+    "policy_ids",
+    "review_frequency",
+    "last_review_date",
+    "next_review_date",
+    "status",
+    "escalation_reason",
+    "ai_recommendations",
+    "accepted_by",
+    "accepted_by_role",
+    "accepted_at",
+    "acceptance_justification",
+    "grc_approval_required",
   ];
 
   for (const [key, value] of Object.entries(risk)) {
     if (allowedFields.includes(key) && value !== undefined) {
       updateFields.push(`${key} = $${paramCount}`);
-      values.push(key === 'ai_recommendations' ? JSON.stringify(value) : value);
+      values.push(key === "ai_recommendations" ? JSON.stringify(value) : value);
       paramCount++;
     }
   }
@@ -317,45 +414,67 @@ export async function updateRisk(id: number, risk: Partial<EnterpriseRisk>, asse
   updateFields.push(`updated_at = NOW()`);
 
   values.push(id);
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     UPDATE enterprise_risks 
-    SET ${updateFields.join(', ')}
+    SET ${updateFields.join(", ")}
     WHERE id = $${paramCount}
     RETURNING *
-  `, values);
+  `,
+    values,
+  );
 
-  console.log('✅ [RiskDB] Risk updated:', id);
+  logger.info("✅ [RiskDB] Risk updated:", id);
   return result.rows[0];
 }
 
 export async function getRiskById(id: number): Promise<EnterpriseRisk | null> {
-  const result = await pool.query('SELECT * FROM enterprise_risks WHERE id = $1', [id]);
+  const result = await pool.query(
+    "SELECT * FROM enterprise_risks WHERE id = $1",
+    [id],
+  );
   return result.rows[0] || null;
 }
 
-export async function getRiskByPublicId(publicId: string): Promise<EnterpriseRisk | null> {
-  const result = await pool.query('SELECT * FROM enterprise_risks WHERE public_id = $1', [publicId]);
+export async function getRiskByPublicId(
+  publicId: string,
+): Promise<EnterpriseRisk | null> {
+  const result = await pool.query(
+    "SELECT * FROM enterprise_risks WHERE public_id = $1",
+    [publicId],
+  );
   return result.rows[0] || null;
 }
 
-export function resolveRiskId(idParam: string): { isUUID: boolean; intId?: number; uuid?: string } {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function resolveRiskId(idParam: string): {
+  isUUID: boolean;
+  intId?: number;
+  uuid?: string;
+} {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(idParam)) {
     return { isUUID: true, uuid: idParam };
   }
   return { isUUID: false, intId: parseInt(idParam) };
 }
 
-export function obfuscateResourceIds<T extends Record<string, any>>(row: T): Omit<T, 'id'> & { id: string } {
+export function obfuscateResourceIds<T extends Record<string, any>>(
+  row: T,
+): Omit<T, "id"> & { id: string } {
   const { id, public_id, ...rest } = row;
   return { ...rest, id: public_id || id } as any;
 }
 
-export function obfuscateResourceIdsList<T extends Record<string, any>>(rows: T[]): (Omit<T, 'id'> & { id: string })[] {
+export function obfuscateResourceIdsList<T extends Record<string, any>>(
+  rows: T[],
+): (Omit<T, "id"> & { id: string })[] {
   return rows.map(obfuscateResourceIds);
 }
 
-export async function resolveRiskParam(idParam: string): Promise<EnterpriseRisk | null> {
+export async function resolveRiskParam(
+  idParam: string,
+): Promise<EnterpriseRisk | null> {
   const resolved = resolveRiskId(idParam);
   if (resolved.isUUID) {
     return getRiskByPublicId(resolved.uuid!);
@@ -363,12 +482,24 @@ export async function resolveRiskParam(idParam: string): Promise<EnterpriseRisk 
   return getRiskById(resolved.intId!);
 }
 
-export async function resolveGenericId(idParam: string, tableName: string): Promise<number | null> {
+export async function resolveGenericId(
+  idParam: string,
+  tableName: string,
+): Promise<number | null> {
   const resolved = resolveRiskId(idParam);
   if (resolved.isUUID) {
-    const allowedTables = ['vendors', 'regulations', 'obligations', 'compliance_assessments', 'team_feedback'];
+    const allowedTables = [
+      "vendors",
+      "regulations",
+      "obligations",
+      "compliance_assessments",
+      "team_feedback",
+    ];
     if (!allowedTables.includes(tableName)) return null;
-    const result = await pool.query(`SELECT id FROM ${tableName} WHERE public_id = $1`, [resolved.uuid]);
+    const result = await pool.query(
+      `SELECT id FROM ${tableName} WHERE public_id = $1`,
+      [resolved.uuid],
+    );
     return result.rows.length > 0 ? result.rows[0].id : null;
   }
   return resolved.intId || null;
@@ -384,8 +515,8 @@ export async function getAllRisks(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<{ risks: EnterpriseRisk[]; total: number }> {
-  console.log('📊 [RiskDB] Fetching risks with filters:', filters);
-  
+  logger.info("📊 [RiskDB] Fetching risks with filters:", filters);
+
   let whereConditions: string[] = [];
   let values: any[] = [];
   let paramCount = 1;
@@ -416,34 +547,43 @@ export async function getAllRisks(filters?: {
     paramCount++;
   }
   if (filters?.date_to) {
-    whereConditions.push(`created_at <= $${paramCount}::date + interval '1 day'`);
+    whereConditions.push(
+      `created_at <= $${paramCount}::date + interval '1 day'`,
+    );
     values.push(filters.date_to);
     paramCount++;
   }
 
-  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+  const whereClause =
+    whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM enterprise_risks ${whereClause}`, values);
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM enterprise_risks ${whereClause}`,
+    values,
+  );
   const total = parseInt(countResult.rows[0].count);
 
   const limit = filters?.limit || 50;
   const offset = filters?.offset || 0;
   values.push(limit, offset);
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT * FROM enterprise_risks 
     ${whereClause}
     ORDER BY risk_score DESC, created_at DESC
     LIMIT $${paramCount} OFFSET $${paramCount + 1}
-  `, values);
+  `,
+    values,
+  );
 
-  console.log('✅ [RiskDB] Found', result.rows.length, 'risks');
+  logger.info("✅ [RiskDB] Found", result.rows.length, "risks");
   return { risks: result.rows, total };
 }
 
 export async function getRiskHeatmapData(): Promise<any> {
-  console.log('📊 [RiskDB] Generating risk heatmap data...');
-  
+  logger.info("📊 [RiskDB] Generating risk heatmap data...");
+
   const result = await pool.query(`
     SELECT 
       impact_score,
@@ -461,27 +601,27 @@ export async function getRiskHeatmapData(): Promise<any> {
   for (let impact = 5; impact >= 1; impact--) {
     const row = [];
     for (let likelihood = 1; likelihood <= 5; likelihood++) {
-      const cell = result.rows.find(r => 
-        r.impact_score === impact && r.likelihood_score === likelihood
+      const cell = result.rows.find(
+        (r) => r.impact_score === impact && r.likelihood_score === likelihood,
       );
       row.push({
         impact,
         likelihood,
         count: cell ? parseInt(cell.count) : 0,
         risk_ids: cell ? cell.risk_ids : [],
-        risk_titles: cell ? cell.risk_titles : []
+        risk_titles: cell ? cell.risk_titles : [],
       });
     }
     heatmapMatrix.push(row);
   }
 
-  console.log('✅ [RiskDB] Heatmap data generated');
+  logger.info("✅ [RiskDB] Heatmap data generated");
   return heatmapMatrix;
 }
 
 export async function getRiskSummaryStats(): Promise<any> {
-  console.log('📊 [RiskDB] Generating risk summary statistics...');
-  
+  logger.info("📊 [RiskDB] Generating risk summary statistics...");
+
   const stats = await pool.query(`
     SELECT 
       COUNT(*) FILTER (WHERE status = 'open') as open_risks,
@@ -530,68 +670,102 @@ export async function getRiskSummaryStats(): Promise<any> {
     LIMIT 10
   `);
 
-  console.log('✅ [RiskDB] Summary statistics generated');
+  logger.info("✅ [RiskDB] Summary statistics generated");
   return {
     ...stats.rows[0],
     by_category: byCategory.rows,
     by_department: byDepartment.rows,
-    top_risks: topRisks.rows
+    top_risks: topRisks.rows,
   };
 }
 
-export async function createTreatmentAction(action: RiskTreatmentAction): Promise<RiskTreatmentAction> {
-  console.log('📝 [RiskDB] Creating treatment action for risk:', action.risk_id);
-  
-  const result = await pool.query(`
+export async function createTreatmentAction(
+  action: RiskTreatmentAction,
+): Promise<RiskTreatmentAction> {
+  logger.info(
+    "📝 [RiskDB] Creating treatment action for risk:",
+    action.risk_id,
+  );
+
+  const result = await pool.query(
+    `
     INSERT INTO risk_treatment_actions (
       risk_id, action_title, action_description, action_type,
       assigned_to, due_date, status,
       evidence_required
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *
-  `, [
-    action.risk_id, action.action_title, action.action_description, action.action_type,
-    action.assigned_to, action.due_date, action.status || 'pending',
-    action.evidence_required || false
-  ]);
+  `,
+    [
+      action.risk_id,
+      action.action_title,
+      action.action_description,
+      action.action_type,
+      action.assigned_to,
+      action.due_date,
+      action.status || "pending",
+      action.evidence_required || false,
+    ],
+  );
 
-  await pool.query(`
+  await pool.query(
+    `
     UPDATE enterprise_risks SET status = 'in_treatment', updated_at = NOW()
     WHERE id = $1 AND status = 'open'
-  `, [action.risk_id]);
+  `,
+    [action.risk_id],
+  );
 
-  console.log('✅ [RiskDB] Treatment action created:', result.rows[0].id);
+  logger.info("✅ [RiskDB] Treatment action created:", result.rows[0].id);
   return result.rows[0];
 }
 
-export async function getTreatmentActions(riskId: number): Promise<RiskTreatmentAction[]> {
-  const result = await pool.query(`
+export async function getTreatmentActions(
+  riskId: number,
+): Promise<RiskTreatmentAction[]> {
+  const result = await pool.query(
+    `
     SELECT * FROM risk_treatment_actions
     WHERE risk_id = $1
     ORDER BY due_date ASC
-  `, [riskId]);
+  `,
+    [riskId],
+  );
   return result.rows;
 }
 
-export async function getTreatmentActionByPublicId(publicId: string): Promise<RiskTreatmentAction | null> {
+export async function getTreatmentActionByPublicId(
+  publicId: string,
+): Promise<RiskTreatmentAction | null> {
   const result = await pool.query(
-    'SELECT * FROM risk_treatment_actions WHERE public_id = $1',
-    [publicId]
+    "SELECT * FROM risk_treatment_actions WHERE public_id = $1",
+    [publicId],
   );
   return result.rows[0] || null;
 }
 
-export async function updateTreatmentAction(id: number, action: Partial<RiskTreatmentAction>): Promise<RiskTreatmentAction> {
-  console.log('📝 [RiskDB] Updating treatment action:', id);
-  
+export async function updateTreatmentAction(
+  id: number,
+  action: Partial<RiskTreatmentAction>,
+): Promise<RiskTreatmentAction> {
+  logger.info("📝 [RiskDB] Updating treatment action:", id);
+
   const updateFields: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
 
   const allowedFields = [
-    'action_title', 'action_description', 'action_type', 'assigned_to',
-    'due_date', 'status', 'completion_date', 'completion_notes',
-    'evidence_required', 'evidence_attached', 'evidence_path'
+    "action_title",
+    "action_description",
+    "action_type",
+    "assigned_to",
+    "due_date",
+    "status",
+    "completion_date",
+    "completion_notes",
+    "evidence_required",
+    "evidence_attached",
+    "evidence_path",
   ];
 
   for (const [key, value] of Object.entries(action)) {
@@ -605,23 +779,31 @@ export async function updateTreatmentAction(id: number, action: Partial<RiskTrea
   updateFields.push(`updated_at = NOW()`);
   values.push(id);
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     UPDATE risk_treatment_actions 
-    SET ${updateFields.join(', ')}
+    SET ${updateFields.join(", ")}
     WHERE id = $${paramCount}
     RETURNING *
-  `, values);
+  `,
+    values,
+  );
 
-  console.log('✅ [RiskDB] Treatment action updated:', id);
+  logger.info("✅ [RiskDB] Treatment action updated:", id);
   return result.rows[0];
 }
 
-export async function getRiskAssessmentHistory(riskId: number): Promise<RiskAssessmentHistory[]> {
-  const result = await pool.query(`
+export async function getRiskAssessmentHistory(
+  riskId: number,
+): Promise<RiskAssessmentHistory[]> {
+  const result = await pool.query(
+    `
     SELECT * FROM risk_assessment_history
     WHERE risk_id = $1
     ORDER BY assessment_date DESC
-  `, [riskId]);
+  `,
+    [riskId],
+  );
   return result.rows;
 }
 
@@ -635,8 +817,8 @@ export async function getRiskCategories(): Promise<RiskCategory[]> {
 }
 
 export async function getOverdueRisks(): Promise<EnterpriseRisk[]> {
-  console.log('📊 [RiskDB] Fetching overdue risks for review...');
-  
+  logger.info("📊 [RiskDB] Fetching overdue risks for review...");
+
   const result = await pool.query(`
     SELECT * FROM enterprise_risks
     WHERE next_review_date < NOW()
@@ -644,13 +826,13 @@ export async function getOverdueRisks(): Promise<EnterpriseRisk[]> {
     ORDER BY risk_score DESC
   `);
 
-  console.log('✅ [RiskDB] Found', result.rows.length, 'overdue risks');
+  logger.info("✅ [RiskDB] Found", result.rows.length, "overdue risks");
   return result.rows;
 }
 
 export async function getOverdueTreatmentActions(): Promise<any[]> {
-  console.log('📊 [RiskDB] Fetching overdue treatment actions...');
-  
+  logger.info("📊 [RiskDB] Fetching overdue treatment actions...");
+
   const result = await pool.query(`
     SELECT 
       ta.*,
@@ -664,15 +846,20 @@ export async function getOverdueTreatmentActions(): Promise<any[]> {
     ORDER BY ta.due_date ASC
   `);
 
-  console.log('✅ [RiskDB] Found', result.rows.length, 'overdue actions');
+  logger.info("✅ [RiskDB] Found", result.rows.length, "overdue actions");
   return result.rows;
 }
 
 export async function getRiskTrends(days: number = 90): Promise<any[]> {
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 90)));
-  console.log('📊 [RiskDB] Generating risk trends for last', safeDays, 'days...');
-  
-  const result = await pool.query(`
+  logger.info(
+    "📊 [RiskDB] Generating risk trends for last",
+    safeDays,
+    "days...",
+  );
+
+  const result = await pool.query(
+    `
     SELECT 
       DATE(created_at) as date,
       COUNT(*) as new_risks,
@@ -684,8 +871,10 @@ export async function getRiskTrends(days: number = 90): Promise<any[]> {
     WHERE created_at >= NOW() - make_interval(days => $1)
     GROUP BY DATE(created_at)
     ORDER BY date ASC
-  `, [safeDays]);
+  `,
+    [safeDays],
+  );
 
-  console.log('✅ [RiskDB] Trend data generated');
+  logger.info("✅ [RiskDB] Trend data generated");
   return result.rows;
 }

@@ -82,19 +82,21 @@ echo "▶ CI gate: dashboard inline-handler + inline-<script> CSP guard (Task #1
 bash scripts/lint-dashboard-handlers.sh --check-inline-scripts
 
 # ----------------------------------------------------------------------------
-# CI gate — console.log / console.error secret-leak guardrail (Task #61)
+# CI gate — console.log / console.error secret-leak guardrail (Tasks #61, #356)
 #
-# Prevents secrets from leaking through raw console.log / console.error calls:
-#   Part 1: The four high-risk modules migrated to logger.ts must stay clean.
-#   Part 2: No TypeScript file outside the known allow-list may introduce a
-#           new console.* call (stops the problem from spreading to new code).
+# Prevents secrets from leaking through raw console.log / console.error calls.
+# Task #356 finished the migration of every src/ module away from console.* and
+# removed the grandfathered allow-list, so the guardrail is now a hard ban: any
+# console.log / console.error / console.warn / console.debug call under src/
+# (other than test files and src/utils/logger.ts itself) fails the build.
 #
 # Implementation: scripts/check-console-logs.sh + tests/safeLoggerRedaction.test.ts
 # See also: src/utils/logger.ts — the safe wrapper that runs every payload
-#           through redactSensitiveFields() before forwarding to pino.
+#           through redactSensitiveDeep() before forwarding to pino, with the
+#           redaction primitives now living in src/utils/sensitiveRedaction.ts.
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: console.log / console.error guardrail + safeLogger redaction tests (Task #61)"
+echo "▶ CI gate: console.log / console.error guardrail + safeLogger redaction tests (Tasks #61, #356)"
 bash scripts/check-console-logs.sh
 npx tsx tests/safeLoggerRedaction.test.ts
 

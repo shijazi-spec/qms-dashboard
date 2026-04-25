@@ -1,4 +1,5 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -8,7 +9,13 @@ export interface KnowledgeDocument {
   id?: number;
   title: string;
   description?: string;
-  document_type: 'regulation' | 'standard' | 'sop' | 'policy' | 'guideline' | 'other';
+  document_type:
+    | "regulation"
+    | "standard"
+    | "sop"
+    | "policy"
+    | "guideline"
+    | "other";
   source?: string;
   file_type: string;
   file_size?: number;
@@ -60,8 +67,12 @@ export async function initKnowledgeTables(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc ON knowledge_chunks(document_id)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_fts ON knowledge_chunks USING GIN(search_vector)`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc ON knowledge_chunks(document_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_fts ON knowledge_chunks USING GIN(search_vector)`,
+  );
 
   await pool.query(`
     CREATE OR REPLACE FUNCTION update_knowledge_search_vector() RETURNS trigger AS $$
@@ -82,17 +93,21 @@ export async function initKnowledgeTables(): Promise<void> {
     END $$
   `);
 
-  console.log('[KnowledgeDB] Tables initialized');
+  logger.info("[KnowledgeDB] Tables initialized");
 }
 
-function chunkText(text: string, chunkSize: number = 1500, overlap: number = 200): string[] {
+function chunkText(
+  text: string,
+  chunkSize: number = 1500,
+  overlap: number = 200,
+): string[] {
   const chunks: string[] = [];
   let start = 0;
   while (start < text.length) {
     let end = start + chunkSize;
     if (end < text.length) {
-      const lastPeriod = text.lastIndexOf('.', end);
-      const lastNewline = text.lastIndexOf('\n', end);
+      const lastPeriod = text.lastIndexOf(".", end);
+      const lastNewline = text.lastIndexOf("\n", end);
       const breakAt = Math.max(lastPeriod, lastNewline);
       if (breakAt > start + chunkSize / 2) {
         end = breakAt + 1;
@@ -102,21 +117,30 @@ function chunkText(text: string, chunkSize: number = 1500, overlap: number = 200
     start = end - overlap;
     if (start >= text.length) break;
   }
-  return chunks.filter(c => c.length > 20);
+  return chunks.filter((c) => c.length > 20);
 }
 
-function extractSections(text: string): { title: string; content: string; pageHint?: number }[] {
-  const lines = text.split('\n');
+function extractSections(
+  text: string,
+): { title: string; content: string; pageHint?: number }[] {
+  const lines = text.split("\n");
   const sections: { title: string; content: string; pageHint?: number }[] = [];
-  let currentTitle = 'Introduction';
+  let currentTitle = "Introduction";
   let currentContent: string[] = [];
   let pageHint = 1;
 
   for (const line of lines) {
-    const headerMatch = line.match(/^#{1,4}\s+(.+)/) || line.match(/^(\d+\.[\d.]*\s+.+)/) || line.match(/^([A-Z][A-Z\s]{5,})$/);
+    const headerMatch =
+      line.match(/^#{1,4}\s+(.+)/) ||
+      line.match(/^(\d+\.[\d.]*\s+.+)/) ||
+      line.match(/^([A-Z][A-Z\s]{5,})$/);
     if (headerMatch) {
       if (currentContent.length > 0) {
-        sections.push({ title: currentTitle, content: currentContent.join('\n'), pageHint });
+        sections.push({
+          title: currentTitle,
+          content: currentContent.join("\n"),
+          pageHint,
+        });
       }
       currentTitle = headerMatch[1].trim();
       currentContent = [];
@@ -129,18 +153,33 @@ function extractSections(text: string): { title: string; content: string; pageHi
     }
   }
   if (currentContent.length > 0) {
-    sections.push({ title: currentTitle, content: currentContent.join('\n'), pageHint });
+    sections.push({
+      title: currentTitle,
+      content: currentContent.join("\n"),
+      pageHint,
+    });
   }
 
   return sections;
 }
 
-export async function ingestDocument(doc: Omit<KnowledgeDocument, 'id' | 'created_at'>, rawText: string): Promise<{ document: KnowledgeDocument; chunkCount: number }> {
+export async function ingestDocument(
+  doc: Omit<KnowledgeDocument, "id" | "created_at">,
+  rawText: string,
+): Promise<{ document: KnowledgeDocument; chunkCount: number }> {
   const docResult = await pool.query(
     `INSERT INTO knowledge_documents (title, description, document_type, source, file_type, file_size, uploaded_by, tags)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [doc.title, doc.description || null, doc.document_type, doc.source || null,
-     doc.file_type, doc.file_size || rawText.length, doc.uploaded_by || 'admin', doc.tags || []]
+    [
+      doc.title,
+      doc.description || null,
+      doc.document_type,
+      doc.source || null,
+      doc.file_type,
+      doc.file_size || rawText.length,
+      doc.uploaded_by || "admin",
+      doc.tags || [],
+    ],
   );
   const document = docResult.rows[0];
 
@@ -153,8 +192,14 @@ export async function ingestDocument(doc: Omit<KnowledgeDocument, 'id' | 'create
       await pool.query(
         `INSERT INTO knowledge_chunks (document_id, chunk_index, content, section_title, page_number, metadata)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [document.id, chunkIndex++, chunk, section.title, section.pageHint || null,
-         JSON.stringify({ section: section.title })]
+        [
+          document.id,
+          chunkIndex++,
+          chunk,
+          section.title,
+          section.pageHint || null,
+          JSON.stringify({ section: section.title }),
+        ],
       );
     }
   }
@@ -165,7 +210,7 @@ export async function ingestDocument(doc: Omit<KnowledgeDocument, 'id' | 'create
       await pool.query(
         `INSERT INTO knowledge_chunks (document_id, chunk_index, content, section_title, page_number)
          VALUES ($1, $2, $3, $4, $5)`,
-        [document.id, chunkIndex++, chunk, null, null]
+        [document.id, chunkIndex++, chunk, null, null],
       );
     }
   }
@@ -173,11 +218,20 @@ export async function ingestDocument(doc: Omit<KnowledgeDocument, 'id' | 'create
   return { document, chunkCount: chunkIndex };
 }
 
-export async function searchKnowledge(query: string, options?: { documentId?: number; documentType?: string; limit?: number }): Promise<{ chunk: KnowledgeChunk; document_title: string; rank: number }[]> {
-  const tsQuery = query.split(/\s+/).filter(w => w.length > 2).map(w => w + ':*').join(' & ');
+export async function searchKnowledge(
+  query: string,
+  options?: { documentId?: number; documentType?: string; limit?: number },
+): Promise<{ chunk: KnowledgeChunk; document_title: string; rank: number }[]> {
+  const tsQuery = query
+    .split(/\s+/)
+    .filter((w) => w.length > 2)
+    .map((w) => w + ":*")
+    .join(" & ");
   if (!tsQuery) return [];
 
-  const conditions: string[] = [`kc.search_vector @@ to_tsquery('english', $1)`];
+  const conditions: string[] = [
+    `kc.search_vector @@ to_tsquery('english', $1)`,
+  ];
   const params: any[] = [tsQuery];
   let idx = 2;
 
@@ -200,42 +254,68 @@ export async function searchKnowledge(query: string, options?: { documentId?: nu
             ts_rank(kc.search_vector, to_tsquery('english', $1)) as rank
      FROM knowledge_chunks kc
      JOIN knowledge_documents kd ON kc.document_id = kd.id
-     WHERE ${conditions.join(' AND ')}
+     WHERE ${conditions.join(" AND ")}
      ORDER BY rank DESC
      LIMIT $${idx}`,
-    params
+    params,
   );
 
   return result.rows.map((r: any) => ({
-    chunk: { id: r.id, document_id: r.document_id, chunk_index: r.chunk_index, content: r.content, section_title: r.section_title, page_number: r.page_number, metadata: r.metadata },
+    chunk: {
+      id: r.id,
+      document_id: r.document_id,
+      chunk_index: r.chunk_index,
+      content: r.content,
+      section_title: r.section_title,
+      page_number: r.page_number,
+      metadata: r.metadata,
+    },
     document_title: r.document_title,
     rank: parseFloat(r.rank),
   }));
 }
 
-export async function getDocuments(filters?: { document_type?: string; is_active?: boolean }): Promise<KnowledgeDocument[]> {
+export async function getDocuments(filters?: {
+  document_type?: string;
+  is_active?: boolean;
+}): Promise<KnowledgeDocument[]> {
   const conditions: string[] = [];
   const params: any[] = [];
   let idx = 1;
 
-  if (filters?.document_type) { conditions.push(`document_type = $${idx++}`); params.push(filters.document_type); }
-  if (filters?.is_active !== undefined) { conditions.push(`is_active = $${idx++}`); params.push(filters.is_active); }
+  if (filters?.document_type) {
+    conditions.push(`document_type = $${idx++}`);
+    params.push(filters.document_type);
+  }
+  if (filters?.is_active !== undefined) {
+    conditions.push(`is_active = $${idx++}`);
+    params.push(filters.is_active);
+  }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const result = await pool.query(
     `SELECT kd.*, (SELECT COUNT(*)::int FROM knowledge_chunks WHERE document_id = kd.id) as chunk_count
      FROM knowledge_documents kd ${where} ORDER BY created_at DESC`,
-    params
+    params,
   );
   return result.rows;
 }
 
 export async function deleteDocument(id: number): Promise<boolean> {
-  const result = await pool.query(`DELETE FROM knowledge_documents WHERE id = $1 RETURNING id`, [id]);
+  const result = await pool.query(
+    `DELETE FROM knowledge_documents WHERE id = $1 RETURNING id`,
+    [id],
+  );
   return result.rows.length > 0;
 }
 
-export async function getDocumentById(id: number): Promise<KnowledgeDocument | null> {
-  const result = await pool.query(`SELECT * FROM knowledge_documents WHERE id = $1`, [id]);
+export async function getDocumentById(
+  id: number,
+): Promise<KnowledgeDocument | null> {
+  const result = await pool.query(
+    `SELECT * FROM knowledge_documents WHERE id = $1`,
+    [id],
+  );
   return result.rows[0] || null;
 }

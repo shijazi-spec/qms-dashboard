@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger";
 export interface Lead {
   id: string;
   First_Name: string;
@@ -78,40 +79,52 @@ export interface AuditCoverageMetrics {
   separateFiltersApplied?: SeparateDateFilters;
 }
 
-function isDateInRange(dateStr: string | undefined, start: string | null, end: string | null): boolean {
+function isDateInRange(
+  dateStr: string | undefined,
+  start: string | null,
+  end: string | null,
+): boolean {
   if (!start || !end) return true;
-  if (!dateStr || dateStr.trim() === '') return false;
-  
+  if (!dateStr || dateStr.trim() === "") return false;
+
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return false;
-  
+
   const startDate = new Date(start);
   startDate.setHours(0, 0, 0, 0);
   const endDate = new Date(end);
   endDate.setHours(23, 59, 59, 999);
-  
+
   return date >= startDate && date <= endDate;
 }
 
 export function isRecordInSeparateDateFilters(
   record: { Created_Time?: string; Modified_Time?: string },
-  filters: SeparateDateFilters
+  filters: SeparateDateFilters,
 ): boolean {
   const hasCreatedFilter = filters.created.start && filters.created.end;
   const hasModifiedFilter = filters.modified.start && filters.modified.end;
-  
+
   if (!hasCreatedFilter && !hasModifiedFilter) return true;
-  
+
   let createdMatch = true;
   if (hasCreatedFilter) {
-    createdMatch = isDateInRange(record.Created_Time, filters.created.start, filters.created.end);
+    createdMatch = isDateInRange(
+      record.Created_Time,
+      filters.created.start,
+      filters.created.end,
+    );
   }
-  
+
   let modifiedMatch = true;
   if (hasModifiedFilter) {
-    modifiedMatch = isDateInRange(record.Modified_Time, filters.modified.start, filters.modified.end);
+    modifiedMatch = isDateInRange(
+      record.Modified_Time,
+      filters.modified.start,
+      filters.modified.end,
+    );
   }
-  
+
   if (hasCreatedFilter && hasModifiedFilter) {
     return createdMatch && modifiedMatch;
   } else if (hasCreatedFilter) {
@@ -123,7 +136,7 @@ export function isRecordInSeparateDateFilters(
 
 export function isRecordInDateRange(
   record: { Created_Time?: string; Modified_Time?: string },
-  dateRange: DateRangeFilter | null
+  dateRange: DateRangeFilter | null,
 ): boolean {
   if (!dateRange || !dateRange.startDate || !dateRange.endDate) return true;
 
@@ -132,23 +145,32 @@ export function isRecordInDateRange(
   const endDate = new Date(dateRange.endDate);
   endDate.setHours(23, 59, 59, 999);
 
-  const createdTime = record.Created_Time ? new Date(record.Created_Time) : null;
-  const modifiedTime = record.Modified_Time ? new Date(record.Modified_Time) : null;
+  const createdTime = record.Created_Time
+    ? new Date(record.Created_Time)
+    : null;
+  const modifiedTime = record.Modified_Time
+    ? new Date(record.Modified_Time)
+    : null;
 
-  const createdInRange = createdTime && createdTime >= startDate && createdTime <= endDate;
-  const modifiedInRange = modifiedTime && modifiedTime >= startDate && modifiedTime <= endDate;
+  const createdInRange =
+    createdTime && createdTime >= startDate && createdTime <= endDate;
+  const modifiedInRange =
+    modifiedTime && modifiedTime >= startDate && modifiedTime <= endDate;
 
   return !!(createdInRange || modifiedInRange);
 }
 
-export async function getLeadsWithSeparateFilters(filters: SeparateDateFilters, maxRecords?: number): Promise<{
+export async function getLeadsWithSeparateFilters(
+  filters: SeparateDateFilters,
+  maxRecords?: number,
+): Promise<{
   leads: Lead[];
   coverage: AuditCoverageMetrics;
 }> {
   const allLeads = await getLeads(maxRecords);
   const hasCreatedFilter = filters.created.start && filters.created.end;
   const hasModifiedFilter = filters.modified.start && filters.modified.end;
-  
+
   if (!hasCreatedFilter && !hasModifiedFilter) {
     return {
       leads: allLeads,
@@ -157,19 +179,27 @@ export async function getLeadsWithSeparateFilters(filters: SeparateDateFilters, 
         recordsInDateRange: allLeads.length,
         recordsAudited: allLeads.length,
         recordsExcluded: 0,
-        exclusionReason: 'No date filter applied',
+        exclusionReason: "No date filter applied",
         dateRangeApplied: null,
-        separateFiltersApplied: filters
-      }
+        separateFiltersApplied: filters,
+      },
     };
   }
 
-  const filteredLeads = allLeads.filter(lead => isRecordInSeparateDateFilters(lead, filters));
-  
+  const filteredLeads = allLeads.filter((lead) =>
+    isRecordInSeparateDateFilters(lead, filters),
+  );
+
   const filterDesc: string[] = [];
-  if (hasCreatedFilter) filterDesc.push(`Created: ${filters.created.start} to ${filters.created.end}`);
-  if (hasModifiedFilter) filterDesc.push(`Modified: ${filters.modified.start} to ${filters.modified.end}`);
-  
+  if (hasCreatedFilter)
+    filterDesc.push(
+      `Created: ${filters.created.start} to ${filters.created.end}`,
+    );
+  if (hasModifiedFilter)
+    filterDesc.push(
+      `Modified: ${filters.modified.start} to ${filters.modified.end}`,
+    );
+
   return {
     leads: filteredLeads,
     coverage: {
@@ -177,21 +207,24 @@ export async function getLeadsWithSeparateFilters(filters: SeparateDateFilters, 
       recordsInDateRange: filteredLeads.length,
       recordsAudited: filteredLeads.length,
       recordsExcluded: allLeads.length - filteredLeads.length,
-      exclusionReason: `${allLeads.length - filteredLeads.length} records excluded (${filterDesc.join(', ')})`,
+      exclusionReason: `${allLeads.length - filteredLeads.length} records excluded (${filterDesc.join(", ")})`,
       dateRangeApplied: null,
-      separateFiltersApplied: filters
-    }
+      separateFiltersApplied: filters,
+    },
   };
 }
 
-export async function getDealsWithSeparateFilters(filters: SeparateDateFilters, maxRecords?: number): Promise<{
+export async function getDealsWithSeparateFilters(
+  filters: SeparateDateFilters,
+  maxRecords?: number,
+): Promise<{
   deals: Deal[];
   coverage: AuditCoverageMetrics;
 }> {
   const allDeals = await getDeals(maxRecords);
   const hasCreatedFilter = filters.created.start && filters.created.end;
   const hasModifiedFilter = filters.modified.start && filters.modified.end;
-  
+
   if (!hasCreatedFilter && !hasModifiedFilter) {
     return {
       deals: allDeals,
@@ -200,19 +233,27 @@ export async function getDealsWithSeparateFilters(filters: SeparateDateFilters, 
         recordsInDateRange: allDeals.length,
         recordsAudited: allDeals.length,
         recordsExcluded: 0,
-        exclusionReason: 'No date filter applied',
+        exclusionReason: "No date filter applied",
         dateRangeApplied: null,
-        separateFiltersApplied: filters
-      }
+        separateFiltersApplied: filters,
+      },
     };
   }
 
-  const filteredDeals = allDeals.filter(deal => isRecordInSeparateDateFilters(deal, filters));
-  
+  const filteredDeals = allDeals.filter((deal) =>
+    isRecordInSeparateDateFilters(deal, filters),
+  );
+
   const filterDesc: string[] = [];
-  if (hasCreatedFilter) filterDesc.push(`Created: ${filters.created.start} to ${filters.created.end}`);
-  if (hasModifiedFilter) filterDesc.push(`Modified: ${filters.modified.start} to ${filters.modified.end}`);
-  
+  if (hasCreatedFilter)
+    filterDesc.push(
+      `Created: ${filters.created.start} to ${filters.created.end}`,
+    );
+  if (hasModifiedFilter)
+    filterDesc.push(
+      `Modified: ${filters.modified.start} to ${filters.modified.end}`,
+    );
+
   return {
     deals: filteredDeals,
     coverage: {
@@ -220,19 +261,21 @@ export async function getDealsWithSeparateFilters(filters: SeparateDateFilters, 
       recordsInDateRange: filteredDeals.length,
       recordsAudited: filteredDeals.length,
       recordsExcluded: allDeals.length - filteredDeals.length,
-      exclusionReason: `${allDeals.length - filteredDeals.length} records excluded (${filterDesc.join(', ')})`,
+      exclusionReason: `${allDeals.length - filteredDeals.length} records excluded (${filterDesc.join(", ")})`,
       dateRangeApplied: null,
-      separateFiltersApplied: filters
-    }
+      separateFiltersApplied: filters,
+    },
   };
 }
 
-export async function getLeadsWithCoverage(dateRange: DateRangeFilter | null): Promise<{
+export async function getLeadsWithCoverage(
+  dateRange: DateRangeFilter | null,
+): Promise<{
   leads: Lead[];
   coverage: AuditCoverageMetrics;
 }> {
   const allLeads = await getLeads();
-  
+
   if (!dateRange || !dateRange.startDate || !dateRange.endDate) {
     return {
       leads: allLeads,
@@ -241,14 +284,16 @@ export async function getLeadsWithCoverage(dateRange: DateRangeFilter | null): P
         recordsInDateRange: allLeads.length,
         recordsAudited: allLeads.length,
         recordsExcluded: 0,
-        exclusionReason: 'No date filter applied',
-        dateRangeApplied: null
-      }
+        exclusionReason: "No date filter applied",
+        dateRangeApplied: null,
+      },
     };
   }
 
-  const filteredLeads = allLeads.filter(lead => isRecordInDateRange(lead, dateRange));
-  
+  const filteredLeads = allLeads.filter((lead) =>
+    isRecordInDateRange(lead, dateRange),
+  );
+
   return {
     leads: filteredLeads,
     coverage: {
@@ -257,17 +302,19 @@ export async function getLeadsWithCoverage(dateRange: DateRangeFilter | null): P
       recordsAudited: filteredLeads.length,
       recordsExcluded: allLeads.length - filteredLeads.length,
       exclusionReason: `${allLeads.length - filteredLeads.length} records excluded (Created/Modified outside ${dateRange.startDate} to ${dateRange.endDate})`,
-      dateRangeApplied: dateRange
-    }
+      dateRangeApplied: dateRange,
+    },
   };
 }
 
-export async function getDealsWithCoverage(dateRange: DateRangeFilter | null): Promise<{
+export async function getDealsWithCoverage(
+  dateRange: DateRangeFilter | null,
+): Promise<{
   deals: Deal[];
   coverage: AuditCoverageMetrics;
 }> {
   const allDeals = await getDeals();
-  
+
   if (!dateRange || !dateRange.startDate || !dateRange.endDate) {
     return {
       deals: allDeals,
@@ -276,14 +323,16 @@ export async function getDealsWithCoverage(dateRange: DateRangeFilter | null): P
         recordsInDateRange: allDeals.length,
         recordsAudited: allDeals.length,
         recordsExcluded: 0,
-        exclusionReason: 'No date filter applied',
-        dateRangeApplied: null
-      }
+        exclusionReason: "No date filter applied",
+        dateRangeApplied: null,
+      },
     };
   }
 
-  const filteredDeals = allDeals.filter(deal => isRecordInDateRange(deal, dateRange));
-  
+  const filteredDeals = allDeals.filter((deal) =>
+    isRecordInDateRange(deal, dateRange),
+  );
+
   return {
     deals: filteredDeals,
     coverage: {
@@ -292,8 +341,8 @@ export async function getDealsWithCoverage(dateRange: DateRangeFilter | null): P
       recordsAudited: filteredDeals.length,
       recordsExcluded: allDeals.length - filteredDeals.length,
       exclusionReason: `${allDeals.length - filteredDeals.length} records excluded (Created/Modified outside ${dateRange.startDate} to ${dateRange.endDate})`,
-      dateRangeApplied: dateRange
-    }
+      dateRangeApplied: dateRange,
+    },
   };
 }
 
@@ -331,48 +380,74 @@ export interface Five9Call {
 }
 
 export async function getLeads(maxRecords?: number): Promise<Lead[]> {
-  const { fetchAllZohoRecords } = await import('../utils/zohoCRM');
-  const records = await fetchAllZohoRecords('Leads', { maxRecords, sortBy: 'Modified_Time', sortOrder: 'desc' });
+  const { fetchAllZohoRecords } = await import("../utils/zohoCRM");
+  const records = await fetchAllZohoRecords("Leads", {
+    maxRecords,
+    sortBy: "Modified_Time",
+    sortOrder: "desc",
+  });
   return records.map((r: any) => ({
     id: r.id,
-    First_Name: r.data?.First_Name || '',
-    Last_Name: r.data?.Last_Name || '',
-    Email: r.data?.Email || '',
-    Phone: r.data?.Phone || '',
-    Company: r.data?.Company || '',
-    Lead_Source: r.data?.Lead_Source || '',
-    Lead_Status: r.data?.Lead_Status || '',
-    Owner: r.owner || r.data?.Owner?.name || r.data?.Owner?.id || '',
-    Layouts: r.data?.Layout?.name || r.data?.Layout || '',
-    Products: (Array.isArray(r.data?.Product_Details) && r.data.Product_Details.length > 0)
-      ? r.data.Product_Details.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
-      : (typeof r.data?.Products === 'object' ? r.data?.Products?.name : r.data?.Products) || r.data?.Product_Name || r.data?.Product || '',
-    Created_By: r.data?.Created_By?.name || r.data?.Created_By || '',
-    Created_Time: r.createdTime || '',
-    Modified_Time: r.modifiedTime || '',
+    First_Name: r.data?.First_Name || "",
+    Last_Name: r.data?.Last_Name || "",
+    Email: r.data?.Email || "",
+    Phone: r.data?.Phone || "",
+    Company: r.data?.Company || "",
+    Lead_Source: r.data?.Lead_Source || "",
+    Lead_Status: r.data?.Lead_Status || "",
+    Owner: r.owner || r.data?.Owner?.name || r.data?.Owner?.id || "",
+    Layouts: r.data?.Layout?.name || r.data?.Layout || "",
+    Products:
+      Array.isArray(r.data?.Product_Details) &&
+      r.data.Product_Details.length > 0
+        ? r.data.Product_Details.map((p: any) => p.product?.name || "")
+            .filter(Boolean)
+            .join(", ")
+        : (typeof r.data?.Products === "object"
+            ? r.data?.Products?.name
+            : r.data?.Products) ||
+          r.data?.Product_Name ||
+          r.data?.Product ||
+          "",
+    Created_By: r.data?.Created_By?.name || r.data?.Created_By || "",
+    Created_Time: r.createdTime || "",
+    Modified_Time: r.modifiedTime || "",
   }));
 }
 
 export async function getDeals(maxRecords?: number): Promise<Deal[]> {
-  const { fetchAllZohoRecords } = await import('../utils/zohoCRM');
-  const records = await fetchAllZohoRecords('Deals', { maxRecords, sortBy: 'Modified_Time', sortOrder: 'desc' });
+  const { fetchAllZohoRecords } = await import("../utils/zohoCRM");
+  const records = await fetchAllZohoRecords("Deals", {
+    maxRecords,
+    sortBy: "Modified_Time",
+    sortOrder: "desc",
+  });
   return records.map((r: any) => ({
     id: r.id,
-    Deal_Name: r.data?.Deal_Name || '',
-    Account_Name: r.data?.Account_Name?.name || '',
-    Stage: r.data?.Stage || '',
+    Deal_Name: r.data?.Deal_Name || "",
+    Account_Name: r.data?.Account_Name?.name || "",
+    Stage: r.data?.Stage || "",
     Amount: r.data?.Amount || 0,
-    Closing_Date: r.data?.Closing_Date || '',
-    Owner: r.owner || r.data?.Owner?.name || r.data?.Owner?.id || '',
-    Layouts: r.data?.Layout?.name || r.data?.Layout || '',
-    Products: (Array.isArray(r.data?.Product_Details) && r.data.Product_Details.length > 0)
-      ? r.data.Product_Details.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
-      : (typeof r.data?.Products === 'object' ? r.data?.Products?.name : r.data?.Products) || r.data?.Product_Name || r.data?.Product || '',
-    Created_By: r.data?.Created_By?.name || r.data?.Created_By || '',
-    Lead_Source: r.data?.Lead_Source || '',
-    Contact_Name: r.data?.Contact_Name?.name || '',
-    Created_Time: r.createdTime || '',
-    Modified_Time: r.modifiedTime || '',
+    Closing_Date: r.data?.Closing_Date || "",
+    Owner: r.owner || r.data?.Owner?.name || r.data?.Owner?.id || "",
+    Layouts: r.data?.Layout?.name || r.data?.Layout || "",
+    Products:
+      Array.isArray(r.data?.Product_Details) &&
+      r.data.Product_Details.length > 0
+        ? r.data.Product_Details.map((p: any) => p.product?.name || "")
+            .filter(Boolean)
+            .join(", ")
+        : (typeof r.data?.Products === "object"
+            ? r.data?.Products?.name
+            : r.data?.Products) ||
+          r.data?.Product_Name ||
+          r.data?.Product ||
+          "",
+    Created_By: r.data?.Created_By?.name || r.data?.Created_By || "",
+    Lead_Source: r.data?.Lead_Source || "",
+    Contact_Name: r.data?.Contact_Name?.name || "",
+    Created_Time: r.createdTime || "",
+    Modified_Time: r.modifiedTime || "",
   }));
 }
 
@@ -386,7 +461,7 @@ export async function getActivities(): Promise<Activity[]> {
 // retries when the API is unavailable due to OAuth scope/auth issues).
 let _usersCache: { ts: number; data: User[] } | null = null;
 let _zohoUsersFailUntil = 0;
-const USERS_TTL_MS = 10 * 60 * 1000;        // success: 10 min
+const USERS_TTL_MS = 10 * 60 * 1000; // success: 10 min
 const ZOHO_USERS_BACKOFF_MS = 5 * 60 * 1000; // failure: 5-min cool-down before retrying Zoho
 
 export async function getUsers(): Promise<User[]> {
@@ -394,21 +469,30 @@ export async function getUsers(): Promise<User[]> {
     return _usersCache.data;
   }
 
-  const { SEED_USERS, findSeedUser } = await import('./seedUsers');
+  const { SEED_USERS, findSeedUser } = await import("./seedUsers");
   const out: User[] = [];
   const consumedSeedKeys = new Set<string>();
-  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
   // 1. Pull live Zoho users (best-effort) so CRM record Owner IDs resolve to names.
-  let zohoUsers: { id: string; full_name: string; email: string; status: string; role: string; profile: string }[] = [];
+  let zohoUsers: {
+    id: string;
+    full_name: string;
+    email: string;
+    status: string;
+    role: string;
+    profile: string;
+  }[] = [];
   if (Date.now() >= _zohoUsersFailUntil) {
     try {
-      const { fetchZohoUsers } = await import('../utils/zohoCRM');
-      zohoUsers = await fetchZohoUsers('AllUsers');
-      console.log(`👥 [Users] Fetched ${zohoUsers.length} users from Zoho`);
+      const { fetchZohoUsers } = await import("../utils/zohoCRM");
+      zohoUsers = await fetchZohoUsers("AllUsers");
+      logger.info(`👥 [Users] Fetched ${zohoUsers.length} users from Zoho`);
     } catch (err: any) {
       _zohoUsersFailUntil = Date.now() + ZOHO_USERS_BACKOFF_MS;
-      console.warn(`⚠️ [Users] Zoho Users API unavailable (backing off ${ZOHO_USERS_BACKOFF_MS / 60000}m), falling back to seed only: ${err?.message || err}`);
+      logger.warn(
+        `⚠️ [Users] Zoho Users API unavailable (backing off ${ZOHO_USERS_BACKOFF_MS / 60000}m), falling back to seed only: ${err?.message || err}`,
+      );
     }
   }
 
@@ -418,12 +502,18 @@ export async function getUsers(): Promise<User[]> {
     if (seed) consumedSeedKeys.add(norm(seed.name));
     out.push({
       id: zu.id,
-      name: zu.full_name || (seed?.name ?? ''),
+      name: zu.full_name || (seed?.name ?? ""),
       email: zu.email,
-      role: seed ? `${seed.team} — ${seed.modules.join(', ') || 'No CRM modules'}` : (zu.role || zu.profile || 'CRM User'),
-      team: seed?.team ?? (zu.profile || 'Unassigned'),
-      status: seed ? seed.status : (zu.status?.toLowerCase() === 'active' ? 'Active' : 'Inactive'),
-      created_at: '',
+      role: seed
+        ? `${seed.team} — ${seed.modules.join(", ") || "No CRM modules"}`
+        : zu.role || zu.profile || "CRM User",
+      team: seed?.team ?? (zu.profile || "Unassigned"),
+      status: seed
+        ? seed.status
+        : zu.status?.toLowerCase() === "active"
+          ? "Active"
+          : "Inactive",
+      created_at: "",
     });
   }
 
@@ -433,35 +523,37 @@ export async function getUsers(): Promise<User[]> {
     out.push({
       id: `seed:${norm(s.name)}`,
       name: s.name,
-      email: '',
-      role: `${s.team} — ${s.modules.join(', ') || 'No CRM modules'}`,
+      email: "",
+      role: `${s.team} — ${s.modules.join(", ") || "No CRM modules"}`,
       team: s.team,
       status: s.status,
-      created_at: '',
+      created_at: "",
     });
   }
 
-  console.log(`👥 [Users] Final roster: ${out.length} (seed=${SEED_USERS.length}, zoho=${zohoUsers.length})`);
+  logger.info(
+    `👥 [Users] Final roster: ${out.length} (seed=${SEED_USERS.length}, zoho=${zohoUsers.length})`,
+  );
   _usersCache = { ts: Date.now(), data: out };
   return out;
 }
 
 export async function getCalendarEvents(): Promise<CalendarEvent[]> {
-  const { fetchCalendarEvents } = await import('../utils/googleCalendar');
+  const { fetchCalendarEvents } = await import("../utils/googleCalendar");
   const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const events = await fetchCalendarEvents(startDate, endDate, 'primary');
-  
+  const events = await fetchCalendarEvents(startDate, endDate, "primary");
+
   return events.map((e: any) => ({
     id: e.id,
-    summary: e.summary || '',
-    description: e.description || '',
-    start: e.start?.dateTime || e.start?.date || '',
-    end: e.end?.dateTime || e.end?.date || '',
+    summary: e.summary || "",
+    description: e.description || "",
+    start: e.start?.dateTime || e.start?.date || "",
+    end: e.end?.dateTime || e.end?.date || "",
     attendees: e.attendees?.map((a: any) => a.email) || [],
-    organizer: e.organizer?.email || '',
-    status: e.status || '',
-    location: e.location || '',
+    organizer: e.organizer?.email || "",
+    status: e.status || "",
+    location: e.location || "",
     related_crm_record: null,
   }));
 }
@@ -471,106 +563,114 @@ export async function getFive9Calls(): Promise<Five9Call[]> {
 }
 
 export async function addLead(lead: Partial<Lead>): Promise<Lead> {
-  const { createZohoRecord } = await import('../utils/zohoCRM');
-  const result = await createZohoRecord('Leads', {
-    First_Name: lead.First_Name || '',
-    Last_Name: lead.Last_Name || '',
-    Email: lead.Email || '',
-    Phone: lead.Phone || '',
-    Company: lead.Company || '',
-    Lead_Source: lead.Lead_Source || '',
-    Lead_Status: lead.Lead_Status || 'Not Contacted',
+  const { createZohoRecord } = await import("../utils/zohoCRM");
+  const result = await createZohoRecord("Leads", {
+    First_Name: lead.First_Name || "",
+    Last_Name: lead.Last_Name || "",
+    Email: lead.Email || "",
+    Phone: lead.Phone || "",
+    Company: lead.Company || "",
+    Lead_Source: lead.Lead_Source || "",
+    Lead_Status: lead.Lead_Status || "Not Contacted",
   });
   return {
     id: result?.id || `lead_${Date.now()}`,
-    First_Name: lead.First_Name || '',
-    Last_Name: lead.Last_Name || '',
-    Email: lead.Email || '',
-    Phone: lead.Phone || '',
-    Company: lead.Company || '',
-    Lead_Source: lead.Lead_Source || '',
-    Lead_Status: lead.Lead_Status || 'Not Contacted',
-    Owner: lead.Owner || '',
+    First_Name: lead.First_Name || "",
+    Last_Name: lead.Last_Name || "",
+    Email: lead.Email || "",
+    Phone: lead.Phone || "",
+    Company: lead.Company || "",
+    Lead_Source: lead.Lead_Source || "",
+    Lead_Status: lead.Lead_Status || "Not Contacted",
+    Owner: lead.Owner || "",
     Created_Time: new Date().toISOString(),
     Modified_Time: new Date().toISOString(),
   };
 }
 
 export async function addDeal(deal: Partial<Deal>): Promise<Deal> {
-  const { createZohoRecord } = await import('../utils/zohoCRM');
-  const result = await createZohoRecord('Deals', {
-    Deal_Name: deal.Deal_Name || '',
-    Account_Name: deal.Account_Name || '',
-    Stage: deal.Stage || 'New Deal',
+  const { createZohoRecord } = await import("../utils/zohoCRM");
+  const result = await createZohoRecord("Deals", {
+    Deal_Name: deal.Deal_Name || "",
+    Account_Name: deal.Account_Name || "",
+    Stage: deal.Stage || "New Deal",
     Amount: deal.Amount || 0,
-    Closing_Date: deal.Closing_Date || '',
-    Lead_Source: deal.Lead_Source || '',
+    Closing_Date: deal.Closing_Date || "",
+    Lead_Source: deal.Lead_Source || "",
   });
   return {
     id: result?.id || `deal_${Date.now()}`,
-    Deal_Name: deal.Deal_Name || '',
-    Account_Name: deal.Account_Name || '',
-    Stage: deal.Stage || 'New Deal',
+    Deal_Name: deal.Deal_Name || "",
+    Account_Name: deal.Account_Name || "",
+    Stage: deal.Stage || "New Deal",
     Amount: deal.Amount || 0,
-    Closing_Date: deal.Closing_Date || '',
-    Owner: deal.Owner || '',
-    Lead_Source: deal.Lead_Source || '',
-    Contact_Name: deal.Contact_Name || '',
+    Closing_Date: deal.Closing_Date || "",
+    Owner: deal.Owner || "",
+    Lead_Source: deal.Lead_Source || "",
+    Contact_Name: deal.Contact_Name || "",
     Created_Time: new Date().toISOString(),
     Modified_Time: new Date().toISOString(),
   };
 }
 
-export async function updateLead(id: string, updates: Partial<Lead>): Promise<Lead | null> {
-  const { updateZohoRecord } = await import('../utils/zohoCRM');
-  await updateZohoRecord('Leads', id, updates);
+export async function updateLead(
+  id: string,
+  updates: Partial<Lead>,
+): Promise<Lead | null> {
+  const { updateZohoRecord } = await import("../utils/zohoCRM");
+  await updateZohoRecord("Leads", id, updates);
   return {
     id,
-    First_Name: updates.First_Name || '',
-    Last_Name: updates.Last_Name || '',
-    Email: updates.Email || '',
-    Phone: updates.Phone || '',
-    Company: updates.Company || '',
-    Lead_Source: updates.Lead_Source || '',
-    Lead_Status: updates.Lead_Status || '',
-    Owner: updates.Owner || '',
-    Created_Time: '',
+    First_Name: updates.First_Name || "",
+    Last_Name: updates.Last_Name || "",
+    Email: updates.Email || "",
+    Phone: updates.Phone || "",
+    Company: updates.Company || "",
+    Lead_Source: updates.Lead_Source || "",
+    Lead_Status: updates.Lead_Status || "",
+    Owner: updates.Owner || "",
+    Created_Time: "",
     Modified_Time: new Date().toISOString(),
   };
 }
 
-export async function updateDeal(id: string, updates: Partial<Deal>): Promise<Deal | null> {
-  const { updateZohoRecord } = await import('../utils/zohoCRM');
-  await updateZohoRecord('Deals', id, updates);
+export async function updateDeal(
+  id: string,
+  updates: Partial<Deal>,
+): Promise<Deal | null> {
+  const { updateZohoRecord } = await import("../utils/zohoCRM");
+  await updateZohoRecord("Deals", id, updates);
   return {
     id,
-    Deal_Name: updates.Deal_Name || '',
-    Account_Name: updates.Account_Name || '',
-    Stage: updates.Stage || '',
+    Deal_Name: updates.Deal_Name || "",
+    Account_Name: updates.Account_Name || "",
+    Stage: updates.Stage || "",
     Amount: updates.Amount || 0,
-    Closing_Date: updates.Closing_Date || '',
-    Owner: updates.Owner || '',
-    Lead_Source: updates.Lead_Source || '',
-    Contact_Name: updates.Contact_Name || '',
-    Created_Time: '',
+    Closing_Date: updates.Closing_Date || "",
+    Owner: updates.Owner || "",
+    Lead_Source: updates.Lead_Source || "",
+    Contact_Name: updates.Contact_Name || "",
+    Created_Time: "",
     Modified_Time: new Date().toISOString(),
   };
 }
 
 export async function deleteLead(id: string): Promise<boolean> {
-  const { deleteZohoRecord } = await import('../utils/zohoCRM');
-  await deleteZohoRecord('Leads', id);
+  const { deleteZohoRecord } = await import("../utils/zohoCRM");
+  await deleteZohoRecord("Leads", id);
   return true;
 }
 
 export async function deleteDeal(id: string): Promise<boolean> {
-  const { deleteZohoRecord } = await import('../utils/zohoCRM');
-  await deleteZohoRecord('Deals', id);
+  const { deleteZohoRecord } = await import("../utils/zohoCRM");
+  await deleteZohoRecord("Deals", id);
   return true;
 }
 
-export type DataMode = 'REAL' | 'MOCK';
+export type DataMode = "REAL" | "MOCK";
 
 export function getDataMode(): DataMode {
-  return (process.env.DATA_MODE || '').toUpperCase() === 'MOCK' ? 'MOCK' : 'REAL';
+  return (process.env.DATA_MODE || "").toUpperCase() === "MOCK"
+    ? "MOCK"
+    : "REAL";
 }

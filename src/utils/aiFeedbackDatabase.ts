@@ -1,9 +1,10 @@
-import pg from 'pg';
+import pg from "pg";
+import { logger } from "./logger";
 import {
   redactSecretLikeStrings,
   deepRedactSecretLikeStrings,
-} from './eventLogsDatabase';
-import { wrapPoolForRedaction } from './redactedPool';
+} from "./eventLogsDatabase";
+import { wrapPoolForRedaction } from "./redactedPool";
 
 const { Pool } = pg;
 
@@ -49,10 +50,12 @@ export async function initAIFeedbackTable(): Promise<void> {
   return tableReady;
 }
 
-function safeRedactPreview(text: string | undefined | null): string | undefined {
+function safeRedactPreview(
+  text: string | undefined | null,
+): string | undefined {
   if (!text) return undefined;
   const redacted = redactSecretLikeStrings(text.substring(0, 500));
-  return typeof redacted === 'string' ? redacted : text.substring(0, 500);
+  return typeof redacted === "string" ? redacted : text.substring(0, 500);
 }
 
 /**
@@ -66,7 +69,7 @@ function safeRedactPreview(text: string | undefined | null): string | undefined 
  * which would land plaintext credentials in the JSONB column. The WRITE-path
  * scrubber `redactFeedbackMetadataForStorage()` defends against that one
  * layer too late: by the time it runs, the secret has already been
- * constructed in memory and (typically) logged to stdout via `console.error`
+ * constructed in memory and (typically) logged to stdout via logger.error
  * / Pino BEFORE the scrubber redacts it for the DB. This typed shape is the
  * source-side prevention; build it via `buildAiCallFeedbackMetadata()`.
  *
@@ -111,14 +114,17 @@ export interface AiCallFeedbackMetadataInput {
   clientSurface?: string;
 }
 
-const FEEDBACK_METADATA_KEY_MAP: Record<keyof AiCallFeedbackMetadataInput, keyof AiCallFeedbackMetadata> = {
-  promptVersion: 'prompt_version',
-  featureFlag: 'feature_flag',
-  experimentArm: 'experiment_arm',
-  workflow: 'workflow',
-  step: 'step',
-  ratingSource: 'rating_source',
-  clientSurface: 'client_surface',
+const FEEDBACK_METADATA_KEY_MAP: Record<
+  keyof AiCallFeedbackMetadataInput,
+  keyof AiCallFeedbackMetadata
+> = {
+  promptVersion: "prompt_version",
+  featureFlag: "feature_flag",
+  experimentArm: "experiment_arm",
+  workflow: "workflow",
+  step: "step",
+  ratingSource: "rating_source",
+  clientSurface: "client_surface",
 };
 
 /**
@@ -132,7 +138,7 @@ const FEEDBACK_METADATA_KEY_MAP: Record<keyof AiCallFeedbackMetadataInput, keyof
  * JSONB column.
  *
  * Defense-in-depth runtime guard: even if a caller bypasses the type
- * system via `as any`, unexpected keys are dropped and a `console.warn`
+ * system via `as any`, unexpected keys are dropped and a structured warn
  * is emitted with an actionable message so the regression shows up in
  * the operator console rather than silently persisting.
  */
@@ -142,12 +148,13 @@ export function buildAiCallFeedbackMetadata(
   const out: AiCallFeedbackMetadata = {};
   const loose = input as Record<string, unknown>;
   for (const inputKey of Object.keys(loose)) {
-    const mapped = FEEDBACK_METADATA_KEY_MAP[inputKey as keyof AiCallFeedbackMetadataInput];
+    const mapped =
+      FEEDBACK_METADATA_KEY_MAP[inputKey as keyof AiCallFeedbackMetadataInput];
     if (!mapped) {
-      console.warn(
+      logger.warn(
         `[aiFeedbackDatabase] buildAiCallFeedbackMetadata received unexpected key "${inputKey}". ` +
-        `Allowed keys: ${Object.keys(FEEDBACK_METADATA_KEY_MAP).join(', ')}. ` +
-        `The key was dropped to prevent credential-shaped substrings from reaching ai_response_feedback.metadata.`,
+          `Allowed keys: ${Object.keys(FEEDBACK_METADATA_KEY_MAP).join(", ")}. ` +
+          `The key was dropped to prevent credential-shaped substrings from reaching ai_response_feedback.metadata.`,
       );
       continue;
     }
@@ -182,7 +189,7 @@ export function redactFeedbackMetadataForStorage(
 ): Record<string, unknown> {
   if (!metadata) return {};
   const scrubbed = deepRedactSecretLikeStrings(metadata);
-  if (scrubbed && typeof scrubbed === 'object' && !Array.isArray(scrubbed)) {
+  if (scrubbed && typeof scrubbed === "object" && !Array.isArray(scrubbed)) {
     return scrubbed as Record<string, unknown>;
   }
   return {};
@@ -192,7 +199,7 @@ export interface FeedbackRecord {
   message_id: string;
   conversation_id?: string;
   agent?: string;
-  rating: 'up' | 'down';
+  rating: "up" | "down";
   category?: string;
   comment?: string;
   user_id?: string;
@@ -203,13 +210,15 @@ export interface FeedbackRecord {
   metadata?: AiCallFeedbackMetadata;
 }
 
-export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> {
+export async function saveFeedback(
+  fb: FeedbackRecord,
+): Promise<{ id: number }> {
   await initAIFeedbackTable();
 
   // upsert: one rating per message per user
   const existing = await pool.query(
     `SELECT id FROM ai_response_feedback WHERE message_id=$1 AND (user_id=$2 OR user_email=$3) LIMIT 1`,
-    [fb.message_id, fb.user_id || null, fb.user_email || null]
+    [fb.message_id, fb.user_id || null, fb.user_email || null],
   );
 
   const redactedPrompt = safeRedactPreview(fb.prompt_preview);
@@ -235,9 +244,16 @@ export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> 
               created_at=NOW()
         WHERE id=$8
         RETURNING id`,
-      [fb.rating, fb.category || null, fb.comment || null,
-       redactedPrompt || null, redactedResponse || null,
-       fb.tools_called || null, metadataJson, existing.rows[0].id]
+      [
+        fb.rating,
+        fb.category || null,
+        fb.comment || null,
+        redactedPrompt || null,
+        redactedResponse || null,
+        fb.tools_called || null,
+        metadataJson,
+        existing.rows[0].id,
+      ],
     );
     return { id: res.rows[0].id };
   }
@@ -251,7 +267,7 @@ export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> 
     [
       fb.message_id,
       fb.conversation_id || null,
-      fb.agent || 'qmsConsultantAgent',
+      fb.agent || "qmsConsultantAgent",
       fb.rating,
       fb.category || null,
       fb.comment || null,
@@ -261,7 +277,7 @@ export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> 
       redactedResponse || null,
       fb.tools_called ? fb.tools_called.substring(0, 1000) : null,
       metadataJson,
-    ]
+    ],
   );
   return { id: res.rows[0].id };
 }
@@ -287,7 +303,7 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='down')                    AS thumbs_down
      FROM ai_response_feedback
      WHERE created_at >= NOW() - make_interval(days => $1)`,
-    [safeDays]
+    [safeDays],
   );
 
   const cats = await pool.query(
@@ -299,7 +315,7 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
      GROUP BY category
      ORDER BY cnt DESC
      LIMIT 6`,
-    [safeDays]
+    [safeDays],
   );
 
   const total = parseInt(totals.rows[0].total) || 0;
@@ -312,7 +328,10 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
     thumbs_down: down,
     thumbs_up_ratio: total > 0 ? Math.round((up / total) * 100) : 0,
     feedback_rate_estimate: 0,
-    top_categories: cats.rows.map(r => ({ category: r.category, count: parseInt(r.cnt) })),
+    top_categories: cats.rows.map((r) => ({
+      category: r.category,
+      count: parseInt(r.cnt),
+    })),
   };
 }
 
@@ -333,7 +352,11 @@ export async function getFeedbackByMessageId(
   messageId: string,
   userId?: string,
   userEmail?: string,
-): Promise<{ rating: 'up' | 'down'; category: string | null; comment: string | null } | null> {
+): Promise<{
+  rating: "up" | "down";
+  category: string | null;
+  comment: string | null;
+} | null> {
   await initAIFeedbackTable();
   const res = await pool.query(
     `SELECT rating, category, comment
@@ -342,17 +365,19 @@ export async function getFeedbackByMessageId(
        AND ($2::text IS NULL OR user_id = $2 OR user_email = $3)
      ORDER BY created_at DESC
      LIMIT 1`,
-    [messageId, userId ?? null, userEmail ?? null]
+    [messageId, userId ?? null, userEmail ?? null],
   );
   if (!res.rows[0]) return null;
   return {
-    rating: res.rows[0].rating as 'up' | 'down',
+    rating: res.rows[0].rating as "up" | "down",
     category: res.rows[0].category ?? null,
     comment: res.rows[0].comment ?? null,
   };
 }
 
-export async function getRecentThumbsDown(limit = 20): Promise<RecentThumbsDown[]> {
+export async function getRecentThumbsDown(
+  limit = 20,
+): Promise<RecentThumbsDown[]> {
   await initAIFeedbackTable();
 
   const res = await pool.query(
@@ -362,7 +387,7 @@ export async function getRecentThumbsDown(limit = 20): Promise<RecentThumbsDown[
      WHERE rating = 'down'
      ORDER BY created_at DESC
      LIMIT $1`,
-    [Math.min(100, limit)]
+    [Math.min(100, limit)],
   );
   return res.rows;
 }
@@ -380,15 +405,16 @@ export async function getFeedbackTrend(
   await initAIFeedbackTable();
 
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
-  const agentFilter = agent && typeof agent === 'string' && agent.trim()
-    ? agent.trim().substring(0, 100)
-    : null;
+  const agentFilter =
+    agent && typeof agent === "string" && agent.trim()
+      ? agent.trim().substring(0, 100)
+      : null;
 
   const params: (number | string)[] = [safeDays];
-  let agentClause = '';
+  let agentClause = "";
   if (agentFilter) {
     params.push(agentFilter);
-    agentClause = ' AND agent = $2';
+    agentClause = " AND agent = $2";
   }
 
   const res = await pool.query(
@@ -400,10 +426,10 @@ export async function getFeedbackTrend(
      WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY DATE(created_at AT TIME ZONE 'UTC')
      ORDER BY day ASC`,
-    params
+    params,
   );
 
-  return res.rows.map(r => ({
+  return res.rows.map((r) => ({
     day: r.day,
     thumbs_up: parseInt(r.thumbs_up) || 0,
     thumbs_down: parseInt(r.thumbs_down) || 0,
@@ -411,7 +437,7 @@ export async function getFeedbackTrend(
 }
 
 export interface FeedbackTrendSummary {
-  direction: 'improving' | 'worsening' | 'stable' | 'insufficient_data';
+  direction: "improving" | "worsening" | "stable" | "insufficient_data";
   peak_negative_day: string | null;
   peak_negative_count: number;
   total_thumbs_up: number;
@@ -426,7 +452,9 @@ export interface FeedbackTrendSummary {
  * Returns trend direction (based on thumbs-down rate change between the first
  * and second half of the window) and the worst single-day spike.
  */
-export function summarizeFeedbackTrend(trend: FeedbackTrendPoint[]): FeedbackTrendSummary {
+export function summarizeFeedbackTrend(
+  trend: FeedbackTrendPoint[],
+): FeedbackTrendSummary {
   const points = Array.isArray(trend) ? trend : [];
   const totalUp = points.reduce((s, p) => s + (p.thumbs_up || 0), 0);
   const totalDown = points.reduce((s, p) => s + (p.thumbs_down || 0), 0);
@@ -440,9 +468,9 @@ export function summarizeFeedbackTrend(trend: FeedbackTrendPoint[]): FeedbackTre
     }
   }
 
-  if (points.length < 2 || (totalUp + totalDown) === 0) {
+  if (points.length < 2 || totalUp + totalDown === 0) {
     return {
-      direction: 'insufficient_data',
+      direction: "insufficient_data",
       peak_negative_day: peakDay,
       peak_negative_count: peakCount,
       total_thumbs_up: totalUp,
@@ -468,13 +496,13 @@ export function summarizeFeedbackTrend(trend: FeedbackTrendPoint[]): FeedbackTre
   const secondRate = halfRate(secondHalf);
   const delta = secondRate - firstRate;
 
-  let direction: FeedbackTrendSummary['direction'];
+  let direction: FeedbackTrendSummary["direction"];
   if (Math.abs(delta) < 0.05) {
-    direction = 'stable';
+    direction = "stable";
   } else if (delta > 0) {
-    direction = 'worsening';
+    direction = "worsening";
   } else {
-    direction = 'improving';
+    direction = "improving";
   }
 
   return {
@@ -495,9 +523,9 @@ export async function getDistinctFeedbackAgents(): Promise<string[]> {
     `SELECT DISTINCT agent
      FROM ai_response_feedback
      WHERE agent IS NOT NULL AND agent <> ''
-     ORDER BY agent ASC`
+     ORDER BY agent ASC`,
   );
-  return res.rows.map(r => String(r.agent));
+  return res.rows.map((r) => String(r.agent));
 }
 
 export async function getWeeklyFeedbackDigest(): Promise<{
@@ -518,7 +546,7 @@ export async function getWeeklyFeedbackDigest(): Promise<{
        COUNT(*) FILTER (WHERE rating='up')         AS up,
        COUNT(*) FILTER (WHERE rating='down')       AS down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - INTERVAL '7 days'`
+     WHERE created_at >= NOW() - INTERVAL '7 days'`,
   );
 
   const cats = await pool.query(
@@ -526,7 +554,7 @@ export async function getWeeklyFeedbackDigest(): Promise<{
      FROM ai_response_feedback
      WHERE rating='down' AND category IS NOT NULL
        AND created_at >= NOW() - INTERVAL '7 days'
-     GROUP BY category ORDER BY cnt DESC LIMIT 5`
+     GROUP BY category ORDER BY cnt DESC LIMIT 5`,
   );
 
   const samples = await pool.query(
@@ -535,7 +563,7 @@ export async function getWeeklyFeedbackDigest(): Promise<{
      WHERE rating='down'
        AND created_at >= NOW() - INTERVAL '7 days'
      ORDER BY created_at DESC
-     LIMIT 5`
+     LIMIT 5`,
   );
 
   const total = parseInt(totals.rows[0].total) || 0;
@@ -552,7 +580,10 @@ export async function getWeeklyFeedbackDigest(): Promise<{
     thumbs_up: up,
     thumbs_down: down,
     thumbs_up_pct: total > 0 ? Math.round((up / total) * 100) : 0,
-    top_categories: cats.rows.map(r => ({ category: r.category, count: parseInt(r.cnt) })),
+    top_categories: cats.rows.map((r) => ({
+      category: r.category,
+      count: parseInt(r.cnt),
+    })),
     sample_down: samples.rows,
     trend,
   };

@@ -80,6 +80,14 @@ export function redactPgParam(value: unknown): unknown {
     return typeof scrubbed === 'string' ? scrubbed : value;
   }
   if (typeof value === 'object') {
+    // Per the param-handling contract documented above, non-plain objects
+    // (Date, Buffer, typed arrays) pass through to pg's native serializer
+    // unchanged — `redactSensitiveDeep` would strip their internal slots and
+    // hand pg an empty `{}` (e.g. `invalid input syntax for type timestamp:
+    // "{}"`).
+    if (value instanceof Date) return value;
+    if (Buffer.isBuffer(value)) return value;
+    if (ArrayBuffer.isView(value)) return value;
     return redactSensitiveDeep(value);
   }
   return value;

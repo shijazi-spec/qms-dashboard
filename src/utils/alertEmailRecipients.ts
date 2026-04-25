@@ -35,6 +35,7 @@
 
 import { sharedPool as pool } from "./sharedPool";
 
+import { logger } from "./logger";
 /**
  * The two opt-in recipient lists this module manages. Kept narrow on
  * purpose so the admin UI / API can validate the channel server-side
@@ -190,7 +191,7 @@ export async function listAlertRecipients(
       added_at: r.added_at ?? null,
     }));
   } catch (err) {
-    console.error("[alertEmailRecipients] list failed:", err);
+    logger.error("[alertEmailRecipients] list failed:", err);
     return [];
   }
 }
@@ -353,7 +354,7 @@ export async function listAlertRecipientsAudit(
       note: r.note ?? null,
     }));
   } catch (err) {
-    console.error("[alertEmailRecipients] audit read failed:", err);
+    logger.error("[alertEmailRecipients] audit read failed:", err);
     return [];
   }
 }
@@ -364,7 +365,9 @@ export async function listAlertRecipientsAudit(
  * entries are dropped. Exported so the dispatcher tests can probe
  * env-fallback parsing without going through the DB.
  */
-export function parseRecipientsEnvValue(raw: string | undefined | null): string[] {
+export function parseRecipientsEnvValue(
+  raw: string | undefined | null,
+): string[] {
   if (!raw || typeof raw !== "string") return [];
   const seen = new Set<string>();
   const out: string[] = [];

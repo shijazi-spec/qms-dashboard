@@ -18,7 +18,7 @@
  *           full context (total429, threshold, top-5 IPs, suppressed) so
  *           there is a permanent audit trail and the activity feed picks it
  *           up automatically;
- *         • emit a console.warn so log-shipping pipelines see it;
+ *         • emit a structured logger.warn so log-shipping pipelines see it;
  *         • best-effort POST to `RATE_LIMIT_429_SLACK_WEBHOOK_URL` (or
  *           falls back to `SLACK_WEBHOOK_URL` when the dedicated var is
  *           unset) — never blocks, never throws.
@@ -47,12 +47,13 @@
  * truth for "is this spike alert-worthy".
  */
 
-import pg from 'pg';
-import pino from 'pino';
+import pg from "pg";
+import pino from "pino";
 
+import { logger as safeLogger } from "./logger";
 const { Pool } = pg;
 
-const logger = pino({ level: 'warn', name: 'rateLimit429SpikeAlert' });
+const logger = pino({ level: "warn", name: "rateLimit429SpikeAlert" });
 
 let sharedPool: InstanceType<typeof Pool> | null = null;
 function getPool(): InstanceType<typeof Pool> {
@@ -65,7 +66,7 @@ function getPool(): InstanceType<typeof Pool> {
 /** Parse a positive-integer env var with a fallback. `0` and negatives fall back. */
 function envPosInt(name: string, fallback: number): number {
   const raw = process.env[name];
-  if (raw == null || raw === '') return fallback;
+  if (raw == null || raw === "") return fallback;
   const n = parseInt(raw, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
@@ -81,7 +82,7 @@ function envPosInt(name: string, fallback: number): number {
  */
 export function getRateLimit24hAlertThreshold(): number {
   const raw = process.env.RATE_LIMIT_429_24H_ALERT_THRESHOLD;
-  if (raw == null || raw === '') return 500;
+  if (raw == null || raw === "") return 500;
   const n = parseInt(raw, 10);
   // Allow exactly 0 as an explicit "disable" sentinel.
   if (Number.isFinite(n) && n >= 0) return n;
@@ -90,7 +91,7 @@ export function getRateLimit24hAlertThreshold(): number {
 
 /** Hours within which we suppress repeat alerts for an ongoing spike. */
 export function getRateLimit24hAlertRepeatHours(): number {
-  return envPosInt('RATE_LIMIT_429_24H_ALERT_REPEAT_HOURS', 6);
+  return envPosInt("RATE_LIMIT_429_24H_ALERT_REPEAT_HOURS", 6);
 }
 
 export interface SpikeAlertEvaluation {
@@ -101,7 +102,7 @@ export interface SpikeAlertEvaluation {
   /** Mirror of the input total429 for the convenience of the dashboard. */
   total429: number;
   /** Reason string suitable for log lines / system_event descriptions. */
-  reason: 'disabled' | 'below_threshold' | 'above_threshold';
+  reason: "disabled" | "below_threshold" | "above_threshold";
 }
 
 /**
@@ -114,12 +115,12 @@ export function evaluateRateLimit24hSpikeAlert(
   threshold: number = getRateLimit24hAlertThreshold(),
 ): SpikeAlertEvaluation {
   if (!Number.isFinite(threshold) || threshold <= 0) {
-    return { active: false, threshold: 0, total429, reason: 'disabled' };
+    return { active: false, threshold: 0, total429, reason: "disabled" };
   }
   if (total429 >= threshold) {
-    return { active: true, threshold, total429, reason: 'above_threshold' };
+    return { active: true, threshold, total429, reason: "above_threshold" };
   }
-  return { active: false, threshold, total429, reason: 'below_threshold' };
+  return { active: false, threshold, total429, reason: "below_threshold" };
 }
 
 export interface SpikeAlertTopIp {
@@ -144,7 +145,7 @@ export interface SpikeAlertCheckResult {
   /** True iff we sent at least one email in this tick. */
   emailSent: boolean;
   /** Diagnostic reason string. */
-  reason: SpikeAlertEvaluation['reason'] | 'evaluation_failed' | 'db_error';
+  reason: SpikeAlertEvaluation["reason"] | "evaluation_failed" | "db_error";
 }
 
 export interface SpikeAlertCheckDeps {
@@ -185,7 +186,7 @@ export interface SpikeAlertCheckDeps {
 }
 
 const DEFAULT_FETCH_AGGREGATE: NonNullable<
-  SpikeAlertCheckDeps['fetchSpikeAggregate']
+  SpikeAlertCheckDeps["fetchSpikeAggregate"]
 > = async () => {
   const pool = getPool();
   // Mirrors the same query used in `getRateLimitStats()` so what we alert
@@ -213,9 +214,9 @@ const DEFAULT_FETCH_AGGREGATE: NonNullable<
     ),
   ]);
   return {
-    total429: parseInt(totRow.rows[0]?.total ?? '0', 10),
-    totalSuppressed: parseInt(totRow.rows[0]?.suppressed ?? '0', 10),
-    topIps: topRow.rows.map(r => ({
+    total429: parseInt(totRow.rows[0]?.total ?? "0", 10),
+    totalSuppressed: parseInt(totRow.rows[0]?.suppressed ?? "0", 10),
+    topIps: topRow.rows.map((r) => ({
       ip: r.ip,
       events: parseInt(r.events, 10),
       suppressed: parseInt(r.suppressed, 10),
@@ -224,7 +225,7 @@ const DEFAULT_FETCH_AGGREGATE: NonNullable<
 };
 
 const DEFAULT_COUNT_RECENT: NonNullable<
-  SpikeAlertCheckDeps['countRecentAlertEmissions']
+  SpikeAlertCheckDeps["countRecentAlertEmissions"]
 > = async (withinHours) => {
   const pool = getPool();
   const r = await pool.query<{ count: string }>(
@@ -234,35 +235,35 @@ const DEFAULT_COUNT_RECENT: NonNullable<
         AND created_at > NOW() - ($1::int * INTERVAL '1 hour')`,
     [withinHours],
   );
-  return parseInt(r.rows[0]?.count ?? '0', 10);
+  return parseInt(r.rows[0]?.count ?? "0", 10);
 };
 
 const DEFAULT_EMIT_EVENT: NonNullable<
-  SpikeAlertCheckDeps['emitSystemEvent']
+  SpikeAlertCheckDeps["emitSystemEvent"]
 > = async ({ description, metadata }) => {
-  const { logSystemEvent } = await import('./database');
+  const { logSystemEvent } = await import("./database");
   await logSystemEvent({
-    event_type: 'rate_limit_429_spike_alert',
-    event_category: 'security',
+    event_type: "rate_limit_429_spike_alert",
+    event_category: "security",
     description,
-    severity: 'warning',
-    source: 'rateLimit429SpikeAlert',
+    severity: "warning",
+    source: "rateLimit429SpikeAlert",
     metadata,
   });
 };
 
-const DEFAULT_POST_SLACK: NonNullable<SpikeAlertCheckDeps['postSlack']> = async (
-  text,
-) => {
+const DEFAULT_POST_SLACK: NonNullable<
+  SpikeAlertCheckDeps["postSlack"]
+> = async (text) => {
   const url =
     process.env.RATE_LIMIT_429_SLACK_WEBHOOK_URL ||
     process.env.SLACK_WEBHOOK_URL ||
-    '';
+    "";
   if (!url) return false;
   try {
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
     if (!response.ok) {
@@ -270,58 +271,59 @@ const DEFAULT_POST_SLACK: NonNullable<SpikeAlertCheckDeps['postSlack']> = async 
         {
           status: response.status,
           statusText: response.statusText,
-          component: 'rateLimit429SpikeAlert',
+          component: "rateLimit429SpikeAlert",
         },
-        'Slack webhook returned non-2xx — alert was already written to system_events',
+        "Slack webhook returned non-2xx — alert was already written to system_events",
       );
       return false;
     }
     return true;
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'Slack webhook POST failed — alert was already written to system_events',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "Slack webhook POST failed — alert was already written to system_events",
     );
     return false;
   }
 };
 
-const DEFAULT_SEND_EMAIL: NonNullable<SpikeAlertCheckDeps['sendEmail']> = async (
-  subject,
-  html,
-  text,
-) => {
-  const raw = (process.env.RATE_LIMIT_429_ALERT_EMAIL || '').trim();
+const DEFAULT_SEND_EMAIL: NonNullable<
+  SpikeAlertCheckDeps["sendEmail"]
+> = async (subject, html, text) => {
+  const raw = (process.env.RATE_LIMIT_429_ALERT_EMAIL || "").trim();
   if (!raw) return false;
-  const recipients = raw.split(',').map(s => s.trim()).filter(Boolean);
+  const recipients = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (recipients.length === 0) return false;
   try {
-    const { sendResendEmail } = await import('./resendMail');
+    const { sendResendEmail } = await import("./resendMail");
     const r = await sendResendEmail({ to: recipients, subject, html, text });
     return !!r?.success;
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'Email send failed — alert was already written to system_events',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "Email send failed — alert was already written to system_events",
     );
     return false;
   }
 };
 
 function formatTopIps(topIps: SpikeAlertTopIp[]): string {
-  if (topIps.length === 0) return '(no per-IP breakdown available)';
+  if (topIps.length === 0) return "(no per-IP breakdown available)";
   return topIps
     .map(
       (t, i) =>
         `  ${i + 1}. ${t.ip} — ${t.events} events` +
-        (t.suppressed > 0 ? ` (+${t.suppressed} suppressed)` : ''),
+        (t.suppressed > 0 ? ` (+${t.suppressed} suppressed)` : ""),
     )
-    .join('\n');
+    .join("\n");
 }
 
 function formatTopIpsHtml(topIps: SpikeAlertTopIp[]): string {
   if (topIps.length === 0) {
-    return '<p><em>(no per-IP breakdown available)</em></p>';
+    return "<p><em>(no per-IP breakdown available)</em></p>";
   }
   const rows = topIps
     .map(
@@ -333,7 +335,7 @@ function formatTopIpsHtml(topIps: SpikeAlertTopIp[]): string {
           <td style="padding:4px 8px;text-align:right">${t.suppressed}</td>
         </tr>`,
     )
-    .join('\n');
+    .join("\n");
   return `<table border="1" cellspacing="0" cellpadding="0"
     style="border-collapse:collapse;font-size:13px">
     <thead style="background:#f5f5f5">
@@ -350,11 +352,11 @@ function formatTopIpsHtml(topIps: SpikeAlertTopIp[]): string {
 
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
@@ -389,17 +391,21 @@ export async function runRateLimit429SpikeAlertCheck(
       alertSuppressedAsRepeat: false,
       slackSent: false,
       emailSent: false,
-      reason: 'disabled',
+      reason: "disabled",
     };
   }
 
-  let aggregate: { total429: number; totalSuppressed: number; topIps: SpikeAlertTopIp[] };
+  let aggregate: {
+    total429: number;
+    totalSuppressed: number;
+    topIps: SpikeAlertTopIp[];
+  };
   try {
     aggregate = await fetchAggregate();
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'Failed to fetch 24h spike aggregate — skipping alert check this tick',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "Failed to fetch 24h spike aggregate — skipping alert check this tick",
     );
     return {
       active: false,
@@ -409,11 +415,14 @@ export async function runRateLimit429SpikeAlertCheck(
       alertSuppressedAsRepeat: false,
       slackSent: false,
       emailSent: false,
-      reason: 'db_error',
+      reason: "db_error",
     };
   }
 
-  const evalResult = evaluateRateLimit24hSpikeAlert(aggregate.total429, threshold);
+  const evalResult = evaluateRateLimit24hSpikeAlert(
+    aggregate.total429,
+    threshold,
+  );
   if (!evalResult.active) {
     return {
       active: false,
@@ -438,13 +447,13 @@ export async function runRateLimit429SpikeAlertCheck(
     // than silently swallow an attack), so we treat this as zero recent
     // emissions and proceed.
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'Failed to count recent spike alert emissions — proceeding with alert',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "Failed to count recent spike alert emissions — proceeding with alert",
     );
   }
 
   if (recentEmissions > 0) {
-    console.warn(
+    safeLogger.warn(
       `[RateLimit429SpikeAlert] Spike still active (${aggregate.total429} ` +
         `>= ${threshold}) but ${recentEmissions} alert(s) already written ` +
         `in the last ${repeatHours}h — suppressing repeat page.`,
@@ -457,7 +466,7 @@ export async function runRateLimit429SpikeAlertCheck(
       alertSuppressedAsRepeat: true,
       slackSent: false,
       emailSent: false,
-      reason: 'above_threshold',
+      reason: "above_threshold",
     };
   }
 
@@ -466,8 +475,8 @@ export async function runRateLimit429SpikeAlertCheck(
     `${threshold}). Top IPs: ` +
     aggregate.topIps
       .slice(0, 5)
-      .map(t => `${t.ip}=${t.events}`)
-      .join(', ');
+      .map((t) => `${t.ip}=${t.events}`)
+      .join(", ");
 
   const metadata = {
     total429: aggregate.total429,
@@ -481,11 +490,11 @@ export async function runRateLimit429SpikeAlertCheck(
   try {
     await emitEvent({ description, metadata });
     alertEmitted = true;
-    console.warn(`[RateLimit429SpikeAlert] ${description}`);
+    safeLogger.warn(`[RateLimit429SpikeAlert] ${description}`);
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'Failed to write rate_limit_429_spike_alert system_event — Slack/email still attempted',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "Failed to write rate_limit_429_spike_alert system_event — Slack/email still attempted",
     );
   }
 
@@ -501,8 +510,8 @@ export async function runRateLimit429SpikeAlertCheck(
     slackSent = await postSlack(slackText);
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'postSlack threw',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "postSlack threw",
     );
   }
 
@@ -526,8 +535,8 @@ to inspect live counters and confirm the source.</p>`;
     emailSent = await sendEmail(emailSubject, emailHtml, emailText);
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, component: 'rateLimit429SpikeAlert' },
-      'sendEmail threw',
+      { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
+      "sendEmail threw",
     );
   }
 
@@ -539,6 +548,6 @@ to inspect live counters and confirm the source.</p>`;
     alertSuppressedAsRepeat: false,
     slackSent,
     emailSent,
-    reason: 'above_threshold',
+    reason: "above_threshold",
   };
 }

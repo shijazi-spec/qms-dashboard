@@ -3,6 +3,7 @@ import { join } from "path";
 import { getSessionFromCookie } from "./authRoutes";
 import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 
+import { logger } from "../../utils/logger";
 // Defense-in-depth gate for SOP routes. The middleware's PUBLIC_PATHS list
 // (see src/mastra/middleware/index.ts) no longer allowlists `/sop` or
 // `/api/sop*` because the SOP document is classified "Internal Use Only"
@@ -12,7 +13,7 @@ import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
 // SOP to the public internet.
 function isAuthorizedForSop(c: any): boolean {
   if (hasValidAdminApiKey(c)) return true;
-  return !!getSessionFromCookie(c.req.header('Cookie'));
+  return !!getSessionFromCookie(c.req.header("Cookie"));
 }
 
 function resolveSopFile(): string | null {
@@ -42,12 +43,12 @@ export const sopRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          if (!isAuthorizedForSop(c)) return c.redirect('/login');
+          if (!isAuthorizedForSop(c)) return c.redirect("/login");
           const filePath = resolveDashboardFile("sop.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
           return c.text("SOP page not found", 404);
         } catch (error) {
-          console.error("Error serving SOP page:", error);
+          logger.error("Error serving SOP page:", error);
           return c.text("Error loading SOP", 500);
         }
       };
@@ -59,9 +60,11 @@ export const sopRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          if (!isAuthorizedForSop(c)) return c.json({ error: "Authentication required" }, 401);
+          if (!isAuthorizedForSop(c))
+            return c.json({ error: "Authentication required" }, 401);
           const filePath = resolveSopFile();
-          if (!filePath) return c.json({ error: "SOP document not found" }, 404);
+          if (!filePath)
+            return c.json({ error: "SOP document not found" }, 404);
           const content = readFileSync(filePath, "utf-8");
           const versionMatch = content.match(/\*\*Version:\*\*\s*(.+)/);
           const dateMatch = content.match(/\*\*Last Updated:\*\*\s*(.+)/);
@@ -71,7 +74,7 @@ export const sopRoutes = [
             lastUpdated: dateMatch ? dateMatch[1].trim() : "Unknown",
           });
         } catch (error) {
-          console.error("Error serving SOP API:", error);
+          logger.error("Error serving SOP API:", error);
           return c.json({ error: "Failed to load SOP" }, 500);
         }
       };
@@ -83,15 +86,19 @@ export const sopRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          if (!isAuthorizedForSop(c)) return c.json({ error: "Authentication required" }, 401);
+          if (!isAuthorizedForSop(c))
+            return c.json({ error: "Authentication required" }, 401);
           const filePath = resolveSopFile();
           if (!filePath) return c.text("SOP document not found", 404);
           const content = readFileSync(filePath, "utf-8");
           c.header("Content-Type", "text/markdown; charset=utf-8");
-          c.header("Content-Disposition", `attachment; filename="WalaPlus_Platform_SOP.md"`);
+          c.header(
+            "Content-Disposition",
+            `attachment; filename="WalaPlus_Platform_SOP.md"`,
+          );
           return c.body(content);
         } catch (error) {
-          console.error("Error downloading SOP:", error);
+          logger.error("Error downloading SOP:", error);
           return c.text("Error downloading SOP", 500);
         }
       };

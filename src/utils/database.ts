@@ -1,4 +1,5 @@
-import pg from 'pg';
+import pg from "pg";
+import { logger } from "./logger";
 const { Pool } = pg;
 
 const pool = new Pool({
@@ -57,9 +58,11 @@ async function ensureActivityTables(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_system_events_created_at ON system_events(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_system_events_severity ON system_events(severity);
       `);
-      console.log('[ActivityDB] admin_activities, workflow_runs, system_events tables ready');
+      logger.info(
+        "[ActivityDB] admin_activities, workflow_runs, system_events tables ready",
+      );
     } catch (err) {
-      console.error('[ActivityDB] Failed to ensure activity tables:', err);
+      logger.error("[ActivityDB] Failed to ensure activity tables:", err);
       activityTablesReady = null;
       throw err;
     }
@@ -114,99 +117,143 @@ export interface QualityAuditResult {
 
 export async function getActiveGovernanceDocument(): Promise<GovernanceDocument | null> {
   const result = await pool.query(
-    'SELECT * FROM governance_documents WHERE is_active = true ORDER BY created_at DESC LIMIT 1'
+    "SELECT * FROM governance_documents WHERE is_active = true ORDER BY created_at DESC LIMIT 1",
   );
   return result.rows[0] || null;
 }
 
-export async function getActiveScorecard(crmModule?: string, teamName?: string): Promise<QualityScorecard | null> {
+export async function getActiveScorecard(
+  crmModule?: string,
+  teamName?: string,
+): Promise<QualityScorecard | null> {
   if (crmModule && teamName) {
     const result = await pool.query(
-      'SELECT * FROM quality_scorecards WHERE crm_module = $1 AND team_name = $2 AND is_active = true ORDER BY created_at DESC LIMIT 1',
-      [crmModule, teamName]
+      "SELECT * FROM quality_scorecards WHERE crm_module = $1 AND team_name = $2 AND is_active = true ORDER BY created_at DESC LIMIT 1",
+      [crmModule, teamName],
     );
     if (result.rows[0]) return result.rows[0];
   }
-  
+
   if (crmModule) {
     const result = await pool.query(
-      'SELECT * FROM quality_scorecards WHERE crm_module = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
-      [crmModule]
+      "SELECT * FROM quality_scorecards WHERE crm_module = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1",
+      [crmModule],
     );
     if (result.rows[0]) return result.rows[0];
   }
-  
+
   const result = await pool.query(
-    'SELECT * FROM quality_scorecards WHERE is_active = true ORDER BY created_at DESC LIMIT 1'
+    "SELECT * FROM quality_scorecards WHERE is_active = true ORDER BY created_at DESC LIMIT 1",
   );
   return result.rows[0] || null;
 }
 
-export async function getScorecardByModule(crmModule: string): Promise<QualityScorecard | null> {
+export async function getScorecardByModule(
+  crmModule: string,
+): Promise<QualityScorecard | null> {
   const result = await pool.query(
-    'SELECT * FROM quality_scorecards WHERE crm_module = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
-    [crmModule]
+    "SELECT * FROM quality_scorecards WHERE crm_module = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1",
+    [crmModule],
   );
   return result.rows[0] || null;
 }
 
 export async function getActiveScorecardsAll(): Promise<QualityScorecard[]> {
   const result = await pool.query(
-    'SELECT * FROM quality_scorecards WHERE is_active = true ORDER BY crm_module, created_at DESC'
+    "SELECT * FROM quality_scorecards WHERE is_active = true ORDER BY crm_module, created_at DESC",
   );
   return result.rows;
 }
 
-export async function saveGovernanceDocument(doc: GovernanceDocument): Promise<GovernanceDocument> {
+export async function saveGovernanceDocument(
+  doc: GovernanceDocument,
+): Promise<GovernanceDocument> {
   if (doc.crm_module) {
-    await pool.query('UPDATE governance_documents SET is_active = false WHERE crm_module = $1', [doc.crm_module]);
+    await pool.query(
+      "UPDATE governance_documents SET is_active = false WHERE crm_module = $1",
+      [doc.crm_module],
+    );
   } else {
-    await pool.query('UPDATE governance_documents SET is_active = false WHERE document_type = $1', [doc.document_type]);
+    await pool.query(
+      "UPDATE governance_documents SET is_active = false WHERE document_type = $1",
+      [doc.document_type],
+    );
   }
-  
+
   const result = await pool.query(
     `INSERT INTO governance_documents (name, document_type, version, file_path, content_text, rules_json, is_active, crm_module, team_name)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [doc.name, doc.document_type, doc.version, doc.file_path, doc.content_text, JSON.stringify(doc.rules_json), doc.is_active, doc.crm_module || null, doc.team_name || null]
+    [
+      doc.name,
+      doc.document_type,
+      doc.version,
+      doc.file_path,
+      doc.content_text,
+      JSON.stringify(doc.rules_json),
+      doc.is_active,
+      doc.crm_module || null,
+      doc.team_name || null,
+    ],
   );
   return result.rows[0];
 }
 
-export async function getGovernanceDocumentByModule(crmModule: string): Promise<GovernanceDocument | null> {
+export async function getGovernanceDocumentByModule(
+  crmModule: string,
+): Promise<GovernanceDocument | null> {
   const result = await pool.query(
-    'SELECT * FROM governance_documents WHERE crm_module = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
-    [crmModule]
+    "SELECT * FROM governance_documents WHERE crm_module = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1",
+    [crmModule],
   );
   return result.rows[0] || null;
 }
 
-export async function getActiveGovernanceDocumentsByModule(): Promise<GovernanceDocument[]> {
+export async function getActiveGovernanceDocumentsByModule(): Promise<
+  GovernanceDocument[]
+> {
   const result = await pool.query(
-    'SELECT * FROM governance_documents WHERE is_active = true ORDER BY crm_module, created_at DESC'
+    "SELECT * FROM governance_documents WHERE is_active = true ORDER BY crm_module, created_at DESC",
   );
   return result.rows;
 }
 
-export async function saveScorecard(scorecard: QualityScorecard): Promise<QualityScorecard> {
+export async function saveScorecard(
+  scorecard: QualityScorecard,
+): Promise<QualityScorecard> {
   if (scorecard.crm_module) {
-    await pool.query('UPDATE quality_scorecards SET is_active = false WHERE crm_module = $1', [scorecard.crm_module]);
+    await pool.query(
+      "UPDATE quality_scorecards SET is_active = false WHERE crm_module = $1",
+      [scorecard.crm_module],
+    );
   } else {
-    await pool.query('UPDATE quality_scorecards SET is_active = false WHERE crm_module IS NULL');
+    await pool.query(
+      "UPDATE quality_scorecards SET is_active = false WHERE crm_module IS NULL",
+    );
   }
-  
+
   const result = await pool.query(
     `INSERT INTO quality_scorecards (name, description, dimensions, is_active, crm_module, team_name, governance_doc_id, version, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [scorecard.name, scorecard.description, JSON.stringify(scorecard.dimensions), scorecard.is_active, 
-     scorecard.crm_module || null, scorecard.team_name || null, scorecard.governance_doc_id || null,
-     scorecard.version || 'v1.0', scorecard.created_by || null]
+    [
+      scorecard.name,
+      scorecard.description,
+      JSON.stringify(scorecard.dimensions),
+      scorecard.is_active,
+      scorecard.crm_module || null,
+      scorecard.team_name || null,
+      scorecard.governance_doc_id || null,
+      scorecard.version || "v1.0",
+      scorecard.created_by || null,
+    ],
   );
   return result.rows[0];
 }
 
-export async function saveAuditResult(audit: QualityAuditResult): Promise<QualityAuditResult> {
+export async function saveAuditResult(
+  audit: QualityAuditResult,
+): Promise<QualityAuditResult> {
   const result = await pool.query(
     `INSERT INTO quality_audit_results 
      (scorecard_id, governance_doc_id, total_records_audited, total_issues_found, 
@@ -215,17 +262,26 @@ export async function saveAuditResult(audit: QualityAuditResult): Promise<Qualit
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
     [
-      audit.scorecard_id, audit.governance_doc_id, audit.total_records_audited, audit.total_issues_found,
-      audit.people_score, audit.process_score, audit.governance_score, audit.overall_score,
-      JSON.stringify(audit.dimension_details), JSON.stringify(audit.issues_by_category),
-      JSON.stringify(audit.recommendations), audit.calendar_events_count, JSON.stringify(audit.raw_audit_data)
-    ]
+      audit.scorecard_id,
+      audit.governance_doc_id,
+      audit.total_records_audited,
+      audit.total_issues_found,
+      audit.people_score,
+      audit.process_score,
+      audit.governance_score,
+      audit.overall_score,
+      JSON.stringify(audit.dimension_details),
+      JSON.stringify(audit.issues_by_category),
+      JSON.stringify(audit.recommendations),
+      audit.calendar_events_count,
+      JSON.stringify(audit.raw_audit_data),
+    ],
   );
-  
+
   const auditResult = result.rows[0];
-  
+
   await saveTrendMetrics(auditResult.id, audit);
-  
+
   return auditResult;
 }
 
@@ -253,10 +309,11 @@ export async function bulkInsert(
     chunkSize?: number;
     /** For testing only: inject a mock query function instead of the real pool. */
     _queryFn?: (sql: string, values: any[]) => Promise<any>;
-  } = {}
+  } = {},
 ): Promise<void> {
   if (rows.length === 0) return;
-  const queryFn = _queryFn ?? ((sql: string, values: any[]) => pool.query(sql, values));
+  const queryFn =
+    _queryFn ?? ((sql: string, values: any[]) => pool.query(sql, values));
   const n = columns.length;
   for (let start = 0; start < rows.length; start += chunkSize) {
     const chunk = rows.slice(start, start + chunkSize);
@@ -266,48 +323,70 @@ export async function bulkInsert(
         values.push(row[col] ?? null);
         return `$${ri * n + ci + 1}`;
       });
-      return `(${ph.join(', ')})`;
+      return `(${ph.join(", ")})`;
     });
     await queryFn(
-      `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders.join(', ')}`,
-      values
+      `INSERT INTO ${table} (${columns.join(", ")}) VALUES ${placeholders.join(", ")}`,
+      values,
     );
   }
 }
 
 async function saveTrendMetrics(auditId: number, audit: QualityAuditResult) {
   const metrics = [
-    { name: 'overall_score', value: audit.overall_score, dimension: 'overall' },
-    { name: 'people_score', value: audit.people_score, dimension: 'people' },
-    { name: 'process_score', value: audit.process_score, dimension: 'process' },
-    { name: 'governance_score', value: audit.governance_score, dimension: 'governance' },
-    { name: 'total_issues', value: audit.total_issues_found, dimension: 'overall' },
-    { name: 'records_audited', value: audit.total_records_audited, dimension: 'overall' },
+    { name: "overall_score", value: audit.overall_score, dimension: "overall" },
+    { name: "people_score", value: audit.people_score, dimension: "people" },
+    { name: "process_score", value: audit.process_score, dimension: "process" },
+    {
+      name: "governance_score",
+      value: audit.governance_score,
+      dimension: "governance",
+    },
+    {
+      name: "total_issues",
+      value: audit.total_issues_found,
+      dimension: "overall",
+    },
+    {
+      name: "records_audited",
+      value: audit.total_records_audited,
+      dimension: "overall",
+    },
   ];
 
   await bulkInsert(
-    'quality_trends',
-    ['audit_id', 'metric_name', 'metric_value', 'dimension'],
-    metrics.map(m => ({ audit_id: auditId, metric_name: m.name, metric_value: m.value, dimension: m.dimension }))
+    "quality_trends",
+    ["audit_id", "metric_name", "metric_value", "dimension"],
+    metrics.map((m) => ({
+      audit_id: auditId,
+      metric_name: m.name,
+      metric_value: m.value,
+      dimension: m.dimension,
+    })),
   );
 }
 
 export async function getLatestAuditResult(): Promise<QualityAuditResult | null> {
   const result = await pool.query(
-    'SELECT * FROM quality_audit_results ORDER BY audit_date DESC LIMIT 1'
+    "SELECT * FROM quality_audit_results ORDER BY audit_date DESC LIMIT 1",
   );
   return result.rows[0] || null;
 }
 
-export async function getAuditHistory(limit: number = 10): Promise<QualityAuditResult[]> {
+export async function getAuditHistory(
+  limit: number = 10,
+): Promise<QualityAuditResult[]> {
   const result = await pool.query(
-    'SELECT * FROM quality_audit_results ORDER BY audit_date DESC LIMIT $1',
-    [limit]
+    "SELECT * FROM quality_audit_results ORDER BY audit_date DESC LIMIT $1",
+    [limit],
   );
   return result.rows;
 }
 
-export async function getTrendData(metricName: string, days: number = 30): Promise<any[]> {
+export async function getTrendData(
+  metricName: string,
+  days: number = 30,
+): Promise<any[]> {
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
   const result = await pool.query(
     `SELECT qt.metric_value, qt.recorded_at, qar.audit_date
@@ -316,7 +395,7 @@ export async function getTrendData(metricName: string, days: number = 30): Promi
      WHERE qt.metric_name = $1 
      AND qt.recorded_at >= NOW() - make_interval(days => $2)
      ORDER BY qt.recorded_at ASC`,
-    [metricName, safeDays]
+    [metricName, safeDays],
   );
   return result.rows;
 }
@@ -334,21 +413,23 @@ export async function getDashboardData(): Promise<{
     governance: any[];
   };
 }> {
-  const [latestAudit, auditHistory, governance, governanceDocs, scorecard] = await Promise.all([
-    getLatestAuditResult(),
-    getAuditHistory(20),
-    getActiveGovernanceDocument(),
-    getActiveGovernanceDocumentsByModule(),
-    getActiveScorecard()
-  ]);
-  
-  const [overallTrend, peopleTrend, processTrend, governanceTrend] = await Promise.all([
-    getTrendData('overall_score', 90),
-    getTrendData('people_score', 90),
-    getTrendData('process_score', 90),
-    getTrendData('governance_score', 90)
-  ]);
-  
+  const [latestAudit, auditHistory, governance, governanceDocs, scorecard] =
+    await Promise.all([
+      getLatestAuditResult(),
+      getAuditHistory(20),
+      getActiveGovernanceDocument(),
+      getActiveGovernanceDocumentsByModule(),
+      getActiveScorecard(),
+    ]);
+
+  const [overallTrend, peopleTrend, processTrend, governanceTrend] =
+    await Promise.all([
+      getTrendData("overall_score", 90),
+      getTrendData("people_score", 90),
+      getTrendData("process_score", 90),
+      getTrendData("governance_score", 90),
+    ]);
+
   return {
     latestAudit,
     auditHistory,
@@ -359,47 +440,67 @@ export async function getDashboardData(): Promise<{
       overall: overallTrend,
       people: peopleTrend,
       process: processTrend,
-      governance: governanceTrend
-    }
+      governance: governanceTrend,
+    },
   };
 }
 
-export async function getAllGovernanceDocuments(): Promise<GovernanceDocument[]> {
+export async function getAllGovernanceDocuments(): Promise<
+  GovernanceDocument[]
+> {
   const result = await pool.query(
-    'SELECT * FROM governance_documents ORDER BY created_at DESC'
+    "SELECT * FROM governance_documents ORDER BY created_at DESC",
   );
   return result.rows;
 }
 
 export async function activateGovernanceDocument(id: number): Promise<void> {
-  const docResult = await pool.query('SELECT crm_module FROM governance_documents WHERE id = $1', [id]);
+  const docResult = await pool.query(
+    "SELECT crm_module FROM governance_documents WHERE id = $1",
+    [id],
+  );
   const doc = docResult.rows[0];
-  
+
   if (doc?.crm_module) {
-    await pool.query('UPDATE governance_documents SET is_active = false WHERE crm_module = $1', [doc.crm_module]);
+    await pool.query(
+      "UPDATE governance_documents SET is_active = false WHERE crm_module = $1",
+      [doc.crm_module],
+    );
   } else {
-    await pool.query('UPDATE governance_documents SET is_active = false WHERE crm_module IS NULL');
+    await pool.query(
+      "UPDATE governance_documents SET is_active = false WHERE crm_module IS NULL",
+    );
   }
-  await pool.query('UPDATE governance_documents SET is_active = true WHERE id = $1', [id]);
+  await pool.query(
+    "UPDATE governance_documents SET is_active = true WHERE id = $1",
+    [id],
+  );
 }
 
-export async function updateScorecardWeights(weights: { people: number; process: number; governance: number }): Promise<QualityScorecard | null> {
+export async function updateScorecardWeights(weights: {
+  people: number;
+  process: number;
+  governance: number;
+}): Promise<QualityScorecard | null> {
   const current = await getActiveScorecard();
   if (!current) return null;
-  
-  const dims = typeof current.dimensions === 'string' ? JSON.parse(current.dimensions) : current.dimensions;
-  
+
+  const dims =
+    typeof current.dimensions === "string"
+      ? JSON.parse(current.dimensions)
+      : current.dimensions;
+
   if (dims.dimensions) {
     dims.dimensions.people.weight = weights.people;
     dims.dimensions.process.weight = weights.process;
     dims.dimensions.governance.weight = weights.governance;
   }
-  
+
   const result = await pool.query(
-    'UPDATE quality_scorecards SET dimensions = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-    [JSON.stringify(dims), current.id]
+    "UPDATE quality_scorecards SET dimensions = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    [JSON.stringify(dims), current.id],
   );
-  
+
   return result.rows[0] || null;
 }
 
@@ -412,44 +513,49 @@ export async function addScorecardAttribute(attr: {
 }): Promise<QualityScorecard | null> {
   const current = await getActiveScorecard();
   if (!current) return null;
-  
-  const dims = typeof current.dimensions === 'string' ? JSON.parse(current.dimensions) : current.dimensions;
-  
+
+  const dims =
+    typeof current.dimensions === "string"
+      ? JSON.parse(current.dimensions)
+      : current.dimensions;
+
   if (dims.dimensions && dims.dimensions[attr.dimension]) {
     const newAttr = {
       name: attr.name,
-      description: attr.description || '',
+      description: attr.description || "",
       weight: attr.weight,
-      target: attr.target
+      target: attr.target,
     };
-    
-    dims.dimensions[attr.dimension].attributes = dims.dimensions[attr.dimension].attributes || [];
+
+    dims.dimensions[attr.dimension].attributes =
+      dims.dimensions[attr.dimension].attributes || [];
     dims.dimensions[attr.dimension].attributes.push(newAttr);
   }
-  
+
   const result = await pool.query(
-    'UPDATE quality_scorecards SET dimensions = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-    [JSON.stringify(dims), current.id]
+    "UPDATE quality_scorecards SET dimensions = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    [JSON.stringify(dims), current.id],
   );
-  
+
   return result.rows[0] || null;
 }
 
 export async function linkScorecardToGovernanceDoc(
   governanceDocId: number,
   crmModule: string,
-  teamName: string
+  teamName: string,
 ): Promise<QualityScorecard | null> {
   let scorecard = await getActiveScorecard(crmModule, teamName);
-  
+
   if (!scorecard) {
     const defaultScorecard = await getActiveScorecard();
     if (!defaultScorecard) return null;
-    
-    const dims = typeof defaultScorecard.dimensions === 'string' 
-      ? JSON.parse(defaultScorecard.dimensions) 
-      : defaultScorecard.dimensions;
-    
+
+    const dims =
+      typeof defaultScorecard.dimensions === "string"
+        ? JSON.parse(defaultScorecard.dimensions)
+        : defaultScorecard.dimensions;
+
     scorecard = await saveScorecard({
       name: `${teamName} Quality Scorecard`,
       description: `Quality scorecard for ${teamName} team managing ${crmModule}`,
@@ -457,17 +563,17 @@ export async function linkScorecardToGovernanceDoc(
       is_active: true,
       crm_module: crmModule,
       team_name: teamName,
-      governance_doc_id: governanceDocId
+      governance_doc_id: governanceDocId,
     });
-    
+
     return scorecard;
   }
-  
+
   const result = await pool.query(
-    'UPDATE quality_scorecards SET governance_doc_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-    [governanceDocId, scorecard.id]
+    "UPDATE quality_scorecards SET governance_doc_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    [governanceDocId, scorecard.id],
   );
-  
+
   return result.rows[0] || null;
 }
 
@@ -487,29 +593,37 @@ export interface ScorecardAttribute {
   updated_at?: Date;
 }
 
-export async function getScorecardsByModuleAndTeam(crmModule?: string, teamName?: string): Promise<QualityScorecard[]> {
+export async function getScorecardsByModuleAndTeam(
+  crmModule?: string,
+  teamName?: string,
+): Promise<QualityScorecard[]> {
   if (crmModule && teamName) {
     const result = await pool.query(
-      'SELECT * FROM quality_scorecards WHERE crm_module = $1 AND team_name = $2 ORDER BY is_active DESC, version DESC',
-      [crmModule, teamName]
+      "SELECT * FROM quality_scorecards WHERE crm_module = $1 AND team_name = $2 ORDER BY is_active DESC, version DESC",
+      [crmModule, teamName],
     );
     return result.rows;
   }
   if (crmModule) {
     const result = await pool.query(
-      'SELECT * FROM quality_scorecards WHERE crm_module = $1 ORDER BY is_active DESC, version DESC',
-      [crmModule]
+      "SELECT * FROM quality_scorecards WHERE crm_module = $1 ORDER BY is_active DESC, version DESC",
+      [crmModule],
     );
     return result.rows;
   }
   const result = await pool.query(
-    'SELECT * FROM quality_scorecards ORDER BY is_active DESC, version DESC'
+    "SELECT * FROM quality_scorecards ORDER BY is_active DESC, version DESC",
   );
   return result.rows;
 }
 
-export async function getScorecardById(id: number): Promise<QualityScorecard | null> {
-  const result = await pool.query('SELECT * FROM quality_scorecards WHERE id = $1', [id]);
+export async function getScorecardById(
+  id: number,
+): Promise<QualityScorecard | null> {
+  const result = await pool.query(
+    "SELECT * FROM quality_scorecards WHERE id = $1",
+    [id],
+  );
   return result.rows[0] || null;
 }
 
@@ -527,147 +641,254 @@ export async function createScorecard(scorecard: {
     `INSERT INTO quality_scorecards (name, description, dimensions, is_active, crm_module, team_name, governance_doc_id, version, created_by)
      VALUES ($1, $2, $3, false, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [scorecard.name, scorecard.description, JSON.stringify(scorecard.dimensions), 
-     scorecard.crm_module, scorecard.team_name, scorecard.governance_doc_id || null,
-     scorecard.version || 'v1.0', scorecard.created_by || null]
+    [
+      scorecard.name,
+      scorecard.description,
+      JSON.stringify(scorecard.dimensions),
+      scorecard.crm_module,
+      scorecard.team_name,
+      scorecard.governance_doc_id || null,
+      scorecard.version || "v1.0",
+      scorecard.created_by || null,
+    ],
   );
   return result.rows[0];
 }
 
-export async function updateScorecard(id: number, updates: Partial<QualityScorecard>): Promise<QualityScorecard | null> {
+export async function updateScorecard(
+  id: number,
+  updates: Partial<QualityScorecard>,
+): Promise<QualityScorecard | null> {
   const setClauses: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
 
-  if (updates.name !== undefined) { setClauses.push(`name = $${paramIndex++}`); values.push(updates.name); }
-  if (updates.description !== undefined) { setClauses.push(`description = $${paramIndex++}`); values.push(updates.description); }
-  if (updates.dimensions !== undefined) { setClauses.push(`dimensions = $${paramIndex++}`); values.push(JSON.stringify(updates.dimensions)); }
-  if (updates.governance_doc_id !== undefined) { setClauses.push(`governance_doc_id = $${paramIndex++}`); values.push(updates.governance_doc_id); }
-  if (updates.version !== undefined) { setClauses.push(`version = $${paramIndex++}`); values.push(updates.version); }
-  
+  if (updates.name !== undefined) {
+    setClauses.push(`name = $${paramIndex++}`);
+    values.push(updates.name);
+  }
+  if (updates.description !== undefined) {
+    setClauses.push(`description = $${paramIndex++}`);
+    values.push(updates.description);
+  }
+  if (updates.dimensions !== undefined) {
+    setClauses.push(`dimensions = $${paramIndex++}`);
+    values.push(JSON.stringify(updates.dimensions));
+  }
+  if (updates.governance_doc_id !== undefined) {
+    setClauses.push(`governance_doc_id = $${paramIndex++}`);
+    values.push(updates.governance_doc_id);
+  }
+  if (updates.version !== undefined) {
+    setClauses.push(`version = $${paramIndex++}`);
+    values.push(updates.version);
+  }
+
   if (setClauses.length === 0) return getScorecardById(id);
-  
+
   setClauses.push(`updated_at = NOW()`);
   values.push(id);
-  
+
   const result = await pool.query(
-    `UPDATE quality_scorecards SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE quality_scorecards SET ${setClauses.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
   );
   return result.rows[0] || null;
 }
 
 export async function deleteScorecard(id: number): Promise<boolean> {
-  const result = await pool.query('DELETE FROM quality_scorecards WHERE id = $1', [id]);
+  const result = await pool.query(
+    "DELETE FROM quality_scorecards WHERE id = $1",
+    [id],
+  );
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function setActiveScorecardForTeam(id: number, crmModule: string, teamName: string): Promise<QualityScorecard | null> {
+export async function setActiveScorecardForTeam(
+  id: number,
+  crmModule: string,
+  teamName: string,
+): Promise<QualityScorecard | null> {
   await pool.query(
-    'UPDATE quality_scorecards SET is_active = false WHERE crm_module = $1 AND team_name = $2',
-    [crmModule, teamName]
+    "UPDATE quality_scorecards SET is_active = false WHERE crm_module = $1 AND team_name = $2",
+    [crmModule, teamName],
   );
   const result = await pool.query(
-    'UPDATE quality_scorecards SET is_active = true, updated_at = NOW() WHERE id = $1 RETURNING *',
-    [id]
+    "UPDATE quality_scorecards SET is_active = true, updated_at = NOW() WHERE id = $1 RETURNING *",
+    [id],
   );
   return result.rows[0] || null;
 }
 
-export async function cloneScorecard(id: number, newName: string, newVersion?: string): Promise<QualityScorecard | null> {
+export async function cloneScorecard(
+  id: number,
+  newName: string,
+  newVersion?: string,
+): Promise<QualityScorecard | null> {
   const original = await getScorecardById(id);
   if (!original) return null;
-  
+
   const result = await pool.query(
     `INSERT INTO quality_scorecards (name, description, dimensions, is_active, crm_module, team_name, governance_doc_id, version, created_by)
      VALUES ($1, $2, $3, false, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [newName, original.description, JSON.stringify(original.dimensions), 
-     original.crm_module, original.team_name, original.governance_doc_id,
-     newVersion || 'v1.0', null]
+    [
+      newName,
+      original.description,
+      JSON.stringify(original.dimensions),
+      original.crm_module,
+      original.team_name,
+      original.governance_doc_id,
+      newVersion || "v1.0",
+      null,
+    ],
   );
-  
+
   const newScorecard = result.rows[0];
 
-  const attrsResult = await pool.query('SELECT * FROM scorecard_attributes WHERE scorecard_id = $1 ORDER BY order_index', [id]);
+  const attrsResult = await pool.query(
+    "SELECT * FROM scorecard_attributes WHERE scorecard_id = $1 ORDER BY order_index",
+    [id],
+  );
   if (attrsResult.rows.length > 0) {
     await bulkInsert(
-      'scorecard_attributes',
-      ['scorecard_id', 'dimension', 'attribute_name', 'description', 'weight', 'severity', 'evaluation_logic', 'evidence_fields', 'is_active', 'order_index'],
-      attrsResult.rows.map(attr => ({
-        scorecard_id:     newScorecard.id,
-        dimension:        attr.dimension,
-        attribute_name:   attr.attribute_name,
-        description:      attr.description,
-        weight:           attr.weight,
-        severity:         attr.severity,
+      "scorecard_attributes",
+      [
+        "scorecard_id",
+        "dimension",
+        "attribute_name",
+        "description",
+        "weight",
+        "severity",
+        "evaluation_logic",
+        "evidence_fields",
+        "is_active",
+        "order_index",
+      ],
+      attrsResult.rows.map((attr) => ({
+        scorecard_id: newScorecard.id,
+        dimension: attr.dimension,
+        attribute_name: attr.attribute_name,
+        description: attr.description,
+        weight: attr.weight,
+        severity: attr.severity,
         evaluation_logic: attr.evaluation_logic,
-        evidence_fields:  attr.evidence_fields,
-        is_active:        attr.is_active,
-        order_index:      attr.order_index,
-      }))
+        evidence_fields: attr.evidence_fields,
+        is_active: attr.is_active,
+        order_index: attr.order_index,
+      })),
     );
   }
 
   return newScorecard;
 }
 
-export async function getScorecardAttributes(scorecardId: number): Promise<ScorecardAttribute[]> {
+export async function getScorecardAttributes(
+  scorecardId: number,
+): Promise<ScorecardAttribute[]> {
   const result = await pool.query(
-    'SELECT * FROM scorecard_attributes WHERE scorecard_id = $1 ORDER BY order_index, id',
-    [scorecardId]
+    "SELECT * FROM scorecard_attributes WHERE scorecard_id = $1 ORDER BY order_index, id",
+    [scorecardId],
   );
   return result.rows;
 }
 
-export async function createScorecardAttribute(attr: Omit<ScorecardAttribute, 'id' | 'created_at' | 'updated_at'>): Promise<ScorecardAttribute> {
+export async function createScorecardAttribute(
+  attr: Omit<ScorecardAttribute, "id" | "created_at" | "updated_at">,
+): Promise<ScorecardAttribute> {
   const result = await pool.query(
     `INSERT INTO scorecard_attributes (scorecard_id, dimension, attribute_name, description, weight, severity, evaluation_logic, evidence_fields, is_active, order_index)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [attr.scorecard_id, attr.dimension, attr.attribute_name, attr.description, attr.weight,
-     attr.severity || 'Minor', attr.evaluation_logic, attr.evidence_fields, attr.is_active, attr.order_index]
+    [
+      attr.scorecard_id,
+      attr.dimension,
+      attr.attribute_name,
+      attr.description,
+      attr.weight,
+      attr.severity || "Minor",
+      attr.evaluation_logic,
+      attr.evidence_fields,
+      attr.is_active,
+      attr.order_index,
+    ],
   );
   return result.rows[0];
 }
 
-export async function updateScorecardAttribute(id: number, updates: Partial<ScorecardAttribute>): Promise<ScorecardAttribute | null> {
+export async function updateScorecardAttribute(
+  id: number,
+  updates: Partial<ScorecardAttribute>,
+): Promise<ScorecardAttribute | null> {
   const setClauses: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
 
-  if (updates.dimension !== undefined) { setClauses.push(`dimension = $${paramIndex++}`); values.push(updates.dimension); }
-  if (updates.attribute_name !== undefined) { setClauses.push(`attribute_name = $${paramIndex++}`); values.push(updates.attribute_name); }
-  if (updates.description !== undefined) { setClauses.push(`description = $${paramIndex++}`); values.push(updates.description); }
-  if (updates.weight !== undefined) { setClauses.push(`weight = $${paramIndex++}`); values.push(updates.weight); }
-  if (updates.severity !== undefined) { setClauses.push(`severity = $${paramIndex++}`); values.push(updates.severity); }
-  if (updates.evaluation_logic !== undefined) { setClauses.push(`evaluation_logic = $${paramIndex++}`); values.push(updates.evaluation_logic); }
-  if (updates.evidence_fields !== undefined) { setClauses.push(`evidence_fields = $${paramIndex++}`); values.push(updates.evidence_fields); }
-  if (updates.is_active !== undefined) { setClauses.push(`is_active = $${paramIndex++}`); values.push(updates.is_active); }
-  if (updates.order_index !== undefined) { setClauses.push(`order_index = $${paramIndex++}`); values.push(updates.order_index); }
+  if (updates.dimension !== undefined) {
+    setClauses.push(`dimension = $${paramIndex++}`);
+    values.push(updates.dimension);
+  }
+  if (updates.attribute_name !== undefined) {
+    setClauses.push(`attribute_name = $${paramIndex++}`);
+    values.push(updates.attribute_name);
+  }
+  if (updates.description !== undefined) {
+    setClauses.push(`description = $${paramIndex++}`);
+    values.push(updates.description);
+  }
+  if (updates.weight !== undefined) {
+    setClauses.push(`weight = $${paramIndex++}`);
+    values.push(updates.weight);
+  }
+  if (updates.severity !== undefined) {
+    setClauses.push(`severity = $${paramIndex++}`);
+    values.push(updates.severity);
+  }
+  if (updates.evaluation_logic !== undefined) {
+    setClauses.push(`evaluation_logic = $${paramIndex++}`);
+    values.push(updates.evaluation_logic);
+  }
+  if (updates.evidence_fields !== undefined) {
+    setClauses.push(`evidence_fields = $${paramIndex++}`);
+    values.push(updates.evidence_fields);
+  }
+  if (updates.is_active !== undefined) {
+    setClauses.push(`is_active = $${paramIndex++}`);
+    values.push(updates.is_active);
+  }
+  if (updates.order_index !== undefined) {
+    setClauses.push(`order_index = $${paramIndex++}`);
+    values.push(updates.order_index);
+  }
 
   if (setClauses.length === 0) return null;
-  
+
   setClauses.push(`updated_at = NOW()`);
   values.push(id);
-  
+
   const result = await pool.query(
-    `UPDATE scorecard_attributes SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE scorecard_attributes SET ${setClauses.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
   );
   return result.rows[0] || null;
 }
 
 export async function deleteScorecardAttribute(id: number): Promise<boolean> {
-  const result = await pool.query('DELETE FROM scorecard_attributes WHERE id = $1', [id]);
+  const result = await pool.query(
+    "DELETE FROM scorecard_attributes WHERE id = $1",
+    [id],
+  );
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function reorderScorecardAttributes(scorecardId: number, attributeIds: number[]): Promise<void> {
+export async function reorderScorecardAttributes(
+  scorecardId: number,
+  attributeIds: number[],
+): Promise<void> {
   for (let i = 0; i < attributeIds.length; i++) {
     await pool.query(
-      'UPDATE scorecard_attributes SET order_index = $1, updated_at = NOW() WHERE id = $2 AND scorecard_id = $3',
-      [i, attributeIds[i], scorecardId]
+      "UPDATE scorecard_attributes SET order_index = $1, updated_at = NOW() WHERE id = $2 AND scorecard_id = $3",
+      [i, attributeIds[i], scorecardId],
     );
   }
 }
@@ -689,8 +910,8 @@ export interface WorkflowRun {
   workflow_id: string;
   workflow_name: string;
   run_id?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  trigger_type: 'manual' | 'scheduled' | 'webhook' | 'api';
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  trigger_type: "manual" | "scheduled" | "webhook" | "api";
   trigger_source?: string;
   started_at?: Date;
   completed_at?: Date;
@@ -707,13 +928,15 @@ export interface SystemEvent {
   event_type: string;
   event_category: string;
   description: string;
-  severity: 'debug' | 'info' | 'warning' | 'error' | 'critical';
+  severity: "debug" | "info" | "warning" | "error" | "critical";
   source?: string;
   metadata?: any;
   created_at?: Date;
 }
 
-export async function logAdminActivity(activity: AdminActivity): Promise<AdminActivity> {
+export async function logAdminActivity(
+  activity: AdminActivity,
+): Promise<AdminActivity> {
   try {
     await ensureActivityTables();
     const result = await pool.query(
@@ -728,66 +951,73 @@ export async function logAdminActivity(activity: AdminActivity): Promise<AdminAc
         activity.target_id || null,
         activity.target_name || null,
         activity.actor_ip || null,
-        JSON.stringify(activity.metadata || {})
-      ]
+        JSON.stringify(activity.metadata || {}),
+      ],
     );
     return result.rows[0];
   } catch (err) {
-    console.error('[logAdminActivity] non-fatal write failure:', (err as Error).message);
+    logger.error(
+      "[logAdminActivity] non-fatal write failure:",
+      (err as Error).message,
+    );
     return activity;
   }
 }
 
-export async function getAdminActivities(options: {
-  limit?: number;
-  offset?: number;
-  action_type?: string;
-  startDate?: Date;
-  endDate?: Date;
-} = {}): Promise<{ activities: AdminActivity[]; total: number }> {
+export async function getAdminActivities(
+  options: {
+    limit?: number;
+    offset?: number;
+    action_type?: string;
+    startDate?: Date;
+    endDate?: Date;
+  } = {},
+): Promise<{ activities: AdminActivity[]; total: number }> {
   const { limit = 50, offset = 0, action_type, startDate, endDate } = options;
-  
-  let whereClause = 'WHERE 1=1';
+
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
-  
+
   if (action_type) {
     whereClause += ` AND action_type = $${paramIndex}`;
     params.push(action_type);
     paramIndex++;
   }
-  
+
   if (startDate) {
     whereClause += ` AND created_at >= $${paramIndex}`;
     params.push(startDate);
     paramIndex++;
   }
-  
+
   if (endDate) {
     whereClause += ` AND created_at <= $${paramIndex}`;
     params.push(endDate);
     paramIndex++;
   }
-  
+
   const countResult = await pool.query(
     `SELECT COUNT(*) FROM admin_activities ${whereClause}`,
-    params
+    params,
   );
-  
+
   const result = await pool.query(
     `SELECT * FROM admin_activities ${whereClause} 
      ORDER BY created_at DESC 
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset]
+    [...params, limit, offset],
   );
-  
+
   return {
     activities: result.rows,
-    total: parseInt(countResult.rows[0].count)
+    total: parseInt(countResult.rows[0].count),
   };
 }
 
-export async function createWorkflowRun(run: WorkflowRun): Promise<WorkflowRun> {
+export async function createWorkflowRun(
+  run: WorkflowRun,
+): Promise<WorkflowRun> {
   const result = await pool.query(
     `INSERT INTO workflow_runs 
      (workflow_id, workflow_name, run_id, status, trigger_type, trigger_source, input_data, metadata)
@@ -801,192 +1031,204 @@ export async function createWorkflowRun(run: WorkflowRun): Promise<WorkflowRun> 
       run.trigger_type,
       run.trigger_source || null,
       JSON.stringify(run.input_data || {}),
-      JSON.stringify(run.metadata || {})
-    ]
+      JSON.stringify(run.metadata || {}),
+    ],
   );
   return result.rows[0];
 }
 
 export async function updateWorkflowRun(
-  id: number, 
-  updates: Partial<WorkflowRun>
+  id: number,
+  updates: Partial<WorkflowRun>,
 ): Promise<WorkflowRun | null> {
   const fields: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
-  
+
   if (updates.status !== undefined) {
     fields.push(`status = $${paramIndex}`);
     values.push(updates.status);
     paramIndex++;
   }
-  
+
   if (updates.completed_at !== undefined) {
     fields.push(`completed_at = $${paramIndex}`);
     values.push(updates.completed_at);
     paramIndex++;
   }
-  
+
   if (updates.duration_ms !== undefined) {
     fields.push(`duration_ms = $${paramIndex}`);
     values.push(updates.duration_ms);
     paramIndex++;
   }
-  
+
   if (updates.output_data !== undefined) {
     fields.push(`output_data = $${paramIndex}`);
     values.push(JSON.stringify(updates.output_data));
     paramIndex++;
   }
-  
+
   if (updates.error_message !== undefined) {
     fields.push(`error_message = $${paramIndex}`);
     values.push(updates.error_message);
     paramIndex++;
   }
-  
+
   if (updates.error_details !== undefined) {
     fields.push(`error_details = $${paramIndex}`);
     values.push(JSON.stringify(updates.error_details));
     paramIndex++;
   }
-  
+
   if (fields.length === 0) return null;
-  
+
   values.push(id);
-  
+
   const result = await pool.query(
-    `UPDATE workflow_runs SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE workflow_runs SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
   );
-  
+
   return result.rows[0] || null;
 }
 
 export async function updateWorkflowRunByRunId(
-  runId: string, 
-  updates: Partial<WorkflowRun>
+  runId: string,
+  updates: Partial<WorkflowRun>,
 ): Promise<WorkflowRun | null> {
   const fields: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
-  
+
   if (updates.status !== undefined) {
     fields.push(`status = $${paramIndex}`);
     values.push(updates.status);
     paramIndex++;
   }
-  
+
   if (updates.completed_at !== undefined) {
     fields.push(`completed_at = $${paramIndex}`);
     values.push(updates.completed_at);
     paramIndex++;
   }
-  
+
   if (updates.duration_ms !== undefined) {
     fields.push(`duration_ms = $${paramIndex}`);
     values.push(updates.duration_ms);
     paramIndex++;
   }
-  
+
   if (updates.output_data !== undefined) {
     fields.push(`output_data = $${paramIndex}`);
     values.push(JSON.stringify(updates.output_data));
     paramIndex++;
   }
-  
+
   if (updates.error_message !== undefined) {
     fields.push(`error_message = $${paramIndex}`);
     values.push(updates.error_message);
     paramIndex++;
   }
-  
+
   if (updates.error_details !== undefined) {
     fields.push(`error_details = $${paramIndex}`);
     values.push(JSON.stringify(updates.error_details));
     paramIndex++;
   }
-  
+
   if (fields.length === 0) return null;
-  
+
   values.push(runId);
-  
+
   const result = await pool.query(
-    `UPDATE workflow_runs SET ${fields.join(', ')} WHERE run_id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE workflow_runs SET ${fields.join(", ")} WHERE run_id = $${paramIndex} RETURNING *`,
+    values,
   );
-  
+
   return result.rows[0] || null;
 }
 
-export async function getWorkflowRuns(options: {
-  limit?: number;
-  offset?: number;
-  workflow_id?: string;
-  status?: string;
-  startDate?: Date;
-  endDate?: Date;
-} = {}): Promise<{ runs: WorkflowRun[]; total: number }> {
-  const { limit = 50, offset = 0, workflow_id, status, startDate, endDate } = options;
-  
-  let whereClause = 'WHERE 1=1';
+export async function getWorkflowRuns(
+  options: {
+    limit?: number;
+    offset?: number;
+    workflow_id?: string;
+    status?: string;
+    startDate?: Date;
+    endDate?: Date;
+  } = {},
+): Promise<{ runs: WorkflowRun[]; total: number }> {
+  const {
+    limit = 50,
+    offset = 0,
+    workflow_id,
+    status,
+    startDate,
+    endDate,
+  } = options;
+
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
-  
+
   if (workflow_id) {
     whereClause += ` AND workflow_id = $${paramIndex}`;
     params.push(workflow_id);
     paramIndex++;
   }
-  
+
   if (status) {
     whereClause += ` AND status = $${paramIndex}`;
     params.push(status);
     paramIndex++;
   }
-  
+
   if (startDate) {
     whereClause += ` AND started_at >= $${paramIndex}`;
     params.push(startDate);
     paramIndex++;
   }
-  
+
   if (endDate) {
     whereClause += ` AND started_at <= $${paramIndex}`;
     params.push(endDate);
     paramIndex++;
   }
-  
+
   const countResult = await pool.query(
     `SELECT COUNT(*) FROM workflow_runs ${whereClause}`,
-    params
+    params,
   );
-  
+
   const result = await pool.query(
     `SELECT * FROM workflow_runs ${whereClause} 
      ORDER BY started_at DESC 
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset]
+    [...params, limit, offset],
   );
-  
+
   return {
     runs: result.rows,
-    total: parseInt(countResult.rows[0].count)
+    total: parseInt(countResult.rows[0].count),
   };
 }
 
-export async function getWorkflowRunById(id: number): Promise<WorkflowRun | null> {
-  const result = await pool.query(
-    'SELECT * FROM workflow_runs WHERE id = $1',
-    [id]
-  );
+export async function getWorkflowRunById(
+  id: number,
+): Promise<WorkflowRun | null> {
+  const result = await pool.query("SELECT * FROM workflow_runs WHERE id = $1", [
+    id,
+  ]);
   return result.rows[0] || null;
 }
 
-export async function getWorkflowRunByRunId(runId: string): Promise<WorkflowRun | null> {
+export async function getWorkflowRunByRunId(
+  runId: string,
+): Promise<WorkflowRun | null> {
   const result = await pool.query(
-    'SELECT * FROM workflow_runs WHERE run_id = $1',
-    [runId]
+    "SELECT * FROM workflow_runs WHERE run_id = $1",
+    [runId],
   );
   return result.rows[0] || null;
 }
@@ -1001,81 +1243,91 @@ export async function logSystemEvent(event: SystemEvent): Promise<SystemEvent> {
       event.event_type,
       event.event_category,
       event.description,
-      event.severity || 'info',
+      event.severity || "info",
       event.source || null,
-      JSON.stringify(event.metadata || {})
-    ]
+      JSON.stringify(event.metadata || {}),
+    ],
   );
   return result.rows[0];
 }
 
-export async function getSystemEvents(options: {
-  limit?: number;
-  offset?: number;
-  event_type?: string;
-  event_category?: string;
-  severity?: string;
-  startDate?: Date;
-  endDate?: Date;
-} = {}): Promise<{ events: SystemEvent[]; total: number }> {
-  const { limit = 100, offset = 0, event_type, event_category, severity, startDate, endDate } = options;
-  
-  let whereClause = 'WHERE 1=1';
+export async function getSystemEvents(
+  options: {
+    limit?: number;
+    offset?: number;
+    event_type?: string;
+    event_category?: string;
+    severity?: string;
+    startDate?: Date;
+    endDate?: Date;
+  } = {},
+): Promise<{ events: SystemEvent[]; total: number }> {
+  const {
+    limit = 100,
+    offset = 0,
+    event_type,
+    event_category,
+    severity,
+    startDate,
+    endDate,
+  } = options;
+
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
-  
+
   if (event_type) {
     whereClause += ` AND event_type = $${paramIndex}`;
     params.push(event_type);
     paramIndex++;
   }
-  
+
   if (event_category) {
     whereClause += ` AND event_category = $${paramIndex}`;
     params.push(event_category);
     paramIndex++;
   }
-  
+
   if (severity) {
     whereClause += ` AND severity = $${paramIndex}`;
     params.push(severity);
     paramIndex++;
   }
-  
+
   if (startDate) {
     whereClause += ` AND created_at >= $${paramIndex}`;
     params.push(startDate);
     paramIndex++;
   }
-  
+
   if (endDate) {
     whereClause += ` AND created_at <= $${paramIndex}`;
     params.push(endDate);
     paramIndex++;
   }
-  
+
   const countResult = await pool.query(
     `SELECT COUNT(*) FROM system_events ${whereClause}`,
-    params
+    params,
   );
-  
+
   const result = await pool.query(
     `SELECT * FROM system_events ${whereClause} 
      ORDER BY created_at DESC 
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset]
+    [...params, limit, offset],
   );
-  
+
   return {
     events: result.rows,
-    total: parseInt(countResult.rows[0].count)
+    total: parseInt(countResult.rows[0].count),
   };
 }
 
 export async function getActivityFeed(limit: number = 50): Promise<{
   activities: Array<{
     id: number;
-    type: 'admin' | 'workflow' | 'system';
+    type: "admin" | "workflow" | "system";
     title: string;
     description: string;
     severity?: string;
@@ -1088,23 +1340,23 @@ export async function getActivityFeed(limit: number = 50): Promise<{
     pool.query(
       `SELECT id, action_type, action_description, target_name, created_at, metadata
        FROM admin_activities ORDER BY created_at DESC LIMIT $1`,
-      [limit]
+      [limit],
     ),
     pool.query(
       `SELECT id, workflow_name, status, trigger_type, started_at, duration_ms, error_message
        FROM workflow_runs ORDER BY started_at DESC LIMIT $1`,
-      [limit]
+      [limit],
     ),
     pool.query(
       `SELECT id, event_type, description, severity, source, created_at, metadata
        FROM system_events ORDER BY created_at DESC LIMIT $1`,
-      [limit]
-    )
+      [limit],
+    ),
   ]);
-  
+
   const activities: Array<{
     id: number;
-    type: 'admin' | 'workflow' | 'system';
+    type: "admin" | "workflow" | "system";
     title: string;
     description: string;
     severity?: string;
@@ -1112,67 +1364,83 @@ export async function getActivityFeed(limit: number = 50): Promise<{
     timestamp: Date;
     metadata?: any;
   }> = [];
-  
+
   for (const row of adminResult.rows) {
     activities.push({
       id: row.id,
-      type: 'admin',
+      type: "admin",
       title: row.action_type,
       description: row.action_description,
       timestamp: row.created_at,
-      metadata: row.metadata
+      metadata: row.metadata,
     });
   }
-  
+
   for (const row of workflowResult.rows) {
     activities.push({
       id: row.id,
-      type: 'workflow',
+      type: "workflow",
       title: row.workflow_name,
-      description: `${row.trigger_type} trigger - ${row.status}${row.duration_ms ? ` (${row.duration_ms}ms)` : ''}`,
+      description: `${row.trigger_type} trigger - ${row.status}${row.duration_ms ? ` (${row.duration_ms}ms)` : ""}`,
       status: row.status,
       timestamp: row.started_at,
-      metadata: { error_message: row.error_message }
+      metadata: { error_message: row.error_message },
     });
   }
-  
+
   for (const row of systemResult.rows) {
     activities.push({
       id: row.id,
-      type: 'system',
+      type: "system",
       title: row.event_type,
       description: row.description,
       severity: row.severity,
       timestamp: row.created_at,
-      metadata: row.metadata
+      metadata: row.metadata,
     });
   }
-  
-  activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  
+
+  activities.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+
   return { activities: activities.slice(0, limit) };
 }
 
 export async function getActivityStats(): Promise<{
   adminActions: { today: number; week: number; month: number };
-  workflowRuns: { total: number; completed: number; failed: number; running: number };
-  systemEvents: { info: number; warning: number; error: number; critical: number };
+  workflowRuns: {
+    total: number;
+    completed: number;
+    failed: number;
+    running: number;
+  };
+  systemEvents: {
+    info: number;
+    warning: number;
+    error: number;
+    critical: number;
+  };
 }> {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  
+
   const [adminStats, workflowStats, eventStats] = await Promise.all([
-    pool.query(`
+    pool.query(
+      `
       SELECT 
         COUNT(*) FILTER (WHERE created_at >= $1) as today,
         COUNT(*) FILTER (WHERE created_at >= $2) as week,
         COUNT(*) FILTER (WHERE created_at >= $3) as month
       FROM admin_activities
-    `, [startOfDay, startOfWeek, startOfMonth]),
-    
-    pool.query(`
+    `,
+      [startOfDay, startOfWeek, startOfMonth],
+    ),
+
+    pool.query(
+      `
       SELECT 
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
@@ -1180,9 +1448,12 @@ export async function getActivityStats(): Promise<{
         COUNT(*) FILTER (WHERE status = 'running') as running
       FROM workflow_runs
       WHERE started_at >= $1
-    `, [startOfMonth]),
-    
-    pool.query(`
+    `,
+      [startOfMonth],
+    ),
+
+    pool.query(
+      `
       SELECT 
         COUNT(*) FILTER (WHERE severity = 'info') as info,
         COUNT(*) FILTER (WHERE severity = 'warning') as warning,
@@ -1190,27 +1461,29 @@ export async function getActivityStats(): Promise<{
         COUNT(*) FILTER (WHERE severity = 'critical') as critical
       FROM system_events
       WHERE created_at >= $1
-    `, [startOfMonth])
+    `,
+      [startOfMonth],
+    ),
   ]);
-  
+
   return {
     adminActions: {
       today: parseInt(adminStats.rows[0].today) || 0,
       week: parseInt(adminStats.rows[0].week) || 0,
-      month: parseInt(adminStats.rows[0].month) || 0
+      month: parseInt(adminStats.rows[0].month) || 0,
     },
     workflowRuns: {
       total: parseInt(workflowStats.rows[0].total) || 0,
       completed: parseInt(workflowStats.rows[0].completed) || 0,
       failed: parseInt(workflowStats.rows[0].failed) || 0,
-      running: parseInt(workflowStats.rows[0].running) || 0
+      running: parseInt(workflowStats.rows[0].running) || 0,
     },
     systemEvents: {
       info: parseInt(eventStats.rows[0].info) || 0,
       warning: parseInt(eventStats.rows[0].warning) || 0,
       error: parseInt(eventStats.rows[0].error) || 0,
-      critical: parseInt(eventStats.rows[0].critical) || 0
-    }
+      critical: parseInt(eventStats.rows[0].critical) || 0,
+    },
   };
 }
 
@@ -1244,28 +1517,48 @@ async function ensureFeedbackTable(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
-  await pool.query(`ALTER TABLE team_feedback ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`UPDATE team_feedback SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_team_feedback_public_id ON team_feedback(public_id)`);
+  await pool.query(
+    `ALTER TABLE team_feedback ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `UPDATE team_feedback SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_team_feedback_public_id ON team_feedback(public_id)`,
+  );
 }
 
-export async function submitFeedback(feedback: TeamFeedback): Promise<TeamFeedback> {
+export async function submitFeedback(
+  feedback: TeamFeedback,
+): Promise<TeamFeedback> {
   await ensureFeedbackTable();
   const result = await pool.query(
     `INSERT INTO team_feedback (submitter_name, submitter_role, dashboard, rating, ease_of_use, comments, suggestions)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [feedback.submitter_name, feedback.submitter_role, feedback.dashboard, feedback.rating, feedback.ease_of_use, feedback.comments, feedback.suggestions]
+    [
+      feedback.submitter_name,
+      feedback.submitter_role,
+      feedback.dashboard,
+      feedback.rating,
+      feedback.ease_of_use,
+      feedback.comments,
+      feedback.suggestions,
+    ],
   );
   return result.rows[0];
 }
 
-export async function getAllFeedback(filters?: { dashboard?: string; startDate?: string; endDate?: string }): Promise<TeamFeedback[]> {
+export async function getAllFeedback(filters?: {
+  dashboard?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<TeamFeedback[]> {
   await ensureFeedbackTable();
-  let query = 'SELECT * FROM team_feedback WHERE 1=1';
+  let query = "SELECT * FROM team_feedback WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
-  
+
   if (filters?.dashboard) {
     query += ` AND dashboard = $${paramIndex++}`;
     params.push(filters.dashboard);
@@ -1278,9 +1571,9 @@ export async function getAllFeedback(filters?: { dashboard?: string; startDate?:
     query += ` AND created_at <= $${paramIndex++}`;
     params.push(filters.endDate);
   }
-  
-  query += ' ORDER BY created_at DESC';
-  
+
+  query += " ORDER BY created_at DESC";
+
   const result = await pool.query(query, params);
   return result.rows;
 }
@@ -1314,19 +1607,19 @@ export async function getFeedbackStats(): Promise<{
       SELECT * FROM team_feedback 
       ORDER BY created_at DESC 
       LIMIT 10
-    `)
+    `),
   ]);
-  
+
   return {
     totalFeedback: parseInt(totals.rows[0].total) || 0,
     avgRating: parseFloat(totals.rows[0].avg_rating) || 0,
     avgEaseOfUse: parseFloat(totals.rows[0].avg_ease) || 0,
-    byDashboard: byDashboard.rows.map(r => ({
+    byDashboard: byDashboard.rows.map((r) => ({
       dashboard: r.dashboard,
       count: parseInt(r.count),
-      avgRating: parseFloat(r.avg_rating)
+      avgRating: parseFloat(r.avg_rating),
     })),
-    recentFeedback: recent.rows
+    recentFeedback: recent.rows,
   };
 }
 

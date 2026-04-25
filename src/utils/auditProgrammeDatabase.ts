@@ -26,7 +26,8 @@
  *     extraction path in manual_audit_findings).
  */
 
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
 
@@ -35,48 +36,48 @@ const pool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
  * ------------------------------------------------------------------------- */
 
 export type AuditSourceParty =
-  | 'platform_ai'           // created by the in-platform AI audit-run engine
-  | 'quality_manual'        // manually logged by Quality team
-  | 'external_regulator'    // SDAIA, SAMA, etc.
-  | 'external_certification' // ISO certification body (BSI, TUV, DNV…)
-  | 'external_surveillance' // annual / mid-cycle surveillance
-  | 'external_customer'     // customer-driven vendor audit
-  | 'external_other';
+  | "platform_ai" // created by the in-platform AI audit-run engine
+  | "quality_manual" // manually logged by Quality team
+  | "external_regulator" // SDAIA, SAMA, etc.
+  | "external_certification" // ISO certification body (BSI, TUV, DNV…)
+  | "external_surveillance" // annual / mid-cycle surveillance
+  | "external_customer" // customer-driven vendor audit
+  | "external_other";
 
 export type ProgrammeStatus =
-  | 'draft'
-  | 'pending_signoff'
-  | 'approved'
-  | 'in_execution'
-  | 'closed'
-  | 'cancelled';
+  | "draft"
+  | "pending_signoff"
+  | "approved"
+  | "in_execution"
+  | "closed"
+  | "cancelled";
 
 export type ManualIntakeStatus =
-  | 'uploaded'      // PDF/DOCX received, no AI run yet
-  | 'extracting'    // GPT-4o extraction in progress
-  | 'ready_review'  // extraction complete, awaiting QM review
-  | 'partially_reviewed'
-  | 'accepted'      // QM accepted all findings -> promoted to grc_audit_findings
-  | 'rejected'
-  | 'failed';       // extraction failed (file corrupt / model error)
+  | "uploaded" // PDF/DOCX received, no AI run yet
+  | "extracting" // GPT-4o extraction in progress
+  | "ready_review" // extraction complete, awaiting QM review
+  | "partially_reviewed"
+  | "accepted" // QM accepted all findings -> promoted to grc_audit_findings
+  | "rejected"
+  | "failed"; // extraction failed (file corrupt / model error)
 
 export type ExternalAuditKind =
-  | 'regulatory'     // government mandated (SDAIA, SAMA, ZATCA…)
-  | 'certification'  // initial cert audit (ISO 27001, 9001, 42001 one-day)
-  | 'surveillance'   // annual follow-up on existing certification
-  | 'recertification'
-  | 'customer'       // customer-driven audit of WalaPlus as supplier
-  | 'other';
+  | "regulatory" // government mandated (SDAIA, SAMA, ZATCA…)
+  | "certification" // initial cert audit (ISO 27001, 9001, 42001 one-day)
+  | "surveillance" // annual follow-up on existing certification
+  | "recertification"
+  | "customer" // customer-driven audit of WalaPlus as supplier
+  | "other";
 
 export interface AuditProgramme {
   id: number;
-  programme_code: string;          // WP-PROG-YYYY-Nnn
+  programme_code: string; // WP-PROG-YYYY-Nnn
   title: string;
   programme_year: number;
   scope_summary: string | null;
   objectives: string | null;
-  risk_based_rationale: string | null;  // free text explaining why this plan
-  planned_audits: any;             // JSONB — array of planned-audit rows
+  risk_based_rationale: string | null; // free text explaining why this plan
+  planned_audits: any; // JSONB — array of planned-audit rows
   status: ProgrammeStatus;
   prepared_by_email: string | null;
   prepared_by_name: string | null;
@@ -90,7 +91,7 @@ export interface AuditProgramme {
 
 export interface ManualIntake {
   id: number;
-  intake_code: string;             // WP-MANI-YYYY-Nnn
+  intake_code: string; // WP-MANI-YYYY-Nnn
   title: string;
   audit_source_party: AuditSourceParty;
   department: string | null;
@@ -102,14 +103,14 @@ export interface ManualIntake {
   file_sha256: string | null;
   uploaded_by_email: string;
   status: ManualIntakeStatus;
-  extraction_model: string | null;  // e.g. 'openai/gpt-4o-2024-11-20'
+  extraction_model: string | null; // e.g. 'openai/gpt-4o-2024-11-20'
   extraction_started_at: Date | null;
   extraction_completed_at: Date | null;
   extraction_error: string | null;
   findings_extracted: number;
   findings_accepted: number;
   findings_rejected: number;
-  linked_audit_id: string | null;   // -> audits.id when promoted
+  linked_audit_id: string | null; // -> audits.id when promoted
   created_at: Date;
   updated_at: Date;
 }
@@ -117,17 +118,17 @@ export interface ManualIntake {
 export interface ManualAuditFinding {
   id: number;
   intake_id: number;
-  finding_ref: string | null;       // auditor's code if any
+  finding_ref: string | null; // auditor's code if any
   title: string;
   description: string;
-  severity: 'critical' | 'major' | 'minor' | 'observation' | 'unknown';
+  severity: "critical" | "major" | "minor" | "observation" | "unknown";
   category: string | null;
   responsible_party: string | null;
   due_date: Date | null;
-  source_page: number | null;       // PDF page where this finding was found
-  source_excerpt: string | null;    // verbatim paragraph from the PDF
-  confidence_score: number;         // 0.00..1.00 from the extractor
-  status: 'pending' | 'accepted' | 'rejected' | 'edited';
+  source_page: number | null; // PDF page where this finding was found
+  source_excerpt: string | null; // verbatim paragraph from the PDF
+  confidence_score: number; // 0.00..1.00 from the extractor
+  status: "pending" | "accepted" | "rejected" | "edited";
   reviewed_by_email: string | null;
   reviewed_at: Date | null;
   reject_reason: string | null;
@@ -138,10 +139,10 @@ export interface ManualAuditFinding {
 
 export interface ExternalAudit {
   id: number;
-  audit_code: string;               // WP-EXT-YYYY-Nnn
+  audit_code: string; // WP-EXT-YYYY-Nnn
   kind: ExternalAuditKind;
   title: string;
-  standard: string | null;          // e.g. 'ISO/IEC 27001:2022'
+  standard: string | null; // e.g. 'ISO/IEC 27001:2022'
   certification_body: string | null;
   auditor_name: string | null;
   scope_summary: string | null;
@@ -149,11 +150,17 @@ export interface ExternalAudit {
   planned_end: Date | null;
   actual_start: Date | null;
   actual_end: Date | null;
-  status: 'scheduled' | 'preparation' | 'in_progress' | 'awaiting_report' | 'closed' | 'cancelled';
-  readiness_percent: number;        // 0-100 computed from checklist
+  status:
+    | "scheduled"
+    | "preparation"
+    | "in_progress"
+    | "awaiting_report"
+    | "closed"
+    | "cancelled";
+  readiness_percent: number; // 0-100 computed from checklist
   findings_count: number;
   critical_findings: number;
-  linked_audit_id: string | null;   // mirror into audits table for reporting
+  linked_audit_id: string | null; // mirror into audits table for reporting
   created_by_email: string | null;
   created_at: Date;
   updated_at: Date;
@@ -169,7 +176,7 @@ export interface ExternalAuditCertificate {
   expiry_date: Date | null;
   scope_statement: string | null;
   file_path: string | null;
-  status: 'active' | 'superseded' | 'withdrawn' | 'expired';
+  status: "active" | "superseded" | "withdrawn" | "expired";
   uploaded_by_email: string | null;
   created_at: Date;
   updated_at: Date;
@@ -177,16 +184,16 @@ export interface ExternalAuditCertificate {
 
 export interface AuditRun {
   id: number;
-  run_code: string;                 // WP-RUN-YYYYMMDD-XXX
-  run_type: 'platform_ai' | 'quality_manual' | 'external';
+  run_code: string; // WP-RUN-YYYYMMDD-XXX
+  run_type: "platform_ai" | "quality_manual" | "external";
   title: string;
   module_in_scope: string | null;
   linked_audit_id: string | null;
   linked_programme_id: number | null;
   started_at: Date;
   finished_at: Date | null;
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
-  summary: any;                     // JSONB
+  status: "running" | "completed" | "failed" | "cancelled";
+  summary: any; // JSONB
   created_by_email: string | null;
 }
 
@@ -199,7 +206,7 @@ let initPromise: Promise<void> | null = null;
 export async function initAuditProgrammeTables(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    console.log('[AuditProgrammeDB] Initializing tables…');
+    logger.info("[AuditProgrammeDB] Initializing tables…");
 
     // 1. audit_programme
     await pool.query(`
@@ -389,24 +396,30 @@ export async function initAuditProgrammeTables(): Promise<void> {
 
     // 9. nullable FK columns on existing tables (safe ADD IF NOT EXISTS).
     const add = async (table: string, column: string, type: string) => {
-      try { await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`); } catch { /* ignore */ }
+      try {
+        await pool.query(
+          `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`,
+        );
+      } catch {
+        /* ignore */
+      }
     };
-    await add('audits', 'source_party',  "VARCHAR(40) DEFAULT 'quality_manual'");
-    await add('audits', 'audit_run_id',  'INTEGER');
-    await add('audits', 'programme_id',  'INTEGER');
-    await add('audits', 'intake_id',     'INTEGER');
+    await add("audits", "source_party", "VARCHAR(40) DEFAULT 'quality_manual'");
+    await add("audits", "audit_run_id", "INTEGER");
+    await add("audits", "programme_id", "INTEGER");
+    await add("audits", "intake_id", "INTEGER");
     // trigger table: dismiss reason, re-eval, auto-escalate, run link
-    await add('audit_triggers', 'dismiss_reason',        'TEXT');
-    await add('audit_triggers', 'dismissed_at',          'TIMESTAMPTZ');
-    await add('audit_triggers', 'dismissed_by_email',    'VARCHAR(255)');
-    await add('audit_triggers', 'next_reevaluate_at',    'TIMESTAMPTZ');
-    await add('audit_triggers', 'reevaluated_at',        'TIMESTAMPTZ');
-    await add('audit_triggers', 'auto_escalated_at',     'TIMESTAMPTZ');
-    await add('audit_triggers', 'escalation_finding_id', 'INTEGER');
-    await add('audit_triggers', 'audit_run_id',          'INTEGER');
-    await add('audit_triggers', 'hitl_action_code',      'VARCHAR(40)');
+    await add("audit_triggers", "dismiss_reason", "TEXT");
+    await add("audit_triggers", "dismissed_at", "TIMESTAMPTZ");
+    await add("audit_triggers", "dismissed_by_email", "VARCHAR(255)");
+    await add("audit_triggers", "next_reevaluate_at", "TIMESTAMPTZ");
+    await add("audit_triggers", "reevaluated_at", "TIMESTAMPTZ");
+    await add("audit_triggers", "auto_escalated_at", "TIMESTAMPTZ");
+    await add("audit_triggers", "escalation_finding_id", "INTEGER");
+    await add("audit_triggers", "audit_run_id", "INTEGER");
+    await add("audit_triggers", "hitl_action_code", "VARCHAR(40)");
 
-    console.log('[AuditProgrammeDB] Tables ready');
+    logger.info("[AuditProgrammeDB] Tables ready");
   })();
   return initPromise;
 }
@@ -415,10 +428,12 @@ export async function initAuditProgrammeTables(): Promise<void> {
  * Code generators (all idempotent, collision-safe via UNIQUE constraint)
  * ------------------------------------------------------------------------- */
 
-function yyyy(): string { return String(new Date().getUTCFullYear()); }
+function yyyy(): string {
+  return String(new Date().getUTCFullYear());
+}
 function ymd(): string {
   const d = new Date();
-  return `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 async function nextSequence(prefix: string, year: string): Promise<string> {
@@ -434,10 +449,10 @@ async function nextSequence(prefix: string, year: string): Promise<string> {
          UNION ALL
          SELECT audit_code       AS code FROM external_audits   WHERE audit_code       LIKE $1
        ) codes`,
-    [pattern]
+    [pattern],
   );
-  const next = (parseInt(res.rows[0]?.max || '0', 10) + 1) || 1;
-  return `${prefix}-${year}-${String(next).padStart(3, '0')}`;
+  const next = parseInt(res.rows[0]?.max || "0", 10) + 1 || 1;
+  return `${prefix}-${year}-${String(next).padStart(3, "0")}`;
 }
 
 async function nextRunCode(): Promise<string> {
@@ -445,10 +460,10 @@ async function nextRunCode(): Promise<string> {
   const res = await pool.query<{ max: string | null }>(
     `SELECT MAX(CAST(SUBSTRING(run_code FROM '[0-9]+$') AS INTEGER))::text AS max
        FROM audit_runs WHERE run_code LIKE $1`,
-    [`${prefix}-%`]
+    [`${prefix}-%`],
   );
-  const next = (parseInt(res.rows[0]?.max || '0', 10) + 1) || 1;
-  return `${prefix}-${String(next).padStart(3, '0')}`;
+  const next = parseInt(res.rows[0]?.max || "0", 10) + 1 || 1;
+  return `${prefix}-${String(next).padStart(3, "0")}`;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -466,7 +481,7 @@ export async function createProgramme(input: {
   prepared_by_name?: string;
 }): Promise<AuditProgramme> {
   await initAuditProgrammeTables();
-  const code = await nextSequence('WP-PROG', String(input.programme_year));
+  const code = await nextSequence("WP-PROG", String(input.programme_year));
   const res = await pool.query<AuditProgramme>(
     `INSERT INTO audit_programme
        (programme_code, title, programme_year, scope_summary, objectives,
@@ -475,14 +490,16 @@ export async function createProgramme(input: {
      VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9)
      RETURNING *`,
     [
-      code, input.title, input.programme_year,
+      code,
+      input.title,
+      input.programme_year,
       input.scope_summary ?? null,
       input.objectives ?? null,
       input.risk_based_rationale ?? null,
       JSON.stringify(input.planned_audits ?? []),
       input.prepared_by_email ?? null,
       input.prepared_by_name ?? null,
-    ]
+    ],
   );
   return res.rows[0];
 }
@@ -494,25 +511,47 @@ export async function listProgrammes(filters?: {
   await initAuditProgrammeTables();
   const where: string[] = [];
   const params: any[] = [];
-  if (filters?.year)   { params.push(filters.year);   where.push(`programme_year = $${params.length}`); }
-  if (filters?.status) { params.push(filters.status); where.push(`status = $${params.length}`); }
-  const sql = `SELECT * FROM audit_programme ${where.length ? 'WHERE '+where.join(' AND ') : ''}
+  if (filters?.year) {
+    params.push(filters.year);
+    where.push(`programme_year = $${params.length}`);
+  }
+  if (filters?.status) {
+    params.push(filters.status);
+    where.push(`status = $${params.length}`);
+  }
+  const sql = `SELECT * FROM audit_programme ${where.length ? "WHERE " + where.join(" AND ") : ""}
                ORDER BY programme_year DESC, created_at DESC`;
   const res = await pool.query<AuditProgramme>(sql, params);
   return res.rows;
 }
 
-export async function getProgrammeById(id: number): Promise<AuditProgramme | null> {
+export async function getProgrammeById(
+  id: number,
+): Promise<AuditProgramme | null> {
   await initAuditProgrammeTables();
-  const res = await pool.query<AuditProgramme>(`SELECT * FROM audit_programme WHERE id = $1`, [id]);
+  const res = await pool.query<AuditProgramme>(
+    `SELECT * FROM audit_programme WHERE id = $1`,
+    [id],
+  );
   return res.rows[0] || null;
 }
 
 export async function updateProgramme(
   id: number,
-  patch: Partial<Pick<AuditProgramme,
-    'title' | 'scope_summary' | 'objectives' | 'risk_based_rationale' | 'planned_audits' |
-    'status' | 'approval_action_code' | 'approved_at' | 'approved_by_email'>>
+  patch: Partial<
+    Pick<
+      AuditProgramme,
+      | "title"
+      | "scope_summary"
+      | "objectives"
+      | "risk_based_rationale"
+      | "planned_audits"
+      | "status"
+      | "approval_action_code"
+      | "approved_at"
+      | "approved_by_email"
+    >
+  >,
 ): Promise<AuditProgramme | null> {
   await initAuditProgrammeTables();
   const fields: string[] = [];
@@ -521,21 +560,21 @@ export async function updateProgramme(
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined) continue;
     fields.push(`${k} = $${i++}`);
-    params.push(k === 'planned_audits' ? JSON.stringify(v) : v);
+    params.push(k === "planned_audits" ? JSON.stringify(v) : v);
   }
   if (fields.length === 0) return getProgrammeById(id);
   fields.push(`updated_at = NOW()`);
   params.push(id);
   const res = await pool.query<AuditProgramme>(
-    `UPDATE audit_programme SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
-    params
+    `UPDATE audit_programme SET ${fields.join(", ")} WHERE id = $${i} RETURNING *`,
+    params,
   );
   return res.rows[0] || null;
 }
 
 export async function recordProgrammeSignoff(input: {
   programme_id: number;
-  action: 'submitted' | 'approved' | 'rejected' | 'revised';
+  action: "submitted" | "approved" | "rejected" | "revised";
   action_code?: string | null;
   actor_email?: string | null;
   actor_role?: string | null;
@@ -548,10 +587,14 @@ export async function recordProgrammeSignoff(input: {
        (programme_id, action, action_code, actor_email, actor_role, notes, snapshot)
      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
     [
-      input.programme_id, input.action, input.action_code ?? null,
-      input.actor_email ?? null, input.actor_role ?? null,
-      input.notes ?? null, JSON.stringify(input.snapshot ?? {}),
-    ]
+      input.programme_id,
+      input.action,
+      input.action_code ?? null,
+      input.actor_email ?? null,
+      input.actor_role ?? null,
+      input.notes ?? null,
+      JSON.stringify(input.snapshot ?? {}),
+    ],
   );
 }
 
@@ -562,7 +605,7 @@ export async function getProgrammeHistory(programmeId: number): Promise<any[]> {
        FROM audit_programme_signoff
       WHERE programme_id = $1
       ORDER BY created_at ASC`,
-    [programmeId]
+    [programmeId],
   );
   return res.rows;
 }
@@ -584,7 +627,7 @@ export async function createIntake(input: {
   uploaded_by_email: string;
 }): Promise<ManualIntake> {
   await initAuditProgrammeTables();
-  const code = await nextSequence('WP-MANI', yyyy());
+  const code = await nextSequence("WP-MANI", yyyy());
   const res = await pool.query<ManualIntake>(
     `INSERT INTO manual_audit_intake
        (intake_code, title, audit_source_party, department, auditor_name, audit_date,
@@ -592,11 +635,18 @@ export async function createIntake(input: {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'uploaded')
      RETURNING *`,
     [
-      code, input.title, input.audit_source_party,
-      input.department ?? null, input.auditor_name ?? null, input.audit_date ?? null,
-      input.file_name, input.file_path ?? null, input.file_mime ?? null,
-      input.file_sha256 ?? null, input.uploaded_by_email,
-    ]
+      code,
+      input.title,
+      input.audit_source_party,
+      input.department ?? null,
+      input.auditor_name ?? null,
+      input.audit_date ?? null,
+      input.file_name,
+      input.file_path ?? null,
+      input.file_mime ?? null,
+      input.file_sha256 ?? null,
+      input.uploaded_by_email,
+    ],
   );
   return res.rows[0];
 }
@@ -609,12 +659,18 @@ export async function listIntakes(filters?: {
   await initAuditProgrammeTables();
   const where: string[] = [];
   const params: any[] = [];
-  if (filters?.status)   { params.push(filters.status);   where.push(`status = $${params.length}`); }
-  if (filters?.uploader) { params.push(filters.uploader); where.push(`uploaded_by_email = $${params.length}`); }
+  if (filters?.status) {
+    params.push(filters.status);
+    where.push(`status = $${params.length}`);
+  }
+  if (filters?.uploader) {
+    params.push(filters.uploader);
+    where.push(`uploaded_by_email = $${params.length}`);
+  }
   const limit = Math.min(filters?.limit ?? 100, 500);
   params.push(limit);
   const sql = `SELECT * FROM manual_audit_intake
-               ${where.length ? 'WHERE '+where.join(' AND ') : ''}
+               ${where.length ? "WHERE " + where.join(" AND ") : ""}
                ORDER BY created_at DESC LIMIT $${params.length}`;
   const res = await pool.query<ManualIntake>(sql, params);
   return res.rows;
@@ -622,41 +678,63 @@ export async function listIntakes(filters?: {
 
 export async function getIntakeById(id: number): Promise<ManualIntake | null> {
   await initAuditProgrammeTables();
-  const res = await pool.query<ManualIntake>(`SELECT * FROM manual_audit_intake WHERE id = $1`, [id]);
+  const res = await pool.query<ManualIntake>(
+    `SELECT * FROM manual_audit_intake WHERE id = $1`,
+    [id],
+  );
   return res.rows[0] || null;
 }
 
 export async function updateIntakeStatus(
   id: number,
   status: ManualIntakeStatus,
-  extra?: Partial<ManualIntake>
+  extra?: Partial<ManualIntake>,
 ): Promise<ManualIntake | null> {
   await initAuditProgrammeTables();
-  const fields = ['status = $1', 'updated_at = NOW()'];
+  const fields = ["status = $1", "updated_at = NOW()"];
   const params: any[] = [status];
   let i = 2;
   const allowed: (keyof ManualIntake)[] = [
-    'extraction_model', 'extraction_started_at', 'extraction_completed_at',
-    'extraction_error', 'findings_extracted', 'findings_accepted',
-    'findings_rejected', 'linked_audit_id',
+    "extraction_model",
+    "extraction_started_at",
+    "extraction_completed_at",
+    "extraction_error",
+    "findings_extracted",
+    "findings_accepted",
+    "findings_rejected",
+    "linked_audit_id",
   ];
   for (const k of allowed) {
     const v = (extra as any)?.[k];
-    if (v !== undefined) { fields.push(`${k} = $${i++}`); params.push(v); }
+    if (v !== undefined) {
+      fields.push(`${k} = $${i++}`);
+      params.push(v);
+    }
   }
   params.push(id);
   const res = await pool.query<ManualIntake>(
-    `UPDATE manual_audit_intake SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
-    params
+    `UPDATE manual_audit_intake SET ${fields.join(", ")} WHERE id = $${i} RETURNING *`,
+    params,
   );
   return res.rows[0] || null;
 }
 
 export async function insertManualFindings(
   intakeId: number,
-  findings: Array<Omit<ManualAuditFinding,
-    'id' | 'intake_id' | 'status' | 'reviewed_by_email' | 'reviewed_at' |
-    'reject_reason' | 'promoted_finding_id' | 'created_at' | 'updated_at'>>
+  findings: Array<
+    Omit<
+      ManualAuditFinding,
+      | "id"
+      | "intake_id"
+      | "status"
+      | "reviewed_by_email"
+      | "reviewed_at"
+      | "reject_reason"
+      | "promoted_finding_id"
+      | "created_at"
+      | "updated_at"
+    >
+  >,
 ): Promise<ManualAuditFinding[]> {
   await initAuditProgrammeTables();
   if (findings.length === 0) return [];
@@ -669,27 +747,35 @@ export async function insertManualFindings(
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
-        intakeId, f.finding_ref ?? null, f.title, f.description,
-        f.severity ?? 'unknown', f.category ?? null,
-        f.responsible_party ?? null, f.due_date ?? null,
-        f.source_page ?? null, f.source_excerpt ?? null,
+        intakeId,
+        f.finding_ref ?? null,
+        f.title,
+        f.description,
+        f.severity ?? "unknown",
+        f.category ?? null,
+        f.responsible_party ?? null,
+        f.due_date ?? null,
+        f.source_page ?? null,
+        f.source_excerpt ?? null,
         f.confidence_score ?? 0,
-      ]
+      ],
     );
     rows.push(r.rows[0]);
   }
   await pool.query(
     `UPDATE manual_audit_intake SET findings_extracted = $1, updated_at = NOW() WHERE id = $2`,
-    [rows.length, intakeId]
+    [rows.length, intakeId],
   );
   return rows;
 }
 
-export async function listManualFindings(intakeId: number): Promise<ManualAuditFinding[]> {
+export async function listManualFindings(
+  intakeId: number,
+): Promise<ManualAuditFinding[]> {
   await initAuditProgrammeTables();
   const res = await pool.query<ManualAuditFinding>(
     `SELECT * FROM manual_audit_findings WHERE intake_id = $1 ORDER BY id ASC`,
-    [intakeId]
+    [intakeId],
   );
   return res.rows;
 }
@@ -697,41 +783,62 @@ export async function listManualFindings(intakeId: number): Promise<ManualAuditF
 export async function reviewManualFinding(
   findingId: number,
   input: {
-    action: 'accept' | 'reject' | 'edit';
+    action: "accept" | "reject" | "edit";
     reviewer_email: string;
-    patch?: Partial<Pick<ManualAuditFinding,
-      'title' | 'description' | 'severity' | 'category' | 'responsible_party' | 'due_date'>>;
+    patch?: Partial<
+      Pick<
+        ManualAuditFinding,
+        | "title"
+        | "description"
+        | "severity"
+        | "category"
+        | "responsible_party"
+        | "due_date"
+      >
+    >;
     reject_reason?: string;
-  }
+  },
 ): Promise<ManualAuditFinding | null> {
   await initAuditProgrammeTables();
-  const fields: string[] = ['reviewed_by_email = $1', 'reviewed_at = NOW()', 'updated_at = NOW()'];
+  const fields: string[] = [
+    "reviewed_by_email = $1",
+    "reviewed_at = NOW()",
+    "updated_at = NOW()",
+  ];
   const params: any[] = [input.reviewer_email];
   let i = 2;
-  if (input.action === 'accept') {
-    fields.push(`status = $${i++}`); params.push('accepted');
-  } else if (input.action === 'reject') {
-    fields.push(`status = $${i++}`); params.push('rejected');
-    fields.push(`reject_reason = $${i++}`); params.push(input.reject_reason ?? null);
-  } else if (input.action === 'edit') {
-    fields.push(`status = $${i++}`); params.push('edited');
+  if (input.action === "accept") {
+    fields.push(`status = $${i++}`);
+    params.push("accepted");
+  } else if (input.action === "reject") {
+    fields.push(`status = $${i++}`);
+    params.push("rejected");
+    fields.push(`reject_reason = $${i++}`);
+    params.push(input.reject_reason ?? null);
+  } else if (input.action === "edit") {
+    fields.push(`status = $${i++}`);
+    params.push("edited");
     for (const [k, v] of Object.entries(input.patch ?? {})) {
       if (v === undefined) continue;
-      fields.push(`${k} = $${i++}`); params.push(v);
+      fields.push(`${k} = $${i++}`);
+      params.push(v);
     }
   }
   params.push(findingId);
   const res = await pool.query<ManualAuditFinding>(
-    `UPDATE manual_audit_findings SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
-    params
+    `UPDATE manual_audit_findings SET ${fields.join(", ")} WHERE id = $${i} RETURNING *`,
+    params,
   );
   return res.rows[0] || null;
 }
 
-export async function markFindingPromoted(findingId: number, promotedFindingId: number): Promise<void> {
+export async function markFindingPromoted(
+  findingId: number,
+  promotedFindingId: number,
+): Promise<void> {
   await pool.query(
     `UPDATE manual_audit_findings SET promoted_finding_id = $1, updated_at = NOW() WHERE id = $2`,
-    [promotedFindingId, findingId]
+    [promotedFindingId, findingId],
   );
 }
 
@@ -739,15 +846,24 @@ export async function markFindingPromoted(findingId: number, promotedFindingId: 
  * EXTERNAL AUDITS
  * ------------------------------------------------------------------------- */
 
-export async function createExternalAudit(input: Omit<ExternalAudit,
-  'id' | 'audit_code' | 'readiness_percent' | 'findings_count' |
-  'critical_findings' | 'linked_audit_id' | 'created_at' | 'updated_at'>
+export async function createExternalAudit(
+  input: Omit<
+    ExternalAudit,
+    | "id"
+    | "audit_code"
+    | "readiness_percent"
+    | "findings_count"
+    | "critical_findings"
+    | "linked_audit_id"
+    | "created_at"
+    | "updated_at"
+  >,
 ): Promise<ExternalAudit> {
   await initAuditProgrammeTables();
   const year = input.planned_start
     ? String(new Date(input.planned_start).getUTCFullYear())
     : yyyy();
-  const code = await nextSequence('WP-EXT', year);
+  const code = await nextSequence("WP-EXT", year);
   const res = await pool.query<ExternalAudit>(
     `INSERT INTO external_audits
        (audit_code, kind, title, standard, certification_body, auditor_name,
@@ -755,12 +871,18 @@ export async function createExternalAudit(input: Omit<ExternalAudit,
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      RETURNING *`,
     [
-      code, input.kind, input.title, input.standard ?? null,
-      input.certification_body ?? null, input.auditor_name ?? null,
+      code,
+      input.kind,
+      input.title,
+      input.standard ?? null,
+      input.certification_body ?? null,
+      input.auditor_name ?? null,
       input.scope_summary ?? null,
-      input.planned_start ?? null, input.planned_end ?? null,
-      input.status ?? 'scheduled', input.created_by_email ?? null,
-    ]
+      input.planned_start ?? null,
+      input.planned_end ?? null,
+      input.status ?? "scheduled",
+      input.created_by_email ?? null,
+    ],
   );
   return res.rows[0];
 }
@@ -773,28 +895,41 @@ export async function listExternalAudits(filters?: {
   await initAuditProgrammeTables();
   const where: string[] = [];
   const params: any[] = [];
-  if (filters?.status) { params.push(filters.status); where.push(`status = $${params.length}`); }
-  if (filters?.kind)   { params.push(filters.kind);   where.push(`kind   = $${params.length}`); }
+  if (filters?.status) {
+    params.push(filters.status);
+    where.push(`status = $${params.length}`);
+  }
+  if (filters?.kind) {
+    params.push(filters.kind);
+    where.push(`kind   = $${params.length}`);
+  }
   if (filters?.upcoming_only) {
     where.push(`(planned_start IS NULL OR planned_start >= NOW()::date)`);
     where.push(`status IN ('scheduled','preparation','in_progress')`);
   }
   const sql = `SELECT * FROM external_audits
-               ${where.length ? 'WHERE '+where.join(' AND ') : ''}
+               ${where.length ? "WHERE " + where.join(" AND ") : ""}
                ORDER BY planned_start ASC NULLS LAST, created_at DESC`;
   const res = await pool.query<ExternalAudit>(sql, params);
   return res.rows;
 }
 
-export async function getExternalAuditById(id: number): Promise<ExternalAudit | null> {
+export async function getExternalAuditById(
+  id: number,
+): Promise<ExternalAudit | null> {
   await initAuditProgrammeTables();
-  const res = await pool.query<ExternalAudit>(`SELECT * FROM external_audits WHERE id = $1`, [id]);
+  const res = await pool.query<ExternalAudit>(
+    `SELECT * FROM external_audits WHERE id = $1`,
+    [id],
+  );
   return res.rows[0] || null;
 }
 
 export async function updateExternalAudit(
   id: number,
-  patch: Partial<Omit<ExternalAudit,'id' | 'audit_code' | 'created_at' | 'updated_at'>>
+  patch: Partial<
+    Omit<ExternalAudit, "id" | "audit_code" | "created_at" | "updated_at">
+  >,
 ): Promise<ExternalAudit | null> {
   await initAuditProgrammeTables();
   const fields: string[] = [];
@@ -809,8 +944,8 @@ export async function updateExternalAudit(
   fields.push(`updated_at = NOW()`);
   params.push(id);
   const res = await pool.query<ExternalAudit>(
-    `UPDATE external_audits SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
-    params
+    `UPDATE external_audits SET ${fields.join(", ")} WHERE id = $${i} RETURNING *`,
+    params,
   );
   return res.rows[0] || null;
 }
@@ -828,9 +963,12 @@ export async function addChecklistItem(input: {
        (external_audit_id, category, requirement, owner_email, order_index)
      VALUES ($1,$2,$3,$4,$5)`,
     [
-      input.external_audit_id, input.category, input.requirement,
-      input.owner_email ?? null, input.order_index ?? 0,
-    ]
+      input.external_audit_id,
+      input.category,
+      input.requirement,
+      input.owner_email ?? null,
+      input.order_index ?? 0,
+    ],
   );
 }
 
@@ -840,14 +978,19 @@ export async function listChecklist(externalAuditId: number): Promise<any[]> {
     `SELECT * FROM external_audit_checklist
       WHERE external_audit_id = $1
       ORDER BY order_index ASC, id ASC`,
-    [externalAuditId]
+    [externalAuditId],
   );
   return res.rows;
 }
 
 export async function updateChecklistItemFields(
   id: number,
-  patch: { status?: string; owner_email?: string; evidence_link?: string; notes?: string }
+  patch: {
+    status?: string;
+    owner_email?: string;
+    evidence_link?: string;
+    notes?: string;
+  },
 ): Promise<void> {
   await initAuditProgrammeTables();
   const fields: string[] = [];
@@ -862,16 +1005,18 @@ export async function updateChecklistItemFields(
   fields.push(`updated_at = NOW()`);
   params.push(id);
   await pool.query(
-    `UPDATE external_audit_checklist SET ${fields.join(', ')} WHERE id = $${i}`,
-    params
+    `UPDATE external_audit_checklist SET ${fields.join(", ")} WHERE id = $${i}`,
+    params,
   );
   await recomputeExternalReadiness(id);
 }
 
-async function recomputeExternalReadiness(checklistItemId: number): Promise<void> {
+async function recomputeExternalReadiness(
+  checklistItemId: number,
+): Promise<void> {
   const auditRow = await pool.query<{ external_audit_id: number }>(
     `SELECT external_audit_id FROM external_audit_checklist WHERE id = $1`,
-    [checklistItemId]
+    [checklistItemId],
   );
   const auditId = auditRow.rows[0]?.external_audit_id;
   if (!auditId) return;
@@ -880,14 +1025,14 @@ async function recomputeExternalReadiness(checklistItemId: number): Promise<void
        COUNT(*)::text AS total,
        COUNT(*) FILTER (WHERE status IN ('ready','not_applicable'))::text AS ready
      FROM external_audit_checklist WHERE external_audit_id = $1`,
-    [auditId]
+    [auditId],
   );
-  const total = parseInt(agg.rows[0]?.total || '0', 10);
-  const ready = parseInt(agg.rows[0]?.ready || '0', 10);
+  const total = parseInt(agg.rows[0]?.total || "0", 10);
+  const ready = parseInt(agg.rows[0]?.ready || "0", 10);
   const pct = total === 0 ? 0 : Math.round((ready / total) * 100);
   await pool.query(
     `UPDATE external_audits SET readiness_percent = $1, updated_at = NOW() WHERE id = $2`,
-    [pct, auditId]
+    [pct, auditId],
   );
 }
 
@@ -895,8 +1040,8 @@ async function recomputeExternalReadiness(checklistItemId: number): Promise<void
  * CERTIFICATES
  * ------------------------------------------------------------------------- */
 
-export async function createCertificate(input: Omit<ExternalAuditCertificate,
-  'id' | 'created_at' | 'updated_at'>
+export async function createCertificate(
+  input: Omit<ExternalAuditCertificate, "id" | "created_at" | "updated_at">,
 ): Promise<ExternalAuditCertificate> {
   await initAuditProgrammeTables();
   const res = await pool.query<ExternalAuditCertificate>(
@@ -906,12 +1051,17 @@ export async function createCertificate(input: Omit<ExternalAuditCertificate,
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      RETURNING *`,
     [
-      input.external_audit_id ?? null, input.certificate_number,
-      input.standard, input.certification_body,
-      input.issue_date ?? null, input.expiry_date ?? null,
-      input.scope_statement ?? null, input.file_path ?? null,
-      input.status ?? 'active', input.uploaded_by_email ?? null,
-    ]
+      input.external_audit_id ?? null,
+      input.certificate_number,
+      input.standard,
+      input.certification_body,
+      input.issue_date ?? null,
+      input.expiry_date ?? null,
+      input.scope_statement ?? null,
+      input.file_path ?? null,
+      input.status ?? "active",
+      input.uploaded_by_email ?? null,
+    ],
   );
   return res.rows[0];
 }
@@ -923,13 +1073,18 @@ export async function listCertificates(filters?: {
   await initAuditProgrammeTables();
   const where: string[] = [];
   const params: any[] = [];
-  if (filters?.status) { params.push(filters.status); where.push(`status = $${params.length}`); }
+  if (filters?.status) {
+    params.push(filters.status);
+    where.push(`status = $${params.length}`);
+  }
   if (filters?.expiring_within_days != null) {
     params.push(filters.expiring_within_days);
-    where.push(`expiry_date IS NOT NULL AND expiry_date <= NOW()::date + ($${params.length} || ' days')::interval`);
+    where.push(
+      `expiry_date IS NOT NULL AND expiry_date <= NOW()::date + ($${params.length} || ' days')::interval`,
+    );
   }
   const sql = `SELECT * FROM external_audit_certificates
-               ${where.length ? 'WHERE '+where.join(' AND ') : ''}
+               ${where.length ? "WHERE " + where.join(" AND ") : ""}
                ORDER BY expiry_date ASC NULLS LAST`;
   const res = await pool.query<ExternalAuditCertificate>(sql, params);
   return res.rows;
@@ -939,8 +1094,11 @@ export async function listCertificates(filters?: {
  * AUDIT RUNS
  * ------------------------------------------------------------------------- */
 
-export async function startAuditRun(input: Omit<AuditRun,
-  'id' | 'run_code' | 'started_at' | 'finished_at' | 'status' | 'summary'>
+export async function startAuditRun(
+  input: Omit<
+    AuditRun,
+    "id" | "run_code" | "started_at" | "finished_at" | "status" | "summary"
+  >,
 ): Promise<AuditRun> {
   await initAuditProgrammeTables();
   const code = await nextRunCode();
@@ -951,22 +1109,26 @@ export async function startAuditRun(input: Omit<AuditRun,
      VALUES ($1,$2,$3,$4,$5,$6,'running',$7)
      RETURNING *`,
     [
-      code, input.run_type, input.title, input.module_in_scope ?? null,
-      input.linked_audit_id ?? null, input.linked_programme_id ?? null,
+      code,
+      input.run_type,
+      input.title,
+      input.module_in_scope ?? null,
+      input.linked_audit_id ?? null,
+      input.linked_programme_id ?? null,
       input.created_by_email ?? null,
-    ]
+    ],
   );
   return res.rows[0];
 }
 
 export async function closeAuditRun(
   id: number,
-  status: 'completed' | 'failed' | 'cancelled',
-  summary?: any
+  status: "completed" | "failed" | "cancelled",
+  summary?: any,
 ): Promise<void> {
   await pool.query(
     `UPDATE audit_runs SET status = $1, summary = $2, finished_at = NOW() WHERE id = $3`,
-    [status, JSON.stringify(summary ?? {}), id]
+    [status, JSON.stringify(summary ?? {}), id],
   );
 }
 
@@ -974,7 +1136,7 @@ export async function listAuditRuns(limit = 50): Promise<AuditRun[]> {
   await initAuditProgrammeTables();
   const res = await pool.query<AuditRun>(
     `SELECT * FROM audit_runs ORDER BY started_at DESC LIMIT $1`,
-    [Math.min(limit, 200)]
+    [Math.min(limit, 200)],
   );
   return res.rows;
 }
@@ -997,31 +1159,31 @@ export async function getExternalAuditsSummary(): Promise<{
         WHERE status IN ('scheduled','preparation','in_progress')
           AND (planned_start IS NULL OR planned_start >= NOW()::date)
         ORDER BY planned_start ASC NULLS LAST
-        LIMIT 1`
+        LIMIT 1`,
     ),
     pool.query<{ n: string }>(
       `SELECT COUNT(*)::text AS n FROM external_audits
-        WHERE status IN ('scheduled','preparation')`
+        WHERE status IN ('scheduled','preparation')`,
     ),
     pool.query<{ n: string }>(
-      `SELECT COUNT(*)::text AS n FROM external_audits WHERE status = 'in_progress'`
+      `SELECT COUNT(*)::text AS n FROM external_audits WHERE status = 'in_progress'`,
     ),
     pool.query<{ n: string }>(
-      `SELECT COUNT(*)::text AS n FROM external_audit_certificates WHERE status = 'active'`
+      `SELECT COUNT(*)::text AS n FROM external_audit_certificates WHERE status = 'active'`,
     ),
     pool.query<{ n: string }>(
       `SELECT COUNT(*)::text AS n FROM external_audit_certificates
         WHERE status = 'active' AND expiry_date IS NOT NULL
-          AND expiry_date <= NOW()::date + INTERVAL '90 days'`
+          AND expiry_date <= NOW()::date + INTERVAL '90 days'`,
     ),
   ]);
 
   return {
-    upcoming:            parseInt(upcoming.rows[0]?.n || '0', 10),
-    in_progress:         parseInt(inProgress.rows[0]?.n || '0', 10),
-    next_audit:          next.rows[0] || null,
-    certs_active:        parseInt(active.rows[0]?.n || '0', 10),
-    certs_expiring_90d:  parseInt(expiring.rows[0]?.n || '0', 10),
+    upcoming: parseInt(upcoming.rows[0]?.n || "0", 10),
+    in_progress: parseInt(inProgress.rows[0]?.n || "0", 10),
+    next_audit: next.rows[0] || null,
+    certs_active: parseInt(active.rows[0]?.n || "0", 10),
+    certs_expiring_90d: parseInt(expiring.rows[0]?.n || "0", 10),
   };
 }
 

@@ -43,6 +43,7 @@
  */
 
 import { Pool } from "pg";
+import { logger } from "../utils/logger";
 import {
   redactSecretLikeStrings,
   deepRedactSecretLikeStrings,
@@ -84,7 +85,9 @@ export interface AiCallMetricsBackfillResult {
  * client) free of the real Pool dependency.
  */
 export async function backfillAiCallMetricsRedaction(
-  client: { query: (sql: string, params?: ReadonlyArray<unknown>) => Promise<any> },
+  client: {
+    query: (sql: string, params?: ReadonlyArray<unknown>) => Promise<any>;
+  },
   batchSize: number = DEFAULT_AI_METRICS_BACKFILL_BATCH_SIZE,
 ): Promise<AiCallMetricsBackfillResult> {
   let scanned = 0;
@@ -160,7 +163,10 @@ export async function backfillAiCallMetricsRedaction(
         }
       }
 
-      if (typeof toolOutputPreview === "string" && toolOutputPreview.length > 0) {
+      if (
+        typeof toolOutputPreview === "string" &&
+        toolOutputPreview.length > 0
+      ) {
         const scrubbed = redactSecretLikeStrings(toolOutputPreview) as string;
         if (scrubbed !== toolOutputPreview) {
           toolOutputPreview = scrubbed;
@@ -263,12 +269,12 @@ export async function backfillAiCallMetricsRedaction(
  * production. Audit-log emission failures are logged but never mask the
  * sweep result (the redaction already succeeded).
  */
-export async function runAiCallMetricsBackfill(
-  client: { query: (sql: string, params?: ReadonlyArray<unknown>) => Promise<any> },
-): Promise<AiCallMetricsBackfillResult> {
+export async function runAiCallMetricsBackfill(client: {
+  query: (sql: string, params?: ReadonlyArray<unknown>) => Promise<any>;
+}): Promise<AiCallMetricsBackfillResult> {
   const result = await backfillAiCallMetricsRedaction(client);
 
-  console.log(
+  logger.info(
     `[AiMetricsBackfill] scanned=${result.scanned} ` +
       `rows_updated=${result.rows_updated} ` +
       `error_message=${result.error_message_changed} ` +
@@ -300,7 +306,7 @@ export async function runAiCallMetricsBackfill(
         module: "security/redaction-sweep",
       });
     } catch (auditErr) {
-      console.error(
+      logger.error(
         "[AiMetricsBackfill] Failed to emit audit-log entry:",
         auditErr,
       );
@@ -319,9 +325,9 @@ export async function runAiCallMetricsBackfill(
 async function main(): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    console.log("[AiMetricsBackfill] Starting historical sweep...");
+    logger.info("[AiMetricsBackfill] Starting historical sweep...");
     const result = await runAiCallMetricsBackfill(pool);
-    console.log(
+    logger.info(
       `[AiMetricsBackfill] Done. Sentinel = ${REDACTED_SENTINEL}. ` +
         `${result.rows_updated} rows rewritten.`,
     );
@@ -343,7 +349,7 @@ const isDirectInvocation = (() => {
 
 if (isDirectInvocation) {
   main().catch((err) => {
-    console.error("[AiMetricsBackfill] Fatal error:", err);
+    logger.error("[AiMetricsBackfill] Fatal error:", err);
     process.exit(1);
   });
 }

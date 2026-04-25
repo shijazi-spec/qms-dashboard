@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
+import { logger as safeLogger } from "../../utils/logger";
 /**
  * Example Mastra Tool
  *
@@ -42,7 +43,7 @@ export const exampleTool = createTool({
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
 
-    // Use logger instead of console.log for proper observability
+    // Use the mastra logger instead of raw stdout for proper observability
     logger?.info("🔧 [exampleTool] Executing with:", context);
 
     // In a real tool, you might:

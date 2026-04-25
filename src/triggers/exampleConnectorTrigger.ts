@@ -17,6 +17,7 @@ import { registerApiRoute } from "../mastra/inngest";
 import type { Mastra } from "@mastra/core";
 import { createHmac, timingSafeEqual } from "crypto";
 
+import { logger as safeLogger } from "../utils/logger";
 /**
  * Linear webhook payload structure
  * Based on: https://developers.linear.app/docs/graphql/webhooks
@@ -93,24 +94,35 @@ export function registerLinearTrigger({
           let payload: any;
           const linearWebhookSecret = process.env.LINEAR_WEBHOOK_SECRET;
           if (linearWebhookSecret) {
-            const signature = c.req.header('linear-signature') || c.req.header('x-linear-signature') || '';
+            const signature =
+              c.req.header("linear-signature") ||
+              c.req.header("x-linear-signature") ||
+              "";
             const rawBody = await c.req.text();
-            const expectedSig = createHmac('sha256', linearWebhookSecret).update(rawBody).digest('hex');
-            const sigBuffer = Buffer.from(signature, 'hex');
-            const expectedBuffer = Buffer.from(expectedSig, 'hex');
-            if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
-              console.warn("🚫 [Linear] Invalid webhook signature");
-              return c.json({ success: false, error: "Invalid signature" }, 403);
+            const expectedSig = createHmac("sha256", linearWebhookSecret)
+              .update(rawBody)
+              .digest("hex");
+            const sigBuffer = Buffer.from(signature, "hex");
+            const expectedBuffer = Buffer.from(expectedSig, "hex");
+            if (
+              sigBuffer.length !== expectedBuffer.length ||
+              !timingSafeEqual(sigBuffer, expectedBuffer)
+            ) {
+              safeLogger.warn("🚫 [Linear] Invalid webhook signature");
+              return c.json(
+                { success: false, error: "Invalid signature" },
+                403,
+              );
             }
             payload = JSON.parse(rawBody);
           } else {
             payload = await c.req.json();
           }
-          console.log("📥 [Linear] Webhook received", { payload });
+          safeLogger.info("📥 [Linear] Webhook received", { payload });
 
           // Only process Issue creation events
           if (payload.action !== "create" || payload.type !== "Issue") {
-            console.log("⏭️ [Linear] Skipping event", {
+            safeLogger.info("⏭️ [Linear] Skipping event", {
               action: payload.action,
               type: payload.type,
             });
@@ -119,7 +131,9 @@ export function registerLinearTrigger({
 
           // Ensure data exists (use empty object as fallback)
           if (!payload.data) {
-            console.log("⚠️ [Linear] Missing data field, using empty object");
+            safeLogger.info(
+              "⚠️ [Linear] Missing data field, using empty object",
+            );
             payload.data = {};
           }
 
@@ -129,11 +143,11 @@ export function registerLinearTrigger({
             payload: payload as LinearWebhookPayload,
           };
 
-          console.log("🚀 [Linear] Triggering handler");
+          safeLogger.info("🚀 [Linear] Triggering handler");
 
           const result = await handler(mastra, triggerInfo);
 
-          console.log("✅ [Linear] Handler completed", { result });
+          safeLogger.info("✅ [Linear] Handler completed", { result });
 
           return c.json({ success: true, result });
         } catch (error) {

@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger";
 export const smokeTestRoutes = [
   {
     path: "/api/health",
@@ -24,15 +25,23 @@ export const smokeTestRoutes = [
           const { Pool } = await import("pg");
           const pool = new Pool({ connectionString: process.env.DATABASE_URL });
           const result = await pool.query("SELECT 1 AS ok");
-          checks.database = { status: result.rows[0]?.ok === 1 ? "pass" : "fail" };
+          checks.database = {
+            status: result.rows[0]?.ok === 1 ? "pass" : "fail",
+          };
           await pool.end();
         } catch (err: any) {
-          console.error("Smoke test DB check failed:", err.message);
+          logger.error("Smoke test DB check failed:", err.message);
           checks.database = { status: "fail" };
         }
 
         checks.zoho = {
-          status: !!(process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN) ? "pass" : "not_configured",
+          status: !!(
+            process.env.ZOHO_CLIENT_ID &&
+            process.env.ZOHO_CLIENT_SECRET &&
+            process.env.ZOHO_REFRESH_TOKEN
+          )
+            ? "pass"
+            : "not_configured",
         };
 
         checks.environment = {

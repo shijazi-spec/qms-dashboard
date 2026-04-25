@@ -34,6 +34,7 @@
  */
 
 import { inngest } from "../inngest/client";
+import { logger } from "../../utils/logger";
 import {
   getFeedbackRateByPromptVersion,
   type PromptVersionAggregate,
@@ -207,7 +208,11 @@ const defaultDeps: Required<PromptRegressionDeps> = {
   alertExists: (relatedRecordId) =>
     openAlertExistsByKey("prompt_regression", relatedRecordId),
   createAlert: async ({
-    title, description, suggestion, severity, relatedRecordId,
+    title,
+    description,
+    suggestion,
+    severity,
+    relatedRecordId,
   }) => {
     await createAIAlert({
       alert_type: "prompt_regression",
@@ -221,7 +226,8 @@ const defaultDeps: Required<PromptRegressionDeps> = {
   },
   listOpenRegressionAlerts: () => getOpenAlertsByType("prompt_regression"),
   resolveAlert: (id, note) => resolveAlert(id, note),
-  notifyRecovery: (recoveries) => sendPromptRegressionRecoveryNotifications(recoveries),
+  notifyRecovery: (recoveries) =>
+    sendPromptRegressionRecoveryNotifications(recoveries),
   notifyBreaches: (breaches) => sendPromptRegressionNotifications(breaches),
   now: () => new Date(),
 };
@@ -238,7 +244,10 @@ function toNumOrNull(v: unknown): number | null {
  * Floors negatives to 0 to absorb minor clock skew between Postgres and the
  * cron host (we never want to emit "last seen −1 days ago").
  */
-function daysSince(lastSeenIso: string | null | undefined, now: Date): number | null {
+function daysSince(
+  lastSeenIso: string | null | undefined,
+  now: Date,
+): number | null {
   if (!lastSeenIso) return null;
   const parsed = new Date(lastSeenIso);
   const ts = parsed.getTime();
@@ -313,7 +322,7 @@ export async function runPromptRegressionCheck(
   try {
     aggregates = await deps.fetchAggregates(cfg.windowDays);
   } catch (err) {
-    console.error(
+    logger.error(
       "[PromptRegression] Failed to load prompt-version aggregates:",
       err,
     );
@@ -429,7 +438,7 @@ export async function runPromptRegressionCheck(
           regressed_last_seen_days_ago: lastSeenDaysAgo,
         });
       } catch (err) {
-        console.error(
+        logger.error(
           `[PromptRegression] Failed to create alert for ` +
             `${agentName}:${r.prompt_version}:`,
           err,
@@ -446,7 +455,10 @@ export async function runPromptRegressionCheck(
   try {
     openAlerts = await deps.listOpenRegressionAlerts();
   } catch (err) {
-    console.error("[PromptRegression] Failed to load open alerts for recovery sweep:", err);
+    logger.error(
+      "[PromptRegression] Failed to load open alerts for recovery sweep:",
+      err,
+    );
     openAlerts = [];
   }
 
@@ -472,10 +484,12 @@ export async function runPromptRegressionCheck(
           prompt_version: promptVersion,
           note,
         });
-        console.log(`[PromptRegression] Auto-resolved alert ${alert.id} (${key}): ${note}`);
+        logger.info(
+          `[PromptRegression] Auto-resolved alert ${alert.id} (${key}): ${note}`,
+        );
       }
     } catch (err) {
-      console.error(
+      logger.error(
         `[PromptRegression] Failed to auto-resolve alert ${alert.id} (${key}):`,
         err,
       );
@@ -489,7 +503,7 @@ export async function runPromptRegressionCheck(
     try {
       await deps.notifyRecovery(out.recoveries);
     } catch (notifyErr) {
-      console.error(
+      logger.error(
         `[PromptRegression] Recovery notifier threw for ${out.recoveries.length} recoveries:`,
         notifyErr,
       );
@@ -498,7 +512,7 @@ export async function runPromptRegressionCheck(
   // ─────────────────────────────────────────────────────────────────────────
 
   if (out.alertsCreated > 0 || out.alertsAutoResolved > 0) {
-    console.log("[PromptRegression] Check complete:", {
+    logger.info("[PromptRegression] Check complete:", {
       agentsEvaluated: out.agentsEvaluated,
       versionsEvaluated: out.versionsEvaluated,
       alertsCreated: out.alertsCreated,
@@ -524,14 +538,14 @@ export async function runPromptRegressionCheck(
       try {
         await deps.notifyBreaches(out.breaches);
       } catch (notifyErr) {
-        console.error(
+        logger.error(
           `[PromptRegression] Breach notifier threw for ${out.breaches.length} breaches:`,
           notifyErr,
         );
       }
     }
   } else {
-    console.log(
+    logger.info(
       `[PromptRegression] Check complete — ${out.agentsEvaluated} agents, ` +
         `${out.versionsEvaluated} versions evaluated, 0 new alerts ` +
         `(skipped ${out.alertsSkippedDuplicate} duplicates, ` +
@@ -578,7 +592,7 @@ export async function sendPromptRegressionNotifications(
         body: JSON.stringify({ text: slackMsg }),
       });
     } catch (slackErr) {
-      console.warn("[PromptRegression] Slack notification failed:", slackErr);
+      logger.warn("[PromptRegression] Slack notification failed:", slackErr);
     }
   }
 
@@ -639,7 +653,7 @@ export async function sendPromptRegressionNotifications(
 <p><a href="${cfg.link}">View in AI Operations panel</a></p>`,
       });
     } catch (emailErr) {
-      console.warn("[PromptRegression] Email alert failed:", emailErr);
+      logger.warn("[PromptRegression] Email alert failed:", emailErr);
     }
   }
 }
@@ -681,7 +695,10 @@ async function sendPromptRegressionRecoveryNotifications(
         body: JSON.stringify({ text: slackMsg }),
       });
     } catch (slackErr) {
-      console.warn("[PromptRegression] Slack recovery notification failed:", slackErr);
+      logger.warn(
+        "[PromptRegression] Slack recovery notification failed:",
+        slackErr,
+      );
     }
   }
 
@@ -728,7 +745,7 @@ or no longer has enough samples to be evaluated.</p>
 <p><a href="${cfg.link}">View in AI Operations panel</a></p>`,
       });
     } catch (emailErr) {
-      console.warn("[PromptRegression] Email recovery alert failed:", emailErr);
+      logger.warn("[PromptRegression] Email recovery alert failed:", emailErr);
     }
   }
 }

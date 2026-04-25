@@ -34,7 +34,7 @@ import { hasValidAdminApiKey, requireRole } from "../../utils/rbacMiddleware";
  */
 async function authorize(c: any): Promise<boolean> {
   if (hasValidAdminApiKey(c)) return true;
-  const user = await requireRole(c, ['admin']);
+  const user = await requireRole(c, ["admin"]);
   return !!user;
 }
 
@@ -81,7 +81,10 @@ export const healthPulseRoutes = [
         await initHealthPulseTables();
         const latest = await getLatestPulseRun();
         if (!latest) {
-          return c.json({ status: "never_run", message: "Health pulse has not run yet" }, 200);
+          return c.json(
+            { status: "never_run", message: "Health pulse has not run yet" },
+            200,
+          );
         }
         return c.json(latest);
       } catch (err: any) {

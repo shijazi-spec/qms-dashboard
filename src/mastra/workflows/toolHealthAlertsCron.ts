@@ -28,6 +28,7 @@
  */
 
 import { inngest } from "../inngest/client";
+import { logger } from "../../utils/logger";
 import {
   getToolWindowAggregates,
   getToolsWithCallsInWindow,
@@ -97,9 +98,15 @@ export const TOOL_HEALTH_DEFAULTS: ToolHealthConfigValues = {
  * so live edits take effect at the next tick.
  */
 export const TOOL_HEALTH_ENV_BASELINE: ToolHealthConfigValues = {
-  windowMinutes: envInt("TOOL_HEALTH_WINDOW_MIN", TOOL_HEALTH_DEFAULTS.windowMinutes),
+  windowMinutes: envInt(
+    "TOOL_HEALTH_WINDOW_MIN",
+    TOOL_HEALTH_DEFAULTS.windowMinutes,
+  ),
   minCalls: envInt("TOOL_HEALTH_MIN_CALLS", TOOL_HEALTH_DEFAULTS.minCalls),
-  errorRatePct: envInt("TOOL_HEALTH_ERROR_RATE_PCT", TOOL_HEALTH_DEFAULTS.errorRatePct),
+  errorRatePct: envInt(
+    "TOOL_HEALTH_ERROR_RATE_PCT",
+    TOOL_HEALTH_DEFAULTS.errorRatePct,
+  ),
   errorRateHighPct: envInt(
     "TOOL_HEALTH_ERROR_RATE_HIGH_PCT",
     TOOL_HEALTH_DEFAULTS.errorRateHighPct,
@@ -169,15 +176,20 @@ export async function getEffectiveToolHealthConfig(
 ): Promise<EffectiveToolHealthConfig> {
   const overrides = await loadOverrides();
   return {
-    windowMinutes: overrides.windowMinutes ?? TOOL_HEALTH_ENV_BASELINE.windowMinutes,
+    windowMinutes:
+      overrides.windowMinutes ?? TOOL_HEALTH_ENV_BASELINE.windowMinutes,
     minCalls: overrides.minCalls ?? TOOL_HEALTH_ENV_BASELINE.minCalls,
-    errorRatePct: overrides.errorRatePct ?? TOOL_HEALTH_ENV_BASELINE.errorRatePct,
+    errorRatePct:
+      overrides.errorRatePct ?? TOOL_HEALTH_ENV_BASELINE.errorRatePct,
     errorRateHighPct:
       overrides.errorRateHighPct ?? TOOL_HEALTH_ENV_BASELINE.errorRateHighPct,
     errorRateCriticalPct:
-      overrides.errorRateCriticalPct ?? TOOL_HEALTH_ENV_BASELINE.errorRateCriticalPct,
-    p95LatencyMs: overrides.p95LatencyMs ?? TOOL_HEALTH_ENV_BASELINE.p95LatencyMs,
-    latencyHighMs: overrides.latencyHighMs ?? TOOL_HEALTH_ENV_BASELINE.latencyHighMs,
+      overrides.errorRateCriticalPct ??
+      TOOL_HEALTH_ENV_BASELINE.errorRateCriticalPct,
+    p95LatencyMs:
+      overrides.p95LatencyMs ?? TOOL_HEALTH_ENV_BASELINE.p95LatencyMs,
+    latencyHighMs:
+      overrides.latencyHighMs ?? TOOL_HEALTH_ENV_BASELINE.latencyHighMs,
     latencyCriticalMs:
       overrides.latencyCriticalMs ?? TOOL_HEALTH_ENV_BASELINE.latencyCriticalMs,
   };
@@ -194,7 +206,8 @@ export async function getEffectiveToolHealthConfig(
  * so an on-call engineer can fix it before the next paging window, instead
  * of discovering the downgrade after a real incident is undercalled.
  *
- * Pure function; consumers wire the warnings into `console.warn`. Equal
+ * Pure function; consumers wire the warnings into a structured logger.warn
+ * call. Equal
  * values are allowed (a flat ladder still preserves correct ordering).
  *
  * Operates on the merged `EffectiveToolHealthConfig` so it catches both
@@ -250,7 +263,8 @@ export function validateToolHealthThresholds(
 }
 
 /**
- * Emits the misconfiguration warnings (if any) via `console.warn`.
+ * Emits the misconfiguration warnings (if any) via the structured
+ * logger.warn channel.
  * Idempotent — only fires the first time per process for a given config so
  * repeated cron passes don't spam the log. The dedupe is keyed on the
  * stringified warnings, so a *new* misconfiguration introduced via an
@@ -276,7 +290,7 @@ function ensureThresholdValidationLogged(
   if (_thresholdValidationLogged.has(key)) return;
   _thresholdValidationLogged.add(key);
   for (const w of warnings) {
-    console.warn(w);
+    logger.warn(w);
   }
 }
 
@@ -582,7 +596,9 @@ export interface ToolHealthDeps {
    * {@link getToolHealthOverrideExpiringSoon}. Tests can stub it to
    * simulate an imminent expiry without touching the DB.
    */
-  checkOverrideExpiringSoon?: (windowMs: number) => ReturnType<typeof getToolHealthOverrideExpiringSoon>;
+  checkOverrideExpiringSoon?: (
+    windowMs: number,
+  ) => ReturnType<typeof getToolHealthOverrideExpiringSoon>;
   /**
    * Writes a dead-letter `ai_alerts` row when the breach notifier fails
    * to deliver on any channel (Task #288). Optional so existing stubs need
@@ -629,9 +645,14 @@ async function maybeCreateBreachAlert(
   title: string,
   description: string,
   suggestion: string,
-): Promise<{ created: true; alertId: number | undefined } | { created: false }> {
+): Promise<
+  { created: true; alertId: number | undefined } | { created: false }
+> {
   const relatedRecordId = `${agg.tool_name}:${reason}`;
-  const exists = await deps.openAlertExistsByKey("tool_health", relatedRecordId);
+  const exists = await deps.openAlertExistsByKey(
+    "tool_health",
+    relatedRecordId,
+  );
   if (exists) return { created: false };
   const inserted = await deps.createAIAlert({
     alert_type: "tool_health",
@@ -681,19 +702,20 @@ async function dispatchBreachNotification(
     // Log first so the stack survives even if the dead-letter write also
     // fails, then attempt the dead-letter so on-call sees the missed page
     // in the AI Operations panel (Task #288).
-    console.error(
-      `[ToolHealth] Notifier threw for ${relatedRecordId}:`,
-      err,
+    logger.error(`[ToolHealth] Notifier threw for ${relatedRecordId}:`, err);
+    await writeNotifyDeadLetter(
+      deps,
+      {
+        relatedRecordId,
+        tool_name: agg.tool_name,
+        reason,
+        severity,
+        title,
+        alertId,
+        failureReason: `notifier threw: ${err instanceof Error ? err.message : String(err)}`,
+      },
+      out,
     );
-    await writeNotifyDeadLetter(deps, {
-      relatedRecordId,
-      tool_name: agg.tool_name,
-      reason,
-      severity,
-      title,
-      alertId,
-      failureReason: `notifier threw: ${err instanceof Error ? err.message : String(err)}`,
-    }, out);
     return;
   }
   if (result.skipped) {
@@ -714,16 +736,20 @@ async function dispatchBreachNotification(
   // returned `success:false`, etc.) or the channels we did try all
   // threw and the notifier swallowed the error. Either way the page
   // was missed — write a dead-letter row so ops can see it.
-  await writeNotifyDeadLetter(deps, {
-    relatedRecordId,
-    tool_name: agg.tool_name,
-    reason,
-    severity,
-    title,
-    alertId,
-    failureReason:
-      'Slack/email delivery returned success=false on every configured channel',
-  }, out);
+  await writeNotifyDeadLetter(
+    deps,
+    {
+      relatedRecordId,
+      tool_name: agg.tool_name,
+      reason,
+      severity,
+      title,
+      alertId,
+      failureReason:
+        "Slack/email delivery returned success=false on every configured channel",
+    },
+    out,
+  );
 }
 
 /**
@@ -752,13 +778,14 @@ async function writeNotifyDeadLetter(
 ): Promise<void> {
   // Structured log line so ops/log-sink users can also count missed pages
   // without querying the DB. Tag is grep-friendly and stable.
-  console.error(
+  logger.error(
     `[ToolHealth][DEAD_LETTER] On-call page not delivered for ` +
       `${args.relatedRecordId}` +
-      (args.alertId != null ? ` (alert #${args.alertId})` : '') +
+      (args.alertId != null ? ` (alert #${args.alertId})` : "") +
       `: ${args.failureReason}`,
   );
-  const writer = deps.recordNotifyDeadLetter ?? recordToolHealthNotifyDeadLetter;
+  const writer =
+    deps.recordNotifyDeadLetter ?? recordToolHealthNotifyDeadLetter;
   try {
     await writer({
       related_record_id: args.relatedRecordId,
@@ -771,7 +798,7 @@ async function writeNotifyDeadLetter(
     });
     out.notificationsDeadLettered++;
   } catch (err) {
-    console.error(
+    logger.error(
       `[ToolHealth][DEAD_LETTER] Failed to persist dead-letter row for ` +
         `${args.relatedRecordId}:`,
       err,
@@ -804,13 +831,11 @@ async function maybeResolveRecoveredAlert(
   const relatedRecordId = `${agg.tool_name}:${reason}`;
   let openAlerts;
   try {
-    openAlerts = await deps.getOpenAlertsByKey(
-      "tool_health",
-      relatedRecordId,
-      { olderThanMinutes: cfg.windowMinutes },
-    );
+    openAlerts = await deps.getOpenAlertsByKey("tool_health", relatedRecordId, {
+      olderThanMinutes: cfg.windowMinutes,
+    });
   } catch (err) {
-    console.error(
+    logger.error(
       `[ToolHealth] Failed to look up open alerts for ${relatedRecordId}:`,
       err,
     );
@@ -854,14 +879,14 @@ async function maybeResolveRecoveredAlert(
             alert_created_at: alert.created_at ?? null,
           });
         } catch (notifyErr) {
-          console.error(
+          logger.error(
             `[ToolHealth] Recovery notifier threw for alert ${alert.id} (${relatedRecordId}):`,
             notifyErr,
           );
         }
       }
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealth] Failed to auto-resolve alert ${alert.id} (${relatedRecordId}):`,
         err,
       );
@@ -901,7 +926,7 @@ export async function runSilentToolSweep(
       deps.getToolsWithCallsInWindow(silentCooldownMinutes),
     ]);
   } catch (err) {
-    console.error("[ToolHealth] Silent-tool sweep: failed to load data:", err);
+    logger.error("[ToolHealth] Silent-tool sweep: failed to load data:", err);
     return;
   }
 
@@ -925,17 +950,19 @@ export async function runSilentToolSweep(
         out.alertsAutoResolved++;
         out.recoveries.push({
           tool_name: toolName,
-          reason: alert.related_record_id.slice(colonIdx + 1) as ToolHealthReason,
+          reason: alert.related_record_id.slice(
+            colonIdx + 1,
+          ) as ToolHealthReason,
           alert_id: alert.id,
           detail: note,
         });
-        console.log(
+        logger.info(
           `[ToolHealth] Silent-tool sweep: closed alert ${alert.id} ` +
-          `for "${alert.related_record_id}" (silent for ≥${silentCooldownMinutes}m).`,
+            `for "${alert.related_record_id}" (silent for ≥${silentCooldownMinutes}m).`,
         );
       }
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealth] Silent-tool sweep: failed to resolve alert ${alert.id}:`,
         err,
       );
@@ -970,11 +997,14 @@ export async function runToolHealthCheck(
     notifyOverrideExpired:
       depsOverride?.notifyOverrideExpired ?? DEFAULT_DEPS.notifyOverrideExpired,
     notifyToolHealthRecovery:
-      depsOverride?.notifyToolHealthRecovery ?? DEFAULT_DEPS.notifyToolHealthRecovery,
+      depsOverride?.notifyToolHealthRecovery ??
+      DEFAULT_DEPS.notifyToolHealthRecovery,
     notifyOverrideExpiringSoon:
-      depsOverride?.notifyOverrideExpiringSoon ?? DEFAULT_DEPS.notifyOverrideExpiringSoon,
+      depsOverride?.notifyOverrideExpiringSoon ??
+      DEFAULT_DEPS.notifyOverrideExpiringSoon,
     checkOverrideExpiringSoon:
-      depsOverride?.checkOverrideExpiringSoon ?? DEFAULT_DEPS.checkOverrideExpiringSoon,
+      depsOverride?.checkOverrideExpiringSoon ??
+      DEFAULT_DEPS.checkOverrideExpiringSoon,
   };
 
   // Task #219: check for an override that is about to expire and, if found,
@@ -983,8 +1013,7 @@ export async function runToolHealthCheck(
   // notifier dedupes on the expires_at ISO key — only one post per expiry
   // per process lifetime, no matter how many ticks fall inside the window.
   // Best-effort: failure is logged but never blocks the surrounding pass.
-  const warnWindowMs =
-    envInt("TOOL_HEALTH_OVERRIDE_WARN_MIN", 30) * 60_000;
+  const warnWindowMs = envInt("TOOL_HEALTH_OVERRIDE_WARN_MIN", 30) * 60_000;
   let overrideExpirySoonWarningSent = 0;
   if (warnWindowMs > 0) {
     try {
@@ -993,25 +1022,28 @@ export async function runToolHealthCheck(
         const warnResult = await deps.notifyOverrideExpiringSoon({
           expires_at: expiringSoon.expires_at,
           previous_updated_by: expiringSoon.updated_by,
-          overrides: expiringSoon.overrides as Record<string, number | undefined>,
+          overrides: expiringSoon.overrides as Record<
+            string,
+            number | undefined
+          >,
           minutes_remaining: expiringSoon.minutes_remaining,
         });
         if (warnResult.slackSent) {
           overrideExpirySoonWarningSent = 1;
-          console.log(
+          logger.info(
             `[ToolHealth] Sent override expiry pre-warning: expires_at=` +
               `${expiringSoon.expires_at.toISOString()}, ` +
               `~${expiringSoon.minutes_remaining}m remaining.`,
           );
         } else if (!warnResult.deduped && !warnResult.skipped) {
-          console.log(
+          logger.info(
             `[ToolHealth] Override expiry pre-warning: Slack send returned false ` +
               `(expires_at=${expiringSoon.expires_at.toISOString()}).`,
           );
         }
       }
     } catch (warnErr) {
-      console.error("[ToolHealth] Override expiry pre-warning failed:", warnErr);
+      logger.error("[ToolHealth] Override expiry pre-warning failed:", warnErr);
     }
   }
 
@@ -1026,14 +1058,14 @@ export async function runToolHealthCheck(
   try {
     reaperResult = await deps.reapExpiredOverrides();
     if (reaperResult.reaped) {
-      console.log(
+      logger.info(
         `[ToolHealth] Reaped expired override row (audit_id=${reaperResult.audit_id}, ` +
           `expired_at=${reaperResult.expired_at?.toISOString?.() ?? reaperResult.expired_at}). ` +
           `Cleared keys: ${Object.keys(reaperResult.cleared_overrides).join(", ") || "(none)"}.`,
       );
     }
   } catch (err) {
-    console.error("[ToolHealth] Override reaper failed:", err);
+    logger.error("[ToolHealth] Override reaper failed:", err);
   }
 
   // Task #213: when the reaper actually swept a row, push a Slack post to
@@ -1050,7 +1082,7 @@ export async function runToolHealthCheck(
         audit_id: reaperResult.audit_id,
       });
     } catch (err) {
-      console.error(
+      logger.error(
         "[ToolHealth] Override auto-revert Slack notification failed:",
         err,
       );
@@ -1085,9 +1117,12 @@ export async function runToolHealthCheck(
 
   let aggregates: ToolWindowAggregate[];
   try {
-    aggregates = await deps.getToolWindowAggregates(cfg.windowMinutes, cfg.minCalls);
+    aggregates = await deps.getToolWindowAggregates(
+      cfg.windowMinutes,
+      cfg.minCalls,
+    );
   } catch (err) {
-    console.error("[ToolHealth] Failed to load per-tool aggregates:", err);
+    logger.error("[ToolHealth] Failed to load per-tool aggregates:", err);
     return out;
   }
 
@@ -1108,8 +1143,13 @@ export async function runToolHealthCheck(
     if (errCand) {
       try {
         const result = await maybeCreateBreachAlert(
-          deps, agg, "error_rate", errCand.severity,
-          errCand.title, errCand.description, errCand.suggestion,
+          deps,
+          agg,
+          "error_rate",
+          errCand.severity,
+          errCand.title,
+          errCand.description,
+          errCand.suggestion,
         );
         if (result.created) {
           out.alertsCreated++;
@@ -1123,15 +1163,21 @@ export async function runToolHealthCheck(
           // notifier inherits the (alert_type, related_record_id) dedupe
           // semantics for free because we only call it on `created=true`.
           await dispatchBreachNotification(
-            deps, agg, "error_rate", errCand.severity,
-            errCand.title, errCand.description, errCand.suggestion,
-            result.alertId, out,
+            deps,
+            agg,
+            "error_rate",
+            errCand.severity,
+            errCand.title,
+            errCand.description,
+            errCand.suggestion,
+            result.alertId,
+            out,
           );
         } else {
           out.alertsSkippedDuplicate++;
         }
       } catch (err) {
-        console.error(
+        logger.error(
           `[ToolHealth] Failed to create error-rate alert for ${agg.tool_name}:`,
           err,
         );
@@ -1147,8 +1193,13 @@ export async function runToolHealthCheck(
     if (latCand) {
       try {
         const result = await maybeCreateBreachAlert(
-          deps, agg, "p95_latency", latCand.severity,
-          latCand.title, latCand.description, latCand.suggestion,
+          deps,
+          agg,
+          "p95_latency",
+          latCand.severity,
+          latCand.title,
+          latCand.description,
+          latCand.suggestion,
         );
         if (result.created) {
           out.alertsCreated++;
@@ -1159,15 +1210,21 @@ export async function runToolHealthCheck(
             detail: latCand.detail,
           });
           await dispatchBreachNotification(
-            deps, agg, "p95_latency", latCand.severity,
-            latCand.title, latCand.description, latCand.suggestion,
-            result.alertId, out,
+            deps,
+            agg,
+            "p95_latency",
+            latCand.severity,
+            latCand.title,
+            latCand.description,
+            latCand.suggestion,
+            result.alertId,
+            out,
           );
         } else {
           out.alertsSkippedDuplicate++;
         }
       } catch (err) {
-        console.error(
+        logger.error(
           `[ToolHealth] Failed to create latency alert for ${agg.tool_name}:`,
           err,
         );
@@ -1183,7 +1240,8 @@ export async function runToolHealthCheck(
   // zero calls for at least silentCooldownMinutes. This handles deprecated or
   // retired tools that never appear in the per-tool aggregates again and
   // would otherwise keep their alerts open forever.
-  const silentCooldownMinutes = TOOL_HEALTH_SILENT_COOLDOWN_MULT * cfg.windowMinutes;
+  const silentCooldownMinutes =
+    TOOL_HEALTH_SILENT_COOLDOWN_MULT * cfg.windowMinutes;
   await runSilentToolSweep(deps, silentCooldownMinutes, out);
 
   if (
@@ -1191,12 +1249,12 @@ export async function runToolHealthCheck(
     out.breaches.length > 0 ||
     out.alertsAutoResolved > 0
   ) {
-    console.log("[ToolHealth] Check complete:", out);
+    logger.info("[ToolHealth] Check complete:", out);
   } else {
-    console.log(
+    logger.info(
       `[ToolHealth] Check complete — ${out.toolsEvaluated} tools evaluated, ` +
-      `0 new alerts (skipped ${out.alertsSkippedDuplicate} duplicates, ` +
-      `0 auto-resolved).`,
+        `0 new alerts (skipped ${out.alertsSkippedDuplicate} duplicates, ` +
+        `0 auto-resolved).`,
     );
   }
   return out;

@@ -1,6 +1,7 @@
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
 
+import { logger as safeLogger } from "../../utils/logger";
 import {
   initKPITables,
   getAllKPIDefinitions,
@@ -18,13 +19,26 @@ import {
   updateExecutiveReport,
   generateMBRData,
   seedMohammedKPIsManual,
-  seedSDRKPIsManual
+  seedSDRKPIsManual,
 } from "../../utils/kpiDatabase";
 
-initKPITables().catch(console.error);
+initKPITables().catch((err) =>
+  safeLogger.error("[KpiRoutes] initKPITables failed", err),
+);
 
-const KPI_READ_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] as const;
-const KPI_WRITE_ROLES = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] as const;
+const KPI_READ_ROLES = [
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+  "executive",
+] as const;
+const KPI_WRITE_ROLES = [
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+] as const;
 
 export const kpiRoutes = [
   {
@@ -44,7 +58,7 @@ export const kpiRoutes = [
           }
           return c.text("KPI Dashboard not found", 404);
         } catch (error) {
-          console.error("Error serving KPI dashboard:", error);
+          safeLogger.error("Error serving KPI dashboard:", error);
           return c.text("Error loading KPI dashboard", 500);
         }
       };
@@ -67,7 +81,7 @@ export const kpiRoutes = [
           }
           return c.text("Executive Dashboard not found", 404);
         } catch (error) {
-          console.error("Error serving Executive dashboard:", error);
+          safeLogger.error("Error serving Executive dashboard:", error);
           return c.text("Error loading Executive dashboard", 500);
         }
       };
@@ -79,9 +93,14 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI data');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI data",
+            );
           const ownerType = c.req.query("owner");
           let kpis;
           if (ownerType) {
@@ -91,7 +110,7 @@ export const kpiRoutes = [
           }
           return c.json(kpis);
         } catch (error) {
-          console.error("Error fetching KPIs:", error);
+          safeLogger.error("Error fetching KPIs:", error);
           return c.json({ error: "Failed to fetch KPIs" }, 500);
         }
       };
@@ -103,13 +122,18 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI data');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI data",
+            );
           const summary = await getKPIDashboardSummary();
           return c.json(summary);
         } catch (error) {
-          console.error("Error fetching KPI summary:", error);
+          safeLogger.error("Error fetching KPI summary:", error);
           return c.json({ error: "Failed to fetch KPI summary" }, 500);
         }
       };
@@ -121,9 +145,14 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI data');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI data",
+            );
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) {
             return c.json({ error: "Invalid KPI ID" }, 400);
@@ -136,7 +165,7 @@ export const kpiRoutes = [
           const history = await getKPIHistory(id, 12);
           return c.json({ ...kpi, latestValue, history });
         } catch (error) {
-          console.error("Error fetching KPI:", error);
+          safeLogger.error("Error fetching KPI:", error);
           return c.json({ error: "Failed to fetch KPI" }, 500);
         }
       };
@@ -148,29 +177,34 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_WRITE_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions to create KPIs');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to create KPIs",
+            );
           const body = await c.req.json();
           const kpi = await createKPIDefinition(body);
 
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'CREATE',
-              entityType: 'KPI',
+              actionType: "CREATE",
+              entityType: "KPI",
               entityId: String(kpi.id),
               entityName: kpi.name || kpi.kpi_code,
               description: `KPI created: ${kpi.name || kpi.kpi_code}`,
               newValue: JSON.stringify(kpi),
-              module: 'kpis',
-              severity: 'INFO',
+              module: "kpis",
+              severity: "INFO",
             });
           } catch {}
 
           return c.json({ success: true, kpi });
         } catch (error) {
-          console.error("Error creating KPI:", error);
+          safeLogger.error("Error creating KPI:", error);
           return c.json({ error: "Failed to create KPI" }, 500);
         }
       };
@@ -182,9 +216,14 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_WRITE_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions to update KPIs');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to update KPIs",
+            );
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const kpi = await updateKPIDefinition(id, body);
@@ -195,20 +234,20 @@ export const kpiRoutes = [
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'UPDATE',
-              entityType: 'KPI',
+              actionType: "UPDATE",
+              entityType: "KPI",
               entityId: String(id),
               entityName: kpi.name || kpi.kpi_code,
               description: `KPI updated: ${kpi.name || kpi.kpi_code}`,
               newValue: JSON.stringify(kpi),
-              module: 'kpis',
-              severity: 'INFO',
+              module: "kpis",
+              severity: "INFO",
             });
           } catch {}
 
           return c.json({ success: true, kpi });
         } catch (error) {
-          console.error("Error updating KPI:", error);
+          safeLogger.error("Error updating KPI:", error);
           return c.json({ error: "Failed to update KPI" }, 500);
         }
       };
@@ -220,9 +259,14 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_WRITE_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions to record KPI values');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to record KPI values",
+            );
           const kpiId = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const value = await recordKPIValue({ ...body, kpi_id: kpiId });
@@ -230,20 +274,20 @@ export const kpiRoutes = [
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'UPDATE',
-              entityType: 'KPI',
+              actionType: "UPDATE",
+              entityType: "KPI",
               entityId: String(kpiId),
               entityName: `KPI #${kpiId}`,
               description: `KPI value recorded for KPI #${kpiId}`,
               newValue: JSON.stringify(value),
-              module: 'kpis',
-              severity: 'INFO',
+              module: "kpis",
+              severity: "INFO",
             });
           } catch {}
 
           return c.json({ success: true, value });
         } catch (error) {
-          console.error("Error recording KPI value:", error);
+          safeLogger.error("Error recording KPI value:", error);
           return c.json({ error: "Failed to record KPI value" }, 500);
         }
       };
@@ -255,15 +299,20 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for KPI history');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI history",
+            );
           const id = parseInt(c.req.param("id"));
           const limit = parseInt(c.req.query("limit") || "12");
           const history = await getKPIHistory(id, limit);
           return c.json(history);
         } catch (error) {
-          console.error("Error fetching KPI history:", error);
+          safeLogger.error("Error fetching KPI history:", error);
           return c.json({ error: "Failed to fetch KPI history" }, 500);
         }
       };
@@ -275,14 +324,19 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for executive reports');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for executive reports",
+            );
           const reportType = c.req.query("type");
           const reports = await getExecutiveReports(reportType);
           return c.json(reports);
         } catch (error) {
-          console.error("Error fetching executive reports:", error);
+          safeLogger.error("Error fetching executive reports:", error);
           return c.json({ error: "Failed to fetch reports" }, 500);
         }
       };
@@ -294,29 +348,34 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_WRITE_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions to create executive reports');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to create executive reports",
+            );
           const body = await c.req.json();
           const report = await createExecutiveReport(body);
 
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'CREATE',
-              entityType: 'DOCUMENT',
+              actionType: "CREATE",
+              entityType: "DOCUMENT",
               entityId: String(report.id),
               entityName: report.title || `Report #${report.id}`,
               description: `Executive report created: ${report.title || report.id}`,
               newValue: JSON.stringify(report),
-              module: 'kpis',
-              severity: 'INFO',
+              module: "kpis",
+              severity: "INFO",
             });
           } catch {}
 
           return c.json({ success: true, report });
         } catch (error) {
-          console.error("Error creating executive report:", error);
+          safeLogger.error("Error creating executive report:", error);
           return c.json({ error: "Failed to create report" }, 500);
         }
       };
@@ -328,9 +387,14 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for executive reports');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for executive reports",
+            );
           const id = parseInt(c.req.param("id"));
           const report = await getExecutiveReportById(id);
           if (!report) {
@@ -338,7 +402,7 @@ export const kpiRoutes = [
           }
           return c.json(report);
         } catch (error) {
-          console.error("Error fetching report:", error);
+          safeLogger.error("Error fetching report:", error);
           return c.json({ error: "Failed to fetch report" }, 500);
         }
       };
@@ -350,9 +414,14 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_WRITE_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions to update executive reports');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to update executive reports",
+            );
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json();
           const report = await updateExecutiveReport(id, body);
@@ -363,20 +432,20 @@ export const kpiRoutes = [
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'UPDATE',
-              entityType: 'DOCUMENT',
+              actionType: "UPDATE",
+              entityType: "DOCUMENT",
               entityId: String(id),
               entityName: report.title || `Report #${id}`,
               description: `Executive report updated: ${report.title || id}`,
               newValue: JSON.stringify(report),
-              module: 'kpis',
-              severity: 'INFO',
+              module: "kpis",
+              severity: "INFO",
             });
           } catch {}
 
           return c.json({ success: true, report });
         } catch (error) {
-          console.error("Error updating report:", error);
+          safeLogger.error("Error updating report:", error);
           return c.json({ error: "Failed to update report" }, 500);
         }
       };
@@ -388,13 +457,18 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
           const user = await requireRole(c, [...KPI_READ_ROLES]);
-          if (!user) return forbiddenResponse(c, 'Insufficient permissions for MBR data');
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for MBR data",
+            );
           const data = await generateMBRData();
           return c.json(data);
         } catch (error) {
-          console.error("Error generating MBR data:", error);
+          safeLogger.error("Error generating MBR data:", error);
           return c.json({ error: "Failed to generate MBR data" }, 500);
         }
       };
@@ -406,13 +480,18 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
-          const user = await requireRole(c, ['admin']);
-          if (!user) return forbiddenResponse(c, 'Admin access required to seed KPIs');
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, ["admin"]);
+          if (!user)
+            return forbiddenResponse(c, "Admin access required to seed KPIs");
           await seedMohammedKPIsManual();
-          return c.json({ success: true, message: "Mohammed's KPIs seeded successfully" });
+          return c.json({
+            success: true,
+            message: "Mohammed's KPIs seeded successfully",
+          });
         } catch (error) {
-          console.error("Error seeding Mohammed's KPIs:", error);
+          safeLogger.error("Error seeding Mohammed's KPIs:", error);
           return c.json({ error: "Failed to seed KPIs" }, 500);
         }
       };
@@ -424,13 +503,18 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { requireRole, forbiddenResponse } = await import("../../utils/rbacMiddleware");
-          const user = await requireRole(c, ['admin']);
-          if (!user) return forbiddenResponse(c, 'Admin access required to seed KPIs');
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, ["admin"]);
+          if (!user)
+            return forbiddenResponse(c, "Admin access required to seed KPIs");
           await seedSDRKPIsManual();
-          return c.json({ success: true, message: "SDR Team KPIs (11) seeded successfully" });
+          return c.json({
+            success: true,
+            message: "SDR Team KPIs (11) seeded successfully",
+          });
         } catch (error) {
-          console.error("Error seeding SDR KPIs:", error);
+          safeLogger.error("Error seeding SDR KPIs:", error);
           return c.json({ error: "Failed to seed SDR KPIs" }, 500);
         }
       };
@@ -443,7 +527,7 @@ export const kpiRoutes = [
       return async (c: any) => {
         const mastra = c.get("mastra");
         const logger = mastra?.getLogger();
-        logger?.info('📋 [MohammedSOW] Serving Scope of Work page');
+        logger?.info("📋 [MohammedSOW] Serving Scope of Work page");
         try {
           const possiblePaths = [
             join(process.cwd(), "docs", "MOHAMMED_SCOPE_OF_WORK.md"),
@@ -452,17 +536,17 @@ export const kpiRoutes = [
           let markdown = "";
           for (const p of possiblePaths) {
             if (existsSync(p)) {
-              logger?.debug('📄 [MohammedSOW] Found markdown at:', p);
+              logger?.debug("📄 [MohammedSOW] Found markdown at:", p);
               markdown = readFileSync(p, "utf-8");
               break;
             }
           }
           if (!markdown) {
-            logger?.warn('⚠️ [MohammedSOW] Markdown file not found');
+            logger?.warn("⚠️ [MohammedSOW] Markdown file not found");
             return c.text("Mohammed's Scope of Work not found", 404);
           }
-          logger?.info('✅ [MohammedSOW] Successfully rendered page');
-          
+          logger?.info("✅ [MohammedSOW] Successfully rendered page");
+
           const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -515,8 +599,8 @@ export const kpiRoutes = [
 </html>`;
           return c.html(html);
         } catch (error) {
-          logger?.error('❌ [MohammedSOW] Error serving page:', error);
-          console.error("Error serving Mohammed's SOW:", error);
+          logger?.error("❌ [MohammedSOW] Error serving page:", error);
+          safeLogger.error("Error serving Mohammed's SOW:", error);
           return c.text("Error loading page", 500);
         }
       };
@@ -531,12 +615,17 @@ export const kpiRoutes = [
         const logger = mastra?.getLogger();
         try {
           const rawFilename = c.req.param("filename");
-          const filename = rawFilename.split('/').pop()?.split('\\').pop() || '';
-          if (!filename || filename.includes('..') || filename.startsWith('.')) {
+          const filename =
+            rawFilename.split("/").pop()?.split("\\").pop() || "";
+          if (
+            !filename ||
+            filename.includes("..") ||
+            filename.startsWith(".")
+          ) {
             return c.text("Invalid filename", 400);
           }
-          const allowedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-          const ext = filename.split('.').pop()?.toLowerCase() || '';
+          const allowedExtensions = ["png", "jpg", "jpeg", "gif", "webp"];
+          const ext = filename.split(".").pop()?.toLowerCase() || "";
           if (!allowedExtensions.includes(ext)) {
             return c.text("File type not allowed", 400);
           }
@@ -548,21 +637,21 @@ export const kpiRoutes = [
           for (const p of possiblePaths) {
             if (existsSync(p)) {
               const content = readFileSync(p);
-              const ext = filename.split('.').pop()?.toLowerCase();
+              const ext = filename.split(".").pop()?.toLowerCase();
               const mimeTypes: Record<string, string> = {
-                'png': 'image/png',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'gif': 'image/gif',
-                'webp': 'image/webp'
+                png: "image/png",
+                jpg: "image/jpeg",
+                jpeg: "image/jpeg",
+                gif: "image/gif",
+                webp: "image/webp",
               };
-              c.header('Content-Type', mimeTypes[ext || 'png'] || 'image/png');
+              c.header("Content-Type", mimeTypes[ext || "png"] || "image/png");
               return c.body(content);
             }
           }
           return c.text("Screenshot not found", 404);
         } catch (error) {
-          console.error("Error serving screenshot:", error);
+          safeLogger.error("Error serving screenshot:", error);
           return c.text("Error loading screenshot", 500);
         }
       };

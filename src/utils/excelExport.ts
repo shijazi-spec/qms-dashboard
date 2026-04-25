@@ -21,6 +21,7 @@ import { promises as fsPromises, createReadStream } from "fs";
 import * as path from "path";
 import * as os from "os";
 
+import { logger } from "./logger";
 // ---------------------------------------------------------------------------
 // Typed shim for ExcelJS streaming WorkbookWriter
 // The streaming classes are not re-exported in the official @types/exceljs
@@ -42,7 +43,12 @@ interface _StreamRow {
 }
 
 interface _StreamWorksheet {
-  columns: Array<{ header: string; key: string; width: number; style?: object }>;
+  columns: Array<{
+    header: string;
+    key: string;
+    width: number;
+    style?: object;
+  }>;
   getRow(rowNumber: number): _StreamRow;
   addRow(values: Record<string, unknown>): { commit(): void };
   commit(): Promise<void>;
@@ -87,10 +93,10 @@ const HEADER_STYLE: Partial<ExcelJS.Style> = {
   fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } },
   alignment: { vertical: "middle", horizontal: "left", wrapText: true },
   border: {
-    top:    { style: "thin", color: { argb: "FFE5E7EB" } },
+    top: { style: "thin", color: { argb: "FFE5E7EB" } },
     bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
-    left:   { style: "thin", color: { argb: "FFE5E7EB" } },
-    right:  { style: "thin", color: { argb: "FFE5E7EB" } },
+    left: { style: "thin", color: { argb: "FFE5E7EB" } },
+    right: { style: "thin", color: { argb: "FFE5E7EB" } },
   },
 };
 
@@ -98,12 +104,20 @@ const HEADER_STYLE: Partial<ExcelJS.Style> = {
 function uniquifyNames() {
   const usedNames = new Set<string>();
   return (raw: string): string => {
-    const base = (raw || "Sheet").replace(/[\\/?*\[\]:]/g, "_").substring(0, 31) || "Sheet";
-    if (!usedNames.has(base)) { usedNames.add(base); return base; }
+    const base =
+      (raw || "Sheet").replace(/[\\/?*\[\]:]/g, "_").substring(0, 31) ||
+      "Sheet";
+    if (!usedNames.has(base)) {
+      usedNames.add(base);
+      return base;
+    }
     for (let i = 2; i < 1000; i++) {
       const suffix = `_${i}`;
       const candidate = base.substring(0, 31 - suffix.length) + suffix;
-      if (!usedNames.has(candidate)) { usedNames.add(candidate); return candidate; }
+      if (!usedNames.has(candidate)) {
+        usedNames.add(candidate);
+        return candidate;
+      }
     }
     const fallback = `Sheet_${usedNames.size + 1}`;
     usedNames.add(fallback);
@@ -172,7 +186,7 @@ function pagedQueryMaxPages(): number {
  */
 export async function* pagedQuery<T = Record<string, unknown>>(
   queryFn: (limit: number, offset: number) => Promise<{ rows: T[] }>,
-  pageSize = 500
+  pageSize = 500,
 ): AsyncGenerator<T> {
   const maxPages = pagedQueryMaxPages();
   let offset = 0;
@@ -181,8 +195,8 @@ export async function* pagedQuery<T = Record<string, unknown>>(
     if (pagesFetched >= maxPages) {
       throw new Error(
         `pagedQuery: refusing to stream more than ${maxPages} pages ` +
-        `(${maxPages * pageSize} rows at pageSize=${pageSize}). ` +
-        `If this is a legitimate large export, raise EXPORT_MAX_PAGES.`
+          `(${maxPages * pageSize} rows at pageSize=${pageSize}). ` +
+          `If this is a legitimate large export, raise EXPORT_MAX_PAGES.`,
       );
     }
     const { rows } = await queryFn(pageSize, offset);
@@ -226,7 +240,9 @@ function cursorQueryMaxRows(): number {
 
 /** Minimal subset of `pg.PoolClient` used by `cursorQuery`. */
 export interface CursorPoolClient {
-  query(stream: unknown): AsyncIterable<unknown> & { destroy?(err?: Error): void };
+  query(
+    stream: unknown,
+  ): AsyncIterable<unknown> & { destroy?(err?: Error): void };
   release(err?: unknown): void;
 }
 
@@ -240,7 +256,7 @@ export interface CursorQueryDeps {
   QueryStream?: new (
     sql: string,
     params: unknown[],
-    opts?: { batchSize?: number }
+    opts?: { batchSize?: number },
   ) => unknown;
 }
 
@@ -283,7 +299,11 @@ export async function* cursorQuery<T = Record<string, unknown>>(
   pool: CursorPool,
   sql: string,
   params: unknown[] = [],
-  options: { batchSize?: number; maxRows?: number; _deps?: CursorQueryDeps } = {}
+  options: {
+    batchSize?: number;
+    maxRows?: number;
+    _deps?: CursorQueryDeps;
+  } = {},
 ): AsyncGenerator<T> {
   const batchSize = options.batchSize ?? 500;
   const maxRows = options.maxRows ?? cursorQueryMaxRows();
@@ -298,25 +318,34 @@ export async function* cursorQuery<T = Record<string, unknown>>(
     const mod = (await import("pg-query-stream")) as QueryStreamModule & {
       default?: QueryStreamCtorT;
     };
-    QueryStreamCtor = (mod.default ?? (mod as unknown as QueryStreamCtorT));
+    QueryStreamCtor = mod.default ?? (mod as unknown as QueryStreamCtorT);
   }
 
   const client = await pool.connect();
   let rowsYielded = 0;
   let releaseErr: unknown;
   try {
-    const stream = client.query(new QueryStreamCtor!(sql, params, { batchSize }));
+    const stream = client.query(
+      new QueryStreamCtor!(sql, params, { batchSize }),
+    );
     try {
       for await (const row of stream as AsyncIterable<T>) {
         if (rowsYielded >= maxRows) {
           // Tear down the cursor immediately rather than draining it before
           // surfacing the cap error.
-          if (typeof (stream as { destroy?: (err?: Error) => void }).destroy === "function") {
-            try { (stream as { destroy: (err?: Error) => void }).destroy(); } catch { /* noop */ }
+          if (
+            typeof (stream as { destroy?: (err?: Error) => void }).destroy ===
+            "function"
+          ) {
+            try {
+              (stream as { destroy: (err?: Error) => void }).destroy();
+            } catch {
+              /* noop */
+            }
           }
           throw new Error(
             `cursorQuery: refusing to stream more than ${maxRows} rows. ` +
-            `If this is a legitimate large export, raise EXPORT_MAX_ROWS.`
+              `If this is a legitimate large export, raise EXPORT_MAX_ROWS.`,
           );
         }
         rowsYielded++;
@@ -342,8 +371,13 @@ export async function* cursorQuery<T = Record<string, unknown>>(
  * @deprecated Use `streamXlsx` for all new exports.
  */
 export async function buildWorkbook(
-  sheets: Array<{ name: string; columns: ColumnSpec[]; rows: Record<string, any>[]; freezeHeader?: boolean }>,
-  meta?: { creator?: string; title?: string }
+  sheets: Array<{
+    name: string;
+    columns: ColumnSpec[];
+    rows: Record<string, any>[];
+    freezeHeader?: boolean;
+  }>,
+  meta?: { creator?: string; title?: string },
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = meta?.creator || "WalaPlus GRC Platform";
@@ -355,12 +389,17 @@ export async function buildWorkbook(
   for (const sheet of sheets) {
     const safeName = uniquify(sheet.name);
     const ws = wb.addWorksheet(safeName, {
-      views: sheet.freezeHeader === false ? [] : [{ state: "frozen", ySplit: 1 }],
+      views:
+        sheet.freezeHeader === false ? [] : [{ state: "frozen", ySplit: 1 }],
     });
-    ws.columns = sheet.columns.map(c => ({ header: c.header, key: c.key, width: c.width }));
+    ws.columns = sheet.columns.map((c) => ({
+      header: c.header,
+      key: c.key,
+      width: c.width,
+    }));
 
     const headerRow = ws.getRow(1);
-    headerRow.eachCell(cell => Object.assign(cell, HEADER_STYLE));
+    headerRow.eachCell((cell) => Object.assign(cell, HEADER_STYLE));
     headerRow.height = 22;
 
     if (sheet.rows.length) ws.addRows(sheet.rows);
@@ -373,7 +412,8 @@ export async function buildWorkbook(
 
 export function xlsxResponseHeaders(filename: string): Record<string, string> {
   return {
-    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "Content-Type":
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "Content-Disposition": `attachment; filename="${filename}"`,
   };
 }
@@ -394,9 +434,10 @@ function weakBufferEtag(buffer: Buffer): string {
   const total = buffer.byteLength;
   const SAMPLE = 8 * 1024;
   const head = buffer.subarray(0, Math.min(SAMPLE, total));
-  const tail = total > SAMPLE
-    ? buffer.subarray(Math.max(0, total - SAMPLE), total)
-    : Buffer.alloc(0);
+  const tail =
+    total > SAMPLE
+      ? buffer.subarray(Math.max(0, total - SAMPLE), total)
+      : Buffer.alloc(0);
   const h = createHash("sha1");
   h.update(head);
   if (tail.byteLength > 0) h.update(tail);
@@ -408,7 +449,10 @@ export type RangeRequestHeaders =
   | Headers
   | { get?: (name: string) => string | null | undefined; [k: string]: unknown };
 
-function readReqHeader(headers: RangeRequestHeaders, name: string): string | null {
+function readReqHeader(
+  headers: RangeRequestHeaders,
+  name: string,
+): string | null {
   if (headers && typeof (headers as Headers).get === "function") {
     return (headers as Headers).get(name) || null;
   }
@@ -436,7 +480,10 @@ interface ParsedRange {
  * return 416). We only support a single range — that's all the streaming-
  * download helper ever issues.
  */
-function parseSingleRange(rangeHeader: string, total: number): ParsedRange | null | "unsatisfiable" {
+function parseSingleRange(
+  rangeHeader: string,
+  total: number,
+): ParsedRange | null | "unsatisfiable" {
   const m = /^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$/i.exec(rangeHeader);
   if (!m) return null;
   const startStr = m[1];
@@ -492,7 +539,7 @@ export function bufferResponseWithRange(
   contentType: string,
   filename: string,
   reqHeaders: RangeRequestHeaders,
-  options: BufferedRangeOptions = {}
+  options: BufferedRangeOptions = {},
 ): Response {
   const total = buffer.byteLength;
   const etag = options.etag || weakBufferEtag(buffer);
@@ -501,7 +548,7 @@ export function bufferResponseWithRange(
     "Content-Type": contentType,
     "Content-Disposition": `attachment; filename="${filename}"`,
     "Accept-Ranges": "bytes",
-    "ETag": etag,
+    ETag: etag,
     ...(options.extraHeaders || {}),
   };
 
@@ -571,11 +618,12 @@ export function bufferResponseWithRange(
 export async function streamXlsx(
   sheets: SheetSpec[],
   filename: string,
-  meta?: { creator?: string; title?: string }
+  meta?: { creator?: string; title?: string },
 ): Promise<Response> {
   const pass = new PassThrough();
 
-  const { WorkbookWriter } = (ExcelJS as unknown as _ExcelJSWithStream).stream.xlsx;
+  const { WorkbookWriter } = (ExcelJS as unknown as _ExcelJSWithStream).stream
+    .xlsx;
   const wb = new WorkbookWriter({
     stream: pass,
     useStyles: true,
@@ -587,7 +635,7 @@ export async function streamXlsx(
   });
 
   if (meta?.creator) wb.creator = meta.creator;
-  if (meta?.title)   wb.title   = meta.title;
+  if (meta?.title) wb.title = meta.title;
 
   const uniquify = uniquifyNames();
 
@@ -596,23 +644,27 @@ export async function streamXlsx(
       for (const sheet of sheets) {
         const safeName = uniquify(sheet.name);
         const ws = wb.addWorksheet(safeName, {
-          views: sheet.freezeHeader === false ? [] : [{ state: "frozen", ySplit: 1 }],
+          views:
+            sheet.freezeHeader === false
+              ? []
+              : [{ state: "frozen", ySplit: 1 }],
         });
 
-        ws.columns = sheet.columns.map(c => ({
+        ws.columns = sheet.columns.map((c) => ({
           header: c.header,
-          key:    c.key,
-          width:  c.width ?? Math.min(Math.max(String(c.header).length + 2, 10), 60),
-          style:  { alignment: { wrapText: false } },
+          key: c.key,
+          width:
+            c.width ?? Math.min(Math.max(String(c.header).length + 2, 10), 60),
+          style: { alignment: { wrapText: false } },
         }));
 
         const headerRow = ws.getRow(1);
         headerRow.height = 22;
         headerRow.eachCell((cell: _StreamCell) => {
-          cell.font      = HEADER_STYLE.font;
-          cell.fill      = HEADER_STYLE.fill;
+          cell.font = HEADER_STYLE.font;
+          cell.fill = HEADER_STYLE.fill;
           cell.alignment = HEADER_STYLE.alignment;
-          cell.border    = HEADER_STYLE.border;
+          cell.border = HEADER_STYLE.border;
         });
         headerRow.commit();
 
@@ -631,16 +683,23 @@ export async function streamXlsx(
 
   const webStream = new ReadableStream({
     start(controller) {
-      pass.on("data",  (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)));
-      pass.on("end",   ()              => controller.close());
-      pass.on("error", (err: Error)    => controller.error(err));
+      pass.on("data", (chunk: Buffer) =>
+        controller.enqueue(
+          new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+        ),
+      );
+      pass.on("end", () => controller.close());
+      pass.on("error", (err: Error) => controller.error(err));
     },
-    cancel() { pass.destroy(); },
+    cancel() {
+      pass.destroy();
+    },
   });
 
   return new Response(webStream, {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
@@ -661,7 +720,7 @@ export function streamCsv(
   filename: string,
   headers: string[],
   rows: string[][] | AsyncIterable<string[]>,
-  chunkSize = 1000
+  chunkSize = 1000,
 ): Response {
   const headerLine = headers.join(",") + "\n";
 
@@ -679,7 +738,7 @@ export function streamCsv(
         const batch = arr.slice(cursor, cursor + chunkSize);
         cursor += chunkSize;
         if (batch.length > 0) {
-          controller.enqueue(batch.map(r => r.join(",")).join("\n") + "\n");
+          controller.enqueue(batch.map((r) => r.join(",")).join("\n") + "\n");
         }
         if (cursor >= arr.length) {
           controller.close();
@@ -739,7 +798,10 @@ export function streamCsv(
  * STREAMING_EXPORT_CACHE_DIR env (useful in tests, or to point at a
  * larger ephemeral volume than `/tmp`).
  */
-const STAGED_EXPORT_DIR_DEFAULT = path.join(os.tmpdir(), "walaplus-export-cache");
+const STAGED_EXPORT_DIR_DEFAULT = path.join(
+  os.tmpdir(),
+  "walaplus-export-cache",
+);
 
 /** Default TTL — exports older than this are unlinked by the janitor. */
 const STAGED_EXPORT_TTL_MS_DEFAULT = 60 * 60 * 1000; // 1 hour
@@ -809,7 +871,7 @@ async function unlinkStagedFile(filePath: string): Promise<void> {
     if (code !== "ENOENT") {
       // Soft-fail — janitor will retry on the next scan.
       // eslint-disable-next-line no-console
-      console.warn("[stagedExport] failed to unlink", filePath, err);
+      logger.warn("[stagedExport] failed to unlink", filePath, err);
     }
   }
 }
@@ -821,7 +883,10 @@ function decRefStagedEntry(entry: StagedExportEntry): void {
   }
 }
 
-async function reapStagedEntry(key: string, entry: StagedExportEntry): Promise<void> {
+async function reapStagedEntry(
+  key: string,
+  entry: StagedExportEntry,
+): Promise<void> {
   stagedExportCache.delete(key);
   if (entry.refCount > 0) {
     // Defer unlink until the last reader drains.
@@ -861,7 +926,10 @@ function mintStagedFilePath(dir: string, jobKey: string): string {
  * back to the buffered path in future — clients that already cached the
  * etag can still resume across the migration boundary.
  */
-async function computeStagedFileWeakEtag(filePath: string, size: number): Promise<string> {
+async function computeStagedFileWeakEtag(
+  filePath: string,
+  size: number,
+): Promise<string> {
   const SAMPLE = 8 * 1024;
   const headLen = Math.min(SAMPLE, size);
   const fh = await fsPromises.open(filePath, "r");
@@ -883,7 +951,10 @@ async function computeStagedFileWeakEtag(filePath: string, size: number): Promis
   }
 }
 
-async function drainResponseBodyToFile(response: Response, filePath: string): Promise<number> {
+async function drainResponseBodyToFile(
+  response: Response,
+  filePath: string,
+): Promise<number> {
   if (!response.body) {
     // Empty body — write a 0-byte file so `serveFromStagedEntry` can still
     // open it for a Range read without an ENOENT race.
@@ -899,13 +970,21 @@ async function drainResponseBodyToFile(response: Response, filePath: string): Pr
       const { value, done } = await reader.read();
       if (done) break;
       if (!value || !value.byteLength) continue;
-      const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+      const chunk = Buffer.from(
+        value.buffer,
+        value.byteOffset,
+        value.byteLength,
+      );
       await fh.write(chunk);
       size += chunk.byteLength;
     }
   } finally {
     await fh.close();
-    try { reader.releaseLock(); } catch { /* noop */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* noop */
+    }
   }
   return size;
 }
@@ -1071,8 +1150,14 @@ export function instrumentExportResponseTiming(
   const ttfbMs = Math.max(0, Math.round(performance.now() - startedAt));
   const newHeaders = new Headers(resp.headers);
   newHeaders.set(EXPORT_TIMING_HEADERS.ttfb, String(ttfbMs));
-  newHeaders.set(EXPORT_TIMING_HEADERS.ttfbBudget, String(EXPORT_TTFB_BUDGET_MS));
-  newHeaders.set(EXPORT_TIMING_HEADERS.totalBudget, String(EXPORT_TOTAL_BUDGET_MS));
+  newHeaders.set(
+    EXPORT_TIMING_HEADERS.ttfbBudget,
+    String(EXPORT_TTFB_BUDGET_MS),
+  );
+  newHeaders.set(
+    EXPORT_TIMING_HEADERS.totalBudget,
+    String(EXPORT_TOTAL_BUDGET_MS),
+  );
 
   // Surface a same-origin-readable subset so a fetch() integration test
   // can actually see the X-Stream-* headers (CORS-agnostic same-origin
@@ -1090,7 +1175,7 @@ export function instrumentExportResponseTiming(
   newHeaders.set("Access-Control-Expose-Headers", exposeList);
 
   if (ttfbMs > EXPORT_TTFB_BUDGET_MS) {
-    console.warn(
+    logger.warn(
       `[export-timing] TTFB OVER BUDGET on ${routeLabel}: ${ttfbMs}ms > ${EXPORT_TTFB_BUDGET_MS}ms ` +
         `— check for accidental full-body buffering before stageStreamingExportFromHono returned.`,
     );
@@ -1098,7 +1183,7 @@ export function instrumentExportResponseTiming(
 
   const origBody = resp.body;
   if (!origBody) {
-    console.log(
+    logger.info(
       `[export-timing] ${routeLabel} ttfb=${ttfbMs}ms total=${ttfbMs}ms bytes=0 status=no-body`,
     );
     return new Response(null, {
@@ -1135,22 +1220,28 @@ export function instrumentExportResponseTiming(
     completed = true;
     const totalMs = Math.max(0, Math.round(performance.now() - startedAt));
     const effectiveStatus =
-      status === "ok" && totalMs > EXPORT_TOTAL_BUDGET_MS ? "over-budget" : status;
-    console.log(
+      status === "ok" && totalMs > EXPORT_TOTAL_BUDGET_MS
+        ? "over-budget"
+        : status;
+    logger.info(
       `[export-timing] ${routeLabel} ttfb=${ttfbMs}ms total=${totalMs}ms ` +
         `bytes=${bytesObserved} budget_ttfb=${EXPORT_TTFB_BUDGET_MS}ms ` +
         `budget_total=${EXPORT_TOTAL_BUDGET_MS}ms status=${effectiveStatus}` +
         (extra ? ` ${extra}` : ""),
     );
     if (effectiveStatus === "over-budget") {
-      console.warn(
+      logger.warn(
         `[export-timing] TOTAL OVER BUDGET on ${routeLabel}: ${totalMs}ms ` +
           `> ${EXPORT_TOTAL_BUDGET_MS}ms (${bytesObserved} bytes). A small ` +
           `payload that takes this long indicates a streaming pipeline ` +
           `regression — check stageAndServeStreamingExport / createReadStream.`,
       );
     }
-    try { reader.releaseLock(); } catch { /* noop */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* noop */
+    }
   };
 
   const wrapped = new ReadableStream<Uint8Array>({
@@ -1158,19 +1249,31 @@ export function instrumentExportResponseTiming(
       try {
         const { value, done } = await reader.read();
         if (done) {
-          try { controller.close(); } catch { /* already closed */ }
+          try {
+            controller.close();
+          } catch {
+            /* already closed */
+          }
           finish("ok");
           return;
         }
         if (value) bytesObserved += value.byteLength;
         controller.enqueue(value);
       } catch (err) {
-        try { controller.error(err); } catch { /* already errored */ }
+        try {
+          controller.error(err);
+        } catch {
+          /* already errored */
+        }
         finish("error", `err=${(err as Error)?.message ?? err}`);
       }
     },
     async cancel(reason) {
-      try { await reader.cancel(reason); } catch { /* noop */ }
+      try {
+        await reader.cancel(reason);
+      } catch {
+        /* noop */
+      }
       finish("cancelled", `reason=${String(reason ?? "")}`);
     },
   });
@@ -1211,7 +1314,7 @@ export async function stageAndServeStreamingExport(
   reqHeaders: RangeRequestHeaders,
   jobKey: string,
   build: () => Promise<Response> | Response,
-  options: StreamingExportStagingOptions = {}
+  options: StreamingExportStagingOptions = {},
 ): Promise<Response> {
   startStagedExportJanitorIfNeeded();
   const ttlMs = options.ttlMs ?? stagedExportTtlMs();
@@ -1255,9 +1358,10 @@ export async function stageAndServeStreamingExport(
             body,
           };
         }
-        const contentType = built.headers.get("content-type") ||
-          "application/octet-stream";
-        const contentDisposition = built.headers.get("content-disposition") ||
+        const contentType =
+          built.headers.get("content-type") || "application/octet-stream";
+        const contentDisposition =
+          built.headers.get("content-disposition") ||
           'attachment; filename="export.bin"';
         const size = await drainResponseBodyToFile(built, filePath);
         const etag = await computeStagedFileWeakEtag(filePath, size);
@@ -1303,14 +1407,14 @@ export async function stageAndServeStreamingExport(
 
 function serveFromStagedEntry(
   entry: StagedExportEntry,
-  reqHeaders: RangeRequestHeaders
+  reqHeaders: RangeRequestHeaders,
 ): Response {
   const total = entry.size;
   const baseHeaders: Record<string, string> = {
     "Content-Type": entry.contentType,
     "Content-Disposition": entry.contentDisposition,
     "Accept-Ranges": "bytes",
-    "ETag": entry.etag,
+    ETag: entry.etag,
   };
 
   const rangeHeader = readReqHeader(reqHeaders, "range");
@@ -1318,7 +1422,8 @@ function serveFromStagedEntry(
 
   // If-Range: ignore Range when the validator no longer matches.  Same
   // semantics as bufferResponseWithRange (verbatim compare, weak or strong).
-  const useRange = !!rangeHeader &&
+  const useRange =
+    !!rangeHeader &&
     (!ifRangeHeader || ifRangeHeader.trim() === entry.etag.trim());
 
   let start = 0;
@@ -1363,19 +1468,33 @@ function serveFromStagedEntry(
   const webStream = new ReadableStream<Uint8Array>({
     start(controller) {
       nodeStream.on("data", (chunk: Buffer) => {
-        controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+        controller.enqueue(
+          new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+        );
       });
       nodeStream.on("end", () => {
-        try { controller.close(); } catch { /* already closed */ }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
         release();
       });
       nodeStream.on("error", (err: Error) => {
-        try { controller.error(err); } catch { /* already errored */ }
+        try {
+          controller.error(err);
+        } catch {
+          /* already errored */
+        }
         release();
       });
     },
     cancel() {
-      try { nodeStream.destroy(); } catch { /* noop */ }
+      try {
+        nodeStream.destroy();
+      } catch {
+        /* noop */
+      }
       release();
     },
   });
@@ -1400,9 +1519,15 @@ function serveFromStagedEntry(
  *     streamXlsx(sheets, filename, meta));
  */
 export async function stageStreamingExportFromHono(
-  c: { req: { url: string; method?: string; header: (n: string) => string | null | undefined } },
+  c: {
+    req: {
+      url: string;
+      method?: string;
+      header: (n: string) => string | null | undefined;
+    };
+  },
   build: () => Promise<Response> | Response,
-  options: StreamingExportStagingOptions = {}
+  options: StreamingExportStagingOptions = {},
 ): Promise<Response> {
   // Capture wall-clock entry time so we can stamp the response with TTFB
   // and total transfer duration. See § "Streaming-export latency budget"
@@ -1442,7 +1567,12 @@ export async function stageStreamingExportFromHono(
     routeLabel = `${method} ${c.req.url}`;
   }
 
-  const resp = await stageAndServeStreamingExport(reqHeaders, jobKey, build, options);
+  const resp = await stageAndServeStreamingExport(
+    reqHeaders,
+    jobKey,
+    build,
+    options,
+  );
 
   // Only instrument 2xx/206 responses — passthrough errors (401/403/500)
   // are not export bodies and would skew the latency log.

@@ -1,3 +1,4 @@
+import { logger as safeLogger } from "../../utils/logger";
 export const eventLogsRoutes = [
   {
     path: "/api/logs",
@@ -8,20 +9,24 @@ export const eventLogsRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Fetching paginated logs");
 
-          const { getEventLogs, initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          const { getEventLogs, initializeEventLogsTable } =
+            await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
           const page = parseInt(c.req.query("page") || "1");
           const pageSize = parseInt(c.req.query("pageSize") || "25");
-          const userId = c.req.query("userId") ? parseInt(c.req.query("userId")) : undefined;
+          const userId = c.req.query("userId")
+            ? parseInt(c.req.query("userId"))
+            : undefined;
           const userName = c.req.query("userName");
           const actionType = c.req.query("actionType");
           const entityType = c.req.query("entityType");
           const module = c.req.query("module");
           const severity = c.req.query("severity");
-          const aiInvolved = c.req.query("aiInvolved") !== undefined 
-            ? c.req.query("aiInvolved") === "true" 
-            : undefined;
+          const aiInvolved =
+            c.req.query("aiInvolved") !== undefined
+              ? c.req.query("aiInvolved") === "true"
+              : undefined;
           const fromDate = c.req.query("fromDate");
           const toDate = c.req.query("toDate");
           const search = c.req.query("search");
@@ -40,23 +45,26 @@ export const eventLogsRoutes = [
             fromDate,
             toDate,
             search,
-            correlationId
+            correlationId,
           });
 
-          logger?.info("📋 [EventLogs API] Logs fetched successfully", { 
-            count: result.logs.length, 
+          logger?.info("📋 [EventLogs API] Logs fetched successfully", {
+            count: result.logs.length,
             total: result.total,
-            page: result.page 
+            page: result.page,
           });
           return c.json(result);
         } catch (error) {
-          console.error("Error fetching event logs:", error);
-          return c.json({ 
-            error: "Failed to fetch event logs" 
-          }, 500);
+          safeLogger.error("Error fetching event logs:", error);
+          return c.json(
+            {
+              error: "Failed to fetch event logs",
+            },
+            500,
+          );
         }
       };
-    }
+    },
   },
   {
     path: "/api/logs/stats",
@@ -67,49 +75,60 @@ export const eventLogsRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Fetching log statistics");
 
-          const { getEventLogStats, initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          const { getEventLogStats, initializeEventLogsTable } =
+            await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
           const stats = await getEventLogStats();
 
-          logger?.info("📋 [EventLogs API] Stats fetched successfully", { 
+          logger?.info("📋 [EventLogs API] Stats fetched successfully", {
             totalLogs: stats.totalLogs,
-            last24Hours: stats.last24Hours 
+            last24Hours: stats.last24Hours,
           });
           return c.json(stats);
         } catch (error) {
-          console.error("Error fetching event log stats:", error);
-          return c.json({ 
-            error: "Failed to fetch stats" 
-          }, 500);
+          safeLogger.error("Error fetching event log stats:", error);
+          return c.json(
+            {
+              error: "Failed to fetch stats",
+            },
+            500,
+          );
         }
       };
-    }
+    },
   },
   {
     path: "/api/logs/export/estimate",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const { requireAuthOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
+        const { requireAuthOrKey, unauthorizedResponse } =
+          await import("../../utils/rbacMiddleware");
         const user = requireAuthOrKey(c);
         if (!user) return unauthorizedResponse(c);
 
         const pg = await import("pg");
-        const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+        const pool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
         try {
-          const { initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          const { initializeEventLogsTable } =
+            await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
-          const userId = c.req.query("userId") ? parseInt(c.req.query("userId")) : undefined;
+          const userId = c.req.query("userId")
+            ? parseInt(c.req.query("userId"))
+            : undefined;
           const userName = c.req.query("userName");
           const actionType = c.req.query("actionType");
           const entityType = c.req.query("entityType");
           const logModule = c.req.query("module");
           const severity = c.req.query("severity");
-          const aiInvolved = c.req.query("aiInvolved") !== undefined
-            ? c.req.query("aiInvolved") === "true"
-            : undefined;
+          const aiInvolved =
+            c.req.query("aiInvolved") !== undefined
+              ? c.req.query("aiInvolved") === "true"
+              : undefined;
           const fromDate = c.req.query("fromDate");
           const toDate = c.req.query("toDate");
           const search = c.req.query("search");
@@ -120,37 +139,76 @@ export const eventLogsRoutes = [
           const conditions: string[] = [];
           const params: unknown[] = [];
           let i = 1;
-          if (userId !== undefined)     { conditions.push(`user_id = $${i++}`);          params.push(userId); }
-          if (userName)                 { conditions.push(`user_name ILIKE $${i++}`);    params.push(`%${userName}%`); }
-          if (actionType)               { conditions.push(`action_type = $${i++}`);      params.push(actionType); }
-          if (entityType)               { conditions.push(`entity_type = $${i++}`);      params.push(entityType); }
-          if (logModule)                { conditions.push(`module = $${i++}`);           params.push(logModule); }
-          if (severity)                 { conditions.push(`severity = $${i++}`);         params.push(severity); }
-          if (aiInvolved !== undefined) { conditions.push(`ai_involved = $${i++}`);      params.push(aiInvolved); }
-          if (fromDate)                 { conditions.push(`timestamp >= $${i++}`);       params.push(fromDate); }
-          if (toDate)                   { conditions.push(`timestamp <= $${i++}`);       params.push(toDate); }
-          if (correlationId)            { conditions.push(`correlation_id = $${i++}`);   params.push(correlationId); }
+          if (userId !== undefined) {
+            conditions.push(`user_id = $${i++}`);
+            params.push(userId);
+          }
+          if (userName) {
+            conditions.push(`user_name ILIKE $${i++}`);
+            params.push(`%${userName}%`);
+          }
+          if (actionType) {
+            conditions.push(`action_type = $${i++}`);
+            params.push(actionType);
+          }
+          if (entityType) {
+            conditions.push(`entity_type = $${i++}`);
+            params.push(entityType);
+          }
+          if (logModule) {
+            conditions.push(`module = $${i++}`);
+            params.push(logModule);
+          }
+          if (severity) {
+            conditions.push(`severity = $${i++}`);
+            params.push(severity);
+          }
+          if (aiInvolved !== undefined) {
+            conditions.push(`ai_involved = $${i++}`);
+            params.push(aiInvolved);
+          }
+          if (fromDate) {
+            conditions.push(`timestamp >= $${i++}`);
+            params.push(fromDate);
+          }
+          if (toDate) {
+            conditions.push(`timestamp <= $${i++}`);
+            params.push(toDate);
+          }
+          if (correlationId) {
+            conditions.push(`correlation_id = $${i++}`);
+            params.push(correlationId);
+          }
           if (search) {
-            conditions.push(`(description ILIKE $${i} OR entity_name ILIKE $${i} OR user_name ILIKE $${i})`);
+            conditions.push(
+              `(description ILIKE $${i} OR entity_name ILIKE $${i} OR user_name ILIKE $${i})`,
+            );
             params.push(`%${search}%`);
             i++;
           }
 
-          const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-          const r = await pool.query(`SELECT COUNT(*)::int AS total FROM event_logs ${where}`, params);
-          const { estimateFromCount, estimateResponse } = await import("../../utils/exportEstimate");
+          const where =
+            conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+          const r = await pool.query(
+            `SELECT COUNT(*)::int AS total FROM event_logs ${where}`,
+            params,
+          );
+          const { estimateFromCount, estimateResponse } =
+            await import("../../utils/exportEstimate");
           // Event-log rows carry full description / old_value / new_value JSON
           // payloads, so the per-row average is materially higher than a
           // typical thin CSV row.
-          return estimateResponse(estimateFromCount(r.rows[0]?.total, 'csv', 600));
+          return estimateResponse(
+            estimateFromCount(r.rows[0]?.total, "csv", 600),
+          );
         } catch (error) {
-          console.error("Error estimating event logs export:", error);
+          safeLogger.error("Error estimating event logs export:", error);
           return c.json({ error: "Failed to estimate export size" }, 500);
         } finally {
           await pool.end();
         }
       };
-    }
+    },
   },
   {
     path: "/api/logs/export",
@@ -161,18 +219,22 @@ export const eventLogsRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Exporting logs as CSV");
 
-          const { initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          const { initializeEventLogsTable } =
+            await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
-          const userId = c.req.query("userId") ? parseInt(c.req.query("userId")) : undefined;
+          const userId = c.req.query("userId")
+            ? parseInt(c.req.query("userId"))
+            : undefined;
           const userName = c.req.query("userName");
           const actionType = c.req.query("actionType");
           const entityType = c.req.query("entityType");
           const logModule = c.req.query("module");
           const severity = c.req.query("severity");
-          const aiInvolved = c.req.query("aiInvolved") !== undefined
-            ? c.req.query("aiInvolved") === "true"
-            : undefined;
+          const aiInvolved =
+            c.req.query("aiInvolved") !== undefined
+              ? c.req.query("aiInvolved") === "true"
+              : undefined;
           const fromDate = c.req.query("fromDate");
           const toDate = c.req.query("toDate");
           const search = c.req.query("search");
@@ -183,39 +245,97 @@ export const eventLogsRoutes = [
           const baseParams: unknown[] = [];
           let paramIndex = 1;
 
-          if (userId !== undefined)       { conditions.push(`user_id = $${paramIndex++}`);          baseParams.push(userId); }
-          if (userName)                   { conditions.push(`user_name ILIKE $${paramIndex++}`);    baseParams.push(`%${userName}%`); }
-          if (actionType)                 { conditions.push(`action_type = $${paramIndex++}`);      baseParams.push(actionType); }
-          if (entityType)                 { conditions.push(`entity_type = $${paramIndex++}`);      baseParams.push(entityType); }
-          if (logModule)                  { conditions.push(`module = $${paramIndex++}`);           baseParams.push(logModule); }
-          if (severity)                   { conditions.push(`severity = $${paramIndex++}`);         baseParams.push(severity); }
-          if (aiInvolved !== undefined)   { conditions.push(`ai_involved = $${paramIndex++}`);      baseParams.push(aiInvolved); }
-          if (fromDate)                   { conditions.push(`timestamp >= $${paramIndex++}`);       baseParams.push(fromDate); }
-          if (toDate)                     { conditions.push(`timestamp <= $${paramIndex++}`);       baseParams.push(toDate); }
-          if (correlationId)              { conditions.push(`correlation_id = $${paramIndex++}`);   baseParams.push(correlationId); }
+          if (userId !== undefined) {
+            conditions.push(`user_id = $${paramIndex++}`);
+            baseParams.push(userId);
+          }
+          if (userName) {
+            conditions.push(`user_name ILIKE $${paramIndex++}`);
+            baseParams.push(`%${userName}%`);
+          }
+          if (actionType) {
+            conditions.push(`action_type = $${paramIndex++}`);
+            baseParams.push(actionType);
+          }
+          if (entityType) {
+            conditions.push(`entity_type = $${paramIndex++}`);
+            baseParams.push(entityType);
+          }
+          if (logModule) {
+            conditions.push(`module = $${paramIndex++}`);
+            baseParams.push(logModule);
+          }
+          if (severity) {
+            conditions.push(`severity = $${paramIndex++}`);
+            baseParams.push(severity);
+          }
+          if (aiInvolved !== undefined) {
+            conditions.push(`ai_involved = $${paramIndex++}`);
+            baseParams.push(aiInvolved);
+          }
+          if (fromDate) {
+            conditions.push(`timestamp >= $${paramIndex++}`);
+            baseParams.push(fromDate);
+          }
+          if (toDate) {
+            conditions.push(`timestamp <= $${paramIndex++}`);
+            baseParams.push(toDate);
+          }
+          if (correlationId) {
+            conditions.push(`correlation_id = $${paramIndex++}`);
+            baseParams.push(correlationId);
+          }
           if (search) {
-            conditions.push(`(description ILIKE $${paramIndex} OR entity_name ILIKE $${paramIndex} OR user_name ILIKE $${paramIndex})`);
+            conditions.push(
+              `(description ILIKE $${paramIndex} OR entity_name ILIKE $${paramIndex} OR user_name ILIKE $${paramIndex})`,
+            );
             baseParams.push(`%${search}%`);
             paramIndex++;
           }
 
-          const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          const where =
+            conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
           // No trailing LIMIT/OFFSET — cursorQuery streams the full result set
           // via a server-side Postgres cursor (O(n) total).
           const baseSql = `SELECT id,timestamp,user_id,user_name,user_email,user_role,action_type,entity_type,entity_id,entity_name,description,old_value,new_value,ai_involved,severity,correlation_id,ip_address,user_agent,module,checksum,created_at FROM event_logs ${where} ORDER BY timestamp DESC`;
 
           const pg = await import("pg");
-          const logPool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          const logPool = new pg.default.Pool({
+            connectionString: process.env.DATABASE_URL,
+          });
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
-          const { streamCsv, cursorQuery, stageStreamingExportFromHono } = await import("../../utils/excelExport");
-          const logCols = ['id','timestamp','user_id','user_name','user_email','user_role','action_type','entity_type','entity_id','entity_name','description','old_value','new_value','ai_involved','severity','correlation_id','ip_address','user_agent','module','checksum','created_at'];
+          const { streamCsv, cursorQuery, stageStreamingExportFromHono } =
+            await import("../../utils/excelExport");
+          const logCols = [
+            "id",
+            "timestamp",
+            "user_id",
+            "user_name",
+            "user_email",
+            "user_role",
+            "action_type",
+            "entity_type",
+            "entity_id",
+            "entity_name",
+            "description",
+            "old_value",
+            "new_value",
+            "ai_involved",
+            "severity",
+            "correlation_id",
+            "ip_address",
+            "user_agent",
+            "module",
+            "checksum",
+            "created_at",
+          ];
 
           const source = cursorQuery(logPool, baseSql, baseParams);
           const mappedRows = (async function* () {
             try {
               for await (const log of source) {
                 const r = log as Record<string, unknown>;
-                yield logCols.map(k => escapeCSVValue(String(r[k] ?? '')));
+                yield logCols.map((k) => escapeCSVValue(String(r[k] ?? "")));
               }
             } finally {
               await logPool.end();
@@ -223,22 +343,50 @@ export const eventLogsRoutes = [
           })();
 
           const headers = [
-            'ID', 'Timestamp', 'User ID', 'User Name', 'User Email', 'User Role',
-            'Action Type', 'Entity Type', 'Entity ID', 'Entity Name', 'Description',
-            'Old Value', 'New Value', 'AI Involved', 'Severity', 'Correlation ID',
-            'IP Address', 'User Agent', 'Module', 'Checksum', 'Created At'
+            "ID",
+            "Timestamp",
+            "User ID",
+            "User Name",
+            "User Email",
+            "User Role",
+            "Action Type",
+            "Entity Type",
+            "Entity ID",
+            "Entity Name",
+            "Description",
+            "Old Value",
+            "New Value",
+            "AI Involved",
+            "Severity",
+            "Correlation ID",
+            "IP Address",
+            "User Agent",
+            "Module",
+            "Checksum",
+            "Created At",
           ];
 
-          logger?.info("📋 [EventLogs API] CSV export streaming started (paged)");
-          return await stageStreamingExportFromHono(c, () => streamCsv(`event_logs_${new Date().toISOString().split('T')[0]}.csv`, headers, mappedRows));
+          logger?.info(
+            "📋 [EventLogs API] CSV export streaming started (paged)",
+          );
+          return await stageStreamingExportFromHono(c, () =>
+            streamCsv(
+              `event_logs_${new Date().toISOString().split("T")[0]}.csv`,
+              headers,
+              mappedRows,
+            ),
+          );
         } catch (error) {
-          console.error("Error exporting event logs:", error);
-          return c.json({ 
-            error: "Failed to export logs" 
-          }, 500);
+          safeLogger.error("Error exporting event logs:", error);
+          return c.json(
+            {
+              error: "Failed to export logs",
+            },
+            500,
+          );
         }
       };
-    }
+    },
   },
   {
     path: "/api/logs/:id",
@@ -250,7 +398,8 @@ export const eventLogsRoutes = [
           const id = parseInt(c.req.param("id"));
           logger?.info("📋 [EventLogs API] Fetching log by ID", { id });
 
-          const { getEventLogById, initializeEventLogsTable } = await import("../../utils/eventLogsDatabase");
+          const { getEventLogById, initializeEventLogsTable } =
+            await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
 
           const eventLog = await getEventLogById(id);
@@ -260,28 +409,31 @@ export const eventLogsRoutes = [
             return c.json({ error: "Event log not found" }, 404);
           }
 
-          logger?.info("📋 [EventLogs API] Log fetched successfully", { 
-            id, 
-            actionType: eventLog.action_type 
+          logger?.info("📋 [EventLogs API] Log fetched successfully", {
+            id,
+            actionType: eventLog.action_type,
           });
           return c.json(eventLog);
         } catch (error) {
-          console.error("Error fetching event log:", error);
-          return c.json({ 
-            error: "Failed to fetch event log" 
-          }, 500);
+          safeLogger.error("Error fetching event log:", error);
+          return c.json(
+            {
+              error: "Failed to fetch event log",
+            },
+            500,
+          );
         }
       };
-    }
+    },
   },
-  
+
   {
     path: "/logs",
     method: "GET" as const,
     createHandler: async () => {
       const { readFileSync, existsSync } = await import("fs");
       const { join } = await import("path");
-      
+
       return async (c: any) => {
         try {
           const possiblePaths = [
@@ -289,21 +441,27 @@ export const eventLogsRoutes = [
             join(process.cwd(), "..", "dashboard", "logs.html"),
             "/home/runner/workspace/dashboard/logs.html",
           ];
-          
+
           for (const logsPath of possiblePaths) {
             if (existsSync(logsPath)) {
               const html = readFileSync(logsPath, "utf-8");
               return c.html(html);
             }
           }
-          
-          console.error("📋 [EventLogs] Logs dashboard not found in any path:", possiblePaths);
+
+          safeLogger.error(
+            "📋 [EventLogs] Logs dashboard not found in any path:",
+            possiblePaths,
+          );
           return c.text("Event Logs dashboard not found", 404);
         } catch (error) {
-          console.error("📋 [EventLogs] Error serving Logs dashboard:", error);
+          safeLogger.error(
+            "📋 [EventLogs] Error serving Logs dashboard:",
+            error,
+          );
           return c.text("Error loading Event Logs dashboard", 500);
         }
       };
-    }
-  }
+    },
+  },
 ];

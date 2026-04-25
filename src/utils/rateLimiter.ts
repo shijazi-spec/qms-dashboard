@@ -1,9 +1,10 @@
-import pg from 'pg';
-import pino from 'pino';
+import pg from "pg";
+import pino from "pino";
 
+import { logger } from "./logger";
 const { Pool } = pg;
 
-const rlLogger = pino({ level: 'warn', name: 'rateLimiter' });
+const rlLogger = pino({ level: "warn", name: "rateLimiter" });
 
 let rlPool: InstanceType<typeof Pool> | null = null;
 let failOpenCount = 0;
@@ -24,8 +25,13 @@ const EXPORT_LIMIT = 10;
 const UNAUTH_READ_LIMIT = 10;
 const UNAUTH_WRITE_LIMIT = 3;
 
-const AUTH_PATHS = ['/api/auth/', '/api/invitations/accept', '/login', '/api/admin/auth'];
-const EXPORT_PATHS = ['/export', '/pdf'];
+const AUTH_PATHS = [
+  "/api/auth/",
+  "/api/invitations/accept",
+  "/login",
+  "/api/admin/auth",
+];
+const EXPORT_PATHS = ["/export", "/pdf"];
 
 let tableReady: Promise<void> | null = null;
 
@@ -52,21 +58,25 @@ function ensureTable(): Promise<void> {
   return tableReady;
 }
 
-ensureTable().catch(err => {
-  rlLogger.warn({ err, component: 'rateLimiter' }, 'rate_limit_buckets table setup failed at startup — rate limiter will fail-open until DB is reachable');
+ensureTable().catch((err) => {
+  rlLogger.warn(
+    { err, component: "rateLimiter" },
+    "rate_limit_buckets table setup failed at startup — rate limiter will fail-open until DB is reachable",
+  );
 });
 
 function getCategory(path?: string): string {
   if (path) {
-    if (AUTH_PATHS.some(p => path.startsWith(p) || path.includes(p))) return 'auth';
-    if (EXPORT_PATHS.some(p => path.includes(p))) return 'export';
+    if (AUTH_PATHS.some((p) => path.startsWith(p) || path.includes(p)))
+      return "auth";
+    if (EXPORT_PATHS.some((p) => path.includes(p))) return "export";
   }
-  return 'general';
+  return "general";
 }
 
 const TRUST_PROXY_HOPS = (() => {
   const raw = process.env.TRUST_PROXY_HOPS;
-  const parsed = parseInt(raw ?? '0', 10);
+  const parsed = parseInt(raw ?? "0", 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 })();
 
@@ -80,12 +90,14 @@ function sanitizeIp(raw: string): string {
   const t = raw.trim();
   // IPv4-mapped IPv6 (e.g. ::ffff:1.2.3.4) — normalize to IPv4 tail
   const v4mapped = t.match(/^[a-fA-F0-9:]+:((?:\d{1,3}\.){3}\d{1,3})$/);
-  if (v4mapped && v4mapped[1].split('.').every(isValidOctet)) return v4mapped[1];
+  if (v4mapped && v4mapped[1].split(".").every(isValidOctet))
+    return v4mapped[1];
   // Pure IPv4 — validate all four octets
-  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(t) && t.split('.').every(isValidOctet)) return t;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(t) && t.split(".").every(isValidOctet))
+    return t;
   // IPv6 — must contain ≥ 2 colons (rules out plain hex strings like "deadbeef")
   if (/^[a-fA-F0-9:]+$/.test(t) && (t.match(/:/g) ?? []).length >= 2) return t;
-  return 'invalid';
+  return "invalid";
 }
 
 /**
@@ -110,17 +122,20 @@ export function parseClientIp(
 ): string {
   if (TRUST_PROXY_HOPS > 0 && xRealIp) {
     const s = sanitizeIp(xRealIp);
-    if (s !== 'invalid') return s;
+    if (s !== "invalid") return s;
   }
   if (xForwardedFor) {
-    const ips = xForwardedFor.split(',').map(s => s.trim()).filter(Boolean);
+    const ips = xForwardedFor
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (ips.length > 0) {
       const idx = Math.max(0, ips.length - TRUST_PROXY_HOPS - 1);
       const s = sanitizeIp(ips[idx]);
-      if (s !== 'invalid') return s;
+      if (s !== "invalid") return s;
     }
   }
-  return 'unknown';
+  return "unknown";
 }
 
 export async function checkRateLimit(
@@ -130,22 +145,22 @@ export async function checkRateLimit(
   isAuthenticated: boolean = true,
   userId?: string,
 ): Promise<{ allowed: boolean; retryAfter?: number }> {
-  if (process.env.RATE_LIMIT_DISABLED === 'true') {
+  if (process.env.RATE_LIMIT_DISABLED === "true") {
     return { allowed: true };
   }
   const category = getCategory(path);
 
   const identifier = userId && isAuthenticated ? `user:${userId}` : `ip:${ip}`;
-  const authPrefix = isAuthenticated ? 'auth' : 'unauth';
+  const authPrefix = isAuthenticated ? "auth" : "unauth";
   const key =
-    category === 'auth'
+    category === "auth"
       ? `${identifier}:authflow`
-      : `${identifier}:${authPrefix}:${category}:${isWrite ? 'w' : 'r'}`;
+      : `${identifier}:${authPrefix}:${category}:${isWrite ? "w" : "r"}`;
 
   let limit: number;
-  if (category === 'auth') {
+  if (category === "auth") {
     limit = AUTH_LIMIT;
-  } else if (category === 'export') {
+  } else if (category === "export") {
     limit = EXPORT_LIMIT;
   } else if (!isAuthenticated) {
     limit = isWrite ? UNAUTH_WRITE_LIMIT : UNAUTH_READ_LIMIT;
@@ -191,7 +206,9 @@ export async function checkRateLimit(
     const total = parseInt(row.total, 10);
     if (total > limit) {
       const nowMs = parseFloat(row.now_epoch) * 1000;
-      const oldestMs = row.oldest_epoch ? parseFloat(row.oldest_epoch) * 1000 : nowMs;
+      const oldestMs = row.oldest_epoch
+        ? parseFloat(row.oldest_epoch) * 1000
+        : nowMs;
       // The oldest sub-bucket [T, T+1s) ages fully out of the rolling
       // window once NOW() ≥ T + 1s + 60s. Wait at least that long.
       const retryAfter = Math.max(
@@ -204,8 +221,13 @@ export async function checkRateLimit(
   } catch (err) {
     failOpenCount++;
     rlLogger.warn(
-      { err: (err as Error).message, key, failOpenCount, component: 'rateLimiter' },
-      'Rate limiter DB unreachable — failing open (counter incremented)',
+      {
+        err: (err as Error).message,
+        key,
+        failOpenCount,
+        component: "rateLimiter",
+      },
+      "Rate limiter DB unreachable — failing open (counter incremented)",
     );
     return { allowed: true };
   }
@@ -267,7 +289,7 @@ export interface RateLimitStats {
 
 const RATE_LIMIT_429_RETENTION_HOURS = (() => {
   const raw = process.env.RATE_LIMIT_429_RETENTION_HOURS;
-  const parsed = parseInt(raw ?? '24', 10);
+  const parsed = parseInt(raw ?? "24", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
 })();
 
@@ -295,14 +317,14 @@ export async function pruneRateLimit429Events(): Promise<{
       [retentionHours],
     );
     const deleted = result.rowCount ?? 0;
-    console.log(
+    logger.info(
       `[RateLimit429Pruner] Pruned ${deleted} rate_limit_429 system_events rows older than ${retentionHours}h`,
     );
     return { deleted, retentionHours, dbReachable: true };
   } catch (err) {
     rlLogger.warn(
-      { err: (err as Error).message, component: 'rateLimiter' },
-      'pruneRateLimit429Events failed — will retry on next cron tick',
+      { err: (err as Error).message, component: "rateLimiter" },
+      "pruneRateLimit429Events failed — will retry on next cron tick",
     );
     return { deleted: 0, retentionHours, dbReachable: false };
   }
@@ -336,11 +358,11 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           WHERE event_type = 'rate_limit_429'
             AND created_at > NOW() - INTERVAL '5 minutes'`,
       )
-      .then(r => parseInt(r.rows[0]?.count ?? '0', 10))
+      .then((r) => parseInt(r.rows[0]?.count ?? "0", 10))
       .catch((err: Error) => {
         rlLogger.warn(
-          { err: err.message, component: 'rateLimiter' },
-          'system_events query failed in getRateLimitStats — defaulting recent429Count to 0',
+          { err: err.message, component: "rateLimiter" },
+          "system_events query failed in getRateLimitStats — defaulting recent429Count to 0",
         );
         return 0;
       });
@@ -386,24 +408,25 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
       ),
     ])
       .then(async ([totRes, ipRes, pathRes]) => {
-        const topIps: RateLimitSpike24hIp[] = ipRes.rows.map(row => ({
+        const topIps: RateLimitSpike24hIp[] = ipRes.rows.map((row) => ({
           ip: row.ip,
           events: parseInt(row.events, 10),
           suppressed: parseInt(row.suppressed, 10),
         }));
-        const topPaths: RateLimitSpike24hPath[] = pathRes.rows.map(row => ({
+        const topPaths: RateLimitSpike24hPath[] = pathRes.rows.map((row) => ({
           path: row.path,
           events: parseInt(row.events, 10),
           suppressed: parseInt(row.suppressed, 10),
         }));
-        const total429 = parseInt(totRes.rows[0]?.total ?? '0', 10);
+        const total429 = parseInt(totRes.rows[0]?.total ?? "0", 10);
         // Annotate with the alert evaluation so the dashboard banner and
         // the cron's system_event alert use the same source of truth.
-        const { evaluateRateLimit24hSpikeAlert } = await import('./rateLimit429SpikeAlert');
+        const { evaluateRateLimit24hSpikeAlert } =
+          await import("./rateLimit429SpikeAlert");
         const evalResult = evaluateRateLimit24hSpikeAlert(total429);
         return {
           total429,
-          totalSuppressed: parseInt(totRes.rows[0]?.suppressed ?? '0', 10),
+          totalSuppressed: parseInt(totRes.rows[0]?.suppressed ?? "0", 10),
           topIps,
           topPaths,
           alertThreshold: evalResult.threshold,
@@ -412,8 +435,8 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
       })
       .catch((err: Error) => {
         rlLogger.warn(
-          { err: err.message, component: 'rateLimiter' },
-          '24h spike query failed in getRateLimitStats — skipping spike24h',
+          { err: err.message, component: "rateLimiter" },
+          "24h spike query failed in getRateLimitStats — skipping spike24h",
         );
         return {
           total429: 0,
@@ -449,7 +472,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
       spike24hPromise,
     ]);
 
-    baseStats.topKeys = topRes.rows.map(r => ({
+    baseStats.topKeys = topRes.rows.map((r) => ({
       key: r.key,
       count: parseInt(r.total, 10),
       window_start:
@@ -457,7 +480,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           ? r.latest_window_start.toISOString()
           : String(r.latest_window_start),
     }));
-    baseStats.totalRows = parseInt(totalRes.rows[0]?.count ?? '0', 10);
+    baseStats.totalRows = parseInt(totalRes.rows[0]?.count ?? "0", 10);
     baseStats.recent429Count = recent429Count;
     baseStats.spike24h = spike24h;
     return baseStats;

@@ -1,10 +1,23 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export type UserRole = 'admin' | 'head_of_operations_quality' | 'quality_manager' | 'quality_specialist' | 'grc_manager' | 'team_lead' | 'department_viewer' | 'auditor' | 'ai_specialist' | 'bu_owner' | 'executive' | 'custom';
+export type UserRole =
+  | "admin"
+  | "head_of_operations_quality"
+  | "quality_manager"
+  | "quality_specialist"
+  | "grc_manager"
+  | "team_lead"
+  | "department_viewer"
+  | "auditor"
+  | "ai_specialist"
+  | "bu_owner"
+  | "executive"
+  | "custom";
 
 export interface SystemUser {
   id?: number;
@@ -48,17 +61,87 @@ const ROLE_PERMISSIONS: RolePermission[] = [
   // Head of Operations & Quality — signs off annual audit programme (ISO 19011 §5.2).
   // Full audit-side powers (close findings, edit controls, create CAPA) and
   // executive visibility, but not general user admin.
-  { role: 'head_of_operations_quality', can_accept_risk: true,  can_approve_policy: true,  can_close_finding: true, can_manage_users: false, can_view_executive: true,  can_edit_controls: true,  can_create_capa: true, can_submit_evidence: true },
-  { role: 'quality_manager', can_accept_risk: false, can_approve_policy: false, can_close_finding: true, can_manage_users: false, can_view_executive: false, can_edit_controls: true, can_create_capa: true, can_submit_evidence: true },
-  { role: 'grc_manager', can_accept_risk: true, can_approve_policy: true, can_close_finding: true, can_manage_users: false, can_view_executive: true, can_edit_controls: true, can_create_capa: true, can_submit_evidence: true },
-  { role: 'ai_specialist', can_accept_risk: false, can_approve_policy: false, can_close_finding: false, can_manage_users: false, can_view_executive: true, can_edit_controls: false, can_create_capa: false, can_submit_evidence: false },
-  { role: 'bu_owner', can_accept_risk: false, can_approve_policy: false, can_close_finding: false, can_manage_users: false, can_view_executive: false, can_edit_controls: false, can_create_capa: false, can_submit_evidence: true },
-  { role: 'executive', can_accept_risk: false, can_approve_policy: false, can_close_finding: false, can_manage_users: false, can_view_executive: true, can_edit_controls: false, can_create_capa: false, can_submit_evidence: false },
-  { role: 'admin', can_accept_risk: true, can_approve_policy: true, can_close_finding: true, can_manage_users: true, can_view_executive: true, can_edit_controls: true, can_create_capa: true, can_submit_evidence: true },
+  {
+    role: "head_of_operations_quality",
+    can_accept_risk: true,
+    can_approve_policy: true,
+    can_close_finding: true,
+    can_manage_users: false,
+    can_view_executive: true,
+    can_edit_controls: true,
+    can_create_capa: true,
+    can_submit_evidence: true,
+  },
+  {
+    role: "quality_manager",
+    can_accept_risk: false,
+    can_approve_policy: false,
+    can_close_finding: true,
+    can_manage_users: false,
+    can_view_executive: false,
+    can_edit_controls: true,
+    can_create_capa: true,
+    can_submit_evidence: true,
+  },
+  {
+    role: "grc_manager",
+    can_accept_risk: true,
+    can_approve_policy: true,
+    can_close_finding: true,
+    can_manage_users: false,
+    can_view_executive: true,
+    can_edit_controls: true,
+    can_create_capa: true,
+    can_submit_evidence: true,
+  },
+  {
+    role: "ai_specialist",
+    can_accept_risk: false,
+    can_approve_policy: false,
+    can_close_finding: false,
+    can_manage_users: false,
+    can_view_executive: true,
+    can_edit_controls: false,
+    can_create_capa: false,
+    can_submit_evidence: false,
+  },
+  {
+    role: "bu_owner",
+    can_accept_risk: false,
+    can_approve_policy: false,
+    can_close_finding: false,
+    can_manage_users: false,
+    can_view_executive: false,
+    can_edit_controls: false,
+    can_create_capa: false,
+    can_submit_evidence: true,
+  },
+  {
+    role: "executive",
+    can_accept_risk: false,
+    can_approve_policy: false,
+    can_close_finding: false,
+    can_manage_users: false,
+    can_view_executive: true,
+    can_edit_controls: false,
+    can_create_capa: false,
+    can_submit_evidence: false,
+  },
+  {
+    role: "admin",
+    can_accept_risk: true,
+    can_approve_policy: true,
+    can_close_finding: true,
+    can_manage_users: true,
+    can_view_executive: true,
+    can_edit_controls: true,
+    can_create_capa: true,
+    can_submit_evidence: true,
+  },
 ];
 
 export async function initRbacTables(): Promise<void> {
-  console.log('🔐 [RBAC] Initializing RBAC tables...');
+  logger.info("🔐 [RBAC] Initializing RBAC tables...");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS system_users (
@@ -128,133 +211,243 @@ export async function initRbacTables(): Promise<void> {
   await seedDefaultProcesses();
   await seedRolePermissions();
 
-  console.log('✅ [RBAC] RBAC tables initialized');
+  logger.info("✅ [RBAC] RBAC tables initialized");
 }
 
 async function addPolicyDualOwnership(): Promise<void> {
-  console.log('📋 [RBAC] Adding dual ownership fields to policies...');
-  
+  logger.info("📋 [RBAC] Adding dual ownership fields to policies...");
+
   const columns = [
-    { name: 'operational_owner', type: 'VARCHAR(255)' },
-    { name: 'operational_owner_email', type: 'VARCHAR(255)' },
-    { name: 'compliance_owner', type: 'VARCHAR(255)' },
-    { name: 'compliance_owner_email', type: 'VARCHAR(255)' },
-    { name: 'compliance_approved', type: 'BOOLEAN DEFAULT FALSE' },
-    { name: 'compliance_approved_by', type: 'VARCHAR(255)' },
-    { name: 'compliance_approved_at', type: 'TIMESTAMP' },
-    { name: 'approval_blocked_reason', type: 'TEXT' },
+    { name: "operational_owner", type: "VARCHAR(255)" },
+    { name: "operational_owner_email", type: "VARCHAR(255)" },
+    { name: "compliance_owner", type: "VARCHAR(255)" },
+    { name: "compliance_owner_email", type: "VARCHAR(255)" },
+    { name: "compliance_approved", type: "BOOLEAN DEFAULT FALSE" },
+    { name: "compliance_approved_by", type: "VARCHAR(255)" },
+    { name: "compliance_approved_at", type: "TIMESTAMP" },
+    { name: "approval_blocked_reason", type: "TEXT" },
   ];
 
   for (const col of columns) {
     try {
-      await pool.query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`);
+      await pool.query(
+        `ALTER TABLE policies ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`,
+      );
     } catch (e: any) {
-      if (!e.message?.includes('already exists')) console.error(`Error adding ${col.name}:`, e.message);
+      if (!e.message?.includes("already exists"))
+        logger.error(`Error adding ${col.name}:`, e.message);
     }
   }
 }
 
 async function addControlReadinessFields(): Promise<void> {
-  console.log('📋 [RBAC] Adding control readiness fields...');
-  
+  logger.info("📋 [RBAC] Adding control readiness fields...");
+
   const columns = [
-    { name: 'linked_bu_process_ids', type: 'INTEGER[]' },
-    { name: 'evidence_status', type: "VARCHAR(20) DEFAULT 'none'" },
-    { name: 'readiness_status', type: "VARCHAR(20) DEFAULT 'not_ready'" },
-    { name: 'last_evidence_date', type: 'TIMESTAMP' },
-    { name: 'testing_method', type: 'VARCHAR(100)' },
+    { name: "linked_bu_process_ids", type: "INTEGER[]" },
+    { name: "evidence_status", type: "VARCHAR(20) DEFAULT 'none'" },
+    { name: "readiness_status", type: "VARCHAR(20) DEFAULT 'not_ready'" },
+    { name: "last_evidence_date", type: "TIMESTAMP" },
+    { name: "testing_method", type: "VARCHAR(100)" },
   ];
 
   for (const col of columns) {
     try {
-      await pool.query(`ALTER TABLE control_mappings ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`);
+      await pool.query(
+        `ALTER TABLE control_mappings ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`,
+      );
     } catch (e: any) {
-      if (!e.message?.includes('already exists')) console.error(`Error adding ${col.name}:`, e.message);
+      if (!e.message?.includes("already exists"))
+        logger.error(`Error adding ${col.name}:`, e.message);
     }
   }
 }
 
 async function addRiskRbacFields(): Promise<void> {
-  console.log('📋 [RBAC] Adding RBAC fields to enterprise_risks...');
-  
+  logger.info("📋 [RBAC] Adding RBAC fields to enterprise_risks...");
+
   const columns = [
-    { name: 'accepted_by', type: 'VARCHAR(255)' },
-    { name: 'accepted_by_role', type: 'VARCHAR(50)' },
-    { name: 'accepted_at', type: 'TIMESTAMP' },
-    { name: 'acceptance_justification', type: 'TEXT' },
-    { name: 'grc_approval_required', type: 'BOOLEAN DEFAULT TRUE' },
+    { name: "accepted_by", type: "VARCHAR(255)" },
+    { name: "accepted_by_role", type: "VARCHAR(50)" },
+    { name: "accepted_at", type: "TIMESTAMP" },
+    { name: "acceptance_justification", type: "TEXT" },
+    { name: "grc_approval_required", type: "BOOLEAN DEFAULT TRUE" },
   ];
 
   for (const col of columns) {
     try {
-      await pool.query(`ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`);
+      await pool.query(
+        `ALTER TABLE enterprise_risks ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`,
+      );
     } catch (e: any) {
-      if (!e.message?.includes('already exists')) console.error(`Error adding ${col.name}:`, e.message);
+      if (!e.message?.includes("already exists"))
+        logger.error(`Error adding ${col.name}:`, e.message);
     }
   }
 }
 
 async function seedDefaultUsers(): Promise<void> {
-  const existing = await pool.query('SELECT COUNT(*) FROM system_users');
+  const existing = await pool.query("SELECT COUNT(*) FROM system_users");
   if (parseInt(existing.rows[0].count) > 0) return;
 
-  console.log('👤 [RBAC] Seeding default system users...');
-  
+  logger.info("👤 [RBAC] Seeding default system users...");
+
   const users: SystemUser[] = [
-    { email: 'head.ops.quality@walaplus.com', name: 'Head of Operations & Quality', role: 'head_of_operations_quality', department: 'Operations & Quality', is_active: true },
-    { email: 'sara@walaplus.com', name: 'Sara Al-Qahtani', role: 'quality_manager', department: 'Quality', is_active: true },
-    { email: 'maram@walaplus.com', name: 'Maram Al-Rashid', role: 'grc_manager', department: 'GRC', is_active: true },
-    { email: 'admin@walaplus.com', name: 'System Admin', role: 'admin', department: 'IT', is_active: true },
-    { email: 'ceo@walaplus.com', name: 'CEO Executive', role: 'executive', department: 'Executive', is_active: true },
-    { email: 'ai.specialist@walaplus.com', name: 'AI Specialist', role: 'ai_specialist', department: 'Technology', is_active: true },
-    { email: 'operations@walaplus.com', name: 'Operations Lead', role: 'bu_owner', department: 'Operations', is_active: true },
+    {
+      email: "head.ops.quality@walaplus.com",
+      name: "Head of Operations & Quality",
+      role: "head_of_operations_quality",
+      department: "Operations & Quality",
+      is_active: true,
+    },
+    {
+      email: "sara@walaplus.com",
+      name: "Sara Al-Qahtani",
+      role: "quality_manager",
+      department: "Quality",
+      is_active: true,
+    },
+    {
+      email: "maram@walaplus.com",
+      name: "Maram Al-Rashid",
+      role: "grc_manager",
+      department: "GRC",
+      is_active: true,
+    },
+    {
+      email: "admin@walaplus.com",
+      name: "System Admin",
+      role: "admin",
+      department: "IT",
+      is_active: true,
+    },
+    {
+      email: "ceo@walaplus.com",
+      name: "CEO Executive",
+      role: "executive",
+      department: "Executive",
+      is_active: true,
+    },
+    {
+      email: "ai.specialist@walaplus.com",
+      name: "AI Specialist",
+      role: "ai_specialist",
+      department: "Technology",
+      is_active: true,
+    },
+    {
+      email: "operations@walaplus.com",
+      name: "Operations Lead",
+      role: "bu_owner",
+      department: "Operations",
+      is_active: true,
+    },
   ];
 
   for (const user of users) {
     await pool.query(
       `INSERT INTO system_users (email, name, role, department, is_active) VALUES ($1, $2, $3, $4, $5)`,
-      [user.email, user.name, user.role, user.department, user.is_active]
+      [user.email, user.name, user.role, user.department, user.is_active],
     );
   }
 }
 
 async function seedDefaultProcesses(): Promise<void> {
-  const existing = await pool.query('SELECT COUNT(*) FROM bu_processes');
+  const existing = await pool.query("SELECT COUNT(*) FROM bu_processes");
   if (parseInt(existing.rows[0].count) > 0) return;
 
-  console.log('📋 [RBAC] Seeding default BU processes...');
-  
+  logger.info("📋 [RBAC] Seeding default BU processes...");
+
   const processes: BuProcess[] = [
-    { process_code: 'BU-OPS-001', process_name: 'Customer Service Operations', department: 'Operations', owner_name: 'Sara', is_active: true },
-    { process_code: 'BU-SAL-001', process_name: 'Sales Pipeline Management', department: 'Sales', owner_name: 'Ahmed', is_active: true },
-    { process_code: 'BU-FIN-001', process_name: 'Financial Reporting', department: 'Finance', owner_name: 'Fatima', is_active: true },
-    { process_code: 'BU-HR-001', process_name: 'Employee Onboarding', department: 'HR', owner_name: 'Maram', is_active: true },
-    { process_code: 'BU-IT-001', process_name: 'IT Change Management', department: 'IT', owner_name: 'Khalid', is_active: true },
-    { process_code: 'BU-QA-001', process_name: 'Quality Assurance Review', department: 'Quality', owner_name: 'Sara', is_active: true },
+    {
+      process_code: "BU-OPS-001",
+      process_name: "Customer Service Operations",
+      department: "Operations",
+      owner_name: "Sara",
+      is_active: true,
+    },
+    {
+      process_code: "BU-SAL-001",
+      process_name: "Sales Pipeline Management",
+      department: "Sales",
+      owner_name: "Ahmed",
+      is_active: true,
+    },
+    {
+      process_code: "BU-FIN-001",
+      process_name: "Financial Reporting",
+      department: "Finance",
+      owner_name: "Fatima",
+      is_active: true,
+    },
+    {
+      process_code: "BU-HR-001",
+      process_name: "Employee Onboarding",
+      department: "HR",
+      owner_name: "Maram",
+      is_active: true,
+    },
+    {
+      process_code: "BU-IT-001",
+      process_name: "IT Change Management",
+      department: "IT",
+      owner_name: "Khalid",
+      is_active: true,
+    },
+    {
+      process_code: "BU-QA-001",
+      process_name: "Quality Assurance Review",
+      department: "Quality",
+      owner_name: "Sara",
+      is_active: true,
+    },
   ];
 
   for (const proc of processes) {
     await pool.query(
       `INSERT INTO bu_processes (process_code, process_name, department, owner_name, is_active) VALUES ($1, $2, $3, $4, $5)`,
-      [proc.process_code, proc.process_name, proc.department, proc.owner_name, proc.is_active]
+      [
+        proc.process_code,
+        proc.process_name,
+        proc.department,
+        proc.owner_name,
+        proc.is_active,
+      ],
     );
   }
 }
 
 async function seedRolePermissions(): Promise<void> {
   for (const perm of ROLE_PERMISSIONS) {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO role_permissions (role, can_accept_risk, can_approve_policy, can_close_finding, can_manage_users, can_view_executive, can_edit_controls, can_create_capa, can_submit_evidence)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (role) DO UPDATE SET
         can_accept_risk = $2, can_approve_policy = $3, can_close_finding = $4, can_manage_users = $5,
         can_view_executive = $6, can_edit_controls = $7, can_create_capa = $8, can_submit_evidence = $9
-    `, [perm.role, perm.can_accept_risk, perm.can_approve_policy, perm.can_close_finding, perm.can_manage_users, perm.can_view_executive, perm.can_edit_controls, perm.can_create_capa, perm.can_submit_evidence]);
+    `,
+      [
+        perm.role,
+        perm.can_accept_risk,
+        perm.can_approve_policy,
+        perm.can_close_finding,
+        perm.can_manage_users,
+        perm.can_view_executive,
+        perm.can_edit_controls,
+        perm.can_create_capa,
+        perm.can_submit_evidence,
+      ],
+    );
   }
 }
 
-export async function getSystemUsers(filters?: { role?: UserRole; department?: string; active_only?: boolean }): Promise<SystemUser[]> {
-  let query = 'SELECT * FROM system_users WHERE 1=1';
+export async function getSystemUsers(filters?: {
+  role?: UserRole;
+  department?: string;
+  active_only?: boolean;
+}): Promise<SystemUser[]> {
+  let query = "SELECT * FROM system_users WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
 
@@ -267,79 +460,113 @@ export async function getSystemUsers(filters?: { role?: UserRole; department?: s
     params.push(filters.department);
   }
   if (filters?.active_only) {
-    query += ' AND is_active = TRUE';
+    query += " AND is_active = TRUE";
   }
 
-  query += ' ORDER BY name';
+  query += " ORDER BY name";
   const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function getUserByEmail(email: string): Promise<SystemUser | null> {
-  const result = await pool.query('SELECT * FROM system_users WHERE email = $1', [email]);
+export async function getUserByEmail(
+  email: string,
+): Promise<SystemUser | null> {
+  const result = await pool.query(
+    "SELECT * FROM system_users WHERE email = $1",
+    [email],
+  );
   return result.rows[0] || null;
 }
 
 export async function createSystemUser(user: SystemUser): Promise<SystemUser> {
-  console.log('👤 [RBAC] Creating system user:', user.email);
+  logger.info("👤 [RBAC] Creating system user:", user.email);
   const result = await pool.query(
     `INSERT INTO system_users (email, name, role, department, is_active, permissions)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [user.email, user.name, user.role, user.department || null, user.is_active, JSON.stringify(user.permissions || [])]
+    [
+      user.email,
+      user.name,
+      user.role,
+      user.department || null,
+      user.is_active,
+      JSON.stringify(user.permissions || []),
+    ],
   );
   return result.rows[0];
 }
 
-export async function updateSystemUser(id: number, updates: Partial<SystemUser>): Promise<SystemUser> {
-  console.log('👤 [RBAC] Updating system user ID:', id);
+export async function updateSystemUser(
+  id: number,
+  updates: Partial<SystemUser>,
+): Promise<SystemUser> {
+  logger.info("👤 [RBAC] Updating system user ID:", id);
   const fields: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
 
-  const allowedFields = ['name', 'role', 'department', 'is_active', 'permissions'];
+  const allowedFields = [
+    "name",
+    "role",
+    "department",
+    "is_active",
+    "permissions",
+  ];
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = $${paramIndex++}`);
-      values.push(key === 'permissions' ? JSON.stringify(value) : value);
+      values.push(key === "permissions" ? JSON.stringify(value) : value);
     }
   }
 
-  fields.push('updated_at = NOW()');
+  fields.push("updated_at = NOW()");
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE system_users SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE system_users SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
   );
   return result.rows[0];
 }
 
-export async function getRolePermissions(role: UserRole): Promise<RolePermission | null> {
-  const result = await pool.query('SELECT * FROM role_permissions WHERE role = $1', [role]);
+export async function getRolePermissions(
+  role: UserRole,
+): Promise<RolePermission | null> {
+  const result = await pool.query(
+    "SELECT * FROM role_permissions WHERE role = $1",
+    [role],
+  );
   return result.rows[0] || null;
 }
 
-export async function checkPermission(userEmail: string, permission: keyof RolePermission): Promise<boolean> {
-  console.log(`🔐 [RBAC] Checking permission ${permission} for ${userEmail}`);
+export async function checkPermission(
+  userEmail: string,
+  permission: keyof RolePermission,
+): Promise<boolean> {
+  logger.info(`🔐 [RBAC] Checking permission ${permission} for ${userEmail}`);
   const user = await getUserByEmail(userEmail);
   if (!user) {
-    console.log(`🔐 [RBAC] User not found: ${userEmail}`);
+    logger.info(`🔐 [RBAC] User not found: ${userEmail}`);
     return false;
   }
 
   const rolePerms = await getRolePermissions(user.role);
   if (!rolePerms) {
-    console.log(`🔐 [RBAC] Role permissions not found for: ${user.role}`);
+    logger.info(`🔐 [RBAC] Role permissions not found for: ${user.role}`);
     return false;
   }
 
   const hasPermission = rolePerms[permission] === true;
-  console.log(`🔐 [RBAC] Permission ${permission} for ${userEmail}: ${hasPermission}`);
+  logger.info(
+    `🔐 [RBAC] Permission ${permission} for ${userEmail}: ${hasPermission}`,
+  );
   return hasPermission;
 }
 
-export async function getBuProcesses(filters?: { department?: string; active_only?: boolean }): Promise<BuProcess[]> {
-  let query = 'SELECT * FROM bu_processes WHERE 1=1';
+export async function getBuProcesses(filters?: {
+  department?: string;
+  active_only?: boolean;
+}): Promise<BuProcess[]> {
+  let query = "SELECT * FROM bu_processes WHERE 1=1";
   const params: any[] = [];
   let paramIndex = 1;
 
@@ -348,31 +575,51 @@ export async function getBuProcesses(filters?: { department?: string; active_onl
     params.push(filters.department);
   }
   if (filters?.active_only) {
-    query += ' AND is_active = TRUE';
+    query += " AND is_active = TRUE";
   }
 
-  query += ' ORDER BY process_code';
+  query += " ORDER BY process_code";
   const result = await pool.query(query, params);
   return result.rows;
 }
 
 export async function createBuProcess(process: BuProcess): Promise<BuProcess> {
-  console.log('📋 [RBAC] Creating BU process:', process.process_code);
+  logger.info("📋 [RBAC] Creating BU process:", process.process_code);
   const result = await pool.query(
     `INSERT INTO bu_processes (process_code, process_name, department, owner_name, owner_email, description, is_active, linked_control_ids)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [process.process_code, process.process_name, process.department, process.owner_name, process.owner_email, process.description, process.is_active, process.linked_control_ids || []]
+    [
+      process.process_code,
+      process.process_name,
+      process.department,
+      process.owner_name,
+      process.owner_email,
+      process.description,
+      process.is_active,
+      process.linked_control_ids || [],
+    ],
   );
   return result.rows[0];
 }
 
-export async function updateBuProcess(id: number, updates: Partial<BuProcess>): Promise<BuProcess> {
-  console.log('📋 [RBAC] Updating BU process ID:', id);
+export async function updateBuProcess(
+  id: number,
+  updates: Partial<BuProcess>,
+): Promise<BuProcess> {
+  logger.info("📋 [RBAC] Updating BU process ID:", id);
   const fields: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
 
-  const allowedFields = ['process_name', 'department', 'owner_name', 'owner_email', 'description', 'is_active', 'linked_control_ids'];
+  const allowedFields = [
+    "process_name",
+    "department",
+    "owner_name",
+    "owner_email",
+    "description",
+    "is_active",
+    "linked_control_ids",
+  ];
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = $${paramIndex++}`);
@@ -380,18 +627,22 @@ export async function updateBuProcess(id: number, updates: Partial<BuProcess>): 
     }
   }
 
-  fields.push('updated_at = NOW()');
+  fields.push("updated_at = NOW()");
   values.push(id);
 
   const result = await pool.query(
-    `UPDATE bu_processes SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
+    `UPDATE bu_processes SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
   );
   return result.rows[0];
 }
 
-export async function calculateControlReadiness(): Promise<{ updated: number; not_ready: number; ready: number }> {
-  console.log('📊 [RBAC] Calculating control readiness...');
+export async function calculateControlReadiness(): Promise<{
+  updated: number;
+  not_ready: number;
+  ready: number;
+}> {
+  logger.info("📊 [RBAC] Calculating control readiness...");
 
   const result = await pool.query(`
     UPDATE control_mappings 
@@ -412,19 +663,24 @@ export async function calculateControlReadiness(): Promise<{ updated: number; no
 
   const stats = { updated: result.rowCount || 0, not_ready: 0, ready: 0 };
   for (const row of result.rows) {
-    if (row.readiness_status === 'not_ready' || row.readiness_status === 'needs_review') {
+    if (
+      row.readiness_status === "not_ready" ||
+      row.readiness_status === "needs_review"
+    ) {
       stats.not_ready++;
     } else {
       stats.ready++;
     }
   }
 
-  console.log(`📊 [RBAC] Control readiness: ${stats.ready} ready, ${stats.not_ready} not ready`);
+  logger.info(
+    `📊 [RBAC] Control readiness: ${stats.ready} ready, ${stats.not_ready} not ready`,
+  );
   return stats;
 }
 
 export async function escalateOverdueActions(): Promise<{ escalated: number }> {
-  console.log('⚠️ [RBAC] Checking for overdue actions to escalate...');
+  logger.info("⚠️ [RBAC] Checking for overdue actions to escalate...");
 
   const overdueCapas = await pool.query(`
     SELECT id, capa_number, title, assigned_to, target_date 
@@ -436,10 +692,16 @@ export async function escalateOverdueActions(): Promise<{ escalated: number }> {
 
   let escalated = 0;
   for (const capa of overdueCapas.rows) {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO escalation_log (source_type, source_id, escalation_reason, escalated_to, status)
       VALUES ('capa', $1, $2, 'executive_dashboard', 'pending')
-    `, [capa.id, `CAPA ${capa.capa_number} is overdue (due: ${capa.target_date})`]);
+    `,
+      [
+        capa.id,
+        `CAPA ${capa.capa_number} is overdue (due: ${capa.target_date})`,
+      ],
+    );
     escalated++;
   }
 
@@ -452,18 +714,27 @@ export async function escalateOverdueActions(): Promise<{ escalated: number }> {
   `);
 
   for (const action of overdueActions.rows) {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO escalation_log (source_type, source_id, escalation_reason, escalated_to, status)
       VALUES ('risk_action', $1, $2, 'executive_dashboard', 'pending')
-    `, [action.id, `Risk treatment action "${action.action_title}" is overdue (due: ${action.due_date})`]);
+    `,
+      [
+        action.id,
+        `Risk treatment action "${action.action_title}" is overdue (due: ${action.due_date})`,
+      ],
+    );
     escalated++;
   }
 
-  console.log(`⚠️ [RBAC] Escalated ${escalated} overdue actions`);
+  logger.info(`⚠️ [RBAC] Escalated ${escalated} overdue actions`);
   return { escalated };
 }
 
-export async function getEscalationLog(filters?: { status?: string; source_type?: string }): Promise<any[]> {
+export async function getEscalationLog(filters?: {
+  status?: string;
+  source_type?: string;
+}): Promise<any[]> {
   let query = `
     SELECT el.*, 
       CASE 
@@ -485,15 +756,22 @@ export async function getEscalationLog(filters?: { status?: string; source_type?
     params.push(filters.source_type);
   }
 
-  query += ' ORDER BY el.created_at DESC';
+  query += " ORDER BY el.created_at DESC";
   const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function resolveEscalation(id: number, resolvedBy: string, notes?: string): Promise<void> {
-  await pool.query(`
+export async function resolveEscalation(
+  id: number,
+  resolvedBy: string,
+  notes?: string,
+): Promise<void> {
+  await pool.query(
+    `
     UPDATE escalation_log 
     SET status = 'resolved', resolved_at = NOW(), resolved_by = $2, notes = $3
     WHERE id = $1
-  `, [id, resolvedBy, notes || null]);
+  `,
+    [id, resolvedBy, notes || null],
+  );
 }

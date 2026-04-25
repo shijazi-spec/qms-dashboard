@@ -34,30 +34,64 @@ import {
   countByStatus,
   type ApprovalStatus,
   type RiskLevel,
-} from '../../utils/aiApprovalDatabase';
+} from "../../utils/aiApprovalDatabase";
 import {
   executeApprovedAction,
   isToolGated,
-} from '../../utils/withApprovalGate';
+} from "../../utils/withApprovalGate";
 import {
   isAllowedApprover,
   getApproverRolesFor,
   getPolicy,
-} from '../../utils/aiToolGovernance';
-import { resolveControlledDocuments } from '../../utils/controlledDocumentRegistry';
-import { getSessionUser, requireRole, unauthorizedResponse, forbiddenResponse, gateApiRoute } from '../../utils/rbacMiddleware';
-import type { UserRole } from '../../utils/rbacDatabase';
+} from "../../utils/aiToolGovernance";
+import { resolveControlledDocuments } from "../../utils/controlledDocumentRegistry";
+import {
+  getSessionUser,
+  requireRole,
+  unauthorizedResponse,
+  forbiddenResponse,
+  gateApiRoute,
+} from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacDatabase";
 
-const AI_APPROVAL_READ_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead'];
-const AI_APPROVAL_APPROVE_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'];
-const AI_APPROVAL_REJECT_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead'];
+import { logger } from "../../utils/logger";
+const AI_APPROVAL_READ_ROLES: UserRole[] = [
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+  "ai_specialist",
+  "bu_owner",
+  "executive",
+  "quality_specialist",
+  "auditor",
+  "team_lead",
+];
+const AI_APPROVAL_APPROVE_ROLES: UserRole[] = [
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+];
+const AI_APPROVAL_REJECT_ROLES: UserRole[] = [
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+  "ai_specialist",
+  "bu_owner",
+  "executive",
+  "quality_specialist",
+  "auditor",
+  "team_lead",
+];
 import {
   logEvent,
   redactSensitiveDeep,
   redactSecretLikeStrings,
   getActionViewers,
   getActionViewersBatch,
-} from '../../utils/eventLogsDatabase';
+} from "../../utils/eventLogsDatabase";
 
 // Lazily initialize the table on first request to this route set.
 let tableReady = false;
@@ -73,15 +107,18 @@ async function ensureTable() {
 // keeps approval-card links resolvable from day one. Safe to re-run.
 (async () => {
   try {
-    const { initPolicyTables } = await import('../../utils/policyDatabase');
-    const { seedControlledDocumentRegistry } = await import('../../utils/controlledDocumentRegistry');
+    const { initPolicyTables } = await import("../../utils/policyDatabase");
+    const { seedControlledDocumentRegistry } =
+      await import("../../utils/controlledDocumentRegistry");
     await initPolicyTables();
     await seedControlledDocumentRegistry();
     await initAIApprovalTable();
     tableReady = true;
-    console.log('[AI-Approval] Bootstrap complete (policies + ai_pending_actions + controlled-doc seed)');
+    logger.info(
+      "[AI-Approval] Bootstrap complete (policies + ai_pending_actions + controlled-doc seed)",
+    );
   } catch (err) {
-    console.error('[AI-Approval] Bootstrap failed:', err);
+    logger.error("[AI-Approval] Bootstrap failed:", err);
   }
 })();
 
@@ -100,7 +137,7 @@ function extractWpCodes(refs: string[]): string[] {
 }
 
 function canSeeAll(role: string | null | undefined): boolean {
-  return role === 'admin' || role === 'quality_manager';
+  return role === "admin" || role === "quality_manager";
 }
 
 /**
@@ -125,17 +162,17 @@ function canSeeAll(role: string | null | undefined): boolean {
  *     (lookup-by-action_code), which does not apply this filter.
  */
 function getExcludedToolIdPrefixes(): string[] {
-  return process.env.NODE_ENV === 'test'
-    ? []
-    : ['integration-test-'];
+  return process.env.NODE_ENV === "test" ? [] : ["integration-test-"];
 }
 
-function aiApprovalGate<T extends { path: string; method: string; createHandler: (deps: any) => any }>(route: T): T {
-  if (!route.path.startsWith('/api/')) return route;
+function aiApprovalGate<
+  T extends { path: string; method: string; createHandler: (deps: any) => any },
+>(route: T): T {
+  if (!route.path.startsWith("/api/")) return route;
   let roles: UserRole[];
-  if (route.path.endsWith('/approve')) {
+  if (route.path.endsWith("/approve")) {
     roles = AI_APPROVAL_APPROVE_ROLES;
-  } else if (route.path.endsWith('/reject')) {
+  } else if (route.path.endsWith("/reject")) {
     roles = AI_APPROVAL_REJECT_ROLES;
   } else {
     roles = AI_APPROVAL_READ_ROLES;
@@ -147,7 +184,11 @@ function aiApprovalGate<T extends { path: string; method: string; createHandler:
       const inner = await originalCreate(deps);
       return async (c: any) => {
         const user = await requireRole(c, roles);
-        if (!user) return forbiddenResponse(c, 'Insufficient permissions for AI approval data');
+        if (!user)
+          return forbiddenResponse(
+            c,
+            "Insufficient permissions for AI approval data",
+          );
         return inner(c);
       };
     },
@@ -159,8 +200,8 @@ const _aiApprovalRoutesRaw = [
   /* GET /api/ai/approvals                                                */
   /* -------------------------------------------------------------------- */
   {
-    path: '/api/ai/approvals',
-    method: 'GET' as const,
+    path: "/api/ai/approvals",
+    method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -169,30 +210,34 @@ const _aiApprovalRoutesRaw = [
           if (!user) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const statusParam = url.searchParams.get('status');
-          const riskLevel = url.searchParams.get('risk_level') as RiskLevel | null;
-          const mine = url.searchParams.get('mine') === 'true';
-          const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-          const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+          const statusParam = url.searchParams.get("status");
+          const riskLevel = url.searchParams.get(
+            "risk_level",
+          ) as RiskLevel | null;
+          const mine = url.searchParams.get("mine") === "true";
+          const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+          const offset = parseInt(url.searchParams.get("offset") || "0", 10);
 
           // Task #298: optional review-status filter. Accepted values:
           //   'unreviewed_by_me' — actions the current user has never opened
           //                        the detail page for
           //   'no_reviewers'     — actions nobody has opened yet
           // Anything else (including absent) leaves the queue unfiltered.
-          const reviewFilterParam = url.searchParams.get('review_filter');
+          const reviewFilterParam = url.searchParams.get("review_filter");
           const reviewFilter =
-            reviewFilterParam === 'unreviewed_by_me' || reviewFilterParam === 'no_reviewers'
+            reviewFilterParam === "unreviewed_by_me" ||
+            reviewFilterParam === "no_reviewers"
               ? reviewFilterParam
               : undefined;
 
           const status = statusParam
-            ? (statusParam.split(',').map(s => s.trim()) as ApprovalStatus[])
-            : (['pending'] as ApprovalStatus[]);
+            ? (statusParam.split(",").map((s) => s.trim()) as ApprovalStatus[])
+            : (["pending"] as ApprovalStatus[]);
 
           // Non-privileged users can only see their own rows. Privileged users
           // ("admin", "quality_manager") see everything unless mine=true.
-          const requestedByUserId = (canSeeAll(user.role) && !mine) ? undefined : user.userId;
+          const requestedByUserId =
+            canSeeAll(user.role) && !mine ? undefined : user.userId;
 
           const { rows, total } = await listPendingActions({
             status,
@@ -217,8 +262,11 @@ const _aiApprovalRoutesRaw = [
 
           return c.json({ success: true, total, rows: rowsWithViewers });
         } catch (error: any) {
-          console.error('[AI-Approval] list error:', error);
-          return c.json({ error: 'Failed to list approvals', details: error.message }, 500);
+          logger.error("[AI-Approval] list error:", error);
+          return c.json(
+            { error: "Failed to list approvals", details: error.message },
+            500,
+          );
         }
       };
     },
@@ -228,8 +276,8 @@ const _aiApprovalRoutesRaw = [
   /* GET /api/ai/approvals/pending-count                                  */
   /* -------------------------------------------------------------------- */
   {
-    path: '/api/ai/approvals/pending-count',
-    method: 'GET' as const,
+    path: "/api/ai/approvals/pending-count",
+    method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -239,11 +287,17 @@ const _aiApprovalRoutesRaw = [
 
           // Pass 0 for privileged users -> unfiltered; otherwise scope to own
           const targetUserId = canSeeAll(user.role) ? 0 : user.userId;
-          const n = await countPendingForUser(targetUserId, getExcludedToolIdPrefixes());
+          const n = await countPendingForUser(
+            targetUserId,
+            getExcludedToolIdPrefixes(),
+          );
           return c.json({ success: true, count: n });
         } catch (error: any) {
-          console.error('[AI-Approval] count error:', error);
-          return c.json({ error: 'Failed to fetch count', details: error.message }, 500);
+          logger.error("[AI-Approval] count error:", error);
+          return c.json(
+            { error: "Failed to fetch count", details: error.message },
+            500,
+          );
         }
       };
     },
@@ -257,8 +311,8 @@ const _aiApprovalRoutesRaw = [
   /* flagged with credential-shaped values, scoped to what the caller is  */
   /* allowed to see (admins/QMs see all; everyone else sees their own).   */
   {
-    path: '/api/ai/approvals/credential-warning-count',
-    method: 'GET' as const,
+    path: "/api/ai/approvals/credential-warning-count",
+    method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -273,8 +327,14 @@ const _aiApprovalRoutesRaw = [
           );
           return c.json({ success: true, count: n });
         } catch (error: any) {
-          console.error('[AI-Approval] credential-warning count error:', error);
-          return c.json({ error: 'Failed to fetch credential-warning count', details: error.message }, 500);
+          logger.error("[AI-Approval] credential-warning count error:", error);
+          return c.json(
+            {
+              error: "Failed to fetch credential-warning count",
+              details: error.message,
+            },
+            500,
+          );
         }
       };
     },
@@ -292,8 +352,8 @@ const _aiApprovalRoutesRaw = [
   /* endpoint: admins / quality_managers see the global counts (unless    */
   /* mine=true); everyone else sees only their own pending rows.          */
   {
-    path: '/api/ai/approvals/review-status-counts',
-    method: 'GET' as const,
+    path: "/api/ai/approvals/review-status-counts",
+    method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -302,16 +362,20 @@ const _aiApprovalRoutesRaw = [
           if (!user) return unauthorizedResponse(c);
 
           const url = new URL(c.req.url);
-          const statusParam = url.searchParams.get('status');
-          const riskLevel = url.searchParams.get('risk_level') as RiskLevel | null;
-          const mine = url.searchParams.get('mine') === 'true';
+          const statusParam = url.searchParams.get("status");
+          const riskLevel = url.searchParams.get(
+            "risk_level",
+          ) as RiskLevel | null;
+          const mine = url.searchParams.get("mine") === "true";
 
           const status = statusParam
-            ? (statusParam.split(',').map(s => s.trim()) as ApprovalStatus[])
-            : (['pending'] as ApprovalStatus[]);
+            ? (statusParam.split(",").map((s) => s.trim()) as ApprovalStatus[])
+            : (["pending"] as ApprovalStatus[]);
 
           const requestedByUserId =
-            (canSeeAll(user.role) && !mine) ? undefined : (user.userId ?? undefined);
+            canSeeAll(user.role) && !mine
+              ? undefined
+              : (user.userId ?? undefined);
 
           // user.userId may be null in dev sessions; fall back to 0 so the
           // SQL still binds a parameter (no rows will match user_id=0, which
@@ -329,9 +393,12 @@ const _aiApprovalRoutesRaw = [
 
           return c.json({ success: true, ...counts });
         } catch (error: any) {
-          console.error('[AI-Approval] review-status-counts error:', error);
+          logger.error("[AI-Approval] review-status-counts error:", error);
           return c.json(
-            { error: 'Failed to fetch review-status counts', details: error.message },
+            {
+              error: "Failed to fetch review-status counts",
+              details: error.message,
+            },
             500,
           );
         }
@@ -394,7 +461,7 @@ const _aiApprovalRoutesRaw = [
 
           return c.json({ success: true, ...counts });
         } catch (error: any) {
-          console.error('[AI-Approval] risk-level-counts error:', error);
+          logger.error('[AI-Approval] risk-level-counts error:', error);
           return c.json(
             { error: 'Failed to fetch risk-level counts', details: error.message },
             500,
@@ -460,7 +527,7 @@ const _aiApprovalRoutesRaw = [
 
           return c.json({ success: true, ...counts });
         } catch (error: any) {
-          console.error('[AI-Approval] status-counts error:', error);
+          logger.error('[AI-Approval] status-counts error:', error);
           return c.json(
             { error: 'Failed to fetch status counts', details: error.message },
             500,
@@ -474,8 +541,8 @@ const _aiApprovalRoutesRaw = [
   /* GET /api/ai/approvals/:code                                          */
   /* -------------------------------------------------------------------- */
   {
-    path: '/api/ai/approvals/:code',
-    method: 'GET' as const,
+    path: "/api/ai/approvals/:code",
+    method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -483,7 +550,7 @@ const _aiApprovalRoutesRaw = [
           const user = getSessionUser(c);
           if (!user) return unauthorizedResponse(c);
 
-          const code = c.req.param('code');
+          const code = c.req.param("code");
           const action = await getPendingActionByCode(code);
           if (!action) {
             // Task #545: include a stable machine-readable `code` so the
@@ -502,7 +569,7 @@ const _aiApprovalRoutesRaw = [
           // Authorization: requester OR privileged role can view.
           const isRequester = action.requested_by_user_id === user.userId;
           if (!isRequester && !canSeeAll(user.role)) {
-            return forbiddenResponse(c, 'Not authorized to view this approval');
+            return forbiddenResponse(c, "Not authorized to view this approval");
           }
 
           // PDPL Art. 16 / ISO 27001 A.5.37 evidence trail:
@@ -518,22 +585,26 @@ const _aiApprovalRoutesRaw = [
             // detail page is reopened after the action has already been
             // approved/executed/rejected/etc. (we still record those views —
             // the redacted execution_result is itself sensitive evidence).
-            const statusLabel = action.status === 'pending' ? 'pending' : action.status;
+            const statusLabel =
+              action.status === "pending" ? "pending" : action.status;
             await logEvent({
               userId: user.userId,
               userEmail: user.email,
               userRole: user.role,
-              actionType: 'AI_ACTION',
-              entityType: 'SYSTEM',
+              actionType: "AI_ACTION",
+              entityType: "SYSTEM",
               entityId: action.action_code,
               entityName: action.tool_label,
               description: `Viewed ${statusLabel} AI action ${action.action_code} (${action.tool_label})`,
               aiInvolved: true,
-              severity: 'INFO',
-              module: 'ai-governance',
+              severity: "INFO",
+              module: "ai-governance",
               correlationId: action.action_code,
-            }).catch(err => {
-              console.error('[AI-Approval] view-audit logEvent failed (non-fatal):', err);
+            }).catch((err) => {
+              logger.error(
+                "[AI-Approval] view-audit logEvent failed (non-fatal):",
+                err,
+              );
             });
           }
 
@@ -549,10 +620,13 @@ const _aiApprovalRoutesRaw = [
           const canApprove =
             isAllowedApprover(action.risk_level, user.role) &&
             action.requested_by_user_id !== user.userId;
-          const canApproveReason = !isAllowedApprover(action.risk_level, user.role)
-            ? `Your role (${user.role}) is not in the approver list for ${action.risk_level} risk. Required: ${getApproverRolesFor(action.risk_level).join(', ')}.`
+          const canApproveReason = !isAllowedApprover(
+            action.risk_level,
+            user.role,
+          )
+            ? `Your role (${user.role}) is not in the approver list for ${action.risk_level} risk. Required: ${getApproverRolesFor(action.risk_level).join(", ")}.`
             : action.requested_by_user_id === user.userId
-              ? 'You cannot approve your own AI proposal (WP-DOC-005 Segregation of Duties).'
+              ? "You cannot approve your own AI proposal (WP-DOC-005 Segregation of Duties)."
               : null;
 
           return c.json({
@@ -565,8 +639,11 @@ const _aiApprovalRoutesRaw = [
             prior_viewers: priorViewers,
           });
         } catch (error: any) {
-          console.error('[AI-Approval] detail error:', error);
-          return c.json({ error: 'Failed to fetch approval', details: error.message }, 500);
+          logger.error("[AI-Approval] detail error:", error);
+          return c.json(
+            { error: "Failed to fetch approval", details: error.message },
+            500,
+          );
         }
       };
     },
@@ -576,8 +653,8 @@ const _aiApprovalRoutesRaw = [
   /* POST /api/ai/approvals/:code/approve                                 */
   /* -------------------------------------------------------------------- */
   {
-    path: '/api/ai/approvals/:code/approve',
-    method: 'POST' as const,
+    path: "/api/ai/approvals/:code/approve",
+    method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -585,11 +662,15 @@ const _aiApprovalRoutesRaw = [
           const user = getSessionUser(c);
           if (!user) return unauthorizedResponse(c);
 
-          const code = c.req.param('code');
+          const code = c.req.param("code");
           const action = await getPendingActionByCode(code);
-          if (!action) return c.json({ error: 'Approval action not found' }, 404);
-          if (action.status !== 'pending') {
-            return c.json({ error: `Action is ${action.status}, cannot approve` }, 409);
+          if (!action)
+            return c.json({ error: "Approval action not found" }, 404);
+          if (action.status !== "pending") {
+            return c.json(
+              { error: `Action is ${action.status}, cannot approve` },
+              409,
+            );
           }
 
           // Role gate
@@ -597,27 +678,30 @@ const _aiApprovalRoutesRaw = [
             return forbiddenResponse(
               c,
               `Role "${user.role}" is not permitted to approve ${action.risk_level}-risk AI actions. ` +
-              `Required roles: ${getApproverRolesFor(action.risk_level).join(', ')}.`
+                `Required roles: ${getApproverRolesFor(action.risk_level).join(", ")}.`,
             );
           }
 
           // Segregation of duties (WP-DOC-005). Admins are exempt as break-glass.
           if (
-            user.role !== 'admin' &&
+            user.role !== "admin" &&
             action.requested_by_user_id != null &&
             action.requested_by_user_id === user.userId
           ) {
             return forbiddenResponse(
               c,
-              'Segregation of duties: you cannot approve your own AI proposal. See WP-DOC-005.'
+              "Segregation of duties: you cannot approve your own AI proposal. See WP-DOC-005.",
             );
           }
 
           // Defense in depth: confirm the tool is actually registered as gated.
           if (!isToolGated(action.tool_id)) {
-            return c.json({
-              error: `Tool "${action.tool_id}" is no longer registered as gated. Approval blocked.`,
-            }, 409);
+            return c.json(
+              {
+                error: `Tool "${action.tool_id}" is no longer registered as gated. Approval blocked.`,
+              },
+              409,
+            );
           }
 
           // Atomic claim (pending -> approved)
@@ -629,26 +713,35 @@ const _aiApprovalRoutesRaw = [
           if (!claimed) {
             // Someone else approved/rejected it between GET and POST, or it expired.
             const current = await getPendingActionByCode(code);
-            return c.json({
-              error: 'Could not claim approval — it may have been handled by another reviewer or expired.',
-              currentStatus: current?.status,
-            }, 409);
+            return c.json(
+              {
+                error:
+                  "Could not claim approval — it may have been handled by another reviewer or expired.",
+                currentStatus: current?.status,
+              },
+              409,
+            );
           }
 
           await logEvent({
             userId: user.userId,
             userEmail: user.email,
             userRole: user.role,
-            actionType: 'AI_ACTION',
-            entityType: 'SYSTEM',
+            actionType: "AI_ACTION",
+            entityType: "SYSTEM",
             entityId: claimed.action_code,
             entityName: claimed.tool_label,
             description: `Approved AI action ${claimed.action_code} (${claimed.tool_label})`,
             aiInvolved: true,
-            severity: claimed.risk_level === 'critical' || claimed.risk_level === 'high' ? 'WARNING' : 'INFO',
-            module: 'ai-governance',
+            severity:
+              claimed.risk_level === "critical" || claimed.risk_level === "high"
+                ? "WARNING"
+                : "INFO",
+            module: "ai-governance",
             correlationId: claimed.action_code,
-          }).catch(() => { /* non-fatal */ });
+          }).catch(() => {
+            /* non-fatal */
+          });
 
           // Execute the underlying tool with the stored payload. On failure,
           // ai_pending_actions.status becomes 'failed' (recorded inside).
@@ -666,29 +759,35 @@ const _aiApprovalRoutesRaw = [
           // dangerous, so it must NEVER be returned in plaintext.
           const safeResult = redactSensitiveDeep(outcome.data);
           const safeError =
-            typeof outcome.error === 'string'
+            typeof outcome.error === "string"
               ? (redactSecretLikeStrings(outcome.error) as string)
               : outcome.error;
 
           // Return everything the UI needs to update the inline chat card.
-          return c.json({
-            success: outcome.ok,
-            actionCode: claimed.action_code,
-            entityType: outcome.entityType,
-            entityId: outcome.entityId,
-            result: safeResult,
-            error: safeError,
-          }, outcome.ok ? 200 : 500);
+          return c.json(
+            {
+              success: outcome.ok,
+              actionCode: claimed.action_code,
+              entityType: outcome.entityType,
+              entityId: outcome.entityId,
+              result: safeResult,
+              error: safeError,
+            },
+            outcome.ok ? 200 : 500,
+          );
         } catch (error: any) {
-          console.error('[AI-Approval] approve error:', error);
+          logger.error("[AI-Approval] approve error:", error);
           // Same redaction guarantee as the success path: a thrown error
           // message can carry the freshly-minted credential the failing
           // tool was trying to handle.
           const safeDetails =
-            typeof error?.message === 'string'
+            typeof error?.message === "string"
               ? (redactSecretLikeStrings(error.message) as string)
               : undefined;
-          return c.json({ error: 'Failed to approve', details: safeDetails }, 500);
+          return c.json(
+            { error: "Failed to approve", details: safeDetails },
+            500,
+          );
         }
       };
     },
@@ -698,8 +797,8 @@ const _aiApprovalRoutesRaw = [
   /* POST /api/ai/approvals/:code/reject                                  */
   /* -------------------------------------------------------------------- */
   {
-    path: '/api/ai/approvals/:code/reject',
-    method: 'POST' as const,
+    path: "/api/ai/approvals/:code/reject",
+    method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -707,62 +806,83 @@ const _aiApprovalRoutesRaw = [
           const user = getSessionUser(c);
           if (!user) return unauthorizedResponse(c);
 
-          const code = c.req.param('code');
+          const code = c.req.param("code");
           const body = await c.req.json().catch(() => ({}));
-          const reason = (body?.reason || '').toString().trim();
+          const reason = (body?.reason || "").toString().trim();
           if (!reason || reason.length < 3) {
-            return c.json({ error: 'A rejection reason (>=3 chars) is required for audit purposes.' }, 400);
+            return c.json(
+              {
+                error:
+                  "A rejection reason (>=3 chars) is required for audit purposes.",
+              },
+              400,
+            );
           }
 
           const action = await getPendingActionByCode(code);
-          if (!action) return c.json({ error: 'Approval action not found' }, 404);
-          if (action.status !== 'pending') {
-            return c.json({ error: `Action is ${action.status}, cannot reject` }, 409);
+          if (!action)
+            return c.json({ error: "Approval action not found" }, 404);
+          if (action.status !== "pending") {
+            return c.json(
+              { error: `Action is ${action.status}, cannot reject` },
+              409,
+            );
           }
 
           // Requester may reject their own draft (cancel); approvers may reject any.
           const isRequester = action.requested_by_user_id === user.userId;
           const isApprover = isAllowedApprover(action.risk_level, user.role);
           if (!isRequester && !isApprover) {
-            return forbiddenResponse(c, 'Not authorized to reject this approval.');
+            return forbiddenResponse(
+              c,
+              "Not authorized to reject this approval.",
+            );
           }
 
           const rejected = await rejectAction(
             action.action_code,
             { userId: user.userId, email: user.email, name: user.name },
-            reason
+            reason,
           );
           if (!rejected) {
-            return c.json({ error: 'Could not reject — state may have changed.' }, 409);
+            return c.json(
+              { error: "Could not reject — state may have changed." },
+              409,
+            );
           }
 
           await logEvent({
             userId: user.userId,
             userEmail: user.email,
             userRole: user.role,
-            actionType: 'AI_ACTION',
-            entityType: 'SYSTEM',
+            actionType: "AI_ACTION",
+            entityType: "SYSTEM",
             entityId: rejected.action_code,
             entityName: rejected.tool_label,
             description: `Rejected AI action ${rejected.action_code}: ${rejected.rejection_reason}`,
             aiInvolved: true,
-            severity: 'INFO',
-            module: 'ai-governance',
+            severity: "INFO",
+            module: "ai-governance",
             correlationId: rejected.action_code,
-          }).catch(() => { /* non-fatal */ });
+          }).catch(() => {
+            /* non-fatal */
+          });
 
           return c.json({ success: true, action: rejected });
         } catch (error: any) {
-          console.error('[AI-Approval] reject error:', error);
+          logger.error("[AI-Approval] reject error:", error);
           // Same redaction guarantee as the approve handler: a thrown
           // error message can carry a credential-shaped substring (e.g.
           // a DB connection string or a key embedded in a third-party
           // error message). Scrub it before echoing back to the browser.
           const safeDetails =
-            typeof error?.message === 'string'
+            typeof error?.message === "string"
               ? (redactSecretLikeStrings(error.message) as string)
               : undefined;
-          return c.json({ error: 'Failed to reject', details: safeDetails }, 500);
+          return c.json(
+            { error: "Failed to reject", details: safeDetails },
+            500,
+          );
         }
       };
     },
@@ -772,23 +892,25 @@ const _aiApprovalRoutesRaw = [
   /* GET /ai-approvals — admin dashboard HTML page                        */
   /* -------------------------------------------------------------------- */
   {
-    path: '/ai-approvals',
-    method: 'GET' as const,
+    path: "/ai-approvals",
+    method: "GET" as const,
     createHandler: async () => {
-      const { join } = await import('path');
-      const { readFileSync, existsSync } = await import('fs');
+      const { join } = await import("path");
+      const { readFileSync, existsSync } = await import("fs");
       return async (c: any) => {
         const candidates = [
-          join(process.cwd(), 'dashboard', 'ai-approvals.html'),
-          '/home/runner/workspace/dashboard/ai-approvals.html',
+          join(process.cwd(), "dashboard", "ai-approvals.html"),
+          "/home/runner/workspace/dashboard/ai-approvals.html",
         ];
         for (const p of candidates) {
-          if (existsSync(p)) return c.html(readFileSync(p, 'utf-8'));
+          if (existsSync(p)) return c.html(readFileSync(p, "utf-8"));
         }
-        return c.text('AI Approvals dashboard not found', 404);
+        return c.text("AI Approvals dashboard not found", 404);
       };
     },
   },
 ];
 
-export const aiApprovalRoutes = _aiApprovalRoutesRaw.map(aiApprovalGate).map(gateApiRoute);
+export const aiApprovalRoutes = _aiApprovalRoutesRaw
+  .map(aiApprovalGate)
+  .map(gateApiRoute);

@@ -1,4 +1,5 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -9,9 +10,21 @@ export interface Vendor {
   vendor_code: string;
   name: string;
   description?: string;
-  category: 'technology' | 'consulting' | 'manufacturing' | 'logistics' | 'financial' | 'professional_services' | 'other';
-  criticality: 'critical' | 'high' | 'medium' | 'low';
-  status: 'active' | 'pending_approval' | 'probation' | 'inactive' | 'terminated';
+  category:
+    | "technology"
+    | "consulting"
+    | "manufacturing"
+    | "logistics"
+    | "financial"
+    | "professional_services"
+    | "other";
+  criticality: "critical" | "high" | "medium" | "low";
+  status:
+    | "active"
+    | "pending_approval"
+    | "probation"
+    | "inactive"
+    | "terminated";
   contract_start?: Date;
   contract_end?: Date;
   contract_value?: number;
@@ -20,7 +33,7 @@ export interface Vendor {
   primary_contact_phone?: string;
   country?: string;
   services_provided?: string;
-  data_access_level?: 'none' | 'limited' | 'sensitive' | 'critical';
+  data_access_level?: "none" | "limited" | "sensitive" | "critical";
   last_assessment_date?: Date;
   next_assessment_date?: Date;
   overall_risk_score?: number;
@@ -35,16 +48,16 @@ export interface Vendor {
 export interface VendorAssessment {
   id?: number;
   vendor_id: number;
-  assessment_type: 'initial' | 'periodic' | 'triggered' | 'exit';
+  assessment_type: "initial" | "periodic" | "triggered" | "exit";
   assessment_date?: Date;
   assessed_by: string;
-  status: 'draft' | 'in_progress' | 'completed' | 'approved';
+  status: "draft" | "in_progress" | "completed" | "approved";
   security_score?: number;
   financial_score?: number;
   operational_score?: number;
   compliance_score?: number;
   overall_score?: number;
-  risk_level?: 'critical' | 'high' | 'medium' | 'low';
+  risk_level?: "critical" | "high" | "medium" | "low";
   security_findings?: string;
   financial_findings?: string;
   operational_findings?: string;
@@ -63,9 +76,9 @@ export interface VendorRemediation {
   assessment_id?: number;
   title: string;
   description: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  category: 'security' | 'financial' | 'operational' | 'compliance';
-  status: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'waived';
+  priority: "critical" | "high" | "medium" | "low";
+  category: "security" | "financial" | "operational" | "compliance";
+  status: "open" | "in_progress" | "pending_verification" | "closed" | "waived";
   assigned_to?: string;
   due_date?: Date;
   completed_date?: Date;
@@ -77,8 +90,8 @@ export interface VendorRemediation {
 }
 
 export async function initVendorTables(): Promise<void> {
-  console.log('📋 [VendorDB] Initializing vendor risk tables...');
-  
+  logger.info("📋 [VendorDB] Initializing vendor risk tables...");
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS vendors (
       id SERIAL PRIMARY KEY,
@@ -157,17 +170,24 @@ export async function initVendorTables(): Promise<void> {
     )
   `);
 
-  await pool.query(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`UPDATE vendors SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_public_id ON vendors(public_id)`);
+  await pool.query(
+    `ALTER TABLE vendors ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `UPDATE vendors SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_public_id ON vendors(public_id)`,
+  );
 
-  console.log('✅ [VendorDB] Vendor risk tables initialized');
+  logger.info("✅ [VendorDB] Vendor risk tables initialized");
 }
 
 export async function createVendor(vendor: Vendor): Promise<Vendor> {
-  console.log('📝 [VendorDB] Creating vendor:', vendor.name);
-  
-  const result = await pool.query(`
+  logger.info("📝 [VendorDB] Creating vendor:", vendor.name);
+
+  const result = await pool.query(
+    `
     INSERT INTO vendors (
       vendor_code, name, description, category, criticality, status,
       contract_start, contract_end, contract_value,
@@ -176,24 +196,62 @@ export async function createVendor(vendor: Vendor): Promise<Vendor> {
       owner_name, owner_department, created_by
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     RETURNING *
-  `, [
-    vendor.vendor_code, vendor.name, vendor.description, vendor.category,
-    vendor.criticality || 'medium', vendor.status || 'pending_approval',
-    vendor.contract_start, vendor.contract_end, vendor.contract_value,
-    vendor.primary_contact_name, vendor.primary_contact_email, vendor.primary_contact_phone,
-    vendor.country, vendor.services_provided, vendor.data_access_level || 'none',
-    vendor.owner_name, vendor.owner_department, vendor.created_by
-  ]);
+  `,
+    [
+      vendor.vendor_code,
+      vendor.name,
+      vendor.description,
+      vendor.category,
+      vendor.criticality || "medium",
+      vendor.status || "pending_approval",
+      vendor.contract_start,
+      vendor.contract_end,
+      vendor.contract_value,
+      vendor.primary_contact_name,
+      vendor.primary_contact_email,
+      vendor.primary_contact_phone,
+      vendor.country,
+      vendor.services_provided,
+      vendor.data_access_level || "none",
+      vendor.owner_name,
+      vendor.owner_department,
+      vendor.created_by,
+    ],
+  );
 
   return result.rows[0];
 }
 
-export async function updateVendor(id: number, updates: Partial<Vendor>): Promise<Vendor> {
+export async function updateVendor(
+  id: number,
+  updates: Partial<Vendor>,
+): Promise<Vendor> {
   const setClause: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
 
-  const allowedFields = ['name', 'description', 'category', 'criticality', 'status', 'contract_start', 'contract_end', 'contract_value', 'primary_contact_name', 'primary_contact_email', 'primary_contact_phone', 'country', 'services_provided', 'data_access_level', 'last_assessment_date', 'next_assessment_date', 'overall_risk_score', 'overall_risk_level', 'owner_name', 'owner_department'];
+  const allowedFields = [
+    "name",
+    "description",
+    "category",
+    "criticality",
+    "status",
+    "contract_start",
+    "contract_end",
+    "contract_value",
+    "primary_contact_name",
+    "primary_contact_email",
+    "primary_contact_phone",
+    "country",
+    "services_provided",
+    "data_access_level",
+    "last_assessment_date",
+    "next_assessment_date",
+    "overall_risk_score",
+    "overall_risk_level",
+    "owner_name",
+    "owner_department",
+  ];
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
@@ -203,20 +261,28 @@ export async function updateVendor(id: number, updates: Partial<Vendor>): Promis
     }
   }
 
-  setClause.push('updated_at = NOW()');
+  setClause.push("updated_at = NOW()");
   values.push(id);
 
-  const result = await pool.query(`UPDATE vendors SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+  const result = await pool.query(
+    `UPDATE vendors SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    values,
+  );
   return result.rows[0];
 }
 
 export async function getVendorById(id: number): Promise<Vendor | null> {
-  const result = await pool.query('SELECT * FROM vendors WHERE id = $1', [id]);
+  const result = await pool.query("SELECT * FROM vendors WHERE id = $1", [id]);
   return result.rows[0] || null;
 }
 
-export async function getAllVendors(filters?: { status?: string; criticality?: string; category?: string; search?: string }): Promise<{ vendors: Vendor[]; total: number }> {
-  let query = 'SELECT * FROM vendors WHERE 1=1';
+export async function getAllVendors(filters?: {
+  status?: string;
+  criticality?: string;
+  category?: string;
+  search?: string;
+}): Promise<{ vendors: Vendor[]; total: number }> {
+  let query = "SELECT * FROM vendors WHERE 1=1";
   const values: any[] = [];
   let paramCount = 1;
 
@@ -241,28 +307,41 @@ export async function getAllVendors(filters?: { status?: string; criticality?: s
     paramCount++;
   }
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM vendors WHERE 1=1` + query.replace('SELECT * FROM vendors WHERE 1=1', ''), values);
-  
-  query += ' ORDER BY criticality DESC, name ASC';
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM vendors WHERE 1=1` +
+      query.replace("SELECT * FROM vendors WHERE 1=1", ""),
+    values,
+  );
+
+  query += " ORDER BY criticality DESC, name ASC";
   const result = await pool.query(query, values);
-  
+
   return { vendors: result.rows, total: parseInt(countResult.rows[0].count) };
 }
 
-export async function createAssessment(assessment: VendorAssessment): Promise<VendorAssessment> {
-  console.log('📝 [VendorDB] Creating vendor assessment for vendor:', assessment.vendor_id);
-  
-  const overallScore = Math.round(
-    ((assessment.security_score || 0) + (assessment.financial_score || 0) + 
-     (assessment.operational_score || 0) + (assessment.compliance_score || 0)) / 4
+export async function createAssessment(
+  assessment: VendorAssessment,
+): Promise<VendorAssessment> {
+  logger.info(
+    "📝 [VendorDB] Creating vendor assessment for vendor:",
+    assessment.vendor_id,
   );
 
-  let riskLevel = 'low';
-  if (overallScore < 40) riskLevel = 'critical';
-  else if (overallScore < 60) riskLevel = 'high';
-  else if (overallScore < 80) riskLevel = 'medium';
+  const overallScore = Math.round(
+    ((assessment.security_score || 0) +
+      (assessment.financial_score || 0) +
+      (assessment.operational_score || 0) +
+      (assessment.compliance_score || 0)) /
+      4,
+  );
 
-  const result = await pool.query(`
+  let riskLevel = "low";
+  if (overallScore < 40) riskLevel = "critical";
+  else if (overallScore < 60) riskLevel = "high";
+  else if (overallScore < 80) riskLevel = "medium";
+
+  const result = await pool.query(
+    `
     INSERT INTO vendor_assessments (
       vendor_id, assessment_type, assessment_date, assessed_by, status,
       security_score, financial_score, operational_score, compliance_score,
@@ -271,54 +350,98 @@ export async function createAssessment(assessment: VendorAssessment): Promise<Ve
       recommendations, next_assessment_date
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
-  `, [
-    assessment.vendor_id, assessment.assessment_type, assessment.assessment_date || new Date(),
-    assessment.assessed_by, assessment.status || 'draft',
-    assessment.security_score, assessment.financial_score, assessment.operational_score, assessment.compliance_score,
-    overallScore, riskLevel,
-    assessment.security_findings, assessment.financial_findings, assessment.operational_findings, assessment.compliance_findings,
-    assessment.recommendations, assessment.next_assessment_date
-  ]);
+  `,
+    [
+      assessment.vendor_id,
+      assessment.assessment_type,
+      assessment.assessment_date || new Date(),
+      assessment.assessed_by,
+      assessment.status || "draft",
+      assessment.security_score,
+      assessment.financial_score,
+      assessment.operational_score,
+      assessment.compliance_score,
+      overallScore,
+      riskLevel,
+      assessment.security_findings,
+      assessment.financial_findings,
+      assessment.operational_findings,
+      assessment.compliance_findings,
+      assessment.recommendations,
+      assessment.next_assessment_date,
+    ],
+  );
 
-  if (assessment.status === 'completed' || assessment.status === 'approved') {
+  if (assessment.status === "completed" || assessment.status === "approved") {
     await updateVendor(assessment.vendor_id, {
       last_assessment_date: new Date(),
       next_assessment_date: assessment.next_assessment_date,
       overall_risk_score: overallScore,
-      overall_risk_level: riskLevel
+      overall_risk_level: riskLevel,
     });
   }
 
   return result.rows[0];
 }
 
-export async function getAssessmentsByVendor(vendorId: number): Promise<VendorAssessment[]> {
-  const result = await pool.query('SELECT * FROM vendor_assessments WHERE vendor_id = $1 ORDER BY assessment_date DESC', [vendorId]);
+export async function getAssessmentsByVendor(
+  vendorId: number,
+): Promise<VendorAssessment[]> {
+  const result = await pool.query(
+    "SELECT * FROM vendor_assessments WHERE vendor_id = $1 ORDER BY assessment_date DESC",
+    [vendorId],
+  );
   return result.rows;
 }
 
-export async function createRemediation(remediation: VendorRemediation): Promise<VendorRemediation> {
-  console.log('📝 [VendorDB] Creating vendor remediation:', remediation.title);
-  
-  const result = await pool.query(`
+export async function createRemediation(
+  remediation: VendorRemediation,
+): Promise<VendorRemediation> {
+  logger.info("📝 [VendorDB] Creating vendor remediation:", remediation.title);
+
+  const result = await pool.query(
+    `
     INSERT INTO vendor_remediations (vendor_id, assessment_id, title, description, priority, category, status, assigned_to, due_date)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *
-  `, [
-    remediation.vendor_id, remediation.assessment_id, remediation.title, remediation.description,
-    remediation.priority, remediation.category, remediation.status || 'open',
-    remediation.assigned_to, remediation.due_date
-  ]);
+  `,
+    [
+      remediation.vendor_id,
+      remediation.assessment_id,
+      remediation.title,
+      remediation.description,
+      remediation.priority,
+      remediation.category,
+      remediation.status || "open",
+      remediation.assigned_to,
+      remediation.due_date,
+    ],
+  );
 
   return result.rows[0];
 }
 
-export async function updateRemediation(id: number, updates: Partial<VendorRemediation>): Promise<VendorRemediation> {
+export async function updateRemediation(
+  id: number,
+  updates: Partial<VendorRemediation>,
+): Promise<VendorRemediation> {
   const setClause: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
 
-  const allowedFields = ['title', 'description', 'priority', 'category', 'status', 'assigned_to', 'due_date', 'completed_date', 'evidence', 'waiver_reason', 'waiver_approved_by'];
+  const allowedFields = [
+    "title",
+    "description",
+    "priority",
+    "category",
+    "status",
+    "assigned_to",
+    "due_date",
+    "completed_date",
+    "evidence",
+    "waiver_reason",
+    "waiver_approved_by",
+  ];
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
@@ -328,20 +451,32 @@ export async function updateRemediation(id: number, updates: Partial<VendorRemed
     }
   }
 
-  setClause.push('updated_at = NOW()');
+  setClause.push("updated_at = NOW()");
   values.push(id);
 
-  const result = await pool.query(`UPDATE vendor_remediations SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+  const result = await pool.query(
+    `UPDATE vendor_remediations SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    values,
+  );
   return result.rows[0];
 }
 
-export async function getRemediationsByVendor(vendorId: number): Promise<VendorRemediation[]> {
-  const result = await pool.query('SELECT * FROM vendor_remediations WHERE vendor_id = $1 ORDER BY priority DESC, due_date ASC', [vendorId]);
+export async function getRemediationsByVendor(
+  vendorId: number,
+): Promise<VendorRemediation[]> {
+  const result = await pool.query(
+    "SELECT * FROM vendor_remediations WHERE vendor_id = $1 ORDER BY priority DESC, due_date ASC",
+    [vendorId],
+  );
   return result.rows;
 }
 
-export async function getAllRemediations(filters?: { status?: string; priority?: string }): Promise<{ remediations: VendorRemediation[]; total: number }> {
-  let query = 'SELECT r.*, v.name as vendor_name, v.vendor_code FROM vendor_remediations r LEFT JOIN vendors v ON r.vendor_id = v.id WHERE 1=1';
+export async function getAllRemediations(filters?: {
+  status?: string;
+  priority?: string;
+}): Promise<{ remediations: VendorRemediation[]; total: number }> {
+  let query =
+    "SELECT r.*, v.name as vendor_name, v.vendor_code FROM vendor_remediations r LEFT JOIN vendors v ON r.vendor_id = v.id WHERE 1=1";
   const values: any[] = [];
   let paramCount = 1;
 
@@ -356,16 +491,26 @@ export async function getAllRemediations(filters?: { status?: string; priority?:
     paramCount++;
   }
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM vendor_remediations r WHERE 1=1` + query.replace(/SELECT r\.\*, v\.name as vendor_name, v\.vendor_code FROM vendor_remediations r LEFT JOIN vendors v ON r\.vendor_id = v\.id WHERE 1=1/, ''), values);
-  
-  query += ' ORDER BY r.priority DESC, r.due_date ASC';
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM vendor_remediations r WHERE 1=1` +
+      query.replace(
+        /SELECT r\.\*, v\.name as vendor_name, v\.vendor_code FROM vendor_remediations r LEFT JOIN vendors v ON r\.vendor_id = v\.id WHERE 1=1/,
+        "",
+      ),
+    values,
+  );
+
+  query += " ORDER BY r.priority DESC, r.due_date ASC";
   const result = await pool.query(query, values);
-  
-  return { remediations: result.rows, total: parseInt(countResult.rows[0].count) };
+
+  return {
+    remediations: result.rows,
+    total: parseInt(countResult.rows[0].count),
+  };
 }
 
 export async function getVendorSummary(): Promise<any> {
-  console.log('📊 [VendorDB] Generating vendor summary...');
+  logger.info("📊 [VendorDB] Generating vendor summary...");
 
   const vendorStats = await pool.query(`
     SELECT 
@@ -433,6 +578,6 @@ export async function getVendorSummary(): Promise<any> {
     by_risk_level: byRiskLevel.rows,
     remediations: openRemediations.rows[0],
     expiring_contracts: expiringContracts.rows,
-    overdue_assessments: dueDueAssessments.rows
+    overdue_assessments: dueDueAssessments.rows,
   };
 }

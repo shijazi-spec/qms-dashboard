@@ -43,6 +43,7 @@ import { wrapPoolForRedaction } from "./redactedPool";
 
 const pool = wrapPoolForRedaction(sharedPool);
 
+import { logger } from "./logger";
 /**
  * The full set of tunables exposed in the AI Operations panel. Every key is
  * a positive integer; the API layer enforces sane bounds before this module
@@ -76,8 +77,17 @@ export interface ToolHealthConfigRow {
 
 export interface ToolHealthAuditBreachDiff {
   new_breaches: Array<{ tool_name: string; reason: string; severity: string }>;
-  resolved_breaches: Array<{ tool_name: string; reason: string; severity: string }>;
-  severity_changes: Array<{ tool_name: string; reason: string; from_severity: string; to_severity: string }>;
+  resolved_breaches: Array<{
+    tool_name: string;
+    reason: string;
+    severity: string;
+  }>;
+  severity_changes: Array<{
+    tool_name: string;
+    reason: string;
+    from_severity: string;
+    to_severity: string;
+  }>;
 }
 
 export interface ToolHealthConfigAuditEntry {
@@ -176,7 +186,9 @@ export function __resetInitPromiseForTests(): void {
   initPromise = null;
 }
 
-function rowToOverrides(row: any | undefined | null): ToolHealthConfigOverrides {
+function rowToOverrides(
+  row: any | undefined | null,
+): ToolHealthConfigOverrides {
   if (!row) return {};
   const out: ToolHealthConfigOverrides = {};
   for (const field of TOOL_HEALTH_CONFIG_FIELDS) {
@@ -200,9 +212,7 @@ function isOverrideRowExpired(
 ): boolean {
   if (!row || row.expires_at == null) return false;
   const expiresAt =
-    row.expires_at instanceof Date
-      ? row.expires_at
-      : new Date(row.expires_at);
+    row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at);
   if (Number.isNaN(expiresAt.getTime())) return false;
   return expiresAt.getTime() <= now.getTime();
 }
@@ -244,7 +254,7 @@ export async function getToolHealthConfigOverrides(): Promise<ToolHealthConfigOv
     if (isOverrideRowExpired(row)) return {};
     return rowToOverrides(row);
   } catch (err) {
-    console.error("[ToolHealthConfig] Failed to load overrides:", err);
+    logger.error("[ToolHealthConfig] Failed to load overrides:", err);
     return {};
   }
 }
@@ -345,7 +355,9 @@ export async function setToolHealthConfigOverrides(input: {
     if (Object.prototype.hasOwnProperty.call(input, "expiresAt")) {
       nextExpiresAt = input.expiresAt ?? null;
     }
-    const allCleared = TOOL_HEALTH_CONFIG_FIELDS.every((f) => merged[f] == null);
+    const allCleared = TOOL_HEALTH_CONFIG_FIELDS.every(
+      (f) => merged[f] == null,
+    );
     if (allCleared) nextExpiresAt = null;
 
     const cols = TOOL_HEALTH_CONFIG_FIELDS.map((f) => FIELD_TO_COLUMN[f]);
@@ -490,7 +502,9 @@ export async function reapExpiredToolHealthOverrides(): Promise<ReapExpiredToolH
     const before = rowToOverrides(row);
     const previousUpdatedBy: string | null = row?.updated_by ?? null;
     const expiredAt: Date =
-      row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at);
+      row.expires_at instanceof Date
+        ? row.expires_at
+        : new Date(row.expires_at);
 
     // Wipe every override field and the expires_at marker. We intentionally
     // leave `updated_by` set to the system attribution string and bump
@@ -510,8 +524,7 @@ export async function reapExpiredToolHealthOverrides(): Promise<ReapExpiredToolH
 
     const beforeBlob: Record<string, unknown> = { ...before };
     beforeBlob._expires_at = expiredAt;
-    const note =
-      `Auto-cleared because expires_at (${expiredAt.toISOString()}) had passed.`;
+    const note = `Auto-cleared because expires_at (${expiredAt.toISOString()}) had passed.`;
     const auditResult = await client.query(
       `INSERT INTO tool_health_config_audit
          (changed_by, before_values, after_values, note)
@@ -591,7 +604,9 @@ export async function getToolHealthOverrideExpiringSoon(
     if (!row || row.expires_at == null) return null;
 
     const expiresAt =
-      row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at);
+      row.expires_at instanceof Date
+        ? row.expires_at
+        : new Date(row.expires_at);
     if (Number.isNaN(expiresAt.getTime())) return null;
 
     const msRemaining = expiresAt.getTime() - now.getTime();
@@ -608,7 +623,10 @@ export async function getToolHealthOverrideExpiringSoon(
       minutes_remaining: Math.round(msRemaining / 60_000),
     };
   } catch (err) {
-    console.error("[ToolHealthConfig] Failed to check expiring-soon overrides:", err);
+    logger.error(
+      "[ToolHealthConfig] Failed to check expiring-soon overrides:",
+      err,
+    );
     return null;
   }
 }
@@ -633,15 +651,20 @@ export async function getToolHealthConfigAudit(
     id: r.id,
     changed_at: r.changed_at,
     changed_by: r.changed_by,
-    before_values: typeof r.before_values === "string"
-      ? JSON.parse(r.before_values)
-      : (r.before_values ?? {}),
-    after_values: typeof r.after_values === "string"
-      ? JSON.parse(r.after_values)
-      : (r.after_values ?? {}),
+    before_values:
+      typeof r.before_values === "string"
+        ? JSON.parse(r.before_values)
+        : (r.before_values ?? {}),
+    after_values:
+      typeof r.after_values === "string"
+        ? JSON.parse(r.after_values)
+        : (r.after_values ?? {}),
     note: r.note ?? null,
-    breach_diff: r.breach_diff != null
-      ? (typeof r.breach_diff === "string" ? JSON.parse(r.breach_diff) : r.breach_diff)
-      : null,
+    breach_diff:
+      r.breach_diff != null
+        ? typeof r.breach_diff === "string"
+          ? JSON.parse(r.breach_diff)
+          : r.breach_diff
+        : null,
   }));
 }

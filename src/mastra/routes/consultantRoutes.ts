@@ -27,16 +27,37 @@ import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
 import type { AutoApproveTier } from "../../utils/aiToolGovernance";
-import { withAiTelemetry, startTelemetrySpan, buildAiCallTelemetryMetadata } from "../../utils/aiTelemetry";
+import {
+  withAiTelemetry,
+  startTelemetrySpan,
+  buildAiCallTelemetryMetadata,
+} from "../../utils/aiTelemetry";
 import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
 
-interface AgentTextResult { text: string }
+import { logger as safeLogger } from "../../utils/logger";
+interface AgentTextResult {
+  text: string;
+}
 
-const CONSULTANT_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
+const CONSULTANT_ROLES: UserRole[] = [
+  "admin",
+  "ai_specialist",
+  "grc_manager",
+  "head_of_operations_quality",
+];
 
-initAIAlertsTable().catch(console.error);
-initToolHealthNotificationsTable().catch(console.error);
-initAIFeedbackTable().catch(console.error);
+initAIAlertsTable().catch((err) =>
+  safeLogger.error("[ConsultantRoutes] initAIAlertsTable failed", err),
+);
+initToolHealthNotificationsTable().catch((err) =>
+  safeLogger.error(
+    "[ConsultantRoutes] initToolHealthNotificationsTable failed",
+    err,
+  ),
+);
+initAIFeedbackTable().catch((err) =>
+  safeLogger.error("[ConsultantRoutes] initAIFeedbackTable failed", err),
+);
 
 /**
  * Resolves the user's auto-approve tier. For now (document-control phase
@@ -46,7 +67,7 @@ initAIFeedbackTable().catch(console.error);
  * is permitted for low-risk actions, read from a users-table column.
  */
 function resolveAutoApproveTier(_role: string | null): AutoApproveTier {
-  return 'never';
+  return "never";
 }
 
 export const consultantRoutes = [
@@ -93,7 +114,9 @@ export const consultantRoutes = [
 
           const resolvedThreadId = threadId || `consultant-${Date.now()}`;
 
-          const chatTimeout = parseInt(process.env.CONSULTANT_CHAT_TIMEOUT_MS || '120000');
+          const chatTimeout = parseInt(
+            process.env.CONSULTANT_CHAT_TIMEOUT_MS || "120000",
+          );
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), chatTimeout);
 
@@ -101,31 +124,39 @@ export const consultantRoutes = [
             // Wrap agent invocation in AsyncLocalStorage so any AI write-tool
             // called during this turn can see WHO prompted it. Without this,
             // the HITL gate cannot attribute pending actions to a user.
-            const { result: response, callId } = await withAiTelemetry<AgentTextResult>(
-              { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
-                promptText: message,
-                userId: user.userId, sessionId: resolvedThreadId,
-                metadata: buildAiCallTelemetryMetadata({ promptVersion: QMS_CONSULTANT_PROMPT_VERSION }) },
-              async () => {
-                const res = await withAgentUserContext(
-                  {
-                    user: {
-                      userId: user.userId,
-                      email: user.email,
-                      role: user.role,
-                      autoApproveTier: resolveAutoApproveTier(user.role),
+            const { result: response, callId } =
+              await withAiTelemetry<AgentTextResult>(
+                {
+                  agentName: "WalaPlus QMS Consultant",
+                  model: "gpt-4o",
+                  promptText: message,
+                  userId: user.userId,
+                  sessionId: resolvedThreadId,
+                  metadata: buildAiCallTelemetryMetadata({
+                    promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+                  }),
+                },
+                async () => {
+                  const res = await withAgentUserContext(
+                    {
+                      user: {
+                        userId: user.userId,
+                        email: user.email,
+                        role: user.role,
+                        autoApproveTier: resolveAutoApproveTier(user.role),
+                      },
+                      threadId: resolvedThreadId,
                     },
-                    threadId: resolvedThreadId,
-                  },
-                  () => agent.generateLegacy(message, {
-                    threadId: resolvedThreadId,
-                    resourceId: "consultant-session",
-                    abortSignal: controller.signal,
-                  })
-                );
-                return res as AgentTextResult;
-              }
-            );
+                    () =>
+                      agent.generateLegacy(message, {
+                        threadId: resolvedThreadId,
+                        resourceId: "consultant-session",
+                        abortSignal: controller.signal,
+                      }),
+                  );
+                  return res as AgentTextResult;
+                },
+              );
 
             const messageId = randomUUID();
             return c.json({
@@ -145,11 +176,14 @@ export const consultantRoutes = [
             clearTimeout(timer);
           }
         } catch (error) {
-          console.error("[Consultant] Chat error:", error);
-          return c.json({
-            error: "Failed to process message",
-            details: error instanceof Error ? error.message : String(error),
-          }, 500);
+          logger.error("[Consultant] Chat error:", error);
+          return c.json(
+            {
+              error: "Failed to process message",
+              details: error instanceof Error ? error.message : String(error),
+            },
+            500,
+          );
         }
       };
     },
@@ -179,7 +213,9 @@ export const consultantRoutes = [
 
           const resolvedThreadId = threadId || `consultant-${Date.now()}`;
 
-          const streamTimeout = parseInt(process.env.CONSULTANT_STREAM_TIMEOUT_MS || '120000');
+          const streamTimeout = parseInt(
+            process.env.CONSULTANT_STREAM_TIMEOUT_MS || "120000",
+          );
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), streamTimeout);
 
@@ -189,40 +225,50 @@ export const consultantRoutes = [
           // installs the AsyncLocalStorage context that propagates through
           // the agent's tool-execution loop.
           const span = await startTelemetrySpan({
-            agentName: 'WalaPlus QMS Consultant',
-            model: 'gpt-4o',
+            agentName: "WalaPlus QMS Consultant",
+            model: "gpt-4o",
             promptText: message,
             userId: user.userId,
             sessionId: resolvedThreadId,
-            metadata: buildAiCallTelemetryMetadata({ promptVersion: QMS_CONSULTANT_PROMPT_VERSION }),
+            metadata: buildAiCallTelemetryMetadata({
+              promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+            }),
           });
           const messageId = randomUUID();
           let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
           try {
-            stream = await span.run(() => withAgentUserContext(
-              {
-                user: {
-                  userId: user.userId,
-                  email: user.email,
-                  role: user.role,
-                  autoApproveTier: resolveAutoApproveTier(user.role),
+            stream = await span.run(() =>
+              withAgentUserContext(
+                {
+                  user: {
+                    userId: user.userId,
+                    email: user.email,
+                    role: user.role,
+                    autoApproveTier: resolveAutoApproveTier(user.role),
+                  },
+                  threadId: resolvedThreadId,
                 },
-                threadId: resolvedThreadId,
-              },
-              () => agent.streamLegacy(message, {
-                threadId: resolvedThreadId,
-                resourceId: "consultant-session",
-                abortSignal: controller.signal,
-              })
-            ));
+                () =>
+                  agent.streamLegacy(message, {
+                    threadId: resolvedThreadId,
+                    resourceId: "consultant-session",
+                    abortSignal: controller.signal,
+                  }),
+              ),
+            );
           } catch (streamInitErr) {
             clearTimeout(timer);
-            const e = streamInitErr instanceof Error ? streamInitErr : new Error(String(streamInitErr));
-            span.finalize({
-              success: false,
-              errorClass: e.constructor.name,
-              errorMessage: e.message,
-            }).catch(() => {});
+            const e =
+              streamInitErr instanceof Error
+                ? streamInitErr
+                : new Error(String(streamInitErr));
+            span
+              .finalize({
+                success: false,
+                errorClass: e.constructor.name,
+                errorMessage: e.message,
+              })
+              .catch(() => {});
             throw streamInitErr;
           }
 
@@ -242,7 +288,9 @@ export const consultantRoutes = [
                 await span.run(async () => {
                   for await (const chunk of stream.textStream) {
                     streamController.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`)
+                      encoder.encode(
+                        `data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
+                      ),
                     );
                   }
                 });
@@ -253,17 +301,23 @@ export const consultantRoutes = [
                 // messageId comes from main and is used by the client to
                 // address an individual assistant turn for editing/threading.
                 streamController.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`)
+                  encoder.encode(
+                    `data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`,
+                  ),
                 );
                 streamController.close();
               } catch (err) {
                 streamSuccess = false;
-                streamError = err instanceof Error ? err : new Error(String(err));
-                const errMsg = err instanceof Error && err.name === 'AbortError'
-                  ? 'Request timed out. Please try a simpler query.'
-                  : 'Stream error';
+                streamError =
+                  err instanceof Error ? err : new Error(String(err));
+                const errMsg =
+                  err instanceof Error && err.name === "AbortError"
+                    ? "Request timed out. Please try a simpler query."
+                    : "Stream error";
                 streamController.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`)
+                  encoder.encode(
+                    `data: ${JSON.stringify({ error: errMsg })}\n\n`,
+                  ),
                 );
                 streamController.close();
               } finally {
@@ -278,27 +332,36 @@ export const consultantRoutes = [
                   try {
                     const usage = await Promise.race([
                       stream.usage ?? Promise.resolve(null),
-                      new Promise<null>(res => setTimeout(() => res(null), 2000)),
+                      new Promise<null>((res) =>
+                        setTimeout(() => res(null), 2000),
+                      ),
                     ]);
-                    if (usage && typeof usage === 'object') {
+                    if (usage && typeof usage === "object") {
                       const u = usage as Record<string, unknown>;
-                      const pt = u.promptTokens     ?? u.prompt_tokens;
+                      const pt = u.promptTokens ?? u.prompt_tokens;
                       const ct = u.completionTokens ?? u.completion_tokens;
-                      const tt = u.totalTokens      ?? u.total_tokens;
-                      promptTokens     = typeof pt === 'number' ? pt : undefined;
-                      completionTokens = typeof ct === 'number' ? ct : undefined;
-                      totalTokens      = typeof tt === 'number' ? tt : undefined;
+                      const tt = u.totalTokens ?? u.total_tokens;
+                      promptTokens = typeof pt === "number" ? pt : undefined;
+                      completionTokens =
+                        typeof ct === "number" ? ct : undefined;
+                      totalTokens = typeof tt === "number" ? tt : undefined;
                     }
-                  } catch { /* usage unavailable */ }
+                  } catch {
+                    /* usage unavailable */
+                  }
                 }
-                span.finalize({
-                  success: streamSuccess,
-                  promptTokens,
-                  completionTokens,
-                  totalTokens,
-                  errorClass: streamError ? streamError.constructor.name : undefined,
-                  errorMessage: streamError?.message,
-                }).catch(() => {});
+                span
+                  .finalize({
+                    success: streamSuccess,
+                    promptTokens,
+                    completionTokens,
+                    totalTokens,
+                    errorClass: streamError
+                      ? streamError.constructor.name
+                      : undefined,
+                    errorMessage: streamError?.message,
+                  })
+                  .catch(() => {});
               }
             },
           });
@@ -307,11 +370,11 @@ export const consultantRoutes = [
             headers: {
               "Content-Type": "text/event-stream",
               "Cache-Control": "no-cache",
-              "Connection": "keep-alive",
+              Connection: "keep-alive",
             },
           });
         } catch (error) {
-          console.error("[Consultant] Stream error:", error);
+          logger.error("[Consultant] Stream error:", error);
           return c.json({ error: "Failed to start stream" }, 500);
         }
       };
@@ -343,7 +406,7 @@ export const consultantRoutes = [
 
           return c.json(result);
         } catch (error) {
-          console.error("[Consultant] Alerts fetch error:", error);
+          logger.error("[Consultant] Alerts fetch error:", error);
           return c.json({ error: "Failed to fetch alerts" }, 500);
         }
       };
@@ -450,15 +513,26 @@ export const consultantRoutes = [
 
           const body = await c.req.json();
           const {
-            messageId, conversationId, rating, category, comment,
-            promptPreview, responsePreview, toolsCalled,
+            messageId,
+            conversationId,
+            rating,
+            category,
+            comment,
+            promptPreview,
+            responsePreview,
+            toolsCalled,
             promptVersion: clientPromptVersion,
             ratingSource: clientRatingSource,
             clientSurface: clientSurfaceInput,
           } = body;
 
-          if (!messageId || !rating || !['up', 'down'].includes(rating)) {
-            return c.json({ error: "messageId and valid rating ('up'|'down') are required" }, 400);
+          if (!messageId || !rating || !["up", "down"].includes(rating)) {
+            return c.json(
+              {
+                error: "messageId and valid rating ('up'|'down') are required",
+              },
+              400,
+            );
           }
 
           // Validate caller-supplied metadata strings: trim, drop empties,
@@ -494,7 +568,7 @@ export const consultantRoutes = [
           const result = await saveFeedback({
             message_id: messageId,
             conversation_id: conversationId || undefined,
-            agent: 'qmsConsultantAgent',
+            agent: "qmsConsultantAgent",
             rating,
             category: category || undefined,
             comment: comment ? String(comment).substring(0, 1000) : undefined,
@@ -502,13 +576,15 @@ export const consultantRoutes = [
             user_email: user.email,
             prompt_preview: promptPreview || undefined,
             response_preview: responsePreview || undefined,
-            tools_called: toolsCalled ? JSON.stringify(toolsCalled).substring(0, 1000) : undefined,
+            tools_called: toolsCalled
+              ? JSON.stringify(toolsCalled).substring(0, 1000)
+              : undefined,
             metadata: feedbackMetadata,
           });
 
           return c.json({ success: true, id: result.id });
         } catch (error) {
-          console.error("[Consultant] Feedback save error:", error);
+          logger.error("[Consultant] Feedback save error:", error);
           return c.json({ error: "Failed to save feedback" }, 500);
         }
       };
@@ -521,12 +597,15 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, ['admin', 'ai_specialist'] as UserRole[]);
+          const user = await requireRole(c, [
+            "admin",
+            "ai_specialist",
+          ] as UserRole[]);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const days = parseInt(c.req.query("days") || "30");
 
-          const isAdmin = user.role === 'admin';
+          const isAdmin = user.role === "admin";
           const [stats, recent] = await Promise.all([
             getFeedbackStats(days),
             isAdmin ? getRecentThumbsDown(20) : Promise.resolve([]),
@@ -534,7 +613,7 @@ export const consultantRoutes = [
 
           return c.json({ stats, recent, isAdmin });
         } catch (error) {
-          console.error("[Consultant] Feedback stats error:", error);
+          logger.error("[Consultant] Feedback stats error:", error);
           return c.json({ error: "Failed to fetch feedback stats" }, 500);
         }
       };
@@ -547,12 +626,16 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, ['admin', 'ai_specialist'] as UserRole[]);
+          const user = await requireRole(c, [
+            "admin",
+            "ai_specialist",
+          ] as UserRole[]);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const days = parseInt(c.req.query("days") || "30");
           const agentParam = c.req.query("agent");
-          const normalized = typeof agentParam === "string" ? agentParam.trim() : "";
+          const normalized =
+            typeof agentParam === "string" ? agentParam.trim() : "";
           const agent = normalized && normalized !== "all" ? normalized : null;
 
           const [trend, agents] = await Promise.all([
@@ -562,7 +645,7 @@ export const consultantRoutes = [
 
           return c.json({ trend, agents, agent: agent || "all" });
         } catch (error) {
-          console.error("[Consultant] Feedback trend error:", error);
+          logger.error("[Consultant] Feedback trend error:", error);
           return c.json({ error: "Failed to fetch feedback trend" }, 500);
         }
       };
@@ -583,12 +666,20 @@ export const consultantRoutes = [
             return c.json({ error: "messageId is required" }, 400);
           }
 
-          const feedback = await getFeedbackByMessageId(messageId, user.userId, user.email);
+          const feedback = await getFeedbackByMessageId(
+            messageId,
+            user.userId,
+            user.email,
+          );
           if (!feedback) return c.json({ rating: null });
 
-          return c.json({ rating: feedback.rating, category: feedback.category, comment: feedback.comment });
+          return c.json({
+            rating: feedback.rating,
+            category: feedback.category,
+            comment: feedback.comment,
+          });
         } catch (error) {
-          console.error("[Consultant] Feedback get error:", error);
+          logger.error("[Consultant] Feedback get error:", error);
           return c.json({ error: "Failed to fetch feedback" }, 500);
         }
       };
@@ -620,25 +711,34 @@ export const consultantRoutes = [
 
 IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a detailed findings report with severity ratings. At the end of the summary, list which findings warrant alerts and ask the user whether they would like you to create them. Present findings grouped by severity (Critical → High → Medium → Low).`;
 
-          const scanTimeout = parseInt(process.env.CONSULTANT_SCAN_TIMEOUT_MS || '300000');
+          const scanTimeout = parseInt(
+            process.env.CONSULTANT_SCAN_TIMEOUT_MS || "300000",
+          );
           const scanController = new AbortController();
-          const scanTimer = setTimeout(() => scanController.abort(), scanTimeout);
+          const scanTimer = setTimeout(
+            () => scanController.abort(),
+            scanTimeout,
+          );
 
           let scanResult: AgentTextResult | undefined;
           try {
             const { result } = await withAiTelemetry<AgentTextResult>(
-              { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
+              {
+                agentName: "WalaPlus QMS Consultant",
+                model: "gpt-4o",
                 promptText: scanPrompt.slice(0, 300),
                 userId: user.userId,
                 metadata: buildAiCallTelemetryMetadata({
-                  scanType: 'platform_scan',
+                  scanType: "platform_scan",
                   promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
-                }) },
-              async () => (await agent.generateLegacy(scanPrompt, {
-                threadId: `scan-${Date.now()}`,
-                resourceId: "system-scanner",
-                abortSignal: scanController.signal,
-              })) as AgentTextResult
+                }),
+              },
+              async () =>
+                (await agent.generateLegacy(scanPrompt, {
+                  threadId: `scan-${Date.now()}`,
+                  resourceId: "system-scanner",
+                  abortSignal: scanController.signal,
+                })) as AgentTextResult,
             );
             scanResult = result;
           } finally {
@@ -647,10 +747,10 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
 
           return c.json({
             success: true,
-            summary: scanResult?.text ?? '',
+            summary: scanResult?.text ?? "",
           });
         } catch (error) {
-          console.error("[Consultant] Scan error:", error);
+          logger.error("[Consultant] Scan error:", error);
           return c.json({ error: "Failed to run platform scan" }, 500);
         }
       };
@@ -684,29 +784,39 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
             ];
 
             try {
-              const { runBackgroundScan } = await import("../../utils/aiBackgroundScanner");
+              const { runBackgroundScan } =
+                await import("../../utils/aiBackgroundScanner");
 
               for (const step of steps) {
-                streamController.enqueue(encoder.encode(
-                  `data: ${JSON.stringify({ step: step.label, pct: step.pct })}\n\n`
-                ));
+                streamController.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ step: step.label, pct: step.pct })}\n\n`,
+                  ),
+                );
               }
 
               const result = await runBackgroundScan();
-              streamController.enqueue(encoder.encode(
-                `data: ${JSON.stringify({ done: true, pct: 100, result })}\n\n`
-              ));
+              streamController.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ done: true, pct: 100, result })}\n\n`,
+                ),
+              );
             } catch (err) {
-              streamController.enqueue(encoder.encode(
-                `data: ${JSON.stringify({ error: err instanceof Error ? err.message : "Scan failed" })}\n\n`
-              ));
+              streamController.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ error: err instanceof Error ? err.message : "Scan failed" })}\n\n`,
+                ),
+              );
             }
             streamController.close();
           },
         });
 
         return new Response(readable, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+          },
         });
       };
     },

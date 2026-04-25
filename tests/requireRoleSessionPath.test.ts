@@ -82,6 +82,17 @@ class StubPool {
   on(): this {
     return this;
   }
+  // Required by `wrapPoolForRedaction` which binds `pool.connect` even when
+  // the test never actually checks out a transactional client.
+  async connect(): Promise<{
+    query: (sql: string, params?: unknown[]) => Promise<{ rows: StubRow[] }>;
+    release: () => void;
+  }> {
+    return {
+      query: (sql, params) => this.query(sql, (params ?? []) as unknown[]),
+      release: () => undefined,
+    };
+  }
 }
 
 (pg as any).Pool = StubPool;

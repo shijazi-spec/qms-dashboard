@@ -1,6 +1,7 @@
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
 
+import { logger } from "../../utils/logger";
 export const a11yRoutes = [
   {
     path: "/a11y",
@@ -19,7 +20,7 @@ export const a11yRoutes = [
           }
           return c.text("Accessibility statement not found", 404);
         } catch (error) {
-          console.error("Error serving accessibility statement:", error);
+          logger.error("Error serving accessibility statement:", error);
           return c.text("Error loading accessibility statement", 500);
         }
       };

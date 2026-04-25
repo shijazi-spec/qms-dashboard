@@ -67,7 +67,20 @@ const ADMIN_HEADERS = {
 const { mockQuery, mockEnd, mockPool } = vi.hoisted(() => {
   const q = vi.fn();
   const e = vi.fn().mockResolvedValue(undefined);
-  return { mockQuery: q, mockEnd: e, mockPool: { query: q, end: e } };
+  // `wrapPoolForRedaction` (src/utils/redactedPool.ts) binds `pool.connect`
+  // and registers `pool.on('error', ...)` at module-graph load time, so the
+  // hoisted mock must expose those surfaces even though no test in this file
+  // actually checks out a transactional client.
+  const pool: Record<string, unknown> = {
+    query: q,
+    end: e,
+    on: () => pool,
+    connect: async () => ({
+      query: q,
+      release: () => undefined,
+    }),
+  };
+  return { mockQuery: q, mockEnd: e, mockPool: pool };
 });
 
 vi.mock("pg", () => {

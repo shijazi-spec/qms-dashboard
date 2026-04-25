@@ -632,7 +632,7 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     // credential-warning-count, and review-status-counts endpoints are
     // expected and excluded from this assertion.
     const detailCalls = calls.filter((u: string) =>
-      /^\/api\/ai\/approvals\/(?!credential-warning-count|review-status-counts|pending-count)/.test(u),
+      /^\/api\/ai\/approvals\/(?!credential-warning-count|review-status-counts|risk-level-counts|status-counts|pending-count)/.test(u),
     );
     expect(detailCalls).toEqual([]);
   });

@@ -28,46 +28,58 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import pg from 'pg';
+import pg from "pg";
 const { Pool } = pg;
-import { createHash } from 'crypto';
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash } from "crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { logger } from "./logger";
 import {
   redactSensitiveDeep,
   redactSecretLikeStrings,
   deepRedactSecretLikeStrings,
-} from './eventLogsDatabase';
+} from "./eventLogsDatabase";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Price table — USD per 1 000 tokens
 // ──────────────────────────────────────────────────────────────────────────────
-export const MODEL_PRICE_TABLE: Record<string, { inputPer1k: number; outputPer1k: number }> = {
-  'gpt-4o':            { inputPer1k: 0.0025,   outputPer1k: 0.010   },
-  'gpt-4o-mini':       { inputPer1k: 0.00015,  outputPer1k: 0.0006  },
-  'gpt-4-turbo':       { inputPer1k: 0.010,    outputPer1k: 0.030   },
-  'gpt-4':             { inputPer1k: 0.030,    outputPer1k: 0.060   },
-  'gpt-3.5-turbo':     { inputPer1k: 0.0005,   outputPer1k: 0.0015  },
-  'gpt-4o-2024-11-20': { inputPer1k: 0.0025,   outputPer1k: 0.010   },
-  'gpt-4o-2024-08-06': { inputPer1k: 0.0025,   outputPer1k: 0.010   },
+export const MODEL_PRICE_TABLE: Record<
+  string,
+  { inputPer1k: number; outputPer1k: number }
+> = {
+  "gpt-4o": { inputPer1k: 0.0025, outputPer1k: 0.01 },
+  "gpt-4o-mini": { inputPer1k: 0.00015, outputPer1k: 0.0006 },
+  "gpt-4-turbo": { inputPer1k: 0.01, outputPer1k: 0.03 },
+  "gpt-4": { inputPer1k: 0.03, outputPer1k: 0.06 },
+  "gpt-3.5-turbo": { inputPer1k: 0.0005, outputPer1k: 0.0015 },
+  "gpt-4o-2024-11-20": { inputPer1k: 0.0025, outputPer1k: 0.01 },
+  "gpt-4o-2024-08-06": { inputPer1k: 0.0025, outputPer1k: 0.01 },
 };
 
-function computeCost(model: string, promptTokens: number, completionTokens: number): number {
-  const key = Object.keys(MODEL_PRICE_TABLE).find(k => model.startsWith(k)) ?? 'gpt-4o';
+function computeCost(
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+): number {
+  const key =
+    Object.keys(MODEL_PRICE_TABLE).find((k) => model.startsWith(k)) ?? "gpt-4o";
   const prices = MODEL_PRICE_TABLE[key];
-  return (promptTokens / 1000) * prices.inputPer1k + (completionTokens / 1000) * prices.outputPer1k;
+  return (
+    (promptTokens / 1000) * prices.inputPer1k +
+    (completionTokens / 1000) * prices.outputPer1k
+  );
 }
 
 function hashValue(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, 16);
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }
 
 const PII_PATTERNS: [RegExp, string][] = [
-  [/\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, '[EMAIL]'],
-  [/\b(?:\+?\d{1,3}[\s-])?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, '[PHONE]'],
-  [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]'],
-  [/\b(?:password|secret|token|key|auth)\s*[:=]\s*\S+/gi, '[REDACTED]'],
+  [/\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, "[EMAIL]"],
+  [/\b(?:\+?\d{1,3}[\s-])?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, "[PHONE]"],
+  [/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, "[CARD]"],
+  [/\b(?:password|secret|token|key|auth)\s*[:=]\s*\S+/gi, "[REDACTED]"],
 ];
 
 /**
@@ -100,7 +112,7 @@ export function redactErrorMessageForStorage(
  * JSONB column. The WRITE-path scrubber `redactMetadataForStorage()`
  * defends against that one layer too late: by the time it runs, the
  * secret has already been constructed in memory and (typically) logged
- * to stdout via `console.error` / Pino BEFORE telemetry redacts it for
+ * to stdout via logger.error / Pino BEFORE telemetry redacts it for
  * the DB. This typed shape is the source-side prevention; build it via
  * `buildAiCallTelemetryMetadata()`.
  *
@@ -144,14 +156,17 @@ export interface AiCallTelemetryMetadataInput {
   scanType?: string;
 }
 
-const TELEMETRY_METADATA_KEY_MAP: Record<keyof AiCallTelemetryMetadataInput, keyof AiCallTelemetryMetadata> = {
-  promptVersion: 'prompt_version',
-  featureFlag: 'feature_flag',
-  experimentArm: 'experiment_arm',
-  agentTemperature: 'agent_temperature',
-  workflow: 'workflow',
-  step: 'step',
-  scanType: 'scan_type',
+const TELEMETRY_METADATA_KEY_MAP: Record<
+  keyof AiCallTelemetryMetadataInput,
+  keyof AiCallTelemetryMetadata
+> = {
+  promptVersion: "prompt_version",
+  featureFlag: "feature_flag",
+  experimentArm: "experiment_arm",
+  agentTemperature: "agent_temperature",
+  workflow: "workflow",
+  step: "step",
+  scanType: "scan_type",
 };
 
 /**
@@ -189,7 +204,7 @@ export type BuiltAiCallTelemetryMetadata = AiCallTelemetryMetadata & {
  *
  * Defense-in-depth runtime guard: even if a caller bypasses the type
  * system via `as any`, unexpected keys are dropped and a
- * `console.warn` is emitted with an actionable message so the regression
+ * structured warn is emitted with an actionable message so the regression
  * shows up in the operator console rather than silently persisting.
  *
  * The return value carries the {@link BuiltAiCallTelemetryMetadata} brand
@@ -204,12 +219,15 @@ export function buildAiCallTelemetryMetadata(
   const out: AiCallTelemetryMetadata = {};
   const loose = input as Record<string, unknown>;
   for (const inputKey of Object.keys(loose)) {
-    const mapped = TELEMETRY_METADATA_KEY_MAP[inputKey as keyof AiCallTelemetryMetadataInput];
+    const mapped =
+      TELEMETRY_METADATA_KEY_MAP[
+        inputKey as keyof AiCallTelemetryMetadataInput
+      ];
     if (!mapped) {
-      console.warn(
+      logger.warn(
         `[aiTelemetry] buildAiCallTelemetryMetadata received unexpected key "${inputKey}". ` +
-        `Allowed keys: ${Object.keys(TELEMETRY_METADATA_KEY_MAP).join(', ')}. ` +
-        `The key was dropped to prevent credential-shaped substrings from reaching ai_call_metrics.metadata.`,
+          `Allowed keys: ${Object.keys(TELEMETRY_METADATA_KEY_MAP).join(", ")}. ` +
+          `The key was dropped to prevent credential-shaped substrings from reaching ai_call_metrics.metadata.`,
       );
       continue;
     }
@@ -246,11 +264,15 @@ export function buildAiCallTelemetryMetadata(
  * straight into `JSON.stringify` without an extra `?? {}`.
  */
 export function redactMetadataForStorage(
-  metadata: AiCallTelemetryMetadata | Record<string, unknown> | null | undefined,
+  metadata:
+    | AiCallTelemetryMetadata
+    | Record<string, unknown>
+    | null
+    | undefined,
 ): Record<string, unknown> {
   if (!metadata) return {};
   const scrubbed = deepRedactSecretLikeStrings(metadata);
-  if (scrubbed && typeof scrubbed === 'object' && !Array.isArray(scrubbed)) {
+  if (scrubbed && typeof scrubbed === "object" && !Array.isArray(scrubbed)) {
     return scrubbed as Record<string, unknown>;
   }
   return {};
@@ -282,10 +304,13 @@ export function redactPromptPreview(prompt: string, maxLen = 300): string {
  *
  * Returns undefined for null/undefined so we don't store an empty string.
  */
-export function redactToolPayloadPreview(payload: unknown, maxLen = 300): string | undefined {
+export function redactToolPayloadPreview(
+  payload: unknown,
+  maxLen = 300,
+): string | undefined {
   if (payload === undefined || payload === null) return undefined;
   let asString: string;
-  if (typeof payload === 'string') {
+  if (typeof payload === "string") {
     asString = String(redactSecretLikeStrings(payload));
   } else {
     try {
@@ -405,7 +430,9 @@ export interface AiCallMetricRow {
   metadata?: AiCallTelemetryMetadata;
 }
 
-export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number | null> {
+export async function insertAiCallMetric(
+  row: AiCallMetricRow,
+): Promise<number | null> {
   try {
     await ensureAiMetricsTable();
 
@@ -444,11 +471,11 @@ export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number |
         row.user_hash ?? null,
         row.session_hash ?? null,
         JSON.stringify(redactMetadataForStorage(row.metadata)),
-      ]
+      ],
     );
     return result.rows[0]?.id ?? null;
   } catch (err) {
-    console.error('[aiTelemetry] Failed to insert metric:', err);
+    logger.error("[aiTelemetry] Failed to insert metric:", err);
     return null;
   }
 }
@@ -491,11 +518,11 @@ async function openAiCallMetric(params: {
         params.userId ? hashValue(params.userId) : null,
         params.sessionId ? hashValue(params.sessionId) : null,
         JSON.stringify(redactMetadataForStorage(params.metadata)),
-      ]
+      ],
     );
     return result.rows[0]?.id ?? null;
   } catch (err) {
-    console.error('[aiTelemetry] Failed to open metric:', err);
+    logger.error("[aiTelemetry] Failed to open metric:", err);
     return null;
   }
 }
@@ -511,12 +538,16 @@ async function finalizeAiCallMetric(
     success: boolean;
     errorClass?: string;
     errorMessage?: string;
-  }
+  },
 ): Promise<void> {
   try {
     const cost =
       finals.promptTokens != null && finals.completionTokens != null
-        ? computeCost(finals.model, finals.promptTokens, finals.completionTokens)
+        ? computeCost(
+            finals.model,
+            finals.promptTokens,
+            finals.completionTokens,
+          )
         : 0;
     await pool.query(
       `UPDATE ai_call_metrics
@@ -539,10 +570,10 @@ async function finalizeAiCallMetric(
         finals.success,
         finals.errorClass ?? null,
         redactErrorMessageForStorage(finals.errorMessage),
-      ]
+      ],
     );
   } catch (err) {
-    console.error('[aiTelemetry] Failed to finalize metric:', err);
+    logger.error("[aiTelemetry] Failed to finalize metric:", err);
   }
 }
 
@@ -565,7 +596,9 @@ export interface TelemetrySpan {
   }): Promise<void>;
 }
 
-export async function startTelemetrySpan(params: WithAiTelemetryParams): Promise<TelemetrySpan> {
+export async function startTelemetrySpan(
+  params: WithAiTelemetryParams,
+): Promise<TelemetrySpan> {
   const startedAt = Date.now();
   const promptPreview = params.promptText
     ? redactPromptPreview(params.promptText)
@@ -620,7 +653,7 @@ export interface WithAiTelemetryParams {
 
 export async function withAiTelemetry<T>(
   params: WithAiTelemetryParams,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<{ result: T; callId: number | null }> {
   const span = await startTelemetrySpan(params);
 
@@ -630,20 +663,28 @@ export async function withAiTelemetry<T>(
     const res = result as Record<string, unknown>;
     const rawUsage =
       (res?.usage as Record<string, unknown> | undefined) ??
-      ((res?.rawResponse as Record<string, unknown> | undefined)?.usage as Record<string, unknown> | undefined) ??
+      ((res?.rawResponse as Record<string, unknown> | undefined)?.usage as
+        | Record<string, unknown>
+        | undefined) ??
       null;
     const promptTokens =
-      typeof rawUsage?.promptTokens === 'number' ? rawUsage.promptTokens
-      : typeof rawUsage?.prompt_tokens === 'number' ? rawUsage.prompt_tokens
-      : undefined;
+      typeof rawUsage?.promptTokens === "number"
+        ? rawUsage.promptTokens
+        : typeof rawUsage?.prompt_tokens === "number"
+          ? rawUsage.prompt_tokens
+          : undefined;
     const completionTokens =
-      typeof rawUsage?.completionTokens === 'number' ? rawUsage.completionTokens
-      : typeof rawUsage?.completion_tokens === 'number' ? rawUsage.completion_tokens
-      : undefined;
+      typeof rawUsage?.completionTokens === "number"
+        ? rawUsage.completionTokens
+        : typeof rawUsage?.completion_tokens === "number"
+          ? rawUsage.completion_tokens
+          : undefined;
     const totalTokens =
-      typeof rawUsage?.totalTokens === 'number' ? rawUsage.totalTokens
-      : typeof rawUsage?.total_tokens === 'number' ? rawUsage.total_tokens
-      : undefined;
+      typeof rawUsage?.totalTokens === "number"
+        ? rawUsage.totalTokens
+        : typeof rawUsage?.total_tokens === "number"
+          ? rawUsage.total_tokens
+          : undefined;
 
     await span.finalize({
       success: true,
@@ -656,7 +697,7 @@ export async function withAiTelemetry<T>(
   } catch (err) {
     await span.finalize({
       success: false,
-      errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
+      errorClass: err instanceof Error ? err.constructor.name : "UnknownError",
       errorMessage: err instanceof Error ? err.message : String(err),
     });
     throw err;
@@ -682,16 +723,19 @@ type WrappableTool = {
 };
 
 function describeToolFailure(result: unknown): string | null {
-  if (result === null || typeof result !== 'object') return null;
+  if (result === null || typeof result !== "object") return null;
   const r = result as Record<string, unknown>;
   if (r.success !== false) return null;
   if (r.queued === true) return null; // HITL-gated queue is not an error
-  if (typeof r.error === 'string') return r.error;
-  if (typeof r.message === 'string') return r.message;
-  return 'Tool returned success=false';
+  if (typeof r.error === "string") return r.error;
+  if (typeof r.message === "string") return r.message;
+  return "Tool returned success=false";
 }
 
-export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentName: string): T {
+export function wrapToolWithTelemetry<T extends WrappableTool>(
+  tool: T,
+  agentName: string,
+): T {
   const originalExecute = tool.execute;
   const toolId = tool.id;
   if (!originalExecute || !toolId) return tool;
@@ -719,13 +763,13 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
       const failureMessage = describeToolFailure(result);
       if (failureMessage !== null) {
         success = false;
-        errorClass = 'ToolReturnedFailure';
+        errorClass = "ToolReturnedFailure";
         errorMessage = failureMessage;
       }
       return result;
     } catch (err) {
       success = false;
-      errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
+      errorClass = err instanceof Error ? err.constructor.name : "UnknownError";
       errorMessage = err instanceof Error ? err.message : String(err);
       // Even on hard failures we still want the redacted error string in
       // tool_output_preview so the dashboard can show what came back.
@@ -738,14 +782,16 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
         agent_name: agentName,
         tool_name: toolId,
         parent_call_id: parentCallId ?? undefined,
-        model: 'tool',
+        model: "tool",
         latency_ms: latencyMs,
         success,
         error_class: errorClass,
         error_message: errorMessage,
         tool_input_preview: toolInputPreview,
         tool_output_preview: toolOutputPreview,
-      }).catch(() => { /* non-fatal */ });
+      }).catch(() => {
+        /* non-fatal */
+      });
     }
   };
 
@@ -754,11 +800,9 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
   // tool's prototype (e.g. Mastra's Tool class) and all original fields
   // (id, description, inputSchema, outputSchema, requireApproval, etc.).
   const proto = Object.getPrototypeOf(tool) as object | null;
-  const cloned = Object.assign(
-    proto ? Object.create(proto) : {},
-    tool,
-    { execute: wrappedExecute as unknown as T['execute'] },
-  ) as T;
+  const cloned = Object.assign(proto ? Object.create(proto) : {}, tool, {
+    execute: wrappedExecute as unknown as T["execute"],
+  }) as T;
   return cloned;
 }
 
@@ -788,7 +832,16 @@ export interface RecordStreamTelemetryParams {
   agentName: string;
   model: string;
   startedAt: number;
-  stream: { usage?: Promise<{ promptTokens?: number; completionTokens?: number; totalTokens?: number; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }> } | null;
+  stream: {
+    usage?: Promise<{
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    }>;
+  } | null;
   success: boolean;
   errorClass?: string;
   errorMessage?: string;
@@ -819,11 +872,12 @@ export async function recordStreamTelemetry(params: RecordStreamTelemetryParams)
     try {
       const usage = await Promise.race([
         params.stream.usage ?? Promise.resolve(null),
-        new Promise<null>(res => setTimeout(() => res(null), 2000)),
+        new Promise<null>((res) => setTimeout(() => res(null), 2000)),
       ]);
       if (usage) {
         promptTokens = usage.promptTokens ?? usage.prompt_tokens ?? undefined;
-        completionTokens = usage.completionTokens ?? usage.completion_tokens ?? undefined;
+        completionTokens =
+          usage.completionTokens ?? usage.completion_tokens ?? undefined;
         totalTokens = usage.totalTokens ?? usage.total_tokens ?? undefined;
       }
     } catch {
@@ -874,7 +928,7 @@ export const DEFAULT_AI_METRICS_RETENTION_DAYS = 90;
  */
 export function resolveAiMetricsRetentionDays(): number {
   const raw = process.env.AI_METRICS_RETENTION_DAYS;
-  if (raw == null || raw === '') return DEFAULT_AI_METRICS_RETENTION_DAYS;
+  if (raw == null || raw === "") return DEFAULT_AI_METRICS_RETENTION_DAYS;
   const parsed = parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return DEFAULT_AI_METRICS_RETENTION_DAYS;
@@ -903,17 +957,23 @@ export function resolveAiMetricsRetentionDays(): number {
 export async function resolveEffectiveAiMetricsRetentionDays(): Promise<number> {
   const envValue = resolveAiMetricsRetentionDays();
   try {
-    const { isAiMetricsRetentionLocked, getAiMetricsRetentionConfig } = await import(
-      './aiMetricsRetentionConfig'
-    );
+    const { isAiMetricsRetentionLocked, getAiMetricsRetentionConfig } =
+      await import("./aiMetricsRetentionConfig");
     if (isAiMetricsRetentionLocked()) return envValue;
     const cfg = await getAiMetricsRetentionConfig();
-    if (cfg.retention_days != null && Number.isFinite(cfg.retention_days) && cfg.retention_days > 0) {
+    if (
+      cfg.retention_days != null &&
+      Number.isFinite(cfg.retention_days) &&
+      cfg.retention_days > 0
+    ) {
       return Math.max(1, Math.floor(cfg.retention_days));
     }
     return envValue;
   } catch (err) {
-    console.error('[aiTelemetry] resolveEffectiveAiMetricsRetentionDays fallback:', err);
+    logger.error(
+      "[aiTelemetry] resolveEffectiveAiMetricsRetentionDays fallback:",
+      err,
+    );
     return envValue;
   }
 }
@@ -975,14 +1035,18 @@ async function recordPruneRun(row: {
       ],
     );
   } catch (err) {
-    console.error('[aiTelemetry] Failed to record prune run:', err);
+    logger.error("[aiTelemetry] Failed to record prune run:", err);
   }
 }
 
-export async function pruneOldAiMetrics(retentionDays?: number): Promise<number> {
+export async function pruneOldAiMetrics(
+  retentionDays?: number,
+): Promise<number> {
   const startedAt = Date.now();
   const days =
-    typeof retentionDays === 'number' && Number.isFinite(retentionDays) && retentionDays > 0
+    typeof retentionDays === "number" &&
+    Number.isFinite(retentionDays) &&
+    retentionDays > 0
       ? Math.max(1, Math.floor(retentionDays))
       : resolveAiMetricsRetentionDays();
   try {
@@ -1000,7 +1064,7 @@ export async function pruneOldAiMetrics(retentionDays?: number): Promise<number>
     });
     return deleted;
   } catch (err) {
-    console.error('[aiTelemetry] Pruning failed:', err);
+    logger.error("[aiTelemetry] Pruning failed:", err);
     await recordPruneRun({
       retention_days: days,
       rows_deleted: 0,
@@ -1104,7 +1168,8 @@ export async function getAiMetricsTableStats(): Promise<AiMetricsTableStats> {
   // (the cron only runs once per day) is intentionally NOT applied here —
   // the dashboard tile owns the visual styling and can pick its own
   // threshold for amber vs red if desired in the future.
-  const exceedsRetention = oldestAgeDays != null && oldestAgeDays > retentionDays;
+  const exceedsRetention =
+    oldestAgeDays != null && oldestAgeDays > retentionDays;
 
   return {
     rowCount,
@@ -1188,9 +1253,11 @@ export async function getAiMetricsPruneRunHistory(
  * `AI_METRICS_RETENTION_BOUNDS` first, so reaching this function with a
  * non-positive value is a programmer error.
  */
-export async function countAiMetricsOlderThan(retentionDays: number): Promise<number> {
+export async function countAiMetricsOlderThan(
+  retentionDays: number,
+): Promise<number> {
   if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
-    throw new Error('retentionDays must be a positive number');
+    throw new Error("retentionDays must be a positive number");
   }
   await ensureAiMetricsTable();
   const days = Math.max(1, Math.floor(retentionDays));
@@ -1204,7 +1271,7 @@ export async function countAiMetricsOlderThan(retentionDays: number): Promise<nu
   // pg returns BIGINT as a string by default. Coerce safely; the table is
   // pruned daily so the value will always fit in a JS Number long-term,
   // but we still guard against NaN from an unexpected payload shape.
-  const n = typeof raw === 'string' ? Number(raw) : raw;
+  const n = typeof raw === "string" ? Number(raw) : raw;
   return Number.isFinite(n) ? Number(n) : 0;
 }
 
@@ -1246,7 +1313,7 @@ export async function previewAiMetricsPruneImpact(
   candidateDays: number,
 ): Promise<AiMetricsPruneImpactPreview> {
   if (!Number.isFinite(candidateDays) || candidateDays <= 0) {
-    throw new Error('candidateDays must be a positive number');
+    throw new Error("candidateDays must be a positive number");
   }
   await ensureAiMetricsTable();
   const days = Math.max(1, Math.floor(candidateDays));
@@ -1262,13 +1329,14 @@ export async function previewAiMetricsPruneImpact(
   );
   const row = result.rows[0] ?? {};
   const rawCount = row.count ?? 0;
-  const rowCountNum = typeof rawCount === 'string' ? Number(rawCount) : rawCount;
+  const rowCountNum =
+    typeof rawCount === "string" ? Number(rawCount) : rawCount;
   const rowCount = Number.isFinite(rowCountNum) ? Number(rowCountNum) : 0;
 
   let oldestRowAgeDays: number | null = null;
   if (row.oldest_age_days != null) {
     const n =
-      typeof row.oldest_age_days === 'string'
+      typeof row.oldest_age_days === "string"
         ? Number(row.oldest_age_days)
         : row.oldest_age_days;
     if (Number.isFinite(n)) oldestRowAgeDays = Number(n);
@@ -1314,8 +1382,8 @@ export async function purgeArchivedPromptVersionMetrics(
   try {
     await ensureAiMetricsTable();
     if (liveVersions.length === 0) {
-      console.warn(
-        '[aiTelemetry] purgeArchivedPromptVersionMetrics: no live versions supplied — skipping to avoid purging everything',
+      logger.warn(
+        "[aiTelemetry] purgeArchivedPromptVersionMetrics: no live versions supplied — skipping to avoid purging everything",
       );
       return 0;
     }
@@ -1340,7 +1408,10 @@ export async function purgeArchivedPromptVersionMetrics(
     );
     return result.rowCount ?? 0;
   } catch (err) {
-    console.error('[aiTelemetry] purgeArchivedPromptVersionMetrics failed:', err);
+    logger.error(
+      "[aiTelemetry] purgeArchivedPromptVersionMetrics failed:",
+      err,
+    );
     return 0;
   }
 }
@@ -1399,7 +1470,11 @@ export async function recordPromptVersionPurgeRun(
       `INSERT INTO prompt_version_purge_runs (deleted_count, retention_days, live_versions)
        VALUES ($1, $2, $3)
        RETURNING id`,
-      [Math.max(0, Math.floor(deletedCount)), Math.max(1, Math.floor(retentionDays)), liveVersions],
+      [
+        Math.max(0, Math.floor(deletedCount)),
+        Math.max(1, Math.floor(retentionDays)),
+        liveVersions,
+      ],
     );
     // Trim history to the most-recent N rows so the table cannot grow without
     // bound. Cheap because the index above orders rows by ran_at DESC.
@@ -1414,7 +1489,7 @@ export async function recordPromptVersionPurgeRun(
     );
     return result.rows[0]?.id ?? null;
   } catch (err) {
-    console.error('[aiTelemetry] recordPromptVersionPurgeRun failed:', err);
+    logger.error("[aiTelemetry] recordPromptVersionPurgeRun failed:", err);
     return null;
   }
 }
@@ -1432,13 +1507,16 @@ export async function getLastPromptVersionPurgeRun(): Promise<PromptVersionPurge
     const row = result.rows[0];
     return {
       id: Number(row.id),
-      ran_at: row.ran_at instanceof Date ? row.ran_at.toISOString() : String(row.ran_at),
+      ran_at:
+        row.ran_at instanceof Date
+          ? row.ran_at.toISOString()
+          : String(row.ran_at),
       deleted_count: Number(row.deleted_count) || 0,
       retention_days: Number(row.retention_days) || 0,
       live_versions: Array.isArray(row.live_versions) ? row.live_versions : [],
     };
   } catch (err) {
-    console.error('[aiTelemetry] getLastPromptVersionPurgeRun failed:', err);
+    logger.error("[aiTelemetry] getLastPromptVersionPurgeRun failed:", err);
     return null;
   }
 }
@@ -1460,7 +1538,7 @@ export async function getWeeklyCostTrend(days = 14): Promise<any[]> {
        AND tool_name IS NULL
      GROUP BY DATE(started_at AT TIME ZONE 'UTC')
      ORDER BY day`,
-    [days]
+    [days],
   );
   return result.rows;
 }
@@ -1483,15 +1561,18 @@ export async function getAgentLatencyPercentiles(): Promise<any[]> {
      WHERE started_at >= NOW() - INTERVAL '7 days'
        AND tool_name IS NULL
      GROUP BY agent_name
-     ORDER BY total_cost DESC`
+     ORDER BY total_cost DESC`,
   );
   return result.rows;
 }
 
-export async function getTopToolsByCost(limit = 10, agentName?: string): Promise<any[]> {
+export async function getTopToolsByCost(
+  limit = 10,
+  agentName?: string,
+): Promise<any[]> {
   await ensureAiMetricsTable();
   const params: any[] = [limit];
-  let agentFilter = '';
+  let agentFilter = "";
   if (agentName && agentName.trim()) {
     params.push(agentName.trim());
     agentFilter = `AND agent_name = $${params.length}`;
@@ -1514,7 +1595,7 @@ export async function getTopToolsByCost(limit = 10, agentName?: string): Promise
      GROUP BY tool_name, agent_name
      ORDER BY total_cost DESC, call_count DESC
      LIMIT $1`,
-    params
+    params,
   );
   return result.rows;
 }
@@ -1567,9 +1648,9 @@ export async function getKnownAgentNames(): Promise<string[]> {
      FROM ai_call_metrics
      WHERE tool_name IS NOT NULL
        AND started_at >= NOW() - INTERVAL '7 days'
-     ORDER BY agent_name`
+     ORDER BY agent_name`,
   );
-  return result.rows.map(r => r.agent_name);
+  return result.rows.map((r) => r.agent_name);
 }
 
 /**
@@ -1587,16 +1668,18 @@ export const CHILD_TOOL_CALLS_SQL = `SELECT
      WHERE parent_call_id = $1
      ORDER BY started_at ASC, id ASC`;
 
-export async function getChildToolCallsForParent(parentId: number): Promise<{
-  id: string;
-  agent_name: string;
-  tool_name: string | null;
-  latency_ms: number;
-  success: boolean;
-  error_class: string | null;
-  error_message: string | null;
-  started_at: string;
-}[]> {
+export async function getChildToolCallsForParent(parentId: number): Promise<
+  {
+    id: string;
+    agent_name: string;
+    tool_name: string | null;
+    latency_ms: number;
+    success: boolean;
+    error_class: string | null;
+    error_message: string | null;
+    started_at: string;
+  }[]
+> {
   await ensureAiMetricsTable();
   const result = await pool.query(CHILD_TOOL_CALLS_SQL, [parentId]);
   return result.rows;
@@ -1644,7 +1727,9 @@ export async function getToolsWithCallsInWindow(
         AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)`,
     [windowMinutes],
   );
-  return new Set<string>(result.rows.map((r: { tool_name: string }) => r.tool_name));
+  return new Set<string>(
+    result.rows.map((r: { tool_name: string }) => r.tool_name),
+  );
 }
 
 export async function getToolWindowAggregates(
@@ -1688,23 +1773,25 @@ export async function getToolWindowAggregates(
   }));
 }
 
-export async function getRecentSlowFailedCalls(limit = 20): Promise<{
-  id: string;
-  agent_name: string;
-  tool_name: string | null;
-  model: string;
-  latency_ms: number;
-  estimated_cost_usd: string;
-  success: boolean;
-  error_class: string | null;
-  error_message: string | null;
-  prompt_preview: string | null;
-  tool_input_preview: string | null;
-  tool_output_preview: string | null;
-  started_at: string;
-  prompt_tokens: number | null;
-  completion_tokens: number | null;
-}[]> {
+export async function getRecentSlowFailedCalls(limit = 20): Promise<
+  {
+    id: string;
+    agent_name: string;
+    tool_name: string | null;
+    model: string;
+    latency_ms: number;
+    estimated_cost_usd: string;
+    success: boolean;
+    error_class: string | null;
+    error_message: string | null;
+    prompt_preview: string | null;
+    tool_input_preview: string | null;
+    tool_output_preview: string | null;
+    started_at: string;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+  }[]
+> {
   await ensureAiMetricsTable();
   const result = await pool.query(
     `SELECT
@@ -1718,7 +1805,7 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<{
        AND started_at >= NOW() - INTERVAL '7 days'
      ORDER BY started_at DESC
      LIMIT $1`,
-    [limit]
+    [limit],
   );
   return result.rows;
 }
@@ -1760,7 +1847,7 @@ export async function getCallById(callId: number): Promise<{
      FROM ai_call_metrics
      WHERE id = $1
      LIMIT 1`,
-    [callId]
+    [callId],
   );
   return result.rows[0] || null;
 }
@@ -1803,11 +1890,11 @@ async function ensureFeedbackTable(): Promise<void> {
 export const FEEDBACK_COMMENT_MAX_LEN = 1000;
 
 function sanitizeFeedbackComment(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
+  if (typeof raw !== "string") return null;
   // Strip HTML tags and common script vectors before storage.
-  let cleaned = raw.replace(/<[^>]*>/g, '');
-  cleaned = cleaned.replace(/javascript:/gi, '');
-  cleaned = cleaned.replace(/on\w+\s*=/gi, '');
+  let cleaned = raw.replace(/<[^>]*>/g, "");
+  cleaned = cleaned.replace(/javascript:/gi, "");
+  cleaned = cleaned.replace(/on\w+\s*=/gi, "");
   cleaned = cleaned.trim();
   if (!cleaned) return null;
   if (cleaned.length > FEEDBACK_COMMENT_MAX_LEN) {
@@ -1818,13 +1905,13 @@ function sanitizeFeedbackComment(raw: unknown): string | null {
 
 export async function insertCallFeedback(
   callId: number,
-  rating: 'thumbs_up' | 'thumbs_down',
+  rating: "thumbs_up" | "thumbs_down",
   userId?: string,
-  comment?: string | null
+  comment?: string | null,
 ): Promise<boolean> {
   try {
     await ensureFeedbackTable();
-    const userHash = userId ? hashValue(userId) : 'anonymous';
+    const userHash = userId ? hashValue(userId) : "anonymous";
     const cleanComment = sanitizeFeedbackComment(comment);
     await pool.query(
       `INSERT INTO ai_call_feedback (call_id, rating, user_hash, comment)
@@ -1832,11 +1919,11 @@ export async function insertCallFeedback(
        ON CONFLICT ON CONSTRAINT uq_ai_call_feedback_call_user
        DO UPDATE SET rating  = EXCLUDED.rating,
                      comment = COALESCE(EXCLUDED.comment, ai_call_feedback.comment)`,
-      [callId, rating, userHash, cleanComment]
+      [callId, rating, userHash, cleanComment],
     );
     return true;
   } catch (err) {
-    console.error('[aiTelemetry] Failed to insert feedback:', err);
+    logger.error("[aiTelemetry] Failed to insert feedback:", err);
     return false;
   }
 }
@@ -1923,9 +2010,10 @@ export async function getFeedbackRateByPromptVersion(
   // Guard against negative/NaN floors — a zero floor effectively disables
   // the small-sample protection, which is a valid (if discouraged) choice
   // we should still honour for callers that want raw aggregates.
-  const floor = Number.isFinite(minFeedback) && minFeedback >= 0
-    ? Math.floor(minFeedback)
-    : DEFAULT_PROMPT_VERSION_MIN_FEEDBACK;
+  const floor =
+    Number.isFinite(minFeedback) && minFeedback >= 0
+      ? Math.floor(minFeedback)
+      : DEFAULT_PROMPT_VERSION_MIN_FEEDBACK;
   const queryPool = _pool ?? pool;
   try {
     if (!_pool) {
@@ -1998,28 +2086,30 @@ export async function getFeedbackRateByPromptVersion(
        LEFT JOIN windowed w
          ON w.agent_name = g.agent_name AND w.prompt_version = g.prompt_version
        ORDER BY g.agent_name, g.last_seen_at DESC`,
-      [days, floor]
+      [days, floor],
     );
     return result.rows;
   } catch (err) {
-    console.error('[aiTelemetry] getFeedbackRateByPromptVersion failed:', err);
+    logger.error("[aiTelemetry] getFeedbackRateByPromptVersion failed:", err);
     return [];
   }
 }
 
-export async function getRecentNegativeFeedback(limit = 25): Promise<{
-  feedback_id: string;
-  call_id: string;
-  agent_name: string;
-  model: string;
-  comment: string | null;
-  created_at: string;
-  call_started_at: string;
-  prompt_preview: string | null;
-  latency_ms: number;
-  success: boolean;
-  error_class: string | null;
-}[]> {
+export async function getRecentNegativeFeedback(limit = 25): Promise<
+  {
+    feedback_id: string;
+    call_id: string;
+    agent_name: string;
+    model: string;
+    comment: string | null;
+    created_at: string;
+    call_started_at: string;
+    prompt_preview: string | null;
+    latency_ms: number;
+    success: boolean;
+    error_class: string | null;
+  }[]
+> {
   try {
     await ensureFeedbackTable();
     const result = await pool.query(
@@ -2041,22 +2131,24 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<{
          AND f.created_at >= NOW() - INTERVAL '30 days'
        ORDER BY f.created_at DESC
        LIMIT $1`,
-      [limit]
+      [limit],
     );
     return result.rows;
   } catch (err) {
-    console.error('[aiTelemetry] getRecentNegativeFeedback failed:', err);
+    logger.error("[aiTelemetry] getRecentNegativeFeedback failed:", err);
     return [];
   }
 }
 
-export async function getFeedbackRateByAgent(): Promise<{
-  agent_name: string;
-  total_feedback: number;
-  thumbs_up: number;
-  thumbs_down: number;
-  feedback_rate_pct: number;
-}[]> {
+export async function getFeedbackRateByAgent(): Promise<
+  {
+    agent_name: string;
+    total_feedback: number;
+    thumbs_up: number;
+    thumbs_down: number;
+    feedback_rate_pct: number;
+  }[]
+> {
   try {
     await ensureFeedbackTable();
     const result = await pool.query(
@@ -2073,7 +2165,7 @@ export async function getFeedbackRateByAgent(): Promise<{
        JOIN ai_call_metrics  m ON m.id = f.call_id
        WHERE f.created_at >= NOW() - INTERVAL '30 days'
        GROUP BY m.agent_name
-       ORDER BY total_feedback DESC`
+       ORDER BY total_feedback DESC`,
     );
     return result.rows;
   } catch {
@@ -2096,13 +2188,13 @@ export async function getDailyCostSummary(): Promise<{
        COALESCE(ROUND(AVG(latency_ms)::NUMERIC,0), 0) AS avg_latency_ms
      FROM ai_call_metrics
      WHERE started_at >= NOW() - INTERVAL '24 hours'
-       AND tool_name IS NULL`
+       AND tool_name IS NULL`,
   );
   const row = result.rows[0];
   return {
-    totalCostUsd:   parseFloat(row.total_cost_usd)  || 0,
-    callCount:      parseInt(row.call_count)         || 0,
-    errorCount:     parseInt(row.error_count)        || 0,
-    avgLatencyMs:   parseFloat(row.avg_latency_ms)   || 0,
+    totalCostUsd: parseFloat(row.total_cost_usd) || 0,
+    callCount: parseInt(row.call_count) || 0,
+    errorCount: parseInt(row.error_count) || 0,
+    avgLatencyMs: parseFloat(row.avg_latency_ms) || 0,
   };
 }

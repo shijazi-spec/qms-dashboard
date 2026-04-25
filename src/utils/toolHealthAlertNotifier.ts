@@ -52,8 +52,12 @@ import {
   claimToolHealthNotifySlot,
   recordAlertNotificationResult,
 } from "./aiAlertsDatabase";
-import type { ToolHealthConfigOverrides, ToolHealthConfigAuditEntry } from "./toolHealthConfigDatabase";
+import type {
+  ToolHealthConfigOverrides,
+  ToolHealthConfigAuditEntry,
+} from "./toolHealthConfigDatabase";
 
+import { logger } from "./logger";
 export type ToolHealthReason = "error_rate" | "p95_latency";
 
 export interface ToolHealthBreachNotification {
@@ -94,7 +98,9 @@ export interface ToolHealthNotifierDeps {
   /** Defaults to `sendSlackNotification`. */
   sendSlack?: typeof sendSlackNotification;
   /** Defaults to `sendResendEmail`. */
-  sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
+  sendEmail?: (
+    opts: ResendEmailOptions,
+  ) => Promise<{ success: boolean; id?: string; error?: string }>;
   /** Defaults to `Date.now`. Tests inject a deterministic clock. */
   now?: () => number;
   /**
@@ -104,7 +110,11 @@ export interface ToolHealthNotifierDeps {
    * Tests inject a stub so no real DB connection is required.
    * Defaults to `claimToolHealthNotifySlot`.
    */
-  claimDb?: (notificationKey: string, nowMs: number, throttleMs: number) => Promise<boolean>;
+  claimDb?: (
+    notificationKey: string,
+    nowMs: number,
+    throttleMs: number,
+  ) => Promise<boolean>;
   /**
    * Persist the on-call notification delivery result on the matching
    * `ai_alerts` row so the dashboard can render a "Notified" column
@@ -112,7 +122,11 @@ export interface ToolHealthNotifierDeps {
    * inject a stub to assert the channel label/timestamp without touching
    * the DB.
    */
-  recordResult?: (alertId: number | null | undefined, channel: string, whenMs: number) => Promise<void>;
+  recordResult?: (
+    alertId: number | null | undefined,
+    channel: string,
+    whenMs: number,
+  ) => Promise<void>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -127,20 +141,30 @@ function envInt(name: string, fallback: number): number {
 }
 
 function readConfig() {
-  const useDefaultSlack = process.env.TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL === "1";
+  const useDefaultSlack =
+    process.env.TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL === "1";
   const slackChannel =
     (process.env.TOOL_HEALTH_SLACK_CHANNEL || "").trim() ||
-    (useDefaultSlack ? (process.env.SLACK_CHANNEL_ID || "").trim() || null : null) ||
+    (useDefaultSlack
+      ? (process.env.SLACK_CHANNEL_ID || "").trim() || null
+      : null) ||
     null;
   const emailRaw = (process.env.TOOL_HEALTH_ALERT_EMAIL || "").trim();
   const emailRecipients = emailRaw
-    ? emailRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    ? emailRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
     : [];
-  const appUrl = (process.env.TOOL_HEALTH_APP_URL || "").trim().replace(/\/+$/, "");
+  const appUrl = (process.env.TOOL_HEALTH_APP_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
   // `link` is always emit-able (relative when no base URL is set); `linkIsAbsolute`
   // gates Slack's action button — Slack rejects blocks whose button.url is a
   // relative path, so we degrade to a plain mrkdwn link in that case.
-  const link = appUrl ? `${appUrl}/dashboard/ai-ops.html` : `/dashboard/ai-ops.html`;
+  const link = appUrl
+    ? `${appUrl}/dashboard/ai-ops.html`
+    : `/dashboard/ai-ops.html`;
   const linkIsAbsolute = /^https?:\/\//i.test(link);
   return {
     slackChannel: slackChannel || null,
@@ -170,12 +194,18 @@ export function _resetToolHealthNotifierThrottleForTests(): void {
 // ──────────────────────────────────────────────────────────────────────────────
 function severityEmoji(sev: AlertSeverity): string {
   switch (sev) {
-    case "critical": return ":rotating_light:";
-    case "high":     return ":red_circle:";
-    case "medium":   return ":large_orange_circle:";
-    case "low":      return ":large_yellow_circle:";
-    case "info":     return ":information_source:";
-    default:         return ":warning:";
+    case "critical":
+      return ":rotating_light:";
+    case "high":
+      return ":red_circle:";
+    case "medium":
+      return ":large_orange_circle:";
+    case "low":
+      return ":large_yellow_circle:";
+    case "info":
+      return ":information_source:";
+    default:
+      return ":warning:";
   }
 }
 
@@ -229,7 +259,11 @@ function buildSlackBlocks(
       elements: [
         {
           type: "button",
-          text: { type: "plain_text", text: "Open AI Operations panel", emoji: true },
+          text: {
+            type: "plain_text",
+            text: "Open AI Operations panel",
+            emoji: true,
+          },
           url: link,
           style: "primary",
         },
@@ -260,10 +294,7 @@ function buildSlackBlocks(
   return blocks;
 }
 
-function buildEmailHtml(
-  n: ToolHealthBreachNotification,
-  link: string,
-): string {
+function buildEmailHtml(n: ToolHealthBreachNotification, link: string): string {
   const linkHtml = `<a href="${link}">Open the AI Operations panel</a>`;
   const suggestionHtml = n.suggestion
     ? `<p><strong>Suggested action:</strong><br>${escapeHtml(n.suggestion)}</p>`
@@ -273,7 +304,9 @@ function buildEmailHtml(
     `<p><strong>Tool:</strong> <code>${escapeHtml(n.tool_name)}</code><br>`,
     `<strong>Reason:</strong> ${reasonLabel(n.reason)}<br>`,
     `<strong>Severity:</strong> ${n.severity.toUpperCase()}<br>`,
-    n.agent_name ? `<strong>Agent:</strong> ${escapeHtml(n.agent_name)}<br>` : "",
+    n.agent_name
+      ? `<strong>Agent:</strong> ${escapeHtml(n.agent_name)}<br>`
+      : "",
     `</p>`,
     `<p><strong>Details:</strong><br>${escapeHtml(n.description)}</p>`,
     suggestionHtml,
@@ -284,10 +317,7 @@ function buildEmailHtml(
   ].join("");
 }
 
-function buildEmailText(
-  n: ToolHealthBreachNotification,
-  link: string,
-): string {
+function buildEmailText(n: ToolHealthBreachNotification, link: string): string {
   return [
     n.title,
     "",
@@ -336,7 +366,8 @@ export async function notifyToolHealthBreach(
   const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
   const nowFn = depsOverride.now ?? Date.now;
   const claimDb = depsOverride.claimDb ?? claimToolHealthNotifySlot;
-  const recordResult = depsOverride.recordResult ?? recordAlertNotificationResult;
+  const recordResult =
+    depsOverride.recordResult ?? recordAlertNotificationResult;
 
   const result: NotifyToolHealthBreachResult = {
     slackSent: false,
@@ -355,7 +386,7 @@ export async function notifyToolHealthBreach(
     try {
       await recordResult(notification.alert_id ?? null, channel, nowFn());
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealthNotifier] recordResult threw for ${notification.related_record_id}:`,
         err,
       );
@@ -394,7 +425,7 @@ export async function notifyToolHealthBreach(
     try {
       claimed = await claimDb(key, now, cfg.throttleMs);
     } catch (err) {
-      console.error(`[ToolHealthNotifier] DB claimDb threw for ${key}:`, err);
+      logger.error(`[ToolHealthNotifier] DB claimDb threw for ${key}:`, err);
     }
     if (!claimed) {
       // Update in-process map with the approximate time another instance paged
@@ -422,7 +453,7 @@ export async function notifyToolHealthBreach(
         buildSlackBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealthNotifier] Slack send threw for ${notification.related_record_id}:`,
         err,
       );
@@ -440,7 +471,7 @@ export async function notifyToolHealthBreach(
       });
       result.emailSent = !!sendResult?.success;
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealthNotifier] Email send threw for ${notification.related_record_id}:`,
         err,
       );
@@ -490,14 +521,14 @@ export async function notifyToolHealthBreach(
 // ──────────────────────────────────────────────────────────────────────────────
 
 const CONFIG_FIELD_LABELS: Record<keyof ToolHealthConfigOverrides, string> = {
-  windowMinutes:        "Rolling window (min)",
-  minCalls:             "Min calls in window",
-  errorRatePct:         "Error rate floor (%)",
-  errorRateHighPct:     "Error rate HIGH (%)",
+  windowMinutes: "Rolling window (min)",
+  minCalls: "Min calls in window",
+  errorRatePct: "Error rate floor (%)",
+  errorRateHighPct: "Error rate HIGH (%)",
   errorRateCriticalPct: "Error rate CRITICAL (%)",
-  p95LatencyMs:         "p95 latency floor (ms)",
-  latencyHighMs:        "p95 latency HIGH (ms)",
-  latencyCriticalMs:    "p95 latency CRITICAL (ms)",
+  p95LatencyMs: "p95 latency floor (ms)",
+  latencyHighMs: "p95 latency HIGH (ms)",
+  latencyCriticalMs: "p95 latency CRITICAL (ms)",
 };
 
 const CONFIG_FIELD_ORDER: Array<keyof ToolHealthConfigOverrides> = [
@@ -544,7 +575,9 @@ export interface ToolHealthConfigChangeNotifierDeps {
    */
   getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
   /** Defaults to `sendResendEmail`. */
-  sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
+  sendEmail?: (
+    opts: ResendEmailOptions,
+  ) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
 /**
@@ -558,7 +591,11 @@ export interface ToolHealthConfigChangeNotifierDeps {
 export function _diffToolHealthConfigOverridesForTests(
   before: ToolHealthConfigOverrides,
   after: ToolHealthConfigOverrides,
-): Array<{ field: keyof ToolHealthConfigOverrides; before: number | null; after: number | null }> {
+): Array<{
+  field: keyof ToolHealthConfigOverrides;
+  before: number | null;
+  after: number | null;
+}> {
   const changes: Array<{
     field: keyof ToolHealthConfigOverrides;
     before: number | null;
@@ -581,9 +618,10 @@ function formatOverrideValue(v: number | null): string {
  * changes" block: `• 2026-04-25 14:30 UTC — Alice Admin (2 fields changed)`
  */
 function formatAuditEntrySummary(entry: ToolHealthConfigAuditEntry): string {
-  const ts = entry.changed_at instanceof Date
-    ? entry.changed_at
-    : new Date(entry.changed_at);
+  const ts =
+    entry.changed_at instanceof Date
+      ? entry.changed_at
+      : new Date(entry.changed_at);
   const dateStr = Number.isNaN(ts.getTime())
     ? "—"
     : ts.toISOString().replace("T", " ").slice(0, 16) + " UTC";
@@ -592,7 +630,8 @@ function formatAuditEntrySummary(entry: ToolHealthConfigAuditEntry): string {
     const a = (entry.after_values as ToolHealthConfigOverrides)[f] ?? null;
     return b !== a;
   }).length;
-  const fieldLabel = fieldCount === 1 ? "1 field changed" : `${fieldCount} fields changed`;
+  const fieldLabel =
+    fieldCount === 1 ? "1 field changed" : `${fieldCount} fields changed`;
   const who = entry.changed_by || "—";
   return `• \`${dateStr}\` — ${who} (${fieldLabel})`;
 }
@@ -723,7 +762,9 @@ function buildConfigChangeEmailHtml(
   return [
     `<h2 style="margin:0 0 12px 0;">Tool-health alert thresholds updated</h2>`,
     `<p><strong>Changed by:</strong> ${escapeHtml(n.changedBy || "—")}<br>`,
-    n.audit_id != null ? `<strong>Audit row:</strong> #${n.audit_id}</p>` : `</p>`,
+    n.audit_id != null
+      ? `<strong>Audit row:</strong> #${n.audit_id}</p>`
+      : `</p>`,
     `<p><strong>Changes (${changes.length}):</strong></p>`,
     `<table style="border-collapse:collapse;font-size:14px;">${diffRows}</table>`,
     noteHtml,
@@ -814,11 +855,12 @@ export async function notifyToolHealthConfigChange(
     // tests inject a stub via depsOverride.getAudit.
     let recentAudit: ToolHealthConfigAuditEntry[] = [];
     try {
-      const getAuditFn = depsOverride.getAudit
-        ?? (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
+      const getAuditFn =
+        depsOverride.getAudit ??
+        (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
       recentAudit = await getAuditFn(3);
     } catch (auditErr) {
-      console.error(
+      logger.error(
         "[ToolHealthNotifier] Failed to load recent audit entries for Slack block (best-effort):",
         auditErr,
       );
@@ -831,10 +873,16 @@ export async function notifyToolHealthConfigChange(
       result.slackSent = await sendSlack(
         cfg.slackChannel,
         fallback,
-        buildConfigChangeBlocks(notification, changes, link, cfg.linkIsAbsolute, recentAudit),
+        buildConfigChangeBlocks(
+          notification,
+          changes,
+          link,
+          cfg.linkIsAbsolute,
+          recentAudit,
+        ),
       );
     } catch (err) {
-      console.error(
+      logger.error(
         "[ToolHealthNotifier] Slack send threw for config change notification:",
         err,
       );
@@ -844,8 +892,7 @@ export async function notifyToolHealthConfigChange(
 
   if (cfg.emailRecipients.length > 0) {
     const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
-    const subject =
-      `[Tool Health · Thresholds Updated] ${changes.length} change${changes.length === 1 ? "" : "s"} by ${notification.changedBy || "—"}`;
+    const subject = `[Tool Health · Thresholds Updated] ${changes.length} change${changes.length === 1 ? "" : "s"} by ${notification.changedBy || "—"}`;
     try {
       const sendResult = await sendEmail({
         to: cfg.emailRecipients,
@@ -855,7 +902,7 @@ export async function notifyToolHealthConfigChange(
       });
       result.emailSent = !!sendResult?.success;
     } catch (err) {
-      console.error(
+      logger.error(
         "[ToolHealthNotifier] Email send threw for config change notification:",
         err,
       );
@@ -943,8 +990,8 @@ function buildOverrideExpiredSlackBlocks(
     n.expired_at instanceof Date
       ? n.expired_at.toISOString()
       : n.expired_at != null
-      ? String(n.expired_at)
-      : "—";
+        ? String(n.expired_at)
+        : "—";
   const blocks: any[] = [
     {
       type: "header",
@@ -1078,7 +1125,7 @@ export async function notifyToolHealthOverrideExpired(
       buildOverrideExpiredSlackBlocks(notification, link, cfg.linkIsAbsolute),
     );
   } catch (err) {
-    console.error(
+    logger.error(
       `[ToolHealthNotifier] Slack send threw for override auto-revert ` +
         `(audit_id=${notification.audit_id ?? "?"}):`,
       err,
@@ -1282,10 +1329,14 @@ export async function notifyToolHealthOverrideExpiringSoon(
     result.slackSent = await sendSlack(
       cfg.slackChannel,
       fallback,
-      buildOverrideExpiringSoonSlackBlocks(notification, link, cfg.linkIsAbsolute),
+      buildOverrideExpiringSoonSlackBlocks(
+        notification,
+        link,
+        cfg.linkIsAbsolute,
+      ),
     );
   } catch (err) {
-    console.error(
+    logger.error(
       `[ToolHealthNotifier] Slack send threw for override expiry pre-warning ` +
         `(expires_at=${dedupeKey}):`,
       err,
@@ -1357,7 +1408,9 @@ export interface ToolHealthRecoveryNotifierDeps {
   /** Defaults to `sendSlackNotification`. */
   sendSlack?: typeof sendSlackNotification;
   /** Defaults to `sendResendEmail`. */
-  sendEmail?: (opts: ResendEmailOptions) => Promise<{ success: boolean; id?: string; error?: string }>;
+  sendEmail?: (
+    opts: ResendEmailOptions,
+  ) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
 /**
@@ -1369,7 +1422,9 @@ export interface ToolHealthRecoveryNotifierDeps {
  * yield a finite epoch — the caller hides the duration field in that
  * case rather than rendering "Invalid Date" or NaN.
  */
-function coerceToDate(v: Date | string | number | null | undefined): Date | null {
+function coerceToDate(
+  v: Date | string | number | null | undefined,
+): Date | null {
   if (v == null) return null;
   const d = v instanceof Date ? v : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
@@ -1466,7 +1521,11 @@ function buildRecoverySlackBlocks(
       elements: [
         {
           type: "button",
-          text: { type: "plain_text", text: "Open AI Operations panel", emoji: true },
+          text: {
+            type: "plain_text",
+            text: "Open AI Operations panel",
+            emoji: true,
+          },
           url: link,
         },
       ],
@@ -1509,7 +1568,9 @@ function buildRecoveryEmailHtml(
     `<h2 style="margin:0 0 12px 0;">${title}</h2>`,
     `<p><strong>Tool:</strong> <code>${escapeHtml(n.tool_name)}</code><br>`,
     `<strong>Metric:</strong> ${reasonLabel(n.reason)}<br>`,
-    n.agent_name ? `<strong>Agent:</strong> ${escapeHtml(n.agent_name)}<br>` : "",
+    n.agent_name
+      ? `<strong>Agent:</strong> ${escapeHtml(n.agent_name)}<br>`
+      : "",
     `<strong>Alert closed:</strong> #${n.alert_id}`,
     duration ? `<br><strong>Open for:</strong> ${escapeHtml(duration)}` : "",
     `</p>`,
@@ -1584,7 +1645,7 @@ export async function notifyToolHealthRecovery(
         buildRecoverySlackBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealthNotifier] Slack recovery send threw for alert #${notification.alert_id}:`,
         err,
       );
@@ -1605,7 +1666,7 @@ export async function notifyToolHealthRecovery(
       });
       result.emailSent = !!sendResult?.success;
     } catch (err) {
-      console.error(
+      logger.error(
         `[ToolHealthNotifier] Email recovery send threw for alert #${notification.alert_id}:`,
         err,
       );

@@ -1,4 +1,5 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -9,12 +10,19 @@ export interface Regulation {
   regulation_code: string;
   name: string;
   description?: string;
-  jurisdiction: 'saudi' | 'gcc' | 'international' | 'internal';
-  category: 'data_privacy' | 'cybersecurity' | 'financial' | 'quality' | 'environmental' | 'labor' | 'industry_specific';
+  jurisdiction: "saudi" | "gcc" | "international" | "internal";
+  category:
+    | "data_privacy"
+    | "cybersecurity"
+    | "financial"
+    | "quality"
+    | "environmental"
+    | "labor"
+    | "industry_specific";
   issuing_body?: string;
   effective_date?: Date;
   last_updated?: Date;
-  status: 'active' | 'pending' | 'superseded' | 'retired';
+  status: "active" | "pending" | "superseded" | "retired";
   version?: string;
   source_url?: string;
   created_at?: Date;
@@ -31,10 +39,17 @@ export interface Obligation {
   section_domain?: string;
   section_order?: number;
   clause_number?: string;
-  requirement_type: 'mandatory' | 'recommended' | 'optional';
-  control_type: 'preventive' | 'detective' | 'corrective';
+  requirement_type: "mandatory" | "recommended" | "optional";
+  control_type: "preventive" | "detective" | "corrective";
   applicability_criteria?: string;
-  compliance_frequency: 'continuous' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'event_driven';
+  compliance_frequency:
+    | "continuous"
+    | "daily"
+    | "weekly"
+    | "monthly"
+    | "quarterly"
+    | "annual"
+    | "event_driven";
   evidence_requirements?: string;
   penalty_for_noncompliance?: string;
   linked_control_ids?: number[];
@@ -42,10 +57,10 @@ export interface Obligation {
   linked_risk_ids?: number[];
   responsible_department?: string;
   responsible_role?: string;
-  status: 'applicable' | 'not_applicable' | 'pending_review' | 'exempt';
+  status: "applicable" | "not_applicable" | "pending_review" | "exempt";
   exemption_reason?: string;
   exemption_expiry?: Date;
-  priority: 'critical' | 'high' | 'medium' | 'low';
+  priority: "critical" | "high" | "medium" | "low";
   created_at?: Date;
   updated_at?: Date;
 }
@@ -55,7 +70,11 @@ export interface ComplianceAssessment {
   obligation_id: number;
   assessment_date: Date;
   assessed_by: string;
-  compliance_status: 'compliant' | 'partially_compliant' | 'non_compliant' | 'not_assessed';
+  compliance_status:
+    | "compliant"
+    | "partially_compliant"
+    | "non_compliant"
+    | "not_assessed";
   score?: number;
   evidence_provided?: string;
   evidence_files?: string[];
@@ -63,7 +82,7 @@ export interface ComplianceAssessment {
   remediation_required?: boolean;
   remediation_deadline?: Date;
   remediation_owner?: string;
-  remediation_status?: 'not_started' | 'in_progress' | 'completed' | 'overdue';
+  remediation_status?: "not_started" | "in_progress" | "completed" | "overdue";
   comments?: string;
   next_assessment_date?: Date;
   created_at?: Date;
@@ -73,19 +92,19 @@ export interface ComplianceAssessment {
 export interface ComplianceCalendar {
   id?: number;
   obligation_id: number;
-  event_type: 'assessment' | 'reporting' | 'renewal' | 'audit' | 'training';
+  event_type: "assessment" | "reporting" | "renewal" | "audit" | "training";
   scheduled_date: Date;
   completed_date?: Date;
   responsible_party?: string;
-  status: 'scheduled' | 'in_progress' | 'completed' | 'missed';
+  status: "scheduled" | "in_progress" | "completed" | "missed";
   reminder_sent?: boolean;
   notes?: string;
   created_at?: Date;
 }
 
 export async function initComplianceTables(): Promise<void> {
-  console.log('📋 [ComplianceDB] Initializing compliance tables...');
-  
+  logger.info("📋 [ComplianceDB] Initializing compliance tables...");
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS regulations (
       id SERIAL PRIMARY KEY,
@@ -170,125 +189,186 @@ export async function initComplianceTables(): Promise<void> {
     )
   `);
 
-  await pool.query(`ALTER TABLE regulations ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`ALTER TABLE compliance_assessments ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`);
-  await pool.query(`UPDATE regulations SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`UPDATE obligations SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`UPDATE compliance_assessments SET public_id = gen_random_uuid() WHERE public_id IS NULL`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_regulations_public_id ON regulations(public_id)`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_obligations_public_id ON obligations(public_id)`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_assessments_public_id ON compliance_assessments(public_id)`);
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `ALTER TABLE compliance_assessments ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,
+  );
+  await pool.query(
+    `UPDATE regulations SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `UPDATE obligations SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `UPDATE compliance_assessments SET public_id = gen_random_uuid() WHERE public_id IS NULL`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_regulations_public_id ON regulations(public_id)`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_obligations_public_id ON obligations(public_id)`,
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_assessments_public_id ON compliance_assessments(public_id)`,
+  );
 
-  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS section_domain VARCHAR(100)`);
-  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS section_order INTEGER`);
-  await pool.query(`ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`);
+  await pool.query(
+    `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS section_domain VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS section_order INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`,
+  );
 
   await seedDefaultRegulations();
   await seedPDPLObligations();
-  console.log('✅ [ComplianceDB] Compliance tables initialized');
+  logger.info("✅ [ComplianceDB] Compliance tables initialized");
 }
 
 async function seedDefaultRegulations(): Promise<void> {
-  const existing = await pool.query('SELECT COUNT(*) FROM regulations');
+  const existing = await pool.query("SELECT COUNT(*) FROM regulations");
   if (parseInt(existing.rows[0].count) > 0) return;
 
-  console.log('🌱 [ComplianceDB] Seeding default Saudi regulations...');
-  
+  logger.info("🌱 [ComplianceDB] Seeding default Saudi regulations...");
+
   const saudiRegulations = [
     {
-      regulation_code: 'PDPL',
-      name: 'Saudi Personal Data Protection Law',
-      description: 'Comprehensive data protection regulation governing collection, processing, and storage of personal data in Saudi Arabia',
-      jurisdiction: 'saudi',
-      category: 'data_privacy',
-      issuing_body: 'SDAIA (Saudi Data & AI Authority)',
-      effective_date: '2023-09-14',
-      status: 'active',
-      version: '2023'
+      regulation_code: "PDPL",
+      name: "Saudi Personal Data Protection Law",
+      description:
+        "Comprehensive data protection regulation governing collection, processing, and storage of personal data in Saudi Arabia",
+      jurisdiction: "saudi",
+      category: "data_privacy",
+      issuing_body: "SDAIA (Saudi Data & AI Authority)",
+      effective_date: "2023-09-14",
+      status: "active",
+      version: "2023",
     },
     {
-      regulation_code: 'NCA-ECC',
-      name: 'NCA Essential Cybersecurity Controls',
-      description: 'Cybersecurity framework mandated by National Cybersecurity Authority for all organizations in Saudi Arabia',
-      jurisdiction: 'saudi',
-      category: 'cybersecurity',
-      issuing_body: 'National Cybersecurity Authority (NCA)',
-      effective_date: '2018-05-01',
-      status: 'active',
-      version: '2.0'
+      regulation_code: "NCA-ECC",
+      name: "NCA Essential Cybersecurity Controls",
+      description:
+        "Cybersecurity framework mandated by National Cybersecurity Authority for all organizations in Saudi Arabia",
+      jurisdiction: "saudi",
+      category: "cybersecurity",
+      issuing_body: "National Cybersecurity Authority (NCA)",
+      effective_date: "2018-05-01",
+      status: "active",
+      version: "2.0",
     },
     {
-      regulation_code: 'NCA-DCC',
-      name: 'NCA Data Cybersecurity Controls',
-      description: 'Data-specific cybersecurity controls for protecting organizational and personal data',
-      jurisdiction: 'saudi',
-      category: 'cybersecurity',
-      issuing_body: 'National Cybersecurity Authority (NCA)',
-      effective_date: '2022-01-01',
-      status: 'active',
-      version: '1.0'
+      regulation_code: "NCA-DCC",
+      name: "NCA Data Cybersecurity Controls",
+      description:
+        "Data-specific cybersecurity controls for protecting organizational and personal data",
+      jurisdiction: "saudi",
+      category: "cybersecurity",
+      issuing_body: "National Cybersecurity Authority (NCA)",
+      effective_date: "2022-01-01",
+      status: "active",
+      version: "1.0",
     },
     {
-      regulation_code: 'ISO-9001',
-      name: 'ISO 9001:2015 Quality Management',
-      description: 'International standard for quality management systems',
-      jurisdiction: 'international',
-      category: 'quality',
-      issuing_body: 'International Organization for Standardization',
-      effective_date: '2015-09-15',
-      status: 'active',
-      version: '2015'
+      regulation_code: "ISO-9001",
+      name: "ISO 9001:2015 Quality Management",
+      description: "International standard for quality management systems",
+      jurisdiction: "international",
+      category: "quality",
+      issuing_body: "International Organization for Standardization",
+      effective_date: "2015-09-15",
+      status: "active",
+      version: "2015",
     },
     {
-      regulation_code: 'ISO-27001',
-      name: 'ISO 27001:2022 Information Security',
-      description: 'International standard for information security management systems',
-      jurisdiction: 'international',
-      category: 'cybersecurity',
-      issuing_body: 'International Organization for Standardization',
-      effective_date: '2022-10-25',
-      status: 'active',
-      version: '2022'
+      regulation_code: "ISO-27001",
+      name: "ISO 27001:2022 Information Security",
+      description:
+        "International standard for information security management systems",
+      jurisdiction: "international",
+      category: "cybersecurity",
+      issuing_body: "International Organization for Standardization",
+      effective_date: "2022-10-25",
+      status: "active",
+      version: "2022",
     },
     {
-      regulation_code: 'COPC',
-      name: 'COPC Customer Experience Standard',
-      description: 'Performance management framework for customer experience operations',
-      jurisdiction: 'international',
-      category: 'quality',
-      issuing_body: 'COPC Inc.',
-      effective_date: '2020-01-01',
-      status: 'active',
-      version: '7.0'
-    }
+      regulation_code: "COPC",
+      name: "COPC Customer Experience Standard",
+      description:
+        "Performance management framework for customer experience operations",
+      jurisdiction: "international",
+      category: "quality",
+      issuing_body: "COPC Inc.",
+      effective_date: "2020-01-01",
+      status: "active",
+      version: "7.0",
+    },
   ];
 
   for (const reg of saudiRegulations) {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO regulations (regulation_code, name, description, jurisdiction, category, issuing_body, effective_date, status, version)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (regulation_code) DO NOTHING
-    `, [reg.regulation_code, reg.name, reg.description, reg.jurisdiction, reg.category, reg.issuing_body, reg.effective_date, reg.status, reg.version]);
+    `,
+      [
+        reg.regulation_code,
+        reg.name,
+        reg.description,
+        reg.jurisdiction,
+        reg.category,
+        reg.issuing_body,
+        reg.effective_date,
+        reg.status,
+        reg.version,
+      ],
+    );
   }
 
-  console.log('✅ [ComplianceDB] Default regulations seeded');
+  logger.info("✅ [ComplianceDB] Default regulations seeded");
 }
 
 export async function createRegulation(reg: Regulation): Promise<Regulation> {
-  console.log('📝 [ComplianceDB] Creating regulation:', reg.name);
-  
-  const result = await pool.query(`
+  logger.info("📝 [ComplianceDB] Creating regulation:", reg.name);
+
+  const result = await pool.query(
+    `
     INSERT INTO regulations (regulation_code, name, description, jurisdiction, category, issuing_body, effective_date, last_updated, status, version, source_url)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
-  `, [reg.regulation_code, reg.name, reg.description, reg.jurisdiction, reg.category, reg.issuing_body, reg.effective_date, reg.last_updated, reg.status || 'active', reg.version, reg.source_url]);
+  `,
+    [
+      reg.regulation_code,
+      reg.name,
+      reg.description,
+      reg.jurisdiction,
+      reg.category,
+      reg.issuing_body,
+      reg.effective_date,
+      reg.last_updated,
+      reg.status || "active",
+      reg.version,
+      reg.source_url,
+    ],
+  );
 
   return result.rows[0];
 }
 
-export async function getAllRegulations(filters?: { status?: string; jurisdiction?: string; category?: string }): Promise<Regulation[]> {
-  let query = 'SELECT * FROM regulations WHERE 1=1';
+export async function getAllRegulations(filters?: {
+  status?: string;
+  jurisdiction?: string;
+  category?: string;
+}): Promise<Regulation[]> {
+  let query = "SELECT * FROM regulations WHERE 1=1";
   const values: any[] = [];
   let paramCount = 1;
 
@@ -308,20 +388,25 @@ export async function getAllRegulations(filters?: { status?: string; jurisdictio
     paramCount++;
   }
 
-  query += ' ORDER BY name ASC';
+  query += " ORDER BY name ASC";
   const result = await pool.query(query, values);
   return result.rows;
 }
 
-export async function getRegulationById(id: number): Promise<Regulation | null> {
-  const result = await pool.query('SELECT * FROM regulations WHERE id = $1', [id]);
+export async function getRegulationById(
+  id: number,
+): Promise<Regulation | null> {
+  const result = await pool.query("SELECT * FROM regulations WHERE id = $1", [
+    id,
+  ]);
   return result.rows[0] || null;
 }
 
 export async function createObligation(obl: Obligation): Promise<Obligation> {
-  console.log('📝 [ComplianceDB] Creating obligation:', obl.title);
-  
-  const result = await pool.query(`
+  logger.info("📝 [ComplianceDB] Creating obligation:", obl.title);
+
+  const result = await pool.query(
+    `
     INSERT INTO obligations (
       obligation_code, regulation_id, article_reference, title, description,
       requirement_type, control_type, applicability_criteria, compliance_frequency,
@@ -330,25 +415,50 @@ export async function createObligation(obl: Obligation): Promise<Obligation> {
       responsible_department, responsible_role, status, priority
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     RETURNING *
-  `, [
-    obl.obligation_code, obl.regulation_id, obl.article_reference, obl.title, obl.description,
-    obl.requirement_type || 'mandatory', obl.control_type || 'preventive',
-    obl.applicability_criteria, obl.compliance_frequency || 'annual',
-    obl.evidence_requirements, obl.penalty_for_noncompliance,
-    obl.linked_control_ids, obl.linked_policy_ids, obl.linked_risk_ids,
-    obl.responsible_department, obl.responsible_role, obl.status || 'applicable', obl.priority || 'medium'
-  ]);
+  `,
+    [
+      obl.obligation_code,
+      obl.regulation_id,
+      obl.article_reference,
+      obl.title,
+      obl.description,
+      obl.requirement_type || "mandatory",
+      obl.control_type || "preventive",
+      obl.applicability_criteria,
+      obl.compliance_frequency || "annual",
+      obl.evidence_requirements,
+      obl.penalty_for_noncompliance,
+      obl.linked_control_ids,
+      obl.linked_policy_ids,
+      obl.linked_risk_ids,
+      obl.responsible_department,
+      obl.responsible_role,
+      obl.status || "applicable",
+      obl.priority || "medium",
+    ],
+  );
 
   return result.rows[0];
 }
 
-export async function getObligationsByRegulation(regulationId: number): Promise<Obligation[]> {
-  const result = await pool.query('SELECT * FROM obligations WHERE regulation_id = $1 ORDER BY section_order ASC NULLS LAST, obligation_code ASC', [regulationId]);
+export async function getObligationsByRegulation(
+  regulationId: number,
+): Promise<Obligation[]> {
+  const result = await pool.query(
+    "SELECT * FROM obligations WHERE regulation_id = $1 ORDER BY section_order ASC NULLS LAST, obligation_code ASC",
+    [regulationId],
+  );
   return result.rows;
 }
 
-export async function getAllObligations(filters?: { status?: string; priority?: string; department?: string; regulation_id?: number }): Promise<{ obligations: Obligation[]; total: number }> {
-  let query = 'SELECT o.*, r.name as regulation_name, r.regulation_code FROM obligations o LEFT JOIN regulations r ON o.regulation_id = r.id WHERE 1=1';
+export async function getAllObligations(filters?: {
+  status?: string;
+  priority?: string;
+  department?: string;
+  regulation_id?: number;
+}): Promise<{ obligations: Obligation[]; total: number }> {
+  let query =
+    "SELECT o.*, r.name as regulation_name, r.regulation_code FROM obligations o LEFT JOIN regulations r ON o.regulation_id = r.id WHERE 1=1";
   const values: any[] = [];
   let paramCount = 1;
 
@@ -373,30 +483,62 @@ export async function getAllObligations(filters?: { status?: string; priority?: 
     paramCount++;
   }
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM (${query.replace('o.*, r.name as regulation_name, r.regulation_code', '1')}) as count_query`, values);
-  
-  query += ' ORDER BY o.priority DESC, o.title ASC';
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM (${query.replace("o.*, r.name as regulation_name, r.regulation_code", "1")}) as count_query`,
+    values,
+  );
+
+  query += " ORDER BY o.priority DESC, o.title ASC";
   const result = await pool.query(query, values);
-  
-  return { obligations: result.rows, total: parseInt(countResult.rows[0].count) };
+
+  return {
+    obligations: result.rows,
+    total: parseInt(countResult.rows[0].count),
+  };
 }
 
-export async function getObligationById(id: number): Promise<Obligation | null> {
-  const result = await pool.query(`
+export async function getObligationById(
+  id: number,
+): Promise<Obligation | null> {
+  const result = await pool.query(
+    `
     SELECT o.*, r.name as regulation_name, r.regulation_code 
     FROM obligations o 
     LEFT JOIN regulations r ON o.regulation_id = r.id 
     WHERE o.id = $1
-  `, [id]);
+  `,
+    [id],
+  );
   return result.rows[0] || null;
 }
 
-export async function updateObligation(id: number, updates: Partial<Obligation>): Promise<Obligation> {
+export async function updateObligation(
+  id: number,
+  updates: Partial<Obligation>,
+): Promise<Obligation> {
   const setClause: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
 
-  const allowedFields = ['title', 'description', 'requirement_type', 'control_type', 'applicability_criteria', 'compliance_frequency', 'evidence_requirements', 'penalty_for_noncompliance', 'responsible_department', 'responsible_role', 'status', 'priority', 'exemption_reason', 'exemption_expiry', 'linked_control_ids', 'linked_policy_ids', 'linked_risk_ids'];
+  const allowedFields = [
+    "title",
+    "description",
+    "requirement_type",
+    "control_type",
+    "applicability_criteria",
+    "compliance_frequency",
+    "evidence_requirements",
+    "penalty_for_noncompliance",
+    "responsible_department",
+    "responsible_role",
+    "status",
+    "priority",
+    "exemption_reason",
+    "exemption_expiry",
+    "linked_control_ids",
+    "linked_policy_ids",
+    "linked_risk_ids",
+  ];
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
@@ -406,17 +548,26 @@ export async function updateObligation(id: number, updates: Partial<Obligation>)
     }
   }
 
-  setClause.push('updated_at = NOW()');
+  setClause.push("updated_at = NOW()");
   values.push(id);
 
-  const result = await pool.query(`UPDATE obligations SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+  const result = await pool.query(
+    `UPDATE obligations SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    values,
+  );
   return result.rows[0];
 }
 
-export async function createAssessment(assessment: ComplianceAssessment): Promise<ComplianceAssessment> {
-  console.log('📝 [ComplianceDB] Creating compliance assessment for obligation:', assessment.obligation_id);
-  
-  const result = await pool.query(`
+export async function createAssessment(
+  assessment: ComplianceAssessment,
+): Promise<ComplianceAssessment> {
+  logger.info(
+    "📝 [ComplianceDB] Creating compliance assessment for obligation:",
+    assessment.obligation_id,
+  );
+
+  const result = await pool.query(
+    `
     INSERT INTO compliance_assessments (
       obligation_id, assessment_date, assessed_by, compliance_status, score,
       evidence_provided, evidence_files, gaps_identified,
@@ -424,20 +575,35 @@ export async function createAssessment(assessment: ComplianceAssessment): Promis
       comments, next_assessment_date
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     RETURNING *
-  `, [
-    assessment.obligation_id, assessment.assessment_date || new Date(), assessment.assessed_by,
-    assessment.compliance_status, assessment.score,
-    assessment.evidence_provided, assessment.evidence_files, assessment.gaps_identified,
-    assessment.remediation_required || false, assessment.remediation_deadline,
-    assessment.remediation_owner, assessment.remediation_status,
-    assessment.comments, assessment.next_assessment_date
-  ]);
+  `,
+    [
+      assessment.obligation_id,
+      assessment.assessment_date || new Date(),
+      assessment.assessed_by,
+      assessment.compliance_status,
+      assessment.score,
+      assessment.evidence_provided,
+      assessment.evidence_files,
+      assessment.gaps_identified,
+      assessment.remediation_required || false,
+      assessment.remediation_deadline,
+      assessment.remediation_owner,
+      assessment.remediation_status,
+      assessment.comments,
+      assessment.next_assessment_date,
+    ],
+  );
 
   return result.rows[0];
 }
 
-export async function getAssessmentHistory(obligationId: number): Promise<ComplianceAssessment[]> {
-  const result = await pool.query('SELECT * FROM compliance_assessments WHERE obligation_id = $1 ORDER BY assessment_date DESC', [obligationId]);
+export async function getAssessmentHistory(
+  obligationId: number,
+): Promise<ComplianceAssessment[]> {
+  const result = await pool.query(
+    "SELECT * FROM compliance_assessments WHERE obligation_id = $1 ORDER BY assessment_date DESC",
+    [obligationId],
+  );
   return result.rows;
 }
 
@@ -454,11 +620,14 @@ export async function getLatestAssessments(): Promise<any[]> {
 }
 
 export async function getComplianceSummary(): Promise<any> {
-  console.log('📊 [ComplianceDB] Generating compliance summary...');
+  logger.info("📊 [ComplianceDB] Generating compliance summary...");
 
-  const regulationsCount = await pool.query('SELECT COUNT(*) FROM regulations WHERE status = $1', ['active']);
-  const obligationsCount = await pool.query('SELECT COUNT(*) FROM obligations');
-  
+  const regulationsCount = await pool.query(
+    "SELECT COUNT(*) FROM regulations WHERE status = $1",
+    ["active"],
+  );
+  const obligationsCount = await pool.query("SELECT COUNT(*) FROM obligations");
+
   const byStatus = await pool.query(`
     SELECT 
       COUNT(*) FILTER (WHERE compliance_status = 'compliant') as compliant,
@@ -510,7 +679,7 @@ export async function getComplianceSummary(): Promise<any> {
     by_regulation: byRegulation.rows,
     pending_remediations: parseInt(remediationsPending.rows[0].count),
     overdue_remediations: parseInt(overdueRemediations.rows[0].count),
-    overall_compliance_score: complianceScore
+    overall_compliance_score: complianceScore,
   };
 }
 
@@ -533,10 +702,16 @@ async function calculateOverallComplianceScore(): Promise<number> {
   `);
 
   if (parseInt(result.rows[0].count) === 0) return 0;
-  return Math.round(parseInt(result.rows[0].total_score) / parseInt(result.rows[0].count));
+  return Math.round(
+    parseInt(result.rows[0].total_score) / parseInt(result.rows[0].count),
+  );
 }
 
-export async function getComplianceCalendar(filters?: { month?: number; year?: number; status?: string }): Promise<ComplianceCalendar[]> {
+export async function getComplianceCalendar(filters?: {
+  month?: number;
+  year?: number;
+  status?: string;
+}): Promise<ComplianceCalendar[]> {
   let query = `
     SELECT cc.*, o.title as obligation_title, o.obligation_code
     FROM compliance_calendar cc
@@ -558,23 +733,36 @@ export async function getComplianceCalendar(filters?: { month?: number; year?: n
     paramCount++;
   }
 
-  query += ' ORDER BY cc.scheduled_date ASC';
+  query += " ORDER BY cc.scheduled_date ASC";
   const result = await pool.query(query, values);
   return result.rows;
 }
 
-export async function createCalendarEvent(event: ComplianceCalendar): Promise<ComplianceCalendar> {
-  const result = await pool.query(`
+export async function createCalendarEvent(
+  event: ComplianceCalendar,
+): Promise<ComplianceCalendar> {
+  const result = await pool.query(
+    `
     INSERT INTO compliance_calendar (obligation_id, event_type, scheduled_date, responsible_party, status, notes)
     VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *
-  `, [event.obligation_id, event.event_type, event.scheduled_date, event.responsible_party, event.status || 'scheduled', event.notes]);
+  `,
+    [
+      event.obligation_id,
+      event.event_type,
+      event.scheduled_date,
+      event.responsible_party,
+      event.status || "scheduled",
+      event.notes,
+    ],
+  );
   return result.rows[0];
 }
 
 export async function getUpcomingDeadlines(days: number = 30): Promise<any[]> {
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT cc.*, o.title as obligation_title, o.obligation_code, r.name as regulation_name
     FROM compliance_calendar cc
     JOIN obligations o ON cc.obligation_id = o.id
@@ -583,7 +771,9 @@ export async function getUpcomingDeadlines(days: number = 30): Promise<any[]> {
     AND cc.scheduled_date BETWEEN NOW() AND NOW() + make_interval(days => $1)
     ORDER BY cc.scheduled_date ASC
     LIMIT 20
-  `, [safeDays]);
+  `,
+    [safeDays],
+  );
   return result.rows;
 }
 
@@ -601,63 +791,309 @@ export async function getOverdueEvents(): Promise<any[]> {
 }
 
 async function seedPDPLObligations(): Promise<void> {
-  const existing = await pool.query("SELECT COUNT(*) FROM obligations WHERE obligation_code LIKE 'PDPL-%'");
+  const existing = await pool.query(
+    "SELECT COUNT(*) FROM obligations WHERE obligation_code LIKE 'PDPL-%'",
+  );
   if (parseInt(existing.rows[0].count) > 0) return;
 
-  const pdplReg = await pool.query("SELECT id FROM regulations WHERE regulation_code = 'PDPL'");
+  const pdplReg = await pool.query(
+    "SELECT id FROM regulations WHERE regulation_code = 'PDPL'",
+  );
   if (pdplReg.rows.length === 0) return;
   const regId = pdplReg.rows[0].id;
 
-  console.log('🌱 [ComplianceDB] Seeding PDPL obligations...');
+  logger.info("🌱 [ComplianceDB] Seeding PDPL obligations...");
 
   const pdplObligations = [
-    { code: 'PDPL-01', clause: 'Art 5', domain: 'Lawful Basis', order: 1, title: 'Lawful Basis for Processing', desc: 'Ensure all personal data processing has a valid lawful basis (consent, contractual necessity, legitimate interest, legal obligation, vital interest, or public interest)', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'Legal' },
-    { code: 'PDPL-02', clause: 'Art 6', domain: 'Lawful Basis', order: 2, title: 'Consent Requirements', desc: 'Obtain explicit, informed, and freely given consent for processing personal data where consent is the lawful basis', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'All Departments' },
-    { code: 'PDPL-03', clause: 'Art 7', domain: 'Data Subject Rights', order: 3, title: 'Right to Be Informed', desc: 'Inform data subjects about the purpose, legal basis, data categories, recipients, retention period, and their rights before or at the time of collection', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'high', dept: 'Privacy Office' },
-    { code: 'PDPL-04', clause: 'Art 8', domain: 'Data Subject Rights', order: 4, title: 'Right of Access', desc: 'Provide data subjects with access to their personal data upon request within 30 days', type: 'mandatory', ctrl: 'detective', freq: 'event_driven', priority: 'high', dept: 'Privacy Office' },
-    { code: 'PDPL-05', clause: 'Art 9', domain: 'Data Subject Rights', order: 5, title: 'Right to Rectification', desc: 'Allow data subjects to request correction or completion of inaccurate or incomplete personal data', type: 'mandatory', ctrl: 'corrective', freq: 'event_driven', priority: 'high', dept: 'Privacy Office' },
-    { code: 'PDPL-06', clause: 'Art 10', domain: 'Data Subject Rights', order: 6, title: 'Right to Erasure', desc: 'Delete personal data when it is no longer necessary, consent is withdrawn, or processing is unlawful', type: 'mandatory', ctrl: 'corrective', freq: 'event_driven', priority: 'high', dept: 'IT / Privacy Office' },
-    { code: 'PDPL-07', clause: 'Art 14', domain: 'Data Protection', order: 7, title: 'Data Minimisation', desc: 'Collect and process only personal data that is adequate, relevant, and limited to the stated purpose', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'high', dept: 'All Departments' },
-    { code: 'PDPL-08', clause: 'Art 15', domain: 'Data Protection', order: 8, title: 'Purpose Limitation', desc: 'Process personal data only for the specific, explicit, and legitimate purposes stated at the time of collection', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'All Departments' },
-    { code: 'PDPL-09', clause: 'Art 16', domain: 'Data Protection', order: 9, title: 'Storage Limitation', desc: 'Retain personal data only for as long as necessary to fulfil the purposes for which it was collected', type: 'mandatory', ctrl: 'detective', freq: 'quarterly', priority: 'medium', dept: 'IT / Records' },
-    { code: 'PDPL-10', clause: 'Art 17', domain: 'Security', order: 10, title: 'Technical & Organisational Measures', desc: 'Implement appropriate technical and organisational measures to protect personal data against unauthorised access, disclosure, alteration, or destruction', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'IT Security' },
-    { code: 'PDPL-11', clause: 'Art 19', domain: 'Breach Management', order: 11, title: 'Data Breach Notification', desc: 'Notify SDAIA and affected data subjects of personal data breaches within 72 hours of discovery', type: 'mandatory', ctrl: 'corrective', freq: 'event_driven', priority: 'critical', dept: 'Privacy Office / CISO' },
-    { code: 'PDPL-12', clause: 'Art 22', domain: 'Cross-Border', order: 12, title: 'Cross-Border Transfer Controls', desc: 'Ensure personal data transfers outside Saudi Arabia comply with SDAIA-approved adequacy decisions or contractual safeguards', type: 'mandatory', ctrl: 'preventive', freq: 'event_driven', priority: 'critical', dept: 'Legal / IT' },
-    { code: 'PDPL-13', clause: 'Art 30', domain: 'Governance', order: 13, title: 'Data Protection Impact Assessment', desc: 'Conduct DPIA for high-risk processing activities before commencement and maintain records', type: 'mandatory', ctrl: 'preventive', freq: 'event_driven', priority: 'high', dept: 'Privacy Office' },
-    { code: 'PDPL-14', clause: 'Art 31', domain: 'Governance', order: 14, title: 'Records of Processing Activities', desc: 'Maintain comprehensive, up-to-date records of all personal data processing activities (ROPA)', type: 'mandatory', ctrl: 'detective', freq: 'quarterly', priority: 'high', dept: 'Privacy Office' },
-    { code: 'PDPL-15', clause: 'Art 32', domain: 'Governance', order: 15, title: 'Data Protection Officer', desc: 'Appoint a qualified Data Protection Officer and ensure independence, resources, and direct reporting to senior management', type: 'mandatory', ctrl: 'preventive', freq: 'annual', priority: 'high', dept: 'Executive Management' },
-    { code: 'PDPL-16', clause: 'Art 11', domain: 'Sensitive Data', order: 16, title: 'Sensitive Data Processing', desc: 'Apply enhanced safeguards for processing sensitive personal data (health, biometric, genetic, religious, criminal, financial)', type: 'mandatory', ctrl: 'preventive', freq: 'continuous', priority: 'critical', dept: 'Privacy Office / Legal' },
-    { code: 'PDPL-17', clause: 'Art 20', domain: 'Third Parties', order: 17, title: 'Processor Agreements', desc: 'Establish binding agreements with data processors specifying processing scope, security measures, breach notification, and audit rights', type: 'mandatory', ctrl: 'preventive', freq: 'annual', priority: 'high', dept: 'Procurement / Legal' },
-    { code: 'PDPL-18', clause: 'Art 33', domain: 'Governance', order: 18, title: 'Awareness & Training', desc: 'Provide regular data protection awareness and training programmes to all employees handling personal data', type: 'recommended', ctrl: 'preventive', freq: 'annual', priority: 'medium', dept: 'HR / Privacy Office' },
+    {
+      code: "PDPL-01",
+      clause: "Art 5",
+      domain: "Lawful Basis",
+      order: 1,
+      title: "Lawful Basis for Processing",
+      desc: "Ensure all personal data processing has a valid lawful basis (consent, contractual necessity, legitimate interest, legal obligation, vital interest, or public interest)",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "critical",
+      dept: "Legal",
+    },
+    {
+      code: "PDPL-02",
+      clause: "Art 6",
+      domain: "Lawful Basis",
+      order: 2,
+      title: "Consent Requirements",
+      desc: "Obtain explicit, informed, and freely given consent for processing personal data where consent is the lawful basis",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "critical",
+      dept: "All Departments",
+    },
+    {
+      code: "PDPL-03",
+      clause: "Art 7",
+      domain: "Data Subject Rights",
+      order: 3,
+      title: "Right to Be Informed",
+      desc: "Inform data subjects about the purpose, legal basis, data categories, recipients, retention period, and their rights before or at the time of collection",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "high",
+      dept: "Privacy Office",
+    },
+    {
+      code: "PDPL-04",
+      clause: "Art 8",
+      domain: "Data Subject Rights",
+      order: 4,
+      title: "Right of Access",
+      desc: "Provide data subjects with access to their personal data upon request within 30 days",
+      type: "mandatory",
+      ctrl: "detective",
+      freq: "event_driven",
+      priority: "high",
+      dept: "Privacy Office",
+    },
+    {
+      code: "PDPL-05",
+      clause: "Art 9",
+      domain: "Data Subject Rights",
+      order: 5,
+      title: "Right to Rectification",
+      desc: "Allow data subjects to request correction or completion of inaccurate or incomplete personal data",
+      type: "mandatory",
+      ctrl: "corrective",
+      freq: "event_driven",
+      priority: "high",
+      dept: "Privacy Office",
+    },
+    {
+      code: "PDPL-06",
+      clause: "Art 10",
+      domain: "Data Subject Rights",
+      order: 6,
+      title: "Right to Erasure",
+      desc: "Delete personal data when it is no longer necessary, consent is withdrawn, or processing is unlawful",
+      type: "mandatory",
+      ctrl: "corrective",
+      freq: "event_driven",
+      priority: "high",
+      dept: "IT / Privacy Office",
+    },
+    {
+      code: "PDPL-07",
+      clause: "Art 14",
+      domain: "Data Protection",
+      order: 7,
+      title: "Data Minimisation",
+      desc: "Collect and process only personal data that is adequate, relevant, and limited to the stated purpose",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "high",
+      dept: "All Departments",
+    },
+    {
+      code: "PDPL-08",
+      clause: "Art 15",
+      domain: "Data Protection",
+      order: 8,
+      title: "Purpose Limitation",
+      desc: "Process personal data only for the specific, explicit, and legitimate purposes stated at the time of collection",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "critical",
+      dept: "All Departments",
+    },
+    {
+      code: "PDPL-09",
+      clause: "Art 16",
+      domain: "Data Protection",
+      order: 9,
+      title: "Storage Limitation",
+      desc: "Retain personal data only for as long as necessary to fulfil the purposes for which it was collected",
+      type: "mandatory",
+      ctrl: "detective",
+      freq: "quarterly",
+      priority: "medium",
+      dept: "IT / Records",
+    },
+    {
+      code: "PDPL-10",
+      clause: "Art 17",
+      domain: "Security",
+      order: 10,
+      title: "Technical & Organisational Measures",
+      desc: "Implement appropriate technical and organisational measures to protect personal data against unauthorised access, disclosure, alteration, or destruction",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "critical",
+      dept: "IT Security",
+    },
+    {
+      code: "PDPL-11",
+      clause: "Art 19",
+      domain: "Breach Management",
+      order: 11,
+      title: "Data Breach Notification",
+      desc: "Notify SDAIA and affected data subjects of personal data breaches within 72 hours of discovery",
+      type: "mandatory",
+      ctrl: "corrective",
+      freq: "event_driven",
+      priority: "critical",
+      dept: "Privacy Office / CISO",
+    },
+    {
+      code: "PDPL-12",
+      clause: "Art 22",
+      domain: "Cross-Border",
+      order: 12,
+      title: "Cross-Border Transfer Controls",
+      desc: "Ensure personal data transfers outside Saudi Arabia comply with SDAIA-approved adequacy decisions or contractual safeguards",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "event_driven",
+      priority: "critical",
+      dept: "Legal / IT",
+    },
+    {
+      code: "PDPL-13",
+      clause: "Art 30",
+      domain: "Governance",
+      order: 13,
+      title: "Data Protection Impact Assessment",
+      desc: "Conduct DPIA for high-risk processing activities before commencement and maintain records",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "event_driven",
+      priority: "high",
+      dept: "Privacy Office",
+    },
+    {
+      code: "PDPL-14",
+      clause: "Art 31",
+      domain: "Governance",
+      order: 14,
+      title: "Records of Processing Activities",
+      desc: "Maintain comprehensive, up-to-date records of all personal data processing activities (ROPA)",
+      type: "mandatory",
+      ctrl: "detective",
+      freq: "quarterly",
+      priority: "high",
+      dept: "Privacy Office",
+    },
+    {
+      code: "PDPL-15",
+      clause: "Art 32",
+      domain: "Governance",
+      order: 15,
+      title: "Data Protection Officer",
+      desc: "Appoint a qualified Data Protection Officer and ensure independence, resources, and direct reporting to senior management",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "annual",
+      priority: "high",
+      dept: "Executive Management",
+    },
+    {
+      code: "PDPL-16",
+      clause: "Art 11",
+      domain: "Sensitive Data",
+      order: 16,
+      title: "Sensitive Data Processing",
+      desc: "Apply enhanced safeguards for processing sensitive personal data (health, biometric, genetic, religious, criminal, financial)",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "continuous",
+      priority: "critical",
+      dept: "Privacy Office / Legal",
+    },
+    {
+      code: "PDPL-17",
+      clause: "Art 20",
+      domain: "Third Parties",
+      order: 17,
+      title: "Processor Agreements",
+      desc: "Establish binding agreements with data processors specifying processing scope, security measures, breach notification, and audit rights",
+      type: "mandatory",
+      ctrl: "preventive",
+      freq: "annual",
+      priority: "high",
+      dept: "Procurement / Legal",
+    },
+    {
+      code: "PDPL-18",
+      clause: "Art 33",
+      domain: "Governance",
+      order: 18,
+      title: "Awareness & Training",
+      desc: "Provide regular data protection awareness and training programmes to all employees handling personal data",
+      type: "recommended",
+      ctrl: "preventive",
+      freq: "annual",
+      priority: "medium",
+      dept: "HR / Privacy Office",
+    },
   ];
 
   for (const ob of pdplObligations) {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO obligations (obligation_code, regulation_id, article_reference, title, description, section_domain, section_order, clause_number, requirement_type, control_type, compliance_frequency, priority, responsible_department, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'applicable')
       ON CONFLICT (obligation_code) DO NOTHING
-    `, [ob.code, regId, ob.clause, ob.title, ob.desc, ob.domain, ob.order, ob.clause, ob.type, ob.ctrl, ob.freq, ob.priority, ob.dept]);
+    `,
+      [
+        ob.code,
+        regId,
+        ob.clause,
+        ob.title,
+        ob.desc,
+        ob.domain,
+        ob.order,
+        ob.clause,
+        ob.type,
+        ob.ctrl,
+        ob.freq,
+        ob.priority,
+        ob.dept,
+      ],
+    );
   }
 
-  console.log('✅ [ComplianceDB] PDPL obligations seeded (' + pdplObligations.length + ' items)');
+  logger.info(
+    "✅ [ComplianceDB] PDPL obligations seeded (" +
+      pdplObligations.length +
+      " items)",
+  );
 }
 
 export async function getComplianceDashboardStats(): Promise<any> {
-  const [regsResult, oblResult, assessResult, overdueResult] = await Promise.all([
-    pool.query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = \'active\') as active FROM regulations'),
-    pool.query(`SELECT COUNT(*) as total,
+  const [regsResult, oblResult, assessResult, overdueResult] =
+    await Promise.all([
+      pool.query(
+        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active FROM regulations",
+      ),
+      pool.query(`SELECT COUNT(*) as total,
       COUNT(*) FILTER (WHERE status = 'applicable') as applicable,
       COUNT(*) FILTER (WHERE priority = 'critical') as critical,
       COUNT(*) FILTER (WHERE priority = 'high') as high
       FROM obligations`),
-    pool.query(`SELECT COUNT(*) as total,
+      pool.query(`SELECT COUNT(*) as total,
       COUNT(*) FILTER (WHERE compliance_status = 'compliant') as compliant,
       COUNT(*) FILTER (WHERE compliance_status = 'partially_compliant') as partial,
       COUNT(*) FILTER (WHERE compliance_status = 'non_compliant') as non_compliant,
       COUNT(*) FILTER (WHERE compliance_status = 'not_assessed') as not_assessed
       FROM compliance_assessments`),
-    pool.query(`SELECT COUNT(*) as count FROM compliance_calendar WHERE status IN ('scheduled','in_progress') AND scheduled_date < NOW()`),
-  ]);
+      pool.query(
+        `SELECT COUNT(*) as count FROM compliance_calendar WHERE status IN ('scheduled','in_progress') AND scheduled_date < NOW()`,
+      ),
+    ]);
 
   const totalOb = parseInt(oblResult.rows[0].total) || 0;
   const assessed = parseInt(assessResult.rows[0].total) || 0;
@@ -668,12 +1104,15 @@ export async function getComplianceDashboardStats(): Promise<any> {
     obligations: oblResult.rows[0],
     assessments: assessResult.rows[0],
     overdue_events: parseInt(overdueResult.rows[0].count),
-    compliance_rate: assessed > 0 ? Math.round((compliant / assessed) * 100) : 0,
+    compliance_rate:
+      assessed > 0 ? Math.round((compliant / assessed) * 100) : 0,
     coverage_rate: totalOb > 0 ? Math.round((assessed / totalOb) * 100) : 0,
   };
 }
 
-export async function getComplianceGapAnalysis(regulationId?: number): Promise<any[]> {
+export async function getComplianceGapAnalysis(
+  regulationId?: number,
+): Promise<any[]> {
   let query = `
     SELECT o.id, o.obligation_code, o.title, o.priority, o.section_domain,
       o.responsible_department, r.name as regulation_name, r.regulation_code,
@@ -689,10 +1128,10 @@ export async function getComplianceGapAnalysis(regulationId?: number): Promise<a
   `;
   const params: any[] = [];
   if (regulationId) {
-    query += ' AND o.regulation_id = $1';
+    query += " AND o.regulation_id = $1";
     params.push(regulationId);
   }
-  query += ' ORDER BY r.regulation_code, o.section_order ASC NULLS LAST';
+  query += " ORDER BY r.regulation_code, o.section_order ASC NULLS LAST";
   const result = await pool.query(query, params);
   return result.rows;
 }

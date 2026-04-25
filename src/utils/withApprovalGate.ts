@@ -41,6 +41,7 @@ import {
 } from "./aiToolGovernance";
 import { logEvent, redactSecretLikeStrings } from "./eventLogsDatabase";
 import { notifyCredentialFlaggedApproval } from "./securityApprovalNotifier";
+import { logger } from "./logger";
 
 /* ------------------------------------------------------------------------- *
  * Per-request context storage.
@@ -231,7 +232,7 @@ export function withApprovalGate<
         requested_by_name: pending.requested_by_name,
         credential_warnings: pending.credential_warnings ?? [],
       }).catch((err) => {
-        console.error(
+        logger.error(
           `[withApprovalGate] notifyCredentialFlaggedApproval threw for ${pending.action_code}:`,
           err,
         );

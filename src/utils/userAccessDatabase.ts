@@ -1,15 +1,49 @@
-import crypto from 'crypto';
-import { createRedactedPool } from './redactedPool';
+import crypto from "crypto";
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export type UserStatus = 'invited' | 'pending_approval' | 'active' | 'denied' | 'disabled';
-export type UserRole = 'admin' | 'quality_manager' | 'quality_specialist' | 'grc_manager' | 'team_lead' | 'department_viewer' | 'auditor' | 'ai_specialist' | 'bu_owner' | 'executive' | 'custom';
-export type TeamScope = 'SDR' | 'Sales' | 'Quality' | 'GRC' | 'Viewer' | 'Other';
-export type ModuleScope = 'Leads' | 'Deals' | 'Accounts' | 'Contacts' | 'All';
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'assign' | 'run_audit' | 'export' | 'upload' | 'manage_settings' | 'manage_users';
+export type UserStatus =
+  | "invited"
+  | "pending_approval"
+  | "active"
+  | "denied"
+  | "disabled";
+export type UserRole =
+  | "admin"
+  | "quality_manager"
+  | "quality_specialist"
+  | "grc_manager"
+  | "team_lead"
+  | "department_viewer"
+  | "auditor"
+  | "ai_specialist"
+  | "bu_owner"
+  | "executive"
+  | "custom";
+export type TeamScope =
+  | "SDR"
+  | "Sales"
+  | "Quality"
+  | "GRC"
+  | "Viewer"
+  | "Other";
+export type ModuleScope = "Leads" | "Deals" | "Accounts" | "Contacts" | "All";
+export type PermissionAction =
+  | "view"
+  | "create"
+  | "edit"
+  | "delete"
+  | "approve"
+  | "assign"
+  | "run_audit"
+  | "export"
+  | "upload"
+  | "manage_settings"
+  | "manage_users";
 
 export interface UserInvitation {
   id?: number;
@@ -74,7 +108,7 @@ export interface DataScope {
   user_id: number;
   team_scope: TeamScope[];
   module_scope: ModuleScope[];
-  record_scope: 'all' | 'assigned' | 'team';
+  record_scope: "all" | "assigned" | "team";
   created_at?: Date;
   updated_at?: Date;
 }
@@ -92,43 +126,142 @@ export interface AccessAuditLog {
 }
 
 export const SCREEN_LIST = [
-  { code: 'governance_documents', name: 'Governance Documents' },
-  { code: 'evaluation_scorecards', name: 'Evaluation Scorecards' },
-  { code: 'run_ai_audit', name: 'Run AI Audit' },
-  { code: 'audit_history', name: 'Audit History' },
-  { code: 'issues_nc', name: 'Issues / Nonconformances' },
-  { code: 'capa', name: 'CAPA' },
-  { code: 'training', name: 'Training' },
-  { code: 'framework', name: 'Framework' },
-  { code: 'analytics', name: 'Analytics' },
-  { code: 'kpi_engine', name: 'KPI Engine' },
-  { code: 'executive_dashboard', name: 'Executive Dashboard' },
-  { code: 'risk_register', name: 'Risk Register' },
-  { code: 'policies', name: 'Policies' },
-  { code: 'compliance', name: 'Compliance' },
-  { code: 'vendors', name: 'Vendor Management' },
-  { code: 'pdpl', name: 'PDPL Compliance' },
-  { code: 'call_intelligence', name: 'Call Intelligence' },
-  { code: 'roi_npv', name: 'ROI & NPV' },
-  { code: 'team_performance', name: 'Team Performance' },
-  { code: 'projects', name: 'Projects' },
-  { code: 'settings', name: 'Settings' },
-  { code: 'admin_users', name: 'Admin - Users & Access' },
+  { code: "governance_documents", name: "Governance Documents" },
+  { code: "evaluation_scorecards", name: "Evaluation Scorecards" },
+  { code: "run_ai_audit", name: "Run AI Audit" },
+  { code: "audit_history", name: "Audit History" },
+  { code: "issues_nc", name: "Issues / Nonconformances" },
+  { code: "capa", name: "CAPA" },
+  { code: "training", name: "Training" },
+  { code: "framework", name: "Framework" },
+  { code: "analytics", name: "Analytics" },
+  { code: "kpi_engine", name: "KPI Engine" },
+  { code: "executive_dashboard", name: "Executive Dashboard" },
+  { code: "risk_register", name: "Risk Register" },
+  { code: "policies", name: "Policies" },
+  { code: "compliance", name: "Compliance" },
+  { code: "vendors", name: "Vendor Management" },
+  { code: "pdpl", name: "PDPL Compliance" },
+  { code: "call_intelligence", name: "Call Intelligence" },
+  { code: "roi_npv", name: "ROI & NPV" },
+  { code: "team_performance", name: "Team Performance" },
+  { code: "projects", name: "Projects" },
+  { code: "settings", name: "Settings" },
+  { code: "admin_users", name: "Admin - Users & Access" },
 ];
 
-export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Partial<ScreenPermission>> = {
-  admin: { can_view: true, can_create: true, can_edit: true, can_delete: true, can_approve: true, can_assign: true, can_run_audit: true, can_export: true, can_upload: true, can_manage_settings: true, can_manage_users: true },
-  quality_manager: { can_view: true, can_create: true, can_edit: true, can_delete: false, can_approve: true, can_assign: true, can_run_audit: true, can_export: true, can_upload: true, can_manage_settings: false, can_manage_users: false },
-  quality_specialist: { can_view: true, can_create: true, can_edit: true, can_delete: false, can_approve: false, can_assign: false, can_run_audit: true, can_export: true, can_upload: true, can_manage_settings: false, can_manage_users: false },
-  grc_manager: { can_view: true, can_create: true, can_edit: true, can_delete: false, can_approve: true, can_assign: true, can_run_audit: false, can_export: true, can_upload: true, can_manage_settings: false, can_manage_users: false },
-  team_lead: { can_view: true, can_create: false, can_edit: false, can_delete: false, can_approve: false, can_assign: false, can_run_audit: false, can_export: true, can_upload: false, can_manage_settings: false, can_manage_users: false },
-  department_viewer: { can_view: true, can_create: false, can_edit: false, can_delete: false, can_approve: false, can_assign: false, can_run_audit: false, can_export: false, can_upload: false, can_manage_settings: false, can_manage_users: false },
-  auditor: { can_view: true, can_create: false, can_edit: false, can_delete: false, can_approve: false, can_assign: false, can_run_audit: false, can_export: false, can_upload: false, can_manage_settings: false, can_manage_users: false },
-  custom: { can_view: false, can_create: false, can_edit: false, can_delete: false, can_approve: false, can_assign: false, can_run_audit: false, can_export: false, can_upload: false, can_manage_settings: false, can_manage_users: false },
+export const DEFAULT_ROLE_PERMISSIONS: Record<
+  UserRole,
+  Partial<ScreenPermission>
+> = {
+  admin: {
+    can_view: true,
+    can_create: true,
+    can_edit: true,
+    can_delete: true,
+    can_approve: true,
+    can_assign: true,
+    can_run_audit: true,
+    can_export: true,
+    can_upload: true,
+    can_manage_settings: true,
+    can_manage_users: true,
+  },
+  quality_manager: {
+    can_view: true,
+    can_create: true,
+    can_edit: true,
+    can_delete: false,
+    can_approve: true,
+    can_assign: true,
+    can_run_audit: true,
+    can_export: true,
+    can_upload: true,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
+  quality_specialist: {
+    can_view: true,
+    can_create: true,
+    can_edit: true,
+    can_delete: false,
+    can_approve: false,
+    can_assign: false,
+    can_run_audit: true,
+    can_export: true,
+    can_upload: true,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
+  grc_manager: {
+    can_view: true,
+    can_create: true,
+    can_edit: true,
+    can_delete: false,
+    can_approve: true,
+    can_assign: true,
+    can_run_audit: false,
+    can_export: true,
+    can_upload: true,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
+  team_lead: {
+    can_view: true,
+    can_create: false,
+    can_edit: false,
+    can_delete: false,
+    can_approve: false,
+    can_assign: false,
+    can_run_audit: false,
+    can_export: true,
+    can_upload: false,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
+  department_viewer: {
+    can_view: true,
+    can_create: false,
+    can_edit: false,
+    can_delete: false,
+    can_approve: false,
+    can_assign: false,
+    can_run_audit: false,
+    can_export: false,
+    can_upload: false,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
+  auditor: {
+    can_view: true,
+    can_create: false,
+    can_edit: false,
+    can_delete: false,
+    can_approve: false,
+    can_assign: false,
+    can_run_audit: false,
+    can_export: false,
+    can_upload: false,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
+  custom: {
+    can_view: false,
+    can_create: false,
+    can_edit: false,
+    can_delete: false,
+    can_approve: false,
+    can_assign: false,
+    can_run_audit: false,
+    can_export: false,
+    can_upload: false,
+    can_manage_settings: false,
+    can_manage_users: false,
+  },
 };
 
 export async function initUserAccessTables(): Promise<void> {
-  console.log('🔐 [UserAccess] Initializing user access tables...');
+  logger.info("🔐 [UserAccess] Initializing user access tables...");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_invitations (
@@ -228,47 +361,68 @@ export async function initUserAccessTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_user_invitations_token ON user_invitations(token);
   `);
 
-  console.log('✅ [UserAccess] User access tables initialized');
+  logger.info("✅ [UserAccess] User access tables initialized");
 }
 
 function generateSecureToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  return crypto.randomBytes(32).toString("hex");
 }
 
-export async function createInvitation(invitation: Omit<UserInvitation, 'id' | 'token' | 'created_at'>): Promise<UserInvitation> {
+export async function createInvitation(
+  invitation: Omit<UserInvitation, "id" | "token" | "created_at">,
+): Promise<UserInvitation> {
   const token = generateSecureToken();
-  
+
   const result = await pool.query(
     `INSERT INTO user_invitations (email, full_name, team, role, token, token_expires_at, require_mfa, invited_by, used)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
      RETURNING *`,
-    [invitation.email, invitation.full_name, invitation.team, invitation.role, token, invitation.token_expires_at, invitation.require_mfa, invitation.invited_by]
+    [
+      invitation.email,
+      invitation.full_name,
+      invitation.team,
+      invitation.role,
+      token,
+      invitation.token_expires_at,
+      invitation.require_mfa,
+      invitation.invited_by,
+    ],
   );
 
   await logAccessEvent({
-    event_type: 'INVITATION_CREATED',
+    event_type: "INVITATION_CREATED",
     user_email: invitation.invited_by,
     target_email: invitation.email,
     action: `Invited ${invitation.email} as ${invitation.role}`,
-    details: { team: invitation.team, role: invitation.role, expires: invitation.token_expires_at },
-    performed_by: invitation.invited_by
+    details: {
+      team: invitation.team,
+      role: invitation.role,
+      expires: invitation.token_expires_at,
+    },
+    performed_by: invitation.invited_by,
   });
 
-  console.log(`📧 [UserAccess] Invitation created for ${invitation.email}`);
+  logger.info(`📧 [UserAccess] Invitation created for ${invitation.email}`);
   return result.rows[0];
 }
 
-export async function validateInvitationToken(token: string): Promise<UserInvitation | null> {
+export async function validateInvitationToken(
+  token: string,
+): Promise<UserInvitation | null> {
   const result = await pool.query(
     `SELECT * FROM user_invitations WHERE token = $1 AND used = false AND token_expires_at > NOW()`,
-    [token]
+    [token],
   );
   return result.rows[0] || null;
 }
 
 export async function acceptInvitation(
-  token: string, 
-  userData: { full_name: string; password_hash?: string; access_reason?: string }
+  token: string,
+  userData: {
+    full_name: string;
+    password_hash?: string;
+    access_reason?: string;
+  },
 ): Promise<PlatformUser | null> {
   const invitation = await validateInvitationToken(token);
   if (!invitation) {
@@ -277,15 +431,23 @@ export async function acceptInvitation(
 
   await pool.query(
     `UPDATE user_invitations SET used = true, used_at = NOW() WHERE token = $1`,
-    [token]
+    [token],
   );
 
   const result = await pool.query(
     `INSERT INTO platform_users (email, full_name, team, role, status, password_hash, mfa_enabled, invitation_id, access_reason)
      VALUES ($1, $2, $3, $4, 'pending_approval', $5, $6, $7, $8)
      RETURNING *`,
-    [invitation.email, userData.full_name || invitation.full_name, invitation.team, invitation.role, 
-     userData.password_hash, invitation.require_mfa, invitation.id, userData.access_reason]
+    [
+      invitation.email,
+      userData.full_name || invitation.full_name,
+      invitation.team,
+      invitation.role,
+      userData.password_hash,
+      invitation.require_mfa,
+      invitation.id,
+      userData.access_reason,
+    ],
   );
 
   const user = result.rows[0];
@@ -294,20 +456,26 @@ export async function acceptInvitation(
   await createDefaultDataScope(user.id, invitation.team as TeamScope);
 
   await logAccessEvent({
-    event_type: 'INVITATION_ACCEPTED',
+    event_type: "INVITATION_ACCEPTED",
     user_email: invitation.email,
     target_email: invitation.email,
-    action: 'Accepted invitation and submitted access request',
+    action: "Accepted invitation and submitted access request",
     details: { invitation_id: invitation.id },
-    performed_by: invitation.email
+    performed_by: invitation.email,
   });
 
-  console.log(`✅ [UserAccess] Invitation accepted by ${invitation.email}, pending approval`);
+  logger.info(
+    `✅ [UserAccess] Invitation accepted by ${invitation.email}, pending approval`,
+  );
   return user;
 }
 
-export async function createDefaultPermissions(userId: number, role: UserRole): Promise<void> {
-  const roleDefaults = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.custom;
+export async function createDefaultPermissions(
+  userId: number,
+  role: UserRole,
+): Promise<void> {
+  const roleDefaults =
+    DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.custom;
 
   for (const screen of SCREEN_LIST) {
     await pool.query(
@@ -317,40 +485,55 @@ export async function createDefaultPermissions(userId: number, role: UserRole): 
        ON CONFLICT (user_id, screen_code) DO UPDATE SET
          can_view = $4, can_create = $5, can_edit = $6, can_delete = $7, can_approve = $8, can_assign = $9,
          can_run_audit = $10, can_export = $11, can_upload = $12, can_manage_settings = $13, can_manage_users = $14`,
-      [userId, screen.code, screen.name, 
-       roleDefaults.can_view, roleDefaults.can_create, roleDefaults.can_edit, roleDefaults.can_delete,
-       roleDefaults.can_approve, roleDefaults.can_assign, roleDefaults.can_run_audit, roleDefaults.can_export,
-       roleDefaults.can_upload, roleDefaults.can_manage_settings, roleDefaults.can_manage_users]
+      [
+        userId,
+        screen.code,
+        screen.name,
+        roleDefaults.can_view,
+        roleDefaults.can_create,
+        roleDefaults.can_edit,
+        roleDefaults.can_delete,
+        roleDefaults.can_approve,
+        roleDefaults.can_assign,
+        roleDefaults.can_run_audit,
+        roleDefaults.can_export,
+        roleDefaults.can_upload,
+        roleDefaults.can_manage_settings,
+        roleDefaults.can_manage_users,
+      ],
     );
   }
 }
 
-export async function createDefaultDataScope(userId: number, team: TeamScope): Promise<void> {
+export async function createDefaultDataScope(
+  userId: number,
+  team: TeamScope,
+): Promise<void> {
   let teamScope: TeamScope[] = [team];
   let moduleScope: ModuleScope[] = [];
-  let recordScope: 'all' | 'assigned' | 'team' = 'assigned';
+  let recordScope: "all" | "assigned" | "team" = "assigned";
 
   switch (team) {
-    case 'SDR':
-      moduleScope = ['Leads'];
-      recordScope = 'team';
+    case "SDR":
+      moduleScope = ["Leads"];
+      recordScope = "team";
       break;
-    case 'Sales':
-      moduleScope = ['Deals', 'Accounts', 'Contacts'];
-      recordScope = 'team';
+    case "Sales":
+      moduleScope = ["Deals", "Accounts", "Contacts"];
+      recordScope = "team";
       break;
-    case 'Quality':
-      moduleScope = ['All'];
-      recordScope = 'all';
-      teamScope = ['SDR', 'Sales', 'Quality', 'GRC'];
+    case "Quality":
+      moduleScope = ["All"];
+      recordScope = "all";
+      teamScope = ["SDR", "Sales", "Quality", "GRC"];
       break;
-    case 'GRC':
-      moduleScope = ['All'];
-      recordScope = 'all';
+    case "GRC":
+      moduleScope = ["All"];
+      recordScope = "all";
       break;
     default:
       moduleScope = [];
-      recordScope = 'assigned';
+      recordScope = "assigned";
   }
 
   await pool.query(
@@ -358,20 +541,20 @@ export async function createDefaultDataScope(userId: number, team: TeamScope): P
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (user_id) DO UPDATE SET
        team_scope = $2, module_scope = $3, record_scope = $4, updated_at = NOW()`,
-    [userId, teamScope, moduleScope, recordScope]
+    [userId, teamScope, moduleScope, recordScope],
   );
 }
 
 export async function approveAccessRequest(
-  userId: number, 
-  approvedBy: string, 
-  permissionOverrides?: Partial<ScreenPermission>[]
+  userId: number,
+  approvedBy: string,
+  permissionOverrides?: Partial<ScreenPermission>[],
 ): Promise<PlatformUser | null> {
   const result = await pool.query(
     `UPDATE platform_users SET status = 'active', approved_by = $1, approved_at = NOW(), updated_at = NOW()
      WHERE id = $2 AND status = 'pending_approval'
      RETURNING *`,
-    [approvedBy, userId]
+    [approvedBy, userId],
   );
 
   const user = result.rows[0];
@@ -388,141 +571,165 @@ export async function approveAccessRequest(
              can_manage_settings = COALESCE($10, can_manage_settings), can_manage_users = COALESCE($11, can_manage_users),
              updated_at = NOW()
            WHERE user_id = $12 AND screen_code = $13`,
-          [perm.can_view, perm.can_create, perm.can_edit, perm.can_delete, perm.can_approve, perm.can_assign,
-           perm.can_run_audit, perm.can_export, perm.can_upload, perm.can_manage_settings, perm.can_manage_users,
-           userId, perm.screen_code]
+          [
+            perm.can_view,
+            perm.can_create,
+            perm.can_edit,
+            perm.can_delete,
+            perm.can_approve,
+            perm.can_assign,
+            perm.can_run_audit,
+            perm.can_export,
+            perm.can_upload,
+            perm.can_manage_settings,
+            perm.can_manage_users,
+            userId,
+            perm.screen_code,
+          ],
         );
       }
     }
   }
 
   await logAccessEvent({
-    event_type: 'ACCESS_APPROVED',
+    event_type: "ACCESS_APPROVED",
     user_email: approvedBy,
     target_email: user.email,
     action: `Approved access for ${user.email}`,
     details: { user_id: userId, role: user.role },
-    performed_by: approvedBy
+    performed_by: approvedBy,
   });
 
-  console.log(`✅ [UserAccess] Access approved for ${user.email} by ${approvedBy}`);
+  logger.info(
+    `✅ [UserAccess] Access approved for ${user.email} by ${approvedBy}`,
+  );
   return user;
 }
 
 export async function denyAccessRequest(
-  userId: number, 
-  deniedBy: string, 
-  reason?: string
+  userId: number,
+  deniedBy: string,
+  reason?: string,
 ): Promise<PlatformUser | null> {
   const result = await pool.query(
     `UPDATE platform_users SET status = 'denied', denied_by = $1, denied_at = NOW(), denial_reason = $2, updated_at = NOW()
      WHERE id = $3 AND status = 'pending_approval'
      RETURNING *`,
-    [deniedBy, reason, userId]
+    [deniedBy, reason, userId],
   );
 
   const user = result.rows[0];
   if (!user) return null;
 
   await logAccessEvent({
-    event_type: 'ACCESS_DENIED',
+    event_type: "ACCESS_DENIED",
     user_email: deniedBy,
     target_email: user.email,
     action: `Denied access for ${user.email}`,
     details: { user_id: userId, reason },
-    performed_by: deniedBy
+    performed_by: deniedBy,
   });
 
-  console.log(`❌ [UserAccess] Access denied for ${user.email} by ${deniedBy}`);
+  logger.info(`❌ [UserAccess] Access denied for ${user.email} by ${deniedBy}`);
   return user;
 }
 
-export async function disableUser(userId: number, disabledBy: string): Promise<PlatformUser | null> {
+export async function disableUser(
+  userId: number,
+  disabledBy: string,
+): Promise<PlatformUser | null> {
   const result = await pool.query(
     `UPDATE platform_users SET status = 'disabled', updated_at = NOW()
      WHERE id = $1 RETURNING *`,
-    [userId]
+    [userId],
   );
 
   const user = result.rows[0];
   if (!user) return null;
 
   try {
-    const { invalidatePlatformUserCache } = await import('./rbacMiddleware');
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
     invalidatePlatformUserCache(user.email);
   } catch {}
 
   await logAccessEvent({
-    event_type: 'USER_DISABLED',
+    event_type: "USER_DISABLED",
     user_email: disabledBy,
     target_email: user.email,
     action: `Disabled user ${user.email}`,
     details: { user_id: userId },
-    performed_by: disabledBy
+    performed_by: disabledBy,
   });
 
   return user;
 }
 
-export async function enableUser(userId: number, enabledBy: string): Promise<PlatformUser | null> {
+export async function enableUser(
+  userId: number,
+  enabledBy: string,
+): Promise<PlatformUser | null> {
   const result = await pool.query(
     `UPDATE platform_users SET status = 'active', updated_at = NOW()
      WHERE id = $1 AND status = 'disabled' RETURNING *`,
-    [userId]
+    [userId],
   );
 
   const user = result.rows[0];
   if (!user) return null;
 
   try {
-    const { invalidatePlatformUserCache } = await import('./rbacMiddleware');
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
     invalidatePlatformUserCache(user.email);
   } catch {}
 
   await logAccessEvent({
-    event_type: 'USER_ENABLED',
+    event_type: "USER_ENABLED",
     user_email: enabledBy,
     target_email: user.email,
     action: `Enabled user ${user.email}`,
     details: { user_id: userId },
-    performed_by: enabledBy
+    performed_by: enabledBy,
   });
 
   return user;
 }
 
-export async function updateUserRole(userId: number, newRole: UserRole, updatedBy: string): Promise<PlatformUser | null> {
+export async function updateUserRole(
+  userId: number,
+  newRole: UserRole,
+  updatedBy: string,
+): Promise<PlatformUser | null> {
   const result = await pool.query(
     `UPDATE platform_users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-    [newRole, userId]
+    [newRole, userId],
   );
 
   const user = result.rows[0];
   if (!user) return null;
 
   try {
-    const { invalidatePlatformUserCache } = await import('./rbacMiddleware');
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
     invalidatePlatformUserCache(user.email);
   } catch {}
 
   await createDefaultPermissions(userId, newRole);
 
   await logAccessEvent({
-    event_type: 'ROLE_CHANGED',
+    event_type: "ROLE_CHANGED",
     user_email: updatedBy,
     target_email: user.email,
     action: `Changed role to ${newRole}`,
     details: { user_id: userId, new_role: newRole },
-    performed_by: updatedBy
+    performed_by: updatedBy,
   });
 
   return user;
 }
 
 export async function updateUserPermissions(
-  userId: number, 
-  permissions: Partial<ScreenPermission>[], 
-  updatedBy: string
+  userId: number,
+  permissions: Partial<ScreenPermission>[],
+  updatedBy: string,
 ): Promise<void> {
   for (const perm of permissions) {
     if (perm.screen_code) {
@@ -534,97 +741,130 @@ export async function updateUserPermissions(
            can_manage_settings = COALESCE($10, can_manage_settings), can_manage_users = COALESCE($11, can_manage_users),
            updated_at = NOW()
          WHERE user_id = $12 AND screen_code = $13`,
-        [perm.can_view, perm.can_create, perm.can_edit, perm.can_delete, perm.can_approve, perm.can_assign,
-         perm.can_run_audit, perm.can_export, perm.can_upload, perm.can_manage_settings, perm.can_manage_users,
-         userId, perm.screen_code]
+        [
+          perm.can_view,
+          perm.can_create,
+          perm.can_edit,
+          perm.can_delete,
+          perm.can_approve,
+          perm.can_assign,
+          perm.can_run_audit,
+          perm.can_export,
+          perm.can_upload,
+          perm.can_manage_settings,
+          perm.can_manage_users,
+          userId,
+          perm.screen_code,
+        ],
       );
     }
   }
 
   await logAccessEvent({
-    event_type: 'PERMISSIONS_CHANGED',
+    event_type: "PERMISSIONS_CHANGED",
     user_email: updatedBy,
     target_email: (await getUserById(userId))?.email,
-    action: 'Updated screen permissions',
-    details: { user_id: userId, screens_modified: permissions.map(p => p.screen_code) },
-    performed_by: updatedBy
+    action: "Updated screen permissions",
+    details: {
+      user_id: userId,
+      screens_modified: permissions.map((p) => p.screen_code),
+    },
+    performed_by: updatedBy,
   });
 }
 
 export async function getPendingApprovals(): Promise<PlatformUser[]> {
   const result = await pool.query(
-    `SELECT * FROM platform_users WHERE status = 'pending_approval' ORDER BY created_at DESC`
+    `SELECT * FROM platform_users WHERE status = 'pending_approval' ORDER BY created_at DESC`,
   );
   return result.rows;
 }
 
 export async function getActiveUsers(): Promise<PlatformUser[]> {
   const result = await pool.query(
-    `SELECT * FROM platform_users WHERE status = 'active' ORDER BY full_name`
+    `SELECT * FROM platform_users WHERE status = 'active' ORDER BY full_name`,
   );
   return result.rows;
 }
 
 export async function getAllUsers(): Promise<PlatformUser[]> {
   const result = await pool.query(
-    `SELECT * FROM platform_users ORDER BY created_at DESC`
+    `SELECT * FROM platform_users ORDER BY created_at DESC`,
   );
   return result.rows;
 }
 
-export async function getUserById(userId: number): Promise<PlatformUser | null> {
+export async function getUserById(
+  userId: number,
+): Promise<PlatformUser | null> {
   const result = await pool.query(
     `SELECT * FROM platform_users WHERE id = $1`,
-    [userId]
+    [userId],
   );
   return result.rows[0] || null;
 }
 
-export async function getUserByEmail(email: string): Promise<PlatformUser | null> {
+export async function getUserByEmail(
+  email: string,
+): Promise<PlatformUser | null> {
   const result = await pool.query(
     `SELECT * FROM platform_users WHERE email = $1`,
-    [email]
+    [email],
   );
   return result.rows[0] || null;
 }
 
-export async function getUserPermissions(userId: number): Promise<ScreenPermission[]> {
+export async function getUserPermissions(
+  userId: number,
+): Promise<ScreenPermission[]> {
   const result = await pool.query(
     `SELECT * FROM screen_permissions WHERE user_id = $1 ORDER BY screen_name`,
-    [userId]
+    [userId],
   );
   return result.rows;
 }
 
-export async function getUserDataScope(userId: number): Promise<DataScope | null> {
+export async function getUserDataScope(
+  userId: number,
+): Promise<DataScope | null> {
   const result = await pool.query(
     `SELECT * FROM data_scopes WHERE user_id = $1`,
-    [userId]
+    [userId],
   );
   return result.rows[0] || null;
 }
 
 export async function getInvitations(): Promise<UserInvitation[]> {
   const result = await pool.query(
-    `SELECT * FROM user_invitations ORDER BY created_at DESC`
+    `SELECT * FROM user_invitations ORDER BY created_at DESC`,
   );
   return result.rows;
 }
 
-export async function logAccessEvent(event: Omit<AccessAuditLog, 'id' | 'created_at'>): Promise<void> {
+export async function logAccessEvent(
+  event: Omit<AccessAuditLog, "id" | "created_at">,
+): Promise<void> {
   await pool.query(
     `INSERT INTO access_audit_log (event_type, user_email, target_email, action, details, performed_by, ip_address)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [event.event_type, event.user_email, event.target_email, event.action, JSON.stringify(event.details || {}), event.performed_by, event.ip_address]
+    [
+      event.event_type,
+      event.user_email,
+      event.target_email,
+      event.action,
+      JSON.stringify(event.details || {}),
+      event.performed_by,
+      event.ip_address,
+    ],
   );
 }
 
-export async function getAccessAuditLog(filters?: { 
-  event_type?: string; 
-  target_email?: string; 
-  limit?: number 
+export async function getAccessAuditLog(filters?: {
+  event_type?: string;
+  target_email?: string;
+  limit?: number;
 }): Promise<AccessAuditLog[]> {
-  let query = 'SELECT * FROM access_audit_log WHERE 1=1';
+  let query = "SELECT * FROM access_audit_log WHERE 1=1";
   const params: any[] = [];
   let idx = 1;
 
@@ -637,8 +877,8 @@ export async function getAccessAuditLog(filters?: {
     params.push(filters.target_email);
   }
 
-  query += ' ORDER BY created_at DESC';
-  
+  query += " ORDER BY created_at DESC";
+
   if (filters?.limit) {
     query += ` LIMIT $${idx++}`;
     params.push(filters.limit);
@@ -672,7 +912,7 @@ export async function getUserStats(): Promise<{
     `),
     pool.query(`
       SELECT team, COUNT(*) as count FROM platform_users GROUP BY team ORDER BY count DESC
-    `)
+    `),
   ]);
 
   return {
@@ -681,7 +921,13 @@ export async function getUserStats(): Promise<{
     pending: parseInt(totals.rows[0].pending),
     denied: parseInt(totals.rows[0].denied),
     disabled: parseInt(totals.rows[0].disabled),
-    byRole: byRole.rows.map(r => ({ role: r.role, count: parseInt(r.count) })),
-    byTeam: byTeam.rows.map(r => ({ team: r.team, count: parseInt(r.count) }))
+    byRole: byRole.rows.map((r) => ({
+      role: r.role,
+      count: parseInt(r.count),
+    })),
+    byTeam: byTeam.rows.map((r) => ({
+      team: r.team,
+      count: parseInt(r.count),
+    })),
   };
 }

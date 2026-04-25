@@ -1,13 +1,14 @@
-import pg from 'pg';
+import pg from "pg";
+import { logger } from "./logger";
 const { Pool } = pg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export type NotificationChannel = 'in_app' | 'email' | 'slack';
-export type NotificationPriority = 'critical' | 'high' | 'medium' | 'low';
-export type NotificationStatus = 'unread' | 'read' | 'dismissed';
+export type NotificationChannel = "in_app" | "email" | "slack";
+export type NotificationPriority = "critical" | "high" | "medium" | "low";
+export type NotificationStatus = "unread" | "read" | "dismissed";
 
 export interface Notification {
   id?: number;
@@ -45,25 +46,42 @@ export async function initNotificationTables(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_module ON notifications(module)`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_notifications_module ON notifications(module)`,
+  );
 }
 
-export async function createNotification(notif: Omit<Notification, 'id' | 'created_at'>): Promise<Notification> {
+export async function createNotification(
+  notif: Omit<Notification, "id" | "created_at">,
+): Promise<Notification> {
   const result = await pool.query(
     `INSERT INTO notifications (title, message, module, priority, channel, status, recipient, related_entity_type, related_entity_id, action_url)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-    [notif.title, notif.message, notif.module, notif.priority || 'medium', notif.channel || 'in_app',
-     notif.status || 'unread', notif.recipient || null, notif.related_entity_type || null,
-     notif.related_entity_id || null, notif.action_url || null]
+    [
+      notif.title,
+      notif.message,
+      notif.module,
+      notif.priority || "medium",
+      notif.channel || "in_app",
+      notif.status || "unread",
+      notif.recipient || null,
+      notif.related_entity_type || null,
+      notif.related_entity_id || null,
+      notif.action_url || null,
+    ],
   );
 
   const notification = result.rows[0];
 
-  if (notif.channel === 'email' && notif.recipient) {
+  if (notif.channel === "email" && notif.recipient) {
     await sendEmailNotification(notification);
-  } else if (notif.channel === 'slack') {
+  } else if (notif.channel === "slack") {
     await sendSlackNotification(notification);
   }
 
@@ -71,27 +89,47 @@ export async function createNotification(notif: Omit<Notification, 'id' | 'creat
 }
 
 export async function getNotifications(filters: {
-  recipient?: string; status?: string; module?: string; limit?: number; offset?: number;
+  recipient?: string;
+  status?: string;
+  module?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<{ notifications: Notification[]; total: number }> {
   const conditions: string[] = [];
   const params: any[] = [];
   let paramIdx = 1;
 
-  if (filters.recipient) { conditions.push(`recipient = $${paramIdx++}`); params.push(filters.recipient); }
-  if (filters.status) { conditions.push(`status = $${paramIdx++}`); params.push(filters.status); }
-  if (filters.module) { conditions.push(`module = $${paramIdx++}`); params.push(filters.module); }
+  if (filters.recipient) {
+    conditions.push(`recipient = $${paramIdx++}`);
+    params.push(filters.recipient);
+  }
+  if (filters.status) {
+    conditions.push(`status = $${paramIdx++}`);
+    params.push(filters.status);
+  }
+  if (filters.module) {
+    conditions.push(`module = $${paramIdx++}`);
+    params.push(filters.module);
+  }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = filters.limit || 50;
   const offset = filters.offset || 0;
 
-  const countResult = await pool.query(`SELECT COUNT(*) as total FROM notifications ${where}`, params);
+  const countResult = await pool.query(
+    `SELECT COUNT(*) as total FROM notifications ${where}`,
+    params,
+  );
   const result = await pool.query(
     `SELECT * FROM notifications ${where} ORDER BY CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, created_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
-    [...params, limit, offset]
+    [...params, limit, offset],
   );
 
-  return { notifications: result.rows, total: parseInt(countResult.rows[0].total) };
+  return {
+    notifications: result.rows,
+    total: parseInt(countResult.rows[0].total),
+  };
 }
 
 export async function getUnreadCount(recipient?: string): Promise<number> {
@@ -105,15 +143,17 @@ export async function getUnreadCount(recipient?: string): Promise<number> {
 export async function markAsRead(id: number): Promise<Notification | null> {
   const result = await pool.query(
     `UPDATE notifications SET status = 'read', read_at = NOW() WHERE id = $1 RETURNING *`,
-    [id]
+    [id],
   );
   return result.rows[0] || null;
 }
 
-export async function dismissNotification(id: number): Promise<Notification | null> {
+export async function dismissNotification(
+  id: number,
+): Promise<Notification | null> {
   const result = await pool.query(
     `UPDATE notifications SET status = 'dismissed' WHERE id = $1 RETURNING *`,
-    [id]
+    [id],
   );
   return result.rows[0] || null;
 }
@@ -123,47 +163,62 @@ async function sendEmailNotification(notif: Notification): Promise<void> {
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey || !notif.recipient) return;
 
-    const { Resend } = await import('resend');
+    const { Resend } = await import("resend");
     const resend = new Resend(resendKey);
     await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'QMS Platform <noreply@qms-dashboard.replit.app>',
+      from:
+        process.env.EMAIL_FROM ||
+        "QMS Platform <noreply@qms-dashboard.replit.app>",
       to: notif.recipient,
       subject: `[${notif.priority.toUpperCase()}] ${notif.title}`,
-      html: `<h2>${notif.title}</h2><p>${notif.message}</p>${notif.action_url ? `<p><a href="${notif.action_url}">View Details</a></p>` : ''}`,
+      html: `<h2>${notif.title}</h2><p>${notif.message}</p>${notif.action_url ? `<p><a href="${notif.action_url}">View Details</a></p>` : ""}`,
     });
-    await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [notif.id]);
+    await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [
+      notif.id,
+    ]);
   } catch (err) {
-    console.error('[NotificationHub] Email send failed:', err);
+    logger.error("[NotificationHub] Email send failed:", err);
   }
 }
 
 async function sendSlackNotification(notif: Notification): Promise<void> {
   try {
     const slackToken = process.env.SLACK_BOT_TOKEN;
-    const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
+    const slackChannel =
+      process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
     if (!slackToken || !slackChannel) return;
 
-    const { WebClient } = await import('@slack/web-api');
+    const { WebClient } = await import("@slack/web-api");
     const slack = new WebClient(slackToken);
-    const priorityEmoji = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' }[notif.priority] || '⚪';
+    const priorityEmoji =
+      { critical: "🔴", high: "🟠", medium: "🟡", low: "🟢" }[notif.priority] ||
+      "⚪";
     await slack.chat.postMessage({
       channel: slackChannel,
-      text: `${priorityEmoji} *${notif.title}*\n${notif.message}${notif.action_url ? `\n<${notif.action_url}|View Details>` : ''}`,
+      text: `${priorityEmoji} *${notif.title}*\n${notif.message}${notif.action_url ? `\n<${notif.action_url}|View Details>` : ""}`,
     });
-    await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [notif.id]);
+    await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [
+      notif.id,
+    ]);
   } catch (err) {
-    console.error('[NotificationHub] Slack send failed:', err);
+    logger.error("[NotificationHub] Slack send failed:", err);
   }
 }
 
 export async function notifyEvent(event: {
-  type: string; module: string; title: string; message: string;
-  priority?: NotificationPriority; entityType?: string; entityId?: string; actionUrl?: string;
+  type: string;
+  module: string;
+  title: string;
+  message: string;
+  priority?: NotificationPriority;
+  entityType?: string;
+  entityId?: string;
+  actionUrl?: string;
 }): Promise<void> {
-  const channels: NotificationChannel[] = ['in_app'];
-  if (event.priority === 'critical' || event.priority === 'high') {
-    if (process.env.SLACK_BOT_TOKEN) channels.push('slack');
-    if (process.env.RESEND_API_KEY) channels.push('email');
+  const channels: NotificationChannel[] = ["in_app"];
+  if (event.priority === "critical" || event.priority === "high") {
+    if (process.env.SLACK_BOT_TOKEN) channels.push("slack");
+    if (process.env.RESEND_API_KEY) channels.push("email");
   }
 
   for (const channel of channels) {
@@ -172,14 +227,17 @@ export async function notifyEvent(event: {
         title: event.title,
         message: event.message,
         module: event.module,
-        priority: event.priority || 'medium',
+        priority: event.priority || "medium",
         channel,
         related_entity_type: event.entityType,
         related_entity_id: event.entityId,
         action_url: event.actionUrl,
       });
     } catch (err) {
-      console.error(`[NotificationHub] Failed to create ${channel} notification:`, err);
+      logger.error(
+        `[NotificationHub] Failed to create ${channel} notification:`,
+        err,
+      );
     }
   }
 }

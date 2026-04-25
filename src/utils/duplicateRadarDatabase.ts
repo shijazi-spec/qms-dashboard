@@ -1,4 +1,5 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -15,14 +16,14 @@ export interface DuplicateCluster {
   total_contacts: number;
   total_accounts: number;
   total_records: number;
-  confidence_level: 'high' | 'medium' | 'low';
+  confidence_level: "high" | "medium" | "low";
   confidence_score: number;
   match_signals?: string[];
   first_record_date?: Date;
   latest_activity_date?: Date;
   owners_involved?: string[];
   estimated_pipeline_value?: number;
-  status: 'active' | 'resolved' | 'ignored';
+  status: "active" | "resolved" | "ignored";
   ai_recommendation?: string;
   resolved_by?: string;
   resolved_at?: Date;
@@ -33,7 +34,7 @@ export interface DuplicateCluster {
 export interface DuplicateRecord {
   id?: number;
   cluster_id: number;
-  record_type: 'lead' | 'deal' | 'contact' | 'account';
+  record_type: "lead" | "deal" | "contact" | "account";
   zoho_record_id?: string;
   record_name: string;
   company_name?: string;
@@ -82,7 +83,7 @@ export interface ZohoSyncState {
   module: string;
   last_sync_at?: Date;
   total_synced: number;
-  sync_status: 'idle' | 'syncing' | 'completed' | 'failed';
+  sync_status: "idle" | "syncing" | "completed" | "failed";
 }
 
 export interface DuplicateRecordTask {
@@ -116,7 +117,7 @@ export interface MergeAction {
   cluster_id: number;
   primary_record_id: number;
   merged_record_ids: number[];
-  action_type: 'merge' | 'resolve' | 'ignore';
+  action_type: "merge" | "resolve" | "ignore";
   performed_by?: string;
   notes?: string;
   created_at?: Date;
@@ -131,12 +132,12 @@ export interface OwnerAccountability {
   clusters_involved: number;
   high_confidence_duplicates: number;
   estimated_waste_value: number;
-  rag_status: 'green' | 'amber' | 'red';
+  rag_status: "green" | "amber" | "red";
 }
 
 export interface DuplicateDetectionLog {
   id?: number;
-  detection_type: 'manual' | 'scheduled' | 'on_demand';
+  detection_type: "manual" | "scheduled" | "on_demand";
   total_records_scanned: number;
   total_clusters_found: number;
   total_duplicates_detected: number;
@@ -147,7 +148,7 @@ export interface DuplicateDetectionLog {
   detection_duration_ms?: number;
   triggered_by?: string;
   user_email?: string;
-  status: 'running' | 'completed' | 'failed';
+  status: "running" | "completed" | "failed";
   error_message?: string;
   detection_config?: any;
   created_at?: Date;
@@ -156,20 +157,33 @@ export interface DuplicateDetectionLog {
 
 export interface DuplicateExportLog {
   id?: number;
-  export_type: 'cluster' | 'owner' | 'time_period' | 'all';
+  export_type: "cluster" | "owner" | "time_period" | "all";
   filter_criteria?: any;
   total_records_exported: number;
-  file_format: 'excel' | 'csv' | 'xlsx';
+  file_format: "excel" | "csv" | "xlsx";
   exported_by?: string;
   user_email?: string;
   created_at?: Date;
 }
 
 const PUBLIC_DOMAINS = [
-  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
-  'aol.com', 'live.com', 'msn.com', 'mail.com', 'protonmail.com',
-  'yandex.com', 'zoho.com', 'gmx.com', 'fastmail.com',
-  'stc.com.sa', 'mobily.com.sa', 'zain.com.sa'
+  "gmail.com",
+  "yahoo.com",
+  "hotmail.com",
+  "outlook.com",
+  "icloud.com",
+  "aol.com",
+  "live.com",
+  "msn.com",
+  "mail.com",
+  "protonmail.com",
+  "yandex.com",
+  "zoho.com",
+  "gmx.com",
+  "fastmail.com",
+  "stc.com.sa",
+  "mobily.com.sa",
+  "zain.com.sa",
 ];
 
 // Full list (no LIMIT 5) for "View All" modals on the dashboard.
@@ -180,7 +194,7 @@ export async function getAllClustersByInflation(
 ): Promise<any[]> {
   const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
   const offset = Math.max(0, opts.offset ?? 0);
-  const statusClause = opts.includeInactive ? '' : `AND status = 'active'`;
+  const statusClause = opts.includeInactive ? "" : `AND status = 'active'`;
   const r = await pool.query(
     `SELECT id, domain, company_name, company_name_arabic,
             estimated_pipeline_value, total_records,
@@ -205,7 +219,7 @@ export async function getClustersBySignal(
 ): Promise<any[]> {
   const limit = Math.max(1, Math.min(opts.limit ?? 500, 2000));
   const offset = Math.max(0, opts.offset ?? 0);
-  const statusClause = opts.includeInactive ? '' : `AND status = 'active'`;
+  const statusClause = opts.includeInactive ? "" : `AND status = 'active'`;
   const r = await pool.query(
     `SELECT id, domain, company_name, company_name_arabic,
             estimated_pipeline_value, total_records,
@@ -223,17 +237,23 @@ export async function getClustersBySignal(
 }
 
 export function extractDomain(email: string): string | null {
-  if (!email || typeof email !== 'string') return null;
-  const match = email.toLowerCase().trim().match(/@([^@]+)$/);
+  if (!email || typeof email !== "string") return null;
+  const match = email
+    .toLowerCase()
+    .trim()
+    .match(/@([^@]+)$/);
   if (!match) return null;
-  let domain = match[1].replace(/^www\./, '').trim();
+  let domain = match[1].replace(/^www\./, "").trim();
   if (PUBLIC_DOMAINS.includes(domain)) return null;
   return domain;
 }
 
 export function normalizeDomain(domain: string): string {
-  if (!domain) return '';
-  return domain.toLowerCase().replace(/^www\./, '').trim();
+  if (!domain) return "";
+  return domain
+    .toLowerCase()
+    .replace(/^www\./, "")
+    .trim();
 }
 
 export function calculateSimilarity(str1: string, str2: string): number {
@@ -241,11 +261,11 @@ export function calculateSimilarity(str1: string, str2: string): number {
   const s1 = str1.toLowerCase().trim();
   const s2 = str2.toLowerCase().trim();
   if (s1 === s2) return 100;
-  
+
   const longer = s1.length > s2.length ? s1 : s2;
-  
+
   if (longer.length === 0) return 100;
-  
+
   const editDistance = levenshteinDistance(s1, s2);
   return Math.round((1 - editDistance / longer.length) * 100);
 }
@@ -253,11 +273,13 @@ export function calculateSimilarity(str1: string, str2: string): number {
 function levenshteinDistance(s1: string, s2: string): number {
   const m = s1.length;
   const n = s2.length;
-  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  
+  const dp: number[][] = Array(m + 1)
+    .fill(null)
+    .map(() => Array(n + 1).fill(0));
+
   for (let i = 0; i <= m; i++) dp[i][0] = i;
   for (let j = 0; j <= n; j++) dp[0][j] = j;
-  
+
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (s1[i - 1] === s2[j - 1]) {
@@ -270,15 +292,19 @@ function levenshteinDistance(s1: string, s2: string): number {
   return dp[m][n];
 }
 
-export function getConfidenceLevel(score: number): 'high' | 'medium' | 'low' {
-  if (score >= 90) return 'high';
-  if (score >= 60) return 'medium';
-  return 'low';
+export function getConfidenceLevel(score: number): "high" | "medium" | "low" {
+  if (score >= 90) return "high";
+  if (score >= 60) return "medium";
+  return "low";
 }
 
 export function normalizePhone(phone: string): string {
-  if (!phone) return '';
-  return phone.replace(/[\s\-\(\)\+\.]/g, '').replace(/^00/, '').replace(/^966/, '').slice(-9);
+  if (!phone) return "";
+  return phone
+    .replace(/[\s\-\(\)\+\.]/g, "")
+    .replace(/^00/, "")
+    .replace(/^966/, "")
+    .slice(-9);
 }
 
 export interface MatchResult {
@@ -287,20 +313,34 @@ export interface MatchResult {
 }
 
 export function calculateMultiSignalScore(
-  record1: { email?: string; domain?: string; phone?: string; company_name?: string },
-  record2: { email?: string; domain?: string; phone?: string; company_name?: string }
+  record1: {
+    email?: string;
+    domain?: string;
+    phone?: string;
+    company_name?: string;
+  },
+  record2: {
+    email?: string;
+    domain?: string;
+    phone?: string;
+    company_name?: string;
+  },
 ): MatchResult {
   const signals: string[] = [];
   let score = 0;
 
-  if (record1.email && record2.email && record1.email.toLowerCase() === record2.email.toLowerCase()) {
+  if (
+    record1.email &&
+    record2.email &&
+    record1.email.toLowerCase() === record2.email.toLowerCase()
+  ) {
     score += 40;
-    signals.push('exact_email');
+    signals.push("exact_email");
   }
 
   if (record1.domain && record2.domain && record1.domain === record2.domain) {
     score += 25;
-    signals.push('domain_match');
+    signals.push("domain_match");
   }
 
   if (record1.phone && record2.phone) {
@@ -308,21 +348,21 @@ export function calculateMultiSignalScore(
     const p2 = normalizePhone(record2.phone);
     if (p1 && p2 && p1.length >= 7 && p1 === p2) {
       score += 30;
-      signals.push('phone_match');
+      signals.push("phone_match");
     }
   }
 
   if (record1.company_name && record2.company_name) {
     const similarity = calculateSimilarity(
       normalizeCompanyName(record1.company_name),
-      normalizeCompanyName(record2.company_name)
+      normalizeCompanyName(record2.company_name),
     );
     if (similarity >= 90) {
       score += 20;
-      signals.push('company_exact');
+      signals.push("company_exact");
     } else if (similarity >= 75) {
       score += 10;
-      signals.push('company_fuzzy');
+      signals.push("company_fuzzy");
     }
   }
 
@@ -358,12 +398,24 @@ export async function initDuplicateRadarTables(): Promise<void> {
     )
   `);
 
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS total_contacts INTEGER DEFAULT 0`);
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS total_accounts INTEGER DEFAULT 0`);
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS match_signals JSONB DEFAULT '[]'`);
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS resolved_by VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`);
-  await pool.query(`ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS company_name_normalized VARCHAR(500)`);
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS total_contacts INTEGER DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS total_accounts INTEGER DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS match_signals JSONB DEFAULT '[]'`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS resolved_by VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS company_name_normalized VARCHAR(500)`,
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_records (
@@ -395,29 +447,73 @@ export async function initDuplicateRadarTables(): Promise<void> {
     )
   `);
 
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS phone_normalized VARCHAR(50)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS match_signals JSONB DEFAULT '[]'`);
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS phone_normalized VARCHAR(50)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS match_signals JSONB DEFAULT '[]'`,
+  );
 
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_name VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_id VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS zoho_module VARCHAR(50)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS pipeline VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS products TEXT`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS mobile VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS mobile_normalized VARCHAR(50)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_name VARCHAR(500)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS cr_number VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS vat_number VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS website VARCHAR(500)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS country VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS region VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS industry VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS no_of_employees INTEGER`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS title VARCHAR(255)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS lead_type VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS gov_type VARCHAR(100)`);
-  await pool.query(`ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_type VARCHAR(100)`);
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_name VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_id VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS zoho_module VARCHAR(50)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS pipeline VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS products TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS mobile VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS mobile_normalized VARCHAR(50)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_name VARCHAR(500)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS cr_number VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS vat_number VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS website VARCHAR(500)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS country VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS region VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS industry VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS no_of_employees INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS title VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS lead_type VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS gov_type VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS account_type VARCHAR(100)`,
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS zoho_sync_state (
@@ -491,40 +587,86 @@ export async function initDuplicateRadarTables(): Promise<void> {
     )
   `);
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_status ON duplicate_clusters(status)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_cluster ON duplicate_records(cluster_id)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_type ON duplicate_records(record_type)`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_status ON duplicate_clusters(status)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_cluster ON duplicate_records(cluster_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_type ON duplicate_records(record_type)`,
+  );
 
   // B6: Additional performance indexes
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_records_zoho_id ON duplicate_records(zoho_record_id) WHERE zoho_record_id IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_email ON duplicate_records(LOWER(email)) WHERE email IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_phone_norm ON duplicate_records(phone_normalized) WHERE phone_normalized IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_domain ON duplicate_records(domain) WHERE domain IS NOT NULL`);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_records_zoho_id ON duplicate_records(zoho_record_id) WHERE zoho_record_id IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_email ON duplicate_records(LOWER(email)) WHERE email IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_phone_norm ON duplicate_records(phone_normalized) WHERE phone_normalized IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_domain ON duplicate_records(domain) WHERE domain IS NOT NULL`,
+  );
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_layout ON duplicate_records(layout_name) WHERE layout_name IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_zoho_module ON duplicate_records(zoho_module) WHERE zoho_module IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_pipeline ON duplicate_records(pipeline) WHERE pipeline IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_owner ON duplicate_records(owner_name) WHERE owner_name IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_country ON duplicate_records(country) WHERE country IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_industry ON duplicate_records(industry) WHERE industry IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_modified ON duplicate_records(modified_date)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_mobile_norm ON duplicate_records(mobile_normalized) WHERE mobile_normalized IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_cr ON duplicate_records(cr_number) WHERE cr_number IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_records_vat ON duplicate_records(vat_number) WHERE vat_number IS NOT NULL`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_duplicate_record_tasks_record ON duplicate_record_tasks(related_record_id)`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_layout ON duplicate_records(layout_name) WHERE layout_name IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_zoho_module ON duplicate_records(zoho_module) WHERE zoho_module IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_pipeline ON duplicate_records(pipeline) WHERE pipeline IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_owner ON duplicate_records(owner_name) WHERE owner_name IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_country ON duplicate_records(country) WHERE country IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_industry ON duplicate_records(industry) WHERE industry IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_modified ON duplicate_records(modified_date)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_mobile_norm ON duplicate_records(mobile_normalized) WHERE mobile_normalized IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_cr ON duplicate_records(cr_number) WHERE cr_number IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_vat ON duplicate_records(vat_number) WHERE vat_number IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_record_tasks_record ON duplicate_record_tasks(related_record_id)`,
+  );
 
   // B4: pg_trgm for fuzzy matching
   try {
     await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_clusters_company_trgm ON duplicate_clusters USING GIN (company_name_normalized gin_trgm_ops)`);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_clusters_company_trgm ON duplicate_clusters USING GIN (company_name_normalized gin_trgm_ops)`,
+    );
   } catch (e) {
-    console.log('⚠️ [DuplicateRadar] pg_trgm not available, falling back to Levenshtein matching');
+    logger.info(
+      "⚠️ [DuplicateRadar] pg_trgm not available, falling back to Levenshtein matching",
+    );
   }
 }
 
-export async function createCluster(cluster: Omit<DuplicateCluster, 'id' | 'created_at' | 'updated_at'>): Promise<DuplicateCluster> {
-  const companyNormalized = cluster.company_name ? normalizeCompanyName(cluster.company_name) : null;
+export async function createCluster(
+  cluster: Omit<DuplicateCluster, "id" | "created_at" | "updated_at">,
+): Promise<DuplicateCluster> {
+  const companyNormalized = cluster.company_name
+    ? normalizeCompanyName(cluster.company_name)
+    : null;
   const result = await pool.query(
     `INSERT INTO duplicate_clusters 
      (domain, company_name, company_name_arabic, company_name_normalized, total_leads, total_deals, total_records, 
@@ -533,20 +675,30 @@ export async function createCluster(cluster: Omit<DuplicateCluster, 'id' | 'crea
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
-      cluster.domain, cluster.company_name, cluster.company_name_arabic, companyNormalized,
-      cluster.total_leads, cluster.total_deals, cluster.total_records,
-      cluster.confidence_level, cluster.confidence_score,
-      cluster.first_record_date, cluster.latest_activity_date,
+      cluster.domain,
+      cluster.company_name,
+      cluster.company_name_arabic,
+      companyNormalized,
+      cluster.total_leads,
+      cluster.total_deals,
+      cluster.total_records,
+      cluster.confidence_level,
+      cluster.confidence_score,
+      cluster.first_record_date,
+      cluster.latest_activity_date,
       JSON.stringify(cluster.owners_involved || []),
-      cluster.estimated_pipeline_value || 0, cluster.status,
-      cluster.ai_recommendation
-    ]
+      cluster.estimated_pipeline_value || 0,
+      cluster.status,
+      cluster.ai_recommendation,
+    ],
   );
   return result.rows[0];
 }
 
 // A1: Incremental upsert for records (replaces destructive clearAllDuplicateData approach)
-export async function upsertRecord(record: Omit<DuplicateRecord, 'id' | 'created_at'>): Promise<DuplicateRecord> {
+export async function upsertRecord(
+  record: Omit<DuplicateRecord, "id" | "created_at">,
+): Promise<DuplicateRecord> {
   const phoneNorm = record.phone ? normalizePhone(record.phone) : null;
   const mobileNorm = record.mobile ? normalizePhone(record.mobile) : null;
   const result = await pool.query(
@@ -597,25 +749,57 @@ export async function upsertRecord(record: Omit<DuplicateRecord, 'id' | 'created
        account_type = EXCLUDED.account_type
      RETURNING *`,
     [
-      record.cluster_id, record.record_type, record.zoho_record_id, record.record_name,
-      record.company_name, record.email, record.domain, record.phone,
-      phoneNorm, record.mobile, mobileNorm,
-      record.owner_name, record.owner_email, record.status, record.stage,
-      record.deal_value, record.source, record.created_date, record.modified_date,
-      record.is_primary, record.ai_recommendation, record.confidence_score,
-      record.is_mock_data, JSON.stringify(record.raw_data || {}),
-      record.layout_name, record.layout_id, record.zoho_module, record.pipeline,
-      record.products, record.contact_name, record.account_name,
-      record.cr_number, record.vat_number, record.website, record.country,
-      record.region, record.industry, record.no_of_employees, record.title,
-      record.lead_type, record.gov_type, record.account_type
-    ]
+      record.cluster_id,
+      record.record_type,
+      record.zoho_record_id,
+      record.record_name,
+      record.company_name,
+      record.email,
+      record.domain,
+      record.phone,
+      phoneNorm,
+      record.mobile,
+      mobileNorm,
+      record.owner_name,
+      record.owner_email,
+      record.status,
+      record.stage,
+      record.deal_value,
+      record.source,
+      record.created_date,
+      record.modified_date,
+      record.is_primary,
+      record.ai_recommendation,
+      record.confidence_score,
+      record.is_mock_data,
+      JSON.stringify(record.raw_data || {}),
+      record.layout_name,
+      record.layout_id,
+      record.zoho_module,
+      record.pipeline,
+      record.products,
+      record.contact_name,
+      record.account_name,
+      record.cr_number,
+      record.vat_number,
+      record.website,
+      record.country,
+      record.region,
+      record.industry,
+      record.no_of_employees,
+      record.title,
+      record.lead_type,
+      record.gov_type,
+      record.account_type,
+    ],
   );
   return result.rows[0];
 }
 
 // A7: phone_normalized included directly in INSERT
-export async function addRecordToCluster(record: Omit<DuplicateRecord, 'id' | 'created_at'>): Promise<DuplicateRecord> {
+export async function addRecordToCluster(
+  record: Omit<DuplicateRecord, "id" | "created_at">,
+): Promise<DuplicateRecord> {
   const phoneNorm = record.phone ? normalizePhone(record.phone) : null;
   const result = await pool.query(
     `INSERT INTO duplicate_records 
@@ -625,14 +809,29 @@ export async function addRecordToCluster(record: Omit<DuplicateRecord, 'id' | 'c
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
      RETURNING *`,
     [
-      record.cluster_id, record.record_type, record.zoho_record_id, record.record_name,
-      record.company_name, record.email, record.domain, record.phone,
+      record.cluster_id,
+      record.record_type,
+      record.zoho_record_id,
+      record.record_name,
+      record.company_name,
+      record.email,
+      record.domain,
+      record.phone,
       phoneNorm,
-      record.owner_name, record.owner_email, record.status, record.stage,
-      record.deal_value, record.source, record.created_date, record.modified_date,
-      record.is_primary, record.ai_recommendation, record.confidence_score,
-      record.is_mock_data, JSON.stringify(record.raw_data || {})
-    ]
+      record.owner_name,
+      record.owner_email,
+      record.status,
+      record.stage,
+      record.deal_value,
+      record.source,
+      record.created_date,
+      record.modified_date,
+      record.is_primary,
+      record.ai_recommendation,
+      record.confidence_score,
+      record.is_mock_data,
+      JSON.stringify(record.raw_data || {}),
+    ],
   );
   return result.rows[0];
 }
@@ -641,19 +840,21 @@ export async function addRecordToCluster(record: Omit<DuplicateRecord, 'id' | 'c
 // the new `layouts` filter (and any future ones) stay in lock-step between
 // `getAllClusters` and `getClusterCount`.
 function buildClusterFilterClause(
-  filters: {
-    status?: string;
-    confidence_level?: string;
-    start_date?: string;
-    end_date?: string;
-    hide_hierarchies?: boolean;
-    layouts?: string[];
-  } | undefined,
+  filters:
+    | {
+        status?: string;
+        confidence_level?: string;
+        start_date?: string;
+        end_date?: string;
+        hide_hierarchies?: boolean;
+        layouts?: string[];
+      }
+    | undefined,
   startIndex: number,
 ): { clause: string; params: any[]; nextIndex: number } {
   const params: any[] = [];
   let paramIndex = startIndex;
-  let clause = '';
+  let clause = "";
 
   if (filters?.status) {
     clause += ` AND status = $${paramIndex++}`;
@@ -669,7 +870,7 @@ function buildClusterFilterClause(
   }
   if (filters?.end_date) {
     clause += ` AND created_at <= $${paramIndex++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
+    params.push(filters.end_date + "T23:59:59Z");
   }
   if (filters?.hide_hierarchies) {
     clause += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
@@ -699,9 +900,9 @@ export async function getAllClusters(filters?: {
 }): Promise<DuplicateCluster[]> {
   const { clause, params, nextIndex } = buildClusterFilterClause(filters, 1);
   let paramIndex = nextIndex;
-  let query = 'SELECT * FROM duplicate_clusters WHERE 1=1' + clause;
+  let query = "SELECT * FROM duplicate_clusters WHERE 1=1" + clause;
 
-  query += ' ORDER BY total_records DESC, confidence_score DESC';
+  query += " ORDER BY total_records DESC, confidence_score DESC";
 
   if (filters?.limit) {
     query += ` LIMIT $${paramIndex++}`;
@@ -725,7 +926,8 @@ export async function getClusterCount(filters?: {
   layouts?: string[];
 }): Promise<number> {
   const { clause, params } = buildClusterFilterClause(filters, 1);
-  const query = 'SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1' + clause;
+  const query =
+    "SELECT COUNT(*) as total FROM duplicate_clusters WHERE 1=1" + clause;
   const result = await pool.query(query, params);
   return parseInt(result.rows[0]?.total) || 0;
 }
@@ -733,20 +935,31 @@ export async function getClusterCount(filters?: {
 // Hard reset for the "Rebuild Clusters" admin action.
 // Wipes all clusters + records so the next scan starts from a clean slate.
 export async function truncateAllDuplicateData(): Promise<void> {
-  console.log('🧨 [DuplicateRadar] Truncating all duplicate data for rebuild...');
-  await pool.query('TRUNCATE duplicate_records, duplicate_clusters RESTART IDENTITY CASCADE');
-  console.log('✅ [DuplicateRadar] Duplicate tables truncated');
+  logger.info(
+    "🧨 [DuplicateRadar] Truncating all duplicate data for rebuild...",
+  );
+  await pool.query(
+    "TRUNCATE duplicate_records, duplicate_clusters RESTART IDENTITY CASCADE",
+  );
+  logger.info("✅ [DuplicateRadar] Duplicate tables truncated");
 }
 
-export async function getClusterById(id: number): Promise<DuplicateCluster | null> {
-  const result = await pool.query('SELECT * FROM duplicate_clusters WHERE id = $1', [id]);
+export async function getClusterById(
+  id: number,
+): Promise<DuplicateCluster | null> {
+  const result = await pool.query(
+    "SELECT * FROM duplicate_clusters WHERE id = $1",
+    [id],
+  );
   return result.rows[0] || null;
 }
 
-export async function getRecordsByClusterId(clusterId: number): Promise<DuplicateRecord[]> {
+export async function getRecordsByClusterId(
+  clusterId: number,
+): Promise<DuplicateRecord[]> {
   const result = await pool.query(
-    'SELECT * FROM duplicate_records WHERE cluster_id = $1 ORDER BY is_primary DESC, created_date ASC',
-    [clusterId]
+    "SELECT * FROM duplicate_records WHERE cluster_id = $1 ORDER BY is_primary DESC, created_date ASC",
+    [clusterId],
   );
   return result.rows;
 }
@@ -775,7 +988,7 @@ export async function getClusterSummary(): Promise<{
       COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count
     FROM duplicate_clusters
   `);
-  
+
   const row = result.rows[0];
   return {
     totalClusters: parseInt(row.total_clusters) || 0,
@@ -786,17 +999,19 @@ export async function getClusterSummary(): Promise<{
     lowConfidence: parseInt(row.low_confidence) || 0,
     estimatedPipelineInflation: parseFloat(row.pipeline_inflation) || 0,
     activeCount: parseInt(row.active_count) || 0,
-    resolvedCount: parseInt(row.resolved_count) || 0
+    resolvedCount: parseInt(row.resolved_count) || 0,
   };
 }
 
-export async function getDuplicatesByOwner(): Promise<Array<{
-  owner_name: string;
-  owner_email: string;
-  lead_count: number;
-  deal_count: number;
-  total_duplicates: number;
-}>> {
+export async function getDuplicatesByOwner(): Promise<
+  Array<{
+    owner_name: string;
+    owner_email: string;
+    lead_count: number;
+    deal_count: number;
+    total_duplicates: number;
+  }>
+> {
   const result = await pool.query(`
     SELECT 
       owner_name,
@@ -812,12 +1027,14 @@ export async function getDuplicatesByOwner(): Promise<Array<{
   return result.rows;
 }
 
-export async function getDuplicatesBySource(): Promise<Array<{
-  source: string;
-  lead_count: number;
-  deal_count: number;
-  total: number;
-}>> {
+export async function getDuplicatesBySource(): Promise<
+  Array<{
+    source: string;
+    lead_count: number;
+    deal_count: number;
+    total: number;
+  }>
+> {
   const result = await pool.query(`
     SELECT 
       COALESCE(source, 'Unknown') as source,
@@ -831,15 +1048,20 @@ export async function getDuplicatesBySource(): Promise<Array<{
   return result.rows;
 }
 
-export async function updateClusterStatus(id: number, status: string): Promise<DuplicateCluster | null> {
+export async function updateClusterStatus(
+  id: number,
+  status: string,
+): Promise<DuplicateCluster | null> {
   const result = await pool.query(
-    'UPDATE duplicate_clusters SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-    [status, id]
+    "UPDATE duplicate_clusters SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+    [status, id],
   );
   return result.rows[0] || null;
 }
 
-export async function createDetectionLog(log: Omit<DuplicateDetectionLog, 'id' | 'created_at'>): Promise<DuplicateDetectionLog> {
+export async function createDetectionLog(
+  log: Omit<DuplicateDetectionLog, "id" | "created_at">,
+): Promise<DuplicateDetectionLog> {
   const result = await pool.query(
     `INSERT INTO duplicate_detection_logs 
      (detection_type, total_records_scanned, total_clusters_found, total_duplicates_detected,
@@ -849,17 +1071,30 @@ export async function createDetectionLog(log: Omit<DuplicateDetectionLog, 'id' |
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
-      log.detection_type, log.total_records_scanned, log.total_clusters_found,
-      log.total_duplicates_detected, log.high_confidence_count, log.medium_confidence_count,
-      log.low_confidence_count, log.estimated_pipeline_inflation, log.detection_duration_ms,
-      log.triggered_by, log.user_email, log.status, log.error_message,
-      JSON.stringify(log.detection_config || {}), log.completed_at
-    ]
+      log.detection_type,
+      log.total_records_scanned,
+      log.total_clusters_found,
+      log.total_duplicates_detected,
+      log.high_confidence_count,
+      log.medium_confidence_count,
+      log.low_confidence_count,
+      log.estimated_pipeline_inflation,
+      log.detection_duration_ms,
+      log.triggered_by,
+      log.user_email,
+      log.status,
+      log.error_message,
+      JSON.stringify(log.detection_config || {}),
+      log.completed_at,
+    ],
   );
   return result.rows[0];
 }
 
-export async function updateDetectionLog(id: number, updates: Partial<DuplicateDetectionLog>): Promise<DuplicateDetectionLog | null> {
+export async function updateDetectionLog(
+  id: number,
+  updates: Partial<DuplicateDetectionLog>,
+): Promise<DuplicateDetectionLog | null> {
   const setClauses: string[] = [];
   const params: any[] = [];
   let paramIndex = 1;
@@ -893,36 +1128,44 @@ export async function updateDetectionLog(id: number, updates: Partial<DuplicateD
 
   params.push(id);
   const result = await pool.query(
-    `UPDATE duplicate_detection_logs SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    params
+    `UPDATE duplicate_detection_logs SET ${setClauses.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    params,
   );
   return result.rows[0] || null;
 }
 
-export async function getDetectionLogs(limit: number = 50): Promise<DuplicateDetectionLog[]> {
+export async function getDetectionLogs(
+  limit: number = 50,
+): Promise<DuplicateDetectionLog[]> {
   const result = await pool.query(
-    'SELECT * FROM duplicate_detection_logs ORDER BY created_at DESC LIMIT $1',
-    [limit]
+    "SELECT * FROM duplicate_detection_logs ORDER BY created_at DESC LIMIT $1",
+    [limit],
   );
   return result.rows;
 }
 
-export async function createExportLog(log: Omit<DuplicateExportLog, 'id' | 'created_at'>): Promise<DuplicateExportLog> {
+export async function createExportLog(
+  log: Omit<DuplicateExportLog, "id" | "created_at">,
+): Promise<DuplicateExportLog> {
   const result = await pool.query(
     `INSERT INTO duplicate_export_logs 
      (export_type, filter_criteria, total_records_exported, file_format, exported_by, user_email)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
     [
-      log.export_type, JSON.stringify(log.filter_criteria || {}),
-      log.total_records_exported, log.file_format, log.exported_by, log.user_email
-    ]
+      log.export_type,
+      JSON.stringify(log.filter_criteria || {}),
+      log.total_records_exported,
+      log.file_format,
+      log.exported_by,
+      log.user_email,
+    ],
   );
   return result.rows[0];
 }
 
 export async function clearMockData(): Promise<void> {
-  await pool.query('DELETE FROM duplicate_records WHERE is_mock_data = true');
+  await pool.query("DELETE FROM duplicate_records WHERE is_mock_data = true");
   await pool.query(`
     DELETE FROM duplicate_clusters 
     WHERE id NOT IN (SELECT DISTINCT cluster_id FROM duplicate_records WHERE cluster_id IS NOT NULL)
@@ -966,18 +1209,21 @@ export async function getKPIMetrics(): Promise<{
   return {
     duplicateLeadRate: Math.round((duplicateLeads / totalLeads) * 100),
     duplicateDealRate: Math.round((duplicateDeals / totalDeals) * 100),
-    domainsWithMultipleDeals: parseInt(multiDealDomainsResult.rows[0].count) || 0,
+    domainsWithMultipleDeals:
+      parseInt(multiDealDomainsResult.rows[0].count) || 0,
     duplicateBySource: await getDuplicatesBySource(),
-    duplicateByOwner: await getDuplicatesByOwner()
+    duplicateByOwner: await getDuplicatesByOwner(),
   };
 }
 
-export async function findOrCreateClusterByDomain(domain: string): Promise<DuplicateCluster> {
+export async function findOrCreateClusterByDomain(
+  domain: string,
+): Promise<DuplicateCluster> {
   const existing = await pool.query(
-    'SELECT * FROM duplicate_clusters WHERE domain = $1',
-    [domain]
+    "SELECT * FROM duplicate_clusters WHERE domain = $1",
+    [domain],
   );
-  
+
   if (existing.rows[0]) {
     return existing.rows[0];
   }
@@ -989,14 +1235,15 @@ export async function findOrCreateClusterByDomain(domain: string): Promise<Dupli
     total_contacts: 0,
     total_accounts: 0,
     total_records: 0,
-    confidence_level: 'medium',
+    confidence_level: "medium",
     confidence_score: 75,
-    status: 'active'
+    status: "active",
   });
 }
 
 export async function updateClusterStats(clusterId: number): Promise<void> {
-  const statsResult = await pool.query(`
+  const statsResult = await pool.query(
+    `
     SELECT 
       COUNT(*) FILTER (WHERE record_type = 'lead') as lead_count,
       COUNT(*) FILTER (WHERE record_type = 'deal') as deal_count,
@@ -1008,14 +1255,16 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
       MAX(COALESCE(modified_date, created_date)) as latest_date,
       ARRAY_AGG(DISTINCT owner_name) FILTER (WHERE owner_name IS NOT NULL) as owners
     FROM duplicate_records WHERE cluster_id = $1
-  `, [clusterId]);
+  `,
+    [clusterId],
+  );
 
   const stats = statsResult.rows[0];
   const totalRecords = parseInt(stats.total_count) || 0;
 
   const records = await pool.query(
-    'SELECT email, domain, phone, phone_normalized, company_name FROM duplicate_records WHERE cluster_id = $1 LIMIT 50',
-    [clusterId]
+    "SELECT email, domain, phone, phone_normalized, company_name FROM duplicate_records WHERE cluster_id = $1 LIMIT 50",
+    [clusterId],
   );
 
   let bestScore = 0;
@@ -1027,7 +1276,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
       for (let j = i + 1; j < Math.min(recs.length, 20); j++) {
         const match = calculateMultiSignalScore(recs[i], recs[j]);
         if (match.score > bestScore) bestScore = match.score;
-        match.signals.forEach(s => allSignals.add(s));
+        match.signals.forEach((s) => allSignals.add(s));
       }
     }
   }
@@ -1038,39 +1287,53 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
   const dealCount = parseInt(stats.deal_count) || 0;
   const contactCount = parseInt(stats.contact_count) || 0;
   const accountCount = parseInt(stats.account_count) || 0;
-  const maxOfSameType = Math.max(leadCount, dealCount, contactCount, accountCount);
+  const maxOfSameType = Math.max(
+    leadCount,
+    dealCount,
+    contactCount,
+    accountCount,
+  );
   const isHierarchy = totalRecords > 1 && maxOfSameType <= 1;
 
   let confidenceScore: number;
   if (totalRecords <= 1 || isHierarchy) {
     confidenceScore = 0;
-    if (isHierarchy) allSignals.add('legitimate_hierarchy');
+    if (isHierarchy) allSignals.add("legitimate_hierarchy");
   } else if (bestScore > 0) {
     confidenceScore = bestScore;
   } else {
     confidenceScore = totalRecords > 3 ? 65 : 55;
   }
 
-  const inflationResult = await pool.query(`
+  const inflationResult = await pool.query(
+    `
     SELECT COALESCE(SUM(deal_value), 0) as inflation
     FROM duplicate_records
     WHERE cluster_id = $1 AND record_type = 'deal' AND is_primary = false AND deal_value > 0
-  `, [clusterId]);
+  `,
+    [clusterId],
+  );
   const pipelineInflation = parseFloat(inflationResult.rows[0]?.inflation) || 0;
 
   const primaryCheck = await pool.query(
-    'SELECT COUNT(*) as cnt FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true', [clusterId]
+    "SELECT COUNT(*) as cnt FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true",
+    [clusterId],
   );
   if (parseInt(primaryCheck.rows[0].cnt) === 0 && totalRecords > 0) {
     const earliest = await pool.query(
-      'SELECT id FROM duplicate_records WHERE cluster_id = $1 ORDER BY created_date ASC NULLS LAST LIMIT 1', [clusterId]
+      "SELECT id FROM duplicate_records WHERE cluster_id = $1 ORDER BY created_date ASC NULLS LAST LIMIT 1",
+      [clusterId],
     );
     if (earliest.rows[0]) {
-      await pool.query('UPDATE duplicate_records SET is_primary = true WHERE id = $1', [earliest.rows[0].id]);
+      await pool.query(
+        "UPDATE duplicate_records SET is_primary = true WHERE id = $1",
+        [earliest.rows[0].id],
+      );
     }
   }
 
-  await pool.query(`
+  await pool.query(
+    `
     UPDATE duplicate_clusters SET
       total_leads = $1,
       total_deals = $2,
@@ -1086,21 +1349,23 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
       match_signals = $12,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = $13
-  `, [
-    parseInt(stats.lead_count) || 0,
-    parseInt(stats.deal_count) || 0,
-    parseInt(stats.contact_count) || 0,
-    parseInt(stats.account_count) || 0,
-    totalRecords,
-    pipelineInflation,
-    stats.first_date,
-    stats.latest_date,
-    JSON.stringify(stats.owners || []),
-    confidenceScore,
-    confidenceScore === 0 ? 'low' : getConfidenceLevel(confidenceScore),
-    JSON.stringify(Array.from(allSignals)),
-    clusterId
-  ]);
+  `,
+    [
+      parseInt(stats.lead_count) || 0,
+      parseInt(stats.deal_count) || 0,
+      parseInt(stats.contact_count) || 0,
+      parseInt(stats.account_count) || 0,
+      totalRecords,
+      pipelineInflation,
+      stats.first_date,
+      stats.latest_date,
+      JSON.stringify(stats.owners || []),
+      confidenceScore,
+      confidenceScore === 0 ? "low" : getConfidenceLevel(confidenceScore),
+      JSON.stringify(Array.from(allSignals)),
+      clusterId,
+    ],
+  );
 }
 
 export interface DuplicateSearchParams {
@@ -1130,13 +1395,17 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
   }
 
   if (params.phone?.trim()) {
-    conditions.push(`REGEXP_REPLACE(dr.phone, '[^0-9+]', '', 'g') LIKE $${paramIndex++}`);
-    queryParams.push(`%${params.phone.trim().replace(/[^0-9+]/g, '')}%`);
+    conditions.push(
+      `REGEXP_REPLACE(dr.phone, '[^0-9+]', '', 'g') LIKE $${paramIndex++}`,
+    );
+    queryParams.push(`%${params.phone.trim().replace(/[^0-9+]/g, "")}%`);
   }
 
   if (params.company_name?.trim()) {
     const pi = paramIndex++;
-    conditions.push(`(LOWER(dr.company_name) LIKE LOWER($${pi}) OR LOWER(dc.company_name) LIKE LOWER($${pi}))`);
+    conditions.push(
+      `(LOWER(dr.company_name) LIKE LOWER($${pi}) OR LOWER(dc.company_name) LIKE LOWER($${pi}))`,
+    );
     queryParams.push(`%${params.company_name.trim()}%`);
   }
 
@@ -1161,29 +1430,42 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
   }
 
   if (conditions.length === 0) {
-    return { records: [], clusters: [], total_records: 0, search_params: params };
+    return {
+      records: [],
+      clusters: [],
+      total_records: 0,
+      search_params: params,
+    };
   }
 
-  const whereClause = conditions.join(' OR ');
+  const whereClause = conditions.join(" OR ");
 
-  const recordsResult = await pool.query(`
+  const recordsResult = await pool.query(
+    `
     SELECT dr.*, dc.domain as cluster_domain, dc.confidence_level, dc.total_records as cluster_total
     FROM duplicate_records dr
     LEFT JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     WHERE ${whereClause}
     ORDER BY dr.confidence_score DESC, dr.created_at DESC
     LIMIT 200
-  `, queryParams);
+  `,
+    queryParams,
+  );
 
-  const clusterIds = [...new Set(recordsResult.rows.map(r => r.cluster_id).filter(Boolean))];
-  
+  const clusterIds = [
+    ...new Set(recordsResult.rows.map((r) => r.cluster_id).filter(Boolean)),
+  ];
+
   let clustersData: DuplicateCluster[] = [];
   if (clusterIds.length > 0) {
-    const clustersResult = await pool.query(`
+    const clustersResult = await pool.query(
+      `
       SELECT * FROM duplicate_clusters 
       WHERE id = ANY($1)
       ORDER BY total_records DESC
-    `, [clusterIds]);
+    `,
+      [clusterIds],
+    );
     clustersData = clustersResult.rows;
   }
 
@@ -1191,7 +1473,7 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
     records: recordsResult.rows,
     clusters: clustersData,
     total_records: recordsResult.rows.length,
-    search_params: params
+    search_params: params,
   };
 }
 
@@ -1205,14 +1487,18 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
 // Zoho are now caught by the deletion-detection pass in the scan flow
 // (fetchDeletedZohoRecords + removeRecordsByZohoIds).
 export async function clearAllDuplicateData(): Promise<void> {
-  const scanMode = process.env.DUPLICATE_SCAN_MODE || 'incremental';
-  if (scanMode === 'full') {
-    console.log('🗑️ [DuplicateRadar] FULL mode: Clearing all duplicate data for fresh Zoho import...');
-    await pool.query('DELETE FROM duplicate_records');
-    await pool.query('DELETE FROM duplicate_clusters');
-    console.log('✅ [DuplicateRadar] All duplicate data cleared');
+  const scanMode = process.env.DUPLICATE_SCAN_MODE || "incremental";
+  if (scanMode === "full") {
+    logger.info(
+      "🗑️ [DuplicateRadar] FULL mode: Clearing all duplicate data for fresh Zoho import...",
+    );
+    await pool.query("DELETE FROM duplicate_records");
+    await pool.query("DELETE FROM duplicate_clusters");
+    logger.info("✅ [DuplicateRadar] All duplicate data cleared");
   } else {
-    console.log('♻️ [DuplicateRadar] INCREMENTAL mode: relying on upserts + Zoho deletion detection (no stale-marking)');
+    logger.info(
+      "♻️ [DuplicateRadar] INCREMENTAL mode: relying on upserts + Zoho deletion detection (no stale-marking)",
+    );
   }
 }
 
@@ -1220,13 +1506,13 @@ export async function clearAllDuplicateData(): Promise<void> {
 // Returns the cluster IDs that lost records so the caller can re-score them.
 export async function removeRecordsByZohoIds(
   zohoIds: string[],
-  opts?: { module?: string }
+  opts?: { module?: string },
 ): Promise<{ removedCount: number; affectedClusterIds: number[] }> {
   if (!zohoIds || zohoIds.length === 0) {
     return { removedCount: 0, affectedClusterIds: [] };
   }
   const params: any[] = [zohoIds];
-  let where = 'zoho_record_id = ANY($1::text[])';
+  let where = "zoho_record_id = ANY($1::text[])";
   if (opts?.module) {
     params.push(opts.module);
     where += ` AND zoho_module = $${params.length}`;
@@ -1236,14 +1522,17 @@ export async function removeRecordsByZohoIds(
     params,
   );
   const affectedClusterIds = affected.rows
-    .map(r => r.cluster_id)
+    .map((r) => r.cluster_id)
     .filter((v): v is number => v != null);
-  const del = await pool.query(`DELETE FROM duplicate_records WHERE ${where}`, params);
+  const del = await pool.query(
+    `DELETE FROM duplicate_records WHERE ${where}`,
+    params,
+  );
   const removedCount = del.rowCount || 0;
   if (removedCount > 0) {
-    console.log(
+    logger.info(
       `🗑️ [DuplicateRadar] Removed ${removedCount} record(s) deleted/merged in Zoho` +
-        (opts?.module ? ` (${opts.module})` : '') +
+        (opts?.module ? ` (${opts.module})` : "") +
         ` — ${affectedClusterIds.length} cluster(s) affected`,
     );
   }
@@ -1256,7 +1545,7 @@ export async function markStaleRecords(): Promise<number> {
     UPDATE duplicate_records SET match_signals = match_signals || '["stale_pending"]'::jsonb
     WHERE is_mock_data = false AND NOT (match_signals @> '["stale_pending"]'::jsonb)
   `);
-  console.log(`📌 [DuplicateRadar] Marked ${result.rowCount} records as stale`);
+  logger.info(`📌 [DuplicateRadar] Marked ${result.rowCount} records as stale`);
   return result.rowCount || 0;
 }
 
@@ -1266,7 +1555,9 @@ export async function cleanupStaleRecords(): Promise<number> {
     DELETE FROM duplicate_records 
     WHERE match_signals @> '["stale_pending"]'::jsonb AND is_mock_data = false
   `);
-  console.log(`🧹 [DuplicateRadar] Cleaned up ${result.rowCount} stale records`);
+  logger.info(
+    `🧹 [DuplicateRadar] Cleaned up ${result.rowCount} stale records`,
+  );
   return result.rowCount || 0;
 }
 
@@ -1276,35 +1567,61 @@ export async function cleanupOrphanClusters(): Promise<number> {
     DELETE FROM duplicate_clusters 
     WHERE id NOT IN (SELECT DISTINCT cluster_id FROM duplicate_records WHERE cluster_id IS NOT NULL)
   `);
-  console.log(`🧹 [DuplicateRadar] Cleaned up ${result.rowCount} orphan clusters`);
+  logger.info(
+    `🧹 [DuplicateRadar] Cleaned up ${result.rowCount} orphan clusters`,
+  );
   return result.rowCount || 0;
 }
 
 export function normalizeCompanyName(name: string): string {
-  if (!name) return '';
+  if (!name) return "";
   let n = name
     .toLowerCase()
-    .replace(/[^\w\s\u0600-\u06FF]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\b(llc|ltd|inc|corp|corporation|company|group|holdings?|holding|co|sa|ksa|uae|ae)\b/gi, ' ');
+    .replace(/[^\w\s\u0600-\u06FF]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(
+      /\b(llc|ltd|inc|corp|corporation|company|group|holdings?|holding|co|sa|ksa|uae|ae)\b/gi,
+      " ",
+    );
 
   const arabicBoilerplate = [
-    'شركة', 'الشركة', 'مؤسسة', 'المؤسسة', 'مجموعة', 'المجموعة',
-    'محدودة', 'المحدودة', 'القابضة', 'قابضة',
-    'للتجارة', 'التجارية', 'التجاري',
-    'للمقاولات', 'المقاولات',
-    'للاستثمار', 'الاستثمارية',
-    'للخدمات', 'الخدمات',
-    'العامة', 'المتحدة',
-    'ذ.م.م', 'ذمم', 'ش.م.م', 'شمم', 'ش.م.ك', 'شمك'
+    "شركة",
+    "الشركة",
+    "مؤسسة",
+    "المؤسسة",
+    "مجموعة",
+    "المجموعة",
+    "محدودة",
+    "المحدودة",
+    "القابضة",
+    "قابضة",
+    "للتجارة",
+    "التجارية",
+    "التجاري",
+    "للمقاولات",
+    "المقاولات",
+    "للاستثمار",
+    "الاستثمارية",
+    "للخدمات",
+    "الخدمات",
+    "العامة",
+    "المتحدة",
+    "ذ.م.م",
+    "ذمم",
+    "ش.م.م",
+    "شمم",
+    "ش.م.ك",
+    "شمك",
   ];
   const boilerplateRe = new RegExp(
-    '(^|\\s)(' + arabicBoilerplate.map(w => w.replace(/\./g, '\\.')).join('|') + ')(?=\\s|$)',
-    'g'
+    "(^|\\s)(" +
+      arabicBoilerplate.map((w) => w.replace(/\./g, "\\.")).join("|") +
+      ")(?=\\s|$)",
+    "g",
   );
-  n = n.replace(boilerplateRe, ' ');
+  n = n.replace(boilerplateRe, " ");
 
-  return n.replace(/\s+/g, ' ').trim();
+  return n.replace(/\s+/g, " ").trim();
 }
 
 // B4: Fuzzy match using pg_trgm similarity() with fallback
@@ -1312,15 +1629,15 @@ export async function findOrCreateClusterByCompany(
   companyName: string,
   domain?: string,
   phone?: string,
-  email?: string
+  email?: string,
 ): Promise<DuplicateCluster> {
   const normalizedName = normalizeCompanyName(companyName);
-  const normalizedPhone = phone ? normalizePhone(phone) : '';
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
 
   if (domain) {
     const existingByDomain = await pool.query(
-      'SELECT * FROM duplicate_clusters WHERE domain = $1',
-      [domain]
+      "SELECT * FROM duplicate_clusters WHERE domain = $1",
+      [domain],
     );
     if (existingByDomain.rows[0]) {
       return existingByDomain.rows[0];
@@ -1332,7 +1649,7 @@ export async function findOrCreateClusterByCompany(
       `SELECT dc.* FROM duplicate_clusters dc
        JOIN duplicate_records dr ON dr.cluster_id = dc.id
        WHERE LOWER(dr.email) = LOWER($1) LIMIT 1`,
-      [email]
+      [email],
     );
     if (existingByEmail.rows[0]) {
       return existingByEmail.rows[0];
@@ -1344,7 +1661,7 @@ export async function findOrCreateClusterByCompany(
       `SELECT dc.* FROM duplicate_clusters dc
        JOIN duplicate_records dr ON dr.cluster_id = dc.id
        WHERE dr.phone_normalized = $1 LIMIT 1`,
-      [normalizedPhone]
+      [normalizedPhone],
     );
     if (existingByPhone.rows[0]) {
       return existingByPhone.rows[0];
@@ -1358,7 +1675,7 @@ export async function findOrCreateClusterByCompany(
     const existingByCompany = await pool.query(
       `SELECT * FROM duplicate_clusters 
        WHERE company_name_normalized = $1`,
-      [normalizedName]
+      [normalizedName],
     );
     if (existingByCompany.rows[0]) {
       return existingByCompany.rows[0];
@@ -1376,19 +1693,29 @@ export async function findOrCreateClusterByCompany(
          WHERE company_name_normalized IS NOT NULL AND company_name_normalized != ''
            AND similarity(company_name_normalized, $1) >= 0.6
          ORDER BY sim DESC LIMIT 1`,
-        [normalizedName]
+        [normalizedName],
       );
       if (trgmResult.rows[0] && trgmResult.rows[0].sim >= 0.6) {
         return trgmResult.rows[0];
       }
     } catch {
       const recentClusters = await pool.query(
-        'SELECT * FROM duplicate_clusters ORDER BY updated_at DESC LIMIT 2000'
+        "SELECT * FROM duplicate_clusters ORDER BY updated_at DESC LIMIT 2000",
       );
       for (const cluster of recentClusters.rows) {
-        const clusterNormalized = normalizeCompanyName(cluster.company_name || '');
-        if (clusterNormalized && normalizedName && clusterNormalized.length > 2 && normalizedName.length > 2) {
-          const similarity = calculateSimilarity(clusterNormalized, normalizedName);
+        const clusterNormalized = normalizeCompanyName(
+          cluster.company_name || "",
+        );
+        if (
+          clusterNormalized &&
+          normalizedName &&
+          clusterNormalized.length > 2 &&
+          normalizedName.length > 2
+        ) {
+          const similarity = calculateSimilarity(
+            clusterNormalized,
+            normalizedName,
+          );
           if (similarity >= 85) {
             return cluster;
           }
@@ -1398,54 +1725,70 @@ export async function findOrCreateClusterByCompany(
   }
 
   return await createCluster({
-    domain: domain || normalizedName.replace(/\s+/g, '-') + '.cluster',
+    domain: domain || normalizedName.replace(/\s+/g, "-") + ".cluster",
     company_name: companyName,
     total_leads: 0,
     total_deals: 0,
     total_contacts: 0,
     total_accounts: 0,
     total_records: 0,
-    confidence_level: 'low',
+    confidence_level: "low",
     confidence_score: 0,
-    status: 'active'
+    status: "active",
   });
 }
 
-export async function markPrimaryRecord(clusterId: number, recordId: number): Promise<boolean> {
-  await pool.query('UPDATE duplicate_records SET is_primary = false WHERE cluster_id = $1', [clusterId]);
+export async function markPrimaryRecord(
+  clusterId: number,
+  recordId: number,
+): Promise<boolean> {
+  await pool.query(
+    "UPDATE duplicate_records SET is_primary = false WHERE cluster_id = $1",
+    [clusterId],
+  );
   const result = await pool.query(
-    'UPDATE duplicate_records SET is_primary = true WHERE id = $1 AND cluster_id = $2 RETURNING id',
-    [recordId, clusterId]
+    "UPDATE duplicate_records SET is_primary = true WHERE id = $1 AND cluster_id = $2 RETURNING id",
+    [recordId, clusterId],
   );
   return result.rows.length > 0;
 }
 
 export async function resolveCluster(
   clusterId: number,
-  action: 'resolve' | 'ignore',
+  action: "resolve" | "ignore",
   performedBy: string,
   primaryRecordId?: number,
-  notes?: string
+  notes?: string,
 ): Promise<MergeAction | null> {
   if (primaryRecordId) {
     await markPrimaryRecord(clusterId, primaryRecordId);
   }
 
   const nonPrimary = await pool.query(
-    'SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = false',
-    [clusterId]
+    "SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = false",
+    [clusterId],
   );
-  const mergedIds = nonPrimary.rows.map(r => r.id);
+  const mergedIds = nonPrimary.rows.map((r) => r.id);
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     INSERT INTO duplicate_merge_actions (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes)
     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
-  `, [clusterId, primaryRecordId || null, JSON.stringify(mergedIds), action, performedBy, notes || null]);
+  `,
+    [
+      clusterId,
+      primaryRecordId || null,
+      JSON.stringify(mergedIds),
+      action,
+      performedBy,
+      notes || null,
+    ],
+  );
 
-  const newStatus = action === 'resolve' ? 'resolved' : 'ignored';
+  const newStatus = action === "resolve" ? "resolved" : "ignored";
   await pool.query(
-    'UPDATE duplicate_clusters SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-    [newStatus, performedBy, clusterId]
+    "UPDATE duplicate_clusters SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+    [newStatus, performedBy, clusterId],
   );
 
   return result.rows[0] || null;
@@ -1453,8 +1796,8 @@ export async function resolveCluster(
 
 export async function bulkResolve(
   clusterIds: number[],
-  action: 'resolve' | 'ignore',
-  performedBy: string
+  action: "resolve" | "ignore",
+  performedBy: string,
 ): Promise<number> {
   let count = 0;
   for (const id of clusterIds) {
@@ -1464,14 +1807,17 @@ export async function bulkResolve(
   return count;
 }
 
-export async function getMergeHistory(clusterId?: number, limit: number = 50): Promise<MergeAction[]> {
-  let query = 'SELECT * FROM duplicate_merge_actions';
+export async function getMergeHistory(
+  clusterId?: number,
+  limit: number = 50,
+): Promise<MergeAction[]> {
+  let query = "SELECT * FROM duplicate_merge_actions";
   const params: any[] = [];
   if (clusterId) {
-    query += ' WHERE cluster_id = $1';
+    query += " WHERE cluster_id = $1";
     params.push(clusterId);
   }
-  query += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1);
+  query += " ORDER BY created_at DESC LIMIT $" + (params.length + 1);
   params.push(limit);
   const result = await pool.query(query, params);
   return result.rows;
@@ -1495,24 +1841,24 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
     ORDER BY duplicate_records DESC
   `);
 
-  return result.rows.map(r => {
+  return result.rows.map((r) => {
     const totalRecs = parseInt(r.total_records) || 0;
     const dupRecs = parseInt(r.duplicate_records) || 0;
     const dupRate = totalRecs > 0 ? Math.round((dupRecs / totalRecs) * 100) : 0;
-    let ragStatus: 'green' | 'amber' | 'red' = 'green';
-    if (dupRate > 5) ragStatus = 'red';
-    else if (dupRate > 2) ragStatus = 'amber';
+    let ragStatus: "green" | "amber" | "red" = "green";
+    if (dupRate > 5) ragStatus = "red";
+    else if (dupRate > 2) ragStatus = "amber";
 
     return {
       owner_name: r.owner_name,
-      owner_email: r.owner_email || '',
+      owner_email: r.owner_email || "",
       total_records: totalRecs,
       duplicate_records: dupRecs,
       duplicate_rate: dupRate,
       clusters_involved: parseInt(r.clusters_involved) || 0,
       high_confidence_duplicates: parseInt(r.high_confidence_duplicates) || 0,
       estimated_waste_value: parseFloat(r.estimated_waste_value) || 0,
-      rag_status: ragStatus
+      rag_status: ragStatus,
     };
   });
 }
@@ -1529,7 +1875,7 @@ export async function checkForDuplicates(params: {
   matching_records: DuplicateRecord[];
 }> {
   const domain = params.email ? extractDomain(params.email) : null;
-  const normalizedPhone = params.phone ? normalizePhone(params.phone) : '';
+  const normalizedPhone = params.phone ? normalizePhone(params.phone) : "";
   const conditions: string[] = [];
   const queryParams: any[] = [];
   let idx = 1;
@@ -1552,42 +1898,72 @@ export async function checkForDuplicates(params: {
   }
 
   if (conditions.length === 0) {
-    return { is_duplicate: false, confidence: 0, signals: [], matching_clusters: [], matching_records: [] };
+    return {
+      is_duplicate: false,
+      confidence: 0,
+      signals: [],
+      matching_clusters: [],
+      matching_records: [],
+    };
   }
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT dr.*, dc.confidence_level, dc.confidence_score as cluster_confidence, dc.total_records as cluster_total
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dc.status = 'active' AND (${conditions.join(' OR ')})
+    WHERE dc.status = 'active' AND (${conditions.join(" OR ")})
     ORDER BY dr.confidence_score DESC
     LIMIT 20
-  `, queryParams);
+  `,
+    queryParams,
+  );
 
   if (result.rows.length === 0) {
-    return { is_duplicate: false, confidence: 0, signals: [], matching_clusters: [], matching_records: [] };
+    return {
+      is_duplicate: false,
+      confidence: 0,
+      signals: [],
+      matching_clusters: [],
+      matching_records: [],
+    };
   }
 
   const matchSignals: string[] = [];
   let bestScore = 0;
   for (const row of result.rows) {
     const match = calculateMultiSignalScore(
-      { email: params.email, domain: domain || undefined, phone: params.phone, company_name: params.company_name },
-      { email: row.email, domain: row.domain, phone: row.phone, company_name: row.company_name }
+      {
+        email: params.email,
+        domain: domain || undefined,
+        phone: params.phone,
+        company_name: params.company_name,
+      },
+      {
+        email: row.email,
+        domain: row.domain,
+        phone: row.phone,
+        company_name: row.company_name,
+      },
     );
     if (match.score > bestScore) bestScore = match.score;
-    match.signals.forEach(s => { if (!matchSignals.includes(s)) matchSignals.push(s); });
+    match.signals.forEach((s) => {
+      if (!matchSignals.includes(s)) matchSignals.push(s);
+    });
   }
 
-  const clusterIds = [...new Set(result.rows.map(r => r.cluster_id))];
-  const clustersResult = await pool.query('SELECT * FROM duplicate_clusters WHERE id = ANY($1)', [clusterIds]);
+  const clusterIds = [...new Set(result.rows.map((r) => r.cluster_id))];
+  const clustersResult = await pool.query(
+    "SELECT * FROM duplicate_clusters WHERE id = ANY($1)",
+    [clusterIds],
+  );
 
   return {
     is_duplicate: bestScore >= 50,
     confidence: bestScore,
     signals: matchSignals,
     matching_clusters: clustersResult.rows,
-    matching_records: result.rows
+    matching_records: result.rows,
   };
 }
 
@@ -1636,8 +2012,12 @@ export async function getEnhancedSummary(): Promise<{
   `);
 
   const row = result.rows[0];
-  const totalLeads = await pool.query("SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'lead'");
-  const totalDeals = await pool.query("SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'deal'");
+  const totalLeads = await pool.query(
+    "SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'lead'",
+  );
+  const totalDeals = await pool.query(
+    "SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'deal'",
+  );
   const tLeads = parseInt(totalLeads.rows[0]?.cnt) || 1;
   const tDeals = parseInt(totalDeals.rows[0]?.cnt) || 1;
   const dupLeads = parseInt(row.dup_leads) || 0;
@@ -1651,7 +2031,7 @@ export async function getEnhancedSummary(): Promise<{
   for (const r of signalResult.rows) {
     const signals = Array.isArray(r.match_signals) ? r.match_signals : [];
     for (const s of signals) {
-      if (s !== 'stale_pending') topSignals[s] = (topSignals[s] || 0) + 1;
+      if (s !== "stale_pending") topSignals[s] = (topSignals[s] || 0) + 1;
     }
   }
 
@@ -1674,7 +2054,10 @@ export async function getEnhancedSummary(): Promise<{
   const totalClusters = parseInt(row.total_clusters) || 0;
   const resolvedCount = parseInt(row.resolved_count) || 0;
   const ignoredCount = parseInt(row.ignored_count) || 0;
-  const resolutionRate = totalClusters > 0 ? Math.round(((resolvedCount + ignoredCount) / totalClusters) * 100) : 0;
+  const resolutionRate =
+    totalClusters > 0
+      ? Math.round(((resolvedCount + ignoredCount) / totalClusters) * 100)
+      : 0;
 
   return {
     totalClusters,
@@ -1697,13 +2080,13 @@ export async function getEnhancedSummary(): Promise<{
     duplicateLeadRate: Math.round((dupLeads / tLeads) * 100),
     duplicateDealRate: Math.round((dupDeals / tDeals) * 100),
     topClustersByInflation: topClustersResult.rows,
-    lastScanInfo: lastScanResult.rows[0] || null
+    lastScanInfo: lastScanResult.rows[0] || null,
   };
 }
 
 export async function getLastScanDate(): Promise<Date | null> {
   const result = await pool.query(
-    "SELECT completed_at FROM duplicate_detection_logs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1"
+    "SELECT completed_at FROM duplicate_detection_logs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1",
   );
   return result.rows[0]?.completed_at || null;
 }
@@ -1711,13 +2094,23 @@ export async function getLastScanDate(): Promise<Date | null> {
 // B5: JOIN-based queries eliminating N+1 pattern
 export async function getDuplicateRecordsByType(
   recordType: string,
-  options?: { limit?: number; offset?: number; start_date?: string; end_date?: string }
+  options?: {
+    limit?: number;
+    offset?: number;
+    start_date?: string;
+    end_date?: string;
+  },
 ): Promise<{ groups: any[]; total: number }> {
-  const countField = recordType === 'lead' ? 'total_leads' :
-                     recordType === 'deal' ? 'total_deals' :
-                     recordType === 'contact' ? 'total_contacts' : 'total_accounts';
+  const countField =
+    recordType === "lead"
+      ? "total_leads"
+      : recordType === "deal"
+        ? "total_deals"
+        : recordType === "contact"
+          ? "total_contacts"
+          : "total_accounts";
 
-  let dateFilter = '';
+  let dateFilter = "";
   const params: any[] = [recordType];
   let pi = 2;
 
@@ -1727,13 +2120,14 @@ export async function getDuplicateRecordsByType(
   }
   if (options?.end_date) {
     dateFilter += ` AND dr.created_date <= $${pi++}`;
-    params.push(options.end_date + 'T23:59:59Z');
+    params.push(options.end_date + "T23:59:59Z");
   }
 
   const limit = options?.limit || 50;
   const offset = options?.offset || 0;
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT dr.*, dc.domain as cluster_domain, dc.company_name as cluster_company,
            dc.confidence_level, dc.confidence_score as cluster_confidence,
            dc.total_records as cluster_total, dc.estimated_pipeline_value,
@@ -1744,15 +2138,20 @@ export async function getDuplicateRecordsByType(
     ${dateFilter}
     ORDER BY dc.confidence_score DESC, dr.is_primary DESC, dr.created_date ASC
     LIMIT $${pi++} OFFSET $${pi++}
-  `, [...params, limit, offset]);
+  `,
+    [...params, limit, offset],
+  );
 
-  const countResult = await pool.query(`
+  const countResult = await pool.query(
+    `
     SELECT COUNT(DISTINCT dc.id) as total
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     WHERE dr.record_type = $1 AND dc.${countField} > 1 AND dc.status = 'active'
     ${dateFilter}
-  `, params);
+  `,
+    params,
+  );
 
   const grouped: Record<number, any> = {};
   for (const row of result.rows) {
@@ -1766,19 +2165,19 @@ export async function getDuplicateRecordsByType(
           confidence_level: row.confidence_level,
           confidence_score: row.cluster_confidence,
           total_records: row.cluster_total,
-          estimated_pipeline_value: row.estimated_pipeline_value
+          estimated_pipeline_value: row.estimated_pipeline_value,
         },
-        [recordType + 's']: [],
-        duplicate_count: 0
+        [recordType + "s"]: [],
+        duplicate_count: 0,
       };
     }
-    grouped[cid][recordType + 's'].push(row);
+    grouped[cid][recordType + "s"].push(row);
     grouped[cid].duplicate_count++;
   }
 
   return {
     groups: Object.values(grouped),
-    total: parseInt(countResult.rows[0]?.total) || 0
+    total: parseInt(countResult.rows[0]?.total) || 0,
   };
 }
 
@@ -1789,7 +2188,7 @@ export async function getExportRecords(filters?: {
   end_date?: string;
   status?: string;
 }): Promise<any[]> {
-  let whereClause = 'WHERE 1=1';
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
   let pi = 1;
 
@@ -1809,16 +2208,19 @@ export async function getExportRecords(filters?: {
   }
   if (filters?.end_date) {
     whereClause += ` AND dr.created_date <= $${pi++}`;
-    params.push(filters.end_date + 'T23:59:59Z');
+    params.push(filters.end_date + "T23:59:59Z");
   }
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT dr.*, dc.domain as cluster_domain, dc.confidence_level as cluster_confidence
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
     ${whereClause}
     ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
-  `, params);
+  `,
+    params,
+  );
 
   return result.rows;
 }
@@ -1838,7 +2240,7 @@ export async function autoResolveClusters(): Promise<{
   for (const row of singletons.rows) {
     await pool.query(
       "UPDATE duplicate_clusters SET status = 'ignored', resolved_by = 'auto-resolve', resolved_at = CURRENT_TIMESTAMP WHERE id = $1",
-      [row.id]
+      [row.id],
     );
     singletonsIgnored++;
   }
@@ -1848,11 +2250,17 @@ export async function autoResolveClusters(): Promise<{
   `);
   for (const row of highConf.rows) {
     const primary = await pool.query(
-      'SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true LIMIT 1',
-      [row.id]
+      "SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true LIMIT 1",
+      [row.id],
     );
     if (primary.rows[0]) {
-      await resolveCluster(row.id, 'resolve', 'auto-resolve', primary.rows[0].id, 'Auto-resolved: confidence >= 95% with clear primary');
+      await resolveCluster(
+        row.id,
+        "resolve",
+        "auto-resolve",
+        primary.rows[0].id,
+        "Auto-resolved: confidence >= 95% with clear primary",
+      );
       highConfidenceResolved++;
     }
   }
@@ -1860,7 +2268,7 @@ export async function autoResolveClusters(): Promise<{
   return {
     singletonsIgnored,
     highConfidenceResolved,
-    totalProcessed: singletonsIgnored + highConfidenceResolved
+    totalProcessed: singletonsIgnored + highConfidenceResolved,
   };
 }
 
@@ -1879,7 +2287,12 @@ export async function autoResolveClusters(): Promise<{
 //
 // Primary selection priority is by record type first
 // (Account > Contact > Deal > Lead > Task), with quality-score breaking ties.
-export type DuplicateActionType = 'keep' | 'merge' | 'link' | 'close' | 'review';
+export type DuplicateActionType =
+  | "keep"
+  | "merge"
+  | "link"
+  | "close"
+  | "review";
 
 export interface SmartRecommendation {
   record_id: number;
@@ -1899,43 +2312,58 @@ const RECORD_TYPE_PRIORITY: Record<string, number> = {
   task: 1,
 };
 
-export function generateSmartRecommendations(records: DuplicateRecord[]): SmartRecommendation[] {
+export function generateSmartRecommendations(
+  records: DuplicateRecord[],
+): SmartRecommendation[] {
   if (records.length === 0) return [];
 
-  const scored = records.map(r => {
+  const scored = records.map((r) => {
     let score = 0;
     const reasons: string[] = [];
 
-    const fields = [r.email, r.phone, r.company_name, r.owner_name, r.source].filter(Boolean);
+    const fields = [
+      r.email,
+      r.phone,
+      r.company_name,
+      r.owner_name,
+      r.source,
+    ].filter(Boolean);
     const completeness = Math.round((fields.length / 5) * 100);
     score += completeness;
-    if (completeness >= 80) reasons.push('High data completeness');
+    if (completeness >= 80) reasons.push("High data completeness");
 
-    if (r.record_type === 'deal' && r.deal_value && r.deal_value > 0) {
+    if (r.record_type === "deal" && r.deal_value && r.deal_value > 0) {
       score += 30;
-      reasons.push('Has active deal value');
+      reasons.push("Has active deal value");
     }
 
     if (r.modified_date) {
-      const daysSinceModified = (Date.now() - new Date(r.modified_date).getTime()) / (1000 * 60 * 60 * 24);
+      const daysSinceModified =
+        (Date.now() - new Date(r.modified_date).getTime()) /
+        (1000 * 60 * 60 * 24);
       if (daysSinceModified < 30) {
         score += 20;
-        reasons.push('Recently modified');
+        reasons.push("Recently modified");
       } else if (daysSinceModified < 90) {
         score += 10;
-        reasons.push('Modified in last 90 days');
+        reasons.push("Modified in last 90 days");
       }
     }
 
     if (r.created_date) {
-      const ageInDays = (Date.now() - new Date(r.created_date).getTime()) / (1000 * 60 * 60 * 24);
+      const ageInDays =
+        (Date.now() - new Date(r.created_date).getTime()) /
+        (1000 * 60 * 60 * 24);
       if (ageInDays > 180) {
         score += 5;
-        reasons.push('Established record (6mo+)');
+        reasons.push("Established record (6mo+)");
       }
     }
 
-    if (r.stage && ['Closed Won', 'Negotiation', 'Proposal'].includes(r.stage)) {
+    if (
+      r.stage &&
+      ["Closed Won", "Negotiation", "Proposal"].includes(r.stage)
+    ) {
       score += 15;
       reasons.push(`Active deal stage: ${r.stage}`);
     }
@@ -1955,9 +2383,9 @@ export function generateSmartRecommendations(records: DuplicateRecord[]): SmartR
   const primary = scored[0].record;
   const primaryType = primary.record_type;
   const primaryScore = scored[0].score;
-  const hasAccount = scored.some(s => s.record.record_type === 'account');
-  const hasContact = scored.some(s => s.record.record_type === 'contact');
-  const hasDeal = scored.some(s => s.record.record_type === 'deal');
+  const hasAccount = scored.some((s) => s.record.record_type === "account");
+  const hasContact = scored.some((s) => s.record.record_type === "contact");
+  const hasDeal = scored.some((s) => s.record.record_type === "deal");
 
   return scored.map((item, index) => {
     if (index === 0) {
@@ -1966,7 +2394,7 @@ export function generateSmartRecommendations(records: DuplicateRecord[]): SmartR
         record_name: item.record.record_name,
         is_primary: true,
         recommendation: `KEEP as primary ${primaryType} (best Zoho-priority + quality score)`,
-        action_type: 'keep' as const,
+        action_type: "keep" as const,
         confidence: 95,
         reasons: item.reasons,
       };
@@ -1977,21 +2405,33 @@ export function generateSmartRecommendations(records: DuplicateRecord[]): SmartR
     let recommendation: string;
 
     if (t === primaryType) {
-      action = 'merge';
+      action = "merge";
       recommendation = `MERGE into primary ${primaryType} (native Zoho merge — same module)`;
-    } else if (primaryType === 'account' && ((t as string) === 'contact' || (t as string) === 'deal' || (t as string) === 'task')) {
-      action = 'link';
-      const field = (t as string) === 'contact' || (t as string) === 'deal' ? 'Account_Name' : 'What_Id';
+    } else if (
+      primaryType === "account" &&
+      ((t as string) === "contact" ||
+        (t as string) === "deal" ||
+        (t as string) === "task")
+    ) {
+      action = "link";
+      const field =
+        (t as string) === "contact" || (t as string) === "deal"
+          ? "Account_Name"
+          : "What_Id";
       recommendation = `LINK to primary account by setting ${field} on this ${t} (cross-module — do NOT merge)`;
-    } else if (primaryType === 'contact' && ((t as string) === 'deal' || (t as string) === 'task')) {
-      action = 'link';
-      const field = t === 'deal' ? 'Contact_Name' : 'Who_Id';
+    } else if (
+      primaryType === "contact" &&
+      ((t as string) === "deal" || (t as string) === "task")
+    ) {
+      action = "link";
+      const field = t === "deal" ? "Contact_Name" : "Who_Id";
       recommendation = `LINK to primary contact by setting ${field} on this ${t} (cross-module — do NOT merge)`;
-    } else if (t === 'lead' && (hasAccount || hasContact || hasDeal)) {
-      action = 'close';
-      recommendation = 'CLOSE — a converted Account/Contact/Deal already exists for this company';
+    } else if (t === "lead" && (hasAccount || hasContact || hasDeal)) {
+      action = "close";
+      recommendation =
+        "CLOSE — a converted Account/Contact/Deal already exists for this company";
     } else {
-      action = 'review';
+      action = "review";
       recommendation = `REVIEW manually — cross-module pairing (${primaryType} ↔ ${t}) has no automatic Zoho action`;
     }
 
@@ -2018,9 +2458,13 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
   if (!records || records.length === 0) {
     return { primary_type: null, is_cross_module: false, record_types: [] };
   }
-  const types = Array.from(new Set(records.map(r => r.record_type).filter(Boolean)));
+  const types = Array.from(
+    new Set(records.map((r) => r.record_type).filter(Boolean)),
+  );
   const sorted = [...records].sort(
-    (a, b) => (RECORD_TYPE_PRIORITY[b.record_type] || 0) - (RECORD_TYPE_PRIORITY[a.record_type] || 0),
+    (a, b) =>
+      (RECORD_TYPE_PRIORITY[b.record_type] || 0) -
+      (RECORD_TYPE_PRIORITY[a.record_type] || 0),
   );
   return {
     primary_type: sorted[0].record_type,
@@ -2029,8 +2473,13 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
   };
 }
 
-export async function getSyncState(module: string): Promise<ZohoSyncState | null> {
-  const result = await pool.query('SELECT * FROM zoho_sync_state WHERE module = $1', [module]);
+export async function getSyncState(
+  module: string,
+): Promise<ZohoSyncState | null> {
+  const result = await pool.query(
+    "SELECT * FROM zoho_sync_state WHERE module = $1",
+    [module],
+  );
   return result.rows[0] || null;
 }
 
@@ -2038,53 +2487,57 @@ export async function getAllSyncStates(): Promise<ZohoSyncState[]> {
   // Tasks module was removed platform-wide; filter out any stale rows so the
   // Sync Status badges only reflect modules we actively sync.
   const result = await pool.query(
-    "SELECT * FROM zoho_sync_state WHERE module NOT IN ('Tasks') ORDER BY module"
+    "SELECT * FROM zoho_sync_state WHERE module NOT IN ('Tasks') ORDER BY module",
   );
   return result.rows;
 }
 
-export async function upsertSyncState(module: string, totalSynced: number, status: string): Promise<void> {
+export async function upsertSyncState(
+  module: string,
+  totalSynced: number,
+  status: string,
+): Promise<void> {
   await pool.query(
     `INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, sync_status)
      VALUES ($1, NOW(), $2, $3)
      ON CONFLICT (module) DO UPDATE SET last_sync_at = NOW(), total_synced = $2, sync_status = $3`,
-    [module, totalSynced, status]
+    [module, totalSynced, status],
   );
 }
 
 export async function getDistinctOwners(): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT owner_name FROM duplicate_records WHERE owner_name IS NOT NULL AND owner_name != '' ORDER BY owner_name`
+    `SELECT DISTINCT owner_name FROM duplicate_records WHERE owner_name IS NOT NULL AND owner_name != '' ORDER BY owner_name`,
   );
-  return result.rows.map(r => r.owner_name);
+  return result.rows.map((r) => r.owner_name);
 }
 
 export async function getDistinctLayouts(): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT layout_name FROM duplicate_records WHERE layout_name IS NOT NULL AND layout_name != '' ORDER BY layout_name`
+    `SELECT DISTINCT layout_name FROM duplicate_records WHERE layout_name IS NOT NULL AND layout_name != '' ORDER BY layout_name`,
   );
-  return result.rows.map(r => r.layout_name);
+  return result.rows.map((r) => r.layout_name);
 }
 
 export async function getDistinctDomains(): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT domain FROM duplicate_records WHERE domain IS NOT NULL AND domain != '' ORDER BY domain LIMIT 200`
+    `SELECT DISTINCT domain FROM duplicate_records WHERE domain IS NOT NULL AND domain != '' ORDER BY domain LIMIT 200`,
   );
-  return result.rows.map(r => r.domain);
+  return result.rows.map((r) => r.domain);
 }
 
 export async function getDistinctProducts(): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT products FROM duplicate_records WHERE products IS NOT NULL AND products != '' ORDER BY products`
+    `SELECT DISTINCT products FROM duplicate_records WHERE products IS NOT NULL AND products != '' ORDER BY products`,
   );
-  return result.rows.map(r => r.products);
+  return result.rows.map((r) => r.products);
 }
 
 export async function getDistinctPipelines(): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT pipeline FROM duplicate_records WHERE pipeline IS NOT NULL AND pipeline != '' ORDER BY pipeline`
+    `SELECT DISTINCT pipeline FROM duplicate_records WHERE pipeline IS NOT NULL AND pipeline != '' ORDER BY pipeline`,
   );
-  return result.rows.map(r => r.pipeline);
+  return result.rows.map((r) => r.pipeline);
 }
 
 // Distinct Deal stages — restricted to the Deals module since stage only
@@ -2093,14 +2546,18 @@ export async function getDistinctStages(): Promise<string[]> {
   const result = await pool.query(
     `SELECT DISTINCT stage FROM duplicate_records
        WHERE zoho_module = 'Deals' AND stage IS NOT NULL AND stage != ''
-       ORDER BY stage`
+       ORDER BY stage`,
   );
-  return result.rows.map(r => r.stage);
+  return result.rows.map((r) => r.stage);
 }
 
-export async function getFilteredClusters(filters: DuplicateFilters, limit = 30, offset = 0): Promise<{ clusters: DuplicateCluster[]; total: number }> {
-  let whereConditions = ['c.status = $1'];
-  let params: any[] = [filters.status || 'active'];
+export async function getFilteredClusters(
+  filters: DuplicateFilters,
+  limit = 30,
+  offset = 0,
+): Promise<{ clusters: DuplicateCluster[]; total: number }> {
+  let whereConditions = ["c.status = $1"];
+  let params: any[] = [filters.status || "active"];
   let paramIdx = 2;
 
   if (filters.confidence_level) {
@@ -2123,35 +2580,45 @@ export async function getFilteredClusters(filters: DuplicateFilters, limit = 30,
 
   if (filters.modules && filters.modules.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.modules);
     paramIdx += filters.modules.length;
   }
 
   if (filters.owners && filters.owners.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.owners);
     paramIdx += filters.owners.length;
   }
 
   if (filters.layouts && filters.layouts.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.layout_name IN (${filters.layouts.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.layout_name IN (${filters.layouts.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.layouts);
     paramIdx += filters.layouts.length;
   }
 
   if (filters.pipelines && filters.pipelines.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.pipeline IN (${filters.pipelines.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.pipeline IN (${filters.pipelines.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.pipelines);
     paramIdx += filters.pipelines.length;
   }
 
   if (filters.stages && filters.stages.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.stage IN (${filters.stages.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.stage IN (${filters.stages.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.stages);
     paramIdx += filters.stages.length;
   }
@@ -2162,21 +2629,26 @@ export async function getFilteredClusters(filters: DuplicateFilters, limit = 30,
     params.push(`%${filters.domain}%`);
   }
 
-  const joinClause = joinNeeded ? 'INNER JOIN duplicate_records r ON r.cluster_id = c.id' : '';
-  const recordWhere = recordConditions.length > 0 ? 'AND ' + recordConditions.join(' AND ') : '';
+  const joinClause = joinNeeded
+    ? "INNER JOIN duplicate_records r ON r.cluster_id = c.id"
+    : "";
+  const recordWhere =
+    recordConditions.length > 0 ? "AND " + recordConditions.join(" AND ") : "";
 
-  const countQuery = `SELECT COUNT(DISTINCT c.id) as total FROM duplicate_clusters c ${joinClause} WHERE ${whereConditions.join(' AND ')} ${recordWhere}`;
+  const countQuery = `SELECT COUNT(DISTINCT c.id) as total FROM duplicate_clusters c ${joinClause} WHERE ${whereConditions.join(" AND ")} ${recordWhere}`;
   const countResult = await pool.query(countQuery, params);
   const total = parseInt(countResult.rows[0].total);
 
   const dataParams = [...params, limit, offset];
-  const dataQuery = `SELECT DISTINCT c.* FROM duplicate_clusters c ${joinClause} WHERE ${whereConditions.join(' AND ')} ${recordWhere} ORDER BY c.confidence_score DESC, c.total_records DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+  const dataQuery = `SELECT DISTINCT c.* FROM duplicate_clusters c ${joinClause} WHERE ${whereConditions.join(" AND ")} ${recordWhere} ORDER BY c.confidence_score DESC, c.total_records DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
   const dataResult = await pool.query(dataQuery, dataParams);
 
   return { clusters: dataResult.rows, total };
 }
 
-export async function getFilteredSummary(filters: DuplicateFilters): Promise<any> {
+export async function getFilteredSummary(
+  filters: DuplicateFilters,
+): Promise<any> {
   let whereConditions = ["c.status = 'active'"];
   let params: any[] = [];
   let paramIdx = 1;
@@ -2186,21 +2658,27 @@ export async function getFilteredSummary(filters: DuplicateFilters): Promise<any
 
   if (filters.modules && filters.modules.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.modules);
     paramIdx += filters.modules.length;
   }
 
   if (filters.owners && filters.owners.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.owner_name IN (${filters.owners.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.owners);
     paramIdx += filters.owners.length;
   }
 
   if (filters.stages && filters.stages.length > 0) {
     joinNeeded = true;
-    recordConditions.push(`r.stage IN (${filters.stages.map((_, i) => `$${paramIdx + i}`).join(',')})`);
+    recordConditions.push(
+      `r.stage IN (${filters.stages.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+    );
     params.push(...filters.stages);
     paramIdx += filters.stages.length;
   }
@@ -2211,8 +2689,11 @@ export async function getFilteredSummary(filters: DuplicateFilters): Promise<any
     params.push(`%${filters.domain}%`);
   }
 
-  const joinClause = joinNeeded ? 'INNER JOIN duplicate_records r ON r.cluster_id = c.id' : '';
-  const recordWhere = recordConditions.length > 0 ? 'AND ' + recordConditions.join(' AND ') : '';
+  const joinClause = joinNeeded
+    ? "INNER JOIN duplicate_records r ON r.cluster_id = c.id"
+    : "";
+  const recordWhere =
+    recordConditions.length > 0 ? "AND " + recordConditions.join(" AND ") : "";
 
   const query = `
     SELECT 
@@ -2222,7 +2703,7 @@ export async function getFilteredSummary(filters: DuplicateFilters): Promise<any
       COUNT(DISTINCT CASE WHEN c.confidence_level = 'low' THEN c.id END) as low_confidence,
       COALESCE(SUM(c.estimated_pipeline_value), 0) as pipeline_inflation
     FROM duplicate_clusters c ${joinClause}
-    WHERE ${whereConditions.join(' AND ')} ${recordWhere}
+    WHERE ${whereConditions.join(" AND ")} ${recordWhere}
   `;
 
   const result = await pool.query(query, params);
@@ -2233,11 +2714,13 @@ export async function getFilteredSummary(filters: DuplicateFilters): Promise<any
     highConfidence: parseInt(row.high_confidence),
     mediumConfidence: parseInt(row.medium_confidence),
     lowConfidence: parseInt(row.low_confidence),
-    estimatedPipelineInflation: parseFloat(row.pipeline_inflation)
+    estimatedPipelineInflation: parseFloat(row.pipeline_inflation),
   };
 }
 
-export async function upsertTask(task: Omit<DuplicateRecordTask, 'id' | 'created_at'>): Promise<DuplicateRecordTask> {
+export async function upsertTask(
+  task: Omit<DuplicateRecordTask, "id" | "created_at">,
+): Promise<DuplicateRecordTask> {
   const result = await pool.query(
     `INSERT INTO duplicate_record_tasks (zoho_task_id, related_record_id, cluster_id, subject, due_date, status, owner_name, description)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -2245,36 +2728,59 @@ export async function upsertTask(task: Omit<DuplicateRecordTask, 'id' | 'created
        subject = EXCLUDED.subject, due_date = EXCLUDED.due_date, status = EXCLUDED.status,
        owner_name = EXCLUDED.owner_name, description = EXCLUDED.description
      RETURNING *`,
-    [task.zoho_task_id, task.related_record_id, task.cluster_id, task.subject, task.due_date, task.status, task.owner_name, task.description]
+    [
+      task.zoho_task_id,
+      task.related_record_id,
+      task.cluster_id,
+      task.subject,
+      task.due_date,
+      task.status,
+      task.owner_name,
+      task.description,
+    ],
   );
   return result.rows[0];
 }
 
-export async function getTasksForRecords(recordIds: string[]): Promise<DuplicateRecordTask[]> {
+export async function getTasksForRecords(
+  recordIds: string[],
+): Promise<DuplicateRecordTask[]> {
   if (recordIds.length === 0) return [];
-  const placeholders = recordIds.map((_, i) => `$${i + 1}`).join(',');
+  const placeholders = recordIds.map((_, i) => `$${i + 1}`).join(",");
   const result = await pool.query(
     `SELECT * FROM duplicate_record_tasks WHERE related_record_id IN (${placeholders}) ORDER BY due_date DESC`,
-    recordIds
+    recordIds,
   );
   return result.rows;
 }
 
-export async function getTaskCountForCluster(clusterId: number): Promise<number> {
+export async function getTaskCountForCluster(
+  clusterId: number,
+): Promise<number> {
   const result = await pool.query(
     `SELECT COUNT(*) as cnt FROM duplicate_record_tasks WHERE cluster_id = $1`,
-    [clusterId]
+    [clusterId],
   );
   return parseInt(result.rows[0].cnt);
 }
 
 export async function calculateEnhancedScore(
   record1: DuplicateRecord,
-  record2: DuplicateRecord
+  record2: DuplicateRecord,
 ): Promise<{ score: number; signals: string[] }> {
   const base = calculateMultiSignalScore(
-    { email: record1.email, domain: record1.domain, phone: record1.phone, company_name: record1.company_name },
-    { email: record2.email, domain: record2.domain, phone: record2.phone, company_name: record2.company_name }
+    {
+      email: record1.email,
+      domain: record1.domain,
+      phone: record1.phone,
+      company_name: record1.company_name,
+    },
+    {
+      email: record2.email,
+      domain: record2.domain,
+      phone: record2.phone,
+      company_name: record2.company_name,
+    },
   );
 
   let score = base.score;
@@ -2285,26 +2791,40 @@ export async function calculateEnhancedScore(
     const m2 = normalizePhone(record2.mobile);
     if (m1 && m2 && m1.length >= 7 && m1 === m2) {
       score += 25;
-      signals.push('mobile_match');
+      signals.push("mobile_match");
     }
   }
 
-  if (record1.cr_number && record2.cr_number && record1.cr_number === record2.cr_number) {
+  if (
+    record1.cr_number &&
+    record2.cr_number &&
+    record1.cr_number === record2.cr_number
+  ) {
     score += 35;
-    signals.push('cr_number_match');
+    signals.push("cr_number_match");
   }
 
-  if (record1.vat_number && record2.vat_number && record1.vat_number === record2.vat_number) {
+  if (
+    record1.vat_number &&
+    record2.vat_number &&
+    record1.vat_number === record2.vat_number
+  ) {
     score += 30;
-    signals.push('vat_number_match');
+    signals.push("vat_number_match");
   }
 
   if (record1.website && record2.website) {
-    const w1 = record1.website.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-    const w2 = record2.website.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+    const w1 = record1.website
+      .toLowerCase()
+      .replace(/^https?:\/\/(www\.)?/, "")
+      .split("/")[0];
+    const w2 = record2.website
+      .toLowerCase()
+      .replace(/^https?:\/\/(www\.)?/, "")
+      .split("/")[0];
     if (w1 === w2) {
       score += 20;
-      signals.push('website_match');
+      signals.push("website_match");
     }
   }
 
@@ -2320,7 +2840,24 @@ export interface DataQualityResult {
 const GIBBERISH_REGEX = /^[a-zA-Z]{20,}$/;
 const RANDOM_MIXED_REGEX = /^[a-zA-Z0-9]{25,}$/;
 const CONSECUTIVE_CAPS_REGEX = /[A-Z]{8,}/;
-const NAME_GARBAGE = ['test', 'testing', 'asdf', 'qwerty', 'xxx', 'yyy', 'zzz', 'demo', 'sample', 'unknown', 'n/a', 'na', '-', '.', '..', 'null'];
+const NAME_GARBAGE = [
+  "test",
+  "testing",
+  "asdf",
+  "qwerty",
+  "xxx",
+  "yyy",
+  "zzz",
+  "demo",
+  "sample",
+  "unknown",
+  "n/a",
+  "na",
+  "-",
+  ".",
+  "..",
+  "null",
+];
 
 function isGibberishName(name: string): boolean {
   if (!name) return false;
@@ -2328,26 +2865,34 @@ function isGibberishName(name: string): boolean {
   if (trimmed.length < 2) return true;
 
   const words = trimmed.split(/\s+/);
-  if (words.some(w => w.length > 25 && /^[a-zA-Z]+$/.test(w))) return true;
-  if (GIBBERISH_REGEX.test(trimmed.replace(/\s/g, ''))) return true;
-  if (RANDOM_MIXED_REGEX.test(trimmed.replace(/\s/g, ''))) return true;
+  if (words.some((w) => w.length > 25 && /^[a-zA-Z]+$/.test(w))) return true;
+  if (GIBBERISH_REGEX.test(trimmed.replace(/\s/g, ""))) return true;
+  if (RANDOM_MIXED_REGEX.test(trimmed.replace(/\s/g, ""))) return true;
 
   const latinLetters = (trimmed.match(/[a-zA-Z]/g) || []).length;
   const upperCase = (trimmed.match(/[A-Z]/g) || []).length;
   if (latinLetters > 10 && upperCase / latinLetters > 0.6) return true;
   if (CONSECUTIVE_CAPS_REGEX.test(trimmed)) return true;
 
-  const consonants = (trimmed.toLowerCase().match(/[bcdfghjklmnpqrstvwxyz]/g) || []).length;
+  const consonants = (
+    trimmed.toLowerCase().match(/[bcdfghjklmnpqrstvwxyz]/g) || []
+  ).length;
   const vowels = (trimmed.toLowerCase().match(/[aeiou]/g) || []).length;
   if (latinLetters > 10 && vowels === 0) return true;
-  if (latinLetters > 15 && consonants > 0 && vowels > 0 && consonants / vowels > 8) return true;
+  if (
+    latinLetters > 15 &&
+    consonants > 0 &&
+    vowels > 0 &&
+    consonants / vowels > 8
+  )
+    return true;
 
   return false;
 }
 
 function isSuspiciousEmail(email: string): boolean {
   if (!email) return false;
-  const local = email.split('@')[0] || '';
+  const local = email.split("@")[0] || "";
   if (/\d{6,}/.test(local)) return true;
   if (local.length > 30 && /^[a-z0-9.]+$/.test(local)) {
     const dots = (local.match(/\./g) || []).length;
@@ -2368,57 +2913,60 @@ export function assessDataQuality(record: {
   const flags: string[] = [];
   let score = 100;
 
-  const name = record.recordName || '';
+  const name = record.recordName || "";
   const nameLower = name.toLowerCase().trim();
-  if (!name || nameLower === '-' || nameLower === '.') {
-    flags.push('missing_name');
+  if (!name || nameLower === "-" || nameLower === ".") {
+    flags.push("missing_name");
     score -= 20;
   } else if (NAME_GARBAGE.includes(nameLower)) {
-    flags.push('garbage_name');
+    flags.push("garbage_name");
     score -= 40;
   } else if (isGibberishName(name)) {
-    flags.push('gibberish_name');
+    flags.push("gibberish_name");
     score -= 50;
   }
 
-  const company = record.companyName || '';
-  if (!company || company === 'Unknown') {
-    flags.push('missing_company');
+  const company = record.companyName || "";
+  if (!company || company === "Unknown") {
+    flags.push("missing_company");
     score -= 15;
   } else if (isGibberishName(company)) {
-    flags.push('gibberish_company');
+    flags.push("gibberish_company");
     score -= 30;
   }
 
   if (!record.email) {
-    flags.push('missing_email');
+    flags.push("missing_email");
     score -= 10;
   } else if (isSuspiciousEmail(record.email)) {
-    flags.push('suspicious_email');
+    flags.push("suspicious_email");
     score -= 15;
   }
 
-  const phoneNorm = record.phone ? normalizePhone(record.phone) : '';
-  const mobileNorm = record.mobile ? normalizePhone(record.mobile) : '';
+  const phoneNorm = record.phone ? normalizePhone(record.phone) : "";
+  const mobileNorm = record.mobile ? normalizePhone(record.mobile) : "";
   if (!phoneNorm && !mobileNorm) {
-    flags.push('missing_phone');
+    flags.push("missing_phone");
     score -= 10;
   }
 
-  if (!record.ownerName || record.ownerName === 'Unknown') {
-    flags.push('missing_owner');
+  if (!record.ownerName || record.ownerName === "Unknown") {
+    flags.push("missing_owner");
     score -= 5;
   }
 
   if (!record.domain) {
-    flags.push('no_business_domain');
+    flags.push("no_business_domain");
     score -= 5;
   }
 
   return {
     score: Math.max(0, score),
     flags,
-    isJunk: score <= 20 || flags.includes('gibberish_name') || flags.includes('garbage_name'),
+    isJunk:
+      score <= 20 ||
+      flags.includes("gibberish_name") ||
+      flags.includes("garbage_name"),
   };
 }
 
@@ -2445,7 +2993,7 @@ export async function lookupRecordsByZohoIds(zohoIds: string[]): Promise<{
      FROM duplicate_records dr
      JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
      WHERE dr.zoho_record_id = ANY($1)`,
-    [zohoIds]
+    [zohoIds],
   );
   const map: Record<string, any> = {};
   for (const row of result.rows) {
@@ -2459,35 +3007,58 @@ export async function lookupRecordsByZohoIds(zohoIds: string[]): Promise<{
       dataQualityScore: row.data_quality_score ?? 100,
       dataQualityFlags: row.data_quality_flags || [],
       recordType: row.record_type,
-      isJunk: row.cluster_id && row.domain === '__JUNK_RECORDS__',
+      isJunk: row.cluster_id && row.domain === "__JUNK_RECORDS__",
     };
   }
   return map;
 }
 
-export async function runLiveQualityCheck(records: Array<{
-  id: string;
-  Full_Name?: string;
-  Last_Name?: string;
-  First_Name?: string;
-  Company?: string;
-  Account_Name?: any;
-  Deal_Name?: string;
-  Email?: string;
-  Phone?: string;
-  Mobile?: string;
-  Owner?: any;
-}>): Promise<{ [id: string]: { score: number; flags: string[]; isJunk: boolean } }> {
+export async function runLiveQualityCheck(
+  records: Array<{
+    id: string;
+    Full_Name?: string;
+    Last_Name?: string;
+    First_Name?: string;
+    Company?: string;
+    Account_Name?: any;
+    Deal_Name?: string;
+    Email?: string;
+    Phone?: string;
+    Mobile?: string;
+    Owner?: any;
+  }>,
+): Promise<{
+  [id: string]: { score: number; flags: string[]; isJunk: boolean };
+}> {
   const results: Record<string, any> = {};
   for (const r of records) {
-    const name = r.Full_Name || r.Deal_Name || (r.First_Name ? `${r.First_Name} ${r.Last_Name || ''}`.trim() : r.Last_Name) || '';
-    const company = typeof r.Company === 'string' ? r.Company : (typeof r.Account_Name === 'object' ? r.Account_Name?.name : r.Account_Name) || '';
-    const owner = typeof r.Owner === 'object' ? r.Owner?.name : r.Owner || '';
-    const email = r.Email || '';
-    const phone = r.Phone || '';
-    const mobile = r.Mobile || '';
-    const domain = email.includes('@') ? email.split('@')[1] : undefined;
-    const dq = assessDataQuality({ recordName: name, companyName: company, email, phone, mobile, ownerName: owner, domain });
+    const name =
+      r.Full_Name ||
+      r.Deal_Name ||
+      (r.First_Name
+        ? `${r.First_Name} ${r.Last_Name || ""}`.trim()
+        : r.Last_Name) ||
+      "";
+    const company =
+      typeof r.Company === "string"
+        ? r.Company
+        : (typeof r.Account_Name === "object"
+            ? r.Account_Name?.name
+            : r.Account_Name) || "";
+    const owner = typeof r.Owner === "object" ? r.Owner?.name : r.Owner || "";
+    const email = r.Email || "";
+    const phone = r.Phone || "";
+    const mobile = r.Mobile || "";
+    const domain = email.includes("@") ? email.split("@")[1] : undefined;
+    const dq = assessDataQuality({
+      recordName: name,
+      companyName: company,
+      email,
+      phone,
+      mobile,
+      ownerName: owner,
+      domain,
+    });
     results[r.id] = { score: dq.score, flags: dq.flags, isJunk: dq.isJunk };
   }
   return results;

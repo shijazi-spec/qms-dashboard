@@ -37,6 +37,7 @@
 
 import { sharedPool as pool } from "./sharedPool";
 
+import { logger } from "./logger";
 /**
  * Bounds applied to dashboard input. Picked to cover every legitimate
  * tuning operators have asked for (a one-day prune window for a perf
@@ -136,7 +137,7 @@ export async function getAiMetricsRetentionConfig(): Promise<AiMetricsRetentionC
     );
     return rowToConfig(result.rows?.[0]);
   } catch (err) {
-    console.error("[aiMetricsRetentionConfig] read failed:", err);
+    logger.error("[aiMetricsRetentionConfig] read failed:", err);
     return { retention_days: null, updated_by: null, updated_at: null };
   }
 }
@@ -170,7 +171,10 @@ export async function setAiMetricsRetentionConfig(
 ): Promise<SetAiMetricsRetentionResult> {
   await initAiMetricsRetentionConfigTable();
   const { retentionDays, changedBy } = params;
-  const note = params.note != null && params.note !== "" ? String(params.note).slice(0, 500) : null;
+  const note =
+    params.note != null && params.note !== ""
+      ? String(params.note).slice(0, 500)
+      : null;
 
   const client = await pool.connect();
   try {
@@ -180,7 +184,9 @@ export async function setAiMetricsRetentionConfig(
     );
     const before = beforeRes.rows?.[0]?.retention_days ?? null;
     const beforeNum: number | null =
-      before != null && Number.isFinite(Number(before)) ? Math.floor(Number(before)) : null;
+      before != null && Number.isFinite(Number(before))
+        ? Math.floor(Number(before))
+        : null;
 
     await client.query(
       `INSERT INTO ai_metrics_retention_config (id, retention_days, updated_by, updated_at)
@@ -358,7 +364,7 @@ export async function getAiMetricsRetentionAuditPage(
       offset: safeOffset,
     };
   } catch (err) {
-    console.error("[aiMetricsRetentionConfig] audit read failed:", err);
+    logger.error("[aiMetricsRetentionConfig] audit read failed:", err);
     return { rows: [], total: 0, limit: safeLimit, offset: safeOffset };
   }
 }
@@ -463,7 +469,7 @@ export interface AiMetricsRetentionConfirmThreshold {
 }
 
 function parseNonNegativeInt(raw: unknown, fallback: number): number {
-  if (raw == null || raw === '') return fallback;
+  if (raw == null || raw === "") return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return fallback;
   return Math.floor(n);

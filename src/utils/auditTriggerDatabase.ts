@@ -1,17 +1,22 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export type TriggerType = 
-  | 'AUDIT_COMPLETED' 
-  | 'NONCONFORMANCE_DETECTED' 
-  | 'CAPA_REQUIRED' 
-  | 'DECISION_PENDING'
-  | 'AUDIT_LOCKED';
+export type TriggerType =
+  | "AUDIT_COMPLETED"
+  | "NONCONFORMANCE_DETECTED"
+  | "CAPA_REQUIRED"
+  | "DECISION_PENDING"
+  | "AUDIT_LOCKED";
 
-export type TriggerStatus = 'pending' | 'acknowledged' | 'actioned' | 'dismissed';
+export type TriggerStatus =
+  | "pending"
+  | "acknowledged"
+  | "actioned"
+  | "dismissed";
 
 export interface AuditTrigger {
   id?: number;
@@ -19,14 +24,14 @@ export interface AuditTrigger {
   trigger_type: TriggerType;
   audit_id: number;
   audit_date?: Date;
-  severity: 'info' | 'warning' | 'critical';
+  severity: "info" | "warning" | "critical";
   title: string;
   description: string;
   action_required?: string;
   assigned_to?: string;
   assigned_role?: string;
   status: TriggerStatus;
-  decision?: 'approved' | 'rejected' | 'modified' | null;
+  decision?: "approved" | "rejected" | "modified" | null;
   decision_by?: string;
   decision_at?: Date;
   decision_notes?: string;
@@ -42,7 +47,7 @@ export interface AuditNotification {
   trigger_id: number;
   recipient_email: string;
   recipient_role: string;
-  notification_type: 'email' | 'dashboard' | 'both';
+  notification_type: "email" | "dashboard" | "both";
   subject: string;
   message: string;
   is_read: boolean;
@@ -52,8 +57,8 @@ export interface AuditNotification {
 }
 
 export async function initAuditTriggerTables(): Promise<void> {
-  console.log('🔔 [AuditTriggers] Initializing audit trigger tables...');
-  
+  logger.info("🔔 [AuditTriggers] Initializing audit trigger tables...");
+
   try {
     await pool.query(`
       ALTER TABLE quality_audit_results 
@@ -61,9 +66,11 @@ export async function initAuditTriggerTables(): Promise<void> {
       ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP
     `);
   } catch (e) {
-    console.log('ℹ️ [AuditTriggers] is_locked column may already exist or table not found');
+    logger.info(
+      "ℹ️ [AuditTriggers] is_locked column may already exist or table not found",
+    );
   }
-  
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_triggers (
       id SERIAL PRIMARY KEY,
@@ -112,21 +119,26 @@ export async function initAuditTriggerTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_audit_notifications_read ON audit_notifications(is_read);
   `);
 
-  console.log('✅ [AuditTriggers] Tables initialized');
+  logger.info("✅ [AuditTriggers] Tables initialized");
 }
 
 function generateTriggerId(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'TRG-';
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "TRG-";
   for (let i = 0; i < 8; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
 }
 
-export async function createAuditTrigger(trigger: Omit<AuditTrigger, 'id' | 'trigger_id' | 'created_at' | 'updated_at'>): Promise<AuditTrigger> {
+export async function createAuditTrigger(
+  trigger: Omit<
+    AuditTrigger,
+    "id" | "trigger_id" | "created_at" | "updated_at"
+  >,
+): Promise<AuditTrigger> {
   const triggerId = generateTriggerId();
-  
+
   const result = await pool.query(
     `INSERT INTO audit_triggers 
      (trigger_id, trigger_type, audit_id, audit_date, severity, title, description, action_required, 
@@ -134,31 +146,52 @@ export async function createAuditTrigger(trigger: Omit<AuditTrigger, 'id' | 'tri
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
-      triggerId, trigger.trigger_type, trigger.audit_id, trigger.audit_date || new Date(),
-      trigger.severity, trigger.title, trigger.description, trigger.action_required,
-      trigger.assigned_to, trigger.assigned_role, trigger.status || 'pending',
-      trigger.related_nc_ids, trigger.related_capa_ids, JSON.stringify(trigger.metadata || {})
-    ]
+      triggerId,
+      trigger.trigger_type,
+      trigger.audit_id,
+      trigger.audit_date || new Date(),
+      trigger.severity,
+      trigger.title,
+      trigger.description,
+      trigger.action_required,
+      trigger.assigned_to,
+      trigger.assigned_role,
+      trigger.status || "pending",
+      trigger.related_nc_ids,
+      trigger.related_capa_ids,
+      JSON.stringify(trigger.metadata || {}),
+    ],
   );
-  
-  console.log(`🔔 [AuditTriggers] Created trigger ${triggerId}: ${trigger.trigger_type}`);
+
+  logger.info(
+    `🔔 [AuditTriggers] Created trigger ${triggerId}: ${trigger.trigger_type}`,
+  );
   return result.rows[0];
 }
 
-export async function createNotification(notification: Omit<AuditNotification, 'id' | 'created_at'>): Promise<AuditNotification> {
+export async function createNotification(
+  notification: Omit<AuditNotification, "id" | "created_at">,
+): Promise<AuditNotification> {
   const result = await pool.query(
     `INSERT INTO audit_notifications 
      (trigger_id, recipient_email, recipient_role, notification_type, subject, message, is_read, sent_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
     [
-      notification.trigger_id, notification.recipient_email, notification.recipient_role,
-      notification.notification_type, notification.subject, notification.message,
-      notification.is_read || false, notification.sent_at
-    ]
+      notification.trigger_id,
+      notification.recipient_email,
+      notification.recipient_role,
+      notification.notification_type,
+      notification.subject,
+      notification.message,
+      notification.is_read || false,
+      notification.sent_at,
+    ],
   );
-  
-  console.log(`📧 [AuditTriggers] Created notification for ${notification.recipient_email || notification.recipient_role}`);
+
+  logger.info(
+    `📧 [AuditTriggers] Created notification for ${notification.recipient_email || notification.recipient_role}`,
+  );
   return result.rows[0];
 }
 
@@ -172,34 +205,35 @@ export async function fireAuditCompletedTrigger(
     processScore: number;
     governanceScore: number;
     auditDate: Date;
-  }
+  },
 ): Promise<AuditTrigger> {
   const trigger = await createAuditTrigger({
-    trigger_type: 'AUDIT_COMPLETED',
+    trigger_type: "AUDIT_COMPLETED",
     audit_id: auditId,
     audit_date: auditResult.auditDate,
-    severity: auditResult.totalIssues > 0 ? 'warning' : 'info',
+    severity: auditResult.totalIssues > 0 ? "warning" : "info",
     title: `Audit Completed - ${auditResult.totalRecords} records evaluated`,
     description: `Audit completed with overall score of ${auditResult.overallScore.toFixed(1)}%. 
       People: ${auditResult.peopleScore.toFixed(1)}%, 
       Process: ${auditResult.processScore.toFixed(1)}%, 
       Governance: ${auditResult.governanceScore.toFixed(1)}%. 
       ${auditResult.totalIssues} issues found.`,
-    action_required: auditResult.totalIssues > 0 
-      ? 'Review audit findings and take corrective action' 
-      : 'Review and acknowledge audit results',
-    assigned_role: 'quality_manager',
-    status: 'pending',
-    metadata: auditResult
+    action_required:
+      auditResult.totalIssues > 0
+        ? "Review audit findings and take corrective action"
+        : "Review and acknowledge audit results",
+    assigned_role: "quality_manager",
+    status: "pending",
+    metadata: auditResult,
   });
 
   await createNotification({
     trigger_id: trigger.id!,
-    recipient_role: 'quality_manager',
-    notification_type: 'dashboard',
+    recipient_role: "quality_manager",
+    notification_type: "dashboard",
     subject: `Audit Completed - ${auditResult.overallScore.toFixed(1)}% Score`,
     message: trigger.description!,
-    is_read: false
+    is_read: false,
   });
 
   return trigger;
@@ -214,12 +248,17 @@ export async function fireNonconformanceDetectedTrigger(
     minorCount: number;
     ncIds: number[];
     auditDate: Date;
-  }
+  },
 ): Promise<AuditTrigger> {
-  const severity = ncDetails.criticalCount > 0 ? 'critical' : (ncDetails.majorCount > 0 ? 'warning' : 'info');
-  
+  const severity =
+    ncDetails.criticalCount > 0
+      ? "critical"
+      : ncDetails.majorCount > 0
+        ? "warning"
+        : "info";
+
   const trigger = await createAuditTrigger({
-    trigger_type: 'NONCONFORMANCE_DETECTED',
+    trigger_type: "NONCONFORMANCE_DETECTED",
     audit_id: auditId,
     audit_date: ncDetails.auditDate,
     severity,
@@ -227,30 +266,31 @@ export async function fireNonconformanceDetectedTrigger(
     description: `Audit identified ${ncDetails.totalNCs} nonconformance(s): 
       Critical: ${ncDetails.criticalCount}, Major: ${ncDetails.majorCount}, Minor: ${ncDetails.minorCount}. 
       Immediate action required for critical and major findings.`,
-    action_required: 'Assign owners and initiate corrective actions for all nonconformances',
-    assigned_role: 'quality_manager',
-    status: 'pending',
+    action_required:
+      "Assign owners and initiate corrective actions for all nonconformances",
+    assigned_role: "quality_manager",
+    status: "pending",
     related_nc_ids: ncDetails.ncIds,
-    metadata: ncDetails
+    metadata: ncDetails,
   });
 
   await createNotification({
     trigger_id: trigger.id!,
-    recipient_role: 'quality_manager',
-    notification_type: 'both',
-    subject: `ALERT: ${ncDetails.criticalCount > 0 ? 'CRITICAL ' : ''}Nonconformances Detected`,
+    recipient_role: "quality_manager",
+    notification_type: "both",
+    subject: `ALERT: ${ncDetails.criticalCount > 0 ? "CRITICAL " : ""}Nonconformances Detected`,
     message: trigger.description!,
-    is_read: false
+    is_read: false,
   });
 
   if (ncDetails.criticalCount > 0) {
     await createNotification({
       trigger_id: trigger.id!,
-      recipient_role: 'executive',
-      notification_type: 'dashboard',
+      recipient_role: "executive",
+      notification_type: "dashboard",
       subject: `CRITICAL: ${ncDetails.criticalCount} Critical Nonconformance(s) Require Executive Attention`,
       message: `Audit has identified ${ncDetails.criticalCount} critical nonconformance(s). Executive review recommended.`,
-      is_read: false
+      is_read: false,
     });
   }
 
@@ -265,31 +305,32 @@ export async function fireCAPARequiredTrigger(
     severity: string;
     suggestedAction: string;
     auditDate: Date;
-  }
+  },
 ): Promise<AuditTrigger> {
   const trigger = await createAuditTrigger({
-    trigger_type: 'CAPA_REQUIRED',
+    trigger_type: "CAPA_REQUIRED",
     audit_id: auditId,
     audit_date: capaDetails.auditDate,
-    severity: capaDetails.severity === 'critical' ? 'critical' : 'warning',
+    severity: capaDetails.severity === "critical" ? "critical" : "warning",
     title: `CAPA Required for: ${capaDetails.ncTitle}`,
     description: `A Corrective and Preventive Action (CAPA) is required for nonconformance. 
       Severity: ${capaDetails.severity}. 
       Suggested Action: ${capaDetails.suggestedAction}`,
-    action_required: 'Create CAPA record, assign owner, and define corrective actions. Approval required.',
-    assigned_role: 'quality_manager',
-    status: 'pending',
+    action_required:
+      "Create CAPA record, assign owner, and define corrective actions. Approval required.",
+    assigned_role: "quality_manager",
+    status: "pending",
     related_nc_ids: [capaDetails.ncId],
-    metadata: capaDetails
+    metadata: capaDetails,
   });
 
   await createNotification({
     trigger_id: trigger.id!,
-    recipient_role: 'quality_manager',
-    notification_type: 'dashboard',
+    recipient_role: "quality_manager",
+    notification_type: "dashboard",
     subject: `CAPA Required - ${capaDetails.severity.toUpperCase()} Severity`,
     message: trigger.description!,
-    is_read: false
+    is_read: false,
   });
 
   return trigger;
@@ -298,46 +339,54 @@ export async function fireCAPARequiredTrigger(
 export async function fireDecisionPendingTrigger(
   auditId: number,
   decisionDetails: {
-    decisionType: 'capa_approval' | 'nc_closure' | 'audit_sign_off' | 'escalation';
+    decisionType:
+      | "capa_approval"
+      | "nc_closure"
+      | "audit_sign_off"
+      | "escalation";
     itemId: number;
     itemTitle: string;
     requestedBy: string;
     auditDate: Date;
-  }
+  },
 ): Promise<AuditTrigger> {
   const trigger = await createAuditTrigger({
-    trigger_type: 'DECISION_PENDING',
+    trigger_type: "DECISION_PENDING",
     audit_id: auditId,
     audit_date: decisionDetails.auditDate,
-    severity: 'warning',
-    title: `Decision Required: ${decisionDetails.decisionType.replace(/_/g, ' ').toUpperCase()}`,
+    severity: "warning",
+    title: `Decision Required: ${decisionDetails.decisionType.replace(/_/g, " ").toUpperCase()}`,
     description: `Management decision required for: ${decisionDetails.itemTitle}. 
       Requested by: ${decisionDetails.requestedBy}. 
       Please review and approve, reject, or request modifications.`,
-    action_required: 'Approve, Reject, or Request Modifications',
-    assigned_role: 'executive',
-    status: 'pending',
-    metadata: decisionDetails
+    action_required: "Approve, Reject, or Request Modifications",
+    assigned_role: "executive",
+    status: "pending",
+    metadata: decisionDetails,
   });
 
   await createNotification({
     trigger_id: trigger.id!,
-    recipient_role: 'executive',
-    notification_type: 'dashboard',
+    recipient_role: "executive",
+    notification_type: "dashboard",
     subject: `DECISION REQUIRED: ${decisionDetails.itemTitle}`,
     message: trigger.description!,
-    is_read: false
+    is_read: false,
   });
 
   return trigger;
 }
 
 export async function updateTriggerStatus(
-  triggerId: number, 
+  triggerId: number,
   status: TriggerStatus,
-  decision?: { decision: 'approved' | 'rejected' | 'modified'; decidedBy: string; notes?: string }
+  decision?: {
+    decision: "approved" | "rejected" | "modified";
+    decidedBy: string;
+    notes?: string;
+  },
 ): Promise<AuditTrigger | null> {
-  let query = 'UPDATE audit_triggers SET status = $1, updated_at = NOW()';
+  let query = "UPDATE audit_triggers SET status = $1, updated_at = NOW()";
   const params: any[] = [status];
   let paramIndex = 2;
 
@@ -357,9 +406,12 @@ export async function updateTriggerStatus(
   return result.rows[0] || null;
 }
 
-export async function getPendingTriggers(filters?: { type?: TriggerType; role?: string }): Promise<AuditTrigger[]> {
-  let query = 'SELECT * FROM audit_triggers WHERE status = $1';
-  const params: any[] = ['pending'];
+export async function getPendingTriggers(filters?: {
+  type?: TriggerType;
+  role?: string;
+}): Promise<AuditTrigger[]> {
+  let query = "SELECT * FROM audit_triggers WHERE status = $1";
+  const params: any[] = ["pending"];
   let paramIndex = 2;
 
   if (filters?.type) {
@@ -371,28 +423,33 @@ export async function getPendingTriggers(filters?: { type?: TriggerType; role?: 
     params.push(filters.role);
   }
 
-  query += ' ORDER BY created_at DESC';
+  query += " ORDER BY created_at DESC";
 
   const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function getTriggersByAudit(auditId: number, role?: string): Promise<AuditTrigger[]> {
-  let query = 'SELECT * FROM audit_triggers WHERE audit_id = $1';
+export async function getTriggersByAudit(
+  auditId: number,
+  role?: string,
+): Promise<AuditTrigger[]> {
+  let query = "SELECT * FROM audit_triggers WHERE audit_id = $1";
   const params: any[] = [auditId];
 
   if (role) {
-    query += ' AND assigned_role = $2';
+    query += " AND assigned_role = $2";
     params.push(role);
   }
 
-  query += ' ORDER BY created_at DESC';
+  query += " ORDER BY created_at DESC";
 
   const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function getUnreadNotifications(role?: string): Promise<AuditNotification[]> {
+export async function getUnreadNotifications(
+  role?: string,
+): Promise<AuditNotification[]> {
   let query = `
     SELECT an.*, at.trigger_type, at.severity, at.status as trigger_status
     FROM audit_notifications an
@@ -402,20 +459,22 @@ export async function getUnreadNotifications(role?: string): Promise<AuditNotifi
   const params: any[] = [];
 
   if (role) {
-    query += ' AND an.recipient_role = $1';
+    query += " AND an.recipient_role = $1";
     params.push(role);
   }
 
-  query += ' ORDER BY an.created_at DESC';
+  query += " ORDER BY an.created_at DESC";
 
   const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function markNotificationRead(notificationId: number): Promise<void> {
+export async function markNotificationRead(
+  notificationId: number,
+): Promise<void> {
   await pool.query(
-    'UPDATE audit_notifications SET is_read = true, read_at = NOW() WHERE id = $1',
-    [notificationId]
+    "UPDATE audit_notifications SET is_read = true, read_at = NOW() WHERE id = $1",
+    [notificationId],
   );
 }
 
@@ -427,30 +486,31 @@ export async function getTriggersStats(): Promise<{
   bySeverity: { severity: string; count: number }[];
   pendingDecisions: number;
 }> {
-  const [statusCounts, typeCounts, severityCounts, pendingDecisions] = await Promise.all([
-    pool.query(`
+  const [statusCounts, typeCounts, severityCounts, pendingDecisions] =
+    await Promise.all([
+      pool.query(`
       SELECT status, COUNT(*) as count 
       FROM audit_triggers 
       GROUP BY status
     `),
-    pool.query(`
+      pool.query(`
       SELECT trigger_type as type, COUNT(*) as count 
       FROM audit_triggers 
       WHERE status = 'pending'
       GROUP BY trigger_type
     `),
-    pool.query(`
+      pool.query(`
       SELECT severity, COUNT(*) as count 
       FROM audit_triggers 
       WHERE status = 'pending'
       GROUP BY severity
     `),
-    pool.query(`
+      pool.query(`
       SELECT COUNT(*) as count 
       FROM audit_triggers 
       WHERE trigger_type = 'DECISION_PENDING' AND status = 'pending'
-    `)
-  ]);
+    `),
+    ]);
 
   const statusMap: any = {};
   statusCounts.rows.forEach((r: any) => {
@@ -461,24 +521,30 @@ export async function getTriggersStats(): Promise<{
     pendingCount: statusMap.pending || 0,
     acknowledgedCount: statusMap.acknowledged || 0,
     actionedCount: statusMap.actioned || 0,
-    byType: typeCounts.rows.map((r: any) => ({ type: r.type, count: parseInt(r.count) })),
-    bySeverity: severityCounts.rows.map((r: any) => ({ severity: r.severity, count: parseInt(r.count) })),
-    pendingDecisions: parseInt(pendingDecisions.rows[0]?.count || 0)
+    byType: typeCounts.rows.map((r: any) => ({
+      type: r.type,
+      count: parseInt(r.count),
+    })),
+    bySeverity: severityCounts.rows.map((r: any) => ({
+      severity: r.severity,
+      count: parseInt(r.count),
+    })),
+    pendingDecisions: parseInt(pendingDecisions.rows[0]?.count || 0),
   };
 }
 
 export async function lockAudit(auditId: number): Promise<void> {
   await pool.query(
-    'UPDATE quality_audit_results SET is_locked = true, locked_at = NOW() WHERE id = $1',
-    [auditId]
+    "UPDATE quality_audit_results SET is_locked = true, locked_at = NOW() WHERE id = $1",
+    [auditId],
   );
-  console.log(`🔒 [AuditTriggers] Audit ${auditId} locked from editing`);
+  logger.info(`🔒 [AuditTriggers] Audit ${auditId} locked from editing`);
 }
 
 export async function isAuditLocked(auditId: number): Promise<boolean> {
   const result = await pool.query(
-    'SELECT is_locked FROM quality_audit_results WHERE id = $1',
-    [auditId]
+    "SELECT is_locked FROM quality_audit_results WHERE id = $1",
+    [auditId],
   );
   return result.rows[0]?.is_locked || false;
 }

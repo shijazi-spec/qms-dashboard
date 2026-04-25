@@ -316,7 +316,15 @@ describe("GET /api/ai/approvals/:code", () => {
     );
 
     expect(res.status).toBe(404);
-    expect(res.body).toEqual({ error: "Approval action not found" });
+    // Task #545 expanded the GET /:code 404 body with a stable
+    // machine-readable `code` and the requested `action_code` so the
+    // dashboard's deep-link handler can render a friendly panel without
+    // string-matching the message.
+    expect(res.body).toEqual({
+      error: "Approval action not found",
+      code: "NOT_FOUND",
+      action_code: "missing",
+    });
   });
 });
 

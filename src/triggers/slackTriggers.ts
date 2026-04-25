@@ -47,6 +47,7 @@ import type { z } from "zod";
 
 import { registerApiRoute } from "../mastra/inngest";
 
+import { logger as safeLogger } from "../utils/logger";
 export type Methods = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "ALL";
 
 // TODO: Remove when Mastra exports this type.
@@ -133,19 +134,21 @@ export async function getClient() {
           if (connectionSettings?.settings?.access_token) {
             return {
               token: connectionSettings.settings.access_token,
-              user: connectionSettings.settings.oauth?.credentials?.raw?.authed_user
-                ?.id,
+              user: connectionSettings.settings.oauth?.credentials?.raw
+                ?.authed_user?.id,
             };
           }
         }
       } catch (connectorError) {
-        console.log("[Slack] Replit connector not available, checking SLACK_BOT_TOKEN env var...");
+        safeLogger.info(
+          "[Slack] Replit connector not available, checking SLACK_BOT_TOKEN env var...",
+        );
       }
     }
 
     const envToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
     if (envToken) {
-      console.log("[Slack] Using SLACK_BOT_TOKEN from environment");
+      safeLogger.info("[Slack] Using SLACK_BOT_TOKEN from environment");
       return { token: envToken, user: undefined };
     }
 
@@ -372,8 +375,10 @@ export function registerSlackTrigger<
           let id = 1;
           const mastra = c.get("mastra");
           const logger = mastra.getLogger() ?? {
-            info: console.log,
-            error: console.error,
+            info: (msg: string, ...args: unknown[]) =>
+              safeLogger.info(msg, ...(args as [])),
+            error: (msg: string, ...args: unknown[]) =>
+              safeLogger.error(msg, ...(args as [])),
           };
 
           let diagnosisStepAuth: DiagnosisStep = {

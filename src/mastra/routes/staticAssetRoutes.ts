@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
+import { logger } from "../../utils/logger";
 function resolveFile(relPaths: string[]): string | null {
   for (const p of relPaths) if (existsSync(p)) return p;
   return null;
@@ -15,12 +16,17 @@ function serveStaticText(filename: string, contentType: string) {
         `/home/runner/workspace/dashboard/${filename}`,
       ];
       const filePath = resolveFile(candidates);
-      if (!filePath) return c.text(`/* ${filename} not found */`, 404, { "Content-Type": contentType });
+      if (!filePath)
+        return c.text(`/* ${filename} not found */`, 404, {
+          "Content-Type": contentType,
+        });
       const content = readFileSync(filePath, "utf-8");
       return c.text(content, 200, { "Content-Type": contentType });
     } catch (error) {
-      console.error(`Error serving ${filename}:`, error);
-      return c.text(`/* Error loading ${filename} */`, 500, { "Content-Type": contentType });
+      logger.error(`Error serving ${filename}:`, error);
+      return c.text(`/* Error loading ${filename} */`, 500, {
+        "Content-Type": contentType,
+      });
     }
   };
 }
@@ -38,14 +44,19 @@ export const staticAssetRoutes = [
             "/home/runner/workspace/dashboard/tailwind.css",
           ];
           const filePath = resolveFile(candidates);
-          if (!filePath) return c.text("/* tailwind.css not found */", 404, { "Content-Type": "text/css" });
+          if (!filePath)
+            return c.text("/* tailwind.css not found */", 404, {
+              "Content-Type": "text/css",
+            });
           const css = readFileSync(filePath, "utf-8");
           c.header("Content-Type", "text/css; charset=utf-8");
           c.header("Cache-Control", "public, max-age=3600");
           return c.body(css);
         } catch (error) {
-          console.error("Error serving tailwind.css:", error);
-          return c.text("/* Error loading tailwind.css */", 500, { "Content-Type": "text/css" });
+          logger.error("Error serving tailwind.css:", error);
+          return c.text("/* Error loading tailwind.css */", 500, {
+            "Content-Type": "text/css",
+          });
         }
       };
     },
@@ -62,11 +73,18 @@ export const staticAssetRoutes = [
             "/home/runner/workspace/dashboard/css/navigation.css",
           ];
           const filePath = resolveFile(candidates);
-          if (!filePath) return c.text("/* navigation.css not found */", 404, { "Content-Type": "text/css" });
-          return c.text(readFileSync(filePath, "utf-8"), 200, { "Content-Type": "text/css" });
+          if (!filePath)
+            return c.text("/* navigation.css not found */", 404, {
+              "Content-Type": "text/css",
+            });
+          return c.text(readFileSync(filePath, "utf-8"), 200, {
+            "Content-Type": "text/css",
+          });
         } catch (error) {
-          console.error("Error serving navigation.css:", error);
-          return c.text("/* Error loading navigation.css */", 500, { "Content-Type": "text/css" });
+          logger.error("Error serving navigation.css:", error);
+          return c.text("/* Error loading navigation.css */", 500, {
+            "Content-Type": "text/css",
+          });
         }
       };
     },
@@ -74,17 +92,20 @@ export const staticAssetRoutes = [
   {
     path: "/js/navigation.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/navigation.js", "application/javascript"),
+    createHandler: async () =>
+      serveStaticText("js/navigation.js", "application/javascript"),
   },
   {
     path: "/js/safe-actions.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/safe-actions.js", "application/javascript"),
+    createHandler: async () =>
+      serveStaticText("js/safe-actions.js", "application/javascript"),
   },
   {
     path: "/js/ai-consultant-widget.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/ai-consultant-widget.js", "application/javascript"),
+    createHandler: async () =>
+      serveStaticText("js/ai-consultant-widget.js", "application/javascript"),
   },
   {
     path: "/css/utilities.css",
@@ -99,27 +120,35 @@ export const staticAssetRoutes = [
   {
     path: "/js/csp-styles.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/csp-styles.js", "application/javascript"),
+    createHandler: async () =>
+      serveStaticText("js/csp-styles.js", "application/javascript"),
   },
   {
     path: "/js/streaming-download.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/streaming-download.js", "application/javascript"),
+    createHandler: async () =>
+      serveStaticText("js/streaming-download.js", "application/javascript"),
   },
   {
     path: "/js/i18n.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/i18n.js", "application/javascript; charset=utf-8"),
+    createHandler: async () =>
+      serveStaticText("js/i18n.js", "application/javascript; charset=utf-8"),
   },
   {
     path: "/js/a11y.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/a11y.js", "application/javascript; charset=utf-8"),
+    createHandler: async () =>
+      serveStaticText("js/a11y.js", "application/javascript; charset=utf-8"),
   },
   {
     path: "/js/safe-render.js",
     method: "GET" as const,
-    createHandler: async () => serveStaticText("js/safe-render.js", "application/javascript; charset=utf-8"),
+    createHandler: async () =>
+      serveStaticText(
+        "js/safe-render.js",
+        "application/javascript; charset=utf-8",
+      ),
   },
   {
     path: "/dashboard/i18n/:lang",
@@ -127,9 +156,9 @@ export const staticAssetRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const raw = c.req.param('lang') || '';
+          const raw = c.req.param("lang") || "";
           if (!/^[a-zA-Z0-9_-]+\.json$/.test(raw)) {
-            return c.text('Invalid locale', 400);
+            return c.text("Invalid locale", 400);
           }
           const candidates = [
             join(process.cwd(), "dashboard", "i18n", raw),
@@ -137,14 +166,14 @@ export const staticAssetRoutes = [
             `/home/runner/workspace/dashboard/i18n/${raw}`,
           ];
           const filePath = resolveFile(candidates);
-          if (!filePath) return c.text('Locale not found', 404);
-          return c.body(readFileSync(filePath, 'utf-8'), 200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=300',
+          if (!filePath) return c.text("Locale not found", 404);
+          return c.body(readFileSync(filePath, "utf-8"), 200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "public, max-age=300",
           });
         } catch (error) {
-          console.error('Error serving locale json:', error);
-          return c.text('Error loading locale', 500);
+          logger.error("Error serving locale json:", error);
+          return c.text("Error loading locale", 500);
         }
       };
     },
@@ -179,7 +208,7 @@ export const staticAssetRoutes = [
           c.header("Cache-Control", "no-cache, max-age=0, must-revalidate");
           return c.body(content);
         } catch (error) {
-          console.error("Error serving streaming-download-sw.js:", error);
+          logger.error("Error serving streaming-download-sw.js:", error);
           return c.text("/* Error loading streaming-download-sw.js */", 500, {
             "Content-Type": "application/javascript",
           });

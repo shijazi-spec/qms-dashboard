@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger";
 export const feedbackApiRoutes = [
   {
     path: "/api/feedback",
@@ -8,7 +9,10 @@ export const feedbackApiRoutes = [
           const { submitFeedback } = await import("../../utils/database");
           const body = await c.req.json();
           if (!body.submitter_name || !body.dashboard || !body.rating) {
-            return c.json({ error: "Name, dashboard, and rating are required" }, 400);
+            return c.json(
+              { error: "Name, dashboard, and rating are required" },
+              400,
+            );
           }
           const feedback = await submitFeedback({
             submitter_name: body.submitter_name,
@@ -19,10 +23,12 @@ export const feedbackApiRoutes = [
             comments: body.comments,
             suggestions: body.suggestions,
           });
-          mastra?.getLogger()?.info("📝 [Feedback] New feedback submitted:", feedback);
+          mastra
+            ?.getLogger()
+            ?.info("📝 [Feedback] New feedback submitted:", feedback);
           return c.json({ success: true, feedback });
         } catch (error) {
-          console.error("Error submitting feedback:", error);
+          logger.error("Error submitting feedback:", error);
           return c.json({ error: "Failed to submit feedback" }, 500);
         }
       };
@@ -38,11 +44,18 @@ export const feedbackApiRoutes = [
           const dashboard = c.req.query("dashboard");
           const startDate = c.req.query("startDate");
           const endDate = c.req.query("endDate");
-          const feedback = await getAllFeedback({ dashboard, startDate, endDate });
+          const feedback = await getAllFeedback({
+            dashboard,
+            startDate,
+            endDate,
+          });
           return c.json({ feedback });
         } catch (error) {
-          console.error("Error fetching feedback:", error);
-          return c.json({ error: "Failed to fetch feedback", feedback: [] }, 500);
+          logger.error("Error fetching feedback:", error);
+          return c.json(
+            { error: "Failed to fetch feedback", feedback: [] },
+            500,
+          );
         }
       };
     },
@@ -57,7 +70,7 @@ export const feedbackApiRoutes = [
           const stats = await getFeedbackStats();
           return c.json(stats);
         } catch (error) {
-          console.error("Error fetching feedback stats:", error);
+          logger.error("Error fetching feedback stats:", error);
           return c.json({ error: "Failed to fetch feedback stats" }, 500);
         }
       };

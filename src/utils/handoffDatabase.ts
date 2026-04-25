@@ -1,4 +1,5 @@
-import { createRedactedPool } from './redactedPool';
+import { createRedactedPool } from "./redactedPool";
+import { logger } from "./logger";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -9,13 +10,18 @@ export interface HandoffRule {
   rule_code: string;
   name: string;
   description?: string;
-  source_module: 'qms' | 'calls' | 'team' | 'sandbox';
-  target_module: 'risks' | 'compliance' | 'audits' | 'vendors';
-  trigger_type: 'threshold' | 'pattern' | 'manual' | 'scheduled';
+  source_module: "qms" | "calls" | "team" | "sandbox";
+  target_module: "risks" | "compliance" | "audits" | "vendors";
+  trigger_type: "threshold" | "pattern" | "manual" | "scheduled";
   trigger_condition: string;
-  action_type: 'create_risk' | 'create_finding' | 'create_obligation' | 'notify' | 'escalate';
+  action_type:
+    | "create_risk"
+    | "create_finding"
+    | "create_obligation"
+    | "notify"
+    | "escalate";
   action_config?: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
+  priority: "critical" | "high" | "medium" | "low";
   is_active: boolean;
   last_triggered?: Date;
   trigger_count?: number;
@@ -32,7 +38,7 @@ export interface HandoffEvent {
   target_module: string;
   action_type: string;
   target_record_id?: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "completed" | "failed";
   details?: string;
   error_message?: string;
   processed_by?: string;
@@ -44,7 +50,7 @@ export interface ControlMapping {
   id?: number;
   control_id: string;
   control_name: string;
-  control_type: 'preventive' | 'detective' | 'corrective';
+  control_type: "preventive" | "detective" | "corrective";
   source_domain: string;
   linked_risks?: number[];
   linked_policies?: number[];
@@ -60,8 +66,8 @@ export interface ControlMapping {
 }
 
 export async function initHandoffTables(): Promise<void> {
-  console.log('📋 [HandoffDB] Initializing handoff tables...');
-  
+  logger.info("📋 [HandoffDB] Initializing handoff tables...");
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS handoff_rules (
       id SERIAL PRIMARY KEY,
@@ -125,122 +131,218 @@ export async function initHandoffTables(): Promise<void> {
 
   await seedHandoffRules();
   await seedControlMappings();
-  console.log('✅ [HandoffDB] Handoff tables initialized');
+  logger.info("✅ [HandoffDB] Handoff tables initialized");
 }
 
 async function seedHandoffRules(): Promise<void> {
-  const existing = await pool.query('SELECT COUNT(*) FROM handoff_rules');
+  const existing = await pool.query("SELECT COUNT(*) FROM handoff_rules");
   if (parseInt(existing.rows[0].count) > 0) return;
 
-  console.log('📝 [HandoffDB] Seeding handoff rules...');
-  
+  logger.info("📝 [HandoffDB] Seeding handoff rules...");
+
   const rules = [
     {
-      rule_code: 'QMS-RISK-001',
-      name: 'Critical CAPA to Risk Register',
-      description: 'Automatically create risk when CAPA is marked as critical',
-      source_module: 'qms',
-      target_module: 'risks',
-      trigger_type: 'threshold',
-      trigger_condition: JSON.stringify({ field: 'priority', operator: 'equals', value: 'critical' }),
-      action_type: 'create_risk',
-      action_config: JSON.stringify({ category: 'operational', likelihood: 4, impact: 4 }),
-      priority: 'critical'
+      rule_code: "QMS-RISK-001",
+      name: "Critical CAPA to Risk Register",
+      description: "Automatically create risk when CAPA is marked as critical",
+      source_module: "qms",
+      target_module: "risks",
+      trigger_type: "threshold",
+      trigger_condition: JSON.stringify({
+        field: "priority",
+        operator: "equals",
+        value: "critical",
+      }),
+      action_type: "create_risk",
+      action_config: JSON.stringify({
+        category: "operational",
+        likelihood: 4,
+        impact: 4,
+      }),
+      priority: "critical",
     },
     {
-      rule_code: 'CALL-COMP-001',
-      name: 'Low Sentiment Score Alert',
-      description: 'Flag compliance review when call sentiment is below threshold',
-      source_module: 'calls',
-      target_module: 'compliance',
-      trigger_type: 'threshold',
-      trigger_condition: JSON.stringify({ field: 'sentiment_score', operator: 'less_than', value: 0.3 }),
-      action_type: 'notify',
-      priority: 'high'
+      rule_code: "CALL-COMP-001",
+      name: "Low Sentiment Score Alert",
+      description:
+        "Flag compliance review when call sentiment is below threshold",
+      source_module: "calls",
+      target_module: "compliance",
+      trigger_type: "threshold",
+      trigger_condition: JSON.stringify({
+        field: "sentiment_score",
+        operator: "less_than",
+        value: 0.3,
+      }),
+      action_type: "notify",
+      priority: "high",
     },
     {
-      rule_code: 'QMS-AUD-001',
-      name: 'Nonconformance to Audit Finding',
-      description: 'Create audit finding from recurring nonconformances',
-      source_module: 'qms',
-      target_module: 'audits',
-      trigger_type: 'pattern',
-      trigger_condition: JSON.stringify({ pattern: 'recurring', min_occurrences: 3, timeframe_days: 90 }),
-      action_type: 'create_finding',
-      priority: 'medium'
+      rule_code: "QMS-AUD-001",
+      name: "Nonconformance to Audit Finding",
+      description: "Create audit finding from recurring nonconformances",
+      source_module: "qms",
+      target_module: "audits",
+      trigger_type: "pattern",
+      trigger_condition: JSON.stringify({
+        pattern: "recurring",
+        min_occurrences: 3,
+        timeframe_days: 90,
+      }),
+      action_type: "create_finding",
+      priority: "medium",
     },
     {
-      rule_code: 'TEAM-COMP-001',
-      name: 'Training Expiry Compliance',
-      description: 'Create compliance obligation when certifications expire',
-      source_module: 'team',
-      target_module: 'compliance',
-      trigger_type: 'scheduled',
-      trigger_condition: JSON.stringify({ check: 'certification_expiry', days_before: 30 }),
-      action_type: 'create_obligation',
-      priority: 'medium'
-    }
+      rule_code: "TEAM-COMP-001",
+      name: "Training Expiry Compliance",
+      description: "Create compliance obligation when certifications expire",
+      source_module: "team",
+      target_module: "compliance",
+      trigger_type: "scheduled",
+      trigger_condition: JSON.stringify({
+        check: "certification_expiry",
+        days_before: 30,
+      }),
+      action_type: "create_obligation",
+      priority: "medium",
+    },
   ];
 
   for (const rule of rules) {
     await pool.query(
       `INSERT INTO handoff_rules (rule_code, name, description, source_module, target_module, trigger_type, trigger_condition, action_type, action_config, priority)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [rule.rule_code, rule.name, rule.description, rule.source_module, rule.target_module,
-       rule.trigger_type, rule.trigger_condition, rule.action_type, rule.action_config || null, rule.priority]
+      [
+        rule.rule_code,
+        rule.name,
+        rule.description,
+        rule.source_module,
+        rule.target_module,
+        rule.trigger_type,
+        rule.trigger_condition,
+        rule.action_type,
+        rule.action_config || null,
+        rule.priority,
+      ],
     );
   }
 }
 
 async function seedControlMappings(): Promise<void> {
-  const existing = await pool.query('SELECT COUNT(*) FROM control_mappings');
+  const existing = await pool.query("SELECT COUNT(*) FROM control_mappings");
   if (parseInt(existing.rows[0].count) > 0) return;
 
-  console.log('📝 [HandoffDB] Seeding control mappings...');
-  
+  logger.info("📝 [HandoffDB] Seeding control mappings...");
+
   const controls = [
-    { control_id: 'CTRL-001', control_name: 'Access Control Policy', control_type: 'preventive', source_domain: 'Information Security', test_frequency: 'quarterly' },
-    { control_id: 'CTRL-002', control_name: 'Change Management Review', control_type: 'detective', source_domain: 'IT Operations', test_frequency: 'monthly' },
-    { control_id: 'CTRL-003', control_name: 'Incident Response Procedure', control_type: 'corrective', source_domain: 'Security Operations', test_frequency: 'semi-annual' },
-    { control_id: 'CTRL-004', control_name: 'Vendor Due Diligence', control_type: 'preventive', source_domain: 'Third Party Risk', test_frequency: 'annual' },
-    { control_id: 'CTRL-005', control_name: 'Data Classification Standard', control_type: 'preventive', source_domain: 'Data Governance', test_frequency: 'annual' },
-    { control_id: 'CTRL-006', control_name: 'Quality Audit Review', control_type: 'detective', source_domain: 'Quality Management', test_frequency: 'quarterly' }
+    {
+      control_id: "CTRL-001",
+      control_name: "Access Control Policy",
+      control_type: "preventive",
+      source_domain: "Information Security",
+      test_frequency: "quarterly",
+    },
+    {
+      control_id: "CTRL-002",
+      control_name: "Change Management Review",
+      control_type: "detective",
+      source_domain: "IT Operations",
+      test_frequency: "monthly",
+    },
+    {
+      control_id: "CTRL-003",
+      control_name: "Incident Response Procedure",
+      control_type: "corrective",
+      source_domain: "Security Operations",
+      test_frequency: "semi-annual",
+    },
+    {
+      control_id: "CTRL-004",
+      control_name: "Vendor Due Diligence",
+      control_type: "preventive",
+      source_domain: "Third Party Risk",
+      test_frequency: "annual",
+    },
+    {
+      control_id: "CTRL-005",
+      control_name: "Data Classification Standard",
+      control_type: "preventive",
+      source_domain: "Data Governance",
+      test_frequency: "annual",
+    },
+    {
+      control_id: "CTRL-006",
+      control_name: "Quality Audit Review",
+      control_type: "detective",
+      source_domain: "Quality Management",
+      test_frequency: "quarterly",
+    },
   ];
 
   for (const control of controls) {
     await pool.query(
       `INSERT INTO control_mappings (control_id, control_name, control_type, source_domain, test_frequency)
        VALUES ($1, $2, $3, $4, $5)`,
-      [control.control_id, control.control_name, control.control_type, control.source_domain, control.test_frequency]
+      [
+        control.control_id,
+        control.control_name,
+        control.control_type,
+        control.source_domain,
+        control.test_frequency,
+      ],
     );
   }
 }
 
-export async function createHandoffRule(rule: HandoffRule): Promise<HandoffRule> {
-  console.log('📝 [HandoffDB] Creating handoff rule:', rule.name);
-  
-  const result = await pool.query(`
+export async function createHandoffRule(
+  rule: HandoffRule,
+): Promise<HandoffRule> {
+  logger.info("📝 [HandoffDB] Creating handoff rule:", rule.name);
+
+  const result = await pool.query(
+    `
     INSERT INTO handoff_rules (
       rule_code, name, description, source_module, target_module,
       trigger_type, trigger_condition, action_type, action_config,
       priority, is_active, created_by
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING *
-  `, [
-    rule.rule_code, rule.name, rule.description, rule.source_module, rule.target_module,
-    rule.trigger_type, rule.trigger_condition, rule.action_type, rule.action_config,
-    rule.priority || 'medium', rule.is_active !== false, rule.created_by
-  ]);
+  `,
+    [
+      rule.rule_code,
+      rule.name,
+      rule.description,
+      rule.source_module,
+      rule.target_module,
+      rule.trigger_type,
+      rule.trigger_condition,
+      rule.action_type,
+      rule.action_config,
+      rule.priority || "medium",
+      rule.is_active !== false,
+      rule.created_by,
+    ],
+  );
 
   return result.rows[0];
 }
 
-export async function updateHandoffRule(id: number, updates: Partial<HandoffRule>): Promise<HandoffRule> {
+export async function updateHandoffRule(
+  id: number,
+  updates: Partial<HandoffRule>,
+): Promise<HandoffRule> {
   const setClause: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
 
-  const allowedFields = ['name', 'description', 'trigger_condition', 'action_config', 'priority', 'is_active'];
+  const allowedFields = [
+    "name",
+    "description",
+    "trigger_condition",
+    "action_config",
+    "priority",
+    "is_active",
+  ];
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
@@ -250,15 +352,21 @@ export async function updateHandoffRule(id: number, updates: Partial<HandoffRule
     }
   }
 
-  setClause.push('updated_at = NOW()');
+  setClause.push("updated_at = NOW()");
   values.push(id);
 
-  const result = await pool.query(`UPDATE handoff_rules SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+  const result = await pool.query(
+    `UPDATE handoff_rules SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    values,
+  );
   return result.rows[0];
 }
 
-export async function getAllHandoffRules(filters?: { source_module?: string; is_active?: boolean }): Promise<{ rules: HandoffRule[]; total: number }> {
-  let query = 'SELECT * FROM handoff_rules WHERE 1=1';
+export async function getAllHandoffRules(filters?: {
+  source_module?: string;
+  is_active?: boolean;
+}): Promise<{ rules: HandoffRule[]; total: number }> {
+  let query = "SELECT * FROM handoff_rules WHERE 1=1";
   const values: any[] = [];
   let paramCount = 1;
 
@@ -273,38 +381,55 @@ export async function getAllHandoffRules(filters?: { source_module?: string; is_
     paramCount++;
   }
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM handoff_rules WHERE 1=1` + query.replace('SELECT * FROM handoff_rules WHERE 1=1', ''), values);
-  
-  query += ' ORDER BY priority DESC, created_at DESC';
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM handoff_rules WHERE 1=1` +
+      query.replace("SELECT * FROM handoff_rules WHERE 1=1", ""),
+    values,
+  );
+
+  query += " ORDER BY priority DESC, created_at DESC";
   const result = await pool.query(query, values);
-  
+
   return { rules: result.rows, total: parseInt(countResult.rows[0].count) };
 }
 
-export async function createHandoffEvent(event: HandoffEvent): Promise<HandoffEvent> {
-  console.log('📝 [HandoffDB] Creating handoff event');
-  
-  const result = await pool.query(`
+export async function createHandoffEvent(
+  event: HandoffEvent,
+): Promise<HandoffEvent> {
+  logger.info("📝 [HandoffDB] Creating handoff event");
+
+  const result = await pool.query(
+    `
     INSERT INTO handoff_events (
       rule_id, source_record_id, source_module, target_module, action_type, status, details
     ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *
-  `, [
-    event.rule_id, event.source_record_id, event.source_module,
-    event.target_module, event.action_type, event.status || 'pending',
-    event.details ? JSON.stringify(event.details) : null
-  ]);
+  `,
+    [
+      event.rule_id,
+      event.source_record_id,
+      event.source_module,
+      event.target_module,
+      event.action_type,
+      event.status || "pending",
+      event.details ? JSON.stringify(event.details) : null,
+    ],
+  );
 
   await pool.query(
-    'UPDATE handoff_rules SET last_triggered = NOW(), trigger_count = COALESCE(trigger_count, 0) + 1 WHERE id = $1',
-    [event.rule_id]
+    "UPDATE handoff_rules SET last_triggered = NOW(), trigger_count = COALESCE(trigger_count, 0) + 1 WHERE id = $1",
+    [event.rule_id],
   );
 
   return result.rows[0];
 }
 
-export async function getHandoffEvents(filters?: { status?: string; source_module?: string }): Promise<{ events: HandoffEvent[]; total: number }> {
-  let query = 'SELECT e.*, r.name as rule_name, r.rule_code FROM handoff_events e LEFT JOIN handoff_rules r ON e.rule_id = r.id WHERE 1=1';
+export async function getHandoffEvents(filters?: {
+  status?: string;
+  source_module?: string;
+}): Promise<{ events: HandoffEvent[]; total: number }> {
+  let query =
+    "SELECT e.*, r.name as rule_name, r.rule_code FROM handoff_events e LEFT JOIN handoff_rules r ON e.rule_id = r.id WHERE 1=1";
   const values: any[] = [];
   let paramCount = 1;
 
@@ -319,25 +444,50 @@ export async function getHandoffEvents(filters?: { status?: string; source_modul
     paramCount++;
   }
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM handoff_events e WHERE 1=1` + query.replace(/SELECT e\.\*, r\.name as rule_name, r\.rule_code FROM handoff_events e LEFT JOIN handoff_rules r ON e\.rule_id = r\.id WHERE 1=1/, ''), values);
-  
-  query += ' ORDER BY e.created_at DESC LIMIT 100';
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM handoff_events e WHERE 1=1` +
+      query.replace(
+        /SELECT e\.\*, r\.name as rule_name, r\.rule_code FROM handoff_events e LEFT JOIN handoff_rules r ON e\.rule_id = r\.id WHERE 1=1/,
+        "",
+      ),
+    values,
+  );
+
+  query += " ORDER BY e.created_at DESC LIMIT 100";
   const result = await pool.query(query, values);
-  
+
   return { events: result.rows, total: parseInt(countResult.rows[0].count) };
 }
 
 export async function getAllControlMappings(): Promise<ControlMapping[]> {
-  const result = await pool.query('SELECT * FROM control_mappings WHERE is_active = true ORDER BY control_id');
+  const result = await pool.query(
+    "SELECT * FROM control_mappings WHERE is_active = true ORDER BY control_id",
+  );
   return result.rows;
 }
 
-export async function updateControlMapping(id: number, updates: Partial<ControlMapping>): Promise<ControlMapping> {
+export async function updateControlMapping(
+  id: number,
+  updates: Partial<ControlMapping>,
+): Promise<ControlMapping> {
   const setClause: string[] = [];
   const values: any[] = [];
   let paramCount = 1;
 
-  const allowedFields = ['control_name', 'control_type', 'source_domain', 'linked_risks', 'linked_policies', 'linked_compliance', 'linked_audits', 'effectiveness_score', 'last_tested', 'test_frequency', 'owner_name', 'is_active'];
+  const allowedFields = [
+    "control_name",
+    "control_type",
+    "source_domain",
+    "linked_risks",
+    "linked_policies",
+    "linked_compliance",
+    "linked_audits",
+    "effectiveness_score",
+    "last_tested",
+    "test_frequency",
+    "owner_name",
+    "is_active",
+  ];
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedFields.includes(key) && value !== undefined) {
@@ -347,15 +497,18 @@ export async function updateControlMapping(id: number, updates: Partial<ControlM
     }
   }
 
-  setClause.push('updated_at = NOW()');
+  setClause.push("updated_at = NOW()");
   values.push(id);
 
-  const result = await pool.query(`UPDATE control_mappings SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+  const result = await pool.query(
+    `UPDATE control_mappings SET ${setClause.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    values,
+  );
   return result.rows[0];
 }
 
 export async function getHandoffSummary(): Promise<any> {
-  console.log('📊 [HandoffDB] Generating handoff summary...');
+  logger.info("📊 [HandoffDB] Generating handoff summary...");
 
   const ruleStats = await pool.query(`
     SELECT 
@@ -413,6 +566,6 @@ export async function getHandoffSummary(): Promise<any> {
     by_source_module: bySourceModule.rows,
     by_target_module: byTargetModule.rows,
     recent_events: recentEvents.rows,
-    controls: controlStats.rows[0]
+    controls: controlStats.rows[0],
   };
 }

@@ -1,5 +1,9 @@
-import { requireAdminOrKey, unauthorizedResponse } from '../../utils/rbacMiddleware';
+import {
+  requireAdminOrKey,
+  unauthorizedResponse,
+} from "../../utils/rbacMiddleware";
 
+import { logger as safeLogger } from "../../utils/logger";
 export const pdplRoutes = [
   {
     path: "/api/pdpl/status",
@@ -13,16 +17,23 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching compliance status");
 
-          const { initPdplTables, getPdplComplianceStatus } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getPdplComplianceStatus } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const status = await getPdplComplianceStatus();
-          logger?.info("🔒 [PDPL API] Compliance score:", status.complianceScore);
-          
+          logger?.info(
+            "🔒 [PDPL API] Compliance score:",
+            status.complianceScore,
+          );
+
           return c.json({ success: true, ...status });
         } catch (error: any) {
-          console.error("Error fetching PDPL status:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching PDPL status:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -39,17 +50,21 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching data inventory");
 
-          const { initPdplTables, getDataInventory } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getDataInventory } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const module = c.req.query("module");
           const category = c.req.query("category");
-          
+
           const inventory = await getDataInventory({ module, category });
           return c.json({ success: true, inventory, count: inventory.length });
         } catch (error: any) {
-          console.error("Error fetching data inventory:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching data inventory:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -65,21 +80,36 @@ export const pdplRoutes = [
 
           const logger = mastra?.getLogger();
           const body = await c.req.json();
-          logger?.info("🔒 [PDPL API] Adding data inventory item:", body.field_name);
+          logger?.info(
+            "🔒 [PDPL API] Adding data inventory item:",
+            body.field_name,
+          );
 
-          const { initPdplTables, addDataInventoryItem } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, addDataInventoryItem } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const item = await addDataInventoryItem(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'CREATE', entityType: 'DATA_INVENTORY', entityId: String(item.id), entityName: body.field_name, description: `Data inventory item added: ${body.field_name}`, module: 'pdpl', severity: 'INFO' });
+            await logEvent({
+              actionType: "CREATE",
+              entityType: "DATA_INVENTORY",
+              entityId: String(item.id),
+              entityName: body.field_name,
+              description: `Data inventory item added: ${body.field_name}`,
+              module: "pdpl",
+              severity: "INFO",
+            });
           } catch {}
           return c.json({ success: true, item });
         } catch (error: any) {
-          console.error("Error adding data inventory item:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error adding data inventory item:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -98,23 +128,35 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Updating data inventory item:", id);
 
-          const { initPdplTables, updateDataInventoryItem } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, updateDataInventoryItem } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const item = await updateDataInventoryItem(id, body, userEmail);
-          
+
           if (!item) {
             return c.json({ success: false, error: "Item not found" }, 404);
           }
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'UPDATE', entityType: 'DATA_INVENTORY', entityId: String(id), entityName: body.field_name || `Item ${id}`, description: `Data inventory item updated: ${id}`, module: 'pdpl', severity: 'INFO' });
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "DATA_INVENTORY",
+              entityId: String(id),
+              entityName: body.field_name || `Item ${id}`,
+              description: `Data inventory item updated: ${id}`,
+              module: "pdpl",
+              severity: "INFO",
+            });
           } catch {}
           return c.json({ success: true, item });
         } catch (error: any) {
-          console.error("Error updating data inventory item:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error updating data inventory item:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -131,17 +173,21 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching DSAR requests");
 
-          const { initPdplTables, getDSARRequests } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getDSARRequests } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const status = c.req.query("status");
           const type = c.req.query("type");
-          
+
           const requests = await getDSARRequests({ status, type });
           return c.json({ success: true, requests, count: requests.length });
         } catch (error: any) {
-          console.error("Error fetching DSAR requests:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching DSAR requests:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -157,21 +203,36 @@ export const pdplRoutes = [
 
           const logger = mastra?.getLogger();
           const body = await c.req.json();
-          logger?.info("🔒 [PDPL API] Creating DSAR request:", body.request_type);
+          logger?.info(
+            "🔒 [PDPL API] Creating DSAR request:",
+            body.request_type,
+          );
 
-          const { initPdplTables, createDSARRequest } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, createDSARRequest } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const request = await createDSARRequest(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'CREATE', entityType: 'DSAR', entityId: String(request.id), entityName: body.request_type, description: `DSAR request created: ${body.request_type}`, module: 'pdpl', severity: 'INFO' });
+            await logEvent({
+              actionType: "CREATE",
+              entityType: "DSAR",
+              entityId: String(request.id),
+              entityName: body.request_type,
+              description: `DSAR request created: ${body.request_type}`,
+              module: "pdpl",
+              severity: "INFO",
+            });
           } catch {}
           return c.json({ success: true, request });
         } catch (error: any) {
-          console.error("Error creating DSAR request:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error creating DSAR request:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -190,23 +251,35 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Updating DSAR request:", id);
 
-          const { initPdplTables, updateDSARRequest } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, updateDSARRequest } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const request = await updateDSARRequest(id, body, userEmail);
-          
+
           if (!request) {
             return c.json({ success: false, error: "Request not found" }, 404);
           }
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'UPDATE', entityType: 'DSAR', entityId: String(id), entityName: `DSAR ${id}`, description: `DSAR request updated: ${id}`, module: 'pdpl', severity: 'INFO' });
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "DSAR",
+              entityId: String(id),
+              entityName: `DSAR ${id}`,
+              description: `DSAR request updated: ${id}`,
+              module: "pdpl",
+              severity: "INFO",
+            });
           } catch {}
           return c.json({ success: true, request });
         } catch (error: any) {
-          console.error("Error updating DSAR request:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error updating DSAR request:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -223,14 +296,18 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching retention policies");
 
-          const { initPdplTables, getRetentionPolicies } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getRetentionPolicies } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const policies = await getRetentionPolicies();
           return c.json({ success: true, policies, count: policies.length });
         } catch (error: any) {
-          console.error("Error fetching retention policies:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching retention policies:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -249,19 +326,23 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Updating retention policy:", id);
 
-          const { initPdplTables, updateRetentionPolicy } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, updateRetentionPolicy } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const policy = await updateRetentionPolicy(id, body, userEmail);
-          
+
           if (!policy) {
             return c.json({ success: false, error: "Policy not found" }, 404);
           }
           return c.json({ success: true, policy });
         } catch (error: any) {
-          console.error("Error updating retention policy:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error updating retention policy:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -278,17 +359,21 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching data incidents");
 
-          const { initPdplTables, getDataIncidents } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getDataIncidents } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const status = c.req.query("status");
           const severity = c.req.query("severity");
-          
+
           const incidents = await getDataIncidents({ status, severity });
           return c.json({ success: true, incidents, count: incidents.length });
         } catch (error: any) {
-          console.error("Error fetching data incidents:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching data incidents:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -306,19 +391,31 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Creating data incident:", body.title);
 
-          const { initPdplTables, createDataIncident } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, createDataIncident } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const incident = await createDataIncident(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'CREATE', entityType: 'DATA_INCIDENT', entityId: String(incident.id), entityName: body.title, description: `Data incident created: ${body.title}`, module: 'pdpl', severity: 'WARNING' });
+            await logEvent({
+              actionType: "CREATE",
+              entityType: "DATA_INCIDENT",
+              entityId: String(incident.id),
+              entityName: body.title,
+              description: `Data incident created: ${body.title}`,
+              module: "pdpl",
+              severity: "WARNING",
+            });
           } catch {}
           return c.json({ success: true, incident });
         } catch (error: any) {
-          console.error("Error creating data incident:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error creating data incident:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -337,23 +434,35 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Updating data incident:", id);
 
-          const { initPdplTables, updateDataIncident } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, updateDataIncident } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const incident = await updateDataIncident(id, body, userEmail);
-          
+
           if (!incident) {
             return c.json({ success: false, error: "Incident not found" }, 404);
           }
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'UPDATE', entityType: 'DATA_INCIDENT', entityId: String(id), entityName: `Incident ${id}`, description: `Data incident updated: ${id}`, module: 'pdpl', severity: 'INFO' });
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "DATA_INCIDENT",
+              entityId: String(id),
+              entityName: `Incident ${id}`,
+              description: `Data incident updated: ${id}`,
+              module: "pdpl",
+              severity: "INFO",
+            });
           } catch {}
           return c.json({ success: true, incident });
         } catch (error: any) {
-          console.error("Error updating data incident:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error updating data incident:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -370,14 +479,22 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching AI guardrails");
 
-          const { initPdplTables, getAIGuardrails } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getAIGuardrails } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const guardrails = await getAIGuardrails();
-          return c.json({ success: true, guardrails, count: guardrails.length });
+          return c.json({
+            success: true,
+            guardrails,
+            count: guardrails.length,
+          });
         } catch (error: any) {
-          console.error("Error fetching AI guardrails:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching AI guardrails:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -395,19 +512,31 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Adding AI guardrail:", body.field_name);
 
-          const { initPdplTables, addAIGuardrail } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, addAIGuardrail } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
-          const userEmail = body.userEmail || 'system@walaplus.com';
+          const userEmail = body.userEmail || "system@walaplus.com";
           const guardrail = await addAIGuardrail(body, userEmail);
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
-            await logEvent({ actionType: 'CREATE', entityType: 'AI_GUARDRAIL', entityId: String(guardrail.id), entityName: body.field_name, description: `AI guardrail added: ${body.field_name}`, module: 'pdpl', severity: 'INFO' });
+            await logEvent({
+              actionType: "CREATE",
+              entityType: "AI_GUARDRAIL",
+              entityId: String(guardrail.id),
+              entityName: body.field_name,
+              description: `AI guardrail added: ${body.field_name}`,
+              module: "pdpl",
+              severity: "INFO",
+            });
           } catch {}
           return c.json({ success: true, guardrail });
         } catch (error: any) {
-          console.error("Error adding AI guardrail:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error adding AI guardrail:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -425,17 +554,21 @@ export const pdplRoutes = [
           const body = await c.req.json();
           logger?.info("🔒 [PDPL API] Masking PII for AI");
 
-          const { initPdplTables, getAIGuardrails, maskPIIForAI } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getAIGuardrails, maskPIIForAI } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const guardrails = await getAIGuardrails();
-          const result = maskPIIForAI(body.text || '', guardrails);
-          
+          const result = maskPIIForAI(body.text || "", guardrails);
+
           logger?.info(`🔒 [PDPL API] Masked ${result.maskedCount} PII items`);
           return c.json({ success: true, ...result });
         } catch (error: any) {
-          console.error("Error masking PII:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error masking PII:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },
@@ -452,15 +585,19 @@ export const pdplRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("🔒 [PDPL API] Fetching PDPL audit log");
 
-          const { initPdplTables, getPdplAuditLog } = await import("../../utils/pdplDatabase");
+          const { initPdplTables, getPdplAuditLog } =
+            await import("../../utils/pdplDatabase");
           await initPdplTables();
 
           const limit = parseInt(c.req.query("limit") || "100");
           const logs = await getPdplAuditLog(limit);
           return c.json({ success: true, logs, count: logs.length });
         } catch (error: any) {
-          console.error("Error fetching PDPL audit log:", error);
-          return c.json({ success: false, error: 'An internal error occurred' }, 500);
+          safeLogger.error("Error fetching PDPL audit log:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
         }
       };
     },

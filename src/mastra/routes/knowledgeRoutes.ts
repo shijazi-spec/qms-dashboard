@@ -1,9 +1,20 @@
 import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 
-const KNOWLEDGE_READ_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality', 'quality_manager'];
-const KNOWLEDGE_WRITE_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager'];
-const KNOWLEDGE_DELETE_ROLES: UserRole[] = ['admin', 'grc_manager'];
+import { logger } from "../../utils/logger";
+const KNOWLEDGE_READ_ROLES: UserRole[] = [
+  "admin",
+  "ai_specialist",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+];
+const KNOWLEDGE_WRITE_ROLES: UserRole[] = [
+  "admin",
+  "ai_specialist",
+  "grc_manager",
+];
+const KNOWLEDGE_DELETE_ROLES: UserRole[] = ["admin", "grc_manager"];
 
 export const knowledgeRoutes = [
   {
@@ -15,10 +26,14 @@ export const knowledgeRoutes = [
           const user = await requireRole(c, KNOWLEDGE_READ_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
-          const { getDocuments, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
+          const { getDocuments, initKnowledgeTables } =
+            await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const documentType = c.req.query("type");
-          const docs = await getDocuments({ document_type: documentType, is_active: true });
+          const docs = await getDocuments({
+            document_type: documentType,
+            is_active: true,
+          });
           return c.json({ success: true, documents: docs });
         } catch (error) {
           return c.json({ error: "Failed to fetch documents" }, 500);
@@ -35,7 +50,8 @@ export const knowledgeRoutes = [
           const user = await requireRole(c, KNOWLEDGE_WRITE_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
-          const { ingestDocument, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
+          const { ingestDocument, initKnowledgeTables } =
+            await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const body = await c.req.json();
 
@@ -43,27 +59,30 @@ export const knowledgeRoutes = [
             return c.json({ error: "title and content are required" }, 400);
           }
 
-          const result = await ingestDocument({
-            title: body.title,
-            description: body.description,
-            document_type: body.documentType || 'other',
-            source: body.source,
-            file_type: body.fileType || 'text',
-            file_size: body.content.length,
-            uploaded_by: user.email,
-            tags: body.tags || [],
-          }, body.content);
+          const result = await ingestDocument(
+            {
+              title: body.title,
+              description: body.description,
+              document_type: body.documentType || "other",
+              source: body.source,
+              file_type: body.fileType || "text",
+              file_size: body.content.length,
+              uploaded_by: user.email,
+              tags: body.tags || [],
+            },
+            body.content,
+          );
 
           try {
             const { logEvent } = await import("../../utils/eventLogsDatabase");
             await logEvent({
-              actionType: 'CREATE',
-              entityType: 'DOCUMENT',
+              actionType: "CREATE",
+              entityType: "DOCUMENT",
               entityId: String(result.document.id),
               entityName: body.title,
               description: `Knowledge base document uploaded: ${body.title} (${result.chunkCount} chunks)`,
-              module: 'knowledge',
-              severity: 'INFO',
+              module: "knowledge",
+              severity: "INFO",
             });
           } catch {}
 
@@ -74,7 +93,7 @@ export const knowledgeRoutes = [
             message: `Document "${body.title}" ingested with ${result.chunkCount} searchable chunks`,
           });
         } catch (error) {
-          console.error("[Knowledge] Upload error:", error);
+          logger.error("[Knowledge] Upload error:", error);
           return c.json({ error: "Failed to upload document" }, 500);
         }
       };
@@ -89,19 +108,26 @@ export const knowledgeRoutes = [
           const user = await requireRole(c, KNOWLEDGE_READ_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
-          const { searchKnowledge, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
+          const { searchKnowledge, initKnowledgeTables } =
+            await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const query = c.req.query("q");
           if (!query) return c.json({ error: "q parameter is required" }, 400);
           const documentType = c.req.query("type");
-          const documentId = c.req.query("documentId") ? parseInt(c.req.query("documentId")) : undefined;
+          const documentId = c.req.query("documentId")
+            ? parseInt(c.req.query("documentId"))
+            : undefined;
           const limit = parseInt(c.req.query("limit") || "10");
 
-          const results = await searchKnowledge(query, { documentType, documentId, limit });
+          const results = await searchKnowledge(query, {
+            documentType,
+            documentId,
+            limit,
+          });
           return c.json({
             success: true,
             query,
-            results: results.map(r => ({
+            results: results.map((r) => ({
               documentTitle: r.document_title,
               section: r.chunk.section_title,
               content: r.chunk.content,
@@ -126,7 +152,8 @@ export const knowledgeRoutes = [
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { deleteDocument, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
+          const { deleteDocument, initKnowledgeTables } =
+            await import("../../utils/knowledgeDatabase");
           await initKnowledgeTables();
           const deleted = await deleteDocument(id);
           if (!deleted) return c.json({ error: "Document not found" }, 404);
@@ -143,7 +170,8 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getChecklists, initChecklistTables } = await import("../../utils/checklistDatabase");
+          const { getChecklists, initChecklistTables } =
+            await import("../../utils/checklistDatabase");
           await initChecklistTables();
           const standard = c.req.query("standard");
           const checklists = await getChecklists({ standard, is_active: true });
@@ -162,7 +190,8 @@ export const knowledgeRoutes = [
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { getChecklistById, initChecklistTables } = await import("../../utils/checklistDatabase");
+          const { getChecklistById, initChecklistTables } =
+            await import("../../utils/checklistDatabase");
           await initChecklistTables();
           const data = await getChecklistById(id);
           if (!data) return c.json({ error: "Checklist not found" }, 404);
@@ -181,7 +210,8 @@ export const knowledgeRoutes = [
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { runChecklist, initChecklistTables } = await import("../../utils/checklistDatabase");
+          const { runChecklist, initChecklistTables } =
+            await import("../../utils/checklistDatabase");
           await initChecklistTables();
           const run = await runChecklist(id, "api");
           return c.json({ success: true, run });
@@ -199,7 +229,8 @@ export const knowledgeRoutes = [
         try {
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { getChecklistRuns, initChecklistTables } = await import("../../utils/checklistDatabase");
+          const { getChecklistRuns, initChecklistTables } =
+            await import("../../utils/checklistDatabase");
           await initChecklistTables();
           const runs = await getChecklistRuns(id);
           return c.json({ success: true, runs });

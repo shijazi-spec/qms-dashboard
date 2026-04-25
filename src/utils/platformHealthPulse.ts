@@ -15,6 +15,7 @@
  */
 
 import pg from "pg";
+import { logger } from "./logger";
 const { Pool } = pg;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -78,7 +79,9 @@ type Check = {
   id: string;
   label: string;
   category: string;
-  run: () => Promise<Omit<CheckResult, "id" | "label" | "category" | "duration_ms">>;
+  run: () => Promise<
+    Omit<CheckResult, "id" | "label" | "category" | "duration_ms">
+  >;
 };
 
 const CHECKS: Check[] = [
@@ -193,8 +196,9 @@ const CHECKS: Check[] = [
       const auditId = r.rows[0].id;
       const raw = r.rows[0].raw_audit_data || {};
       const issues: any[] = Array.isArray(raw.all_issues) ? raw.all_issues : [];
-      const synthetic = issues.filter((i) =>
-        typeof i.record_id === "string" && i.record_id.startsWith("summary_"),
+      const synthetic = issues.filter(
+        (i) =>
+          typeof i.record_id === "string" && i.record_id.startsWith("summary_"),
       );
       if (synthetic.length > 0) {
         return {
@@ -306,7 +310,10 @@ const CHECKS: Check[] = [
       const last: Date | null = r.rows[0]?.last_calc;
       const total = parseInt(r.rows[0]?.total || "0");
       if (!last) {
-        return { status: "warn", message: "No KPI values have ever been recorded" };
+        return {
+          status: "warn",
+          message: "No KPI values have ever been recorded",
+        };
       }
       const hours = (Date.now() - new Date(last).getTime()) / 3600000;
       if (hours > 48) {
@@ -347,7 +354,7 @@ const CHECKS: Check[] = [
         };
       }
       const body: any = await res.json().catch(() => null);
-      if (!body || (typeof body !== "object")) {
+      if (!body || typeof body !== "object") {
         return { status: "fail", message: "Response is not JSON" };
       }
       // Accept a number of plausible top-level shapes; the bug we care about is
@@ -365,7 +372,10 @@ const CHECKS: Check[] = [
           details: { keys: Object.keys(body) },
         };
       }
-      return { status: "pass", details: { keys: Object.keys(body).slice(0, 8) } };
+      return {
+        status: "pass",
+        details: { keys: Object.keys(body).slice(0, 8) },
+      };
     },
   },
   {
@@ -400,14 +410,24 @@ const CHECKS: Check[] = [
           return {
             status: "fail",
             message: `Oldest rate_limit_429 row is ${oldestHours.toFixed(1)}h old (retention=${retentionHours}h + 1h grace). Pruner cron may be broken.`,
-            details: { oldestHours, totalCount, retentionHours, thresholdHours },
+            details: {
+              oldestHours,
+              totalCount,
+              retentionHours,
+              thresholdHours,
+            },
           };
         }
         if (oldestHours > retentionHours) {
           return {
             status: "warn",
             message: `Oldest rate_limit_429 row is ${oldestHours.toFixed(1)}h old (within 1h grace period — pruner should run soon)`,
-            details: { oldestHours, totalCount, retentionHours, thresholdHours },
+            details: {
+              oldestHours,
+              totalCount,
+              retentionHours,
+              thresholdHours,
+            },
           };
         }
         return {
@@ -433,7 +453,11 @@ const CHECKS: Check[] = [
       if (!res.ok) return { status: "fail", message: `HTTP ${res.status}` };
       const body: any = await res.json().catch(() => null);
       if (body?.status !== "ok") {
-        return { status: "fail", message: "status field is not 'ok'", details: body };
+        return {
+          status: "fail",
+          message: "status field is not 'ok'",
+          details: body,
+        };
       }
       return { status: "pass" };
     },
@@ -510,7 +534,7 @@ export async function runHealthPulse(): Promise<PulseRun> {
     );
     run.id = persisted.rows[0]?.id;
   } catch (err: any) {
-    console.error("[HealthPulse] Failed to persist run:", err?.message);
+    logger.error("[HealthPulse] Failed to persist run:", err?.message);
   }
 
   return run;
@@ -571,7 +595,10 @@ export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
       actionUrl: "/api/health/pulse",
     });
   } catch (err: any) {
-    console.error("[HealthPulse] Failed to dispatch notification:", err?.message);
+    logger.error(
+      "[HealthPulse] Failed to dispatch notification:",
+      err?.message,
+    );
   }
 }
 

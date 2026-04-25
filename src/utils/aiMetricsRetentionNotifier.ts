@@ -32,6 +32,7 @@
 import { sendSlackNotification } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
 
+import { logger } from "./logger";
 export interface AiMetricsRetentionChangeNotification {
   /** Operator who made the change (display name / email / "user:<id>"). */
   changedBy: string;
@@ -78,7 +79,10 @@ function readConfig() {
     (process.env.AI_METRICS_RETENTION_SLACK_CHANNEL || "").trim() || null;
   const emailRaw = (process.env.AI_METRICS_RETENTION_ALERT_EMAIL || "").trim();
   const emailRecipients = emailRaw
-    ? emailRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    ? emailRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
     : [];
   // Reuse `TOOL_HEALTH_APP_URL` so admins only have to set the dashboard
   // base URL once for the whole AI Ops surface; the retention panel lives
@@ -137,8 +141,7 @@ function buildBlocks(
   // The headline diff. When the operator clears the override the post-change
   // effective value lives in env/default — surface it explicitly so on-call
   // doesn't have to open the dashboard to know what the next prune will use.
-  let retentionLine =
-    `*Retention window:* ${formatRetentionMrkdwn(n.before)} → ${formatRetentionMrkdwn(n.after)}`;
+  let retentionLine = `*Retention window:* ${formatRetentionMrkdwn(n.before)} → ${formatRetentionMrkdwn(n.after)}`;
   if (n.after == null && n.effectiveAfter != null) {
     retentionLine +=
       `\n_Effective after change:_ \`${n.effectiveAfter}\`` +
@@ -191,8 +194,7 @@ function buildBlocks(
     elements: [
       {
         type: "mrkdwn",
-        text:
-          ":robot_face: _WalaPlus AI metrics retention | dashboard override saved_",
+        text: ":robot_face: _WalaPlus AI metrics retention | dashboard override saved_",
       },
     ],
   });
@@ -203,12 +205,14 @@ function buildEmailHtml(
   n: AiMetricsRetentionChangeNotification,
   link: string,
 ): string {
-  const beforeStr = n.before == null
-    ? "<em>default (env baseline)</em>"
-    : `${escapeHtml(String(n.before))} day${n.before === 1 ? "" : "s"}`;
-  const afterStr = n.after == null
-    ? "<em>default (env baseline)</em>"
-    : `${escapeHtml(String(n.after))} day${n.after === 1 ? "" : "s"}`;
+  const beforeStr =
+    n.before == null
+      ? "<em>default (env baseline)</em>"
+      : `${escapeHtml(String(n.before))} day${n.before === 1 ? "" : "s"}`;
+  const afterStr =
+    n.after == null
+      ? "<em>default (env baseline)</em>"
+      : `${escapeHtml(String(n.after))} day${n.after === 1 ? "" : "s"}`;
   const effective =
     n.after == null && n.effectiveAfter != null
       ? `<p><em>Effective after change: ${escapeHtml(String(n.effectiveAfter))} day${n.effectiveAfter === 1 ? "" : "s"}</em></p>`
@@ -234,12 +238,14 @@ function buildEmailText(
   n: AiMetricsRetentionChangeNotification,
   link: string,
 ): string {
-  const beforeStr = n.before == null
-    ? "default (env baseline)"
-    : `${n.before} day${n.before === 1 ? "" : "s"}`;
-  const afterStr = n.after == null
-    ? "default (env baseline)"
-    : `${n.after} day${n.after === 1 ? "" : "s"}`;
+  const beforeStr =
+    n.before == null
+      ? "default (env baseline)"
+      : `${n.before} day${n.before === 1 ? "" : "s"}`;
+  const afterStr =
+    n.after == null
+      ? "default (env baseline)"
+      : `${n.after} day${n.after === 1 ? "" : "s"}`;
   return [
     "AI metrics retention window updated",
     "",
@@ -290,12 +296,12 @@ export async function notifyAiMetricsRetentionChange(
     return result;
   }
 
-  const before = notification.before == null
-    ? null
-    : Math.floor(Number(notification.before));
-  const after = notification.after == null
-    ? null
-    : Math.floor(Number(notification.after));
+  const before =
+    notification.before == null
+      ? null
+      : Math.floor(Number(notification.before));
+  const after =
+    notification.after == null ? null : Math.floor(Number(notification.after));
   if (before === after) {
     result.noChanges = true;
     return result;
@@ -315,7 +321,7 @@ export async function notifyAiMetricsRetentionChange(
         buildBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
-      console.error(
+      logger.error(
         "[AiMetricsRetentionNotifier] Slack send threw for retention change:",
         err,
       );
@@ -339,7 +345,7 @@ export async function notifyAiMetricsRetentionChange(
       });
       result.emailSent = !!sendResult?.success;
     } catch (err) {
-      console.error(
+      logger.error(
         "[AiMetricsRetentionNotifier] Email send threw for retention change:",
         err,
       );

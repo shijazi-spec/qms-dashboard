@@ -6,6 +6,7 @@ import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
 import { toolHealthAlertsCronFunction } from "../workflows/toolHealthAlertsCron";
 import { promptRegressionAlertsCronFunction } from "../workflows/promptRegressionAlertsCron";
 
+import { logger } from "../../utils/logger";
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
 const {
   createWorkflow: originalCreateWorkflow,
@@ -113,7 +114,7 @@ export function registerApiRoute<P extends string>(
 
 // Helper function for registering cron-based workflow triggers
 export function registerCronWorkflow(cronExpression: string, workflow: any) {
-  console.log("🕐 [registerCronWorkflow] Registering cron trigger", {
+  logger.info("🕐 [registerCronWorkflow] Registering cron trigger", {
     cronExpression,
     workflowId: workflow?.id,
   });
@@ -124,116 +125,135 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
     async ({ event, step }) => {
       return await step.run("execute-cron-workflow", async () => {
         const startedAt = new Date();
-        console.log("🚀 [Cron Trigger] Starting scheduled workflow execution", {
+        logger.info("🚀 [Cron Trigger] Starting scheduled workflow execution", {
           workflowId: workflow?.id,
           scheduledTime: startedAt.toISOString(),
           cronExpression,
         });
 
         let workflowRunLogId: number | null = null;
-        
+
         try {
-          const { createWorkflowRun, logSystemEvent } = await import("../../utils/database");
-          
+          const { createWorkflowRun, logSystemEvent } =
+            await import("../../utils/database");
+
           const logResult = await createWorkflowRun({
-            workflow_id: workflow?.id || 'cron-trigger',
-            workflow_name: workflow?.name || 'Quality Audit Workflow',
-            trigger_type: 'scheduled',
+            workflow_id: workflow?.id || "cron-trigger",
+            workflow_name: workflow?.name || "Quality Audit Workflow",
+            trigger_type: "scheduled",
             trigger_source: cronExpression,
-            status: 'running',
+            status: "running",
             input_data: {},
           });
           workflowRunLogId = logResult?.id || null;
-          
+
           await logSystemEvent({
-            event_type: 'workflow_started',
-            event_category: 'workflow',
-            description: `Scheduled workflow started: ${workflow?.id || 'cron-trigger'}`,
-            severity: 'info',
-            metadata: { workflow_id: workflow?.id, cron_expression: cronExpression, run_id: workflowRunLogId }
+            event_type: "workflow_started",
+            event_category: "workflow",
+            description: `Scheduled workflow started: ${workflow?.id || "cron-trigger"}`,
+            severity: "info",
+            metadata: {
+              workflow_id: workflow?.id,
+              cron_expression: cronExpression,
+              run_id: workflowRunLogId,
+            },
           });
-          
-          console.log("📝 [Cron Trigger] Workflow run logged to database", { logId: workflowRunLogId });
+
+          logger.info("📝 [Cron Trigger] Workflow run logged to database", {
+            logId: workflowRunLogId,
+          });
         } catch (logError) {
-          console.warn("⚠️ [Cron Trigger] Failed to log workflow start", { error: logError instanceof Error ? logError.message : String(logError) });
+          logger.warn("⚠️ [Cron Trigger] Failed to log workflow start", {
+            error:
+              logError instanceof Error ? logError.message : String(logError),
+          });
         }
 
         try {
           const run = await workflow.createRunAsync();
-          console.log("📝 [Cron Trigger] Workflow run created", {
+          logger.info("📝 [Cron Trigger] Workflow run created", {
             runId: run?.id,
           });
 
           const result = await run.start({ inputData: {} });
-          console.log("✅ [Cron Trigger] Workflow completed successfully", {
+          logger.info("✅ [Cron Trigger] Workflow completed successfully", {
             workflowId: workflow?.id,
             status: result?.status,
           });
 
           try {
-            const { updateWorkflowRun, logSystemEvent } = await import("../../utils/database");
-            
+            const { updateWorkflowRun, logSystemEvent } =
+              await import("../../utils/database");
+
             if (workflowRunLogId) {
               await updateWorkflowRun(workflowRunLogId, {
-                status: 'completed',
+                status: "completed",
                 completed_at: new Date(),
                 output_data: result,
                 duration_ms: Date.now() - startedAt.getTime(),
               });
             }
-            
+
             await logSystemEvent({
-              event_type: 'workflow_completed',
-              event_category: 'workflow',
-              description: `Scheduled workflow completed: ${workflow?.id || 'cron-trigger'}`,
-              severity: 'info',
-              metadata: { 
-                workflow_id: workflow?.id, 
+              event_type: "workflow_completed",
+              event_category: "workflow",
+              description: `Scheduled workflow completed: ${workflow?.id || "cron-trigger"}`,
+              severity: "info",
+              metadata: {
+                workflow_id: workflow?.id,
                 run_id: workflowRunLogId,
                 duration_ms: Date.now() - startedAt.getTime(),
-                status: result?.status 
-              }
+                status: result?.status,
+              },
             });
           } catch (logError) {
-            console.warn("⚠️ [Cron Trigger] Failed to log workflow completion", { error: logError instanceof Error ? logError.message : String(logError) });
+            logger.warn("⚠️ [Cron Trigger] Failed to log workflow completion", {
+              error:
+                logError instanceof Error ? logError.message : String(logError),
+            });
           }
 
           return result;
         } catch (error) {
-          console.error("❌ [Cron Trigger] Workflow execution failed", {
+          logger.error("❌ [Cron Trigger] Workflow execution failed", {
             workflowId: workflow?.id,
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
-          
+
           try {
-            const { updateWorkflowRun, logSystemEvent } = await import("../../utils/database");
-            
+            const { updateWorkflowRun, logSystemEvent } =
+              await import("../../utils/database");
+
             if (workflowRunLogId) {
               await updateWorkflowRun(workflowRunLogId, {
-                status: 'failed',
+                status: "failed",
                 completed_at: new Date(),
-                error_message: error instanceof Error ? error.message : String(error),
+                error_message:
+                  error instanceof Error ? error.message : String(error),
                 duration_ms: Date.now() - startedAt.getTime(),
               });
             }
-            
+
             await logSystemEvent({
-              event_type: 'workflow_failed',
-              event_category: 'workflow',
-              description: `Scheduled workflow failed: ${workflow?.id || 'cron-trigger'}`,
-              severity: 'error',
-              metadata: { 
-                workflow_id: workflow?.id, 
+              event_type: "workflow_failed",
+              event_category: "workflow",
+              description: `Scheduled workflow failed: ${workflow?.id || "cron-trigger"}`,
+              severity: "error",
+              metadata: {
+                workflow_id: workflow?.id,
                 run_id: workflowRunLogId,
                 error: error instanceof Error ? error.message : String(error),
-                duration_ms: Date.now() - startedAt.getTime()
-              }
+                duration_ms: Date.now() - startedAt.getTime(),
+              },
             });
           } catch (logError) {
-            console.warn("⚠️ [Cron Trigger] Failed to log workflow failure", { error: logError instanceof Error ? logError.message : String(logError) });
+            logger.warn("⚠️ [Cron Trigger] Failed to log workflow failure", {
+              error:
+                logError instanceof Error ? logError.message : String(logError),
+            });
           }
-          
+
           throw error;
         }
       });
@@ -241,7 +261,7 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
   );
 
   inngestFunctions.push(cronFunction);
-  console.log(
+  logger.info(
     "✅ [registerCronWorkflow] Cron trigger registered successfully",
     {
       cronExpression,
@@ -254,7 +274,7 @@ const kpiAutoCalcFunction = inngest.createFunction(
   { cron: process.env.KPI_AUTO_CALC_CRON || "0 2 * * *" },
   async ({ step }) => {
     return await step.run("run-kpi-auto-calc", async () => {
-      console.log("[KPI Auto] Daily KPI calculation triggered");
+      logger.info("[KPI Auto] Daily KPI calculation triggered");
       const results: any[] = [];
       try {
         const {
@@ -265,15 +285,31 @@ const kpiAutoCalcFunction = inngest.createFunction(
           calculateKPI5_RiskRegisterHygiene,
           calculateKPI6_ExecutiveReportingReadiness,
         } = await import("../../utils/scorecardDatabase");
-        const { recordKPIValue, getKPIDefinitions } = await import("../../utils/kpiDatabase");
+        const { recordKPIValue, getKPIDefinitions } =
+          await import("../../utils/kpiDatabase");
 
         const calculators = [
-          { name: 'Governance Doc Lifecycle', fn: calculateKPI1_GovernanceDocLifecycle },
-          { name: 'Compliance Obligation Tracking', fn: calculateKPI2_ComplianceObligationTracking },
-          { name: 'Audit Evidence Pack Readiness', fn: calculateKPI3_AuditEvidencePackReadiness },
-          { name: 'Quality→GRC Handoff', fn: calculateKPI4_QualityGRCHandoff },
-          { name: 'Risk Register Hygiene', fn: calculateKPI5_RiskRegisterHygiene },
-          { name: 'Executive Reporting Readiness', fn: calculateKPI6_ExecutiveReportingReadiness },
+          {
+            name: "Governance Doc Lifecycle",
+            fn: calculateKPI1_GovernanceDocLifecycle,
+          },
+          {
+            name: "Compliance Obligation Tracking",
+            fn: calculateKPI2_ComplianceObligationTracking,
+          },
+          {
+            name: "Audit Evidence Pack Readiness",
+            fn: calculateKPI3_AuditEvidencePackReadiness,
+          },
+          { name: "Quality→GRC Handoff", fn: calculateKPI4_QualityGRCHandoff },
+          {
+            name: "Risk Register Hygiene",
+            fn: calculateKPI5_RiskRegisterHygiene,
+          },
+          {
+            name: "Executive Reporting Readiness",
+            fn: calculateKPI6_ExecutiveReportingReadiness,
+          },
         ];
 
         const kpiDefs = await getKPIDefinitions({});
@@ -285,7 +321,9 @@ const kpiAutoCalcFunction = inngest.createFunction(
           try {
             const { value } = await calc.fn();
             const matchingKpi = kpiDefs.definitions.find((k: any) =>
-              k.name.toLowerCase().includes(calc.name.split(' ')[0].toLowerCase())
+              k.name
+                .toLowerCase()
+                .includes(calc.name.split(" ")[0].toLowerCase()),
             );
             if (matchingKpi) {
               await recordKPIValue({
@@ -293,19 +331,23 @@ const kpiAutoCalcFunction = inngest.createFunction(
                 actual_value: value,
                 period_start: periodStart,
                 period_end: periodEnd,
-                calculated_by: 'system_auto',
+                calculated_by: "system_auto",
                 notes: `Auto-calculated by scheduled job`,
               });
             }
-            results.push({ kpi: calc.name, value, status: 'recorded' });
+            results.push({ kpi: calc.name, value, status: "recorded" });
           } catch (err) {
-            results.push({ kpi: calc.name, error: String(err), status: 'failed' });
+            results.push({
+              kpi: calc.name,
+              error: String(err),
+              status: "failed",
+            });
           }
         }
       } catch (err) {
-        console.error("[KPI Auto] Fatal error:", err);
+        logger.error("[KPI Auto] Fatal error:", err);
       }
-      console.log("[KPI Auto] Completed:", results);
+      logger.info("[KPI Auto] Completed:", results);
       return { calculated: results.length, results };
     });
   },
@@ -317,40 +359,43 @@ const duplicateSyncFunction = inngest.createFunction(
   { cron: process.env.DUPLICATE_SCAN_CRON || "0 */6 * * *" },
   async ({ step }) => {
     const syncResult = await step.run("sync-crm-data", async () => {
-      console.log("[DuplicateRadar] Auto-sync: fetching CRM data");
+      logger.info("[DuplicateRadar] Auto-sync: fetching CRM data");
       const { syncAllModules } = await import("../routes/duplicateRadarRoutes");
-      return await syncAllModules('incremental');
+      return await syncAllModules("incremental");
     });
 
     const detectionResult = await step.run("detect-duplicates", async () => {
-      console.log("[DuplicateRadar] Auto-sync: running duplicate detection");
-      const { runDuplicateDetection } = await import("../routes/duplicateRadarRoutes");
+      logger.info("[DuplicateRadar] Auto-sync: running duplicate detection");
+      const { runDuplicateDetection } =
+        await import("../routes/duplicateRadarRoutes");
       return await runDuplicateDetection();
     });
 
     await step.run("notify-results", async () => {
-      console.log("[DuplicateRadar] Sync result:", {
+      logger.info("[DuplicateRadar] Sync result:", {
         synced: syncResult.totalSynced,
         clustersScored: detectionResult.clustersScored,
-        modules: syncResult.moduleBreakdown
+        modules: syncResult.moduleBreakdown,
       });
 
       try {
-        const { getEnhancedSummary } = await import("../../utils/duplicateRadarDatabase");
+        const { getEnhancedSummary } =
+          await import("../../utils/duplicateRadarDatabase");
         const summary = await getEnhancedSummary();
 
         if (summary.highConfidence > 0) {
-          const { createNotification } = await import("../../utils/notificationHub");
+          const { createNotification } =
+            await import("../../utils/notificationHub");
           await createNotification({
-            type: 'alert',
+            type: "alert",
             title: `Duplicate Radar: ${summary.highConfidence} high-confidence duplicates`,
             message: `Auto-sync completed: ${syncResult.totalSynced} records synced, ${summary.trueDuplicateClusters} duplicate clusters (${summary.highConfidence} high confidence). Pipeline inflation: SAR ${summary.estimatedPipelineInflation.toLocaleString()}.`,
-            link: '/duplicates',
-            severity: summary.highConfidence > 10 ? 'high' : 'medium'
+            link: "/duplicates",
+            severity: summary.highConfidence > 10 ? "high" : "medium",
           });
         }
       } catch (e) {
-        console.warn("[DuplicateRadar] Failed to send notification:", e);
+        logger.warn("[DuplicateRadar] Failed to send notification:", e);
       }
     });
 
@@ -369,9 +414,11 @@ const aiApprovalExpiryFunction = inngest.createFunction(
   { cron: process.env.AI_APPROVAL_EXPIRY_CRON || "*/15 * * * *" }, // every 15 min
   async ({ step }) => {
     return await step.run("expire-stale-ai-approvals", async () => {
-      const { expireStalePendingActions } = await import("../../utils/aiApprovalDatabase");
+      const { expireStalePendingActions } =
+        await import("../../utils/aiApprovalDatabase");
       const n = await expireStalePendingActions();
-      if (n > 0) console.log(`[AI-Approval] Expired ${n} stale pending actions`);
+      if (n > 0)
+        logger.info(`[AI-Approval] Expired ${n} stale pending actions`);
       return { expired: n };
     });
   },
@@ -407,7 +454,7 @@ const aiCostSummaryFunction = inngest.createFunction(
       const { retentionDays, rowsDeleted: pruned } = pruneResult;
 
       if (pruned > 0) {
-        console.log(
+        logger.info(
           `[AI-Cost] Pruned ${pruned} stale ai_call_metrics rows (>${retentionDays} days)`,
         );
       }
@@ -418,17 +465,18 @@ const aiCostSummaryFunction = inngest.createFunction(
       // time (dedup by related_record_id) and auto-resolves it on the next
       // pass once the table is back inside the window.
       try {
-        const { getAiMetricsTableStats } = await import("../../utils/aiTelemetry");
-        const { evaluateAndAlertStorageHealth } = await import(
-          "../../utils/storageHealthAlerts"
-        );
+        const { getAiMetricsTableStats } =
+          await import("../../utils/aiTelemetry");
+        const { evaluateAndAlertStorageHealth } =
+          await import("../../utils/storageHealthAlerts");
         const {
           openAlertExistsByKey,
           createAIAlert,
           getOpenAlertsByKey,
           resolveAlert,
         } = await import("../../utils/aiAlertsDatabase");
-        const { createNotification } = await import("../../utils/notificationHub");
+        const { createNotification } =
+          await import("../../utils/notificationHub");
         const { sendResendEmail } = await import("../../utils/resendMail");
 
         const stats = await getAiMetricsTableStats();
@@ -443,9 +491,9 @@ const aiCostSummaryFunction = inngest.createFunction(
           // `module` NOT NULL so we surface that here explicitly.
           createNotification: (input) =>
             createNotification({
-              module: 'ai_ops',
+              module: "ai_ops",
               priority: input.severity,
-              channel: 'in_app',
+              channel: "in_app",
               title: input.title,
               message: input.message,
               action_url: input.link,
@@ -469,18 +517,18 @@ const aiCostSummaryFunction = inngest.createFunction(
         });
 
         if (storageResult.alertCreated) {
-          console.warn(
+          logger.warn(
             `[AI-Cost] Storage-health alert opened: ai_call_metrics oldest row ` +
               `${stats.oldestAgeDays?.toFixed?.(1) ?? "?"}d > retention ${stats.retentionDays}d ` +
               `(slack=${storageResult.slackSent}, email=${storageResult.emailSent})`,
           );
         } else if (storageResult.alertsResolved > 0) {
-          console.log(
+          logger.info(
             `[AI-Cost] Storage-health auto-resolved ${storageResult.alertsResolved} alert(s)`,
           );
         }
       } catch (storageErr) {
-        console.warn(
+        logger.warn(
           "[AI-Cost] Storage-health evaluation failed (non-fatal):",
           storageErr,
         );
@@ -496,16 +544,15 @@ const aiCostSummaryFunction = inngest.createFunction(
       // and is a cheap full-table scan.
       try {
         const pg = await import("pg");
-        const { runAiCallMetricsBackfill } = await import(
-          "../../scripts/backfillAiCallMetricsRedaction"
-        );
+        const { runAiCallMetricsBackfill } =
+          await import("../../scripts/backfillAiCallMetricsRedaction");
         const backfillPool = new pg.default.Pool({
           connectionString: process.env.DATABASE_URL,
         });
         try {
           const backfillResult = await runAiCallMetricsBackfill(backfillPool);
           if (backfillResult.rows_updated > 0) {
-            console.log(
+            logger.info(
               `[AI-Cost] Redaction backfill rewrote ${backfillResult.rows_updated} ` +
                 `ai_call_metrics rows (error_message=${backfillResult.error_message_changed}, ` +
                 `prompt_preview=${backfillResult.prompt_preview_changed}, ` +
@@ -518,14 +565,20 @@ const aiCostSummaryFunction = inngest.createFunction(
           await backfillPool.end();
         }
       } catch (backfillErr) {
-        console.warn(
+        logger.warn(
           "[AI-Cost] ai_call_metrics redaction backfill failed (non-fatal):",
           backfillErr,
         );
       }
 
-      const thresholdUsd = parseFloat(process.env.AI_DAILY_COST_ALERT_USD || "10");
-      console.log("[AI-Cost] Daily summary:", summary, `| threshold: $${thresholdUsd}`);
+      const thresholdUsd = parseFloat(
+        process.env.AI_DAILY_COST_ALERT_USD || "10",
+      );
+      logger.info(
+        "[AI-Cost] Daily summary:",
+        summary,
+        `| threshold: $${thresholdUsd}`,
+      );
 
       if (summary.totalCostUsd >= thresholdUsd) {
         const msg =
@@ -534,10 +587,11 @@ const aiCostSummaryFunction = inngest.createFunction(
           `Calls: ${summary.callCount}, Errors: ${summary.errorCount}, ` +
           `Avg latency: ${Math.round(summary.avgLatencyMs)}ms.`;
 
-        console.warn("[AI-Cost] Threshold exceeded:", msg);
+        logger.warn("[AI-Cost] Threshold exceeded:", msg);
 
         try {
-          const { createNotification } = await import("../../utils/notificationHub");
+          const { createNotification } =
+            await import("../../utils/notificationHub");
           await createNotification({
             type: "alert",
             title: "AI Daily Cost Threshold Exceeded",
@@ -546,7 +600,7 @@ const aiCostSummaryFunction = inngest.createFunction(
             severity: "high",
           });
         } catch (notifErr) {
-          console.warn("[AI-Cost] Failed to create notification:", notifErr);
+          logger.warn("[AI-Cost] Failed to create notification:", notifErr);
         }
 
         if (process.env.SLACK_WEBHOOK_URL) {
@@ -557,7 +611,7 @@ const aiCostSummaryFunction = inngest.createFunction(
               body: JSON.stringify({ text: msg }),
             });
           } catch (slackErr) {
-            console.warn("[AI-Cost] Slack notification failed:", slackErr);
+            logger.warn("[AI-Cost] Slack notification failed:", slackErr);
           }
         }
 
@@ -569,9 +623,8 @@ const aiCostSummaryFunction = inngest.createFunction(
         let emailRecipients: string[] = [];
         let recipientsSource: "db" | "env" | "none" = "none";
         try {
-          const { resolveEffectiveRecipients } = await import(
-            "../../utils/alertEmailRecipients"
-          );
+          const { resolveEffectiveRecipients } =
+            await import("../../utils/alertEmailRecipients");
           const resolved = await resolveEffectiveRecipients(
             "ai_cost",
             process.env.AI_COST_ALERT_EMAIL,
@@ -579,19 +632,21 @@ const aiCostSummaryFunction = inngest.createFunction(
           emailRecipients = resolved.recipients;
           recipientsSource = resolved.source;
         } catch (resolveErr) {
-          console.warn(
+          logger.warn(
             "[AI-Cost] Recipient resolver failed; falling back to env var:",
             resolveErr,
           );
           emailRecipients = process.env.AI_COST_ALERT_EMAIL
-            ? process.env.AI_COST_ALERT_EMAIL.split(",").map(e => e.trim()).filter(Boolean)
+            ? process.env.AI_COST_ALERT_EMAIL.split(",")
+                .map((e) => e.trim())
+                .filter(Boolean)
             : [];
           recipientsSource = emailRecipients.length > 0 ? "env" : "none";
         }
         if (emailRecipients.length > 0) {
           try {
             const { sendResendEmail } = await import("../../utils/resendMail");
-            console.log(
+            logger.info(
               `[AI-Cost] Sending alert email to ${emailRecipients.length} recipient(s) (source: ${recipientsSource})`,
             );
             await sendResendEmail({
@@ -608,7 +663,7 @@ exceeding the configured threshold of <strong>$${thresholdUsd}</strong>.</p>
 <p><a href="/ai-ops">View AI Operations panel</a></p>`,
             });
           } catch (emailErr) {
-            console.warn("[AI-Cost] Email alert failed:", emailErr);
+            logger.warn("[AI-Cost] Email alert failed:", emailErr);
           }
         }
       }
@@ -655,28 +710,30 @@ const promptVersionPurgeFunction = inngest.createFunction(
         parseInt(process.env.PROMPT_VERSION_RETENTION_DAYS || "30", 10) || 30,
       );
 
-      const { getActivePromptVersionStrings } = await import(
-        "../agents/promptVersionRegistry"
-      );
+      const { getActivePromptVersionStrings } =
+        await import("../agents/promptVersionRegistry");
       const liveVersions = getActivePromptVersionStrings();
 
-      console.log(
+      logger.info(
         `[PromptVersionPurge] Retention window: ${retentionDays} days. ` +
-        `Live versions (${liveVersions.length}): ${liveVersions.join(", ")}`,
+          `Live versions (${liveVersions.length}): ${liveVersions.join(", ")}`,
       );
 
       const { purgeArchivedPromptVersionMetrics, recordPromptVersionPurgeRun } =
         await import("../../utils/aiTelemetry");
-      const deleted = await purgeArchivedPromptVersionMetrics(liveVersions, retentionDays);
+      const deleted = await purgeArchivedPromptVersionMetrics(
+        liveVersions,
+        retentionDays,
+      );
 
       // Persist the purge result so the AI Operations panel's "Last purge"
       // info strip has a visible record (the console log alone is invisible
       // to operators looking at the Prompt Version tab).
       await recordPromptVersionPurgeRun(deleted, retentionDays, liveVersions);
 
-      console.log(
+      logger.info(
         `[PromptVersionPurge] Deleted ${deleted} ai_call_metrics row(s) for ` +
-        `archived prompt versions older than ${retentionDays} days.`,
+          `archived prompt versions older than ${retentionDays} days.`,
       );
 
       return { deleted, retentionDays, liveVersions };
@@ -690,10 +747,11 @@ const aiScannerFunction = inngest.createFunction(
   { cron: process.env.AI_SCANNER_CRON || "0 */6 * * *" },
   async ({ step }) => {
     return await step.run("run-ai-platform-scan", async () => {
-      console.log("[AI Scanner] Scheduled scan triggered");
-      const { runBackgroundScan } = await import("../../utils/aiBackgroundScanner");
+      logger.info("[AI Scanner] Scheduled scan triggered");
+      const { runBackgroundScan } =
+        await import("../../utils/aiBackgroundScanner");
       const result = await runBackgroundScan();
-      console.log("[AI Scanner] Scan result:", result);
+      logger.info("[AI Scanner] Scan result:", result);
       return result;
     });
   },
@@ -727,37 +785,44 @@ const triggerAutoEscalateFunction = inngest.createFunction(
   { id: "trigger-auto-escalate" },
   { cron: process.env.TRIGGER_AUTO_ESCALATE_CRON || "0 3 * * *" }, // daily @ 03:00
   async ({ step }) => {
-    const reactivated = await step.run("reactivate-dismissed-triggers", async () => {
-      const { auditTriggerPool: pool } = await import("../../utils/auditTriggerDatabase");
-      const res = await pool.query(
-        `UPDATE audit_triggers
+    const reactivated = await step.run(
+      "reactivate-dismissed-triggers",
+      async () => {
+        const { auditTriggerPool: pool } =
+          await import("../../utils/auditTriggerDatabase");
+        const res = await pool.query(
+          `UPDATE audit_triggers
             SET status             = 'pending',
                 reevaluated_at     = NOW(),
                 next_reevaluate_at = NULL
           WHERE status             = 'dismissed'
             AND next_reevaluate_at IS NOT NULL
             AND next_reevaluate_at <= NOW()
-          RETURNING id, trigger_id, title, severity, dismiss_reason`
-      );
-      for (const row of res.rows) {
-        console.log(
-          `[TriggerCron] Re-surfaced dismissed trigger ${row.trigger_id} ` +
-          `(severity=${row.severity}) — prior reason: "${row.dismiss_reason}"`
+          RETURNING id, trigger_id, title, severity, dismiss_reason`,
         );
-      }
-      return { count: res.rowCount || 0, triggers: res.rows };
-    });
+        for (const row of res.rows) {
+          logger.info(
+            `[TriggerCron] Re-surfaced dismissed trigger ${row.trigger_id} ` +
+              `(severity=${row.severity}) — prior reason: "${row.dismiss_reason}"`,
+          );
+        }
+        return { count: res.rowCount || 0, triggers: res.rows };
+      },
+    );
 
-    const escalated = await step.run("auto-escalate-stale-triggers", async () => {
-      const { auditTriggerPool: pool } = await import("../../utils/auditTriggerDatabase");
-      const { createFinding } = await import("../../utils/auditDatabase");
-      const { logEvent } = await import("../../utils/eventLogsDatabase");
+    const escalated = await step.run(
+      "auto-escalate-stale-triggers",
+      async () => {
+        const { auditTriggerPool: pool } =
+          await import("../../utils/auditTriggerDatabase");
+        const { createFinding } = await import("../../utils/auditDatabase");
+        const { logEvent } = await import("../../utils/eventLogsDatabase");
 
-      // Find triggers that exceed their SLA and have not yet been escalated.
-      // We do NOT auto-escalate rows that are already acknowledged/actioned —
-      // the timer only applies to truly neglected pending rows.
-      const stale = await pool.query(
-        `SELECT *
+        // Find triggers that exceed their SLA and have not yet been escalated.
+        // We do NOT auto-escalate rows that are already acknowledged/actioned —
+        // the timer only applies to truly neglected pending rows.
+        const stale = await pool.query(
+          `SELECT *
            FROM audit_triggers
           WHERE status = 'pending'
             AND auto_escalated_at IS NULL
@@ -766,76 +831,83 @@ const triggerAutoEscalateFunction = inngest.createFunction(
               OR (severity IN ('warning','info') AND created_at <= NOW() - INTERVAL '30 days')
             )
           ORDER BY created_at ASC
-          LIMIT 50`
-      );
+          LIMIT 50`,
+        );
 
-      const out: any[] = [];
-      for (const t of stale.rows) {
-        try {
-          const ageDays = Math.floor(
-            (Date.now() - new Date(t.created_at).getTime()) / 86_400_000
-          );
-          const severity =
-            t.severity === 'critical' ? 'major' :
-            t.severity === 'warning'  ? 'minor' : 'observation';
+        const out: any[] = [];
+        for (const t of stale.rows) {
+          try {
+            const ageDays = Math.floor(
+              (Date.now() - new Date(t.created_at).getTime()) / 86_400_000,
+            );
+            const severity =
+              t.severity === "critical"
+                ? "major"
+                : t.severity === "warning"
+                  ? "minor"
+                  : "observation";
 
-          const finding = await createFinding({
-            audit_id:             t.audit_id,
-            finding_code:         `AUTO-ESC-${t.trigger_id || t.id}`,
-            title:                `Auto-escalated: ${t.title}`,
-            description:
-              `This finding was auto-generated because trigger ` +
-              `${t.trigger_id || `#${t.id}`} (severity: ${t.severity}) has been ` +
-              `pending for ${ageDays} days without action.\n\n` +
-              `Original trigger description:\n${t.description || '(none)'}\n\n` +
-              `Action originally required:\n${t.action_required || '(none specified)'}`,
-            category:             'process',
-            severity:             severity as any,
-            control_reference:    'WP-SOP-009 / ISO 19011 §6.7',
-            evidence_description: `audit_triggers.id=${t.id}, created_at=${t.created_at}`,
-            affected_process:     t.trigger_type,
-            responsible_party:    t.assigned_role || 'quality_manager',
-            status:               'open',
-          } as any);
+            const finding = await createFinding({
+              audit_id: t.audit_id,
+              finding_code: `AUTO-ESC-${t.trigger_id || t.id}`,
+              title: `Auto-escalated: ${t.title}`,
+              description:
+                `This finding was auto-generated because trigger ` +
+                `${t.trigger_id || `#${t.id}`} (severity: ${t.severity}) has been ` +
+                `pending for ${ageDays} days without action.\n\n` +
+                `Original trigger description:\n${t.description || "(none)"}\n\n` +
+                `Action originally required:\n${t.action_required || "(none specified)"}`,
+              category: "process",
+              severity: severity as any,
+              control_reference: "WP-SOP-009 / ISO 19011 §6.7",
+              evidence_description: `audit_triggers.id=${t.id}, created_at=${t.created_at}`,
+              affected_process: t.trigger_type,
+              responsible_party: t.assigned_role || "quality_manager",
+              status: "open",
+            } as any);
 
-          await pool.query(
-            `UPDATE audit_triggers
+            await pool.query(
+              `UPDATE audit_triggers
                 SET status                = 'actioned',
                     auto_escalated_at     = NOW(),
                     escalation_finding_id = $1
               WHERE id = $2`,
-            [finding.id, t.id]
-          );
+              [finding.id, t.id],
+            );
 
-          await logEvent({
-            actionType:  'STATUS_CHANGE',
-            entityType:  'SYSTEM',
-            entityId:    String(t.id),
-            entityName:  t.title,
-            description:
-              `Trigger ${t.trigger_id || t.id} auto-escalated to Finding ` +
-              `${finding.finding_code} after ${ageDays} days pending.`,
-            severity:    t.severity === 'critical' ? 'CRITICAL' : 'WARNING',
-            module:      'audits',
-            aiInvolved:  false,
-            correlationId: finding.finding_code,
-          });
+            await logEvent({
+              actionType: "STATUS_CHANGE",
+              entityType: "SYSTEM",
+              entityId: String(t.id),
+              entityName: t.title,
+              description:
+                `Trigger ${t.trigger_id || t.id} auto-escalated to Finding ` +
+                `${finding.finding_code} after ${ageDays} days pending.`,
+              severity: t.severity === "critical" ? "CRITICAL" : "WARNING",
+              module: "audits",
+              aiInvolved: false,
+              correlationId: finding.finding_code,
+            });
 
-          out.push({
-            trigger_id: t.trigger_id || t.id,
-            finding_id: finding.id,
-            finding_code: finding.finding_code,
-            age_days: ageDays,
-          });
-        } catch (err) {
-          console.error(`[TriggerCron] Failed to escalate trigger ${t.id}:`, err);
+            out.push({
+              trigger_id: t.trigger_id || t.id,
+              finding_id: finding.id,
+              finding_code: finding.finding_code,
+              age_days: ageDays,
+            });
+          } catch (err) {
+            logger.error(
+              `[TriggerCron] Failed to escalate trigger ${t.id}:`,
+              err,
+            );
+          }
         }
-      }
 
-      return { count: out.length, escalations: out };
-    });
+        return { count: out.length, escalations: out };
+      },
+    );
 
-    console.log("[TriggerCron] Completed:", {
+    logger.info("[TriggerCron] Completed:", {
       reactivated: reactivated.count,
       escalated: escalated.count,
     });
@@ -850,14 +922,18 @@ const rateLimitJanitorFunction = inngest.createFunction(
   async ({ step }) => {
     return await step.run("prune-expired-rate-limit-buckets", async () => {
       const pg = await import("pg");
-      const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+      const pool = new pg.default.Pool({
+        connectionString: process.env.DATABASE_URL,
+      });
       try {
         const result = await pool.query(
-          `DELETE FROM rate_limit_buckets WHERE window_start < NOW() - INTERVAL '15 minutes'`
+          `DELETE FROM rate_limit_buckets WHERE window_start < NOW() - INTERVAL '15 minutes'`,
         );
         const deleted = result.rowCount ?? 0;
         if (deleted > 0) {
-          console.log(`[RateLimitJanitor] Pruned ${deleted} expired rate_limit_buckets rows`);
+          logger.info(
+            `[RateLimitJanitor] Pruned ${deleted} expired rate_limit_buckets rows`,
+          );
         }
         return { deleted };
       } finally {
@@ -879,9 +955,10 @@ const rateLimit429EventsPrunerFunction = inngest.createFunction(
   { cron: process.env.RATE_LIMIT_429_PRUNER_CRON || "0 * * * *" },
   async ({ step }) => {
     return await step.run("prune-rate-limit-429-events", async () => {
-      const { pruneRateLimit429Events } = await import("../../utils/rateLimiter");
+      const { pruneRateLimit429Events } =
+        await import("../../utils/rateLimiter");
       const result = await pruneRateLimit429Events();
-      console.log(`[RateLimit429Pruner] Cron run complete:`, result);
+      logger.info(`[RateLimit429Pruner] Cron run complete:`, result);
       return result;
     });
   },
@@ -899,11 +976,10 @@ const rateLimit429SpikeAlertFunction = inngest.createFunction(
   { cron: process.env.RATE_LIMIT_429_24H_ALERT_CRON || "15 * * * *" },
   async ({ step }) => {
     return await step.run("check-rate-limit-429-spike", async () => {
-      const { runRateLimit429SpikeAlertCheck } = await import(
-        "../../utils/rateLimit429SpikeAlert"
-      );
+      const { runRateLimit429SpikeAlertCheck } =
+        await import("../../utils/rateLimit429SpikeAlert");
       const result = await runRateLimit429SpikeAlertCheck();
-      console.log(`[RateLimit429SpikeAlert] Cron run complete:`, result);
+      logger.info(`[RateLimit429SpikeAlert] Cron run complete:`, result);
       return result;
     });
   },
@@ -930,20 +1006,21 @@ const executiveDigestFunction = inngest.createFunction(
   { cron: process.env.DIGEST_CRON || "0 7 * * 1" },
   async ({ step }) => {
     return await step.run("send-executive-digest", async () => {
-      console.log("[Digest] Weekly executive quality digest triggered");
+      logger.info("[Digest] Weekly executive quality digest triggered");
       const { sendDigestEmail } = await import("../../utils/executiveDigest");
       const result = await sendDigestEmail();
-      console.log("[Digest] Result:", result);
+      logger.info("[Digest] Result:", result);
 
       if (result.success) {
         try {
-          const { createNotification } = await import("../../utils/notificationHub");
+          const { createNotification } =
+            await import("../../utils/notificationHub");
           await createNotification({
-            type: 'info',
-            title: 'Weekly Quality Digest sent',
+            type: "info",
+            title: "Weekly Quality Digest sent",
             message: `Executive quality digest sent via ${result.method}.`,
-            link: '/executive',
-            severity: 'low'
+            link: "/executive",
+            severity: "low",
           });
         } catch {}
       }
@@ -959,58 +1036,71 @@ const aiFeedbackDigestFunction = inngest.createFunction(
   { cron: process.env.AI_FEEDBACK_DIGEST_CRON || "0 7 * * 1" },
   async ({ step }) => {
     return await step.run("send-ai-feedback-digest", async () => {
-      console.log("[AIFeedbackDigest] Weekly AI feedback digest triggered");
-      const {
-        getWeeklyFeedbackDigest,
-        summarizeFeedbackTrend,
-      } = await import("../../utils/aiFeedbackDatabase");
+      logger.info("[AIFeedbackDigest] Weekly AI feedback digest triggered");
+      const { getWeeklyFeedbackDigest, summarizeFeedbackTrend } =
+        await import("../../utils/aiFeedbackDatabase");
       const digest = await getWeeklyFeedbackDigest();
       const trend = Array.isArray(digest.trend) ? digest.trend : [];
       const trendSummary = summarizeFeedbackTrend(trend);
-      console.log("[AIFeedbackDigest] Digest data:", digest);
-      console.log("[AIFeedbackDigest] Trend summary:", trendSummary);
+      logger.info("[AIFeedbackDigest] Digest data:", digest);
+      logger.info("[AIFeedbackDigest] Trend summary:", trendSummary);
 
       if (!digest || digest.total === 0) {
-        console.log("[AIFeedbackDigest] No feedback this week, skipping notifications");
+        logger.info(
+          "[AIFeedbackDigest] No feedback this week, skipping notifications",
+        );
         return { skipped: true, trend: trendSummary };
       }
 
-      const upRate = digest.total > 0 ? Math.round((digest.thumbs_up / digest.total) * 100) : 0;
+      const upRate =
+        digest.total > 0
+          ? Math.round((digest.thumbs_up / digest.total) * 100)
+          : 0;
       const trendLabel: Record<typeof trendSummary.direction, string> = {
-        improving: '📈 improving',
-        worsening: '📉 worsening',
-        stable: '➡️ stable',
-        insufficient_data: 'insufficient data',
+        improving: "📈 improving",
+        worsening: "📉 worsening",
+        stable: "➡️ stable",
+        insufficient_data: "insufficient data",
       };
-      const peakSuffix = trendSummary.peak_negative_day && trendSummary.peak_negative_count > 0
-        ? `, worst day ${trendSummary.peak_negative_day} (${trendSummary.peak_negative_count} 👎)`
-        : '';
+      const peakSuffix =
+        trendSummary.peak_negative_day && trendSummary.peak_negative_count > 0
+          ? `, worst day ${trendSummary.peak_negative_day} (${trendSummary.peak_negative_count} 👎)`
+          : "";
       const trendLine = `Trend: ${trendLabel[trendSummary.direction]}${peakSuffix}.`;
-      const summary = `AI Consultant received ${digest.total} ratings this week: ${digest.thumbs_up} 👍 (${upRate}%) / ${digest.thumbs_down} 👎. Top issue: ${digest.top_categories?.[0]?.category || 'none'}. ${trendLine}`;
+      const summary = `AI Consultant received ${digest.total} ratings this week: ${digest.thumbs_up} 👍 (${upRate}%) / ${digest.thumbs_down} 👎. Top issue: ${digest.top_categories?.[0]?.category || "none"}. ${trendLine}`;
 
-      const trendPlainLines = trend.length > 0
-        ? [
-            'Day         👍   👎',
-            ...trend.map(p => `${p.day}  ${String(p.thumbs_up).padStart(3)}  ${String(p.thumbs_down).padStart(3)}`),
-          ]
-        : ['No daily activity recorded this week.'];
-      const trendPlain = trendPlainLines.join('\n');
+      const trendPlainLines =
+        trend.length > 0
+          ? [
+              "Day         👍   👎",
+              ...trend.map(
+                (p) =>
+                  `${p.day}  ${String(p.thumbs_up).padStart(3)}  ${String(p.thumbs_down).padStart(3)}`,
+              ),
+            ]
+          : ["No daily activity recorded this week."];
+      const trendPlain = trendPlainLines.join("\n");
       const messageWithTrend = `${summary}\n\nDaily trend (last 7 days):\n${trendPlain}`;
 
       try {
-        const { createNotification } = await import("../../utils/notificationHub");
+        const { createNotification } =
+          await import("../../utils/notificationHub");
         await createNotification({
-          type: 'info',
-          title: 'Weekly AI Feedback Digest',
+          type: "info",
+          title: "Weekly AI Feedback Digest",
           message: messageWithTrend,
-          link: '/dashboard/admin.html',
-          severity: 'low'
+          link: "/dashboard/admin.html",
+          severity: "low",
         });
       } catch {}
 
       try {
-        const { sendSlackNotification } = await import("../../utils/slackNotifications");
-        const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_QMS_CHANNEL || '#general';
+        const { sendSlackNotification } =
+          await import("../../utils/slackNotifications");
+        const slackChannel =
+          process.env.SLACK_CHANNEL_ID ||
+          process.env.SLACK_QMS_CHANNEL ||
+          "#general";
         const slackMessage = `📊 *Weekly AI Consultant Feedback*\n${summary}\n\n*Daily trend (last 7 days):*\n\`\`\`\n${trendPlain}\n\`\`\``;
         await sendSlackNotification(slackChannel, slackMessage);
       } catch {}

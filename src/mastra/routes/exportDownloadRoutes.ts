@@ -1,7 +1,10 @@
-import pg from 'pg';
+import pg from "pg";
 const { Pool } = pg;
-import { getSessionUser, unauthorizedResponse } from '../../utils/rbacMiddleware';
-import { logger } from '../../utils/logger';
+import {
+  getSessionUser,
+  unauthorizedResponse,
+} from "../../utils/rbacMiddleware";
+import { logger } from "../../utils/logger";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -21,8 +24,8 @@ async function ensureTable(): Promise<void> {
 
 export const exportDownloadRoutes = [
   {
-    path: '/api/exports/recent-downloads',
-    method: 'GET' as const,
+    path: "/api/exports/recent-downloads",
+    method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
         const user = getSessionUser(c);
@@ -31,21 +34,21 @@ export const exportDownloadRoutes = [
         try {
           await ensureTable();
           const result = await pool.query(
-            'SELECT entries FROM user_recent_downloads WHERE user_id = $1',
-            [user.userId]
+            "SELECT entries FROM user_recent_downloads WHERE user_id = $1",
+            [user.userId],
           );
           const entries = result.rows.length > 0 ? result.rows[0].entries : [];
           return c.json({ entries });
         } catch (error) {
-          logger.error({ err: error }, '[ExportDownloads] GET error');
+          logger.error({ err: error }, "[ExportDownloads] GET error");
           return c.json({ entries: [] });
         }
       };
     },
   },
   {
-    path: '/api/exports/recent-downloads',
-    method: 'POST' as const,
+    path: "/api/exports/recent-downloads",
+    method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
         const user = getSessionUser(c);
@@ -60,19 +63,19 @@ export const exportDownloadRoutes = [
              VALUES ($1, $2::jsonb, NOW())
              ON CONFLICT (user_id) DO UPDATE
              SET entries = $2::jsonb, updated_at = NOW()`,
-            [user.userId, JSON.stringify(entries)]
+            [user.userId, JSON.stringify(entries)],
           );
           return c.json({ success: true });
         } catch (error) {
-          logger.error({ err: error }, '[ExportDownloads] POST error');
-          return c.json({ error: 'Failed to save recent downloads' }, 500);
+          logger.error({ err: error }, "[ExportDownloads] POST error");
+          return c.json({ error: "Failed to save recent downloads" }, 500);
         }
       };
     },
   },
   {
-    path: '/api/exports/recent-downloads',
-    method: 'DELETE' as const,
+    path: "/api/exports/recent-downloads",
+    method: "DELETE" as const,
     createHandler: async () => {
       return async (c: any) => {
         const user = getSessionUser(c);
@@ -81,13 +84,13 @@ export const exportDownloadRoutes = [
         try {
           await ensureTable();
           await pool.query(
-            'DELETE FROM user_recent_downloads WHERE user_id = $1',
-            [user.userId]
+            "DELETE FROM user_recent_downloads WHERE user_id = $1",
+            [user.userId],
           );
           return c.json({ success: true });
         } catch (error) {
-          logger.error({ err: error }, '[ExportDownloads] DELETE error');
-          return c.json({ error: 'Failed to clear recent downloads' }, 500);
+          logger.error({ err: error }, "[ExportDownloads] DELETE error");
+          return c.json({ error: "Failed to clear recent downloads" }, 500);
         }
       };
     },

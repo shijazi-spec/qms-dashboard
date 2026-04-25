@@ -53,6 +53,7 @@ import { sendSlackNotification } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
 import type { CredentialWarning } from "./eventLogsDatabase";
 import type { RiskLevel } from "./aiApprovalDatabase";
+import { logger } from "./logger";
 
 export interface CredentialFlaggedApprovalNotification {
   /** Approval-row ticket code (e.g. APR-20260425-AB12CD). Used as dedupe key. */
@@ -421,7 +422,7 @@ export async function notifyCredentialFlaggedApproval(
         buildSlackBlocks(notification, link, linkAbsolute),
       );
     } catch (err) {
-      console.error(
+      logger.error(
         `[SecurityApprovalNotifier] Slack send threw for ${notification.action_code}:`,
         err,
       );
@@ -441,7 +442,7 @@ export async function notifyCredentialFlaggedApproval(
       });
       result.emailSent = !!sendResult?.success;
     } catch (err) {
-      console.error(
+      logger.error(
         `[SecurityApprovalNotifier] Email send threw for ${notification.action_code}:`,
         err,
       );

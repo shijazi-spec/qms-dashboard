@@ -8,7 +8,12 @@ import {
 } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 
-function renderSetupRequiredPage(title: string, panelDescription: string): string {
+import { logger } from "../../utils/logger";
+
+function renderSetupRequiredPage(
+  title: string,
+  panelDescription: string,
+): string {
   return `<!DOCTYPE html><html><head><title>${title}</title><link rel="stylesheet" href="/dashboard/tailwind.css"></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">${title}</h1><p class="text-gray-600 mb-4">${panelDescription}</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`;
 }
 
@@ -45,7 +50,7 @@ function serveDashboardPageWithRoleGate(
   return async (c: any) => {
     try {
       if (!hasValidAdminApiKey(c)) {
-        const session = getSessionFromCookie(c.req.header('Cookie'));
+        const session = getSessionFromCookie(c.req.header("Cookie"));
         if (!session || !allowedRoles.includes(session.role as UserRole)) {
           return c.html(renderSetupRequiredPage(pageTitle, panelDescription));
         }
@@ -54,7 +59,7 @@ function serveDashboardPageWithRoleGate(
       if (filePath) return c.html(readFileSync(filePath, "utf-8"));
       return c.text(`${filename} not found`, 404);
     } catch (error) {
-      console.error(`Error serving ${filename}:`, error);
+      logger.error(`Error serving ${filename}:`, error);
       return c.text(`Error loading ${filename}`, 500);
     }
   };
@@ -73,9 +78,17 @@ function serveDashboardPageWithRoleGate(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ANY_DASHBOARD_ROLES: readonly UserRole[] = [
-  'admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager',
-  'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist',
-  'executive', 'department_viewer',
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+  "auditor",
+  "quality_specialist",
+  "team_lead",
+  "bu_owner",
+  "ai_specialist",
+  "executive",
+  "department_viewer",
 ];
 
 // Governance + senior leadership read set used for cross-module governance
@@ -85,65 +98,93 @@ const ANY_DASHBOARD_ROLES: readonly UserRole[] = [
 // `/api/management-reviews GET`, `/api/crm/data GET`,
 // `/api/executive/reports GET`, `/api/infographic GET`.
 const GOVERNANCE_AND_EXECUTIVE: readonly UserRole[] = [
-  'admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive',
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+  "executive",
 ];
 
 // Governance write set (no executive, no read-only). Mirrors
 // `/api/vendors GET` (GRC owns vendor data; PII / contract values).
 const VENDORS_READ_ROLES: readonly UserRole[] = [
-  'admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager',
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
 ];
 
 // Policies read set. Mirrors `/api/policies GET` — broader than other
 // QMS reads because policy text is widely consumed.
 const POLICIES_READ_ROLES: readonly UserRole[] = [
-  'admin', 'grc_manager', 'quality_manager', 'head_of_operations_quality',
-  'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead',
-  'ai_specialist',
+  "admin",
+  "grc_manager",
+  "quality_manager",
+  "head_of_operations_quality",
+  "bu_owner",
+  "executive",
+  "quality_specialist",
+  "auditor",
+  "team_lead",
+  "ai_specialist",
 ];
 
 // AI Approvals (HITL queue) read set. Mirrors `/api/ai/approvals GET`.
 const AI_APPROVALS_ROLES: readonly UserRole[] = [
-  'admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality',
-  'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor',
-  'team_lead',
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+  "ai_specialist",
+  "bu_owner",
+  "executive",
+  "quality_specialist",
+  "auditor",
+  "team_lead",
 ];
 
 // TableF (department COPC scorecard) read set. Mirrors
 // `/api/tablef/ GET` — adds bu_owner who reads their own department.
 const TABLEF_READ_ROLES: readonly UserRole[] = [
-  'admin', 'head_of_operations_quality', 'quality_manager', 'grc_manager',
-  'executive', 'bu_owner',
+  "admin",
+  "head_of_operations_quality",
+  "quality_manager",
+  "grc_manager",
+  "executive",
+  "bu_owner",
 ];
 
 // Consultant (AI alerts/feedback) read set. Mirrors
 // `/api/consultant/alerts GET` and `/api/consultant/feedback POST`.
 const CONSULTANT_ROLES: readonly UserRole[] = [
-  'admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality',
+  "admin",
+  "ai_specialist",
+  "grc_manager",
+  "head_of_operations_quality",
 ];
 
 // Admin-only set. Mirrors `/api/pdpl/ *` (admin-only by `requireAdminOrKey`)
 // and `/api/logs GET` / `/api/event-logs GET` (admin-only audit trail).
-const ADMIN_ONLY: readonly UserRole[] = ['admin'];
+const ADMIN_ONLY: readonly UserRole[] = ["admin"];
 
 const STATIC_MIME: Record<string, string> = {
-  css: 'text/css; charset=utf-8',
-  js: 'application/javascript; charset=utf-8',
-  mjs: 'application/javascript; charset=utf-8',
-  json: 'application/json; charset=utf-8',
-  map: 'application/json; charset=utf-8',
-  svg: 'image/svg+xml',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  ico: 'image/x-icon',
-  woff: 'font/woff',
-  woff2: 'font/woff2',
-  ttf: 'font/ttf',
-  otf: 'font/otf',
-  txt: 'text/plain; charset=utf-8',
+  css: "text/css; charset=utf-8",
+  js: "application/javascript; charset=utf-8",
+  mjs: "application/javascript; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  map: "application/json; charset=utf-8",
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  txt: "text/plain; charset=utf-8",
 };
 
 function resolveDashboardFile(relPath: string): string | null {
@@ -164,7 +205,7 @@ function serveDashboardPage(filename: string) {
       if (filePath) return c.html(readFileSync(filePath, "utf-8"));
       return c.text(`${filename} not found`, 404);
     } catch (error) {
-      console.error(`Error serving ${filename}:`, error);
+      logger.error(`Error serving ${filename}:`, error);
       return c.text(`Error loading ${filename}`, 500);
     }
   };
@@ -192,19 +233,24 @@ export const staticPageRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const rawName = c.req.param('name') || '';
+          const rawName = c.req.param("name") || "";
           if (!/^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(rawName)) {
             return c.text("Invalid dashboard name", 400);
           }
-          const dotIdx = rawName.lastIndexOf('.');
-          const ext = dotIdx > 0 ? rawName.slice(dotIdx + 1).toLowerCase() : '';
+          const dotIdx = rawName.lastIndexOf(".");
+          const ext = dotIdx > 0 ? rawName.slice(dotIdx + 1).toLowerCase() : "";
 
-          if (!ext || ext === 'html') {
-            const session = getSessionFromCookie(c.req.header('Cookie'));
+          if (!ext || ext === "html") {
+            const session = getSessionFromCookie(c.req.header("Cookie"));
             if (!isAdminKeyConfigured() && !session) {
-              return c.html(renderSetupRequiredPage("Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`));
+              return c.html(
+                renderSetupRequiredPage(
+                  "Setup Required",
+                  `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+                ),
+              );
             }
-            const baseName = rawName.replace(/\.html$/i, '');
+            const baseName = rawName.replace(/\.html$/i, "");
             const htmlPath = resolveDashboardFile(`${baseName}.html`);
             if (htmlPath) return c.html(readFileSync(htmlPath, "utf-8"));
             return c.text(`Dashboard "${baseName}" not found`, 404);
@@ -212,15 +258,21 @@ export const staticPageRoutes = [
 
           const assetPath = resolveDashboardFile(rawName);
           if (!assetPath) return c.text(`Asset "${rawName}" not found`, 404);
-          const mime = STATIC_MIME[ext] || 'application/octet-stream';
-          const isText = mime.startsWith('text/') || mime.includes('json') || mime.includes('javascript') || mime.includes('svg');
-          const body = isText ? readFileSync(assetPath, 'utf-8') : readFileSync(assetPath);
+          const mime = STATIC_MIME[ext] || "application/octet-stream";
+          const isText =
+            mime.startsWith("text/") ||
+            mime.includes("json") ||
+            mime.includes("javascript") ||
+            mime.includes("svg");
+          const body = isText
+            ? readFileSync(assetPath, "utf-8")
+            : readFileSync(assetPath);
           return c.body(body as any, 200, {
-            'Content-Type': mime,
-            'Cache-Control': 'public, max-age=3600',
+            "Content-Type": mime,
+            "Cache-Control": "public, max-age=3600",
           });
         } catch (error) {
-          console.error("Error serving dashboard subpage:", error);
+          logger.error("Error serving dashboard subpage:", error);
           return c.text("Error loading dashboard", 500);
         }
       };
@@ -240,13 +292,18 @@ export const staticPageRoutes = [
       return async (c: any) => {
         try {
           if (!isAdminAuthorized(c)) {
-            return c.html(renderSetupRequiredPage("Admin Setup Required", `To access the admin panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.`));
+            return c.html(
+              renderSetupRequiredPage(
+                "Admin Setup Required",
+                `To access the admin panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.`,
+              ),
+            );
           }
           const filePath = resolveDashboardFile("admin.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
           return c.text("Admin panel not found", 404);
         } catch (error) {
-          console.error("Error serving admin panel:", error);
+          logger.error("Error serving admin panel:", error);
           return c.text("Error loading admin panel", 500);
         }
       };
@@ -265,13 +322,18 @@ export const staticPageRoutes = [
       return async (c: any) => {
         try {
           if (!isAdminAuthorized(c)) {
-            return c.html(renderSetupRequiredPage("Admin Setup Required", `To access the Users &amp; Access panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.`));
+            return c.html(
+              renderSetupRequiredPage(
+                "Admin Setup Required",
+                `To access the Users &amp; Access panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.`,
+              ),
+            );
           }
           const filePath = resolveDashboardFile("users.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
           return c.text("Users panel not found", 404);
         } catch (error) {
-          console.error("Error serving users panel:", error);
+          logger.error("Error serving users panel:", error);
           return c.text("Error loading users panel", 500);
         }
       };
@@ -300,16 +362,18 @@ export const staticPageRoutes = [
       return async (c: any) => {
         try {
           if (!isAdminAuthorized(c)) {
-            return c.html(renderSetupRequiredPage(
-              "QMS Setup Required",
-              `To access the QMS dashboard, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.`,
-            ));
+            return c.html(
+              renderSetupRequiredPage(
+                "QMS Setup Required",
+                `To access the QMS dashboard, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.`,
+              ),
+            );
           }
           const filePath = resolveDashboardFile("qms.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
           return c.text("QMS dashboard not found", 404);
         } catch (error) {
-          console.error("Error serving QMS dashboard:", error);
+          logger.error("Error serving QMS dashboard:", error);
           return c.text("Error loading QMS dashboard", 500);
         }
       };
@@ -326,57 +390,281 @@ export const staticPageRoutes = [
   // top-to-bottom.
   // ──────────────────────────────────────────────────────────────────────
   // /sandbox → /api/sandbox/ — any authenticated session.
-  { path: "/sandbox", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("sandbox.html", ANY_DASHBOARD_ROLES, "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/sandbox",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "sandbox.html",
+        ANY_DASHBOARD_ROLES,
+        "Setup Required",
+        `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /crm → /api/crm/data GET — governance + executive.
-  { path: "/crm", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("crm.html", GOVERNANCE_AND_EXECUTIVE, "CRM Setup Required", `To access the CRM dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/crm",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "crm.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "CRM Setup Required",
+        `To access the CRM dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /audits → /api/audits GET — governance + executive.
-  { path: "/audits", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("audits.html", GOVERNANCE_AND_EXECUTIVE, "Audits Setup Required", `To access the Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/audits",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "audits.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Audits Setup Required",
+        `To access the Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /compliance → /api/compliance GET — governance + executive.
-  { path: "/compliance", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("compliance.html", GOVERNANCE_AND_EXECUTIVE, "Compliance Setup Required", `To access the Compliance dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/compliance",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "compliance.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Compliance Setup Required",
+        `To access the Compliance dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /policies → /api/policies GET — broad QMS read set.
-  { path: "/policies", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("policies.html", POLICIES_READ_ROLES, "Policies Setup Required", `To access the Policies dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/policies",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "policies.html",
+        POLICIES_READ_ROLES,
+        "Policies Setup Required",
+        `To access the Policies dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /reviews → /api/management-reviews GET — governance + executive.
-  { path: "/reviews", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("reviews.html", GOVERNANCE_AND_EXECUTIVE, "Reviews Setup Required", `To access the Management Reviews dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/reviews",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "reviews.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Reviews Setup Required",
+        `To access the Management Reviews dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /risks → /api/risks GET — governance + executive.
-  { path: "/risks", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("risks.html", GOVERNANCE_AND_EXECUTIVE, "Risks Setup Required", `To access the Risk Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/risks",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "risks.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Risks Setup Required",
+        `To access the Risk Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /grc → cross-module GRC dashboard (audits, compliance, risks, etc.).
-  { path: "/grc", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("grc.html", GOVERNANCE_AND_EXECUTIVE, "GRC Setup Required", `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/grc",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "grc.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "GRC Setup Required",
+        `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /pdpl → /api/pdpl/* — admin only (privacy inventory, incident history).
-  { path: "/pdpl", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("pdpl.html", ADMIN_ONLY, "PDPL Setup Required", `To access the PDPL dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/pdpl",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "pdpl.html",
+        ADMIN_ONLY,
+        "PDPL Setup Required",
+        `To access the PDPL dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /feedback → /api/feedback — any authenticated session.
-  { path: "/feedback", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("feedback.html", ANY_DASHBOARD_ROLES, "Feedback Setup Required", `To access the Feedback dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/feedback",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "feedback.html",
+        ANY_DASHBOARD_ROLES,
+        "Feedback Setup Required",
+        `To access the Feedback dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /guide → platform user guide; readable by any authenticated dashboard
   // session (mirrors `ANY_DASHBOARD_ROLES`). Documents internal workflows
   // so unauthenticated visitors must not browse it, but every signed-in
   // role — including read-only ones — can consult the guide for the
   // features their own role can use.
-  { path: "/guide", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("guide.html", ANY_DASHBOARD_ROLES, "Guide Setup Required", `To access the platform user guide, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/guide",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "guide.html",
+        ANY_DASHBOARD_ROLES,
+        "Guide Setup Required",
+        `To access the platform user guide, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /migration → /api/migration (GET + writes) — admin only. The page is
   // a functional data-import tool with file uploads and deduplication;
   // its backing API is admin-gated in `ROUTE_PERMISSION_MAP`, so the
   // page shell mirrors that allowlist.
-  { path: "/migration", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("migration.html", ADMIN_ONLY, "Migration Setup Required", `To access the Data Migration Engine, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/migration",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "migration.html",
+        ADMIN_ONLY,
+        "Migration Setup Required",
+        `To access the Data Migration Engine, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /logs → /api/logs GET, /api/event-logs GET — admin only.
-  { path: "/logs", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("logs.html", ADMIN_ONLY, "Logs Setup Required", `To access the Audit Logs, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/logs",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "logs.html",
+        ADMIN_ONLY,
+        "Logs Setup Required",
+        `To access the Audit Logs, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /ai-approvals → /api/ai/approvals GET — broad HITL participant set.
-  { path: "/ai-approvals", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("ai-approvals.html", AI_APPROVALS_ROLES, "AI Approvals Setup Required", `To access the AI Approvals dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/ai-approvals",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "ai-approvals.html",
+        AI_APPROVALS_ROLES,
+        "AI Approvals Setup Required",
+        `To access the AI Approvals dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /intake → /api/manual-audit-intake GET — any authenticated session.
-  { path: "/intake", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("intake.html", ANY_DASHBOARD_ROLES, "Intake Setup Required", `To access the Intake dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/intake",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "intake.html",
+        ANY_DASHBOARD_ROLES,
+        "Intake Setup Required",
+        `To access the Intake dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /external-audits → /api/external-audits GET — any authenticated session.
-  { path: "/external-audits", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("external-audits.html", ANY_DASHBOARD_ROLES, "External Audits Setup Required", `To access the External Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/external-audits",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "external-audits.html",
+        ANY_DASHBOARD_ROLES,
+        "External Audits Setup Required",
+        `To access the External Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /vendors → /api/vendors GET — governance roles only (PII / contracts).
-  { path: "/vendors", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("vendors.html", VENDORS_READ_ROLES, "Vendors Setup Required", `To access the Vendors dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/vendors",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "vendors.html",
+        VENDORS_READ_ROLES,
+        "Vendors Setup Required",
+        `To access the Vendors dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /tablef → /api/tablef/ GET — governance + executive + bu_owner.
-  { path: "/tablef", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("tablef.html", TABLEF_READ_ROLES, "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/tablef",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "tablef.html",
+        TABLEF_READ_ROLES,
+        "Setup Required",
+        `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /infographic → /api/infographic GET — governance + executive.
-  { path: "/infographic", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("infographic.html", GOVERNANCE_AND_EXECUTIVE, "Infographic Setup Required", `To access the Infographic dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/infographic",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "infographic.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Infographic Setup Required",
+        `To access the Infographic dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /executive.html → /api/executive/reports GET, /api/executive/mbr-data GET.
-  { path: "/executive.html", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("executive.html", GOVERNANCE_AND_EXECUTIVE, "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/executive.html",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "executive.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Setup Required",
+        `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /grc.html → same dashboard shell as /grc.
-  { path: "/grc.html", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("grc.html", GOVERNANCE_AND_EXECUTIVE, "GRC Setup Required", `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  {
+    path: "/grc.html",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "grc.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "GRC Setup Required",
+        `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /consultant.html → /api/consultant/* — AI insiders only.
-  { path: "/consultant.html", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("consultant.html", CONSULTANT_ROLES, "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
-  { path: "/login.html", method: "GET", createHandler: async () => serveDashboardPage("login.html") },
+  {
+    path: "/consultant.html",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "consultant.html",
+        CONSULTANT_ROLES,
+        "Setup Required",
+        `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  {
+    path: "/login.html",
+    method: "GET",
+    createHandler: async () => serveDashboardPage("login.html"),
+  },
   {
     path: "/docs/SCOPE_OF_WORK.html",
     method: "GET",
@@ -389,11 +677,12 @@ export const staticPageRoutes = [
             "/home/runner/workspace/docs/SCOPE_OF_WORK.html",
           ];
           for (const docPath of possiblePaths) {
-            if (existsSync(docPath)) return c.html(readFileSync(docPath, "utf-8"));
+            if (existsSync(docPath))
+              return c.html(readFileSync(docPath, "utf-8"));
           }
           return c.text("Documentation not found", 404);
         } catch (error) {
-          console.error("Error serving documentation:", error);
+          logger.error("Error serving documentation:", error);
           return c.text("Error loading documentation", 500);
         }
       };
@@ -423,35 +712,115 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
   allowedRoles: readonly UserRole[];
   backingApiPath: string | null;
 }> = [
-  { path: "/sandbox",         allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/sandbox/health" },
-  { path: "/crm",             allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/crm/data" },
-  { path: "/audits",          allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/audits" },
-  { path: "/compliance",      allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/compliance" },
-  { path: "/policies",        allowedRoles: POLICIES_READ_ROLES,       backingApiPath: "/api/policies" },
-  { path: "/reviews",         allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/management-reviews" },
-  { path: "/risks",           allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/risks" },
+  {
+    path: "/sandbox",
+    allowedRoles: ANY_DASHBOARD_ROLES,
+    backingApiPath: "/api/sandbox/health",
+  },
+  {
+    path: "/crm",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/crm/data",
+  },
+  {
+    path: "/audits",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/audits",
+  },
+  {
+    path: "/compliance",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/compliance",
+  },
+  {
+    path: "/policies",
+    allowedRoles: POLICIES_READ_ROLES,
+    backingApiPath: "/api/policies",
+  },
+  {
+    path: "/reviews",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/management-reviews",
+  },
+  {
+    path: "/risks",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/risks",
+  },
   // /grc aggregates audits + compliance + risks + reviews; all share the
   // same governance+executive read allowlist, so /api/audits is a faithful
   // representative and any divergence in any of those rules will be
   // caught individually by /audits, /compliance, /risks, /reviews.
-  { path: "/grc",             allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/audits" },
-  { path: "/pdpl",            allowedRoles: ADMIN_ONLY,                backingApiPath: "/api/pdpl/export" },
-  { path: "/feedback",        allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/feedback" },
+  {
+    path: "/grc",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/audits",
+  },
+  {
+    path: "/pdpl",
+    allowedRoles: ADMIN_ONLY,
+    backingApiPath: "/api/pdpl/export",
+  },
+  {
+    path: "/feedback",
+    allowedRoles: ANY_DASHBOARD_ROLES,
+    backingApiPath: "/api/feedback",
+  },
   // /guide is a static platform user-guide HTML; no `/api/guide` rule
   // exists. The page-gate allowlist (`ANY_DASHBOARD_ROLES`) is asserted
   // by the four-case role-gate test; the drift check skips it because
   // there is no API-side rule to mirror.
-  { path: "/guide",           allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: null },
+  { path: "/guide", allowedRoles: ANY_DASHBOARD_ROLES, backingApiPath: null },
   // /migration → /api/migration GET — admin only.
-  { path: "/migration",       allowedRoles: ADMIN_ONLY,                backingApiPath: "/api/migration/run" },
-  { path: "/logs",            allowedRoles: ADMIN_ONLY,                backingApiPath: "/api/logs" },
-  { path: "/ai-approvals",    allowedRoles: AI_APPROVALS_ROLES,        backingApiPath: "/api/ai/approvals" },
-  { path: "/intake",          allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/manual-audit-intake" },
-  { path: "/external-audits", allowedRoles: ANY_DASHBOARD_ROLES,       backingApiPath: "/api/external-audits" },
-  { path: "/vendors",         allowedRoles: VENDORS_READ_ROLES,        backingApiPath: "/api/vendors" },
-  { path: "/tablef",          allowedRoles: TABLEF_READ_ROLES,         backingApiPath: "/api/tablef/kpis" },
-  { path: "/infographic",     allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/infographic" },
-  { path: "/executive.html",  allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/executive/reports" },
-  { path: "/grc.html",        allowedRoles: GOVERNANCE_AND_EXECUTIVE,  backingApiPath: "/api/audits" },
-  { path: "/consultant.html", allowedRoles: CONSULTANT_ROLES,          backingApiPath: "/api/consultant/alerts" },
+  {
+    path: "/migration",
+    allowedRoles: ADMIN_ONLY,
+    backingApiPath: "/api/migration/run",
+  },
+  { path: "/logs", allowedRoles: ADMIN_ONLY, backingApiPath: "/api/logs" },
+  {
+    path: "/ai-approvals",
+    allowedRoles: AI_APPROVALS_ROLES,
+    backingApiPath: "/api/ai/approvals",
+  },
+  {
+    path: "/intake",
+    allowedRoles: ANY_DASHBOARD_ROLES,
+    backingApiPath: "/api/manual-audit-intake",
+  },
+  {
+    path: "/external-audits",
+    allowedRoles: ANY_DASHBOARD_ROLES,
+    backingApiPath: "/api/external-audits",
+  },
+  {
+    path: "/vendors",
+    allowedRoles: VENDORS_READ_ROLES,
+    backingApiPath: "/api/vendors",
+  },
+  {
+    path: "/tablef",
+    allowedRoles: TABLEF_READ_ROLES,
+    backingApiPath: "/api/tablef/kpis",
+  },
+  {
+    path: "/infographic",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/infographic",
+  },
+  {
+    path: "/executive.html",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/executive/reports",
+  },
+  {
+    path: "/grc.html",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/audits",
+  },
+  {
+    path: "/consultant.html",
+    allowedRoles: CONSULTANT_ROLES,
+    backingApiPath: "/api/consultant/alerts",
+  },
 ];

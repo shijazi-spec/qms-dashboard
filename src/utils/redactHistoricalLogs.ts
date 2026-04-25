@@ -49,6 +49,7 @@ import {
 import { redactPromptPreview, redactToolPayloadPreview } from "./aiTelemetry";
 import { previewBreadcrumbSetFragment } from "./aiCallMetricsPreviewBreadcrumb";
 
+import { logger as safeLogger } from "./logger";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const REDACT_DATE = new Date().toISOString();
 const BREADCRUMB_KEY = "_redacted_at";
@@ -185,7 +186,7 @@ export async function waitForTablesReady(
       // Treat any probe error as "not ready yet" so a transient failure
       // (e.g. connection reset during cold-start) does not prevent the
       // sweep from ever running. We still respect the timeout below.
-      console.warn("[Redaction] Table-readiness probe failed:", probeErr);
+      safeLogger.warn("[Redaction] Table-readiness probe failed:", probeErr);
     }
 
     if (now() - startedAt >= timeoutMs) {
@@ -915,8 +916,8 @@ export async function redactAiCallMetrics(
 async function main() {
   const client = await pool.connect();
   try {
-    console.log("[Redaction] Starting historical log redaction sweep...");
-    console.log(`[Redaction] Sweep timestamp: ${REDACT_DATE}`);
+    safeLogger.info("[Redaction] Starting historical log redaction sweep...");
+    safeLogger.info(`[Redaction] Sweep timestamp: ${REDACT_DATE}`);
 
     const result = await runSweepWithClient(client, REDACT_DATE);
 
@@ -949,9 +950,9 @@ async function main() {
         severity: "INFO",
         module: "security/redaction-sweep",
       });
-      console.log("[Redaction] Audit-log entry emitted for sweep run");
+      safeLogger.info("[Redaction] Audit-log entry emitted for sweep run");
     } catch (auditErr) {
-      console.error("[Redaction] Failed to emit audit-log entry:", auditErr);
+      safeLogger.error("[Redaction] Failed to emit audit-log entry:", auditErr);
     }
   } finally {
     client.release();
@@ -1046,7 +1047,7 @@ export async function runSweepWithClient(
   sweepTimestamp: string,
 ): Promise<SweepResult> {
   const elCount = await redactEventLogs(client);
-  console.log(`[Redaction] event_logs: ${elCount} rows updated`);
+  safeLogger.info(`[Redaction] event_logs: ${elCount} rows updated`);
 
   let ncCount = 0;
   let ncReasonCount = 0;
@@ -1069,13 +1070,13 @@ export async function runSweepWithClient(
     );
     ncCount = ncResult.rowsUpdated;
     ncReasonCount = ncResult.changeReasonUpdated;
-    console.log(
+    safeLogger.info(
       `[Redaction] nc_change_history: ${ncCount} rows updated ` +
         `(change_reason scrubs=${ncReasonCount})`,
     );
   } catch (e: any) {
     if (e.code === "42P01") {
-      console.log(
+      safeLogger.info(
         "[Redaction] nc_change_history table does not exist — skipped",
       );
     } else {
@@ -1090,13 +1091,13 @@ export async function runSweepWithClient(
     );
     capaCount = capaResult.rowsUpdated;
     capaReasonCount = capaResult.changeReasonUpdated;
-    console.log(
+    safeLogger.info(
       `[Redaction] capa_change_history: ${capaCount} rows updated ` +
         `(change_reason scrubs=${capaReasonCount})`,
     );
   } catch (e: any) {
     if (e.code === "42P01") {
-      console.log(
+      safeLogger.info(
         "[Redaction] capa_change_history table does not exist — skipped",
       );
     } else {
@@ -1107,7 +1108,7 @@ export async function runSweepWithClient(
   try {
     aiResult = await redactAiPendingActions(client);
     aiCount = aiResult.rowsUpdated;
-    console.log(
+    safeLogger.info(
       `[Redaction] ai_pending_actions: ${aiResult.rowsUpdated} rows updated ` +
         `(scanned=${aiResult.scanned}, payload=${aiResult.payloadChanged}, ` +
         `payload_preview=${aiResult.previewChanged}, ` +
@@ -1116,7 +1117,7 @@ export async function runSweepWithClient(
   } catch (e: any) {
     if (e.code === "42P01") {
       aiSkipReason = "table_missing";
-      console.log(
+      safeLogger.info(
         "[Redaction] ai_pending_actions table does not exist — skipped",
       );
     } else {
@@ -1143,7 +1144,7 @@ export async function runSweepWithClient(
             : "") +
           `]`
         : "";
-    console.log(
+    safeLogger.info(
       `[Redaction] ai_pending_actions.credential_warnings backfill: ` +
         `${credWarnResult.rowsUpdated} rows flagged ` +
         `(scanned=${credWarnResult.scanned}, ` +
@@ -1152,7 +1153,7 @@ export async function runSweepWithClient(
   } catch (e: any) {
     if (e.code === "42P01") {
       credWarnSkipReason = "table_missing";
-      console.log(
+      safeLogger.info(
         "[Redaction] ai_pending_actions table does not exist — credential_warnings backfill skipped",
       );
     } else {
@@ -1163,7 +1164,7 @@ export async function runSweepWithClient(
   try {
     metricsResult = await redactAiCallMetrics(client);
     metricsCount = metricsResult.rowsUpdated;
-    console.log(
+    safeLogger.info(
       `[Redaction] ai_call_metrics: ${metricsResult.rowsUpdated} rows updated ` +
         `(scanned=${metricsResult.scanned}, ` +
         `prompt_preview=${metricsResult.promptPreviewChanged}, ` +
@@ -1173,7 +1174,9 @@ export async function runSweepWithClient(
   } catch (e: any) {
     if (e.code === "42P01") {
       metricsSkipReason = "table_missing";
-      console.log("[Redaction] ai_call_metrics table does not exist — skipped");
+      safeLogger.info(
+        "[Redaction] ai_call_metrics table does not exist — skipped",
+      );
     } else {
       throw e;
     }
@@ -1184,7 +1187,7 @@ export async function runSweepWithClient(
   const credWarnCount = credWarnResult?.rowsUpdated ?? 0;
   const total =
     elCount + ncCount + capaCount + aiCount + credWarnCount + metricsCount;
-  console.log(`[Redaction] Sweep complete. Total rows updated: ${total}`);
+  safeLogger.info(`[Redaction] Sweep complete. Total rows updated: ${total}`);
 
   return {
     sweep_timestamp: sweepTimestamp,
@@ -1514,14 +1517,15 @@ export async function dispatchPostRestoreSweepAlert(
   // var continues to work as a fallback when the DB list is empty —
   // existing deployments that haven't touched the dashboard see no
   // behaviour change.
-  const { resolveEffectiveRecipients } = await import(
-    "./alertEmailRecipients"
-  );
+  const { resolveEffectiveRecipients } = await import("./alertEmailRecipients");
   let emailRecipients: string[] = [];
   let recipientsSource: "db" | "env" | "none" = "none";
   try {
     const resolved = await (deps.resolveRecipients
-      ? deps.resolveRecipients("post_restore_sweep", env.POST_RESTORE_SWEEP_ALERT_EMAIL)
+      ? deps.resolveRecipients(
+          "post_restore_sweep",
+          env.POST_RESTORE_SWEEP_ALERT_EMAIL,
+        )
       : resolveEffectiveRecipients(
           "post_restore_sweep",
           env.POST_RESTORE_SWEEP_ALERT_EMAIL,
@@ -1547,9 +1551,7 @@ export async function dispatchPostRestoreSweepAlert(
   // length>=20 sentinel-key gate. Imported dynamically to keep the
   // module usable in CLI contexts that never touch the email path.
   const { isResendConfigured } = await import("./resendMail");
-  const helperConfigured = isResendConfigured(
-    env as NodeJS.ProcessEnv,
-  );
+  const helperConfigured = isResendConfigured(env as NodeJS.ProcessEnv);
   if (emailRecipients.length > 0 && helperConfigured) {
     channelsAttempted.push("email_recipients");
     try {
@@ -1650,7 +1652,7 @@ export async function dispatchPostRestoreSweepAlert(
 export async function onBootRedactionSweep(): Promise<void> {
   const g = globalThis as any;
   if (g.__walaplus_bootSweepDone) {
-    console.log(
+    safeLogger.info(
       "[Redaction] Boot sweep already ran this process — skipping duplicate call",
     );
     return;
@@ -1660,8 +1662,8 @@ export async function onBootRedactionSweep(): Promise<void> {
   const bootPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
-    console.log("[Redaction] Boot sweep starting...");
-    console.log(`[Redaction] Sweep timestamp: ${sweepTimestamp}`);
+    safeLogger.info("[Redaction] Boot sweep starting...");
+    safeLogger.info(`[Redaction] Sweep timestamp: ${sweepTimestamp}`);
 
     const client = await bootPool.connect();
     let result: SweepResult;
@@ -1675,7 +1677,7 @@ export async function onBootRedactionSweep(): Promise<void> {
       // entirely without polluting last-sweep.json.
       const readiness = await waitForTablesReady(client);
       if (!readiness.ready) {
-        console.warn(
+        safeLogger.warn(
           `[Redaction] Boot sweep aborted: tables not ready after ` +
             `${readiness.waitedMs}ms (${readiness.attempts} probes). ` +
             `Missing: ${readiness.missing.join(", ")}. ` +
@@ -1687,7 +1689,7 @@ export async function onBootRedactionSweep(): Promise<void> {
         return;
       }
       if (readiness.attempts > 1) {
-        console.log(
+        safeLogger.info(
           `[Redaction] Boot sweep tables ready after ${readiness.waitedMs}ms ` +
             `(${readiness.attempts} probes)`,
         );
@@ -1726,9 +1728,9 @@ export async function onBootRedactionSweep(): Promise<void> {
         severity: "INFO",
         module: "security/redaction-sweep",
       });
-      console.log("[Redaction] Boot sweep audit-log entry emitted");
+      safeLogger.info("[Redaction] Boot sweep audit-log entry emitted");
     } catch (auditErr) {
-      console.error(
+      safeLogger.error(
         "[Redaction] Failed to emit boot sweep audit-log entry:",
         auditErr,
       );
@@ -1745,9 +1747,11 @@ export async function onBootRedactionSweep(): Promise<void> {
         JSON.stringify(result, null, 2) + "\n",
         "utf8",
       );
-      console.log(`[Redaction] Boot sweep summary written to ${summaryPath}`);
+      safeLogger.info(
+        `[Redaction] Boot sweep summary written to ${summaryPath}`,
+      );
     } catch (fileErr) {
-      console.error(
+      safeLogger.error(
         "[Redaction] Failed to write boot sweep summary file:",
         fileErr,
       );
@@ -1761,13 +1765,13 @@ export async function onBootRedactionSweep(): Promise<void> {
     try {
       await dispatchPostRestoreSweepAlert(result);
     } catch (alertErr) {
-      console.error(
+      safeLogger.error(
         "[Redaction] Failed to dispatch post-restore sweep alert:",
         alertErr,
       );
     }
   } catch (err) {
-    console.error(
+    safeLogger.error(
       "[Redaction] Boot sweep failed — application startup continues:",
       err,
     );
@@ -1794,7 +1798,7 @@ const isDirectInvocation = (() => {
 
 if (isDirectInvocation) {
   main().catch((err) => {
-    console.error("[Redaction] Fatal error:", err);
+    safeLogger.error("[Redaction] Fatal error:", err);
     process.exit(1);
   });
 }
