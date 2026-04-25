@@ -56,6 +56,15 @@ async function main(): Promise<void> {
   const agentName = `roundtrip-${process.pid}-${Date.now()}`;
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+  // Richer secrets (Task #277) — credential-shaped substrings that the basic
+  // PII_PATTERNS pass cannot catch on its own. Their redaction relies on the
+  // SECRET_LIKE_PATTERNS regex deny-list inside `redactSecretLikeStrings()`
+  // / `redactSensitiveDeep()`. They are placed under innocuously-named keys
+  // (`note`, `commitMessage`) so the key-based deny-list cannot match — only
+  // the regex / value-based redaction can save us.
+  const RICH_OPENAI_KEY = 'sk-live-abcdefghijklmnopqrstuvwxyz0123456789AB';
+  const RICH_GITHUB_PAT = 'ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ZZ';
+
   try {
     // ── SUCCESS PATH ──────────────────────────────────────────────────
     const happyTool = {
@@ -64,6 +73,10 @@ async function main(): Promise<void> {
         success: true,
         echo: args,
         contact: 'support@example.com',
+        // Richer secret embedded under an innocuous key — only the regex
+        // deny-list inside `redactSecretLikeStrings()` can scrub this on
+        // the OUTPUT side.
+        commitMessage: `deploy: rotated key ${RICH_GITHUB_PAT}`,
       }),
     };
     const wrappedHappy = wrapToolWithTelemetry(happyTool, agentName);
@@ -76,6 +89,10 @@ async function main(): Promise<void> {
       query: 'lookup user',
       email: 'alice@example.com',
       token: 'secret=hunter2-not-stored-raw',
+      // Richer secret embedded under an innocuous key — only the regex
+      // deny-list inside `redactSensitiveDeep()` can scrub this on the
+      // INPUT side.
+      note: `Reset attempted with key ${RICH_OPENAI_KEY}`,
     });
 
     // Wait for the fire-and-forget INSERT to land.
@@ -126,6 +143,33 @@ async function main(): Promise<void> {
         && hr.tool_output_preview.includes('[EMAIL]')
         && !hr.tool_output_preview.includes('support@example.com'),
       'persisted tool_output_preview redacts emails',
+    );
+    // ── Richer secret types (Task #277) ──────────────────────────────
+    // End-to-end proof that `redactToolPayloadPreview()`'s richer
+    // SECRET_LIKE_PATTERNS deny-list (sk-…, ghp_…, JWTs, bcrypt, AWS …)
+    // survives the stringify → INSERT → SELECT round-trip, even when
+    // the credential lives under an innocuously-named key that the
+    // key-based deny-list cannot match.
+    // We assert BOTH that the raw secret is absent AND that a redaction
+    // marker is present in the same preview. The marker check guards
+    // against a future truncation/order regression that would let the
+    // test pass simply because the secret slid past the 300-char preview
+    // boundary instead of actually being scrubbed.
+    assert(
+      typeof hr?.tool_input_preview === 'string'
+        && !hr.tool_input_preview.includes(RICH_OPENAI_KEY)
+        && !hr.tool_input_preview.includes('sk-live-abcdefghijklmnopqrstuvwxyz')
+        && (hr.tool_input_preview.includes('***REDACTED***')
+            || hr.tool_input_preview.includes('[REDACTED]')),
+      'persisted tool_input_preview redacts richer secrets (sk-… OpenAI key)',
+    );
+    assert(
+      typeof hr?.tool_output_preview === 'string'
+        && !hr.tool_output_preview.includes(RICH_GITHUB_PAT)
+        && !hr.tool_output_preview.includes('ghp_AbCdEfGhIjKlMnOpQrSt')
+        && (hr.tool_output_preview.includes('***REDACTED***')
+            || hr.tool_output_preview.includes('[REDACTED]')),
+      'persisted tool_output_preview redacts richer secrets (ghp_… GitHub PAT)',
     );
     assert(
       (hr?.tool_input_preview?.length ?? 0) <= 300
