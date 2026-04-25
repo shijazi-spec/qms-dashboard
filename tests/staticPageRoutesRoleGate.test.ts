@@ -1,11 +1,12 @@
 /**
  * Route-level role-gate tests for the dashboard pages locked down by
- * Task #461 in `src/mastra/routes/staticPageRoutes.ts`:
+ * Task #461 (extended in Task #471) in
+ * `src/mastra/routes/staticPageRoutes.ts`:
  *
  *   /sandbox, /crm, /audits, /compliance, /policies, /reviews, /risks,
- *   /grc, /pdpl, /feedback, /logs, /ai-approvals, /intake,
- *   /external-audits, /vendors, /tablef, /infographic, /executive.html,
- *   /grc.html, /consultant.html
+ *   /grc, /pdpl, /feedback, /guide, /migration, /logs, /ai-approvals,
+ *   /intake, /external-audits, /vendors, /tablef, /infographic,
+ *   /executive.html, /grc.html, /consultant.html
  *
  * Why this file exists
  * ────────────────────
@@ -163,13 +164,15 @@ await suite.test("every gated route is registered as GET in staticPageRoutes", (
 });
 
 // Sanity: the matrix is non-empty and contains at least the routes named
-// in Task #461. If someone trims an entry by accident, we want to know.
-await suite.test("matrix includes every route named by Task #461", () => {
+// in Task #461 and the two routes added by Task #471 (/guide, /migration).
+// If someone trims an entry by accident, we want to know.
+await suite.test("matrix includes every route named by Task #461 + Task #471", () => {
   const required = [
     "/sandbox", "/crm", "/audits", "/compliance", "/policies", "/reviews",
-    "/risks", "/grc", "/pdpl", "/feedback", "/logs", "/ai-approvals",
-    "/intake", "/external-audits", "/vendors", "/tablef", "/infographic",
-    "/executive.html", "/grc.html", "/consultant.html",
+    "/risks", "/grc", "/pdpl", "/feedback", "/guide", "/migration",
+    "/logs", "/ai-approvals", "/intake", "/external-audits", "/vendors",
+    "/tablef", "/infographic", "/executive.html", "/grc.html",
+    "/consultant.html",
   ];
   const present = new Set(ROLE_GATED_DASHBOARD_ROUTES.map((r) => r.path));
   for (const p of required) {

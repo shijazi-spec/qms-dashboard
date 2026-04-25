@@ -12,25 +12,8 @@ function renderSetupRequiredPage(title: string, panelDescription: string): strin
   return `<!DOCTYPE html><html><head><title>${title}</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">${title}</h1><p class="text-gray-600 mb-4">${panelDescription}</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`;
 }
 
-function serveDashboardPageWithSetupCheck(filename: string, pageTitle: string, panelDescription: string) {
-  return async (c: any) => {
-    try {
-      const session = getSessionFromCookie(c.req.header('Cookie'));
-      if (!isAdminKeyConfigured() && !session) {
-        return c.html(renderSetupRequiredPage(pageTitle, panelDescription));
-      }
-      const filePath = resolveDashboardFile(filename);
-      if (filePath) return c.html(readFileSync(filePath, "utf-8"));
-      return c.text(`${filename} not found`, 404);
-    } catch (error) {
-      console.error(`Error serving ${filename}:`, error);
-      return c.text(`Error loading ${filename}`, 500);
-    }
-  };
-}
-
 /**
- * Role-aware page-shell gate (Task #461). Used for the dashboard pages whose
+ * Role-aware page-shell gate (Task #461, extended in Task #471). Used for the dashboard pages whose
  * backing `/api/*` routes enforce a specific role allowlist via
  * `ROUTE_PERMISSION_MAP` in `src/utils/rbacMiddleware.ts`.
  *
@@ -362,15 +345,17 @@ export const staticPageRoutes = [
   { path: "/pdpl", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("pdpl.html", ADMIN_ONLY, "PDPL Setup Required", `To access the PDPL dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   // /feedback → /api/feedback — any authenticated session.
   { path: "/feedback", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("feedback.html", ANY_DASHBOARD_ROLES, "Feedback Setup Required", `To access the Feedback dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
-  // Access semantics: both `/guide` and `/migration` are internal dashboard
-  // pages that integrate with the WalaPlusNav chrome and describe / expose
-  // admin-only workflows (the user guide documents internal admin features,
-  // and the migration page is a functional data-import tool with file
-  // uploads and deduplication). They are gated behind the same setup-check
-  // as every other dashboard page so that an unauthenticated visitor cannot
-  // browse them or learn about internal admin functionality.
-  { path: "/guide", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("guide.html", "Guide Setup Required", `To access the platform user guide, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
-  { path: "/migration", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("migration.html", "Migration Setup Required", `To access the Data Migration Engine, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  // /guide → platform user guide; readable by any authenticated dashboard
+  // session (mirrors `ANY_DASHBOARD_ROLES`). Documents internal workflows
+  // so unauthenticated visitors must not browse it, but every signed-in
+  // role — including read-only ones — can consult the guide for the
+  // features their own role can use.
+  { path: "/guide", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("guide.html", ANY_DASHBOARD_ROLES, "Guide Setup Required", `To access the platform user guide, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  // /migration → /api/migration (GET + writes) — admin only. The page is
+  // a functional data-import tool with file uploads and deduplication;
+  // its backing API is admin-gated in `ROUTE_PERMISSION_MAP`, so the
+  // page shell mirrors that allowlist.
+  { path: "/migration", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("migration.html", ADMIN_ONLY, "Migration Setup Required", `To access the Data Migration Engine, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   // /logs → /api/logs GET, /api/event-logs GET — admin only.
   { path: "/logs", method: "GET", createHandler: async () => serveDashboardPageWithRoleGate("logs.html", ADMIN_ONLY, "Logs Setup Required", `To access the Audit Logs, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   // /ai-approvals → /api/ai/approvals GET — broad HITL participant set.
@@ -433,6 +418,8 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
   { path: "/grc",             allowedRoles: GOVERNANCE_AND_EXECUTIVE },
   { path: "/pdpl",            allowedRoles: ADMIN_ONLY },
   { path: "/feedback",        allowedRoles: ANY_DASHBOARD_ROLES },
+  { path: "/guide",           allowedRoles: ANY_DASHBOARD_ROLES },
+  { path: "/migration",       allowedRoles: ADMIN_ONLY },
   { path: "/logs",            allowedRoles: ADMIN_ONLY },
   { path: "/ai-approvals",    allowedRoles: AI_APPROVALS_ROLES },
   { path: "/intake",          allowedRoles: ANY_DASHBOARD_ROLES },
