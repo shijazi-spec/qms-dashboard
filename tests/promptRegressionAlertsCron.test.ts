@@ -12,7 +12,9 @@
 
 import {
   runPromptRegressionCheck,
+  sendPromptRegressionNotifications,
   PROMPT_REGRESSION_THRESHOLDS,
+  type RegressionBreach,
 } from "../src/mastra/workflows/promptRegressionAlertsCron";
 import type { PromptVersionAggregate } from "../src/utils/aiTelemetry";
 import type { AIAlert, AlertSeverity } from "../src/utils/aiAlertsDatabase";
@@ -736,6 +738,247 @@ async function run(): Promise<void> {
       `description carries 2-day clause for the (unknown) bucket (got: "${stub.created[0].description}")`,
     );
   }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Notification fan-out tests (Task #247)
+  //
+  // The next four cases exercise the breach-side Slack + email fan-out
+  // (`sendPromptRegressionNotifications`). The recovery-side fan-out is
+  // already covered by Cases 15–16 via the `notifyRecovery` dep. Here we:
+  //
+  //   • Stub `fetch` (Slack) and `sendEmail` (Resend) on the helper's
+  //     injected deps so no real network or email goes out from CI.
+  //   • Set `SLACK_WEBHOOK_URL` and `AI_PROMPT_REGRESSION_ALERT_EMAIL`
+  //     so the helper's per-channel guards open. Every block restores
+  //     the previous values in a finally so the test file stays
+  //     idempotent regardless of which env was set when CI invoked it.
+  //   • Verify the contract from the task: both channels fire on a new
+  //     alert, neither fires when every alert was a duplicate, and a
+  //     failure on one channel never silences the other.
+  // ──────────────────────────────────────────────────────────────────────
+
+  function withRegressionEnv<T>(
+    fn: () => Promise<T>,
+    overrides: { slack?: string | null; email?: string | null } = {},
+  ): Promise<T> {
+    const prevSlack = process.env.SLACK_WEBHOOK_URL;
+    const prevEmail = process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
+    if (overrides.slack === null) {
+      delete process.env.SLACK_WEBHOOK_URL;
+    } else {
+      process.env.SLACK_WEBHOOK_URL =
+        overrides.slack ?? "https://hooks.slack.test/services/T0/B0/xxx";
+    }
+    if (overrides.email === null) {
+      delete process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
+    } else {
+      process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL =
+        overrides.email ?? "ops@example.com";
+    }
+    return fn().finally(() => {
+      if (prevSlack === undefined) delete process.env.SLACK_WEBHOOK_URL;
+      else process.env.SLACK_WEBHOOK_URL = prevSlack;
+      if (prevEmail === undefined) {
+        delete process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
+      } else {
+        process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL = prevEmail;
+      }
+    });
+  }
+
+  function makeBreach(over: Partial<RegressionBreach> = {}): RegressionBreach {
+    return {
+      agent_name: "TestAgent",
+      regressed_version: "v2",
+      best_version: "v1",
+      regressed_rate_pct: 70,
+      best_rate_pct: 90,
+      drop_pp: 20,
+      regressed_feedback_count: 20,
+      best_feedback_count: 20,
+      severity: "high",
+      regressed_last_seen_at: "2026-04-20T12:00:00Z",
+      regressed_last_seen_days_ago: 5,
+      ...over,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 19 (Task #247): Slack + email each fire exactly once when the
+  // cron creates a new alert. Stubs both channels at the dep level so
+  // the assertions live or die on the actual fan-out path executed by
+  // production code, not on a parallel codepath in the test.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n19. Slack and email each fire once when an alert is created");
+  await withRegressionEnv(async () => {
+    const fetchCalls: Array<{ url: string; body: string }> = [];
+    const emailCalls: Array<{
+      to: string | string[];
+      subject: string;
+      html?: string;
+    }> = [];
+    const fetchStub = (async (url: string | URL | Request, init?: RequestInit) => {
+      fetchCalls.push({
+        url: String(url),
+        body: typeof init?.body === "string" ? init.body : "",
+      });
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const sendEmailStub = async (opts: {
+      to: string | string[];
+      subject: string;
+      html?: string;
+      text?: string;
+    }) => {
+      emailCalls.push(opts);
+      return { success: true };
+    };
+
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 92, total_feedback: 25, thumbs_up: 23, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 60, total_feedback: 20, thumbs_up: 12, thumbs_down: 8 }),
+      ],
+    });
+    const out = await runPromptRegressionCheck({
+      ...stub.deps,
+      notifyBreaches: (breaches) =>
+        sendPromptRegressionNotifications(breaches, {
+          fetchFn: fetchStub,
+          sendEmail: sendEmailStub,
+        }),
+    });
+
+    assert(out.alertsCreated === 1, "1 alert created (precondition for fan-out)");
+    assert(fetchCalls.length === 1, `Slack fetch called once (got ${fetchCalls.length})`);
+    assert(
+      fetchCalls[0]?.url === process.env.SLACK_WEBHOOK_URL,
+      `Slack POST targets the configured webhook (got "${fetchCalls[0]?.url}")`,
+    );
+    assert(
+      fetchCalls[0]?.body.includes("TestAgent") &&
+        fetchCalls[0]?.body.includes("v2"),
+      "Slack body names the agent and the regressed version",
+    );
+    assert(emailCalls.length === 1, `Email sent once (got ${emailCalls.length})`);
+    const emailTo = emailCalls[0]?.to;
+    const recipients = Array.isArray(emailTo) ? emailTo : [emailTo];
+    assert(
+      recipients.includes("ops@example.com"),
+      `Email targets the configured recipient (got ${JSON.stringify(emailTo)})`,
+    );
+    assert(
+      typeof emailCalls[0]?.subject === "string" &&
+        emailCalls[0]!.subject.includes("Prompt Regression"),
+      `Email subject mentions the regression (got "${emailCalls[0]?.subject}")`,
+    );
+    assert(
+      (emailCalls[0]?.html ?? "").includes("TestAgent") &&
+        (emailCalls[0]?.html ?? "").includes("v2"),
+      "Email HTML body includes the agent + regressed version",
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 20 (Task #247): when every breach is a dedupe-skip, neither
+  // channel must fire. This protects against re-paging on every cron
+  // tick while a still-open regression is being investigated — the
+  // exact concern called out in the cron's preamble comment.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n20. Neither channel fires when all alerts are dedupe-skipped");
+  await withRegressionEnv(async () => {
+    let fetchCalls = 0;
+    let emailCalls = 0;
+    let notifyBreachesCalls = 0;
+    const fetchStub = (async () => {
+      fetchCalls++;
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const sendEmailStub = async () => {
+      emailCalls++;
+      return { success: true };
+    };
+
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 92, total_feedback: 25, thumbs_up: 23, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 60, total_feedback: 20, thumbs_up: 12, thumbs_down: 8 }),
+      ],
+      // Pre-existing open alert for the only regressed key — runPromptRegressionCheck
+      // must classify it as a duplicate skip and never invoke the breach notifier.
+      existingKeys: new Set(["TestAgent:v2"]),
+    });
+    const out = await runPromptRegressionCheck({
+      ...stub.deps,
+      notifyBreaches: async (breaches) => {
+        notifyBreachesCalls++;
+        await sendPromptRegressionNotifications(breaches, {
+          fetchFn: fetchStub,
+          sendEmail: sendEmailStub,
+        });
+      },
+    });
+
+    assert(out.alertsCreated === 0, "no new alerts when all are duplicates");
+    assert(out.alertsSkippedDuplicate === 1, "the one breach was skipped as a duplicate");
+    assert(out.breaches.length === 0, "out.breaches stays empty on the dedupe path");
+    assert(
+      notifyBreachesCalls === 0,
+      `breach notifier dep is not invoked at all (got ${notifyBreachesCalls})`,
+    );
+    assert(fetchCalls === 0, `Slack fetch never fires (got ${fetchCalls})`);
+    assert(emailCalls === 0, `Email never fires (got ${emailCalls})`);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 21 (Task #247): a Slack outage must not silence the email
+  // channel. The cron explicitly catches each channel independently so
+  // ops still get the email summary even when the Slack webhook is
+  // returning 5xx or refusing connections.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n21. Slack failure does not prevent the email from being attempted");
+  await withRegressionEnv(async () => {
+    let emailCalls = 0;
+    const fetchStub = (async () => {
+      throw new Error("simulated Slack 503");
+    }) as typeof fetch;
+    const sendEmailStub = async () => {
+      emailCalls++;
+      return { success: true };
+    };
+
+    await sendPromptRegressionNotifications([makeBreach()], {
+      fetchFn: fetchStub,
+      sendEmail: sendEmailStub,
+    });
+
+    assert(emailCalls === 1, `Email was still attempted (got ${emailCalls})`);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 22 (Task #247): symmetrically — if Resend (email) throws, the
+  // Slack post must already have happened. The Slack block runs first
+  // and is wrapped in its own try/catch, so an email failure cannot
+  // retroactively cancel the Slack notification.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n22. Email failure does not prevent the Slack post");
+  await withRegressionEnv(async () => {
+    let fetchCalls = 0;
+    const fetchStub = (async () => {
+      fetchCalls++;
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const sendEmailStub = async () => {
+      throw new Error("simulated Resend 500");
+    };
+
+    await sendPromptRegressionNotifications([makeBreach()], {
+      fetchFn: fetchStub,
+      sendEmail: sendEmailStub,
+    });
+
+    assert(fetchCalls === 1, `Slack fetch was still attempted (got ${fetchCalls})`);
+  });
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

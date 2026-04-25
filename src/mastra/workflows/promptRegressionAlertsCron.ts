@@ -87,7 +87,7 @@ function severityForDrop(dropPp: number): AlertSeverity {
   return "medium";
 }
 
-interface RegressionBreach {
+export interface RegressionBreach {
   agent_name: string;
   regressed_version: string;
   best_version: string;
@@ -167,12 +167,39 @@ export interface PromptRegressionDeps {
    */
   notifyRecovery?: (recoveries: RegressionRecovery[]) => Promise<void>;
   /**
+   * Page on-call about one or more newly-created `prompt_regression`
+   * alerts. Mirrors `notifyRecovery` but for the breach side of the
+   * cron — keeping the notifier behind a dep means unit tests can stub
+   * it to a no-op (and verify it is *not* called when every alert was
+   * skipped as a duplicate) without touching Slack/email or env vars.
+   * Default impl forwards to `sendPromptRegressionNotifications`.
+   */
+  notifyBreaches?: (breaches: RegressionBreach[]) => Promise<void>;
+  /**
    * Returns the "current time" used to compute the
    * `regressed_last_seen_days_ago` clause in the alert description.
    * Injected so unit tests can pin the clock and assert exact day counts
    * without flaking on the wall clock. Defaults to `new Date()`.
    */
   now?: () => Date;
+}
+
+/**
+ * Per-channel injection points used by `sendPromptRegressionNotifications`
+ * so the test for task #247 can stub `fetch` (Slack) and `sendResendEmail`
+ * (email) without monkey-patching the dynamically-imported `resendMail`
+ * module. Defaults are the real `globalThis.fetch` and a thin closure
+ * over the dynamic `sendResendEmail` import — i.e. the production
+ * behaviour is unchanged when no overrides are passed.
+ */
+export interface PromptRegressionNotifyDeps {
+  fetchFn?: typeof globalThis.fetch;
+  sendEmail?: (options: {
+    to: string | string[];
+    subject: string;
+    html?: string;
+    text?: string;
+  }) => Promise<unknown>;
 }
 
 const defaultDeps: Required<PromptRegressionDeps> = {
@@ -195,6 +222,7 @@ const defaultDeps: Required<PromptRegressionDeps> = {
   listOpenRegressionAlerts: () => getOpenAlertsByType("prompt_regression"),
   resolveAlert: (id, note) => resolveAlert(id, note),
   notifyRecovery: (recoveries) => sendPromptRegressionRecoveryNotifications(recoveries),
+  notifyBreaches: (breaches) => sendPromptRegressionNotifications(breaches),
   now: () => new Date(),
 };
 
@@ -486,7 +514,22 @@ export async function runPromptRegressionCheck(
       recoveries: out.recoveries.map((r) => r.related_record_id),
     });
 
-    await sendPromptRegressionNotifications(out.breaches);
+    // Page on-call only when at least one *new* alert row was created.
+    // Skipped-duplicate ticks (`alertsCreated === 0`) intentionally fall
+    // through here so a still-open regression doesn't re-page Slack/email
+    // every cron run while the breach is being investigated. The
+    // recovery-only path (alertsAutoResolved > 0, alertsCreated === 0)
+    // also falls through — the recovery notifier above already paged.
+    if (out.breaches.length > 0) {
+      try {
+        await deps.notifyBreaches(out.breaches);
+      } catch (notifyErr) {
+        console.error(
+          `[PromptRegression] Breach notifier threw for ${out.breaches.length} breaches:`,
+          notifyErr,
+        );
+      }
+    }
   } else {
     console.log(
       `[PromptRegression] Check complete — ${out.agentsEvaluated} agents, ` +
@@ -504,12 +547,15 @@ export async function runPromptRegressionCheck(
 // never fire on the duplicate-skip path. Each channel is caught independently
 // so a Slack outage cannot silence the email and vice-versa.
 // ──────────────────────────────────────────────────────────────────────────────
-async function sendPromptRegressionNotifications(
+export async function sendPromptRegressionNotifications(
   breaches: RegressionBreach[],
+  notifyDeps: PromptRegressionNotifyDeps = {},
 ): Promise<void> {
   const cfg = PROMPT_REGRESSION_THRESHOLDS;
   const count = breaches.length;
+  if (count === 0) return;
   const plural = count === 1 ? "regression" : "regressions";
+  const fetchFn = notifyDeps.fetchFn ?? globalThis.fetch;
 
   // ── Slack ──────────────────────────────────────────────────────────────────
   if (process.env.SLACK_WEBHOOK_URL) {
@@ -526,7 +572,7 @@ async function sendPromptRegressionNotifications(
         lines.join("\n") +
         `\n_Window: ${cfg.windowDays} days | <${cfg.link}|View in AI Ops>_`;
 
-      await fetch(process.env.SLACK_WEBHOOK_URL, {
+      await fetchFn(process.env.SLACK_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: slackMsg }),
@@ -544,7 +590,12 @@ async function sendPromptRegressionNotifications(
     : [];
   if (emailRecipients.length > 0) {
     try {
-      const { sendResendEmail } = await import("../../utils/resendMail");
+      const sendEmail =
+        notifyDeps.sendEmail ??
+        (async (opts) => {
+          const { sendResendEmail } = await import("../../utils/resendMail");
+          return sendResendEmail(opts);
+        });
       const rows = breaches
         .map(
           (b) =>
@@ -561,7 +612,7 @@ async function sendPromptRegressionNotifications(
         )
         .join("\n");
 
-      await sendResendEmail({
+      await sendEmail({
         to: emailRecipients,
         subject: `⚠️ WalaPlus Prompt Regression — ${count} new ${plural} detected`,
         html: `<h2>Prompt Regression Alert</h2>
