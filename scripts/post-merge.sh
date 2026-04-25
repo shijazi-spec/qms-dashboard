@@ -71,6 +71,20 @@ echo ""
 echo "▶ CI gate: requireRole session-path unit tests (Task #253)"
 npx tsx tests/requireRoleSessionPath.test.ts
 
+# ----------------------------------------------------------------------------
+# CI gate — gateApiRoute wrapper unit tests (Task #254)
+#
+# `gateApiRoute` in src/utils/rbacMiddleware.ts wraps every /api/ route with a
+# `requireAuthOrKey` gate so an unauthenticated caller can never reach a
+# handler — even when the global middleware in src/mastra/middleware/index.ts
+# is bypassed (e.g. when an integration test invokes a handler directly via
+# tests/_helpers/fakeContext.ts). Regressing the wrapper would silently let
+# anonymous callers hit routes that look gated everywhere else.
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: gateApiRoute wrapper unit tests (Task #254)"
+npx tsx tests/gateApiRoute.test.ts
+
 echo ""
 echo "▶ CI gate: ai_pending_actions historical sweep backfill (Task #85)"
 npx tsx tests/aiApprovalSweepBackfill.test.ts
