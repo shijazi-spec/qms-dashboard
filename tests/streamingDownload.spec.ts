@@ -327,4 +327,200 @@ test.describe('streamingDownload — cross-browser smoke', () => {
         `console=${consoleErrors.join(' | ') || 'none'}`,
     ).toBe(true);
   });
+
+  // ── Arabic fallback-advisory smoke ──────────────────────────────────────
+  // The Vitest jsdom suite (tests/vitest/streamingDownload.vitest.test.ts)
+  // already proves that buildFallbackNotice() pulls the Arabic strings out
+  // of dashboard/i18n/ar.json once WalaPlusI18n is ready. jsdom cannot
+  // catch a number of *real-browser* regressions, though:
+  //
+  //   1. The Noto Sans Arabic font fails to load (CSP, network, font-face
+  //      typo) and the glyphs render as boxes / Latin fallback.
+  //   2. An RTL layout regression (e.g. a stray `flex-direction: row`
+  //      override) hides or clips the dismiss button.
+  //   3. A new dashboard CSP rule blocks the inline SVG icons inside the
+  //      notice.
+  //   4. The `walaPlusI18nReady` event fires before the strings are loaded
+  //      in a way that only the real event-loop ordering exposes.
+  //
+  // Driving a real browser to the gated `/vendors` dashboard with the
+  // locale forced to Arabic and `canStreamToDisk()` forced false closes
+  // that gap on every engine the streaming-download workflow already
+  // exercises (Chromium, Firefox, WebKit).
+  test('renders the streaming-fallback advisory in Arabic on /vendors', async ({
+    page,
+    context,
+    browserName,
+  }) => {
+    test.setTimeout(60_000);
+
+    console.log(`[streaming-fallback-ar] running on ${browserName}`);
+
+    const ok = await authenticate(context);
+    if (!ok) {
+      // Same CI-vs-local skip policy as the streaming smoke above: missing
+      // admin key in CI is a config regression and must hard-fail.
+      if (process.env.CI === 'true') {
+        throw new Error(
+          'CI: ADMIN_API_KEY / TEST_ADMIN_KEY missing or not accepted by ' +
+            `${BASE_URL}/api/admin/auth — refusing to skip the Arabic ` +
+            'fallback-advisory smoke test.',
+        );
+      }
+      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not configured');
+    }
+
+    // Read the EXACT Arabic strings the test must see in the rendered
+    // notice. We assert against the file rather than a hard-coded
+    // duplicate so a translator updating ar.json automatically updates
+    // the test expectation — and so this spec catches a regression where
+    // ar.json is edited but buildFallbackNotice still emits the old text.
+    // Resolve from process.cwd() rather than __dirname because Playwright
+    // loads specs as native ESM (where __dirname is undefined). Playwright
+    // always runs tests from the project root, which is where dashboard/
+    // lives, so this is stable across local and CI invocations.
+    const arPath = path.resolve(process.cwd(), 'dashboard', 'i18n', 'ar.json');
+    const arRaw = await fs.readFile(arPath, 'utf-8');
+    const ar = JSON.parse(arRaw) as {
+      downloads: {
+        fallback_notice_title: string;
+        fallback_notice_detail: string;
+        fallback_notice_dismiss: string;
+      };
+    };
+    const expectedTitle = ar.downloads.fallback_notice_title;
+    const expectedDetail = ar.downloads.fallback_notice_detail;
+    const expectedDismiss = ar.downloads.fallback_notice_dismiss;
+
+    // Sanity-check that ar.json actually contains Arabic glyphs — if a
+    // future edit accidentally replaced the Arabic with English, the rest
+    // of this test would still "pass" but no longer prove anything.
+    expect(
+      /[\u0600-\u06FF]/.test(expectedTitle),
+      'ar.json downloads.fallback_notice_title is not Arabic',
+    ).toBe(true);
+
+    // Surfaces in console-error context if the assertion blows up so a
+    // failing CI log explains what was expected.
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+    page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
+
+    // Force three things BEFORE any dashboard script runs:
+    //
+    //   1. localStorage.walaplus_lang = 'ar'  →  WalaPlusI18n._detectLang()
+    //      returns 'ar' on first init, so the page boots in Arabic and
+    //      buildFallbackNotice() resolves the `downloads.fallback_notice_*`
+    //      keys against ar.json.
+    //
+    //   2. delete window.showSaveFilePicker   →  supportsFileSystemAccess()
+    //      returns false in canStreamToDisk().
+    //
+    //   3. Delete window.MessageChannel → supportsServiceWorkerStreaming()
+    //      hits its `typeof MessageChannel === 'undefined'` short-circuit
+    //      and returns false. Combined with (2), canStreamToDisk() now
+    //      returns false on every engine, so attachStreamingFallbackNotice
+    //      proceeds to render the advisory instead of bailing early.
+    //
+    //      Note: we deliberately do NOT try to remove navigator.serviceWorker
+    //      to disable the SW path. That property lives on Navigator.prototype
+    //      and survives an instance-level override for the `'serviceWorker' in
+    //      navigator` check that supportsServiceWorkerStreaming() performs.
+    //      MessageChannel is a plain own property on Window and is *only*
+    //      consumed by streaming-download.js inside this dashboard, so
+    //      deleting it has no collateral damage on other page scripts (an
+    //      `rg MessageChannel dashboard/` returns only this file).
+    //
+    // We use addInitScript so these run before /js/i18n.js and
+    // /js/streaming-download.js execute — by the time DOMContentLoaded
+    // fires and scheduleStreamingFallbackNotice() runs, the locale and
+    // capability flags are already in their forced state.
+    await context.addInitScript(() => {
+      try {
+        window.localStorage.setItem('walaplus_lang', 'ar');
+      } catch (_) {
+        /* storage may be blocked in some engines; the assertion will
+           surface a clear failure if so */
+      }
+      try {
+        // showSaveFilePicker is an own property on Window in Chromium,
+        // and absent on Firefox/WebKit — `delete` is a no-op there.
+        delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker;
+      } catch (_) { /* ignore */ }
+      try {
+        delete (window as { MessageChannel?: unknown }).MessageChannel;
+      } catch (_) { /* ignore */ }
+    });
+
+    // /vendors is a gated dashboard that pulls in /js/i18n.js and
+    // /js/streaming-download.js and ships static export buttons in its
+    // server-rendered HTML — so findExportButton() succeeds on
+    // DOMContentLoaded and attachStreamingFallbackNotice() has an anchor
+    // to mount under <main>.
+    await page.goto(`${BASE_URL}/vendors`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+
+    // The notice is attached after WalaPlusI18n.onReady() resolves (or
+    // after a 2 s safety-net timeout in scheduleStreamingFallbackNotice).
+    // 15 s is well past either path on any reasonable machine.
+    const notice = page.locator('[data-testid="notice-streaming-fallback"]');
+    await notice.waitFor({ state: 'attached', timeout: 15_000 });
+
+    // ── Translation correctness ───────────────────────────────────────────
+    // Assert the headline (<strong>) and detail (<span> inside the text
+    // wrapper div) match the ar.json strings byte-for-byte. We assert each
+    // of the three translated keys (headline, body, dismiss aria-label)
+    // independently so a partial regression in one string can't be hidden
+    // by another still translating.
+    const headline = notice.locator('strong');
+    await expect(
+      headline,
+      `Headline text mismatch on ${browserName}; ` +
+        `console=${consoleErrors.join(' | ') || 'none'}`,
+    ).toHaveText(expectedTitle);
+
+    // The detail is the only <span> inside the .flex-1 text wrapper
+    // (the icon span sits at the notice root, not inside .flex-1).
+    const detail = notice.locator('div.flex-1 > span');
+    await expect(
+      detail,
+      `Detail text mismatch on ${browserName}; ` +
+        `console=${consoleErrors.join(' | ') || 'none'}`,
+    ).toHaveText(expectedDetail);
+
+    const dismissBtn = notice.locator('[data-testid="button-dismiss-streaming-fallback"]');
+    await expect(
+      dismissBtn,
+      `Dismiss aria-label mismatch on ${browserName}; ` +
+        `console=${consoleErrors.join(' | ') || 'none'}`,
+    ).toHaveAttribute('aria-label', expectedDismiss);
+
+    // ── Real-browser RTL / visibility checks ──────────────────────────────
+    // The whole point of running this in a real browser (vs. jsdom) is to
+    // catch font/RTL/CSP regressions that jsdom can't see. Confirm that:
+    //
+    //   • The page locale really did flip to Arabic / RTL — proving the
+    //     localStorage init script took effect rather than the test
+    //     silently passing on the English defaults that
+    //     buildFallbackNotice() would otherwise fall back to.
+    //
+    //   • The dismiss button is actually visible and large enough to
+    //     click — i.e. an RTL flex regression hasn't collapsed it to
+    //     0×0 or pushed it off-screen.
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+
+    await expect(dismissBtn).toBeVisible();
+    const dismissBox = await dismissBtn.boundingBox();
+    expect(
+      dismissBox && dismissBox.width > 0 && dismissBox.height > 0,
+      `Dismiss button has zero size on ${browserName} ` +
+        `(box=${JSON.stringify(dismissBox)}) — possible RTL layout ` +
+        'regression hiding the close affordance.',
+    ).toBe(true);
+  });
 });
