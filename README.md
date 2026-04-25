@@ -30,12 +30,50 @@ source control**.
 npx tsx tests/toolHealthAlertNotifier.integration.ts
 ```
 
-### Report-route RBAC (`tests/rbacReportRoutes.integration.ts`)
+### RBAC HTTP integration suite (`tests/rbac*.integration.ts`)
 
-Spins up real HTTP requests against the running server using temporary test users.
-Requires `DATABASE_URL` and `SESSION_SECRET` (both required; the file exits with
-an error if they are absent).
+Two HTTP-level tests drive real `fetch()` calls against the running dev server
+using signed session cookies for five different roles, and assert exact 403/200
+outcomes per role per route. They catch middleware-ordering, cookie-parsing,
+and `ROUTE_PERMISSION_MAP` regressions that the in-process unit tests cannot:
+
+- `tests/rbacRouteLockdown.integration.ts` — KPI / executive / analytics /
+  scorecard / health-pulse / infographic routes (task #35 lockdown).
+- `tests/rbacReportRoutes.integration.ts` — `/api/reports/*` endpoints
+  (department_viewer 403 vs executive 200).
+
+Both files require `DATABASE_URL` and `SESSION_SECRET` (the **same**
+`SESSION_SECRET` the dev server uses, otherwise every signed cookie comes back
+401 instead of 403 and silently masks regressions). Each file exits with a
+clear error if either is absent.
+
+The wrapper script does an upfront env-var check and then runs both files
+sequentially:
 
 ```sh
-npx tsx tests/rbacReportRoutes.integration.ts
+DATABASE_URL=postgresql://... \
+SESSION_SECRET=local-dev-secret \
+bash scripts/run-rbac-integration-tests.sh
+```
+
+CI runs this suite in two places:
+
+- `.github/workflows/test.yml` (standard test job) boots postgres + the dev
+  server with both env vars set and `RUN_RBAC_INTEGRATION_E2E=1`, so the
+  same `npm test` invocation that runs the unit tests also drives the RBAC
+  HTTP integration suite. Any route-lockdown regression fails the standard
+  test job, not just a separate workflow.
+- `.github/workflows/rbac-integration-tests.yml` (dedicated workflow)
+  re-runs only the RBAC HTTP integration suite for fast feedback when
+  iterating on RBAC middleware in isolation.
+
+To include the suite in a local `npm test` run, set
+`RUN_RBAC_INTEGRATION_E2E=1` (with `DATABASE_URL`, `SESSION_SECRET`, and the
+dev server reachable at `BASE_URL`):
+
+```sh
+RUN_RBAC_INTEGRATION_E2E=1 \
+DATABASE_URL=postgresql://... \
+SESSION_SECRET=local-dev-secret \
+npm test
 ```

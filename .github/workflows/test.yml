@@ -14,7 +14,7 @@ jobs:
   test:
     name: Integration tests (npm test)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -30,6 +30,27 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://testuser:testpass@localhost:5432/testdb
+      # Same key used by the dev server below AND by the RBAC integration
+      # test harness. Both sides MUST agree, otherwise signed cookies fail
+      # HMAC verification and every request comes back 401 instead of 403,
+      # silently masking any RBAC regression.
+      SESSION_SECRET: ci-session-secret-do-not-use-in-prod
+      ADMIN_API_KEY: ci-admin-key-tests
+      TEST_ADMIN_KEY: ci-admin-key-tests
+      BASE_URL: http://localhost:5000
+      PORT: "5000"
+      DATA_MODE: REAL
+      CI: "true"
+      # Tells tests/runIntegrationTests.ts to additionally run
+      # tests/rbacRouteLockdown.integration.ts and
+      # tests/rbacReportRoutes.integration.ts (via
+      # scripts/run-rbac-integration-tests.sh) inside this same npm test
+      # invocation, so a route-lockdown middleware regression fails the
+      # standard test job — not just the dedicated workflow.
+      RUN_RBAC_INTEGRATION_E2E: "1"
 
     steps:
       - name: Check out repository
@@ -49,7 +70,35 @@ jobs:
           PGPASSWORD: testpass
         run: psql -h localhost -U testuser -d testdb -f tests/fixtures/ci-schema.sql
 
-      - name: Run integration test suite
-        env:
-          DATABASE_URL: postgres://testuser:testpass@localhost:5432/testdb
+      - name: Start dev server (for RBAC HTTP integration tests)
+        run: |
+          npm run dev > server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Wait for /api/health to come up (max 90 s).
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:5000/api/health > /dev/null; then
+              echo "Server ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become healthy in time" >&2
+          tail -200 server.log >&2 || true
+          exit 1
+
+      - name: Run integration test suite (incl. RBAC HTTP integration via RUN_RBAC_INTEGRATION_E2E=1)
         run: npm test
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-server-log
+          path: server.log
+          if-no-files-found: ignore
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "${SERVER_PID}" 2>/dev/null || true
+          fi
