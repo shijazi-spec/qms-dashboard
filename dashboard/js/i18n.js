@@ -19,6 +19,11 @@
 
   var STORAGE_KEY = 'walaplus_lang';
   var NUMERALS_KEY = 'walaplus_eastern_numerals';
+  // Tracks a language change that has been written to localStorage but has
+  // not yet been confirmed-persisted on the server (offline, 5xx, etc.).
+  // Shape: { lang: 'en'|'ar', timestamp: <ms epoch> }. Cleared once the
+  // server returns a 2xx for the matching lang.
+  var PENDING_KEY = 'walaplus_lang_pending';
   var DEFAULT_LANG = 'en';
   var SUPPORTED = ['en', 'ar'];
   var PREF_ENDPOINT = '/api/user/language-preference';
@@ -28,6 +33,8 @@
   var _loaded = false;
   var _readyCallbacks = [];
   var _useEasternNumerals = true;
+  var _retryInFlight = false;
+  var _onlineHandlerBound = false;
 
   function _loadNumeralPref() {
     try {
@@ -149,18 +156,102 @@
   }
 
   /**
-   * Persist language preference: localStorage + server (if authenticated).
-   * Returns a Promise that resolves once the server request settles (or fails).
-   * Does NOT reload automatically — caller must decide.
+   * Read the pending (unsynced) language marker from localStorage.
+   * Returns null if absent, malformed, or holds an unsupported lang.
    */
-  function _persistLang(lang) {
-    try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) {}
+  function _readPending() {
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.lang === 'string' && SUPPORTED.indexOf(parsed.lang) !== -1) {
+        return parsed;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function _writePending(lang) {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ lang: lang, timestamp: Date.now() }));
+    } catch (_) {}
+  }
+
+  function _clearPending() {
+    try { localStorage.removeItem(PENDING_KEY); } catch (_) {}
+  }
+
+  /**
+   * POST the language preference once. Resolves to `true` on a 2xx response
+   * (and clears the pending marker, but ONLY when it still matches `lang` —
+   * this prevents an older successful response from racing past and clearing
+   * a newer pending write). Resolves to `false` on any failure (network
+   * error, non-2xx). The caller decides whether to retry.
+   */
+  function _postLang(lang) {
     return fetch(PREF_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({ lang: lang })
-    }).catch(function () {});
+    }).then(function (r) {
+      if (r && r.ok) {
+        var pending = _readPending();
+        if (pending && pending.lang === lang) {
+          _clearPending();
+        }
+        return true;
+      }
+      return false;
+    }, function () {
+      return false;
+    });
+  }
+
+  /**
+   * Persist language preference: localStorage + server (if authenticated).
+   * Records a "pending" marker before the network call so that, if the
+   * request fails (offline, 5xx, network drop), a later init() or `online`
+   * event can retry until the server matches localStorage.
+   * Returns a Promise that resolves once the server request settles (or fails).
+   * Does NOT reload automatically — caller must decide.
+   */
+  function _persistLang(lang) {
+    try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) {}
+    _writePending(lang);
+    _bindOnlineRetry();
+    return _postLang(lang);
+  }
+
+  /**
+   * Retry a previously-failed language persist, if one is pending. Safe to
+   * call repeatedly; concurrent calls are coalesced via _retryInFlight.
+   * Returns a Promise resolving to `true` on success, `false` otherwise
+   * (including when there is no pending write).
+   */
+  function _retryPendingLang() {
+    if (_retryInFlight) return Promise.resolve(false);
+    var pending = _readPending();
+    if (!pending) return Promise.resolve(false);
+    _retryInFlight = true;
+    return _postLang(pending.lang).then(function (ok) {
+      _retryInFlight = false;
+      return ok;
+    }, function () {
+      _retryInFlight = false;
+      return false;
+    });
+  }
+
+  /**
+   * Bind an `online` listener once so that a failed persist is retried
+   * automatically the moment the browser regains connectivity.
+   */
+  function _bindOnlineRetry() {
+    if (_onlineHandlerBound) return;
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    _onlineHandlerBound = true;
+    window.addEventListener('online', function () { _retryPendingLang(); });
   }
 
   /**
@@ -216,9 +307,29 @@
     _lang = localLang;
     _applyHtmlDir(_lang);
 
+    // If a previous setLang() couldn't reach the server (offline / 5xx), the
+    // server still holds the stale language. Keep retrying in the background
+    // until the server matches localStorage, and ensure connectivity-restored
+    // events also trigger a retry.
+    var pending = _readPending();
+    if (pending) {
+      _bindOnlineRetry();
+      _retryPendingLang();
+    }
+
     return _fetchServerPref()
       .then(function (serverLang) {
-        if (serverLang && SUPPORTED.indexOf(serverLang) !== -1 && serverLang !== localLang) {
+        // When a pending unsynced write exists, the server value is stale by
+        // definition — trust localStorage and let the background retry catch
+        // the server up. Otherwise, prefer the server value as the source of
+        // truth across devices.
+        var hasPendingForLocal = pending && pending.lang === localLang;
+        if (
+          !hasPendingForLocal &&
+          serverLang &&
+          SUPPORTED.indexOf(serverLang) !== -1 &&
+          serverLang !== localLang
+        ) {
           _lang = serverLang;
           try { localStorage.setItem(STORAGE_KEY, serverLang); } catch (_) {}
           _applyHtmlDir(_lang);

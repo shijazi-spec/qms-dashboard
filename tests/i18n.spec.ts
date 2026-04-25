@@ -203,6 +203,151 @@ test.describe('Login page — localStorage Arabic preference persists without au
   });
 });
 
+// --- Offline persist + retry behaviour ---
+//
+// Verifies the offline-resilience contract added for [P1] task #240:
+//   - When setLang() can't reach the server (offline / 5xx), a "pending"
+//     marker is recorded in localStorage.
+//   - On the next init() (page load) and on the `online` event, the marker
+//     drives a background retry until the server confirms.
+//   - While a pending marker exists, init() does NOT overwrite localStorage
+//     with the (stale) server value.
+
+test.describe('Language preference — offline retry & reconciliation', () => {
+  test('init() keeps localStorage when a pending marker disagrees with the (stale) server, then retries the persist', async ({ page }) => {
+    // Stub fetch BEFORE the page loads so i18n.js sees our mock during init().
+    await page.addInitScript(() => {
+      // Seed an offline-failed write: user picked "ar", localStorage holds it,
+      // but the server still has "en" because the persist never completed.
+      localStorage.setItem('walaplus_lang', 'ar');
+      localStorage.setItem(
+        'walaplus_lang_pending',
+        JSON.stringify({ lang: 'ar', timestamp: Date.now() })
+      );
+
+      const realFetch = window.fetch;
+      (window as any).__langPostCount = 0;
+      (window as any).__langPostBody = null;
+      window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+        const url = typeof input === 'string'
+          ? input
+          : (input instanceof URL ? input.toString() : (input as Request).url);
+        const method = (init?.method || 'GET').toUpperCase();
+        if (url.indexOf('/api/user/language-preference') !== -1) {
+          if (method === 'GET') {
+            // Stale server value — should NOT clobber the local "ar".
+            return Promise.resolve(new Response(JSON.stringify({ lang: 'en' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }));
+          }
+          if (method === 'POST') {
+            (window as any).__langPostCount += 1;
+            (window as any).__langPostBody = init?.body || null;
+            return Promise.resolve(new Response(JSON.stringify({ success: true, lang: 'ar' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }));
+          }
+        }
+        return realFetch.call(this, input as any, init);
+      } as typeof window.fetch;
+    });
+
+    await page.goto(`${BASE_URL}/login`);
+    await page.waitForLoadState('networkidle');
+
+    // localStorage must still be 'ar' (the user's last choice), not the
+    // server's stale 'en'.
+    const stored = await page.evaluate(() => localStorage.getItem('walaplus_lang'));
+    expect(stored).toBe('ar');
+
+    // The pending marker should be cleared after the background retry succeeds.
+    await page.waitForFunction(
+      () => localStorage.getItem('walaplus_lang_pending') === null,
+      { timeout: 5000 }
+    );
+
+    // And the retry must have actually issued a POST with the local language.
+    const postCount = await page.evaluate(() => (window as any).__langPostCount);
+    const postBody = await page.evaluate(() => (window as any).__langPostBody);
+    expect(postCount).toBeGreaterThanOrEqual(1);
+    expect(typeof postBody === 'string' && postBody.indexOf('"ar"') !== -1).toBe(true);
+  });
+
+  test('setLang() leaves a pending marker when the server fails (5xx) — exercises production setLang/_persistLang/_postLang', async ({ page }) => {
+    // Stub fetch + window.location.reload BEFORE the page loads so the real
+    // setLang() in dashboard/js/i18n.js runs end-to-end without bouncing us
+    // out of the test, and we can observe the post-failure state.
+    await page.addInitScript(() => {
+      // Make any reload a no-op so setLang() can complete in-page.
+      try {
+        Object.defineProperty(window.location, 'reload', {
+          configurable: true,
+          value: () => { (window as any).__reloadCalls = ((window as any).__reloadCalls || 0) + 1; },
+        });
+      } catch (_) { /* noop */ }
+
+      const realFetch = window.fetch;
+      (window as any).__failingPostCount = 0;
+      window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+        const url = typeof input === 'string'
+          ? input
+          : (input instanceof URL ? input.toString() : (input as Request).url);
+        const method = (init?.method || 'GET').toUpperCase();
+        if (url.indexOf('/api/user/language-preference') !== -1 && method === 'POST') {
+          (window as any).__failingPostCount += 1;
+          // Simulate a 5xx — the production code must NOT clear the pending
+          // marker so a later retry can try again.
+          return Promise.resolve(new Response('boom', { status: 500 }));
+        }
+        return realFetch.call(this, input as any, init);
+      } as typeof window.fetch;
+    });
+
+    await page.goto(`${BASE_URL}/login`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Wait for WalaPlusI18n to be available (dashboard/js/i18n.js is loaded
+    // by the login page).
+    await page.waitForFunction(() => typeof (window as any).WalaPlusI18n !== 'undefined', { timeout: 5000 });
+
+    // Reset state from any prior init so we observe a clean failed-persist.
+    await page.evaluate(() => {
+      try { localStorage.removeItem('walaplus_lang_pending'); } catch (_) {}
+    });
+
+    // Drive the real public API. setLang() calls _persistLang() → _postLang()
+    // and then schedules a (now stubbed) reload via Promise.race with a 5s
+    // timeout. We give it ample time to settle and then assert state.
+    await page.evaluate(() => (window as any).WalaPlusI18n.setLang('ar'));
+
+    // Wait until either the pending marker shows up (set synchronously by
+    // _persistLang before the network call) or the timeout fires.
+    await page.waitForFunction(
+      () => localStorage.getItem('walaplus_lang_pending') !== null,
+      { timeout: 5000 }
+    );
+
+    const after = await page.evaluate(() => ({
+      lang: localStorage.getItem('walaplus_lang'),
+      pending: localStorage.getItem('walaplus_lang_pending'),
+      failingPostCount: (window as any).__failingPostCount,
+    }));
+
+    // localStorage was updated immediately, the failing 5xx left the pending
+    // marker in place, and the production code did issue exactly one POST
+    // (the retry happens later, on init() / online).
+    expect(after.lang).toBe('ar');
+    expect(after.pending).not.toBeNull();
+    const parsed = JSON.parse(after.pending as string);
+    expect(parsed.lang).toBe('ar');
+    expect(typeof parsed.timestamp).toBe('number');
+    expect(after.failingPostCount).toBeGreaterThanOrEqual(1);
+  });
+
+});
+
 // --- RTL layout ---
 
 test.describe('RTL layout checks', () => {
