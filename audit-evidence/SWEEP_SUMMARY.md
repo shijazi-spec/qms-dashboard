@@ -370,3 +370,48 @@ Each sweep run continues to emit a single `event_logs` entry via
 `SweepResult` in `new_value`, including `nc_change_history_updated` and
 `capa_change_history_updated`. Operators can therefore confirm in the
 event log that all three tables were processed in the same scheduled run.
+
+### Operator alerting on non-zero rewrites (Task #462)
+
+Until Task #462 a non-zero `nc_change_history_updated` /
+`capa_change_history_updated` was only visible in two passive surfaces:
+the JSON file at `audit-evidence/last-sweep.json` and a single
+INFO-severity `event_logs` row emitted by `logEvent()`. Neither pages
+on-call.
+
+A non-zero count on either change-history table is a strong signal that a
+database restore from a pre-Task-#99 backup just reintroduced leaked
+credentials — exactly the scenario this sweep exists to catch — so
+security/ops should be paged immediately rather than have to remember to
+read a JSON file after every restore.
+
+`onBootRedactionSweep()` now invokes `dispatchPostRestoreSweepAlert()`
+after writing `last-sweep.json`. The dispatcher:
+
+- Stays **silent** when all four monitored counters
+  (`event_logs_updated`, `nc_change_history_updated`,
+  `capa_change_history_updated`, `ai_pending_actions.rows_updated`) are
+  zero. Clean boots do not page on-call.
+- Dispatches a `critical`-priority platform notification via
+  `notificationHub.createNotification` (module
+  `security/redaction-sweep`, `related_entity_id="boot_redaction_sweep"`)
+  when any of those counts is non-zero.
+- Mirrors the `ai-cost-summary` cron pattern in
+  `src/mastra/inngest/index.ts` by additionally POSTing to
+  `SLACK_WEBHOOK_URL` (when set). Skipped silently when the env var is
+  unset, exactly like the cost-summary cron.
+- Includes the sweep timestamp and the per-table counts
+  (`event_logs=…, nc_change_history=…, capa_change_history=…,
+  ai_pending_actions=…`) in **both** payloads so on-call can immediately
+  tell which surface area was affected without opening the dashboard.
+- Attempts each channel independently and never re-throws — a Slack
+  outage cannot suppress the in-app notification, and a notifications-DB
+  outage cannot suppress the Slack page.
+
+Regression test: `tests/redactPostRestoreSweepAlert.test.ts`
+(auto-discovered by `tests/runIntegrationTests.ts` → `npm test`).
+55 assertions cover the silent-on-clean contract, the both-channels-fire
+path, each individual surface area triggering the alert in isolation,
+the `ai_pending_actions: { skipped: 'table_missing' }` → 0 narrowing,
+the `SLACK_WEBHOOK_URL`-unset path, and degraded-channel behaviour
+(notification-hub throws, Slack network error, Slack HTTP 5xx).

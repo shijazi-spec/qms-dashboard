@@ -1113,6 +1113,241 @@ export async function runSweepWithClient(
 }
 
 /**
+ * Per-table counters extracted from a {@link SweepResult} for the alert
+ * dispatcher. Kept in this stable shape so the alert payload (notification
+ * `message`, Slack body) is independent of internal `SweepResult` field
+ * renames.
+ *
+ * Only the four surfaces called out in Task #462 trigger the alert — the
+ * NC/CAPA `change_reason` sub-counters, the credential-warnings backfill,
+ * and the `ai_call_metrics` preview backfill are diagnostic and would
+ * otherwise produce noise on every boot they re-scan a still-dirty table.
+ */
+export interface PostRestoreSweepAlertTriggerCounts {
+  event_logs: number;
+  nc_change_history: number;
+  capa_change_history: number;
+  ai_pending_actions: number;
+}
+
+/**
+ * Outcome of {@link dispatchPostRestoreSweepAlert}. Used by the boot sweep
+ * for logging and by unit tests to assert dispatcher behaviour without
+ * standing up a real notifications/Slack pipeline.
+ */
+export interface PostRestoreSweepAlertOutcome {
+  /**
+   * `true` iff at least one of the four monitored counters was non-zero
+   * AND a delivery attempt was made (regardless of whether each individual
+   * channel succeeded).
+   */
+  dispatched: boolean;
+  /** Reason a clean sweep was suppressed — populated only when `dispatched=false`. */
+  skippedReason?: "all_counts_zero";
+  /** Per-table counts that triggered the alert (empty when not dispatched). */
+  triggers: PostRestoreSweepAlertTriggerCounts;
+  /** Channels the dispatcher attempted to deliver on this run. */
+  channelsAttempted: Array<"platform_notification" | "slack_webhook">;
+  /** Subset of `channelsAttempted` that completed without throwing. */
+  channelsSucceeded: Array<"platform_notification" | "slack_webhook">;
+}
+
+/**
+ * Optional dependency overrides for {@link dispatchPostRestoreSweepAlert}.
+ * Production callers leave these undefined — the defaults dynamically
+ * import `notificationHub.createNotification` and use the global `fetch`
+ * + `process.env`. Unit tests pass stubs to assert the dispatcher's
+ * behaviour without touching real notification or webhook destinations.
+ */
+export interface PostRestoreSweepAlertDeps {
+  createNotification?: (notif: Record<string, unknown>) => Promise<unknown>;
+  fetch?: typeof fetch;
+  env?: Record<string, string | undefined>;
+  logger?: Pick<Console, "log" | "warn" | "error">;
+}
+
+/**
+ * Extract the four monitored counters from a {@link SweepResult}.
+ *
+ * `ai_pending_actions` is a discriminated union (`{ skipped: ... }` when
+ * the table was missing on a cold-start race), so we narrow with `'rows_updated' in …` and treat the skipped case as zero — a missing
+ * table genuinely had no rewrites to alert on.
+ */
+export function extractPostRestoreSweepAlertCounts(
+  result: SweepResult,
+): PostRestoreSweepAlertTriggerCounts {
+  const aiCount =
+    "rows_updated" in result.ai_pending_actions
+      ? result.ai_pending_actions.rows_updated
+      : 0;
+  return {
+    event_logs: result.event_logs_updated,
+    nc_change_history: result.nc_change_history_updated,
+    capa_change_history: result.capa_change_history_updated,
+    ai_pending_actions: aiCount,
+  };
+}
+
+/**
+ * Dispatch an operator-facing alert when the post-restore redaction sweep
+ * actually rewrote rows (Task #462).
+ *
+ * A non-zero `nc_change_history_updated` or `capa_change_history_updated`
+ * is a strong signal that a database restore from a pre-Task-#99 backup
+ * just reintroduced leaked credentials — exactly the scenario the sweep
+ * is designed to catch. Without an active alert, the only post-fact
+ * evidence is the `audit-evidence/last-sweep.json` file and a single
+ * INFO-severity `event_logs` row, neither of which pages anyone.
+ *
+ * Behaviour:
+ *
+ *   - When **all four** monitored counts are zero, the function returns
+ *     immediately without emitting anything. A clean sweep stays silent
+ *     so on-call is not paged on every boot.
+ *   - When any count is non-zero, the function dispatches the alert via:
+ *       1. The platform notification hub (`createNotification`,
+ *          dynamically imported so this module stays usable in pure-CLI
+ *          contexts that have no DB-backed notifications table).
+ *       2. The Slack webhook at `SLACK_WEBHOOK_URL`, mirroring the
+ *          `ai-cost-summary` cron pattern in
+ *          `src/mastra/inngest/index.ts`. Skipped silently when the env
+ *          var is unset (parity with that cron).
+ *
+ * Each channel is attempted independently — a Slack outage must not
+ * suppress the in-app notification and vice-versa. Failures are logged
+ * but never re-thrown: the boot path must not crash because the alert
+ * pipeline is degraded.
+ *
+ * The alert payload always includes the per-table counts and the sweep
+ * timestamp so on-call can immediately tell which surface area was
+ * affected without opening the dashboard.
+ */
+export async function dispatchPostRestoreSweepAlert(
+  result: SweepResult,
+  deps: PostRestoreSweepAlertDeps = {},
+): Promise<PostRestoreSweepAlertOutcome> {
+  const env = deps.env ?? process.env;
+  const logger = deps.logger ?? console;
+  const triggers = extractPostRestoreSweepAlertCounts(result);
+
+  const totalTriggered =
+    triggers.event_logs +
+    triggers.nc_change_history +
+    triggers.capa_change_history +
+    triggers.ai_pending_actions;
+
+  if (totalTriggered === 0) {
+    return {
+      dispatched: false,
+      skippedReason: "all_counts_zero",
+      triggers,
+      channelsAttempted: [],
+      channelsSucceeded: [],
+    };
+  }
+
+  // Headline kept neutral ("historical rows") because the same dispatcher
+  // fires when only `event_logs_updated` or `ai_pending_actions.rows_updated`
+  // is non-zero — saying "change-history rows" would be misleading for
+  // those cases. The per-table counts in the body and the explicit
+  // change-history hint make the source unambiguous to responders.
+  const headline = "Post-restore redaction sweep rewrote historical rows";
+  const detailLine =
+    `event_logs=${triggers.event_logs}, ` +
+    `nc_change_history=${triggers.nc_change_history}, ` +
+    `capa_change_history=${triggers.capa_change_history}, ` +
+    `ai_pending_actions=${triggers.ai_pending_actions}`;
+  const message =
+    `Boot-time redaction sweep at ${result.sweep_timestamp} rewrote one or ` +
+    `more historical rows. A non-zero count on nc_change_history or ` +
+    `capa_change_history usually means a database restore from a pre-fix ` +
+    `backup reintroduced leaked credentials — investigate the source ` +
+    `backup immediately. Per-table counts: ${detailLine}.`;
+
+  const channelsAttempted: PostRestoreSweepAlertOutcome["channelsAttempted"] =
+    [];
+  const channelsSucceeded: PostRestoreSweepAlertOutcome["channelsSucceeded"] =
+    [];
+
+  // Channel 1 — platform notification hub.
+  channelsAttempted.push("platform_notification");
+  try {
+    const createNotification =
+      deps.createNotification ??
+      (await import("./notificationHub")).createNotification;
+    await createNotification({
+      module: "security/redaction-sweep",
+      priority: "critical",
+      channel: "in_app",
+      title: headline,
+      message,
+      related_entity_type: "SYSTEM",
+      related_entity_id: "boot_redaction_sweep",
+      action_url: "/audit-logs",
+    });
+    channelsSucceeded.push("platform_notification");
+  } catch (notifErr) {
+    logger.warn?.(
+      "[Redaction] Post-restore sweep alert: platform notification failed:",
+      notifErr,
+    );
+  }
+
+  // Channel 2 — Slack webhook (mirrors the ai-cost-summary cron pattern).
+  const slackUrl = env.SLACK_WEBHOOK_URL;
+  if (slackUrl) {
+    channelsAttempted.push("slack_webhook");
+    try {
+      const fetchImpl = deps.fetch ?? fetch;
+      const slackBody = {
+        text:
+          `:rotating_light: *${headline}*\n` +
+          `Sweep timestamp: \`${result.sweep_timestamp}\`\n` +
+          `Per-table counts: \`${detailLine}\`\n` +
+          `A non-zero \`nc_change_history\` or \`capa_change_history\` ` +
+          `count usually means a database restore from a pre-fix backup ` +
+          `reintroduced leaked credentials — investigate the source ` +
+          `backup immediately.`,
+      };
+      const res = await fetchImpl(slackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(slackBody),
+      });
+      // `fetch` only throws on network errors; a 4xx/5xx response
+      // resolves with `ok=false`. Treat HTTP failure as a delivery
+      // failure so the outcome accurately reflects what landed in Slack.
+      if (res && typeof res === "object" && "ok" in res && !res.ok) {
+        logger.warn?.(
+          `[Redaction] Post-restore sweep alert: Slack webhook returned ` +
+            `HTTP ${"status" in res ? (res as { status: number }).status : "?"}`,
+        );
+      } else {
+        channelsSucceeded.push("slack_webhook");
+      }
+    } catch (slackErr) {
+      logger.warn?.(
+        "[Redaction] Post-restore sweep alert: Slack webhook failed:",
+        slackErr,
+      );
+    }
+  }
+
+  logger.log?.(
+    `[Redaction] Post-restore sweep alert dispatched ` +
+      `(triggers: ${detailLine}; channels succeeded: ` +
+      `${channelsSucceeded.join(",") || "none"})`,
+  );
+
+  return {
+    dispatched: true,
+    triggers,
+    channelsAttempted,
+    channelsSucceeded,
+  };
+}
+
+/**
  * On-boot redaction sweep hook.
  *
  * Called once during application startup (see src/mastra/index.ts). It runs
@@ -1123,6 +1358,9 @@ export async function runSweepWithClient(
  *   2. Writes a machine-readable JSON summary to
  *      audit-evidence/last-sweep.json so operators can see the most recent
  *      run's row counts at a glance without querying the database.
+ *   3. Dispatches an operator-facing alert (Task #462) when any of the
+ *      four monitored counters is non-zero — see
+ *      {@link dispatchPostRestoreSweepAlert}.
  *
  * The function NEVER throws — any error is caught and logged to stderr so
  * that a sweep failure cannot prevent the application from starting.
@@ -1234,6 +1472,20 @@ export async function onBootRedactionSweep(): Promise<void> {
       console.error(
         "[Redaction] Failed to write boot sweep summary file:",
         fileErr,
+      );
+    }
+
+    // Task #462: actively page security/ops when the sweep actually
+    // rewrote rows. A clean sweep stays silent (see
+    // dispatchPostRestoreSweepAlert). The dispatcher swallows its own
+    // delivery errors, but we still wrap it so an unexpected throw cannot
+    // take down the boot path.
+    try {
+      await dispatchPostRestoreSweepAlert(result);
+    } catch (alertErr) {
+      console.error(
+        "[Redaction] Failed to dispatch post-restore sweep alert:",
+        alertErr,
       );
     }
   } catch (err) {
