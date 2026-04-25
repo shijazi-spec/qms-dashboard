@@ -13,12 +13,20 @@
  * the `aiApprovalSweepBackfill`.
  *
  * This sweep walks every existing `ai_call_metrics` row and runs the four
- * free-form text columns through `redactSecretLikeStrings()`:
+ * free-form text columns through `redactSecretLikeStrings()`, plus the
+ * JSONB `metadata` column through `deepRedactSecretLikeStrings()`:
  *
- *   - error_message        (TEXT) — error from a failed tool / LLM call
- *   - prompt_preview       (TEXT) — first ~300 chars of the user prompt
- *   - tool_input_preview   (TEXT) — sanitized JSON-stringified tool input
- *   - tool_output_preview  (TEXT) — sanitized JSON-stringified tool output
+ *   - error_message        (TEXT)  — error from a failed tool / LLM call
+ *   - prompt_preview       (TEXT)  — first ~300 chars of the user prompt
+ *   - tool_input_preview   (TEXT)  — sanitized JSON-stringified tool input
+ *   - tool_output_preview  (TEXT)  — sanitized JSON-stringified tool output
+ *   - metadata             (JSONB) — caller-supplied free-form context
+ *
+ * `metadata` is walked recursively so credential-shaped substrings stuffed
+ * under innocuously-named leaf keys (e.g. `metadata.note`) get sentinelised
+ * the same way the four TEXT columns do — Task #475 mirrors the JSONB
+ * defense `redactAiPendingActions` (Task #289) already applies to
+ * `ai_pending_actions.execution_result`.
  *
  * Only rows whose redacted form differs from the stored value are UPDATEd, so
  * a second pass reports 0 rows updated (the script is idempotent). The
@@ -37,6 +45,7 @@
 import { Pool } from "pg";
 import {
   redactSecretLikeStrings,
+  deepRedactSecretLikeStrings,
   REDACTED_SENTINEL,
   logEvent,
 } from "../utils/eventLogsDatabase";
@@ -58,6 +67,7 @@ export interface AiCallMetricsBackfillResult {
   prompt_preview_changed: number;
   tool_input_preview_changed: number;
   tool_output_preview_changed: number;
+  metadata_changed: number;
   rows_updated: number;
 }
 
@@ -81,12 +91,14 @@ export async function backfillAiCallMetricsRedaction(
   let promptPreviewChanged = 0;
   let toolInputPreviewChanged = 0;
   let toolOutputPreviewChanged = 0;
+  let metadataChanged = 0;
   let rowsUpdated = 0;
   let cursor = 0;
 
   while (true) {
     const page = await client.query(
-      `SELECT id, error_message, prompt_preview, tool_input_preview, tool_output_preview
+      `SELECT id, error_message, prompt_preview, tool_input_preview,
+              tool_output_preview, metadata
          FROM ai_call_metrics
         WHERE id > $1
         ORDER BY id ASC
@@ -103,11 +115,25 @@ export async function backfillAiCallMetricsRedaction(
       let promptPreview: string | null = row.prompt_preview ?? null;
       let toolInputPreview: string | null = row.tool_input_preview ?? null;
       let toolOutputPreview: string | null = row.tool_output_preview ?? null;
+      // node-postgres parses JSONB columns into native JS values, so
+      // `row.metadata` is already a plain object (or null). Some tests /
+      // historical rows may still hand us a raw JSON string, so tolerate
+      // both shapes defensively.
+      let metadata: unknown = row.metadata ?? null;
+      if (typeof metadata === "string" && metadata.length > 0) {
+        try {
+          metadata = JSON.parse(metadata);
+        } catch {
+          // Leave the malformed string alone — the deep-walk path below
+          // will still scrub it as a string leaf.
+        }
+      }
 
       let errorDirty = false;
       let promptDirty = false;
       let toolInputDirty = false;
       let toolOutputDirty = false;
+      let metadataDirty = false;
 
       if (typeof errorMessage === "string" && errorMessage.length > 0) {
         const scrubbed = redactSecretLikeStrings(errorMessage) as string;
@@ -141,24 +167,47 @@ export async function backfillAiCallMetricsRedaction(
         }
       }
 
+      if (metadata !== null && metadata !== undefined) {
+        const scrubbed = deepRedactSecretLikeStrings(metadata);
+        // Compare via JSON.stringify because deep equality on arbitrary
+        // JSONB shapes is otherwise non-trivial; the structures here are
+        // small and JSON-serialisable by definition (they came out of
+        // JSONB), so this is cheap and correct.
+        if (JSON.stringify(scrubbed) !== JSON.stringify(metadata)) {
+          metadata = scrubbed;
+          metadataDirty = true;
+        }
+      }
+
       if (errorDirty) errorMessageChanged++;
       if (promptDirty) promptPreviewChanged++;
       if (toolInputDirty) toolInputPreviewChanged++;
       if (toolOutputDirty) toolOutputPreviewChanged++;
+      if (metadataDirty) metadataChanged++;
 
-      if (errorDirty || promptDirty || toolInputDirty || toolOutputDirty) {
+      if (
+        errorDirty ||
+        promptDirty ||
+        toolInputDirty ||
+        toolOutputDirty ||
+        metadataDirty
+      ) {
         await client.query(
           `UPDATE ai_call_metrics
               SET error_message       = $1,
                   prompt_preview      = $2,
                   tool_input_preview  = $3,
-                  tool_output_preview = $4
-            WHERE id = $5`,
+                  tool_output_preview = $4,
+                  metadata            = $5::jsonb
+            WHERE id = $6`,
           [
             errorMessage,
             promptPreview,
             toolInputPreview,
             toolOutputPreview,
+            metadata !== null && metadata !== undefined
+              ? JSON.stringify(metadata)
+              : null,
             row.id,
           ],
         );
@@ -176,6 +225,7 @@ export async function backfillAiCallMetricsRedaction(
     prompt_preview_changed: promptPreviewChanged,
     tool_input_preview_changed: toolInputPreviewChanged,
     tool_output_preview_changed: toolOutputPreviewChanged,
+    metadata_changed: metadataChanged,
     rows_updated: rowsUpdated,
   };
 }
@@ -199,7 +249,8 @@ export async function runAiCallMetricsBackfill(
       `error_message=${result.error_message_changed} ` +
       `prompt_preview=${result.prompt_preview_changed} ` +
       `tool_input_preview=${result.tool_input_preview_changed} ` +
-      `tool_output_preview=${result.tool_output_preview_changed}`,
+      `tool_output_preview=${result.tool_output_preview_changed} ` +
+      `metadata=${result.metadata_changed}`,
   );
 
   if (result.rows_updated > 0) {
@@ -211,11 +262,13 @@ export async function runAiCallMetricsBackfill(
         entityName: "Historical AI metric secret-redaction sweep",
         description:
           `Backfilled redactSecretLikeStrings across ai_call_metrics free-form ` +
-          `TEXT columns. scanned=${result.scanned}, rows_updated=${result.rows_updated}, ` +
+          `TEXT columns and deepRedactSecretLikeStrings across the metadata ` +
+          `JSONB column. scanned=${result.scanned}, rows_updated=${result.rows_updated}, ` +
           `error_message=${result.error_message_changed}, ` +
           `prompt_preview=${result.prompt_preview_changed}, ` +
           `tool_input_preview=${result.tool_input_preview_changed}, ` +
-          `tool_output_preview=${result.tool_output_preview_changed}.`,
+          `tool_output_preview=${result.tool_output_preview_changed}, ` +
+          `metadata=${result.metadata_changed}.`,
         newValue: result,
         aiInvolved: false,
         severity: "INFO",

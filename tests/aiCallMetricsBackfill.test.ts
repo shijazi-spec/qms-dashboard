@@ -1,13 +1,16 @@
 /**
- * Tests for the historical ai_call_metrics backfill sweep (Task #469).
+ * Tests for the historical ai_call_metrics backfill sweep (Task #469 + #475).
  *
  * Verifies that `backfillAiCallMetricsRedaction()` in
  * `src/scripts/backfillAiCallMetricsRedaction.ts` rewrites pre-fix free-form
  * TEXT columns (`error_message`, `prompt_preview`, `tool_input_preview`,
- * `tool_output_preview`) that contain credential-shaped substrings (sk-…,
- * ghp_…, JWTs, bcrypt hashes, AWS keys), leaves clean rows untouched, is
- * idempotent on a second pass, and reports the per-column scanned/changed
- * counters the audit-log entry consumes.
+ * `tool_output_preview`) AND walks the JSONB `metadata` column with
+ * `deepRedactSecretLikeStrings()` so credential-shaped substrings (sk-…,
+ * ghp_…, JWTs, bcrypt hashes, AWS keys) stuffed under innocuously-named
+ * leaf keys (e.g. `metadata.note`) get sentinelised the same way. Also
+ * leaves clean rows untouched, is idempotent on a second pass, and reports
+ * the per-column scanned/changed counters the audit-log entry consumes —
+ * including the new `metadata_changed` counter introduced by Task #475.
  *
  * Mirrors the fixture / assertion pattern of `tests/aiApprovalSweepBackfill.test.ts`
  * and reuses the same credential fixtures as `tests/aiTelemetryErrorRedaction.test.ts`
@@ -42,6 +45,9 @@ interface RowState {
   prompt_preview: string | null;
   tool_input_preview: string | null;
   tool_output_preview: string | null;
+  // node-postgres parses JSONB columns into native JS values, so the
+  // fixture stores the parsed shape (object | null), not a JSON string.
+  metadata: Record<string, unknown> | null;
 }
 
 interface CapturedUpdate {
@@ -72,13 +78,21 @@ function makeStubClient(initialRows: RowState[]): {
     }
     if (/^\s*UPDATE\s+ai_call_metrics/i.test(sql)) {
       updates.push({ sql, params });
-      const id = params[4] as number;
+      const id = params[5] as number;
       const target = rows.find((r) => r.id === id);
       if (target) {
         target.error_message = params[0] as string | null;
         target.prompt_preview = params[1] as string | null;
         target.tool_input_preview = params[2] as string | null;
         target.tool_output_preview = params[3] as string | null;
+        // The sweep serialises metadata to a JSON string before binding so
+        // it can be cast to ::jsonb in the UPDATE. Mirror Postgres' jsonb
+        // round-trip by parsing it back into the in-memory object.
+        const rawMeta = params[4] as string | null;
+        target.metadata =
+          rawMeta === null || rawMeta === undefined
+            ? null
+            : (JSON.parse(rawMeta) as Record<string, unknown>);
       }
       return { rows: [], rowCount: 1 };
     }
@@ -109,6 +123,8 @@ async function run(): Promise<void> {
       prompt_preview: "Rotate API key for zoho_books integration",
       tool_input_preview: null,
       tool_output_preview: null,
+      // Clean metadata — must round-trip byte-identical.
+      metadata: { prompt_version: "v3.2", tenant: "acme" },
     },
     {
       id: 2,
@@ -116,6 +132,7 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: `{"authorization":"Bearer ${GH_PAT}","tenant":"acme"}`,
       tool_output_preview: null,
+      metadata: null,
     },
     {
       id: 3,
@@ -123,6 +140,7 @@ async function run(): Promise<void> {
       prompt_preview: `User prompt: please rotate key. Old hash was ${BCRYPT_HASH}`,
       tool_input_preview: null,
       tool_output_preview: `{"status":"failed","echo":"key=${AWS_KEY}"}`,
+      metadata: { prompt_version: "v4.0" },
     },
     {
       id: 4,
@@ -131,6 +149,7 @@ async function run(): Promise<void> {
       prompt_preview: "Summarise audit findings for Q2",
       tool_input_preview: '{"vendor":"acme-corp","status":"open"}',
       tool_output_preview: '{"count":17,"ok":true}',
+      metadata: { prompt_version: "v2.1", source: "scheduler" },
     },
     {
       id: 5,
@@ -139,6 +158,29 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: null,
       tool_output_preview: null,
+      metadata: { prompt_version: "v1.0" },
+    },
+    {
+      id: 6,
+      // Task #475 fixture — TEXT columns clean, but a credential-shaped
+      // substring is hiding under an innocuously-named JSONB leaf key
+      // (`metadata.note`) that the per-key deny-list cannot catch. The
+      // sweep must walk metadata recursively and sentinelise the leak
+      // while preserving the surrounding non-secret structure.
+      error_message: SAFE_PROSE,
+      prompt_preview: null,
+      tool_input_preview: null,
+      tool_output_preview: null,
+      metadata: {
+        prompt_version: "v5.0",
+        request_context: {
+          // Even nested under a non-sensitive key, the leaf string must
+          // be scrubbed. Mirrors the `deepRedactSecretLikeStrings` path
+          // that already covers `ai_pending_actions.execution_result`.
+          note: `Caller passed key ${SK_KEY} in error context`,
+          tenant: "acme",
+        },
+      },
     },
   ];
 
@@ -147,7 +189,7 @@ async function run(): Promise<void> {
     stub1.client,
   );
 
-  assert(result1.scanned === 5, `scanned all 5 rows (got ${result1.scanned})`);
+  assert(result1.scanned === 6, `scanned all 6 rows (got ${result1.scanned})`);
   assert(
     result1.error_message_changed === 2,
     `error_message rewritten on the 2 leaky rows (got ${result1.error_message_changed})`,
@@ -165,12 +207,16 @@ async function run(): Promise<void> {
     `tool_output_preview rewritten on the 1 leaky row (got ${result1.tool_output_preview_changed})`,
   );
   assert(
-    result1.rows_updated === 3,
-    `total rows updated = 3 (rows 1, 2, 3 — got ${result1.rows_updated})`,
+    result1.metadata_changed === 1,
+    `metadata rewritten on the 1 leaky row — id=6, sk-… nested under metadata.request_context.note (got ${result1.metadata_changed})`,
   );
   assert(
-    stub1.updates.length === 3,
-    `exactly 3 UPDATE statements issued (got ${stub1.updates.length})`,
+    result1.rows_updated === 4,
+    `total rows updated = 4 (rows 1, 2, 3, 6 — got ${result1.rows_updated})`,
+  );
+  assert(
+    stub1.updates.length === 4,
+    `exactly 4 UPDATE statements issued (got ${stub1.updates.length})`,
   );
 
   const row1 = stub1.rows.find((r) => r.id === 1)!;
@@ -225,7 +271,12 @@ async function run(): Promise<void> {
       row4.prompt_preview === "Summarise audit findings for Q2" &&
       row4.tool_input_preview === '{"vendor":"acme-corp","status":"open"}' &&
       row4.tool_output_preview === '{"count":17,"ok":true}',
-    "row 4 (clean control) — every column byte-identical, no UPDATE issued",
+    "row 4 (clean control) — every TEXT column byte-identical, no UPDATE issued",
+  );
+  assert(
+    JSON.stringify(row4.metadata) ===
+      JSON.stringify({ prompt_version: "v2.1", source: "scheduler" }),
+    "row 4 (clean control) — metadata byte-identical",
   );
 
   const row5 = stub1.rows.find((r) => r.id === 5)!;
@@ -234,13 +285,42 @@ async function run(): Promise<void> {
     "row 5 (already-redacted) error_message is byte-identical — no UPDATE issued",
   );
 
+  // Task #475 — verify the JSONB sweep on the metadata leak fixture.
+  const row6 = stub1.rows.find((r) => r.id === 6)!;
+  const row6Meta = row6.metadata as {
+    prompt_version: string;
+    request_context: { note: string; tenant: string };
+  };
+  assert(
+    !JSON.stringify(row6.metadata).includes(SK_KEY),
+    "row 6 metadata no longer contains the sk-… credential anywhere in the JSONB tree",
+  );
+  assert(
+    row6Meta.request_context.note.includes(REDACTED_SENTINEL),
+    "row 6 metadata.request_context.note contains the redaction sentinel",
+  );
+  assert(
+    row6Meta.request_context.note.includes("Caller passed key") &&
+      row6Meta.request_context.note.includes("in error context"),
+    "row 6 metadata.request_context.note preserves the surrounding non-secret prose",
+  );
+  assert(
+    row6Meta.request_context.tenant === "acme" &&
+      row6Meta.prompt_version === "v5.0",
+    "row 6 metadata: untouched leaves (tenant, prompt_version) round-trip byte-identical",
+  );
+  assert(
+    row6.error_message === SAFE_PROSE,
+    "row 6 error_message (clean) is byte-identical — TEXT columns untouched",
+  );
+
   // -----------------------------------------------------------------------
   // Idempotency: a second pass over the now-clean dataset must be a no-op.
   // -----------------------------------------------------------------------
   const stub2 = makeStubClient(stub1.rows);
   const result2 = await backfillAiCallMetricsRedaction(stub2.client);
 
-  assert(result2.scanned === 5, "second pass still scans all 5 rows");
+  assert(result2.scanned === 6, "second pass still scans all 6 rows");
   assert(
     result2.rows_updated === 0,
     `second pass updates 0 rows (got ${result2.rows_updated}) — script is idempotent`,
@@ -249,8 +329,9 @@ async function run(): Promise<void> {
     result2.error_message_changed === 0 &&
       result2.prompt_preview_changed === 0 &&
       result2.tool_input_preview_changed === 0 &&
-      result2.tool_output_preview_changed === 0,
-    "second pass reports zero per-column changes",
+      result2.tool_output_preview_changed === 0 &&
+      result2.metadata_changed === 0,
+    "second pass reports zero per-column changes (including metadata_changed)",
   );
   assert(
     stub2.updates.length === 0,
@@ -258,8 +339,9 @@ async function run(): Promise<void> {
   );
 
   // -----------------------------------------------------------------------
-  // Combined column changes: every TEXT column dirty in the same row →
-  // counts as a single UPDATE but increments all four per-column counters.
+  // Combined column changes: every TEXT column dirty in the same row plus
+  // a credential nested under metadata → counts as a single UPDATE but
+  // increments all five per-column counters (Task #475 adds metadata).
   // -----------------------------------------------------------------------
   const combined: RowState[] = [
     {
@@ -268,6 +350,10 @@ async function run(): Promise<void> {
       prompt_preview: `Help me rotate ${GH_PAT}`,
       tool_input_preview: `{"authorization":"Bearer ${JWT}"}`,
       tool_output_preview: `{"echo":"hash=${BCRYPT_HASH}"}`,
+      metadata: {
+        prompt_version: "v9.9",
+        debug_context: { last_aws_key: AWS_KEY },
+      },
     },
   ];
   const stub3 = makeStubClient(combined);
@@ -277,8 +363,9 @@ async function run(): Promise<void> {
     result3.error_message_changed === 1 &&
       result3.prompt_preview_changed === 1 &&
       result3.tool_input_preview_changed === 1 &&
-      result3.tool_output_preview_changed === 1,
-    "combined-fixture row reports change on all four per-column counters",
+      result3.tool_output_preview_changed === 1 &&
+      result3.metadata_changed === 1,
+    "combined-fixture row reports change on all five per-column counters",
   );
   assert(
     result3.rows_updated === 1,
@@ -293,15 +380,25 @@ async function run(): Promise<void> {
     !combinedRow.error_message!.includes(SK_KEY) &&
       !combinedRow.prompt_preview!.includes(GH_PAT) &&
       !combinedRow.tool_input_preview!.includes(JWT) &&
-      !combinedRow.tool_output_preview!.includes("$2b$12$"),
-    "combined-fixture: every leaky column scrubbed in the single UPDATE",
+      !combinedRow.tool_output_preview!.includes("$2b$12$") &&
+      !JSON.stringify(combinedRow.metadata).includes(AWS_KEY),
+    "combined-fixture: every leaky column (including metadata) scrubbed in the single UPDATE",
   );
+  const combinedMeta = combinedRow.metadata as {
+    prompt_version: string;
+    debug_context: { last_aws_key: string };
+  };
   assert(
     combinedRow.error_message!.includes(REDACTED_SENTINEL) &&
       combinedRow.prompt_preview!.includes(REDACTED_SENTINEL) &&
       combinedRow.tool_input_preview!.includes(REDACTED_SENTINEL) &&
-      combinedRow.tool_output_preview!.includes(REDACTED_SENTINEL),
-    "combined-fixture: sentinel present in every scrubbed column",
+      combinedRow.tool_output_preview!.includes(REDACTED_SENTINEL) &&
+      combinedMeta.debug_context.last_aws_key.includes(REDACTED_SENTINEL),
+    "combined-fixture: sentinel present in every scrubbed column (including nested metadata leaf)",
+  );
+  assert(
+    combinedMeta.prompt_version === "v9.9",
+    "combined-fixture: untouched metadata leaves remain byte-identical",
   );
 
   // -----------------------------------------------------------------------
@@ -317,6 +414,7 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: null,
       tool_output_preview: null,
+      metadata: null,
     },
     {
       id: 101,
@@ -324,6 +422,7 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: null,
       tool_output_preview: null,
+      metadata: { prompt_version: "v1.0" },
     },
     {
       id: 102,
@@ -331,6 +430,7 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: null,
       tool_output_preview: null,
+      metadata: null,
     },
     {
       id: 103,
@@ -338,6 +438,7 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: null,
       tool_output_preview: null,
+      metadata: { prompt_version: "v1.1" },
     },
     {
       id: 104,
@@ -345,6 +446,7 @@ async function run(): Promise<void> {
       prompt_preview: null,
       tool_input_preview: null,
       tool_output_preview: null,
+      metadata: null,
     },
   ];
   const stub4 = makeStubClient(batched);

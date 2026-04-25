@@ -400,12 +400,14 @@ const aiCostSummaryFunction = inngest.createFunction(
         console.log(`[AI-Cost] Pruned ${pruned} stale ai_call_metrics rows (>90 days)`);
       }
 
-      // Task #469: scrub credential-shaped substrings from any pre-Task-#452
-      // rows that may have leaked secrets into ai_call_metrics free-form
-      // TEXT columns (error_message, prompt_preview, tool_input_preview,
-      // tool_output_preview). Idempotent — once the historical rows are
-      // clean, every subsequent daily run reports 0 rows updated and is a
-      // cheap full-table scan.
+      // Task #469 + #475: scrub credential-shaped substrings from any
+      // pre-Task-#452 rows that may have leaked secrets into ai_call_metrics
+      // free-form TEXT columns (error_message, prompt_preview,
+      // tool_input_preview, tool_output_preview) and from the JSONB
+      // `metadata` column (Task #475 — covers leaks under innocuously-named
+      // leaf keys like `metadata.note`). Idempotent — once the historical
+      // rows are clean, every subsequent daily run reports 0 rows updated
+      // and is a cheap full-table scan.
       try {
         const pg = await import("pg");
         const { runAiCallMetricsBackfill } = await import(
@@ -422,7 +424,8 @@ const aiCostSummaryFunction = inngest.createFunction(
                 `ai_call_metrics rows (error_message=${backfillResult.error_message_changed}, ` +
                 `prompt_preview=${backfillResult.prompt_preview_changed}, ` +
                 `tool_input_preview=${backfillResult.tool_input_preview_changed}, ` +
-                `tool_output_preview=${backfillResult.tool_output_preview_changed})`,
+                `tool_output_preview=${backfillResult.tool_output_preview_changed}, ` +
+                `metadata=${backfillResult.metadata_changed})`,
             );
           }
         } finally {
