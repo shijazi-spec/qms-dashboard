@@ -1,9 +1,10 @@
 /**
- * Discovers and runs every tests/*.test.ts file (excluding _helpers and
- * fixtures) using the same `npx tsx <file>` pattern each test was designed
- * for. Each test runs in its own subprocess so module-level side effects (DB
- * pools, env mutation) stay isolated. Aggregates pass/fail and exits non-zero
- * if any test file fails — designed to be invoked from `npm test` and from CI.
+ * Discovers and runs every tests/*.test.ts and src/**\/*.test.ts file
+ * (excluding _helpers and fixtures) using the same `npx tsx <file>` pattern
+ * each test was designed for. Each test runs in its own subprocess so
+ * module-level side effects (DB pools, env mutation) stay isolated. Aggregates
+ * pass/fail and exits non-zero if any test file fails — designed to be invoked
+ * from `npm test` and from CI.
  *
  * After the tsx-based suites finish, this also invokes `npx vitest run` to
  * execute the vitest-based suites under `tests/vitest/**` which need real
@@ -67,6 +68,7 @@ import path from "node:path";
 import pLimit from "p-limit";
 
 const TESTS_DIR = path.resolve(new URL(".", import.meta.url).pathname);
+const ROOT_DIR = path.resolve(TESTS_DIR, "..");
 
 interface RunResult {
   file: string;
@@ -75,12 +77,40 @@ interface RunResult {
   durationMs: number;
 }
 
+/**
+ * Recursively collect all *.test.ts files under a given directory.
+ * Skips __tests__ subdirectories — those are vitest-managed and discovered
+ * via `npx vitest run` rather than the tsx subprocess runner.
+ */
+async function collectTestFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && entry.name !== "__tests__") {
+      results.push(...(await collectTestFiles(full)));
+    } else if (entry.isFile() && entry.name.endsWith(".test.ts")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
 async function discoverTestFiles(): Promise<string[]> {
-  const entries = await readdir(TESTS_DIR, { withFileTypes: true });
-  return entries
+  // tests/*.test.ts (top-level only, preserving existing behaviour)
+  const testsEntries = await readdir(TESTS_DIR, { withFileTypes: true });
+  const testsFiles = testsEntries
     .filter((e) => e.isFile() && e.name.endsWith(".test.ts"))
-    .map((e) => path.join(TESTS_DIR, e.name))
-    .sort();
+    .map((e) => path.join(TESTS_DIR, e.name));
+
+  // src/**/*.test.ts (recursive — picks up e.g. redactSensitiveFields.test.ts)
+  const srcDir = path.join(ROOT_DIR, "src");
+  const srcFiles = await collectTestFiles(srcDir).catch((err: unknown) => {
+    console.error(`Failed to discover src/**/*.test.ts: ${(err as Error).message}`);
+    process.exit(1);
+  }) as string[];
+
+  return [...testsFiles, ...srcFiles].sort();
 }
 
 /**
@@ -267,7 +297,7 @@ async function main(): Promise<void> {
   const overallStart = Date.now();
   const files = await discoverTestFiles();
   if (files.length === 0) {
-    console.error("No *.test.ts files discovered under tests/");
+    console.error("No *.test.ts files discovered under tests/ or src/");
     process.exit(1);
   }
 
