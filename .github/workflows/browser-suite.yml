@@ -1,13 +1,18 @@
-name: Browser suite — CSP, AI Ops tabs, Prompt Version tab
+name: Browser suite — CSP, AI Ops tabs, Prompt Version tab, AI Approvals credential banner
 
-# Runs the three Playwright specs that previously only ran on demand:
+# Runs the four Playwright specs that previously only ran on demand:
 #   tests/csp.spec.ts           — CSP header + nonce + AI-widget inline-style checks
 #   tests/aiOpsTabs.spec.ts     — AI Ops admin surface tab navigation & rendering
 #   tests/promptVersionTab.spec.ts — Prompt Version tab admin surface checks
+#   tests/aiApprovalsCredentialBanner.spec.ts — AI approvals credential-warning banner (Task #482)
 #
 # CSP regressions are particularly dangerous because they silently break pages
 # in production. The AI Ops / prompt-version tabs are admin surfaces that rarely
 # get manual smoke testing, so wiring them into CI is the best safety net.
+# The credential-banner spec guards the dashboard surface added in Task #477
+# (renderCredentialWarnings + the read-endpoint serialiser) against silent
+# regressions where the column is dropped from the response or the renderer
+# stops emitting the chips/title labels.
 #
 # Pattern mirrors .github/workflows/i18n-tests.yml and
 # .github/workflows/streaming-download-smoke.yml (postgres service, health-check
@@ -25,7 +30,7 @@ concurrency:
 
 jobs:
   browser-suite:
-    name: CSP / AI Ops / Prompt Version — Playwright suite (chromium)
+    name: CSP / AI Ops / Prompt Version / AI Approvals credential banner — Playwright suite (chromium)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -47,8 +52,11 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/walaplus_test
       SESSION_SECRET: ci-session-secret-do-not-use-in-prod
-      ADMIN_API_KEY: ci-admin-key-browser-suite
-      TEST_ADMIN_KEY: ci-admin-key-browser-suite
+      # Length ≥ 32 + ≥ 10 distinct chars to satisfy assertAdminApiKeyStrengthOrThrow()
+      # in src/utils/rbacMiddleware.ts (Task #450). A shorter value would crash
+      # `mastra dev` at bootstrap before any /api/admin/* route is registered.
+      ADMIN_API_KEY: ci-admin-key-browser-suite-x7y9z3a1b5c8
+      TEST_ADMIN_KEY: ci-admin-key-browser-suite-x7y9z3a1b5c8
       BASE_URL: http://localhost:5000
       PORT: "5000"
       DATA_MODE: REAL
@@ -93,6 +101,9 @@ jobs:
 
       - name: Run Prompt Version tab Playwright suite
         run: npx playwright test tests/promptVersionTab.spec.ts --reporter=list
+
+      - name: Run AI Approvals credential-banner Playwright suite
+        run: npx playwright test tests/aiApprovalsCredentialBanner.spec.ts --reporter=list
 
       - name: Upload Playwright report
         if: always()
