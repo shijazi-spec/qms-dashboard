@@ -60,6 +60,13 @@
  * renames the index — or rewrites the NOT EXISTS sub-query into a shape
  * the planner can no longer satisfy with the index — fails CI.
  *
+ * AI metrics secret-sweep DB integration test: if `RUN_AI_METRICS_SWEEP_E2E=1`
+ * is set we additionally run `tests/aiCallMetricsSweepBackfill.integration.ts`
+ * against a real Postgres so SQL shape, parameter encoding, and BIGSERIAL
+ * keyset pagination in `redactAiCallMetrics()` are exercised end-to-end.
+ * Test validates DATABASE_URL itself; CI wires it via
+ * `.github/workflows/ai-metrics-sweep.yml`.
+ *
  * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
  * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
  * `tests/rbacReportRoutes.integration.ts` against a running dev server.
@@ -308,6 +315,37 @@ function runApprovalRedactionIntegration(): Promise<RunResult> {
   });
 }
 
+function runAiMetricsSweep(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/aiCallMetricsSweepBackfill.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/aiCallMetricsSweepBackfill.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn ai-metrics-sweep integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 function runReviewFilterIndex(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
@@ -448,6 +486,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] streaming-export latency HTTP integration tests — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  if (process.env.RUN_AI_METRICS_SWEEP_E2E === "1") {
+    console.log(
+      `\n──── ai_call_metrics secret-sweep DB integration test ────`,
+    );
+    results.push(await runAiMetricsSweep());
+  } else {
+    console.log(
+      `\n[skip] ai_call_metrics secret-sweep DB integration test — set RUN_AI_METRICS_SWEEP_E2E=1 with DATABASE_URL pointed at a real Postgres to verify redactAiCallMetrics() against live SQL.`,
     );
   }
 
