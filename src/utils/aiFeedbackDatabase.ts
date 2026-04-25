@@ -283,6 +283,14 @@ export async function saveFeedback(
   return { id: res.rows[0].id };
 }
 
+export interface FeedbackPromptVersionBreakdown {
+  prompt_version: string;
+  total: number;
+  thumbs_up: number;
+  thumbs_down: number;
+  thumbs_up_ratio: number;
+}
+
 export interface FeedbackStats {
   total: number;
   thumbs_up: number;
@@ -290,6 +298,22 @@ export interface FeedbackStats {
   thumbs_up_ratio: number;
   feedback_rate_estimate: number;
   top_categories: { category: string; count: number }[];
+  /**
+   * Per-prompt-version breakdown for the same window as the headline totals.
+   *
+   * Lets operators triage whether a thumbs-down spike is concentrated on one
+   * prompt revision (e.g. a recent edit to QMS_CONSULTANT_INSTRUCTIONS) vs
+   * spread across all revisions. Sourced from `metadata->>'prompt_version'`,
+   * which is populated by `buildAiCallFeedbackMetadata()` at the
+   * /api/consultant/feedback save site (Task #590).
+   *
+   * Rows where `metadata->>'prompt_version'` is NULL or blank are grouped
+   * under the literal `unknown` so legacy rows (where metadata is `{}`)
+   * still contribute to the totals instead of silently disappearing — see
+   * `getRecentThumbsDown` for the matching dashboard rendering of that
+   * sentinel.
+   */
+  prompt_versions: FeedbackPromptVersionBreakdown[];
 }
 
 export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
@@ -319,6 +343,29 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
     [safeDays],
   );
 
+  // Per-prompt-version breakdown (Task #661).
+  //
+  // We coalesce empty / NULL prompt_version into the literal 'unknown' so
+  // legacy rows from before Task #590 (where metadata is `{}`) still show
+  // up in the table — otherwise an admin would see a per-version total
+  // that doesn't add up to the headline thumbs-up / thumbs-down counts and
+  // think the breakdown was broken. Cap at 12 rows so a long tail of
+  // historical revisions doesn't blow up the dashboard payload; the
+  // ORDER BY puts the busiest revisions first.
+  const versions = await pool.query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(metadata->>'prompt_version'), ''), 'unknown') AS prompt_version,
+       COUNT(*)                                                            AS total,
+       COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
+       COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
+     FROM ai_response_feedback
+     WHERE created_at >= NOW() - make_interval(days => $1)
+     GROUP BY 1
+     ORDER BY total DESC, prompt_version ASC
+     LIMIT 12`,
+    [safeDays],
+  );
+
   const total = parseInt(totals.rows[0].total) || 0;
   const up = parseInt(totals.rows[0].thumbs_up) || 0;
   const down = parseInt(totals.rows[0].thumbs_down) || 0;
@@ -333,6 +380,19 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
       category: r.category,
       count: parseInt(r.cnt),
     })),
+    prompt_versions: versions.rows.map((r) => {
+      const rowTotal = parseInt(r.total) || 0;
+      const rowUp = parseInt(r.thumbs_up) || 0;
+      const rowDown = parseInt(r.thumbs_down) || 0;
+      return {
+        prompt_version: String(r.prompt_version),
+        total: rowTotal,
+        thumbs_up: rowUp,
+        thumbs_down: rowDown,
+        thumbs_up_ratio:
+          rowTotal > 0 ? Math.round((rowUp / rowTotal) * 100) : 0,
+      };
+    }),
   };
 }
 
@@ -347,6 +407,18 @@ export interface RecentThumbsDown {
   response_preview: string | null;
   tools_called: string | null;
   created_at: string;
+  /**
+   * Triage badges projected out of `metadata` (Task #661).
+   *
+   * These mirror the snake_case keys persisted by
+   * `buildAiCallFeedbackMetadata()` — see `AiCallFeedbackMetadata`. Hoisted
+   * to top-level columns so the AI Ops dashboard can render them without
+   * having to teach the frontend the JSONB shape, and so legacy rows where
+   * `metadata` is `{}` cleanly come back as `null` (rendered as "—").
+   */
+  prompt_version: string | null;
+  rating_source: string | null;
+  client_surface: string | null;
 }
 
 export async function getFeedbackByMessageId(
@@ -381,9 +453,18 @@ export async function getRecentThumbsDown(
 ): Promise<RecentThumbsDown[]> {
   await initAIFeedbackTable();
 
+  // Project prompt_version / rating_source / client_surface out of the
+  // metadata JSONB so the dashboard can render triage badges without
+  // having to know the underlying column shape (Task #661). NULLIF on the
+  // trimmed value collapses blanks to NULL so the rendering layer's
+  // "fallback to em-dash" logic kicks in for legacy rows where
+  // `metadata` is still `{}`.
   const res = await pool.query(
     `SELECT id, message_id, conversation_id, category, comment,
-            user_email, prompt_preview, response_preview, tools_called, created_at
+            user_email, prompt_preview, response_preview, tools_called, created_at,
+            NULLIF(TRIM(metadata->>'prompt_version'), '') AS prompt_version,
+            NULLIF(TRIM(metadata->>'rating_source'),  '') AS rating_source,
+            NULLIF(TRIM(metadata->>'client_surface'), '') AS client_surface
      FROM ai_response_feedback
      WHERE rating = 'down'
      ORDER BY created_at DESC

@@ -240,6 +240,194 @@ if (!HAS_DB) {
     },
   );
 
+  // ---------------------------------------------------------------------
+  // Task #661: feedback stats endpoint surfaces per-prompt-version
+  // breakdown, and the recent-thumbs-down list hoists prompt_version /
+  // rating_source / client_surface out of the metadata JSONB so the AI
+  // Ops dashboard can render badges without re-implementing the JSONB
+  // shape on the frontend.
+  //
+  // Locks in three regressions the typed FeedbackStats / RecentThumbsDown
+  // shapes don't catch on their own:
+  //   1. A future SQL refactor of getFeedbackStats might drop the
+  //      `prompt_versions` aggregate, leaving the dashboard table empty
+  //      with no test failure.
+  //   2. A future SQL refactor of getRecentThumbsDown might stop
+  //      projecting the metadata fields, silently breaking the badges.
+  //   3. The JSONB->>'prompt_version' coalesce-to-'unknown' branch is
+  //      easy to drop accidentally; without it, legacy rows where
+  //      metadata is `{}` would silently disappear from the breakdown
+  //      and the dashboard totals would no longer add up.
+  // ---------------------------------------------------------------------
+  await suite.test(
+    "GET /api/consultant/feedback/stats — returns per-prompt-version breakdown including 'unknown' bucket for legacy rows",
+    async () => {
+      // Seed three rows: two on prompt revision A (one up, one down) and
+      // one on prompt revision B (up). The 'down' on A should make A's
+      // ratio 50%, while B should be 100%.
+      //
+      // Use plain alphabetic labels (no high-entropy hex tail) so the
+      // wrapPoolForRedaction guard doesn't mistake the synthetic test
+      // value for a credential and replace it with `***REDACTED***`
+      // mid-write — that would silently break the per-version assertions
+      // below. Mirrors the wording used by the upstream
+      // `clientPromptVersion = "qms-consultant@feedbacktest"` happy-path
+      // test that already exercises the same redaction path.
+      const versionA = "qms-consultant@taskaprompt";
+      const versionB = "qms-consultant@taskbprompt";
+      const ids = [
+        `consultant-stats-A-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-stats-A-down-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-stats-B-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-stats-legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ];
+      seededMessageIds.push(...ids);
+
+      await postFeedback({ messageId: ids[0], rating: "up", promptVersion: versionA });
+      await postFeedback({ messageId: ids[1], rating: "down", promptVersion: versionA });
+      await postFeedback({ messageId: ids[2], rating: "up", promptVersion: versionB });
+      // Legacy row: insert directly so metadata stays `{}`. The route
+      // would normally fall back to the server-side prompt version (see
+      // the "older clients keep working" test above), so we bypass it
+      // here to simulate a row written before Task #590 was deployed.
+      await pool.query(
+        `INSERT INTO ai_response_feedback (message_id, agent, rating, metadata)
+         VALUES ($1, 'qmsConsultantAgent', 'down', '{}'::jsonb)`,
+        [ids[3]],
+      );
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      let res;
+      try {
+        const handler = await buildHandler(
+          consultantRoutes,
+          "/api/consultant/feedback/stats",
+          "GET",
+        );
+        const ctx = makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "30" },
+        });
+        res = await handler(ctx);
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+
+      suite.expectEqual(res.status, 200, "status");
+      const versions = res.body?.stats?.prompt_versions;
+      suite.expect(Array.isArray(versions), "stats.prompt_versions is an array");
+
+      const findRow = (label: string) =>
+        Array.isArray(versions)
+          ? versions.find((v: any) => v.prompt_version === label)
+          : undefined;
+      const rowA = findRow(versionA);
+      const rowB = findRow(versionB);
+      const rowUnknown = findRow("unknown");
+
+      suite.expect(!!rowA, `breakdown contains versionA (${versionA})`);
+      suite.expect(!!rowB, `breakdown contains versionB (${versionB})`);
+      suite.expect(!!rowUnknown, "breakdown contains the 'unknown' bucket for legacy rows");
+
+      if (rowA) {
+        suite.expectEqual(rowA.thumbs_up, 1, "versionA thumbs_up");
+        suite.expectEqual(rowA.thumbs_down, 1, "versionA thumbs_down");
+        suite.expectEqual(rowA.thumbs_up_ratio, 50, "versionA ratio rounds to 50%");
+      }
+      if (rowB) {
+        suite.expectEqual(rowB.thumbs_up, 1, "versionB thumbs_up");
+        suite.expectEqual(rowB.thumbs_up_ratio, 100, "versionB ratio is 100%");
+      }
+      if (rowUnknown) {
+        suite.expect(
+          (rowUnknown.thumbs_down ?? 0) >= 1,
+          "'unknown' bucket counts the legacy row",
+        );
+      }
+    },
+  );
+
+  await suite.test(
+    "GET /api/consultant/feedback/stats — recent thumbs-down rows expose prompt_version / rating_source / client_surface for badges",
+    async () => {
+      // Seed a thumbs-down with a fully-populated metadata payload, plus
+      // a legacy thumbs-down with empty metadata. Both must come back in
+      // the `recent` array; only the first must carry the badge fields.
+      // Plain alphabetic label so the secret-redaction wrapper doesn't
+      // mistake it for a high-entropy credential — see the comment in
+      // the per-prompt-version breakdown test above.
+      const versionLabel = "qms-consultant@badgepromptlabel";
+      const sourceLabel = "detail_modal";
+      const surfaceLabel = "mobile";
+      const messageIdRich = `consultant-recent-rich-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const messageIdLegacy = `consultant-recent-legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      seededMessageIds.push(messageIdRich, messageIdLegacy);
+
+      await postFeedback({
+        messageId: messageIdRich,
+        rating: "down",
+        category: "incorrect",
+        promptVersion: versionLabel,
+        ratingSource: sourceLabel,
+        clientSurface: surfaceLabel,
+      });
+      await pool.query(
+        `INSERT INTO ai_response_feedback (message_id, agent, rating, metadata)
+         VALUES ($1, 'qmsConsultantAgent', 'down', '{}'::jsonb)`,
+        [messageIdLegacy],
+      );
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      let res;
+      try {
+        const handler = await buildHandler(
+          consultantRoutes,
+          "/api/consultant/feedback/stats",
+          "GET",
+        );
+        const ctx = makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+        });
+        res = await handler(ctx);
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+
+      suite.expectEqual(res.status, 200, "status");
+      const recent = res.body?.recent;
+      suite.expect(Array.isArray(recent), "recent is an array");
+      const rich = Array.isArray(recent)
+        ? recent.find((r: any) => r.message_id === messageIdRich)
+        : undefined;
+      const legacy = Array.isArray(recent)
+        ? recent.find((r: any) => r.message_id === messageIdLegacy)
+        : undefined;
+
+      suite.expect(!!rich, "recent contains the metadata-rich row");
+      suite.expect(!!legacy, "recent still contains the legacy empty-metadata row");
+
+      if (rich) {
+        suite.expectEqual(rich.prompt_version, versionLabel, "rich.prompt_version");
+        suite.expectEqual(rich.rating_source, sourceLabel, "rich.rating_source");
+        suite.expectEqual(rich.client_surface, surfaceLabel, "rich.client_surface");
+      }
+      if (legacy) {
+        // Empty `{}` metadata projects to JSON null; once the SQL TRIM/
+        // NULLIF kicks in, we want it back as a real `null` so the
+        // dashboard's `if (r.prompt_version)` guard hides the badge.
+        suite.expectEqual(legacy.prompt_version, null, "legacy.prompt_version is null");
+        suite.expectEqual(legacy.rating_source, null, "legacy.rating_source is null");
+        suite.expectEqual(legacy.client_surface, null, "legacy.client_surface is null");
+      }
+    },
+  );
+
   // Best-effort cleanup: remove the rows we seeded so the test doesn't
   // pollute the DB with synthetic feedback. Wrap in try/catch so a delete
   // failure doesn't mask the real test result.
