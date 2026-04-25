@@ -13,6 +13,7 @@ import {
   getChildToolCallsForParent,
   getParentCallsForTool,
   getKnownAgentNames,
+  getLastPromptVersionPurgeRun,
   FEEDBACK_COMMENT_MAX_LEN,
   MODEL_PRICE_TABLE,
   DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
@@ -450,6 +451,29 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] active prompt-versions error:", error);
           return c.json({ error: "Failed to fetch active prompt versions" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    // Returns the most-recent prompt-version purge run so the AI Operations
+    // panel can show a "Last purge" info strip (deleted count, when it ran,
+    // retention window, live versions). Returns { data: null } when the cron
+    // has never run on this database (e.g. fresh install) — the UI renders a
+    // "no purge yet" hint in that case rather than treating it as an error.
+    path: "/api/ai-ops/prompt-versions/last-purge",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const run = await getLastPromptVersionPurgeRun();
+          return c.json({ data: run });
+        } catch (error) {
+          console.error("[AI-Ops] last-purge error:", error);
+          return c.json({ error: "Failed to fetch last purge run" }, 500);
         }
       };
     },

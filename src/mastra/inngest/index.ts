@@ -562,8 +562,14 @@ const promptVersionPurgeFunction = inngest.createFunction(
         `Live versions (${liveVersions.length}): ${liveVersions.join(", ")}`,
       );
 
-      const { purgeArchivedPromptVersionMetrics } = await import("../../utils/aiTelemetry");
+      const { purgeArchivedPromptVersionMetrics, recordPromptVersionPurgeRun } =
+        await import("../../utils/aiTelemetry");
       const deleted = await purgeArchivedPromptVersionMetrics(liveVersions, retentionDays);
+
+      // Persist the purge result so the AI Operations panel's "Last purge"
+      // info strip has a visible record (the console log alone is invisible
+      // to operators looking at the Prompt Version tab).
+      await recordPromptVersionPurgeRun(deleted, retentionDays, liveVersions);
 
       console.log(
         `[PromptVersionPurge] Deleted ${deleted} ai_call_metrics row(s) for ` +

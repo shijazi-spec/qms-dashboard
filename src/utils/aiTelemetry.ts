@@ -812,6 +812,104 @@ export async function purgeArchivedPromptVersionMetrics(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Prompt-version purge run audit trail
+//
+// The Inngest cron (promptVersionPurgeFunction) writes one row per run so the
+// AI Operations panel can show a "Last purge" info strip and operators get
+// visible confirmation that the job ran. The table is intentionally tiny:
+// one row per cron tick, capped at PROMPT_VERSION_PURGE_HISTORY_KEEP rows by
+// each writer (NOT a TTL), so the table stays small without an extra cron.
+// ──────────────────────────────────────────────────────────────────────────────
+const PROMPT_VERSION_PURGE_HISTORY_KEEP = 200;
+
+let purgeRunsTableReady: Promise<void> | null = null;
+async function ensurePromptVersionPurgeRunsTable(): Promise<void> {
+  if (purgeRunsTableReady) return purgeRunsTableReady;
+  purgeRunsTableReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS prompt_version_purge_runs (
+          id              BIGSERIAL  PRIMARY KEY,
+          ran_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          deleted_count   INTEGER     NOT NULL DEFAULT 0,
+          retention_days  INTEGER     NOT NULL,
+          live_versions   TEXT[]      NOT NULL DEFAULT ARRAY[]::TEXT[]
+        );
+        CREATE INDEX IF NOT EXISTS idx_prompt_version_purge_runs_ran_at
+          ON prompt_version_purge_runs (ran_at DESC);
+      `);
+    } catch (err) {
+      purgeRunsTableReady = null;
+      throw err;
+    }
+  })();
+  return purgeRunsTableReady;
+}
+
+export interface PromptVersionPurgeRun {
+  id: number;
+  ran_at: string;
+  deleted_count: number;
+  retention_days: number;
+  live_versions: string[];
+}
+
+export async function recordPromptVersionPurgeRun(
+  deletedCount: number,
+  retentionDays: number,
+  liveVersions: string[],
+): Promise<number | null> {
+  try {
+    await ensurePromptVersionPurgeRunsTable();
+    const result = await pool.query(
+      `INSERT INTO prompt_version_purge_runs (deleted_count, retention_days, live_versions)
+       VALUES ($1, $2, $3)
+       RETURNING id`,
+      [Math.max(0, Math.floor(deletedCount)), Math.max(1, Math.floor(retentionDays)), liveVersions],
+    );
+    // Trim history to the most-recent N rows so the table cannot grow without
+    // bound. Cheap because the index above orders rows by ran_at DESC.
+    await pool.query(
+      `DELETE FROM prompt_version_purge_runs
+        WHERE id IN (
+          SELECT id FROM prompt_version_purge_runs
+          ORDER BY ran_at DESC
+          OFFSET $1
+        )`,
+      [PROMPT_VERSION_PURGE_HISTORY_KEEP],
+    );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    console.error('[aiTelemetry] recordPromptVersionPurgeRun failed:', err);
+    return null;
+  }
+}
+
+export async function getLastPromptVersionPurgeRun(): Promise<PromptVersionPurgeRun | null> {
+  try {
+    await ensurePromptVersionPurgeRunsTable();
+    const result = await pool.query(
+      `SELECT id, ran_at, deleted_count, retention_days, live_versions
+         FROM prompt_version_purge_runs
+        ORDER BY ran_at DESC
+        LIMIT 1`,
+    );
+    if (result.rowCount === 0) return null;
+    const row = result.rows[0];
+    return {
+      id: Number(row.id),
+      ran_at: row.ran_at instanceof Date ? row.ran_at.toISOString() : String(row.ran_at),
+      deleted_count: Number(row.deleted_count) || 0,
+      retention_days: Number(row.retention_days) || 0,
+      live_versions: Array.isArray(row.live_versions) ? row.live_versions : [],
+    };
+  } catch (err) {
+    console.error('[aiTelemetry] getLastPromptVersionPurgeRun failed:', err);
+    return null;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Aggregate queries — consumed by the AI Operations panel routes
 // ──────────────────────────────────────────────────────────────────────────────
 

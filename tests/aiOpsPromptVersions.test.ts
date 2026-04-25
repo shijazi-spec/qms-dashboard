@@ -48,7 +48,32 @@ await suite.test("prompt-version routes are wired into aiOpsRoutes", async () =>
     paths.includes("GET /api/ai-ops/prompt-versions/active"),
     "GET /api/ai-ops/prompt-versions/active registered",
   );
+  suite.expect(
+    paths.includes("GET /api/ai-ops/prompt-versions/last-purge"),
+    "GET /api/ai-ops/prompt-versions/last-purge registered",
+  );
 });
+
+await suite.test(
+  "GET /api/ai-ops/prompt-versions/last-purge — 403 without an AI-ops role",
+  async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/prompt-versions/last-purge",
+        "GET",
+      );
+      const res = await handler(makeContext({ method: "GET" }));
+      suite.expectEqual(res.status, 403, "status");
+      suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Auth-gate checks (no DB required — requireRole fires first)
@@ -289,6 +314,102 @@ if (!HAS_DB) {
     },
   );
 
+  // ---------------------------------------------------------------------------
+  // last-purge endpoint — round-trip a recorded run via the DB.
+  // ---------------------------------------------------------------------------
+  await suite.test(
+    "happy: GET /api/ai-ops/prompt-versions/last-purge returns the most-recent recorded run",
+    async () => {
+      const { recordPromptVersionPurgeRun } = await import(
+        "../src/utils/aiTelemetry"
+      );
+      // Seed two runs ~10ms apart; the endpoint must surface the second one
+      // because it has the larger ran_at timestamp.
+      const liveA = ["agent-x@aaaaaaaa", "agent-y@bbbbbbbb"];
+      const liveB = ["agent-x@cccccccc", "agent-y@dddddddd"];
+      const firstId = await recordPromptVersionPurgeRun(3, 30, liveA);
+      suite.expect(firstId != null, "first purge run inserted");
+      await new Promise((r) => setTimeout(r, 15));
+      const secondId = await recordPromptVersionPurgeRun(7, 45, liveB);
+      suite.expect(secondId != null, "second purge run inserted");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/prompt-versions/last-purge",
+          "GET",
+        );
+        const res = await handler(
+          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        );
+        suite.expectEqual(res.status, 200, "status");
+        const run = res.body?.data;
+        suite.expect(run != null, "run row in body.data");
+        suite.expectEqual(run.deleted_count, 7, "echoes most-recent deleted_count");
+        suite.expectEqual(run.retention_days, 45, "echoes most-recent retention_days");
+        suite.expect(
+          Array.isArray(run.live_versions) &&
+            run.live_versions.length === 2 &&
+            run.live_versions.includes("agent-x@cccccccc") &&
+            run.live_versions.includes("agent-y@dddddddd"),
+          "echoes most-recent live_versions",
+        );
+        suite.expect(
+          typeof run.ran_at === "string" && !isNaN(Date.parse(run.ran_at)),
+          "ran_at is a parseable ISO timestamp",
+        );
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  // Contract: when the table has no rows, the route must return
+  // { data: null } (not 404, not [], not undefined). This locks the
+  // shape the dashboard's renderLastPurgeStrip(null) branch depends on.
+  await suite.test(
+    "contract: GET /api/ai-ops/prompt-versions/last-purge returns data:null when no purge runs exist",
+    async () => {
+      const pgMod = await import("pg");
+      const pool = new pgMod.default.Pool({
+        connectionString: process.env.DATABASE_URL,
+      });
+      try {
+        // Wipe the table so we exercise the "fresh DB" branch deterministically.
+        // The cleanup step at the end of this suite is selective; this test
+        // needs a fully-empty table for the assertion to be meaningful.
+        await pool.query(`DELETE FROM prompt_version_purge_runs`);
+      } finally {
+        await pool.end();
+      }
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/prompt-versions/last-purge",
+          "GET",
+        );
+        const res = await handler(
+          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        );
+        suite.expectEqual(res.status, 200, "status is 200 even with no rows");
+        suite.expect(
+          res.body && Object.prototype.hasOwnProperty.call(res.body, "data"),
+          "body has a `data` property",
+        );
+        suite.expectEqual(res.body.data, null, "data is exactly null");
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
   // Clean up seeded rows so the analytics tables stay uncluttered.
   await suite.test("cleanup: remove seeded test rows from ai_call_metrics", async () => {
     if (seededIds.length === 0) return;
@@ -298,6 +419,13 @@ if (!HAS_DB) {
       await pool.query(
         `DELETE FROM ai_call_metrics WHERE agent_name = $1`,
         [TEST_AGENT],
+      );
+      // Drop the synthetic purge rows seeded by the last-purge happy-path test
+      // so the AI Ops UI doesn't show "agent-x@cccccccc" to a real operator.
+      await pool.query(
+        `DELETE FROM prompt_version_purge_runs
+          WHERE 'agent-x@aaaaaaaa' = ANY(live_versions)
+             OR 'agent-x@cccccccc' = ANY(live_versions)`,
       );
       suite.expect(true, "cleanup query executed without error");
     } finally {
