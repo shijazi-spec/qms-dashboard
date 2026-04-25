@@ -51,10 +51,19 @@ interface CapturedRecoveryNotification {
   note: string;
 }
 
+// Pinned "now" used by every test so the "last seen X days ago" clause
+// renders deterministically. Picked far enough in the future of the
+// `last_seen_at` defaults below that ordinary cases land at exactly 5
+// days ago — easy to assert without floating-point fuzz.
+const FIXED_NOW_ISO = "2026-04-25T12:00:00Z";
+const FIXED_NOW = new Date(FIXED_NOW_ISO);
+
 function makeStub(opts: {
   rows: PromptVersionAggregate[];
   existingKeys?: Set<string>;
   openAlerts?: AIAlert[];
+  /** Override the cron's "now" for last-seen-days-ago math. */
+  now?: () => Date;
 }) {
   const created: CapturedAlert[] = [];
   const resolved: CapturedResolve[] = [];
@@ -83,6 +92,7 @@ function makeStub(opts: {
       notifyRecovery: async (recoveries: CapturedRecoveryNotification[]) => {
         recoveryCalls.push(recoveries);
       },
+      now: opts.now ?? (() => FIXED_NOW),
     },
   };
 }
@@ -101,6 +111,12 @@ function makeRow(over: Partial<PromptVersionAggregate>): PromptVersionAggregate 
     error_rate_pct: 0,
     first_seen: "2026-04-01T00:00:00Z",
     last_seen: "2026-04-20T00:00:00Z",
+    // Unbounded all-time last seen (added to the aggregate by Task #173).
+    // Defaulted to exactly 5 days before FIXED_NOW so the regression cron's
+    // "last seen X days ago" clause renders deterministically as
+    // "Last seen 5 days ago." for the common case. Tests that want to
+    // exercise other recencies override this in `over`.
+    last_seen_at: "2026-04-20T12:00:00Z",
     // The aggregate now echoes the small-sample floor and per-row
     // eligibility flag so the dashboard can hide best/regression badges
     // for brand-new versions. Default to "comparable" here so existing
@@ -157,6 +173,15 @@ async function run(): Promise<void> {
         a.description.includes("70%") && a.description.includes("90%"),
       "description names both versions and both rates",
     );
+    // Task #331: description must also tell the on-call reviewer how
+    // recently the regressed version was last used so they can tell an
+    // active production regression from a dormant archived version.
+    // makeRow defaults regressed v2 to last_seen_at = 5 days before
+    // FIXED_NOW, so the clause renders as exactly "Last seen 5 days ago."
+    assert(
+      a.description.includes("Last seen 5 days ago."),
+      `description includes "last seen X days ago" clause (got: "${a.description}")`,
+    );
     const breach = out.breaches[0];
     assert(
       breach.regressed_version === "v2" && breach.best_version === "v1",
@@ -165,6 +190,14 @@ async function run(): Promise<void> {
     assert(
       Math.abs(breach.drop_pp - 20) < 0.001,
       `drop_pp is ~20 (got ${breach.drop_pp})`,
+    );
+    assert(
+      breach.regressed_last_seen_days_ago === 5,
+      `breach carries regressed_last_seen_days_ago=5 (got ${breach.regressed_last_seen_days_ago})`,
+    );
+    assert(
+      breach.regressed_last_seen_at === "2026-04-20T12:00:00Z",
+      `breach carries the source ISO timestamp (got "${breach.regressed_last_seen_at}")`,
     );
   }
 
@@ -576,6 +609,132 @@ async function run(): Promise<void> {
     });
     assert(out.alertsAutoResolved === 1, "alert still reported as auto-resolved");
     assert(stub.resolved.length === 1, "DB resolve was still called");
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 17 (Task #331): "Last seen X days ago" clause renders sensible
+  // wording for the day=0, day=1, and missing-timestamp edge cases. These
+  // are the three branches `formatLastSeenClause` handles, and the alert
+  // description is the only place the on-call reviewer sees them — getting
+  // the phrasing wrong (e.g. "−1 days ago" or "0 days ago") would be
+  // visible in the live alerts feed.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n17. last-seen clause covers day=0, day=1 and missing timestamp");
+  {
+    // Same-day usage → "Last seen today."
+    const todayStub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 95, total_feedback: 30, thumbs_up: 28, thumbs_down: 2 }),
+        makeRow({
+          prompt_version: "v2",
+          feedback_rate_pct: 70,
+          total_feedback: 20,
+          thumbs_up: 14,
+          thumbs_down: 6,
+          // 30 minutes before FIXED_NOW — still the same UTC day.
+          last_seen_at: "2026-04-25T11:30:00Z",
+        }),
+      ],
+    });
+    const todayOut = await runPromptRegressionCheck(todayStub.deps);
+    assert(todayOut.alertsCreated === 1, "today: 1 alert created");
+    assert(
+      todayStub.created[0].description.includes("Last seen today."),
+      `today: description renders "Last seen today." (got: "${todayStub.created[0].description}")`,
+    );
+    assert(
+      todayOut.breaches[0].regressed_last_seen_days_ago === 0,
+      `today: breach.regressed_last_seen_days_ago === 0 (got ${todayOut.breaches[0].regressed_last_seen_days_ago})`,
+    );
+
+    // Exactly one day old → "Last seen 1 day ago." (singular, not "1 days").
+    const yesterdayStub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 95, total_feedback: 30, thumbs_up: 28, thumbs_down: 2 }),
+        makeRow({
+          prompt_version: "v2",
+          feedback_rate_pct: 70,
+          total_feedback: 20,
+          thumbs_up: 14,
+          thumbs_down: 6,
+          last_seen_at: "2026-04-24T12:00:00Z",
+        }),
+      ],
+    });
+    const yesterdayOut = await runPromptRegressionCheck(yesterdayStub.deps);
+    assert(yesterdayOut.alertsCreated === 1, "yesterday: 1 alert created");
+    assert(
+      yesterdayStub.created[0].description.includes("Last seen 1 day ago."),
+      `yesterday: singular phrasing (got: "${yesterdayStub.created[0].description}")`,
+    );
+    assert(
+      !yesterdayStub.created[0].description.includes("1 days ago"),
+      "yesterday: never says \"1 days ago\" (plural would be wrong)",
+    );
+
+    // Missing/empty last_seen_at → "Last seen: unknown..."
+    const unknownStub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 95, total_feedback: 30, thumbs_up: 28, thumbs_down: 2 }),
+        makeRow({
+          prompt_version: "v2",
+          feedback_rate_pct: 70,
+          total_feedback: 20,
+          thumbs_up: 14,
+          thumbs_down: 6,
+          last_seen_at: "",
+        }),
+      ],
+    });
+    const unknownOut = await runPromptRegressionCheck(unknownStub.deps);
+    assert(unknownOut.alertsCreated === 1, "unknown: 1 alert created");
+    assert(
+      unknownStub.created[0].description.includes("Last seen: unknown"),
+      `unknown: description falls back to "Last seen: unknown ..." (got: "${unknownStub.created[0].description}")`,
+    );
+    assert(
+      unknownOut.breaches[0].regressed_last_seen_days_ago === null,
+      "unknown: breach.regressed_last_seen_days_ago is null when ts missing",
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 18 (Task #331): the "(unknown)" prompt version bucket — which
+  // can be the regressed version even though it's never the baseline —
+  // must still get a last-seen clause attached. This guards against the
+  // refactor accidentally short-circuiting the clause for legacy traffic.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n18. last-seen clause attaches to (unknown)-version regressions too");
+  {
+    // Two known versions are required so the (unknown) bucket can be
+    // compared against the best baseline (the cron rejects (unknown) as
+    // a baseline candidate, so we need v1 + v2 to clear the
+    // `eligibleForBaseline.length >= 2` gate before the (unknown) bucket
+    // can be reported as a regressed version).
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 95, total_feedback: 30, thumbs_up: 28, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 92, total_feedback: 30, thumbs_up: 28, thumbs_down: 2 }),
+        makeRow({
+          prompt_version: "(unknown)",
+          feedback_rate_pct: 60,
+          total_feedback: 20,
+          thumbs_up: 12,
+          thumbs_down: 8,
+          last_seen_at: "2026-04-23T12:00:00Z", // 2 days before FIXED_NOW
+        }),
+      ],
+    });
+    const out = await runPromptRegressionCheck(stub.deps);
+    assert(out.alertsCreated === 1, "1 alert for the (unknown) regression");
+    assert(
+      stub.created[0].relatedRecordId === "TestAgent:(unknown)",
+      `alert is for TestAgent:(unknown) (got "${stub.created[0].relatedRecordId}")`,
+    );
+    assert(
+      stub.created[0].description.includes("Last seen 2 days ago."),
+      `description carries 2-day clause for the (unknown) bucket (got: "${stub.created[0].description}")`,
+    );
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

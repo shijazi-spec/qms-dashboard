@@ -97,6 +97,25 @@ interface RegressionBreach {
   regressed_feedback_count: number;
   best_feedback_count: number;
   severity: AlertSeverity;
+  /**
+   * Unbounded most-recent `started_at` for the regressed (agent, version)
+   * pair, copied straight from the aggregate row. Surfaces in the alert
+   * description and email so the on-call reviewer can immediately tell
+   * whether the regression is on a version that's still serving traffic
+   * today vs one that was archived weeks ago.
+   *
+   * Empty string when the aggregate row didn't carry a usable timestamp
+   * (legacy rows, query downtime fallbacks); rendered as "unknown" in the
+   * description in that case.
+   */
+  regressed_last_seen_at: string;
+  /**
+   * Whole days between `regressed_last_seen_at` and the cron's evaluation
+   * time (`now`). `null` when the timestamp was missing or unparseable.
+   * Floored to 0 for same-day activity so we never render "−1 days ago"
+   * when clocks drift slightly.
+   */
+  regressed_last_seen_days_ago: number | null;
 }
 
 interface RegressionRecovery {
@@ -147,6 +166,13 @@ export interface PromptRegressionDeps {
    * touching Slack/email or env vars.
    */
   notifyRecovery?: (recoveries: RegressionRecovery[]) => Promise<void>;
+  /**
+   * Returns the "current time" used to compute the
+   * `regressed_last_seen_days_ago` clause in the alert description.
+   * Injected so unit tests can pin the clock and assert exact day counts
+   * without flaking on the wall clock. Defaults to `new Date()`.
+   */
+  now?: () => Date;
 }
 
 const defaultDeps: Required<PromptRegressionDeps> = {
@@ -169,12 +195,44 @@ const defaultDeps: Required<PromptRegressionDeps> = {
   listOpenRegressionAlerts: () => getOpenAlertsByType("prompt_regression"),
   resolveAlert: (id, note) => resolveAlert(id, note),
   notifyRecovery: (recoveries) => sendPromptRegressionRecoveryNotifications(recoveries),
+  now: () => new Date(),
 };
 
 function toNumOrNull(v: unknown): number | null {
   if (v == null) return null;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Whole-day delta between `lastSeenIso` and `now`. Returns `null` when the
+ * timestamp is missing/unparseable so callers can fall back to "unknown".
+ * Floors negatives to 0 to absorb minor clock skew between Postgres and the
+ * cron host (we never want to emit "last seen −1 days ago").
+ */
+function daysSince(lastSeenIso: string | null | undefined, now: Date): number | null {
+  if (!lastSeenIso) return null;
+  const parsed = new Date(lastSeenIso);
+  const ts = parsed.getTime();
+  if (!Number.isFinite(ts)) return null;
+  const ms = now.getTime() - ts;
+  if (!Number.isFinite(ms)) return null;
+  const days = Math.floor(ms / 86_400_000);
+  return days < 0 ? 0 : days;
+}
+
+/**
+ * Human-readable phrasing of the regressed version's last-seen timestamp,
+ * used inside the alert description. Kept centralised so the cron, the
+ * email renderer, and the test all agree on wording.
+ */
+function formatLastSeenClause(daysAgo: number | null): string {
+  if (daysAgo == null) {
+    return "Last seen: unknown (no usage timestamp on record).";
+  }
+  if (daysAgo === 0) return "Last seen today.";
+  if (daysAgo === 1) return "Last seen 1 day ago.";
+  return `Last seen ${daysAgo} days ago.`;
 }
 
 /**
@@ -292,6 +350,9 @@ export async function runPromptRegressionCheck(
       const severity = severityForDrop(drop);
       const relatedRecordId = `${agentName}:${r.prompt_version}`;
       currentBreachKeys.add(relatedRecordId);
+      const lastSeenIso = r.last_seen_at ?? "";
+      const lastSeenDaysAgo = daysSince(lastSeenIso, deps.now());
+      const lastSeenClause = formatLastSeenClause(lastSeenDaysAgo);
       const title =
         `Prompt regression: "${agentName}" version ` +
         `${r.prompt_version} feedback rate dropped vs best`;
@@ -303,7 +364,8 @@ export async function runPromptRegressionCheck(
         `agent in the same window is ${best.prompt_version} at ` +
         `${bestRate.toFixed(0)}% (${best.thumbs_up}👍 / ${best.thumbs_down}👎 ` +
         `over ${best.total_feedback} ratings) — a ${drop.toFixed(0)}pp drop ` +
-        `(threshold: ${cfg.dropPctPoints}pp; min sample: ${cfg.minFeedback}).`;
+        `(threshold: ${cfg.dropPctPoints}pp; min sample: ${cfg.minFeedback}). ` +
+        lastSeenClause;
       const suggestion =
         `Open ${cfg.link} to compare the two prompt versions for ` +
         `"${agentName}". Review what changed in the agent's instructions ` +
@@ -335,6 +397,8 @@ export async function runPromptRegressionCheck(
           regressed_feedback_count: Number(r.total_feedback),
           best_feedback_count: Number(best.total_feedback),
           severity,
+          regressed_last_seen_at: lastSeenIso,
+          regressed_last_seen_days_ago: lastSeenDaysAgo,
         });
       } catch (err) {
         console.error(
@@ -492,6 +556,7 @@ async function sendPromptRegressionNotifications(
               <td style="padding:4px 8px">${b.best_rate_pct.toFixed(0)}%</td>
               <td style="padding:4px 8px">↓${Math.round(b.drop_pp)}pp</td>
               <td style="padding:4px 8px">${b.severity}</td>
+              <td style="padding:4px 8px">${formatLastSeenClause(b.regressed_last_seen_days_ago)}</td>
             </tr>`,
         )
         .join("\n");
@@ -513,6 +578,7 @@ async function sendPromptRegressionNotifications(
       <th style="padding:4px 8px">Best rate</th>
       <th style="padding:4px 8px">Drop</th>
       <th style="padding:4px 8px">Severity</th>
+      <th style="padding:4px 8px">Last seen</th>
     </tr>
   </thead>
   <tbody>
