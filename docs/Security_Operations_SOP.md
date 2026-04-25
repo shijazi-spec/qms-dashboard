@@ -656,6 +656,21 @@ A pre-commit / CI guardrail blocks new ` style="..."` attributes from re-enterin
 
 When a developer needs to add a genuinely safe inline style (e.g. an HTML email body that will be rendered by Outlook, not by a CSP-controlled browser context), they have three options: (1) add the file to `ALLOWLIST_FILES` in the guardrail script with a short comment justifying it, (2) annotate the specific line with `csp-safe-inline-style: <reason>`, or (3) refactor the markup so the styles live in `dashboard/css/utilities.css` or the `data-style="…"` pattern instead.
 
+#### Inline Event-Handler Guardrail (automated regression check)
+
+A pre-commit / CI guardrail blocks new inline event-handler attributes (`onclick=`, `onsubmit=`, `onload=`, `onerror=`, `onmouseover=`, `onfocus=`, `onchange=`, `onkeydown=`, and all other `on*=` HTML event attributes) from re-entering the dashboard pages or the platform server code, so the strict `script-src` directive above cannot be silently broken by an unrelated edit:
+
+| Item | Value |
+|------|-------|
+| Script | `scripts/check-no-inline-handlers.sh` |
+| Scope | `dashboard/` and `src/mastra/` (recursive) |
+| Pattern | regex `\bon(click\|submit\|load\|error\|mouseover\|focus\|change\|keydown\|keyup\|keypress\|blur\|input\|reset\|select\|dblclick\|mousedown\|mouseup\|mouseout\|contextmenu\|dragstart\|drop\|scroll\|resize\|beforeunload\|unload\|abort\|cancel\|close\|toggle)=` (word-boundary + `=` suffix to match only HTML attribute form, not JS property assignments like `el.onclick = fn`) |
+| Skipped | HTML-email and PNG/PDF generators that are never served to a browser (see `ALLOWLIST_FILES` in the script — currently `userAccessRoutes.ts`, `infographicRoutes.ts`, `emailReportTool.ts`, `qualityAuditWorkflow.ts`); any single line annotated with the marker `csp-safe-inline-handler` (e.g. in a trailing `<!-- csp-safe-inline-handler: reason -->` or `// csp-safe-inline-handler: reason` comment). Use the marker sparingly and document the reason. |
+| Exit | `0` if clean, `1` (with a remediation hint to use `addEventListener()` in an external `.js` file or event delegation) if any forbidden match is found. |
+| Wiring | Wrapped by `tests/noInlineHandlers.test.ts`, which is auto-discovered by `tests/runIntegrationTests.ts` and therefore runs on every `npm test` (the same command CI invokes on every push). The script can also be run standalone: `bash scripts/check-no-inline-handlers.sh`. |
+
+When a developer needs to add a genuinely safe inline handler (e.g. HTML delivered to an email client that has no CSP), they have three options: (1) add the file to `ALLOWLIST_FILES` in the guardrail script with a short comment justifying it, (2) annotate the specific line with `csp-safe-inline-handler: <reason>`, or (3) refactor the interaction so the handler is registered via `addEventListener()` in an external `.js` file instead.
+
 #### CORS Configuration
 
 | Property | Value |
@@ -679,7 +694,9 @@ When a developer needs to add a genuinely safe inline style (e.g. an HTML email 
 - `src/mastra/index.ts` — CSP, CORS, and security header middleware
 - `src/mastra/middleware/index.ts` — `cspMiddleware` (per-request nonce + header emission)
 - `scripts/check-no-inline-styles.sh` — guardrail that blocks new inline `style="..."` attributes
-- `tests/noInlineStyles.test.ts` — integration-test wrapper that runs the guardrail under `npm test` / CI
+- `tests/noInlineStyles.test.ts` — integration-test wrapper that runs the inline-style guardrail under `npm test` / CI
+- `scripts/check-no-inline-handlers.sh` — guardrail that blocks new inline event-handler attributes (`onclick=` etc.)
+- `tests/noInlineHandlers.test.ts` — integration-test wrapper that runs the inline-handler guardrail under `npm test` / CI
 
 ---
 

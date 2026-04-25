@@ -2,7 +2,7 @@
  * safe-actions.js — CSP-safe inline event handler replacement.
  *
  * The dashboard CSP no longer allows `script-src 'unsafe-inline'`, so
- * `onclick="..."`, `onchange="..."`, etc. are silently blocked by browsers.
+ * `onclick="..."`, `onchange="..."`, etc. are silently blocked by browsers. // csp-safe-inline-handler: JSDoc comment text, not actual attributes
  * This module wires up a single delegated listener per event type that reads
  * `data-on-{event}` attributes and invokes the named function from `window`.
  *

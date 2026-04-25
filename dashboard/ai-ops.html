@@ -2879,7 +2879,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       // Wire the override-banner buttons via addEventListener — the page CSP
-      // (`script-src 'self' 'nonce-…'`) blocks inline `onclick=` handlers,
+      // (`script-src 'self' 'nonce-…'`) blocks inline `onclick=` handlers, // csp-safe-inline-handler: comment text, not an actual attribute
       // so they MUST be attached programmatically from a nonced <script>.
       const overrideDeeplinkBtn = document.getElementById('tool-health-override-banner-deeplink');
       if (overrideDeeplinkBtn) overrideDeeplinkBtn.addEventListener('click', goToThresholdsTabFromBanner);
