@@ -168,6 +168,39 @@ export async function redactEventLogs(
   return updated;
 }
 
+/**
+ * Sweeps a `*_change_history` table (currently `nc_change_history` and
+ * `capa_change_history`) for already-leaked secrets in the
+ * `old_value`, `new_value`, and `change_reason` TEXT columns.
+ *
+ * Two complementary defenses are applied per row:
+ *
+ *   1. KEY-BASED: when `field_changed` matches the sensitive-field deny
+ *      list (`isSensitiveField`), the row's `old_value` and `new_value`
+ *      are wholesale-replaced with `REDACTED_SENTINEL` — regardless of
+ *      whether the stored value happens to look like a credential. This
+ *      mirrors the write-path guard in `logNCChange`/`logCAPAChange`.
+ *
+ *   2. REGEX-BASED: for every row (sensitive field or not), the
+ *      `change_reason` column AND any `old_value`/`new_value` strings on
+ *      non-sensitive rows are passed through `redactSecretLikeStrings()`
+ *      so that credential-shaped substrings (`sk_…`, `ghp_…`, `eyJ…`,
+ *      bcrypt hashes, etc.) interpolated into prose are scrubbed. This
+ *      catches rows written before Task #99 added the same defense to
+ *      the write path, and rows whose `field_changed` is something
+ *      innocuous like `description`/`note`/`summary` but happens to
+ *      embed a leaked credential.
+ *
+ * Idempotent: a row is only UPDATEd when at least one of its three
+ * columns actually changes value, so re-running the sweep produces 0
+ * updates on a clean table.
+ *
+ * Memory-safe: walks the table in keyset-paginated batches (Task #289).
+ *
+ * Used by Task #249 to retroactively sanitise existing
+ * `nc_change_history` / `capa_change_history` rows that may contain
+ * credentials written before Task #99 hardened the write path.
+ */
 export async function redactChangeHistoryTable(
   client: any,
   tableName: string,
@@ -178,7 +211,7 @@ export async function redactChangeHistoryTable(
 
   while (true) {
     const page = await client.query(
-      `SELECT id, field_changed, old_value, new_value
+      `SELECT id, field_changed, old_value, new_value, change_reason
          FROM ${tableName}
         WHERE id > $1
         ORDER BY id ASC
@@ -189,17 +222,58 @@ export async function redactChangeHistoryTable(
     if (!page.rows || page.rows.length === 0) break;
 
     for (const row of page.rows) {
-      if (!isSensitiveField(row.field_changed)) continue;
+      let oldVal: string | null = row.old_value;
+      let newVal: string | null = row.new_value;
+      let reason: string | null = row.change_reason;
+      let changed = false;
 
-      const oldAlready = row.old_value === REDACTED_SENTINEL;
-      const newAlready = row.new_value === REDACTED_SENTINEL;
-      if (oldAlready && newAlready) continue;
+      if (isSensitiveField(row.field_changed)) {
+        // Key-based: blanket-redact any non-null, non-already-sentinel value.
+        if (oldVal !== null && oldVal !== undefined && oldVal !== REDACTED_SENTINEL) {
+          oldVal = REDACTED_SENTINEL;
+          changed = true;
+        }
+        if (newVal !== null && newVal !== undefined && newVal !== REDACTED_SENTINEL) {
+          newVal = REDACTED_SENTINEL;
+          changed = true;
+        }
+      } else {
+        // Regex-based: scrub credential-shaped substrings out of the prose
+        // value. Non-string / null inputs short-circuit to identity inside
+        // redactSecretLikeStrings.
+        if (typeof oldVal === 'string' && oldVal.length > 0) {
+          const scrubbed = redactSecretLikeStrings(oldVal) as string;
+          if (scrubbed !== oldVal) {
+            oldVal = scrubbed;
+            changed = true;
+          }
+        }
+        if (typeof newVal === 'string' && newVal.length > 0) {
+          const scrubbed = redactSecretLikeStrings(newVal) as string;
+          if (scrubbed !== newVal) {
+            newVal = scrubbed;
+            changed = true;
+          }
+        }
+      }
 
-      await client.query(
-        `UPDATE ${tableName} SET old_value = $1, new_value = $2 WHERE id = $3`,
-        [REDACTED_SENTINEL, REDACTED_SENTINEL, row.id],
-      );
-      updated++;
+      // change_reason is free-form prose on every row regardless of
+      // field_changed, so it always gets the regex pass.
+      if (typeof reason === 'string' && reason.length > 0) {
+        const scrubbed = redactSecretLikeStrings(reason) as string;
+        if (scrubbed !== reason) {
+          reason = scrubbed;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await client.query(
+          `UPDATE ${tableName} SET old_value = $1, new_value = $2, change_reason = $3 WHERE id = $4`,
+          [oldVal, newVal, reason, row.id],
+        );
+        updated++;
+      }
     }
 
     cursor = page.rows[page.rows.length - 1].id;
