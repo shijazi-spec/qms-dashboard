@@ -87,6 +87,19 @@
             <div id="error-message" class="text-sm mt-1"></div>
         </div>
 
+        <!-- In-panel alert banner: surfaces failing/warning checks above the fold -->
+        <div id="alert-banner" class="hidden mb-6" role="alert" aria-live="polite" data-testid="banner-health-alert">
+            <div id="alert-banner-inner" class="rounded-xl border p-4">
+                <div class="flex items-start gap-3">
+                    <span id="alert-banner-icon" class="dot mt-1" aria-hidden="true"></span>
+                    <div class="flex-1">
+                        <div id="alert-banner-title" class="font-semibold" data-testid="text-alert-banner-title"></div>
+                        <ul id="alert-banner-list" class="mt-2 text-sm space-y-1 list-disc pl-5" data-testid="list-alert-banner"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main content -->
         <div id="main-content" class="hidden">
             <!-- Top summary cards -->
@@ -157,6 +170,14 @@
             get scheduler() { return _t('dyn.health.cat_scheduler'); },
         };
 
+        // Sort order for category groups in the per-check breakdown.
+        // Infrastructure is pinned to the top so failures of the 429 pruner
+        // and other plumbing checks aren't buried below alphabetised peers.
+        const CATEGORY_ORDER = [
+            'infrastructure', 'endpoints', 'ai', 'audits',
+            'duplicates', 'data', 'integrations', 'kpis', 'scheduler',
+        ];
+
         let historyChart = null;
 
         function el(id) { return document.getElementById(id); }
@@ -188,6 +209,51 @@
             return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
+        function renderAlertBanner(latest) {
+            const banner = el('alert-banner');
+            const inner = el('alert-banner-inner');
+            const icon = el('alert-banner-icon');
+            const titleEl = el('alert-banner-title');
+            const list = el('alert-banner-list');
+
+            const checks = Array.isArray(latest.checks) ? latest.checks : [];
+            const failing = checks.filter(c => c.status === 'fail');
+            const warning = checks.filter(c => c.status === 'warn');
+
+            if (failing.length === 0 && warning.length === 0) {
+                banner.classList.add('hidden');
+                return;
+            }
+
+            const hasFail = failing.length > 0;
+            const tone = hasFail
+                ? { cls: 'bg-red-50 border-red-200 text-red-800', dot: 'dot-fail' }
+                : { cls: 'bg-amber-50 border-amber-200 text-amber-800', dot: 'dot-warn' };
+
+            inner.className = 'rounded-xl border p-4 ' + tone.cls;
+            icon.className = 'dot mt-1 ' + tone.dot;
+
+            const titleKey = hasFail ? 'dyn.health.alert_failing_title' : 'dyn.health.alert_warning_title';
+            titleEl.textContent = _t(titleKey, {
+                fail: failing.length,
+                warn: warning.length,
+            });
+
+            const items = [...failing, ...warning].map(c => {
+                const badgeClass = 'badge badge-' + c.status;
+                const msg = c.message ? ' — ' + escapeHtml(c.message) : '';
+                return '<li data-testid="item-alert-' + escapeHtml(c.id) + '">'
+                    + '<span class="' + badgeClass + '">' + c.status.toUpperCase() + '</span> '
+                    + '<strong>' + escapeHtml(c.label || c.id) + '</strong>'
+                    + ' <span class="text-xs opacity-75">(' + escapeHtml(c.id) + ')</span>'
+                    + msg
+                    + '</li>';
+            }).join('');
+            list.innerHTML = items;
+
+            banner.classList.remove('hidden');
+        }
+
         function renderLatest(latest) {
             const status = latest.overall_status || 'healthy';
             const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
@@ -207,7 +273,18 @@
                 (grouped[cat] = grouped[cat] || []).push(c);
             }
 
-            const html = Object.keys(grouped).sort().map(cat => {
+            renderAlertBanner(latest);
+
+            const orderedCats = Object.keys(grouped).sort((a, b) => {
+                const ai = CATEGORY_ORDER.indexOf(a);
+                const bi = CATEGORY_ORDER.indexOf(b);
+                if (ai === -1 && bi === -1) return a.localeCompare(b);
+                if (ai === -1) return 1;
+                if (bi === -1) return -1;
+                return ai - bi;
+            });
+
+            const html = orderedCats.map(cat => {
                 const rows = grouped[cat].map(c => {
                     const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
                     const message = c.message ? `<div class="text-sm text-gray-600 mt-1">${escapeHtml(c.message)}</div>` : '';
@@ -299,6 +376,7 @@
 
                 if (!data.latest) {
                     hide('main-content');
+                    hide('alert-banner');
                     show('empty-state');
                     return;
                 }
@@ -311,6 +389,7 @@
             } catch (err) {
                 hide('loading-state');
                 hide('main-content');
+                hide('alert-banner');
                 el('error-message').textContent = err.message || String(err);
                 show('error-state');
             }

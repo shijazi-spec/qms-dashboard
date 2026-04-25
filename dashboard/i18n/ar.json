@@ -1543,7 +1543,9 @@
       "label_runs_plural": "تشغيلات",
       "chart_pass": "نجاح",
       "chart_warn": "تحذير",
-      "chart_fail": "فشل"
+      "chart_fail": "فشل",
+      "alert_failing_title": "{fail} فحص فاشل، {warn} تحذير — راجع التفاصيل أدناه",
+      "alert_warning_title": "{warn} فحص في حالة تحذير — راجع التفاصيل أدناه"
     },
     "admin": {
       "no_audit_entries": "لم يتم العثور على إدخالات تدقيق",

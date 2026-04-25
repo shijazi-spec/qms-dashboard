@@ -1543,7 +1543,9 @@
       "label_runs_plural": "runs",
       "chart_pass": "Pass",
       "chart_warn": "Warn",
-      "chart_fail": "Fail"
+      "chart_fail": "Fail",
+      "alert_failing_title": "{fail} check(s) failing, {warn} warning(s) — review details below",
+      "alert_warning_title": "{warn} check(s) warning — review details below"
     },
     "admin": {
       "no_audit_entries": "No audit entries found",
