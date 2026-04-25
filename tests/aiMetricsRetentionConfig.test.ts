@@ -116,6 +116,12 @@ const originalConnect = pg.Pool.prototype.connect;
     const offset = Number(tail[tail.length - 1] ?? 0);
     return { ...empty, rows: all.slice(offset, offset + limit) };
   }
+  if (/INSERT INTO ai_metrics_retention_audit/i.test(sql)) {
+    // Mirrors the client.query stub below so direct pool.query inserts
+    // (used by recordAiMetricsRetentionPruneAudit, Task #558) also see
+    // the same RETURNING id contract.
+    return { ...empty, rows: [{ id: 42 }] };
+  }
   return empty;
 } as typeof pg.Pool.prototype.query;
 
@@ -164,10 +170,12 @@ const {
   AI_METRICS_RETENTION_BOUNDS,
   AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
   AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS,
+  AI_METRICS_RETENTION_PRUNE_NOW_NOTE_PREFIX,
   getAiMetricsRetentionConfirmThreshold,
   getAiMetricsRetentionAudit,
   getAiMetricsRetentionAuditPage,
   isAiMetricsRetentionLocked,
+  recordAiMetricsRetentionPruneAudit,
   setAiMetricsRetentionConfig,
   __resetInitPromiseForTests,
 } = await import('../src/utils/aiMetricsRetentionConfig');
@@ -397,6 +405,132 @@ async function main(): Promise<void> {
     'note longer than 500 chars is truncated to 500',
     auditInsert != null && typeof auditInsert.params[3] === 'string' && (auditInsert.params[3] as string).length === 500,
     { len: auditInsert ? (auditInsert.params[3] as string)?.length : null },
+  );
+
+  console.log('=== recordAiMetricsRetentionPruneAudit() — manual prune audit (Task #558) ===');
+  clearAll();
+  __resetInitPromiseForTests();
+
+  // Happy path with a free-form note: writes one audit row, before === after,
+  // structured prefix is present, operator note is appended after " — ".
+  captured.length = 0;
+  let pruneAudit = await recordAiMetricsRetentionPruneAudit({
+    changedBy: 'admin@example.com',
+    retentionDays: 30,
+    previewedRows: 7,
+    deletedRows: 7,
+    note: 'incident-1234 cleanup',
+  });
+  check('prune-now audit returns the inserted id from RETURNING', pruneAudit.audit_id === 42, {
+    pruneAudit,
+  });
+  let pruneInsert = captured.find((q) =>
+    /INSERT INTO ai_metrics_retention_audit/i.test(q.sql),
+  );
+  check('prune-now audit writes exactly one row', pruneInsert != null, {
+    sqls: captured.map((c) => c.sql),
+  });
+  check(
+    'prune-now audit row uses operator name from changedBy',
+    pruneInsert?.params[0] === 'admin@example.com',
+    { params: pruneInsert?.params },
+  );
+  check(
+    'prune-now audit sets before_days === after_days === retentionDays (no config change)',
+    pruneInsert?.params[1] === 30 && pruneInsert?.params[2] === 30,
+    { params: pruneInsert?.params },
+  );
+  const noteValue = pruneInsert?.params[3] as string | undefined;
+  check(
+    'prune-now audit note starts with the [prune-now] prefix marker',
+    typeof noteValue === 'string' && noteValue.startsWith(AI_METRICS_RETENTION_PRUNE_NOW_NOTE_PREFIX),
+    { noteValue },
+  );
+  check(
+    'prune-now audit note carries previewed/deleted/retention triple',
+    typeof noteValue === 'string'
+      && noteValue.includes('previewed=7')
+      && noteValue.includes('deleted=7')
+      && noteValue.includes('retention=30d'),
+    { noteValue },
+  );
+  check(
+    'prune-now audit note appends operator free-form note after " — "',
+    typeof noteValue === 'string' && noteValue.includes(' — incident-1234 cleanup'),
+    { noteValue },
+  );
+
+  // Drift path: previewed != deleted is preserved verbatim so the dashboard
+  // can render the divergence; no operator note → no trailing " — ".
+  captured.length = 0;
+  pruneAudit = await recordAiMetricsRetentionPruneAudit({
+    changedBy: 'ops-admin',
+    retentionDays: 14,
+    previewedRows: 100,
+    deletedRows: 95,
+  });
+  pruneInsert = captured.find((q) =>
+    /INSERT INTO ai_metrics_retention_audit/i.test(q.sql),
+  );
+  const driftNote = pruneInsert?.params[3] as string | undefined;
+  check(
+    'prune-now audit preserves preview/actual drift in the structured note',
+    typeof driftNote === 'string'
+      && driftNote.includes('previewed=100')
+      && driftNote.includes('deleted=95')
+      && driftNote.includes('retention=14d'),
+    { driftNote },
+  );
+  check(
+    'prune-now audit with no operator note omits the trailing " — "',
+    typeof driftNote === 'string' && !driftNote.includes(' — '),
+    { driftNote },
+  );
+
+  // Sanitization: negative / NaN / fractional row counts and retention are coerced.
+  captured.length = 0;
+  await recordAiMetricsRetentionPruneAudit({
+    changedBy: 'admin',
+    retentionDays: 7.9,
+    previewedRows: -3,
+    deletedRows: Number.NaN as unknown as number,
+  });
+  pruneInsert = captured.find((q) =>
+    /INSERT INTO ai_metrics_retention_audit/i.test(q.sql),
+  );
+  const sanitizedNote = pruneInsert?.params[3] as string | undefined;
+  check(
+    'prune-now audit floors fractional retention (7.9 → 7) and clamps negative/NaN counts to 0',
+    typeof sanitizedNote === 'string'
+      && sanitizedNote.includes('retention=7d')
+      && sanitizedNote.includes('previewed=0')
+      && sanitizedNote.includes('deleted=0')
+      && pruneInsert?.params[1] === 7
+      && pruneInsert?.params[2] === 7,
+    { sanitizedNote, params: pruneInsert?.params },
+  );
+
+  // Operator note truncated to 400 chars (leaves room for the structured prefix
+  // inside the 500-char DB column budget shared with config-change rows).
+  captured.length = 0;
+  const longOperatorNote = 'y'.repeat(800);
+  await recordAiMetricsRetentionPruneAudit({
+    changedBy: 'admin',
+    retentionDays: 30,
+    previewedRows: 1,
+    deletedRows: 1,
+    note: longOperatorNote,
+  });
+  pruneInsert = captured.find((q) =>
+    /INSERT INTO ai_metrics_retention_audit/i.test(q.sql),
+  );
+  const truncNote = pruneInsert?.params[3] as string | undefined;
+  check(
+    'operator note longer than 400 chars is truncated before being appended',
+    typeof truncNote === 'string'
+      && truncNote.includes(' — ')
+      && truncNote.split(' — ')[1].length === 400,
+    { len: truncNote ? truncNote.split(' — ')[1]?.length : null },
   );
 
   console.log('=== getAiMetricsRetentionConfirmThreshold() — env parsing (Task #561) ===');

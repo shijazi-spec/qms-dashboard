@@ -3035,6 +3035,14 @@
     // tunes the daily prune window for `ai_call_metrics`.
     // ─────────────────────────────────────────────────────────────────
     let metricsRetentionState = null;
+    // Last "Prune now" result the operator saw, kept in module state so
+    // the post-prune call to loadMetricsRetentionForm() (which rerenders
+    // the entire retention card and therefore wipes the result banner
+    // element) can reapply it after the rerender. Without this, the
+    // success banner would flash and disappear inside ~100ms — the
+    // operator would only see the new audit row, not the live counts.
+    // Cleared whenever the operator opens a fresh confirm panel.
+    let lastMetricsRetentionPruneResult = null; // { text, kind } | null
 
     // Task #566: client-side paging / filter state for the audit history.
     // Lives next to (not inside) `metricsRetentionState` so a filter or
@@ -3096,6 +3104,17 @@
           metaEl.innerHTML = 'Last edited ' + esc(fmtDate(data.updated_at)) + who;
         } else {
           metaEl.textContent = 'No dashboard override set';
+        }
+        // Re-apply the last prune-now result banner if the operator just
+        // ran one — the rerender above wiped the banner element. Only
+        // applies when canEdit is still true (lock-engaged renders omit
+        // the banner element entirely, in which case setMetricsRetentionPruneResult
+        // is a no-op).
+        if (lastMetricsRetentionPruneResult) {
+          setMetricsRetentionPruneResult(
+            lastMetricsRetentionPruneResult.text,
+            lastMetricsRetentionPruneResult.kind,
+          );
         }
       } catch (e) {
         console.error('Metrics-retention load error', e);
@@ -3214,6 +3233,7 @@
         ? `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
              <button type="button" data-on-click="saveMetricsRetention" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-metrics-retention-save">Save retention</button>
              <button type="button" data-on-click="clearMetricsRetentionOverride" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-metrics-retention-clear">Clear override</button>
+             <button type="button" data-on-click="requestPruneMetricsNow" class="px-4 py-2 bg-white border border-red-300 text-red-700 text-sm font-medium rounded hover:bg-red-50" data-testid="button-metrics-retention-prune-now" title="Run pruneOldAiMetrics() against the current effective retention window without waiting for the next daily cron pass.">Prune now</button>
              <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
            </div>
            <div id="metrics-retention-confirm-panel" class="hidden mt-3 px-4 py-3 rounded border border-amber-300 bg-amber-50 text-amber-900" role="alertdialog" aria-labelledby="metrics-retention-confirm-title" data-testid="panel-metrics-retention-confirm">
@@ -3230,7 +3250,25 @@
                <button type="button" data-on-click="confirmSaveMetricsRetention" class="px-3 py-1.5 bg-amber-600 text-white text-sm font-medium rounded hover:bg-amber-700" data-testid="button-metrics-retention-confirm-save">Confirm &amp; save</button>
                <button type="button" data-on-click="cancelMetricsRetentionConfirm" class="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 text-sm font-medium rounded hover:bg-amber-100" data-testid="button-metrics-retention-confirm-cancel">Cancel</button>
              </div>
-           </div>`
+           </div>
+           <div id="metrics-retention-prune-panel" class="hidden mt-3 px-4 py-3 rounded border border-red-300 bg-red-50 text-red-900" role="alertdialog" aria-labelledby="metrics-retention-prune-title" data-testid="panel-metrics-retention-prune">
+             <div class="flex items-start gap-2">
+               <svg class="h-5 w-5 mt-0.5 flex-shrink-0 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16"/>
+               </svg>
+               <div class="flex-1">
+                 <p id="metrics-retention-prune-title" class="text-sm font-semibold" data-testid="text-metrics-retention-prune-title">Run prune now</p>
+                 <p id="metrics-retention-prune-body" class="text-sm mt-1" data-testid="text-metrics-retention-prune-body">Counting rows…</p>
+                 <label class="block text-xs font-medium text-red-900 mt-3" for="metrics-retention-prune-note">Optional note (audit log)</label>
+                 <input type="text" id="metrics-retention-prune-note" maxlength="500" placeholder="e.g. INC-1234 — manual prune after retention tightened to 7d" class="mt-1 w-full px-3 py-2 border border-red-200 rounded text-sm bg-white text-gray-900" data-testid="input-metrics-retention-prune-note" />
+               </div>
+             </div>
+             <div class="mt-3 flex flex-wrap gap-2">
+               <button type="button" data-on-click="confirmPruneMetricsNow" class="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700" data-testid="button-metrics-retention-prune-confirm">Yes, prune now</button>
+               <button type="button" data-on-click="cancelPruneMetricsNow" class="px-3 py-1.5 bg-white border border-red-300 text-red-700 text-sm font-medium rounded hover:bg-red-100" data-testid="button-metrics-retention-prune-cancel">Cancel</button>
+             </div>
+           </div>
+           <div id="metrics-retention-prune-result" class="hidden mt-3 px-4 py-3 rounded border text-sm" role="status" aria-live="polite" data-testid="banner-metrics-retention-prune-result"></div>`
         : `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
              <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
            </div>`;
@@ -3287,10 +3325,40 @@
           '</p>';
       } else {
         auditEl.innerHTML = rows.map(r => {
-          const before = r.before_days == null ? '—' : esc(r.before_days) + 'd';
-          const after = r.after_days == null ? '—' : esc(r.after_days) + 'd';
           const who = esc(r.changed_by || 'unknown');
           const when = esc(fmtDate(r.changed_at));
+          // Task #558: rows recorded by `recordAiMetricsRetentionPruneAudit`
+          // share this audit table as config changes but represent a
+          // manual "Prune now" run — not a value change. They are tagged
+          // with a `[prune-now]` marker in the note. Detect that here so
+          // the row renders distinctly (red badge, structured "previewed
+          // / deleted" line) instead of an awkward "7d → 7d" diff.
+          const pruneInfo = parseMetricsRetentionPruneAuditNote(r.note);
+          if (pruneInfo) {
+            const operatorNote = pruneInfo.operatorNote
+              ? `<div class="text-xs text-gray-500 mt-1 italic">${esc(pruneInfo.operatorNote)}</div>`
+              : '';
+            const drift = pruneInfo.deletedRows !== pruneInfo.previewedRows
+              ? `<span class="text-xs text-amber-700 ml-2" data-testid="text-metrics-retention-audit-drift-${esc(r.id)}">drift ${pruneInfo.deletedRows - pruneInfo.previewedRows >= 0 ? '+' : ''}${esc(String(pruneInfo.deletedRows - pruneInfo.previewedRows))}</span>`
+              : '';
+            return `<div class="border border-red-200 rounded p-3 bg-red-50" data-testid="row-metrics-retention-audit-${esc(r.id)}" data-audit-kind="prune-now">
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="text-sm text-gray-800">
+                  <span class="inline-block px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-semibold uppercase tracking-wide" data-testid="badge-metrics-retention-audit-prune-now-${esc(r.id)}">Manual prune</span>
+                  <span class="ml-2 font-mono text-gray-700">${esc(pruneInfo.retentionDays)}d</span>
+                  <span class="text-xs text-gray-500 ml-2">by ${who}</span>
+                </div>
+                <div class="text-xs text-gray-500">${when}</div>
+              </div>
+              <div class="text-xs text-gray-700 mt-1" data-testid="text-metrics-retention-audit-counts-${esc(r.id)}">
+                Previewed <span class="font-mono">${esc(String(pruneInfo.previewedRows))}</span> rows,
+                actually deleted <span class="font-mono font-semibold">${esc(String(pruneInfo.deletedRows))}</span> rows.${drift}
+              </div>
+              ${operatorNote}
+            </div>`;
+          }
+          const before = r.before_days == null ? '—' : esc(r.before_days) + 'd';
+          const after = r.after_days == null ? '—' : esc(r.after_days) + 'd';
           const note = r.note ? `<div class="text-xs text-gray-500 mt-1 italic">${esc(r.note)}</div>` : '';
           return `<div class="border rounded p-3 bg-gray-50" data-testid="row-metrics-retention-audit-${esc(r.id)}">
             <div class="flex items-center justify-between flex-wrap gap-2">
@@ -3399,6 +3467,28 @@
       metricsRetentionAuditState.to = '';
       metricsRetentionAuditState.offset = 0;
       loadMetricsRetentionForm();
+    }
+
+    // Parse `[prune-now] previewed=N deleted=M retention=Xd[ — operator note]`
+    // out of an audit row's note column. Returns `null` for non-prune-now
+    // rows so the renderer falls back to the regular before→after diff
+    // layout. Keeps the parser tolerant of extra whitespace and missing
+    // fields so a malformed legacy row never breaks the audit list.
+    function parseMetricsRetentionPruneAuditNote(note) {
+      if (typeof note !== 'string') return null;
+      if (!note.startsWith('[prune-now]')) return null;
+      const previewedMatch = note.match(/previewed=(\d+)/);
+      const deletedMatch = note.match(/deleted=(\d+)/);
+      const retentionMatch = note.match(/retention=(\d+)d/);
+      if (!previewedMatch || !deletedMatch || !retentionMatch) return null;
+      const sepIdx = note.indexOf(' — ');
+      const operatorNote = sepIdx >= 0 ? note.slice(sepIdx + 3).trim() : '';
+      return {
+        previewedRows: Number(previewedMatch[1]),
+        deletedRows: Number(deletedMatch[1]),
+        retentionDays: Number(retentionMatch[1]),
+        operatorNote,
+      };
     }
 
     function setMetricsRetentionStatus(text, kind) {
@@ -3728,6 +3818,194 @@
       const inputEl = document.getElementById('metrics-retention-input');
       if (inputEl) inputEl.value = '';
       setMetricsRetentionStatus('Override cleared — click "Save retention" to fall back to env / default.', 'info');
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Manual prune ("Prune now") flow — Task #558.
+    //
+    // After saving a tighter retention window the operator can click
+    // "Prune now" to immediately fire `pruneOldAiMetrics()` against
+    // the current effective window without waiting up to ~24h for the
+    // next daily cron pass. The flow:
+    //   1. Hide any stale result banner / confirm panel.
+    //   2. Call /api/ai-ops/metrics-retention/preview?days=<effective>
+    //      to surface a "this will delete ~N rows" line in the inline
+    //      red confirm panel before the destructive action runs.
+    //   3. On confirm, POST /api/ai-ops/metrics-retention/prune-now
+    //      and render a result banner that shows BOTH the previewed
+    //      and the actual deleted row counts so any drift is obvious.
+    //   4. Reload the retention form so the new audit row (recorded
+    //      server-side) appears in the timeline immediately.
+    // ──────────────────────────────────────────────────────────────────
+
+    let pruneMetricsNowInFlight = false;
+
+    function clearMetricsRetentionPrunePanel() {
+      const panel = document.getElementById('metrics-retention-prune-panel');
+      if (panel) panel.classList.add('hidden');
+    }
+
+    function clearMetricsRetentionPruneResult() {
+      lastMetricsRetentionPruneResult = null;
+      const banner = document.getElementById('metrics-retention-prune-result');
+      if (!banner) return;
+      banner.classList.add('hidden');
+      banner.textContent = '';
+      banner.className = 'hidden mt-3 px-4 py-3 rounded border text-sm';
+    }
+
+    function setMetricsRetentionPruneResult(text, kind) {
+      // Persist before painting so a subsequent loadMetricsRetentionForm()
+      // (which rerenders the form HTML and wipes the banner element) can
+      // re-apply the same banner. The transient 'Running prune…' state
+      // is intentionally NOT persisted — it would be confusing to see
+      // it reappear after a tab switch unrelated to a prune.
+      if (kind !== 'warn' || text !== 'Running prune…') {
+        lastMetricsRetentionPruneResult = { text, kind };
+      }
+      const banner = document.getElementById('metrics-retention-prune-result');
+      if (!banner) return;
+      const palette = kind === 'error'
+        ? 'border-red-300 bg-red-50 text-red-800'
+        : kind === 'warn'
+          ? 'border-amber-300 bg-amber-50 text-amber-900'
+          : 'border-green-300 bg-green-50 text-green-900';
+      banner.className = 'mt-3 px-4 py-3 rounded border text-sm ' + palette;
+      banner.textContent = text;
+      banner.classList.remove('hidden');
+    }
+
+    async function requestPruneMetricsNow() {
+      if (pruneMetricsNowInFlight) return;
+      if (!metricsRetentionState) return;
+      // Lock check is the server's source-of-truth, but mirror it here
+      // so the UI doesn't ever pop a destructive panel for an op that
+      // would 409. `can_edit` already incorporates env_locked.
+      if (!metricsRetentionState.can_edit) {
+        setMetricsRetentionPruneResult(
+          'You do not have permission to run a manual prune right now.',
+          'error',
+        );
+        return;
+      }
+      const effective = Number(metricsRetentionState.effective_days);
+      if (!Number.isFinite(effective) || effective <= 0) {
+        setMetricsRetentionPruneResult(
+          'Effective retention window is unknown — reload the page and try again.',
+          'error',
+        );
+        return;
+      }
+
+      // Reset any previously visible result and clear the save-flow
+      // confirm panel so the two surfaces are never both showing at once.
+      clearMetricsRetentionPruneResult();
+      clearMetricsRetentionConfirmPanel();
+
+      const panel = document.getElementById('metrics-retention-prune-panel');
+      const body = document.getElementById('metrics-retention-prune-body');
+      const noteInput = document.getElementById('metrics-retention-prune-note');
+      if (!panel || !body) return;
+      if (noteInput) noteInput.value = '';
+      body.textContent =
+        'Counting rows older than ' + effective + ' days that the daily cron would normally remove…';
+      panel.classList.remove('hidden');
+
+      // Best-effort impact preview — if it fails we still let the
+      // operator proceed but flag the unknown count in the panel body
+      // rather than silently hide the failure.
+      try {
+        const preview = await fetchMetricsRetentionPreview(effective);
+        if (preview.rows === 0) {
+          body.textContent =
+            'No rows older than ' + effective + ' days right now — running prune will be a no-op (audit row will still be written).';
+        } else {
+          const dayPart = preview.daysToDelete > 0
+            ? ' spanning ~' + preview.daysToDelete + ' day' + (preview.daysToDelete === 1 ? '' : 's') + ' of telemetry'
+            : '';
+          body.textContent =
+            'About to delete ~' + preview.rows.toLocaleString() + ' row' + (preview.rows === 1 ? '' : 's') + dayPart +
+            ' (older than ' + effective + ' days). The daily cron would normally do this on its next pass — confirm to run it now.';
+        }
+      } catch (e) {
+        console.error('Metrics-retention prune-now preview error', e);
+        body.textContent =
+          'Could not count how many rows would be deleted (' + (e?.message || 'unknown error') +
+          '). Confirm to prune anyway against the ' + effective + '-day window.';
+      }
+
+      // Move keyboard focus onto the destructive button so the panel
+      // is immediately keyboard-actionable.
+      const confirmBtn = panel.querySelector('[data-testid="button-metrics-retention-prune-confirm"]');
+      if (confirmBtn && typeof confirmBtn.focus === 'function') {
+        try { confirmBtn.focus(); } catch (_) { /* ignore */ }
+      }
+    }
+
+    function cancelPruneMetricsNow() {
+      clearMetricsRetentionPrunePanel();
+    }
+
+    async function confirmPruneMetricsNow() {
+      if (pruneMetricsNowInFlight) return;
+      pruneMetricsNowInFlight = true;
+      const panel = document.getElementById('metrics-retention-prune-panel');
+      const noteInput = document.getElementById('metrics-retention-prune-note');
+      const note = noteInput?.value?.trim() || '';
+      // Hide the confirm panel immediately so the operator sees the
+      // status banner without an obviously-stale prompt next to it.
+      clearMetricsRetentionPrunePanel();
+      setMetricsRetentionPruneResult('Running prune…', 'warn');
+      try {
+        const requestBody = {};
+        if (note) requestBody.note = note;
+        const r = await fetch('/api/ai-ops/metrics-retention/prune-now', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setMetricsRetentionPruneResult(
+            'Manual prune failed: ' + (body?.error || 'HTTP ' + r.status),
+            'error',
+          );
+          return;
+        }
+        const previewed = body?.previewed_rows;
+        const deleted = Number(body?.deleted_rows ?? 0);
+        const retention = body?.retention_days != null ? Number(body.retention_days) : null;
+        const auditId = body?.audit_id;
+        const drift = (typeof previewed === 'number' && Number.isFinite(previewed))
+          ? deleted - previewed
+          : null;
+        const previewedText = (typeof previewed === 'number' && Number.isFinite(previewed))
+          ? previewed.toLocaleString() + ' row' + (previewed === 1 ? '' : 's')
+          : 'unknown (preview unavailable)';
+        const driftText = drift != null && drift !== 0
+          ? ' (drift ' + (drift > 0 ? '+' : '') + drift.toLocaleString() + ')'
+          : '';
+        const retentionText = retention != null ? ' against the ' + retention + '-day window' : '';
+        const auditText = auditId != null ? ' Audit #' + auditId + '.' : '';
+        setMetricsRetentionPruneResult(
+          'Prune complete' + retentionText + ': previewed ' + previewedText +
+            ', actually deleted ' + deleted.toLocaleString() + ' row' + (deleted === 1 ? '' : 's') +
+            driftText + '.' + auditText,
+          drift != null && drift !== 0 ? 'warn' : 'ok',
+        );
+        // Refresh the form so the new audit row (server-side) appears
+        // in the timeline without a manual reload.
+        await loadMetricsRetentionForm();
+      } catch (e) {
+        console.error('Metrics-retention prune-now error', e);
+        setMetricsRetentionPruneResult(
+          'Manual prune failed: ' + (e?.message || 'unknown error'),
+          'error',
+        );
+      } finally {
+        pruneMetricsNowInFlight = false;
+      }
     }
 
     async function loadThresholdsForm() {

@@ -1776,6 +1776,148 @@ export const aiOpsRoutes = [
     },
   },
 
+  /**
+   * AI usage history retention — manual prune endpoint (Task #558).
+   *
+   * After tightening the retention window an admin can click "Prune now"
+   * on the dashboard to fire `pruneOldAiMetrics()` immediately rather
+   * than wait for the next daily `ai-cost-summary` cron pass. This
+   * closes the loop on the dry-run preview that Task #550 added: until
+   * this endpoint existed, the previewed deletion count remained
+   * "stale" in dashboards and queries until the cron fired up to ~24h
+   * later, making it hard to reconcile the preview against reality.
+   *
+   * Same admin role and lock check as the PUT retention endpoint
+   * (`AI_METRICS_RETENTION_WRITE_ROLES` + `isAiMetricsRetentionLocked`).
+   * The action is audited via `recordAiMetricsRetentionPruneAudit()`
+   * which appends a row to the same `ai_metrics_retention_audit` table
+   * config changes write to — operators have one timeline to scan when
+   * reconstructing what happened to the retention window.
+   *
+   * Body (optional): { note?: string }
+   *
+   * Response payload includes BOTH the previewed and the actual
+   * deleted-row counts so the dashboard banner / audit row can surface
+   * any drift between the two (e.g. new rows aged into the deletion
+   * bucket between the preview and the prune).
+   */
+  {
+    path: "/api/ai-ops/metrics-retention/prune-now",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_METRICS_RETENTION_WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const {
+            isAiMetricsRetentionLocked,
+            recordAiMetricsRetentionPruneAudit,
+          } = await import("../../utils/aiMetricsRetentionConfig");
+
+          if (isAiMetricsRetentionLocked()) {
+            return c.json(
+              {
+                error:
+                  "AI_METRICS_RETENTION_DAYS_LOCK is engaged — clear the env lock to run a manual prune from the dashboard.",
+              },
+              409,
+            );
+          }
+
+          // Body is optional; only the operator note is read. Any other
+          // fields are silently ignored so a future client revision can
+          // pass extra context without breaking older servers.
+          let note: string | null = null;
+          try {
+            const body = await c.req.json();
+            if (body && typeof body === "object" && body.note != null) {
+              if (typeof body.note !== "string") {
+                return c.json({ error: "note must be a string" }, 400);
+              }
+              note = body.note.length > 500
+                ? body.note.slice(0, 500)
+                : body.note;
+            }
+          } catch {
+            // No body / invalid JSON — fine, body is optional.
+            note = null;
+          }
+
+          const {
+            pruneOldAiMetrics,
+            previewAiMetricsPruneImpact,
+            resolveEffectiveAiMetricsRetentionDays,
+          } = await import("../../utils/aiTelemetry");
+
+          const retentionDays = await resolveEffectiveAiMetricsRetentionDays();
+
+          // Run the dry-run preview FIRST so we can compare it against
+          // the actual deletion count and surface any drift in the
+          // audit row. Re-uses the exact same SQL predicate as
+          // `pruneOldAiMetrics()` so the previewed number is the
+          // server-side source-of-truth (not whatever the client last
+          // showed). Failures here are non-fatal — we report
+          // `previewed_rows = null` and still run the prune so the
+          // operator's click is not silently dropped.
+          let previewedRows: number | null = null;
+          try {
+            const impact = await previewAiMetricsPruneImpact(retentionDays);
+            previewedRows = impact.rowCount;
+          } catch (previewErr) {
+            console.error(
+              "[AI-Ops] metrics-retention prune-now preview error (continuing):",
+              previewErr,
+            );
+            previewedRows = null;
+          }
+
+          let deletedRows: number;
+          try {
+            deletedRows = await pruneOldAiMetrics(retentionDays);
+          } catch (pruneErr) {
+            console.error(
+              "[AI-Ops] metrics-retention prune-now prune error:",
+              pruneErr,
+            );
+            return c.json(
+              {
+                error: "Manual prune failed — see server logs for details.",
+                retention_days: retentionDays,
+                previewed_rows: previewedRows,
+              },
+              500,
+            );
+          }
+
+          const changedBy = user.name || user.email || `user:${user.userId}`;
+          const { audit_id } = await recordAiMetricsRetentionPruneAudit({
+            changedBy,
+            retentionDays,
+            // Audit a `null` preview as 0 so the row never says
+            // "previewed=null" — but the response payload keeps the
+            // null distinction so the dashboard banner can call out
+            // that the preview was unavailable.
+            previewedRows: previewedRows ?? 0,
+            deletedRows,
+            note,
+          });
+
+          return c.json({
+            success: true,
+            retention_days: retentionDays,
+            previewed_rows: previewedRows,
+            deleted_rows: deletedRows,
+            audit_id,
+          });
+        } catch (error) {
+          console.error("[AI-Ops] metrics-retention prune-now error:", error);
+          return c.json({ error: "Failed to run manual prune" }, 500);
+        }
+      };
+    },
+  },
+
   {
     path: "/api/ai-ops/tool-health/config-warnings",
     method: "GET" as const,

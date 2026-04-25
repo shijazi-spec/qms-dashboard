@@ -364,6 +364,78 @@ export async function getAiMetricsRetentionAuditPage(
 }
 
 /**
+ * Marker prefix used in `ai_metrics_retention_audit.note` for rows that
+ * record a manual "Prune now" run (Task #558) rather than a config
+ * change. The dashboard's audit renderer detects this prefix to label
+ * the row distinctly and to surface the previewed-vs-actual deletion
+ * counts inline. The marker stays in the note (not a separate column)
+ * so manual prunes share the same audit ladder as config changes —
+ * operators only have one place to look when reconstructing what
+ * happened during an incident.
+ */
+export const AI_METRICS_RETENTION_PRUNE_NOW_NOTE_PREFIX = '[prune-now]' as const;
+
+export interface RecordAiMetricsRetentionPruneAuditParams {
+  /** Operator who clicked "Prune now" (display name / email / "user:<id>"). */
+  changedBy: string;
+  /** Effective retention window the prune actually used (days). */
+  retentionDays: number;
+  /** Row count returned by the dry-run preview that ran immediately before the prune. */
+  previewedRows: number;
+  /** Row count actually returned by `pruneOldAiMetrics()`. */
+  deletedRows: number;
+  /** Optional free-form note from the operator (truncated to 500 chars by the caller). */
+  note?: string | null;
+}
+
+export interface RecordAiMetricsRetentionPruneAuditResult {
+  audit_id: number | null;
+}
+
+/**
+ * Append an audit row recording a manual "Prune now" execution
+ * (Task #558).
+ *
+ * Re-uses the same `ai_metrics_retention_audit` table as config changes
+ * so admins only have one timeline to scan when reconstructing what
+ * happened to the retention window during an incident. To keep the
+ * existing schema unchanged, prune-now rows set `before_days` and
+ * `after_days` to the retention window the prune actually used (i.e.
+ * before === after — no config change) and prefix the note with
+ * {@link AI_METRICS_RETENTION_PRUNE_NOW_NOTE_PREFIX} together with the
+ * structured `previewed=N deleted=M retention=Xd` triple. The dashboard
+ * audit renderer detects the prefix and shows the previewed-vs-actual
+ * drift inline so any divergence is visible at a glance.
+ */
+export async function recordAiMetricsRetentionPruneAudit(
+  params: RecordAiMetricsRetentionPruneAuditParams,
+): Promise<RecordAiMetricsRetentionPruneAuditResult> {
+  await initAiMetricsRetentionConfigTable();
+  const retention = Math.max(1, Math.floor(Number(params.retentionDays) || 0));
+  const previewed = Math.max(0, Math.floor(Number(params.previewedRows) || 0));
+  const deleted = Math.max(0, Math.floor(Number(params.deletedRows) || 0));
+  const operatorNote = params.note != null && params.note !== ''
+    ? String(params.note).slice(0, 400) // leave room for the structured prefix
+    : null;
+  const structured =
+    `${AI_METRICS_RETENTION_PRUNE_NOW_NOTE_PREFIX} previewed=${previewed} deleted=${deleted} retention=${retention}d`;
+  const note = operatorNote ? `${structured} — ${operatorNote}` : structured;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO ai_metrics_retention_audit (changed_by, before_days, after_days, note)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [params.changedBy, retention, retention, note],
+    );
+    return { audit_id: result.rows?.[0]?.id ?? null };
+  } catch (err) {
+    console.error('[aiMetricsRetentionConfig] prune-now audit write failed:', err);
+    return { audit_id: null };
+  }
+}
+
+/**
  * Default thresholds for the Save-button inline confirm step (Task #561).
  *
  * The dashboard requires an explicit "yes I want to delete this" click
