@@ -2135,17 +2135,28 @@
                 const lastSeenCell = isCurrent
                   ? `<span title="${esc(fmtDate(lastSeenVal))}" data-testid="text-prompt-last-seen-${esc(r.prompt_version)}">${fmtDate(lastSeenVal)}</span>`
                   : `<span title="${esc(fmtDate(lastSeenVal))}" data-testid="text-prompt-last-seen-${esc(r.prompt_version)}">Last seen: ${fmtRelTime(lastSeenVal)}</span>`;
+                // A row with 0 in-window calls is an archived placeholder
+                // surfaced by global_last (Task #330). For these rows we
+                // render "—" in the error-rate cell since "0.0%" would be
+                // misread as "no errors" rather than "no activity".
+                const noWindowActivity = Number(r.call_count || 0) === 0;
+                const errorCell = noWindowActivity
+                  ? `<span class="text-gray-400" title="No calls in selected window" data-testid="text-prompt-error-rate-${esc(r.prompt_version)}">—</span>`
+                  : `<span class="${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}" data-testid="text-prompt-error-rate-${esc(r.prompt_version)}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</span>`;
+                const callCountCell = noWindowActivity
+                  ? `<span class="text-gray-400" title="No calls in selected window" data-testid="text-prompt-call-count-${esc(r.prompt_version)}">0</span>`
+                  : `<span data-testid="text-prompt-call-count-${esc(r.prompt_version)}">${fmtNum(r.call_count)}</span>`;
                 return `
-                  <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}">
+                  <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}" data-prompt-window-activity="${noWindowActivity ? 'none' : 'present'}">
                     <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}</td>
-                    <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
+                    <td class="px-3 py-2 text-right">${callCountCell}</td>
                     <td class="px-3 py-2 text-right" data-testid="text-prompt-feedback-rate-${esc(r.prompt_version)}">${rateCell}</td>
                     <td class="px-3 py-2 text-right text-xs text-gray-500">
                       ${r.total_feedback > 0 ? `👍 ${r.thumbs_up} / 👎 ${r.thumbs_down}` : '<span class="text-gray-400">—</span>'}
                     </td>
                     <td class="px-3 py-2 text-right">${fmtMs(r.p50_ms)}</td>
                     <td class="px-3 py-2 text-right">${fmtMs(r.avg_ms)}</td>
-                    <td class="px-3 py-2 text-right ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
+                    <td class="px-3 py-2 text-right">${errorCell}</td>
                     <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${lastSeenCell}</td>
                   </tr>`;
               }).join('')

@@ -1360,8 +1360,19 @@ export interface PromptVersionAggregate {
   p50_ms: number | null;
   avg_ms: number | null;
   error_rate_pct: number;
-  first_seen: string;
-  last_seen: string;
+  /**
+   * Earliest `started_at` for this (agent, version) pair *within the
+   * selected window*. NULL for rows that were last active outside the
+   * window — they appear as archived placeholders with 0 in-window calls
+   * (see Task #330).
+   */
+  first_seen: string | null;
+  /**
+   * Most recent `started_at` for this (agent, version) pair *within the
+   * selected window*. NULL for archived rows that fall outside the
+   * window. Use `last_seen_at` for the unbounded all-time value.
+   */
+  last_seen: string | null;
   /**
    * Unbounded all-time last seen — the most recent `started_at` across the
    * full `ai_call_metrics` history for this (agent_name, prompt_version)
@@ -1455,11 +1466,32 @@ export async function getFeedbackRateByPromptVersion(
          WHERE tool_name IS NULL
          GROUP BY agent_name, COALESCE(metadata ->> 'prompt_version', '(unknown)')
        )
-       SELECT w.*, g.last_seen_at
-       FROM windowed w
-       JOIN global_last g
-         ON g.agent_name = w.agent_name AND g.prompt_version = w.prompt_version
-       ORDER BY w.agent_name, g.last_seen_at DESC`,
+       -- LEFT JOIN from global_last so (agent, version) pairs whose most
+       -- recent traffic predates the selected window still surface as
+       -- archived placeholder rows (Task #330). When there's no matching
+       -- windowed aggregate, in-window metrics fall back to 0/NULL so the
+       -- dashboard can clearly show "no activity in window" without losing
+       -- the historic version label or its all-time last_seen_at.
+       SELECT
+         g.agent_name,
+         g.prompt_version,
+         COALESCE(w.call_count, 0)             AS call_count,
+         COALESCE(w.total_feedback, 0)         AS total_feedback,
+         COALESCE(w.thumbs_up, 0)              AS thumbs_up,
+         COALESCE(w.thumbs_down, 0)            AS thumbs_down,
+         w.feedback_rate_pct                   AS feedback_rate_pct,
+         w.p50_ms                              AS p50_ms,
+         w.avg_ms                              AS avg_ms,
+         COALESCE(w.error_rate_pct, 0)         AS error_rate_pct,
+         w.first_seen                          AS first_seen,
+         w.last_seen                           AS last_seen,
+         $2::INTEGER                           AS min_feedback,
+         COALESCE(w.meets_min_feedback, FALSE) AS meets_min_feedback,
+         g.last_seen_at                        AS last_seen_at
+       FROM global_last g
+       LEFT JOIN windowed w
+         ON w.agent_name = g.agent_name AND w.prompt_version = g.prompt_version
+       ORDER BY g.agent_name, g.last_seen_at DESC`,
       [days, floor]
     );
     return result.rows;

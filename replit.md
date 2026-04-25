@@ -51,3 +51,70 @@ The prompt-regression and tool-health crons now silently auto-resolve their own 
 Extended `dashboard/js/streaming-download.js` so multi-hundred-MB exports stream straight to disk in Firefox and Safari, not just Chromium. Vendored a same-origin service worker (`dashboard/streaming-download-sw.js`, served at `/streaming-download-sw.js` with `Service-Worker-Allowed: /` and `Cache-Control: no-cache`) that intercepts a synthetic `/_stream-download/<id>` URL pattern. The page-side helper now tries (1) File System Access API → (2) the SW shim → (3) the legacy in-memory `Blob` accumulator, in that order. The SW path uses transferable `ReadableStream` (Firefox 114+, Safari 16.4+, Chromium 87+): the helper builds a `TransformStream` for byte-progress accounting, transfers the readable side to the SW via `postMessage([readable, port])`, waits for an ack on the `MessageChannel`, then triggers the download by navigating a hidden iframe to `/_stream-download/<id>`. The SW responds with `new Response(transferredStream, { headers: 'Content-Disposition: attachment' })` and the browser pulls bytes through to disk — so memory stays flat regardless of export size. Critically, `streamResponseViaServiceWorker()` returns `null` *without* consuming `response.body` whenever the SW can't be reached (no `serviceWorker` API, no transferable streams, registration failure, or a non-`ok` ack), so the Blob fallback below it still works. Same button label / progress text / cancel UX as the FSA path; user cancellations surface as `AbortError` and are silenced. New `useServiceWorker: false` opt-out for callers that need to force the legacy path. Added `/streaming-download-sw.js` and `/_stream-download/` to the middleware `PUBLIC_PATHS` allowlist so the SW loads without an auth redirect (browsers fetch SW files independently of cookies). Cache-bust version on the script tags bumped from `?v=2.0.0` to `?v=2.1.0` across all six dashboards (`vendors.html`, `risks.html`, `policies.html`, `logs.html`, `duplicates.html`, `audits.html`). Test coverage: `tests/vitest/streamingDownload.vit...
 
 ### April 24, 2026 — True streaming exports to disk
+
+## System Architecture
+The platform is built on the Mastra AI agent framework and Hono HTTP server.
+
+-   **RTL Layout Convention**:
+    The dashboard supports Arabic (RTL) via `html[dir="rtl"]` set by `dashboard/js/i18n.js`. To ensure layout details (table-header alignment, card accent borders, icon gutters) automatically mirror in RTL, use CSS logical properties instead of physical ones. The precompiled `dashboard/tailwind.css` does not generate Tailwind's logical-utility variants, so a set of helper classes is provided in `dashboard/css/utilities.css`:
+    -   **Table headers**: use `text-start` (not `text-left`) — aligns to the reading-start edge.
+    -   **KPI / stat-card accent borders**: use `border-s-4` (not `border-l-4`) — placed on the inline-start edge, so the accent appears on the right in Arabic.
+    -   **Icon-to-label spacing**: use `ms-2` / `me-2` (not `ml-2` / `mr-2`) — margin flips with writing direction.
+    -   **Inline-end rounded corners**: use `rounded-e-lg` (not `rounded-r-lg`).
+    -   **Right-aligned values**: use `text-end` (not `text-right`).
+    -   **Flexbox item spacing**: use `gap-*` (not `space-x-*`) — `space-x-*` generates physical `margin-left` and does not flip in RTL; `gap-*` is direction-neutral.
+    -   **Flexbox layouts** (`flex justify-between`, `justify-end`) and **`mx-*` / `px-*`** (symmetric) are already direction-neutral and do not need to change.
+    -   **Inline CSS in `<style>` blocks**: use `border-inline-start` / `margin-inline-start` instead of `border-left` / `margin-left` when the property must flip with writing direction.
+    Do **not** use physical-direction Tailwind classes (`ml-`, `mr-`, `space-x-`, `text-left`, `text-right`, `border-l-`, `border-r-`, `rounded-l-`, `rounded-r-`) or physical CSS properties (`border-left`, `border-right`, `margin-left`, `margin-right`) on any element whose appearance should flip in RTL.
+
+-   **UI/UX Decisions**:
+    -   Dashboards are static HTML, styled with compiled Tailwind CSS, offering views like Executive Dashboard, GRC Control Tower, QMS Dashboard, and an AI Consultant interface. UI/UX emphasizes WCAG 2.1 AA accessibility conformance, including skip-to-main-content links, modal focus traps, ARIA live regions, and semantic HTML. A fixed left side rail navigation replaces the traditional top-bar navigation, improving usability and screen real estate.
+    -   Floating bottom-right progress card per download: filename, gradient progress bar, bytes downloaded / total + percentage, Cancel button. Card auto-dismisses on success/cancel/failure.
+    -   Top-right toast container for success / "cancelled" info / failure alerts — replaces every `window.alert()` failure path.
+-   **Technical Implementations**:
+    -   **Frontend**: Static HTML dashboards, styled with compiled Tailwind CSS.
+    -   **Backend**: Mastra API routes are handled by Hono, with a refactored thin composition root for better modularity and maintainability.
+    -   **Database**: PostgreSQL manages over 103 tables across 21 module groups using a shared connection pool.
+    -   **AI Integration**: GPT-4o powers AI agent functionalities through Replit AI/OpenAI. AI Observability is implemented via an `ai_call_metrics` table, tracking token usage, cost, latency, and errors for every LLM call, visualized in an "AI Operations" panel.
+    -   **Workflows**: Inngest orchestrates event-driven processes like background scanning, KPI calculation, and AI approval expiry.
+    -   **Authentication**: Replit OIDC (Google, GitHub, Apple, email) with HMAC-SHA256 signed cookies for session management. An Admin API key provides alternative access.
+    -   **Authorization**: Role-Based Access Control (RBAC) with 11 roles ensures granular access to API endpoints and dashboards via `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
+    -   **Security**: Features include nonce-based Content Security Policy (CSP) with strict enforcement for inline scripts and styles, distributed Postgres-backed rate limiting, input sanitization (XSS/injection prevention), UUID resource ID obfuscation, strong password policies, generic error messages, and Human-In-The-Loop (HITL) AI Approval Gate for AI-initiated write actions. CI checks enforce CSP compliance for dashboard HTML.
+-   **Feature Specifications**:
+    -   **AI Consultant**: GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration. Feedback ratings are linked to AI observability for prompt-quality A/B tracking.
+    -   **Duplicate Radar**: Multi-signal duplicate detection for CRM data with cross-module clustering, AI recommendations, and auto-resolution.
+    -   **Download Progress UX**: Layered a visible progress UX on top of the streaming-download helper. Includes a floating bottom-right progress card with cancel button and top-right toast alerts. Cancellation is wired through AbortController.
+    -   **AI Observability**: Tracks LLM call metrics (token usage, cost, latency, errors) in an `ai_call_metrics` table. An "AI Operations" panel (`/ai-ops`) visualizes cost trends, latency percentiles, and recent failures. A daily Inngest cron alerts on high AI spend.
+    -   **Evidence Management**: Structured upload and retrieval of evidence documents.
+    -   **Compliance Checklist Engine**: Create and run structured compliance checklists with automated data verification.
+    -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
+    -   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
+    -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
+    -   **True Streaming Exports**: Large exports flow directly to disk via File System Access API where supported, bypassing memory Blobs for stability. Cache-bust `?v=2.1.0`.
+
+## Key Features
+-   **AI Consultant**: A GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration. Feedback ratings are linked to AI observability for prompt-quality A/B tracking.
+-   **Duplicate Radar**: A multi-signal duplicate detection system for CRM data with cross-module clustering, AI recommendations, and auto-resolution.
+-   **Evidence Management**: Structured upload and retrieval of evidence documents.
+-   **Compliance Checklist Engine**: Create and run structured compliance checklists with automated data verification.
+-   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
+-   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
+-   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
+-   **AI Observability**: Tracks LLM call metrics (token usage, cost, latency, errors) in an `ai_call_metrics` table. An "AI Operations" panel (`/ai-ops`) visualizes cost trends, latency percentiles, and recent failures. A daily Inngest cron alerts on high AI spend.
+-   **Download Progress UI**: Floating progress card and toast alerts for large file exports with cancel functionality. Cache-bust `?v=2.1.0`.
+-   **True Streaming Exports**: Direct-to-disk streaming for large files to optimize memory usage. Cache-bust `?v=2.1.0`.
+    -   **Evidence Management**: Structured upload and retrieval of evidence documents.
+    -   **Compliance Checklist Engine**: Create and run structured compliance checklists with automated data verification.
+    -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
+    -   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
+    -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
+
+## External Dependencies
+-   **PostgreSQL**: Primary data store.
+-   **Replit AI Integrations / OpenAI**: For GPT-4o AI capabilities.
+-   **Inngest**: Event-driven workflow orchestration.
+-   **Resend**: For outgoing email services.
+-   **Zoho CRM**: Integrated for live CRM data.
+-   **Slack**: For notifications and infographic sharing.
+-   **exceljs**: Library for generating XLSX data exports.
+-   **ImageMagick**: Used for converting SVG infographics to PNG.

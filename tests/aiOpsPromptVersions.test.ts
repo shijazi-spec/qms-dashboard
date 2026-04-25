@@ -411,14 +411,141 @@ if (!HAS_DB) {
   );
 
   // Clean up seeded rows so the analytics tables stay uncluttered.
+  // -------------------------------------------------------------------------
+  // Task #330: archived versions whose most recent traffic predates the
+  // selected window should still surface as placeholder rows with 0
+  // in-window calls and the unbounded `last_seen_at` populated. This
+  // catches regressions of the LEFT JOIN on global_last that lets stale
+  // rollbacks remain visible to reviewers.
+  // -------------------------------------------------------------------------
+  const ARCHIVED_AGENT = `__test_prompt_version_archived_${Date.now()}__`;
+  const VERSION_ARCHIVED = "v-archived-old";
+  const archivedSeededIds: number[] = [];
+
+  await suite.test(
+    "happy: seed an out-of-window archived prompt-version row (started_at = 60 days ago)",
+    async () => {
+      const pg = await import("pg");
+      const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+      try {
+        // Insert a row whose started_at is 60 days in the past so it falls
+        // outside any selected window <= 30 days. Direct INSERT (rather
+        // than insertAiCallMetric) so we control started_at.
+        const res = await pool.query(
+          `INSERT INTO ai_call_metrics
+             (agent_name, tool_name, model, latency_ms, success, metadata, started_at)
+           VALUES ($1, NULL, 'gpt-4o', 600, TRUE, $2::jsonb, NOW() - INTERVAL '60 days')
+           RETURNING id`,
+          [ARCHIVED_AGENT, JSON.stringify({ prompt_version: VERSION_ARCHIVED })],
+        );
+        const id = Number(res.rows[0].id);
+        suite.expect(id > 0, "archived row inserted with id");
+        archivedSeededIds.push(id);
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+
+  await suite.test(
+    "happy: GET /api/ai-ops/prompt-versions?days=7 still surfaces archived versions older than the window",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/prompt-versions",
+          "GET",
+        );
+        // 7-day window guarantees the 60-day-old seed is out-of-window.
+        // minFeedback=0 keeps the row eligible (no feedback was seeded).
+        const res = await handler(
+          makeContext({
+            method: "GET",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            query: { days: "7", minFeedback: "0" },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "status");
+
+        const data: Array<{
+          agent_name: string;
+          prompt_version: string;
+          call_count: number;
+          total_feedback: number;
+          feedback_rate_pct: number | null;
+          p50_ms: number | null;
+          avg_ms: number | null;
+          last_seen: string | null;
+          last_seen_at: string;
+        }> = res.body?.data ?? [];
+
+        const archived = data.find(
+          (r) =>
+            r.agent_name === ARCHIVED_AGENT &&
+            r.prompt_version === VERSION_ARCHIVED,
+        );
+        suite.expect(
+          !!archived,
+          `archived row for ${ARCHIVED_AGENT}/${VERSION_ARCHIVED} surfaces despite 60-day-old started_at`,
+        );
+
+        suite.expectEqual(
+          Number(archived?.call_count ?? -1),
+          0,
+          "call_count = 0 (no in-window activity)",
+        );
+        suite.expectEqual(
+          Number(archived?.total_feedback ?? -1),
+          0,
+          "total_feedback = 0 (no in-window activity)",
+        );
+        suite.expect(
+          archived?.feedback_rate_pct == null,
+          "feedback_rate_pct is NULL (not 0%) so the dashboard renders —",
+        );
+        suite.expect(
+          archived?.p50_ms == null,
+          "p50_ms is NULL so the dashboard renders —",
+        );
+        suite.expect(
+          archived?.avg_ms == null,
+          "avg_ms is NULL so the dashboard renders —",
+        );
+        suite.expect(
+          archived?.last_seen == null,
+          "in-window last_seen is NULL for archived rows",
+        );
+        // The pg driver returns timestamps as Date objects; the route serializes
+        // them via JSON.stringify (-> ISO 8601 string) at the wire boundary.
+        // The fakeContext used here returns the raw body object, so we accept
+        // either a Date or a non-empty string as evidence that the value is
+        // populated.
+        const lastSeenAt: unknown = archived?.last_seen_at;
+        const lastSeenAtPopulated =
+          (typeof lastSeenAt === "string" && lastSeenAt.length > 0) ||
+          lastSeenAt instanceof Date;
+        suite.expect(
+          lastSeenAtPopulated,
+          `unbounded last_seen_at is populated (got ${JSON.stringify(lastSeenAt)}) so the dashboard can show 'last seen N days ago'`,
+        );
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+
   await suite.test("cleanup: remove seeded test rows from ai_call_metrics", async () => {
-    if (seededIds.length === 0) return;
+    if (seededIds.length === 0 && archivedSeededIds.length === 0) return;
     const pg = await import("pg");
     const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
     try {
       await pool.query(
-        `DELETE FROM ai_call_metrics WHERE agent_name = $1`,
-        [TEST_AGENT],
+        `DELETE FROM ai_call_metrics WHERE agent_name IN ($1, $2)`,
+        [TEST_AGENT, ARCHIVED_AGENT],
       );
       // Drop the synthetic purge rows seeded by the last-purge happy-path test
       // so the AI Ops UI doesn't show "agent-x@cccccccc" to a real operator.
