@@ -1,0 +1,95 @@
+name: public-path regression guard
+
+# Runs the dedicated public-path regression guard on every push and pull
+# request. The test (tests/publicPathsGuard.test.ts) was added by task #465
+# to enforce the invariants from task #447:
+#
+#   - Every entry in PUBLIC_PATHS carries a one-line justification in the
+#     in-test allow-list (so adding a new public path is a privilege-
+#     escalation review checkpoint).
+#   - No new /api/* route in routeManifest.ts can be matched as public via
+#     an existing prefix bypass (the original /api/health -> /api/health-index
+#     foot-gun) without an explicit allow-list entry.
+#   - The specific foot-gun paths from task #447 (/api/health-index,
+#     /api/health/pulse*) stay private.
+#
+# The same file is also auto-discovered by tests/runIntegrationTests.ts and
+# runs as part of `npm test` in the broader Tests workflow, but a regression
+# in this single file would be visually buried inside the flat
+# "X/Y test files passed" summary at the bottom of that ~80-file run. This
+# dedicated job is the loud, top-of-output gate task #611 asked for: a
+# failure surfaces as a GitHub Actions error annotation (`::error::`) at the
+# top of the run summary AND mirrors the captured test output into
+# $GITHUB_STEP_SUMMARY so reviewers and on-call engineers cannot miss a
+# missing allow-list entry in code review.
+#
+# The test uses in-memory module imports only (no DB, no HTTP), so this job
+# is intentionally minimal (no services:) and fast.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: public-paths-guard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-paths-guard:
+    name: public-path regression guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: "publicPathsGuard.test.ts (Task #447 / #465 — public-path regression gate)"
+        id: public_paths_guard
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_FILE="$(mktemp)"
+          echo "## publicPathsGuard.test.ts" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          # Capture to both the step summary and a temp file so we can
+          # extract failure context for the top-of-run ::error:: annotation
+          # below. `set -o pipefail` ensures tsx's exit code propagates
+          # through `tee`.
+          set +e
+          npx tsx tests/publicPathsGuard.test.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" | tee "$LOG_FILE"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "❌ **publicPathsGuard.test.ts FAILED** — see captured output above. A failure here means a new entry was added to PUBLIC_PATHS or routeManifest.ts that bypasses authentication without an acknowledged justification in tests/publicPathsGuard.test.ts. See task #447 for the original audit." >> "$GITHUB_STEP_SUMMARY"
+            # Top-of-run GitHub Actions error annotation. This shows up at
+            # the very top of the run summary (and in the PR "Files
+            # changed" view next to the workflow file), so a regression
+            # in this single guard cannot be visually buried.
+            echo "::error title=public-path regression guard FAILED::A change in this PR has caused tests/publicPathsGuard.test.ts to fail. This guard (see task #447) prevents accidental privilege-escalation via PUBLIC_PATHS / routeManifest.ts. Review the failing assertion in the job log, then either tighten the matching PUBLIC_PATHS entry or add a justified allow-list entry in tests/publicPathsGuard.test.ts."
+            # Also emit the first failed-assertion line we can find as a
+            # second annotation so the specific offending path is visible
+            # without having to scroll the log.
+            FIRST_FAIL="$(grep -m 1 -E '^\s*✗|FAIL|Error:|AssertionError' "$LOG_FILE" || true)"
+            if [ -n "$FIRST_FAIL" ]; then
+              # Strip control chars and trim to a single line to keep the
+              # annotation readable in the GitHub UI.
+              CLEAN="$(printf '%s' "$FIRST_FAIL" | tr -d '\r' | sed 's/[[:cntrl:]]//g' | head -c 800)"
+              echo "::error title=public-path regression guard — first failure::${CLEAN}"
+            fi
+          else
+            echo "✅ publicPathsGuard.test.ts passed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
