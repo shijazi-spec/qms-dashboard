@@ -132,12 +132,176 @@ if it were executed against the production write endpoint right now.
 ## Files in this directory
 
 - `production-precheck.txt` — production row counts captured before the
-  sweep.
+  sweep (updated for each task run).
 - `production-postcheck.txt` — production post-state verification and
-  unredacted-leak scan.
+  unredacted-leak scan (updated for each task run).
 - `redaction-sweep-dev-*.log` — first dry run against the empty dev
   database.
 - `redaction-sweep-validation-*.log` — sweep output against the seeded
   dev data (5 rows updated across 3 tables).
 - `redaction-sweep-idempotency-*.log` — re-run output proving the
   script is idempotent (0 rows updated).
+
+---
+
+# Task #101 — Approval-Preview Redaction Sweep (payload_preview backfill)
+
+**Task:** #101 — Run the new approval-preview redaction sweep against production and capture audit evidence
+**Script:** `src/utils/redactHistoricalLogs.ts` (extended by Task #85 to include `ai_pending_actions.payload_preview`)
+**Sweep performed (UTC):** 2026-04-24T23:29:06.376Z
+
+Task #85 extended `redactHistoricalLogs.ts` so it now also rewrites
+historical `ai_pending_actions.payload_preview` TEXT rows that contain
+credential-shaped substrings (using `redactSecretLikeStrings`), and emits
+a dedicated `event_logs` audit entry covering the per-column breakdown.
+
+## 7. Production pre-sweep state (Task #101)
+
+Captured via read-only production replica at 2026-04-24T23:29:00Z.
+
+| Table                 | Total rows | payload ≠ null | payload_preview ≠ null | execution_result ≠ null |
+|-----------------------|-----------:|---------------:|-----------------------:|------------------------:|
+| `ai_pending_actions`  |          0 |              0 |                      0 |                       0 |
+| `nc_change_history`   |          0 |            n/a |                    n/a |                     n/a |
+| `capa_change_history` |          0 |            n/a |                    n/a |                     n/a |
+| `event_logs`          |          0 |              0 |                    n/a |                     n/a |
+
+All four target tables exist in production. Row counts are zero — a
+production sweep is a no-op (0 rows updated) at this point in time, which
+is the expected and correct outcome.
+
+## 8. Script validation against the development database (Task #101)
+
+> **Environment note:** The task-agent environment has read-only access to
+> the production replica and cannot issue write queries against production.
+> The sweep script was therefore executed against the development database
+> to verify the new `payload_preview` backfill path runs without errors
+> before a production operator triggers it manually (see section 12).
+> Because all four production tables contain 0 rows (section 7), the
+> production run will produce byte-for-byte identical console output.
+
+Full console output from the dev run:
+
+```
+[Redaction] Starting historical log redaction sweep...
+[Redaction] Sweep timestamp: 2026-04-24T23:29:06.376Z
+[Redaction] event_logs: 0 rows updated
+[Redaction] nc_change_history: 0 rows updated
+[Redaction] capa_change_history: 0 rows updated
+[Redaction] ai_pending_actions: 0 rows updated (scanned=0, payload=0, payload_preview=0, execution_result=0)
+[Redaction] Sweep complete. Total rows updated: 0
+[Redaction] Audit-log entry emitted for sweep run
+```
+
+Per-column breakdown for `ai_pending_actions`:
+
+| Column                 | Scanned | Changed |
+|------------------------|--------:|--------:|
+| `payload`              |       0 |       0 |
+| `payload_preview`      |       0 |       0 |
+| `execution_result`     |       0 |       0 |
+| **Total rows updated** |         |   **0** |
+
+All rows scanned = 0 (table empty), confirming the zero pre-sweep count.
+The new `payload_preview` code path executed without error.
+
+## 9. Audit-log entry from dev validation run (Task #101)
+
+The dev sweep emitted an `event_logs` row in the **development** database.
+This entry confirms the `logEvent` call works correctly for the new sweep
+variant; it is **not** a production audit record.
+
+| Field         | Value (development database)                             |
+|---------------|----------------------------------------------------------|
+| `id`          | 76 *(development DB only)*                               |
+| `action_type` | `UPDATE`                                                 |
+| `entity_type` | `SYSTEM`                                                 |
+| `entity_id`   | `ai_pending_actions`                                     |
+| `entity_name` | `Historical secret-redaction sweep`                      |
+| `module`      | `security/redaction-sweep`                               |
+| `created_at`  | `2026-04-24T23:29:06.425924Z`                            |
+
+`new_value` JSONB structure confirmed by the dev entry:
+
+```json
+{
+  "sweep_timestamp": "2026-04-24T23:29:06.376Z",
+  "event_logs_updated": 0,
+  "nc_change_history_updated": 0,
+  "capa_change_history_updated": 0,
+  "ai_pending_actions": {
+    "scanned": 0,
+    "payload_changed": 0,
+    "payload_preview_changed": 0,
+    "execution_result_changed": 0,
+    "rows_updated": 0
+  },
+  "total_rows_updated": 0
+}
+```
+
+The production run (section 12) will write an equivalent entry to the
+production `event_logs` table. Its ID must be recorded here once the
+operator has completed that step.
+
+**Production audit-log entry ID: _pending manual production run_**
+
+## 10. Idempotency re-run (Task #101, development database)
+
+The script was executed a second time immediately after the first dev run.
+Full console output:
+
+```
+[Redaction] Starting historical log redaction sweep...
+[Redaction] Sweep timestamp: 2026-04-24T23:29:22.589Z
+[Redaction] event_logs: 0 rows updated
+[Redaction] nc_change_history: 0 rows updated
+[Redaction] capa_change_history: 0 rows updated
+[Redaction] ai_pending_actions: 0 rows updated (scanned=0, payload=0, payload_preview=0, execution_result=0)
+[Redaction] Sweep complete. Total rows updated: 0
+[Redaction] Audit-log entry emitted for sweep run
+```
+
+**Idempotency confirmed:** `Total rows updated: 0` on re-run.  
+*(Dev re-run emitted event_logs id=77 in the development database,
+timestamp `2026-04-24T23:29:22.637Z`.)*
+
+## 11. Production post-state (Task #101)
+
+Row counts queried from the read-only production replica after the dev
+validation run. Because production has 0 rows in all tables, no changes
+are present to inspect:
+
+| Table                 | Total rows | Rows with payload | Suspect unredacted rows |
+|-----------------------|-----------:|------------------:|------------------------:|
+| `event_logs`          |          0 |                 0 |                       0 |
+| `nc_change_history`   |          0 |                 0 |                       0 |
+| `capa_change_history` |          0 |                 0 |                       0 |
+| `ai_pending_actions`  |          0 |                 0 |                     n/a |
+
+No credential-shaped strings found in any production row. Production is
+clean and contains no rows requiring redaction at this time.
+
+**No production audit-log entries for the sweep exist yet** — they will be
+created by the manual production run documented in section 12.
+
+## 12. Manual production run — operator instructions (Task #101)
+
+The task-agent environment cannot write to the production database. A
+production operator must complete this step from the deployed environment:
+
+1. Open a shell against the published deployment (or run as a one-off
+   scheduled job against the production `DATABASE_URL`).
+2. Execute: `npx tsx src/utils/redactHistoricalLogs.ts`
+3. Capture the full stdout. The key lines to record are:
+   - `[Redaction] ai_pending_actions: N rows updated (scanned=..., payload=..., payload_preview=..., execution_result=...)`
+   - `[Redaction] Sweep complete. Total rows updated: N`
+   - `Event logged successfully with ID: <ID>` (the production audit-log entry ID)
+4. Update this file: fill in the production audit-log entry ID in section 9
+   and add the actual per-column counts to section 8.
+5. Run a second time to confirm idempotency (`Total rows updated: 0`).
+
+Given the current production state (all four tables empty), step 2 is
+expected to report `Total rows updated: 0`, identical to the dev validation
+run. The procedure should be re-executed any time legacy data is restored
+from a backup that predates the deny-list fix.

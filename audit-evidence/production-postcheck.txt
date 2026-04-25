@@ -29,3 +29,54 @@ Interpretation:
   (see redaction-sweep-idempotency-*.log), so any future execution
   against production (e.g. after a backup restore that re-introduces
   legacy rows) will safely redact only what needs redacting.
+
+---
+
+Task #101 — Post-sweep verification (payload_preview backfill)
+Post-state captured: 2026-04-24T23:29:30Z
+Source: read-only production replica via executeSql({ environment: "production" })
+
+=== Row counts post-sweep ===
+table_name,total_rows,rows_with_payload,suspect_unredacted_rows
+event_logs,0,0,0
+nc_change_history,0,0,0
+capa_change_history,0,0,0
+ai_pending_actions,0,0,n/a
+
+=== ai_pending_actions column-level breakdown ===
+  total_rows              = 0
+  payload_non_null        = 0
+  payload_preview_non_null= 0
+  execution_result_non_null=0
+
+Sweep result (dev run — reflects what production run would produce):
+  event_logs rows updated          = 0
+  nc_change_history rows updated   = 0
+  capa_change_history rows updated = 0
+  ai_pending_actions:
+    scanned                        = 0
+    payload_changed                = 0
+    payload_preview_changed        = 0
+    execution_result_changed       = 0
+    rows_updated                   = 0
+  Total rows updated               = 0
+
+Dev validation audit-log entry ID (sweep run):   76  (development DB, module=security/redaction-sweep, 2026-04-24T23:29:06.425Z)
+Dev validation audit-log entry ID (idempotency): 77  (development DB, module=security/redaction-sweep, 2026-04-24T23:29:22.637Z)
+
+Production audit-log entry ID (sweep run):   PENDING — requires manual production run (see SWEEP_SUMMARY.md §12)
+Production audit-log entry ID (idempotency): PENDING — requires manual idempotency re-run after production sweep
+
+Interpretation:
+- All four target tables in production have zero rows post-sweep-validation.
+- The task-agent environment cannot write to the production database; the
+  sweep was validated against the development database to prove the
+  payload_preview backfill code path (Task #85 extension) runs without error.
+- The new payload_preview path reported scanned=0 / payload_preview_changed=0,
+  confirming it executes correctly against an empty table.
+- Idempotency re-run (dev) confirms "Total rows updated: 0" as required.
+- No credential-shaped strings were found unredacted in any production row.
+- Production is clean. The manual production run (SWEEP_SUMMARY.md §12)
+  will write the real production audit-log entry and complete this evidence.
+- The sweep should be re-executed after any backup restore that may
+  reintroduce pre-redaction rows.
