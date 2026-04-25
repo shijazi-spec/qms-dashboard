@@ -428,6 +428,93 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
   return { rows: res.rows, total };
 }
 
+/**
+ * Task #513: bucket counts driving the inline numbers next to each option
+ * of the "Review" filter on the approval queue UI. Returns the count for
+ * BOTH `unreviewed_by_me` and `no_reviewers` in a single round-trip so the
+ * dashboard can render "Unreviewed by me (N)" / "No reviewer yet (M)"
+ * without two extra requests on the 30s refresh.
+ *
+ * The supplied `filters` mirror the LIST endpoint: the counts are scoped
+ * to the same Status / Risk / requester (Only-my-proposals) the operator
+ * has selected so the numbers stay coherent with the visible list.
+ *
+ * Visibility scoping is the caller's responsibility — pass
+ * `requestedByUserId = user.userId` for non-privileged users, and
+ * `undefined` for admins/QMs (mirroring `listPendingActions`).
+ *
+ * `reviewerUserId` is required: the `unreviewed_by_me` count is meaningless
+ * without knowing whose view-audit rows to exclude.
+ */
+export async function countByReviewStatus(filters: {
+  status?: ApprovalStatus | ApprovalStatus[];
+  requestedByUserId?: number;
+  riskLevel?: RiskLevel;
+  reviewerUserId: number;
+}): Promise<{ unreviewed_by_me: number; no_reviewers: number }> {
+  if (filters.reviewerUserId == null) {
+    throw new Error('countByReviewStatus: reviewerUserId is required');
+  }
+
+  const where: string[] = [];
+  const params: any[] = [];
+
+  if (filters.status) {
+    const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+    params.push(statuses);
+    where.push(`status = ANY($${params.length})`);
+  }
+  if (filters.requestedByUserId != null) {
+    params.push(filters.requestedByUserId);
+    where.push(`requested_by_user_id = $${params.length}`);
+  }
+  if (filters.riskLevel) {
+    params.push(filters.riskLevel);
+    where.push(`risk_level = $${params.length}`);
+  }
+
+  // Bind reviewerUserId LAST so its placeholder is stable. Used only by the
+  // `unreviewed_by_me` correlated NOT EXISTS — the `no_reviewers` branch
+  // intentionally omits any user_id filter so it counts true blind spots.
+  params.push(filters.reviewerUserId);
+  const reviewerParam = `$${params.length}`;
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  // Both buckets share the same base WHERE; we use FILTER (WHERE ...) with
+  // correlated NOT EXISTS sub-queries against event_logs view-audit rows.
+  // This matches the SQL shape used by `listPendingActions` so the counts
+  // and the visible rows are guaranteed to agree.
+  const sql = `
+    SELECT
+      COUNT(*) FILTER (WHERE NOT EXISTS (
+        SELECT 1 FROM event_logs el
+         WHERE el.correlation_id = ai_pending_actions.action_code
+           AND el.action_type    = 'AI_ACTION'
+           AND el.description    ILIKE 'Viewed%'
+           AND el.user_id        = ${reviewerParam}
+      ))::text AS unreviewed_by_me,
+      COUNT(*) FILTER (WHERE NOT EXISTS (
+        SELECT 1 FROM event_logs el
+         WHERE el.correlation_id = ai_pending_actions.action_code
+           AND el.action_type    = 'AI_ACTION'
+           AND el.description    ILIKE 'Viewed%'
+      ))::text AS no_reviewers
+    FROM ai_pending_actions
+    ${whereSql}
+  `;
+
+  const res = await pool.query<{ unreviewed_by_me: string; no_reviewers: string }>(
+    sql,
+    params,
+  );
+  const row = res.rows[0] ?? { unreviewed_by_me: '0', no_reviewers: '0' };
+  return {
+    unreviewed_by_me: parseInt(row.unreviewed_by_me, 10) || 0,
+    no_reviewers: parseInt(row.no_reviewers, 10) || 0,
+  };
+}
+
 export async function countPendingForUser(
   userId: number,
   excludeToolIdPrefixes: string[] = []

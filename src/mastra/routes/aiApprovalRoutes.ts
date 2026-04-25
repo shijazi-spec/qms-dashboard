@@ -29,6 +29,7 @@ import {
   rejectAction,
   countPendingForUser,
   countPendingWithCredentialWarnings,
+  countByReviewStatus,
   type ApprovalStatus,
   type RiskLevel,
 } from '../../utils/aiApprovalDatabase';
@@ -272,6 +273,65 @@ const _aiApprovalRoutesRaw = [
         } catch (error: any) {
           console.error('[AI-Approval] credential-warning count error:', error);
           return c.json({ error: 'Failed to fetch credential-warning count', details: error.message }, 500);
+        }
+      };
+    },
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* GET /api/ai/approvals/review-status-counts                           */
+  /* -------------------------------------------------------------------- */
+  /* Task #513: drives the inline counts next to each option of the      */
+  /* "Review" filter on the approval queue UI. Returns                    */
+  /*   { unreviewed_by_me, no_reviewers }                                 */
+  /* scoped to the same Status / Risk / "Only my proposals" filters the   */
+  /* operator currently has selected on the list, so the numbers stay     */
+  /* coherent with the visible rows. Visibility scoping mirrors the LIST  */
+  /* endpoint: admins / quality_managers see the global counts (unless    */
+  /* mine=true); everyone else sees only their own pending rows.          */
+  {
+    path: '/api/ai/approvals/review-status-counts',
+    method: 'GET' as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          await ensureTable();
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const statusParam = url.searchParams.get('status');
+          const riskLevel = url.searchParams.get('risk_level') as RiskLevel | null;
+          const mine = url.searchParams.get('mine') === 'true';
+
+          const status = statusParam
+            ? (statusParam.split(',').map(s => s.trim()) as ApprovalStatus[])
+            : (['pending'] as ApprovalStatus[]);
+
+          const requestedByUserId =
+            (canSeeAll(user.role) && !mine) ? undefined : (user.userId ?? undefined);
+
+          // user.userId may be null in dev sessions; fall back to 0 so the
+          // SQL still binds a parameter (no rows will match user_id=0, which
+          // simply means "every row counts as unreviewed_by_me", matching
+          // the operator expectation that an unauthenticated viewer has
+          // never opened any detail page).
+          const reviewerUserId = user.userId ?? 0;
+
+          const counts = await countByReviewStatus({
+            status,
+            riskLevel: riskLevel || undefined,
+            requestedByUserId,
+            reviewerUserId,
+          });
+
+          return c.json({ success: true, ...counts });
+        } catch (error: any) {
+          console.error('[AI-Approval] review-status-counts error:', error);
+          return c.json(
+            { error: 'Failed to fetch review-status counts', details: error.message },
+            500,
+          );
         }
       };
     },

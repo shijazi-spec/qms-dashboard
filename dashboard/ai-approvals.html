@@ -125,8 +125,18 @@
                     class="border border-gray-300 rounded px-2 py-1 text-sm"
                     title="Show only actions you (or anyone) haven't opened the detail page for yet.">
                 <option value="" data-i18n="ai_approvals.review_any">Any</option>
-                <option value="unreviewed_by_me" data-i18n="ai_approvals.review_unreviewed_by_me">Unreviewed by me</option>
-                <option value="no_reviewers" data-i18n="ai_approvals.review_no_reviewers">No reviewer yet</option>
+                <!-- Task #513: these two options own their textContent in JS so
+                     the inline " (N)" count is not clobbered by i18n.applyToDOM().
+                     `data-base-i18n` lets the JS re-translate the label without
+                     the suffix; `data-base-label` is the untranslated fallback. -->
+                <option value="unreviewed_by_me"
+                        data-testid="option-review-unreviewed-by-me"
+                        data-base-i18n="ai_approvals.review_unreviewed_by_me"
+                        data-base-label="Unreviewed by me">Unreviewed by me</option>
+                <option value="no_reviewers"
+                        data-testid="option-review-no-reviewers"
+                        data-base-i18n="ai_approvals.review_no_reviewers"
+                        data-base-label="No reviewer yet">No reviewer yet</option>
             </select>
 
             <label class="text-xs text-gray-600 ml-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
@@ -197,6 +207,8 @@
     var fltReview = document.getElementById('fltReview');
     var fltCredWarn = document.getElementById('fltCredWarn');
     var badgeCredWarn = document.getElementById('badgeCredWarn');
+    var optUnreviewedByMe = fltReview.querySelector('option[value="unreviewed_by_me"]');
+    var optNoReviewers = fltReview.querySelector('option[value="no_reviewers"]');
     var cntPending = document.getElementById('cntPending');
     var cntExecutedToday = document.getElementById('cntExecutedToday');
 
@@ -207,6 +219,81 @@
     function hasCredentialWarning(row) {
         return Array.isArray(row && row.credential_warnings) && row.credential_warnings.length > 0;
     }
+
+    // Task #513: refresh the inline counts shown next to each option of the
+    // "Review" filter dropdown ("Unreviewed by me (N)" / "No reviewer yet (M)").
+    // We send the same Status / Risk / mine query params as the LIST request
+    // so the numbers stay coherent with the visible queue. Soft-fail: on
+    // error we drop the suffix rather than render a stale count.
+    function _baseLabel(opt) {
+        // Prefer the live i18n key (re-translates after applyToDOM); fall
+        // back to the static data-base-label so the dropdown still reads
+        // sensibly if i18n is unavailable.
+        var key = opt.getAttribute('data-base-i18n') || opt.getAttribute('data-i18n');
+        var fallback = opt.getAttribute('data-base-label') || opt.textContent;
+        if (key && window.WalaPlusI18n) {
+            var translated = WalaPlusI18n.t(key);
+            // The `t()` helper returns the key itself when no translation
+            // exists; treat that as "no translation" and use the fallback.
+            if (translated && translated !== key) return translated;
+        }
+        return fallback;
+    }
+    function _formatNumber(n) {
+        if (window.WalaPlusI18n && typeof WalaPlusI18n.formatNumber === 'function') {
+            try { return WalaPlusI18n.formatNumber(n); } catch (_) { /* fall through */ }
+        }
+        return String(n);
+    }
+    function _setOptionCount(opt, n) {
+        if (!opt) return;
+        var base = _baseLabel(opt);
+        if (n == null) {
+            opt.textContent = base;
+        } else {
+            opt.textContent = base + ' (' + _formatNumber(n) + ')';
+        }
+    }
+    // Cache the most recent counts so we can re-render the option labels
+    // when i18n becomes ready (translations swap in) or the user toggles
+    // language. Without this, a slow-network race where applyToDOM() runs
+    // AFTER our first count fetch would have left the labels in their
+    // English fallback wording.
+    var lastReviewCounts = { unreviewed_by_me: null, no_reviewers: null };
+
+    function _applyReviewLabels() {
+        _setOptionCount(optUnreviewedByMe, lastReviewCounts.unreviewed_by_me);
+        _setOptionCount(optNoReviewers, lastReviewCounts.no_reviewers);
+    }
+
+    function refreshReviewStatusCounts() {
+        var p = new URLSearchParams();
+        p.set('status', fltStatus.value);
+        if (fltRisk.value) p.set('risk_level', fltRisk.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        fetch('/api/ai/approvals/review-status-counts?' + p.toString(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastReviewCounts.unreviewed_by_me =
+                    typeof data.unreviewed_by_me === 'number' ? data.unreviewed_by_me : 0;
+                lastReviewCounts.no_reviewers =
+                    typeof data.no_reviewers === 'number' ? data.no_reviewers : 0;
+                _applyReviewLabels();
+            })
+            .catch(function () {
+                // Soft-fail: drop the suffix so the operator never sees a
+                // stale or misleading count.
+                lastReviewCounts.unreviewed_by_me = null;
+                lastReviewCounts.no_reviewers = null;
+                _applyReviewLabels();
+            });
+    }
+
+    // Re-apply our labels once i18n finishes its initial load — covers the
+    // race where the count fetch resolves BEFORE applyToDOM() runs and the
+    // sibling "Any" option still owns its data-i18n key. We also re-translate
+    // the base label from the i18n key when this fires.
+    document.addEventListener('walaPlusI18nReady', _applyReviewLabels);
 
     // The credential-warning badge always reflects the GLOBAL pending queue —
     // not whatever subset the operator has currently filtered to. We hit a
@@ -724,6 +811,7 @@
                 renderRows(lastRows);
                 updateSummary(lastRows);
                 refreshGlobalCredentialBadge();
+                refreshReviewStatusCounts();
             })
             .catch(function (err) {
                 lastRows = [];
@@ -731,6 +819,7 @@
                     (err && err.statusText ? escapeHtml(err.statusText) : '') + '</div>';
                 updateSummary(lastRows);
                 refreshGlobalCredentialBadge();
+                refreshReviewStatusCounts();
             });
     }
 
