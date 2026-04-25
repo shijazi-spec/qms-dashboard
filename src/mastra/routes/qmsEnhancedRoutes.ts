@@ -1,7 +1,7 @@
 import type { Pool as PgPool } from 'pg';
 import { streamCsv, stageStreamingExportFromHono } from "../../utils/excelExport";
 import { escapeCSVValue } from "../../utils/inputSanitizer";
-import { gateApiRoute, requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import { gateApiRoute, requireRole, forbiddenResponse, QMS_ROLES } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 
 const QMS_GOVERNANCE_READ: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'];
@@ -76,6 +76,7 @@ const evidenceRoutes = [
   {
     path: "/api/evidence",
     method: "POST" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -110,6 +111,7 @@ const evidenceRoutes = [
   {
     path: "/api/evidence/:id",
     method: "DELETE" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -166,6 +168,7 @@ const evidenceRoutes = [
   {
     path: "/api/qms/capa/:id",
     method: "PATCH" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -954,6 +957,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/nc/bulk-update",
     method: "POST" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -985,6 +989,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/capa/bulk-update",
     method: "POST" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -1016,6 +1021,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/nc/:id/history",
     method: "GET" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -1034,6 +1040,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/capa/:id/history",
     method: "GET" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -1052,6 +1059,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/nc/:id/approve-closure",
     method: "POST" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -1078,6 +1086,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/capa/:id/effectiveness",
     method: "POST" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {
@@ -1134,6 +1143,7 @@ const _qmsEnhancedRoutesRaw = [
   {
     path: "/api/qms/capa/:id/approve-closure",
     method: "POST" as const,
+    roles: QMS_ROLES,
     createHandler: async () => {
       return async (c: any) => {
         try {

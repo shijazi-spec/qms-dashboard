@@ -214,30 +214,25 @@ export function requireAuthOrKey(c: any): SessionUser | null {
 }
 
 /**
- * Wraps a route definition's `createHandler` with a per-handler
- * `requireAuthOrKey` gate so unauthenticated callers always receive a 401
- * — even when the global middleware in `src/mastra/middleware/index.ts`
- * is not in front of the handler (e.g. when the handler is invoked
- * directly from an integration test via tests/_helpers/fakeContext.ts).
- *
- * Routes whose path does not start with `/api/` are returned untouched —
- * static page handlers (`/projects`, `/onboarding`, etc.) fall through
- * to the page-auth middleware which redirects to `/login` rather than
- * returning a JSON 401.
- *
- * Inner role checks (e.g. `requireAdminOrKey` on XLSX export endpoints)
- * still execute for authenticated callers, so admin-only routes remain
- * admin-only.
+ * QMS roles that may perform write actions and access sensitive history/approval
+ * endpoints.  Mirrors the role set used by risk read endpoints.
  */
-export function gateApiRoute<T extends { path: string; createHandler: (deps: any) => any | Promise<any> }>(route: T): T {
+export const QMS_ROLES: UserRole[] = ['admin', 'quality_manager', 'head_of_operations_quality', 'grc_manager'];
+
+export function gateApiRoute<T extends { path: string; roles?: UserRole[]; createHandler: (deps: any) => any | Promise<any> }>(route: T): T {
   if (!route.path.startsWith('/api/')) return route;
   const originalCreate = route.createHandler;
+  const allowedRoles = route.roles;
   return {
     ...route,
     createHandler: async (deps: any) => {
       const inner = await originalCreate(deps);
       return async (c: any) => {
-        if (!requireAuthOrKey(c)) return unauthorizedResponse(c);
+        const user = requireAuthOrKey(c);
+        if (!user) return unauthorizedResponse(c);
+        if (allowedRoles && !allowedRoles.includes(user.role as UserRole)) {
+          return forbiddenResponse(c);
+        }
         return inner(c);
       };
     },
