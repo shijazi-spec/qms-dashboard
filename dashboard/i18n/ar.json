@@ -385,7 +385,12 @@
     "alert_acknowledge": "إقرار",
     "alert_resolve": "حل",
     "alert_dismiss": "رفض",
-    "alert_ask_ai": "اسأل الذكاء الاصطناعي"
+    "alert_ask_ai": "اسأل الذكاء الاصطناعي",
+    "alert_filter_resolution_all": "جميع طرق الإغلاق",
+    "alert_filter_resolution_manual": "مُغلق يدوياً",
+    "alert_filter_resolution_auto": "حُلّ تلقائياً",
+    "alert_badge_auto_resolved": "حُلّ تلقائياً",
+    "alert_badge_manual_resolved": "حُلّ يدوياً"
   },
   "notifications": {
     "title": "الإشعارات",

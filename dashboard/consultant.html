@@ -377,6 +377,23 @@
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                     </select>
+                    <!--
+                      Resolution-source filter.
+
+                      The prompt-regression and tool-health crons silently
+                      auto-resolve their own alerts once the underlying
+                      condition recovers. Without a way to filter those out
+                      reviewers can't tell which "resolved" rows reflect a
+                      real human triage and which were just the system
+                      cleaning up after itself. Auto-resolved rows are
+                      detected by `resolution_note` starting with
+                      "auto-resolved" — both crons use that prefix.
+                    -->
+                    <select id="alertFilterResolution" aria-label="Filter by resolution source" data-on-change="loadAllAlerts" class="text-xs border border-gray-300 rounded-lg px-2 py-1" data-testid="select-alert-resolution-filter">
+                        <option value="" data-i18n="consultant.alert_filter_resolution_all">All Resolutions</option>
+                        <option value="manual" data-i18n="consultant.alert_filter_resolution_manual">Manually closed</option>
+                        <option value="auto" data-i18n="consultant.alert_filter_resolution_auto">Auto-resolved</option>
+                    </select>
                     <button data-on-click="addClass" data-args='["allAlertsModal","hidden"]' class="text-gray-400 hover:text-gray-600" aria-label="Close alerts">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
@@ -1262,12 +1279,26 @@
             loadAllAlerts();
         };
 
+        // An alert is "auto-resolved" when the recovery cron closed it on
+        // the system's behalf rather than a human clicking Resolve. Both
+        // the prompt-regression and tool-health crons stamp the
+        // resolution_note with an "auto-resolved" prefix when they do so;
+        // we centralize the detection here so the badge, filter, and any
+        // future surfaces stay in sync.
+        function isAutoResolved(a) {
+            if (!a || a.status !== 'resolved') return false;
+            var note = (a.resolution_note || '').toString().trim().toLowerCase();
+            return note.indexOf('auto-resolved') === 0;
+        }
+
         window.loadAllAlerts = async function() {
             var content = document.getElementById('allAlertsContent');
             content.innerHTML = '<div class="text-center text-gray-600 py-8">Loading...</div>';
             try {
                 var status = document.getElementById('alertFilterStatus').value;
                 var severity = document.getElementById('alertFilterSeverity').value;
+                var resolutionEl = document.getElementById('alertFilterResolution');
+                var resolutionFilter = resolutionEl ? resolutionEl.value : '';
                 var url = '/api/consultant/alerts?limit=50';
                 if (status) url += '&status=' + status;
                 if (severity) url += '&severity=' + severity;
@@ -1275,10 +1306,34 @@
                 var data = await res.json();
                 var alerts = data.alerts || [];
 
+                // Apply the auto-vs-manual filter client-side. The API
+                // doesn't (yet) expose this distinction as a query param —
+                // it's a label derived from `resolution_note`. Filtering
+                // here keeps the wire contract unchanged.
+                if (resolutionFilter === 'auto') {
+                    alerts = alerts.filter(isAutoResolved);
+                } else if (resolutionFilter === 'manual') {
+                    // Manually-closed = resolved or dismissed by a human.
+                    // Dismissed alerts are always manual (cron auto-resolve
+                    // never dismisses), so include them too. Open and
+                    // acknowledged rows are excluded because the
+                    // auto/manual distinction only makes sense for closed
+                    // alerts.
+                    alerts = alerts.filter(function(a) {
+                        if (a.status === 'dismissed') return true;
+                        if (a.status === 'resolved') return !isAutoResolved(a);
+                        return false;
+                    });
+                }
+
                 if (!alerts.length) {
                     content.innerHTML = '<div class="text-center text-gray-600 py-8">No alerts match the selected filters</div>';
                     return;
                 }
+
+                var i18n = window.WalaPlusI18n;
+                var autoLabel = i18n ? i18n.t('consultant.alert_badge_auto_resolved') : 'Auto-resolved';
+                var manualLabel = i18n ? i18n.t('consultant.alert_badge_manual_resolved') : 'Manually resolved';
 
                 content.innerHTML = alerts.map(function(a) {
                     var icon = severityIcons[a.severity] || severityIcons.info;
@@ -1286,14 +1341,51 @@
                         open: 'bg-yellow-100 text-yellow-700', acknowledged: 'bg-blue-100 text-blue-700',
                         resolved: 'bg-green-100 text-green-700', dismissed: 'bg-gray-100 text-gray-500'
                     }[a.status] || 'bg-gray-100 text-gray-500';
-                    return '<div class="border border-gray-200 rounded-lg p-3 mb-2 hover:shadow-sm transition">' +
+
+                    // Resolution-source badge — only meaningful for resolved
+                    // alerts. Auto-resolved gets a distinct purple pill so
+                    // it stands out from the green "resolved" status pill.
+                    var resolutionBadge = '';
+                    if (a.status === 'resolved') {
+                        var auto = isAutoResolved(a);
+                        var pillCls = auto
+                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                        var pillText = auto ? autoLabel : manualLabel;
+                        var pillTip = a.resolution_note
+                            ? escAttr(a.resolution_note)
+                            : (auto ? escAttr('Closed automatically by the recovery cron.')
+                                    : escAttr('Closed by an operator.'));
+                        resolutionBadge =
+                            '<span class="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + pillCls + '" ' +
+                                'title="' + pillTip + '" ' +
+                                'data-testid="badge-resolution-' + (auto ? 'auto' : 'manual') + '-' + Number(a.id) + '">' +
+                                escapeHtml(pillText) +
+                            '</span>';
+                    }
+
+                    // Inline resolution-note line — shown for any closed
+                    // alert that has a note. Helps reviewers see WHY the
+                    // alert was closed without having to hover the badge.
+                    var noteLine = '';
+                    if (a.resolution_note && (a.status === 'resolved' || a.status === 'dismissed')) {
+                        noteLine =
+                            '<p class="text-[11px] text-gray-500 italic mt-1" ' +
+                                'data-testid="text-resolution-note-' + Number(a.id) + '">' +
+                                escapeHtml(a.resolution_note) +
+                            '</p>';
+                    }
+
+                    return '<div class="border border-gray-200 rounded-lg p-3 mb-2 hover:shadow-sm transition" data-testid="card-alert-' + Number(a.id) + '">' +
                         '<div class="flex items-start gap-2">' + icon +
                         '<div class="flex-1 min-w-0">' +
-                            '<div class="flex items-center gap-2 mb-1">' +
+                            '<div class="flex items-center gap-2 mb-1 flex-wrap">' +
                                 '<span class="text-sm font-medium text-gray-800 truncate">' + escapeHtml(a.title) + '</span>' +
                                 '<span class="text-[10px] px-1.5 py-0.5 rounded-full ' + statusBadge + ' shrink-0">' + escapeHtml(a.status) + '</span>' +
+                                resolutionBadge +
                             '</div>' +
                             '<p class="text-xs text-gray-500 line-clamp-2">' + escapeHtml(a.description || '') + '</p>' +
+                            noteLine +
                             '<div class="flex items-center gap-2 mt-2">' +
                                 '<span class="text-[10px] text-gray-400">' + timeAgo(a.created_at) + '</span>' +
                                 (a.status === 'open' ? '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200" data-on-click="alertAction,loadAllAlerts" data-args="' + escAttr(JSON.stringify([[a.id, 'acknowledge'], []])) + '">Acknowledge</button>' +

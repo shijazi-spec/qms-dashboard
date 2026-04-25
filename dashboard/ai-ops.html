@@ -761,12 +761,40 @@
           resolved:     'bg-green-100 text-green-800',
         };
         const REASON_LABEL = { error_rate: 'Error rate', p95_latency: 'p95 latency' };
+        // The tool-health auto-resolve sweep stamps `resolution_note` with
+        // an "auto-resolved" prefix when it closes an alert. Surface that
+        // distinction so reviewers can tell which entries were closed by
+        // the system vs by an operator clicking Resolve.
+        const isAutoResolvedHistory = (a) => {
+          if (!a || a.status !== 'resolved') return false;
+          const note = String(a.resolution_note || '').trim().toLowerCase();
+          return note.indexOf('auto-resolved') === 0;
+        };
         list.innerHTML = alerts.map(a => {
           const sevClass   = SEVERITY_BADGE[a.severity] || SEVERITY_BADGE.info;
           const statusCls  = STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-700';
           const reasonText = REASON_LABEL[a.reason] || 'Tool health';
           const when       = a.triaged_at ? fmtDate(a.triaged_at) : (a.created_at ? fmtDate(a.created_at) : '—');
-          const who        = a.acknowledged_by ? esc(a.acknowledged_by) : '<span class="italic text-gray-400">system</span>';
+          const auto       = isAutoResolvedHistory(a);
+          // For auto-resolved rows the operator field is meaningless
+          // (`acknowledged_by` is left null by the cron). Show "system"
+          // explicitly so the column doesn't read as an unknown human.
+          const who        = auto
+            ? '<span class="italic text-gray-400" data-testid="text-history-who-system-' + a.id + '">system (auto)</span>'
+            : (a.acknowledged_by ? esc(a.acknowledged_by) : '<span class="italic text-gray-400">system</span>');
+          // Resolution-source pill — only meaningful for resolved rows.
+          // Auto-resolved gets a distinct purple pill so it doesn't blur
+          // into the green status badge.
+          const resolutionPill = a.status === 'resolved'
+            ? (auto
+                ? `<span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200" title="${esc(a.resolution_note || 'Closed automatically by the recovery cron.')}" data-testid="badge-history-auto-${a.id}">Auto-resolved</span>`
+                : `<span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" title="${esc(a.resolution_note || 'Closed by an operator.')}" data-testid="badge-history-manual-${a.id}">Manual</span>`)
+            : '';
+          // Inline resolution note — small italic line so reviewers can
+          // see WHY an alert was closed without hovering the badge.
+          const noteLine = a.resolution_note
+            ? `<p class="text-[11px] text-gray-500 italic mt-1" data-testid="text-history-note-${a.id}">${esc(a.resolution_note)}</p>`
+            : '';
           return `
           <div class="bg-white border border-gray-200 rounded-lg p-3" data-testid="card-tool-health-history-${a.id}">
             <div class="flex items-start gap-3 flex-wrap">
@@ -774,10 +802,12 @@
                 <div class="flex items-center gap-2 mb-1 flex-wrap">
                   <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${sevClass}" data-testid="badge-history-severity-${a.id}">${esc(a.severity)}</span>
                   <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${statusCls}" data-testid="badge-history-status-${a.id}">${esc(a.status)}</span>
+                  ${resolutionPill}
                   <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500" data-testid="text-history-reason-${a.id}">${esc(reasonText)}</span>
                   ${a.tool_name ? `<code class="text-xs font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded" data-testid="text-history-tool-${a.id}">${esc(a.tool_name)}</code>` : ''}
                 </div>
                 <p class="text-sm font-semibold text-gray-900 truncate" data-testid="text-history-title-${a.id}">${esc(a.title)}</p>
+                ${noteLine}
               </div>
               <div class="shrink-0 text-right text-xs text-gray-500 whitespace-nowrap">
                 <p data-testid="text-history-when-${a.id}">${when}</p>

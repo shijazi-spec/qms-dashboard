@@ -630,6 +630,11 @@ export const aiOpsRoutes = [
               acknowledged_by: a.acknowledged_by ?? null,
               triaged_at: triagedAt,
               created_at: a.created_at,
+              // resolution_note powers the "Auto-resolved" vs "Manual"
+              // pill and the inline note line in the history list. Both
+              // tool-health and prompt-regression auto-resolve sweeps
+              // stamp this with an "auto-resolved" prefix.
+              resolution_note: a.resolution_note ?? null,
             };
           });
           return c.json({ data, days });
