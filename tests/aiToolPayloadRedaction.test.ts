@@ -87,6 +87,110 @@ async function main(): Promise<void> {
     'custom maxLen is honored',
   );
 
+  // ─── Richer secret fixtures — same set used by aiApprovalRedaction.test.ts ──
+  // These cover credential patterns that the basic PII_PATTERNS regex pass
+  // does not catch on its own. They are caught by the redactSensitiveDeep /
+  // redactSecretLikeStrings layer added to redactToolPayloadPreview().
+  console.log('\nredactToolPayloadPreview() — richer secret fixtures:');
+
+  const OPENAI_KEY = 'sk-live-NEVER_PERSIST_ME_1234567890abcdefghijklmnop';
+  const GH_PAT = 'ghp_topsecretrefreshtokenabcdefghijklmnoXYZ';
+  const BCRYPT_HASH = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
+  const JWT =
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+  const AWS_KEY = 'AKIAIOSFODNN7EXAMPLE';
+
+  // OpenAI key as a plain string
+  const openAiStr = redactToolPayloadPreview(OPENAI_KEY);
+  assert(
+    !!openAiStr && !openAiStr.includes(OPENAI_KEY),
+    'OpenAI sk-… key in plain string is redacted',
+  );
+
+  // GitHub PAT as a plain string
+  const ghPatStr = redactToolPayloadPreview(GH_PAT);
+  assert(
+    !!ghPatStr && !ghPatStr.includes(GH_PAT),
+    'GitHub ghp_… PAT in plain string is redacted',
+  );
+
+  // bcrypt hash as a plain string
+  const bcryptStr = redactToolPayloadPreview(BCRYPT_HASH);
+  assert(
+    !!bcryptStr && !bcryptStr.includes('$2b$12$'),
+    'bcrypt hash in plain string is redacted',
+  );
+
+  // JWT as a plain string
+  const jwtStr = redactToolPayloadPreview(JWT);
+  assert(
+    !!jwtStr && !jwtStr.includes('eyJhbGciOiJIUzI1NiJ9'),
+    'JWT in plain string is redacted',
+  );
+
+  // AWS Access Key ID as a plain string
+  const awsStr = redactToolPayloadPreview(AWS_KEY);
+  assert(
+    !!awsStr && !awsStr.includes(AWS_KEY),
+    'AWS AKIA… access key in plain string is redacted',
+  );
+
+  // OpenAI key nested inside an object under a key-name-neutral field
+  const nestedOpenAi = redactToolPayloadPreview({
+    config: { api_key: OPENAI_KEY, region: 'us-east-1' },
+  });
+  assert(
+    !!nestedOpenAi && !nestedOpenAi.includes(OPENAI_KEY),
+    'OpenAI sk-… key nested under api_key object field is redacted',
+  );
+
+  // GitHub PAT nested inside Authorization header value
+  const nestedBearer = redactToolPayloadPreview({
+    headers: { Authorization: `Bearer ${GH_PAT}`, 'Content-Type': 'application/json' },
+  });
+  assert(
+    !!nestedBearer && !nestedBearer.includes(GH_PAT),
+    'GitHub ghp_… PAT nested under Authorization header field is redacted',
+  );
+
+  // bcrypt hash inside a nested field called password_hash
+  const nestedBcrypt = redactToolPayloadPreview({
+    user: { email: 'alice@example.com', password_hash: BCRYPT_HASH },
+  });
+  assert(
+    !!nestedBcrypt && !nestedBcrypt.includes('$2b$12$'),
+    'bcrypt hash nested under password_hash field is redacted',
+  );
+
+  // JWT inside a free-form string payload (error message style)
+  const jwtInMsg = redactToolPayloadPreview(
+    `Authentication failed — received token ${JWT} which is now expired`,
+  );
+  assert(
+    !!jwtInMsg && !jwtInMsg.includes('eyJhbGciOiJIUzI1NiJ9'),
+    'JWT embedded in free-form error string is redacted',
+  );
+
+  // AWS key in a value under an innocuous key name ("id")
+  const awsInObject = redactToolPayloadPreview({ result: { id: AWS_KEY, region: 'us-east-1' } });
+  assert(
+    !!awsInObject && !awsInObject.includes(AWS_KEY),
+    'AWS AKIA… key embedded in object value is redacted',
+  );
+
+  // Safe non-secret fields must survive
+  const safeSurvives = redactToolPayloadPreview({
+    action: 'rotate_key',
+    target: 'zoho_books',
+    reason: 'Scheduled quarterly rotation',
+  });
+  assert(
+    !!safeSurvives &&
+      safeSurvives.includes('zoho_books') &&
+      safeSurvives.includes('Scheduled quarterly rotation'),
+    'non-sensitive fields are preserved through deep redaction',
+  );
+
   // ─── Structural sanity check on wrapToolWithTelemetry ─────────────────
   // We can't easily intercept the fire-and-forget insertAiCallMetric in
   // ESM, but we can verify the wrapper preserves the contract: returns

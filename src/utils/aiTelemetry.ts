@@ -32,6 +32,7 @@ import pg from 'pg';
 const { Pool } = pg;
 import { createHash } from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { redactSensitiveDeep, redactSecretLikeStrings } from './eventLogsDatabase';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -75,19 +76,28 @@ export function redactPromptPreview(prompt: string, maxLen = 300): string {
 
 /**
  * Stringify-and-redact arbitrary tool input/output payloads for the
- * `tool_input_preview` / `tool_output_preview` columns. Reuses the same
- * PII rules as redactPromptPreview() so secrets, emails, phone numbers
- * and card numbers never reach `ai_call_metrics`. Returns undefined for
- * null/undefined so we don't store an empty string.
+ * `tool_input_preview` / `tool_output_preview` columns.
+ *
+ * Applies two layers of protection before the final PII_PATTERNS pass:
+ *   1. For object payloads — `redactSensitiveDeep()` from eventLogsDatabase,
+ *      which covers key-based deny list (api_key, authorization, password …)
+ *      AND regex patterns (sk-…, ghp_…, JWTs, bcrypt hashes, AWS keys, etc.).
+ *   2. For string payloads — `redactSecretLikeStrings()` which applies the
+ *      same regex deny list to free-form text (e.g. error messages).
+ *   3. Finally, `redactPromptPreview()` applies the PII_PATTERNS (emails,
+ *      phones, cards, generic `token=…` / `key=…` patterns) and caps length.
+ *
+ * Returns undefined for null/undefined so we don't store an empty string.
  */
 export function redactToolPayloadPreview(payload: unknown, maxLen = 300): string | undefined {
   if (payload === undefined || payload === null) return undefined;
   let asString: string;
   if (typeof payload === 'string') {
-    asString = payload;
+    asString = String(redactSecretLikeStrings(payload));
   } else {
     try {
-      asString = JSON.stringify(payload);
+      const deepRedacted = redactSensitiveDeep(payload);
+      asString = JSON.stringify(deepRedacted);
     } catch {
       asString = String(payload);
     }
