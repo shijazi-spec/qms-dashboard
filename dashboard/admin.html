@@ -699,12 +699,24 @@
 
                     <!-- 24h spike summary card -->
                     <div class="mb-6 border rounded-xl overflow-hidden">
+                        <!-- Threshold-breach banner (Task #282) — shown only when total429 >= alertThreshold -->
+                        <div
+                            id="spike24h-alert-banner"
+                            data-testid="banner-spike24h-alert"
+                            class="hidden px-4 py-3 bg-red-50 border-b border-red-200 text-sm text-red-800 flex items-start gap-2"
+                            role="alert">
+                            <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
+                            <div>
+                                <p class="font-semibold" id="spike24h-alert-title" data-testid="text-spike24h-alert-title">24h spike threshold exceeded</p>
+                                <p class="text-xs mt-0.5" id="spike24h-alert-detail" data-testid="text-spike24h-alert-detail">Ops have been notified.</p>
+                            </div>
+                        </div>
                         <div class="flex items-center justify-between px-4 py-3 bg-amber-50 border-b border-amber-100">
                             <div class="flex items-center gap-2">
                                 <span id="spike24h-badge" data-testid="badge-spike24h" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">24h Spike</span>
                                 <h3 class="text-sm font-semibold text-gray-700">Last 24 h — rate-limit spike summary</h3>
                             </div>
-                            <p class="text-xs text-gray-500">From <code class="text-xs">system_events</code> audit rows</p>
+                            <p class="text-xs text-gray-500" id="spike24h-threshold-hint" data-testid="text-spike24h-threshold-hint">From <code class="text-xs">system_events</code> audit rows</p>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-white">
                             <div class="bg-gray-50 rounded-lg p-4 border">
@@ -2317,15 +2329,43 @@
                 }
 
                 // 24h spike summary card
-                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [] };
+                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], alertThreshold: 0, alertActive: false };
                 document.getElementById("spike24h-total").textContent = String(spike.total429 ?? 0);
                 document.getElementById("spike24h-suppressed").textContent = String(spike.totalSuppressed ?? 0);
 
+                // Threshold-breach banner (Task #282) — surfaces the same
+                // condition that the rate-limit-429-spike-alert cron pages
+                // ops on, so dashboard viewers see the alert state in real
+                // time even before the next cron tick fires.
+                const banner = document.getElementById("spike24h-alert-banner");
+                const bannerDetail = document.getElementById("spike24h-alert-detail");
+                const thresholdHint = document.getElementById("spike24h-threshold-hint");
+                const threshold = Number(spike.alertThreshold ?? 0);
+                if (spike.alertActive) {
+                    banner.classList.remove("hidden");
+                    bannerDetail.textContent = _t('dyn.admin.spike_24h_alert_detail', {
+                        total: String(spike.total429 ?? 0),
+                        threshold: String(threshold),
+                    });
+                } else {
+                    banner.classList.add("hidden");
+                }
+                if (threshold > 0) {
+                    thresholdHint.textContent = _t('dyn.admin.spike_24h_threshold_hint', {
+                        threshold: String(threshold),
+                    });
+                } else {
+                    thresholdHint.textContent = _t('dyn.admin.spike_24h_threshold_disabled');
+                }
+
                 // Colour the badge red when the 24h total is non-zero
                 const badge = document.getElementById("spike24h-badge");
-                if (spike.total429 > 0) {
+                if (spike.alertActive) {
                     badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200";
                     badge.textContent = _t('dyn.admin.spike_24h_alert');
+                } else if (spike.total429 > 0) {
+                    badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200";
+                    badge.textContent = _t('dyn.admin.spike_24h_warn');
                 } else {
                     badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200";
                     badge.textContent = _t('dyn.admin.spike_24h_ok');

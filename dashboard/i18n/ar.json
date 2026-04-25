@@ -1579,8 +1579,12 @@
       "select_gov_doc_placeholder": "اختر وثيقة الحوكمة...",
       "label_active": "نشط",
       "window_started_at": "بدأت النافذة في ",
-      "spike_24h_alert": "ارتفاع 24س ⚠",
+      "spike_24h_alert": "ارتفاع 24س ⚠ تجاوز العتبة",
+      "spike_24h_warn": "ارتفاع 24س ⚠",
       "spike_24h_ok": "ارتفاع 24س ✔",
+      "spike_24h_alert_detail": "{total} حدث 429 خلال آخر 24 ساعة تجاوز عتبة التنبيه المُعدّة ({threshold}). تم إخطار فريق العمليات عبر system_event (وSlack/البريد إن كانا مُعدّين).",
+      "spike_24h_threshold_hint": "ينبّه عندما يتجاوز الإجمالي {threshold} خلال 24 ساعة",
+      "spike_24h_threshold_disabled": "تنبيه الارتفاع معطّل (اضبط RATE_LIMIT_429_24H_ALERT_THRESHOLD)",
       "updated_at": "تم التحديث في ",
       "db_unreachable": "قاعدة البيانات غير متاحة: "
     },

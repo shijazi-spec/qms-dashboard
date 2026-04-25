@@ -1579,8 +1579,12 @@
       "select_gov_doc_placeholder": "Select governance document...",
       "label_active": "Active",
       "window_started_at": "Window started at ",
-      "spike_24h_alert": "24h Spike ⚠",
+      "spike_24h_alert": "24h Spike ⚠ Threshold",
+      "spike_24h_warn": "24h Spike ⚠",
       "spike_24h_ok": "24h Spike ✔",
+      "spike_24h_alert_detail": "{total} 429 events in the last 24h crossed the configured alert threshold ({threshold}). Ops have been notified via system_event (and Slack/email if configured).",
+      "spike_24h_threshold_hint": "Alerts when total >= {threshold} in 24h",
+      "spike_24h_threshold_disabled": "Spike alert disabled (set RATE_LIMIT_429_24H_ALERT_THRESHOLD)",
       "updated_at": "Updated at ",
       "db_unreachable": "DB unreachable: "
     },

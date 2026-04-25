@@ -231,6 +231,19 @@ export interface RateLimitSpike24h {
   total429: number;
   totalSuppressed: number;
   topIps: RateLimitSpike24hIp[];
+  /**
+   * Effective alert threshold (from RATE_LIMIT_429_24H_ALERT_THRESHOLD,
+   * default 500). `0` means the alert is disabled. Surfaced so the
+   * dashboard can render "Alert at >= N events" hint copy.
+   */
+  alertThreshold: number;
+  /**
+   * True when `total429 >= alertThreshold` AND the threshold is enabled
+   * (`> 0`). Mirrors what the cron in
+   * `src/utils/rateLimit429SpikeAlert.ts` will alert on, so the UI banner
+   * and the system notification stay in lockstep.
+   */
+  alertActive: boolean;
 }
 
 export interface RateLimitStats {
@@ -366,10 +379,17 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
             WHERE event_type = 'rate_limit_429'
               AND created_at > NOW() - INTERVAL '24 hours'`,
         );
+        const total429 = parseInt(totRow.rows[0]?.total ?? '0', 10);
+        // Annotate with the alert evaluation so the dashboard banner and
+        // the cron's system_event alert use the same source of truth.
+        const { evaluateRateLimit24hSpikeAlert } = await import('./rateLimit429SpikeAlert');
+        const evalResult = evaluateRateLimit24hSpikeAlert(total429);
         return {
-          total429: parseInt(totRow.rows[0]?.total ?? '0', 10),
+          total429,
           totalSuppressed: parseInt(totRow.rows[0]?.suppressed ?? '0', 10),
           topIps: partial.topIps,
+          alertThreshold: evalResult.threshold,
+          alertActive: evalResult.active,
         };
       })
       .catch((err: Error) => {
@@ -377,7 +397,13 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           { err: err.message, component: 'rateLimiter' },
           '24h spike query failed in getRateLimitStats — skipping spike24h',
         );
-        return { total429: 0, totalSuppressed: 0, topIps: [] };
+        return {
+          total429: 0,
+          totalSuppressed: 0,
+          topIps: [],
+          alertThreshold: 0,
+          alertActive: false,
+        };
       });
 
     // Rolling 1-minute window aggregated by key.

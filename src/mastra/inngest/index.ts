@@ -783,6 +783,28 @@ const rateLimit429EventsPrunerFunction = inngest.createFunction(
 );
 inngestFunctions.push(rateLimit429EventsPrunerFunction);
 
+// 24h rate-limit 429 spike alert cron (Task #282) — checks the rolling-24h
+// `rate_limit_429` event count against `RATE_LIMIT_429_24H_ALERT_THRESHOLD`
+// (default 500) every hour and writes a `rate_limit_429_spike_alert`
+// `system_event` (plus optional Slack/email page) when the threshold is
+// crossed. Repeat-suppression window is `RATE_LIMIT_429_24H_ALERT_REPEAT_HOURS`
+// (default 6h) so an ongoing spike does not page on every tick.
+const rateLimit429SpikeAlertFunction = inngest.createFunction(
+  { id: "rate-limit-429-spike-alert" },
+  { cron: process.env.RATE_LIMIT_429_24H_ALERT_CRON || "15 * * * *" },
+  async ({ step }) => {
+    return await step.run("check-rate-limit-429-spike", async () => {
+      const { runRateLimit429SpikeAlertCheck } = await import(
+        "../../utils/rateLimit429SpikeAlert"
+      );
+      const result = await runRateLimit429SpikeAlertCheck();
+      console.log(`[RateLimit429SpikeAlert] Cron run complete:`, result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(rateLimit429SpikeAlertFunction);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Per-tool health alert cron — defined in workflows/toolHealthAlertsCron.ts
 // (kept there so all the threshold config + evaluation logic live together).
