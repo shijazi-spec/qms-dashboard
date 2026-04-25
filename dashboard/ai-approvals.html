@@ -22,6 +22,36 @@
         .status-expired  { background: #f3f4f6; color: #6b7280; }
         .prose-compact { font-size: 0.8125rem; line-height: 1.35; }
         .prose-compact p { margin: 0.2rem 0; }
+
+        /* Detail modal — scoped to this page so we don't depend on a global
+           dialog stylesheet. Uses fixed positioning + a translucent backdrop;
+           the inner card scrolls when the viewer history is long. */
+        #actionDetailModal {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+            padding: 1rem;
+        }
+        #actionDetailModal.hidden { display: none; }
+        .detail-modal-box {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+            max-width: 720px;
+            width: 100%;
+            max-height: calc(100vh - 2rem);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .detail-modal-body { overflow-y: auto; padding: 1rem 1.25rem 1.25rem; }
+        .viewer-avatar {
+            width: 2rem; height: 2rem;
+            border-radius: 9999px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 600; color: white;
+            flex-shrink: 0;
+        }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -119,6 +149,43 @@
             <div class="text-center text-gray-500 text-sm py-10">Loading…</div>
         </div>
     </main>
+
+    <!--
+      Action Detail Modal (Task #297)
+      ---------------------------------------------------------------------
+      Opens when an operator clicks "Details" on a queue card. Surfaces the
+      action metadata plus the full prior_viewers list (with timestamps and
+      per-user view counts) returned by GET /api/ai/approvals/:code, so the
+      detail view matches what auditors see in the audit trail. The summary
+      chips on the queue card are truncated to 5 viewers; this panel shows
+      every reviewer who has opened the action, ordered by most recent view.
+    -->
+    <div id="actionDetailModal" class="hidden" role="dialog" aria-modal="true"
+         aria-labelledby="actionDetailTitle" aria-describedby="actionDetailSummary"
+         tabindex="-1" data-testid="modal-action-detail">
+        <div class="detail-modal-box">
+            <div class="flex items-start justify-between gap-3 px-5 py-3 border-b border-gray-200">
+                <div class="min-w-0">
+                    <h2 id="actionDetailTitle" class="text-base font-semibold text-gray-900 truncate"
+                        data-testid="text-action-detail-title">AI action detail</h2>
+                    <p id="actionDetailSummary" class="text-xs text-gray-500 mt-0.5">
+                        Loading action details…
+                    </p>
+                </div>
+                <button id="actionDetailClose" type="button"
+                        aria-label="Close action detail dialog"
+                        data-testid="button-close-action-detail"
+                        class="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="actionDetailBody" class="detail-modal-body" data-testid="container-action-detail-body">
+                <div class="text-sm text-gray-500 py-6 text-center">Loading…</div>
+            </div>
+        </div>
+    </div>
 
 <script>
 (function () {
@@ -281,6 +348,15 @@
             actionsHtml = '<span class="text-xs text-gray-500">' + _td('dyn.ai_approvals.status', a.status) + '</span>';
         }
 
+        // Task #297: a "Details" link sits below the row's primary action
+        // buttons and opens the detail modal. We render it for every row
+        // (regardless of status) because the viewer history is interesting
+        // for executed/rejected actions too — auditors care who reviewed
+        // the action before it shipped, not only while it was pending.
+        actionsHtml += '<button type="button" data-code="' + a.action_code + '" data-act="details" ' +
+            'data-testid="button-details-' + escapeHtml(a.action_code) + '" ' +
+            'class="text-xs text-indigo-700 hover:text-indigo-900 underline mt-1">Details</button>';
+
         return (
             '<div class="bg-white border border-gray-200 rounded-lg p-3" data-code="' + a.action_code + '">' +
               '<div class="flex items-start justify-between gap-3">' +
@@ -309,6 +385,10 @@
             btn.addEventListener('click', function () {
                 var code = btn.getAttribute('data-code');
                 var act = btn.getAttribute('data-act');
+                if (act === 'details') {
+                    openDetailModal(code);
+                    return;
+                }
                 var row = listEl.querySelector('[data-code="' + code + '"]');
                 var actionsEl = row.querySelector('[data-actions]');
                 if (act === 'reject') {
@@ -319,6 +399,294 @@
                     postAction(code, 'approve', {}, actionsEl);
                 }
             });
+        });
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  Action Detail Modal (Task #297)
+     *
+     *  When the operator clicks "Details" on a queue card we fetch the
+     *  full record from GET /api/ai/approvals/:code and render an
+     *  accessible modal. The viewer history panel is the focus of this
+     *  task — the queue card only shows the first 5 viewers as truncated
+     *  chips, but auditors and reviewers need to see the complete list
+     *  with timestamps and per-user view counts.
+     *
+     *  Accessibility:
+     *    - role="dialog" + aria-modal="true" + aria-labelledby/describedby
+     *    - Escape key + backdrop click close the modal
+     *    - Focus moves into the modal on open and back to the trigger
+     *      element when it closes
+     *    - The viewer list is announced as a labelled region with an
+     *      aria-live polite update so SR users hear it after the fetch
+     * ---------------------------------------------------------------- */
+    var detailModal     = document.getElementById('actionDetailModal');
+    var detailTitle     = document.getElementById('actionDetailTitle');
+    var detailSummary   = document.getElementById('actionDetailSummary');
+    var detailBody      = document.getElementById('actionDetailBody');
+    var detailCloseBtn  = document.getElementById('actionDetailClose');
+    var detailLastFocus = null;
+    // Monotonically-increasing request id. Each openDetailModal() call
+    // bumps it; the response handler discards data whose id no longer
+    // matches the current one. Prevents a slow response from action A
+    // from overwriting the panel after the operator quickly opened
+    // action B (or closed the modal entirely).
+    var detailRequestId = 0;
+
+    function openDetailModal(code) {
+        detailLastFocus = document.activeElement;
+        var myRequestId = ++detailRequestId;
+        detailTitle.textContent = code;
+        detailSummary.textContent = _t('dyn.ai_approvals.loading');
+        detailBody.innerHTML = '<div class="text-sm text-gray-500 py-6 text-center" aria-live="polite">' +
+            _t('dyn.ai_approvals.loading') + '</div>';
+        detailModal.classList.remove('hidden');
+        // Defer focus to the next frame so screen readers register the
+        // dialog before we move focus inside it.
+        requestAnimationFrame(function () { detailCloseBtn.focus(); });
+
+        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                if (myRequestId !== detailRequestId) return;        // stale: superseded
+                if (detailModal.classList.contains('hidden')) return; // stale: closed
+                renderActionDetail(data);
+            })
+            .catch(function () {
+                if (myRequestId !== detailRequestId) return;
+                if (detailModal.classList.contains('hidden')) return;
+                detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
+                    _t('dyn.ai_approvals.failed_load') + '</div>';
+                detailSummary.textContent = '';
+            });
+    }
+
+    function closeDetailModal() {
+        if (detailModal.classList.contains('hidden')) return;
+        // Bumping the id invalidates any in-flight detail fetch so a late
+        // response won't paint into a closed dialog (or worse, the next
+        // dialog the operator opens for a different action).
+        detailRequestId++;
+        detailModal.classList.add('hidden');
+        detailBody.innerHTML = '';
+        if (detailLastFocus && typeof detailLastFocus.focus === 'function') {
+            try { detailLastFocus.focus(); } catch (_) { /* ignore */ }
+        }
+        detailLastFocus = null;
+    }
+
+    detailCloseBtn.addEventListener('click', closeDetailModal);
+    // Click on the backdrop (the modal element itself, not the inner box) closes the dialog.
+    detailModal.addEventListener('click', function (e) {
+        if (e.target === detailModal) closeDetailModal();
+    });
+
+    // Lightweight focus trap — when the dialog is open, a Tab from the
+    // last focusable element wraps to the first (and Shift+Tab from the
+    // first wraps to the last). Keeps keyboard focus inside the dialog
+    // for screen-reader and keyboard-only users without pulling in a
+    // heavyweight a11y dependency.
+    function focusableElementsInDialog() {
+        var nodes = detailModal.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]),' +
+            ' select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        return Array.prototype.filter.call(nodes, function (el) {
+            // Visible + not aria-hidden. offsetParent is null for display:none.
+            return el.offsetParent !== null && el.getAttribute('aria-hidden') !== 'true';
+        });
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (detailModal.classList.contains('hidden')) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeDetailModal();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        var focusables = focusableElementsInDialog();
+        if (focusables.length === 0) {
+            e.preventDefault();
+            detailCloseBtn.focus();
+            return;
+        }
+        var first = focusables[0];
+        var last  = focusables[focusables.length - 1];
+        var active = document.activeElement;
+        if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    });
+
+    /**
+     * Returns a deterministic background color for an avatar bubble so the
+     * same reviewer always gets the same color across re-renders. Uses a
+     * tiny hash of the user identity (id, email, or name) modulo a curated
+     * palette of accessible WCAG-AA-on-white colors.
+     */
+    function avatarColor(seed) {
+        var palette = ['#4f46e5','#0891b2','#16a34a','#ca8a04','#db2777','#9333ea','#dc2626','#0d9488'];
+        var s = String(seed || '?');
+        var hash = 0;
+        for (var i = 0; i < s.length; i++) hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+        return palette[Math.abs(hash) % palette.length];
+    }
+
+    function avatarInitials(viewer) {
+        var src = (viewer.user_name || viewer.user_email || '?').trim();
+        if (!src) return '?';
+        // First letter of first two whitespace-separated tokens, uppercased.
+        var parts = src.split(/[\s@._-]+/).filter(Boolean);
+        var first = parts[0] ? parts[0][0] : '?';
+        var second = parts[1] ? parts[1][0] : '';
+        return (first + second).toUpperCase().slice(0, 2);
+    }
+
+    function fmtDate(iso) {
+        if (!iso) return '';
+        try { return new Date(iso).toLocaleString(); } catch (_) { return String(iso); }
+    }
+
+    /**
+     * Renders the full prior_viewers panel — the heart of Task #297.
+     * Each viewer is a row with an initials avatar, name+email, role,
+     * the per-user view count, and the most-recent view timestamp.
+     */
+    function renderFullPriorViewers(viewers) {
+        if (!viewers || viewers.length === 0) {
+            return '<div class="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-xs text-gray-500 text-center"' +
+                ' data-testid="text-no-prior-viewers">' +
+                'No reviewers have opened this action yet.' +
+                '</div>';
+        }
+        var rows = viewers.map(function (v, idx) {
+            var name      = v.user_name || v.user_email || 'Unknown reviewer';
+            var email     = v.user_email && v.user_email !== name ? v.user_email : '';
+            var role      = v.user_role || '';
+            var viewCount = Math.max(1, v.view_count | 0);
+            var lastSeen  = fmtDate(v.last_viewed_at);
+            var seed      = v.user_id != null ? 'u' + v.user_id : (v.user_email || name);
+            var color     = avatarColor(seed);
+            var initials  = avatarInitials(v);
+
+            // Per-user view count: "1 view" / "N views". Single string so SR
+            // users hear it as one phrase next to the timestamp.
+            var countLabel = viewCount === 1 ? '1 view' : (viewCount + ' views');
+
+            // Avatar background-color is a per-row inline style (8 fixed
+            // colors, deterministic), kept here because it's the only way
+            // to vary an attribute per element without injecting a
+            // <style> tag per row. csp-styles.js allows scoped inline
+            // background-color via its style helpers, but we play it safe
+            // by setting it imperatively after render.
+            return '<li class="flex items-start gap-3 py-2" ' +
+                       'data-testid="row-prior-viewer-' + idx + '">' +
+                     '<span class="viewer-avatar" data-avatar-color="' + color + '" aria-hidden="true">' +
+                       escapeHtml(initials) +
+                     '</span>' +
+                     '<div class="min-w-0 flex-1">' +
+                       '<div class="flex flex-wrap items-baseline gap-x-2">' +
+                         '<span class="text-sm font-medium text-gray-900 truncate" data-testid="text-viewer-name-' + idx + '">' +
+                           escapeHtml(name) +
+                         '</span>' +
+                         (role
+                            ? '<span class="text-xs text-gray-500" data-testid="text-viewer-role-' + idx + '">' +
+                                escapeHtml(role) +
+                              '</span>'
+                            : '') +
+                       '</div>' +
+                       (email
+                          ? '<div class="text-xs text-gray-500 truncate">' + escapeHtml(email) + '</div>'
+                          : '') +
+                       '<div class="text-xs text-gray-500 mt-0.5">' +
+                         '<span data-testid="text-viewer-count-' + idx + '">' + escapeHtml(countLabel) + '</span>' +
+                         (lastSeen
+                            ? ' <span aria-hidden="true">·</span> ' +
+                              '<span><span class="sr-only">last viewed </span>' +
+                                '<time datetime="' + escapeHtml(v.last_viewed_at || '') + '" ' +
+                                'data-testid="text-viewer-last-' + idx + '">' +
+                                  escapeHtml(lastSeen) +
+                                '</time>' +
+                              '</span>'
+                            : '') +
+                       '</div>' +
+                     '</div>' +
+                   '</li>';
+        }).join('');
+
+        return '<ol class="divide-y divide-gray-100" data-testid="list-prior-viewers" ' +
+                  'aria-label="Prior reviewers, most recent first">' + rows + '</ol>';
+    }
+
+    function renderActionDetail(data) {
+        if (!data || !data.action) {
+            detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
+                'Malformed response.' +
+                '</div>';
+            return;
+        }
+        var a = data.action;
+        var viewers = Array.isArray(data.prior_viewers) ? data.prior_viewers : [];
+
+        // Header summary (visible label below the dialog title).
+        detailTitle.textContent = a.tool_label || a.action_code;
+        var statusText = _td('dyn.ai_approvals.status', a.status) || a.status;
+        var riskText   = _td('dyn.ai_approvals.risk_level', a.risk_level) || a.risk_level;
+        detailSummary.textContent = a.action_code + ' · ' + riskText + ' risk · ' + statusText;
+
+        var requester = escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown');
+        var preview   = (a.payload_preview || '').replace(/\*\*/g, '').slice(0, 600);
+
+        detailBody.innerHTML =
+            '<section class="mb-4">' +
+              '<div class="flex flex-wrap items-center gap-2 mb-2">' +
+                '<span class="px-2 py-0.5 rounded text-xs font-medium ' + riskClass(a.risk_level) + '">' +
+                  escapeHtml(riskText) +
+                '</span>' +
+                '<span class="px-2 py-0.5 rounded text-xs font-medium ' + statusClass(a.status) + '">' +
+                  escapeHtml(statusText) +
+                '</span>' +
+                '<span class="font-mono text-xs text-gray-500">' + escapeHtml(a.action_code) + '</span>' +
+              '</div>' +
+              '<div class="text-xs text-gray-600 mb-1">' +
+                'Requested by ' + requester +
+                ' · ' + escapeHtml(fmtDate(a.created_at)) +
+              '</div>' +
+              (preview
+                 ? '<div class="text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded p-2 prose-compact whitespace-pre-wrap">' +
+                     escapeHtml(preview) +
+                   '</div>'
+                 : '') +
+            '</section>' +
+
+            '<section aria-labelledby="actionDetailViewersHeading">' +
+              '<div class="flex items-baseline justify-between mb-2">' +
+                '<h3 id="actionDetailViewersHeading" class="text-sm font-semibold text-gray-900">' +
+                  'Viewed by' +
+                '</h3>' +
+                '<span class="text-xs text-gray-500" data-testid="text-prior-viewers-count">' +
+                  (viewers.length === 1 ? '1 reviewer' : (viewers.length + ' reviewers')) +
+                '</span>' +
+              '</div>' +
+              '<p class="text-xs text-gray-500 mb-2">' +
+                'Every Quality Manager or admin who has opened this action\'s detail page, ' +
+                'with the most recent view first. View counts include repeat visits.' +
+              '</p>' +
+              '<div aria-live="polite">' +
+                renderFullPriorViewers(viewers) +
+              '</div>' +
+            '</section>';
+
+        // Apply the per-row avatar background colors imperatively. We avoid
+        // building a `style="..."` attribute in the HTML string so the
+        // page's CSP-style sweeper (csp-styles.js) doesn't flag it.
+        detailBody.querySelectorAll('.viewer-avatar[data-avatar-color]').forEach(function (el) {
+            el.style.backgroundColor = el.getAttribute('data-avatar-color');
         });
     }
 
