@@ -481,6 +481,132 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/crm\/data$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
   { pattern: /^\/api\/agents\/performance$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
   { pattern: /^\/api\/integrations\/status$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Task #352 — explicit ROUTE_PERMISSION_MAP entries for every currently-
+  // live `/api/*` route that previously relied on the permissive
+  // `return { allowed: true }` fallback.  Added before the fallback was
+  // flipped to deny-by-default so existing access patterns are preserved.
+  //
+  // Role-list selection rules:
+  //   * Mirror the inner-handler role check when one exists (e.g.
+  //     `requireRole(c, AI_OPS_ROLES)`).
+  //   * For handlers whose only auth gate is `requireAuthOrKey` /
+  //     `getSessionUser` (any authenticated caller), use ANY_AUTH so the
+  //     current "any logged-in user" behaviour is preserved.  The
+  //     department_viewer write-block earlier in `enforceRoutePermission`
+  //     still keeps writes locked down for that role.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Admin-only operational diagnostics (activity feed/stats, system events,
+  // workflow run history) — `isAdminAuthorized` in `adminApiRoutes.ts`.
+  { pattern: /^\/api\/activity\//, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/system\//, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/workflow\/runs(\/\d+)?$/, methods: ['GET'], roles: ['admin'] },
+
+  // AI Ops — agent observability, prompt versions, tool-health alerts/config.
+  // Tool-health-config writes are admin-only (TOOL_HEALTH_CONFIG_WRITE_ROLES).
+  // All other endpoints use AI_OPS_ROLES.
+  { pattern: /^\/api\/ai-ops\/tool-health-config$/, methods: ['PUT'], roles: ['admin'] },
+  { pattern: /^\/api\/ai-ops\//, methods: ['GET', 'POST', 'PUT', 'PATCH'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+
+  // Audit checklist POST (PUT already covered above).
+  { pattern: /^\/api\/audits\/\d+\/checklist$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+
+  // Call Intelligence writes — admin-only via `verifyAdminKey`
+  // (calls/ingest, /analyze, /compliance POST, /upload, /upload-audio,
+  // /bulk-upload, /five9/*, /:id/evaluate, /:id/sdr-evaluate, /:id/sync-zoho,
+  // meetings/mom POST, quality-scorecards POST/PUT).
+  { pattern: /^\/api\/calls\/(ingest|upload|upload-audio|bulk-upload)$/, methods: ['POST'], roles: ['admin'] },
+  { pattern: /^\/api\/calls\/five9\//, methods: ['POST'], roles: ['admin'] },
+  { pattern: /^\/api\/calls\/[^/]+\/(analyze|compliance|sync-zoho|evaluate|sdr-evaluate)$/, methods: ['POST'], roles: ['admin'] },
+  { pattern: /^\/api\/meetings\/mom$/, methods: ['POST'], roles: ['admin'] },
+  { pattern: /^\/api\/quality-scorecards(\/\d+)?$/, methods: ['POST', 'PUT'], roles: ['admin'] },
+
+  // Call Intelligence reads with no inner role gate — any authenticated user.
+  { pattern: /^\/api\/meetings\/mom\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+  { pattern: /^\/api\/sdr-scorecards\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+  { pattern: /^\/api\/ai-training\//, methods: ['GET', 'POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+  { pattern: /^\/api\/quality-scorecards$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Consultant — alerts/feedback (CONSULTANT_ROLES; stats/trend = AI insiders).
+  { pattern: /^\/api\/consultant\/alerts(\/count)?$/, methods: ['GET'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/consultant\/feedback$/, methods: ['POST'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/consultant\/feedback\/(stats|trend)$/, methods: ['GET'], roles: ['admin', 'ai_specialist'] },
+  { pattern: /^\/api\/consultant\/scan-stream$/, methods: ['GET'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'] },
+
+  // Duplicate Radar writes — DUPLICATE_RADAR_READ_ROLES (single gate covers
+  // every action; see `requireDuplicateRadarAccess` in duplicateRadarRoutes).
+  { pattern: /^\/api\/duplicates\//, methods: ['POST', 'PATCH', 'DELETE'], roles: ['admin', 'grc_manager', 'ai_specialist', 'head_of_operations_quality', 'quality_manager', 'bu_owner', 'executive'] },
+
+  // External Audit reads — handler uses `getSessionUser` only (any auth).
+  { pattern: /^\/api\/external-audits/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Feedback API — no inner role gate (any auth).
+  { pattern: /^\/api\/feedback(\/stats)?$/, methods: ['GET', 'POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Handoff GET endpoints — handlers use `getSessionUser` (any auth);
+  // writes are already covered by the `/api/handoff/` POST/PUT/DELETE rule.
+  { pattern: /^\/api\/handoff\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Knowledge reads — KNOWLEDGE_READ_ROLES (already covered: upload write,
+  // delete).  Checklists have no inner role gate (any auth).
+  { pattern: /^\/api\/knowledge\/(documents|search)/, methods: ['GET'], roles: ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality', 'quality_manager'] },
+  { pattern: /^\/api\/checklists(\/.*)?$/, methods: ['GET', 'POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Manual Audit Intake reads — handler uses `getSessionUser` only.
+  { pattern: /^\/api\/manual-audit-intake/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Migration GETs — admin only (writes already admin via existing rule).
+  { pattern: /^\/api\/migration\//, methods: ['GET'], roles: ['admin'] },
+
+  // Notifications — handlers have no inner role check (any auth).
+  // Specific /:id/read POST is covered by an existing reviewer-roles rule.
+  { pattern: /^\/api\/notifications(\/count)?$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+  { pattern: /^\/api\/notifications\/\d+\/dismiss$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive'] },
+
+  // Onboarding status / tour / tooltips — `requireAuthOrKey` (any auth).
+  { pattern: /^\/api\/onboarding\/(status|tour-steps|tooltips)$/, methods: ['GET', 'POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+  { pattern: /^\/api\/onboarding\/tooltip\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // PDPL — `requireAdminOrKey` for every endpoint (admin only).
+  // /api/pdpl/export is already covered above for GET; this catches the rest.
+  { pattern: /^\/api\/pdpl\//, methods: ['GET', 'POST', 'PUT', 'DELETE'], roles: ['admin'] },
+
+  // Policies — link & review-cycles writes (governance roles).
+  { pattern: /^\/api\/policies\/\d+\/link$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/policies\/review-cycles$/, methods: ['POST'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+
+  // QMS API (qmsApiRoutes.ts) — every endpoint gated by `isAdminAuthorized`
+  // (admin user OR X-Admin-Key).
+  { pattern: /^\/api\/qms\/(dashboard|evaluations|capa|nc|training|framework)/, methods: ['GET', 'POST'], roles: ['admin'] },
+
+  // RBAC GET endpoints — admin only (writes already covered).
+  { pattern: /^\/api\/rbac\//, methods: ['GET'], roles: ['admin'] },
+
+  // ROI reads — handlers use `getSessionUser` (any auth); writes covered.
+  { pattern: /^\/api\/roi(\/.*)?$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Sandbox API — every endpoint uses `requireSandboxAuth` (any auth).
+  { pattern: /^\/api\/sandbox\//, methods: ['GET', 'POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive', 'department_viewer'] },
+
+  // Team management reads & audit-trail — TEAM_MGMT_ROLES.
+  { pattern: /^\/api\/team\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+  { pattern: /^\/api\/audit-trail$/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
+
+  // Trigger reads (list / stats / by-audit) — TRIGGER_REVIEWER_ROLES.
+  { pattern: /^\/api\/triggers/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'auditor', 'team_lead', 'executive', 'bu_owner', 'ai_specialist'] },
+
+  // User access reads — fine-grained (admin-only diagnostics; admin+QM list).
+  // Order matters: more specific patterns must precede the broad
+  // `/api/users(/...)?$ GET` rule below.
+  { pattern: /^\/api\/users\/stats$/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/users\/\d+$/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/users$/, methods: ['GET'], roles: ['admin', 'quality_manager'] },
+  { pattern: /^\/api\/invitations$/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/access-audit/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/screens$/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/roles\/defaults$/, methods: ['GET'], roles: ['admin'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {
@@ -528,6 +654,15 @@ export async function enforceRoutePermission(c: any, path: string, method: strin
     }
   }
 
+  // Task #352 — deny-by-default for `/api/*` paths.  Routes that fall through
+  // every ROUTE_PERMISSION_MAP entry above are denied so that newly-added
+  // `/api/*` endpoints are fail-closed until an explicit map rule covers them.
+  // Non-API paths (page handlers under `/projects`, `/onboarding`, etc.) keep
+  // the previous permissive default and rely on the page-auth middleware.
+  if (path.startsWith('/api/')) {
+    return { allowed: false, error: 'Route not authorised by RBAC policy' };
+  }
+
   return { allowed: true };
 }
 
@@ -537,9 +672,14 @@ export async function enforceRoutePermission(c: any, path: string, method: strin
  * configured for a given (role, path, method) triple.
  */
 export function canAccessRoute(role: string, path: string, method: string): boolean {
-  if (role === 'admin') return true;
+  // Task #352 — admin bypass only fires when a ROUTE_PERMISSION_MAP rule
+  // matches.  Mirrors `enforceRoutePermission`, where the admin shortcut
+  // lives inside the rule-match loop, so an unmatched `/api/*` path is
+  // denied for every role (including admin) by the deny-by-default
+  // fallback below.
   for (const rule of ROUTE_PERMISSION_MAP) {
     if (rule.pattern.test(path) && rule.methods.includes(method)) {
+      if (role === 'admin') return true;
       if (rule.roles && !rule.roles.includes(role as UserRole)) {
         return false;
       }
@@ -547,6 +687,12 @@ export function canAccessRoute(role: string, path: string, method: string): bool
         return true;
       }
     }
+  }
+  // Task #352 — deny-by-default for `/api/*` paths.  Mirrors the runtime
+  // `enforceRoutePermission` fallback so unit tests catch any newly-added
+  // `/api/*` endpoint that lacks an explicit ROUTE_PERMISSION_MAP entry.
+  if (path.startsWith('/api/')) {
+    return false;
   }
   return true;
 }
