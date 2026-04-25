@@ -48,6 +48,13 @@ interface RowState {
   // node-postgres parses JSONB columns into native JS values, so the
   // fixture stores the parsed shape (object | null), not a JSON string.
   metadata: Record<string, unknown> | null;
+  // Task #557: the daily sweep stamps `previews_redacted_at = NOW()`
+  // whenever it actually rewrites one of the three preview columns,
+  // mirroring the breadcrumb the primary `redactAiCallMetrics()` sweep
+  // (Task #467) already writes. Tracked here so assertions can verify
+  // both the stamped path (preview-dirty rows) and the deliberately
+  // unstamped path (rows where only `error_message` / `metadata` changed).
+  previews_redacted_at: Date | null;
 }
 
 interface CapturedUpdate {
@@ -93,6 +100,14 @@ function makeStubClient(initialRows: RowState[]): {
           rawMeta === null || rawMeta === undefined
             ? null
             : (JSON.parse(rawMeta) as Record<string, unknown>);
+        // Task #557: the real UPDATE adds `previews_redacted_at = NOW()`
+        // to the SET clause server-side (no JS bind param) only when the
+        // sweep actually rewrote one of the three preview columns. Mirror
+        // that behaviour here by sniffing the SQL string so assertions
+        // can confirm both the stamped path and the unstamped path.
+        if (/previews_redacted_at\s*=\s*NOW\(\)/i.test(sql)) {
+          target.previews_redacted_at = new Date();
+        }
       }
       return { rows: [], rowCount: 1 };
     }
@@ -119,28 +134,39 @@ async function run(): Promise<void> {
   const initial: RowState[] = [
     {
       id: 1,
+      // Only `error_message` is dirty — the prompt_preview is clean
+      // prose. Task #557 contract: this row gets an UPDATE but must NOT
+      // acquire a `previews_redacted_at` breadcrumb because the AI Ops
+      // call-detail badge specifically signals preview provenance.
       error_message: `Upstream API rejected key ${SK_KEY}`,
       prompt_preview: "Rotate API key for zoho_books integration",
       tool_input_preview: null,
       tool_output_preview: null,
       // Clean metadata — must round-trip byte-identical.
       metadata: { prompt_version: "v3.2", tenant: "acme" },
+      previews_redacted_at: null,
     },
     {
       id: 2,
+      // error_message + tool_input_preview both dirty → preview-dirty
+      // path → breadcrumb stamped.
       error_message: `JWT verify failed for token=${JWT}`,
       prompt_preview: null,
       tool_input_preview: `{"authorization":"Bearer ${GH_PAT}","tenant":"acme"}`,
       tool_output_preview: null,
       metadata: null,
+      previews_redacted_at: null,
     },
     {
       id: 3,
+      // prompt_preview + tool_output_preview both dirty → preview-dirty
+      // path → breadcrumb stamped.
       error_message: null,
       prompt_preview: `User prompt: please rotate key. Old hash was ${BCRYPT_HASH}`,
       tool_input_preview: null,
       tool_output_preview: `{"status":"failed","echo":"key=${AWS_KEY}"}`,
       metadata: { prompt_version: "v4.0" },
+      previews_redacted_at: null,
     },
     {
       id: 4,
@@ -150,6 +176,7 @@ async function run(): Promise<void> {
       tool_input_preview: '{"vendor":"acme-corp","status":"open"}',
       tool_output_preview: '{"count":17,"ok":true}',
       metadata: { prompt_version: "v2.1", source: "scheduler" },
+      previews_redacted_at: null,
     },
     {
       id: 5,
@@ -159,6 +186,7 @@ async function run(): Promise<void> {
       tool_input_preview: null,
       tool_output_preview: null,
       metadata: { prompt_version: "v1.0" },
+      previews_redacted_at: null,
     },
     {
       id: 6,
@@ -166,7 +194,9 @@ async function run(): Promise<void> {
       // substring is hiding under an innocuously-named JSONB leaf key
       // (`metadata.note`) that the per-key deny-list cannot catch. The
       // sweep must walk metadata recursively and sentinelise the leak
-      // while preserving the surrounding non-secret structure.
+      // while preserving the surrounding non-secret structure. Task #557
+      // contract: only `metadata` changed, so the breadcrumb must NOT
+      // be stamped — the badge would misrepresent provenance.
       error_message: SAFE_PROSE,
       prompt_preview: null,
       tool_input_preview: null,
@@ -181,6 +211,7 @@ async function run(): Promise<void> {
           tenant: "acme",
         },
       },
+      previews_redacted_at: null,
     },
   ];
 
@@ -315,6 +346,57 @@ async function run(): Promise<void> {
   );
 
   // -----------------------------------------------------------------------
+  // Task #557 — `previews_redacted_at` breadcrumb is stamped if-and-only-if
+  // the sweep actually rewrote one of the three preview columns. Without
+  // this, the AI Operations call-detail panel ("Preview redacted by
+  // historical sweep on YYYY-MM-DD") fires inconsistently depending on
+  // which historical sweep happened to clean the row.
+  // -----------------------------------------------------------------------
+  assert(
+    row1.previews_redacted_at === null,
+    "row 1 (only error_message dirty) — previews_redacted_at NOT stamped, badge stays hidden",
+  );
+  assert(
+    row2.previews_redacted_at instanceof Date,
+    "row 2 (tool_input_preview dirty) — previews_redacted_at stamped",
+  );
+  assert(
+    row3.previews_redacted_at instanceof Date,
+    "row 3 (prompt_preview + tool_output_preview dirty) — previews_redacted_at stamped",
+  );
+  assert(
+    row4.previews_redacted_at === null,
+    "row 4 (clean control, no UPDATE) — previews_redacted_at stays NULL",
+  );
+  assert(
+    row5.previews_redacted_at === null,
+    "row 5 (already-redacted, no UPDATE) — previews_redacted_at stays NULL",
+  );
+  assert(
+    row6.previews_redacted_at === null,
+    "row 6 (only metadata dirty) — previews_redacted_at NOT stamped, badge stays hidden",
+  );
+  // Also assert the SQL shape directly: the breadcrumb assignment must
+  // appear only on the UPDATE statements that rewrote a preview column.
+  const previewDirtyIds = new Set([2, 3]);
+  const errorOrMetadataOnlyIds = new Set([1, 6]);
+  for (const u of stub1.updates) {
+    const id = u.params[5] as number;
+    const sqlHasBreadcrumb = /previews_redacted_at\s*=\s*NOW\(\)/i.test(u.sql);
+    if (previewDirtyIds.has(id)) {
+      assert(
+        sqlHasBreadcrumb,
+        `UPDATE for preview-dirty row id=${id} includes previews_redacted_at = NOW()`,
+      );
+    } else if (errorOrMetadataOnlyIds.has(id)) {
+      assert(
+        !sqlHasBreadcrumb,
+        `UPDATE for non-preview-dirty row id=${id} omits previews_redacted_at = NOW()`,
+      );
+    }
+  }
+
+  // -----------------------------------------------------------------------
   // Idempotency: a second pass over the now-clean dataset must be a no-op.
   // -----------------------------------------------------------------------
   const stub2 = makeStubClient(stub1.rows);
@@ -354,6 +436,7 @@ async function run(): Promise<void> {
         prompt_version: "v9.9",
         debug_context: { last_aws_key: AWS_KEY },
       },
+      previews_redacted_at: null,
     },
   ];
   const stub3 = makeStubClient(combined);
@@ -400,6 +483,16 @@ async function run(): Promise<void> {
     combinedMeta.prompt_version === "v9.9",
     "combined-fixture: untouched metadata leaves remain byte-identical",
   );
+  // Task #557 — every preview column was rewritten, so the breadcrumb
+  // must be stamped and the SQL must contain the server-side assignment.
+  assert(
+    combinedRow.previews_redacted_at instanceof Date,
+    "combined-fixture: previews_redacted_at stamped (all preview columns rewritten)",
+  );
+  assert(
+    /previews_redacted_at\s*=\s*NOW\(\)/i.test(stub3.updates[0].sql),
+    "combined-fixture: UPDATE includes previews_redacted_at = NOW()",
+  );
 
   // -----------------------------------------------------------------------
   // Batched keyset pagination: with batch=2 over 5 rows, the cursor must
@@ -415,6 +508,7 @@ async function run(): Promise<void> {
       tool_input_preview: null,
       tool_output_preview: null,
       metadata: null,
+      previews_redacted_at: null,
     },
     {
       id: 101,
@@ -423,6 +517,7 @@ async function run(): Promise<void> {
       tool_input_preview: null,
       tool_output_preview: null,
       metadata: { prompt_version: "v1.0" },
+      previews_redacted_at: null,
     },
     {
       id: 102,
@@ -431,6 +526,7 @@ async function run(): Promise<void> {
       tool_input_preview: null,
       tool_output_preview: null,
       metadata: null,
+      previews_redacted_at: null,
     },
     {
       id: 103,
@@ -439,6 +535,7 @@ async function run(): Promise<void> {
       tool_input_preview: null,
       tool_output_preview: null,
       metadata: { prompt_version: "v1.1" },
+      previews_redacted_at: null,
     },
     {
       id: 104,
@@ -447,6 +544,7 @@ async function run(): Promise<void> {
       tool_input_preview: null,
       tool_output_preview: null,
       metadata: null,
+      previews_redacted_at: null,
     },
   ];
   const stub4 = makeStubClient(batched);
@@ -470,6 +568,22 @@ async function run(): Promise<void> {
     stub4.rows.find((r) => r.id === 101)!.error_message === SAFE_PROSE &&
       stub4.rows.find((r) => r.id === 103)!.error_message === SAFE_PROSE,
     "batched sweep: clean rows between leaky ones remain byte-identical",
+  );
+  // Task #557 — every batched leak is error_message-only (no preview
+  // column rewrites), so none of the rewritten rows should acquire a
+  // previews_redacted_at breadcrumb and no UPDATE should contain the
+  // server-side `NOW()` assignment.
+  assert(
+    stub4.rows.find((r) => r.id === 100)!.previews_redacted_at === null &&
+      stub4.rows.find((r) => r.id === 102)!.previews_redacted_at === null &&
+      stub4.rows.find((r) => r.id === 104)!.previews_redacted_at === null,
+    "batched sweep: error_message-only rewrites leave previews_redacted_at NULL",
+  );
+  assert(
+    stub4.updates.every(
+      (u) => !/previews_redacted_at\s*=\s*NOW\(\)/i.test(u.sql),
+    ),
+    "batched sweep: no UPDATE includes previews_redacted_at = NOW() (no preview columns dirty)",
   );
 
   console.log(`\n${passed} passed, ${failed} failed`);

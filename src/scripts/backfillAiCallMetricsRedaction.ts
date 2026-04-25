@@ -192,13 +192,29 @@ export async function backfillAiCallMetricsRedaction(
         toolOutputDirty ||
         metadataDirty
       ) {
+        // Task #557: stamp `previews_redacted_at = NOW()` alongside the
+        // scrubbed columns whenever any of the three preview columns
+        // actually changed, mirroring the Task #467 breadcrumb the
+        // primary `redactAiCallMetrics()` sweep already writes. The AI
+        // Operations call-detail panel reads this timestamp to render
+        // the "Preview redacted by historical sweep on YYYY-MM-DD" badge,
+        // so operators get consistent provenance signalling regardless
+        // of which historical sweep cleaned the row. We deliberately do
+        // NOT stamp when only `error_message` or `metadata` changed —
+        // those columns are not surfaced as previews and the badge would
+        // be misleading. Idempotency is preserved because we only enter
+        // this branch when at least one column actually changed.
+        const previewDirty = promptDirty || toolInputDirty || toolOutputDirty;
+        const previewBreadcrumbAssignment = previewDirty
+          ? `, previews_redacted_at = NOW()`
+          : ``;
         await client.query(
           `UPDATE ai_call_metrics
               SET error_message       = $1,
                   prompt_preview      = $2,
                   tool_input_preview  = $3,
                   tool_output_preview = $4,
-                  metadata            = $5::jsonb
+                  metadata            = $5::jsonb${previewBreadcrumbAssignment}
             WHERE id = $6`,
           [
             errorMessage,
