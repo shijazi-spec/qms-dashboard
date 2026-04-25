@@ -12,6 +12,12 @@
 import { pool as kpiPool } from "./kpiDatabase";
 import { sharedPool } from "./sharedPool";
 
+const RATE_LIMIT_429_RETENTION_HOURS = (() => {
+  const raw = process.env.RATE_LIMIT_429_RETENTION_HOURS;
+  const parsed = parseInt(raw ?? '24', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+})();
+
 export interface KPIAutoCalcResult {
   calculated: number;
   results: Array<{
@@ -192,6 +198,62 @@ export async function runQualityAuditIfStale(maxAgeHours = 168): Promise<{ ran: 
  * creates on first call so we don't depend on alerts existing (alerts only
  * fire when issues are found, which would mask a successful clean scan).
  */
+
+/**
+ * Hours since the oldest surviving `rate_limit_429` row in `system_events`.
+ * Returns Infinity when the table has no such rows (nothing to prune).
+ * Returns 0 when the table is unreachable so we don't trigger a spurious run.
+ */
+export async function hoursSinceOldestRateLimit429(): Promise<number> {
+  try {
+    const r = await sharedPool.query<{ hours: number | null }>(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))/3600 AS hours
+       FROM system_events WHERE event_type = 'rate_limit_429'`,
+    );
+    const h = r.rows[0]?.hours;
+    return h == null ? Infinity : Number(h);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * In-process safety-net for the `rate-limit-429-events-pruner` Inngest cron.
+ *
+ * Calls `pruneRateLimit429Events()` when the oldest surviving `rate_limit_429`
+ * row in `system_events` is older than `retentionHours + gracePeriodHours`.
+ * The default grace period (1h) matches the health-pulse threshold so both
+ * signals fire in lockstep.
+ *
+ * Mirror of `runConsultantScannerIfStale` / `runDuplicateScanIfStale`.
+ */
+export async function runPruneRateLimit429IfStale(
+  retentionHours = RATE_LIMIT_429_RETENTION_HOURS,
+  gracePeriodHours = 1,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const maxAgeHours = retentionHours + gracePeriodHours;
+  const ageHours = await hoursSinceOldestRateLimit429();
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+  console.log(
+    `[RateLimit429Pruner Fallback] Oldest rate_limit_429 row is ${
+      ageHours === Infinity ? 'absent (table empty — nothing to prune)' : ageHours.toFixed(1) + 'h old'
+    } (threshold ${maxAgeHours}h); running pruner.`,
+  );
+  if (ageHours === Infinity) {
+    return { ran: false, ageHours };
+  }
+  try {
+    const { pruneRateLimit429Events } = await import('./rateLimiter');
+    const result = await pruneRateLimit429Events();
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    console.error('[RateLimit429Pruner Fallback] Pruner failed:', err);
+    return { ran: false, ageHours };
+  }
+}
+
 export async function runConsultantScannerIfStale(maxAgeHours = 6): Promise<{ ran: boolean; ageHours: number; result?: any }> {
   const pool = sharedPool;
   await pool.query(`

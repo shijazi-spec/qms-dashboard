@@ -369,6 +369,60 @@ const CHECKS: Check[] = [
     },
   },
   {
+    id: "rate_limit_429_pruner_freshness",
+    label: "rate_limit_429 pruner running (no rows older than retention + 1h)",
+    category: "infrastructure",
+    run: async () => {
+      const retentionHours = (() => {
+        const raw = process.env.RATE_LIMIT_429_RETENTION_HOURS;
+        const parsed = parseInt(raw ?? "24", 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+      })();
+      const thresholdHours = retentionHours + 1;
+      try {
+        const r = await pool.query<{ hours: number | null; count: string }>(
+          `SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))/3600 AS hours,
+                  COUNT(*)::text AS count
+           FROM system_events
+           WHERE event_type = 'rate_limit_429'`,
+        );
+        const row = r.rows[0];
+        const oldestHours = row?.hours == null ? null : Number(row.hours);
+        const totalCount = parseInt(row?.count ?? "0", 10);
+        if (oldestHours === null) {
+          return {
+            status: "pass",
+            message: "No rate_limit_429 rows exist — nothing to prune",
+            details: { totalCount: 0, retentionHours, thresholdHours },
+          };
+        }
+        if (oldestHours > thresholdHours) {
+          return {
+            status: "fail",
+            message: `Oldest rate_limit_429 row is ${oldestHours.toFixed(1)}h old (retention=${retentionHours}h + 1h grace). Pruner cron may be broken.`,
+            details: { oldestHours, totalCount, retentionHours, thresholdHours },
+          };
+        }
+        if (oldestHours > retentionHours) {
+          return {
+            status: "warn",
+            message: `Oldest rate_limit_429 row is ${oldestHours.toFixed(1)}h old (within 1h grace period — pruner should run soon)`,
+            details: { oldestHours, totalCount, retentionHours, thresholdHours },
+          };
+        }
+        return {
+          status: "pass",
+          details: { oldestHours, totalCount, retentionHours },
+        };
+      } catch (err: any) {
+        return {
+          status: "fail",
+          message: `DB error checking rate_limit_429 pruner freshness: ${err?.message}`,
+        };
+      }
+    },
+  },
+  {
     id: "endpoint_health",
     label: "/api/health returns ok",
     category: "endpoints",
