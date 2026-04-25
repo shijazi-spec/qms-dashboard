@@ -1924,8 +1924,8 @@
               <th class="px-3 py-2 text-right">Total Cost</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
-              <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-tool-${i}" data-tool-name="${esc(r.tool_name)}">
-                <td class="px-3 py-2 font-medium text-gray-900 font-mono text-xs">${esc(r.tool_name)}</td>
+              <tr class="border-t cursor-pointer hover:bg-blue-50 transition-colors ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-tool-${i}" data-tool-name="${esc(r.tool_name)}" data-on-click="openToolParentsPanel" data-args='[${JSON.stringify(r.tool_name)}]' title="Click to see parent agent calls for this tool">
+                <td class="px-3 py-2 font-medium text-blue-700 font-mono text-xs underline decoration-dotted">${esc(r.tool_name)}</td>
                 <td class="px-3 py-2 text-gray-600 text-xs">${esc(r.agent_name)}</td>
                 <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
                 <td class="px-3 py-2 text-right">${fmtMs(r.avg_latency_ms)}</td>
@@ -1936,6 +1936,82 @@
           </table>`;
       } catch (e) {
         el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_tools') + '</p>';
+      }
+    }
+
+    function closeToolParentsPanel() {
+      const existing = document.getElementById('tool-parents-panel');
+      if (existing) existing.remove();
+    }
+
+    async function openToolParentsPanel(toolName) {
+      closeToolParentsPanel();
+
+      const panel = document.createElement('div');
+      panel.id = 'tool-parents-panel';
+      panel.className = 'fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40';
+      panel.setAttribute('data-testid', 'panel-tool-parents');
+      panel.innerHTML = `
+        <div class="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-3xl mx-0 sm:mx-4 max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between px-5 py-3 border-b flex-shrink-0">
+            <div>
+              <h3 class="font-semibold text-gray-900 text-sm">
+                Parent agent calls for
+                <span class="font-mono text-blue-600" data-testid="text-tool-parents-name">${esc(toolName)}</span>
+              </h3>
+              <p class="text-xs text-gray-500 mt-0.5">Most expensive agent runs that invoked this tool — last 7 days</p>
+            </div>
+            <button class="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-4 flex-shrink-0"
+                    data-on-click="closeToolParentsPanel"
+                    aria-label="Close panel"
+                    data-testid="button-close-tool-parents">&times;</button>
+          </div>
+          <div id="tool-parents-body" class="overflow-y-auto p-4 text-sm flex-1">
+            <p class="text-gray-400 text-sm">Loading…</p>
+          </div>
+        </div>`;
+      panel.addEventListener('click', (e) => { if (e.target === panel) closeToolParentsPanel(); });
+      document.body.appendChild(panel);
+
+      const body = document.getElementById('tool-parents-body');
+      try {
+        const { data } = await apiFetch(`/api/ai-ops/tools/${encodeURIComponent(toolName)}/parents?limit=20`);
+        if (!data.length) {
+          body.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tool-parents-empty">No parent agent calls found for <span class="font-mono">${esc(toolName)}</span> in the last 7 days.</p>`;
+          return;
+        }
+        body.innerHTML = `
+          <table class="min-w-full text-left text-sm" data-testid="table-tool-parents">
+            <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+              <th class="px-3 py-2">Call ID</th>
+              <th class="px-3 py-2">Agent</th>
+              <th class="px-3 py-2">When</th>
+              <th class="px-3 py-2 text-right">Invocations</th>
+              <th class="px-3 py-2 text-right">Tool Cost</th>
+              <th class="px-3 py-2 text-right">Latency</th>
+              <th class="px-3 py-2 text-right">Status</th>
+            </tr></thead>
+            <tbody>${data.map((r, i) => `
+              <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''} cursor-pointer hover:bg-blue-50 transition-colors"
+                  data-testid="row-tool-parent-${r.id}"
+                  data-on-click="showCallContext" data-args='[${JSON.stringify(String(r.id))}, null]'
+                  title="Click to open full call detail">
+                <td class="px-3 py-2 font-mono text-xs text-blue-600 underline decoration-dotted">#${esc(r.id)}</td>
+                <td class="px-3 py-2 font-medium text-gray-900 text-xs">${esc(r.agent_name)}</td>
+                <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.started_at)}</td>
+                <td class="px-3 py-2 text-right">${fmtNum(r.tool_invocations)}</td>
+                <td class="px-3 py-2 text-right">$${parseFloat(r.tool_cost || 0).toFixed(6)}</td>
+                <td class="px-3 py-2 text-right">${fmtMs(r.latency_ms)}</td>
+                <td class="px-3 py-2 text-right">
+                  ${r.success
+                    ? '<span class="inline-block px-1.5 py-0.5 rounded text-xs bg-green-100 text-green-700">ok</span>'
+                    : '<span class="inline-block px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">failed</span>'}
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch (e) {
+        body.innerHTML = '<p class="text-red-500 text-sm">Failed to load parent calls.</p>';
       }
     }
 

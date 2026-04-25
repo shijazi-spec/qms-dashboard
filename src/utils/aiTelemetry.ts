@@ -759,6 +759,47 @@ export async function getTopToolsByCost(limit = 10, agentName?: string): Promise
   return result.rows;
 }
 
+export interface ParentCallForTool {
+  id: string;
+  agent_name: string;
+  model: string | null;
+  started_at: string;
+  latency_ms: number;
+  estimated_cost_usd: string;
+  success: boolean;
+  tool_invocations: string;
+  tool_cost: string;
+}
+
+export async function getParentCallsForTool(
+  toolName: string,
+  limit = 20,
+): Promise<ParentCallForTool[]> {
+  await ensureAiMetricsTable();
+  const result = await pool.query(
+    `SELECT
+       p.id,
+       p.agent_name,
+       p.model,
+       p.started_at,
+       p.latency_ms,
+       COALESCE(p.estimated_cost_usd, 0)                          AS estimated_cost_usd,
+       p.success,
+       COUNT(c.id)                                                AS tool_invocations,
+       COALESCE(ROUND(SUM(c.estimated_cost_usd)::NUMERIC, 6), 0) AS tool_cost
+     FROM ai_call_metrics p
+     JOIN ai_call_metrics c ON c.parent_call_id = p.id
+     WHERE c.tool_name = $1
+       AND p.started_at >= NOW() - INTERVAL '7 days'
+     GROUP BY p.id, p.agent_name, p.model, p.started_at, p.latency_ms,
+              p.estimated_cost_usd, p.success
+     ORDER BY tool_cost DESC, p.started_at DESC
+     LIMIT $2`,
+    [toolName, limit],
+  );
+  return result.rows;
+}
+
 export async function getKnownAgentNames(): Promise<string[]> {
   await ensureAiMetricsTable();
   const result = await pool.query(

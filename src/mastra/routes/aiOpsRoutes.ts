@@ -11,6 +11,7 @@ import {
   getCallById,
   insertCallFeedback,
   getChildToolCallsForParent,
+  getParentCallsForTool,
   getKnownAgentNames,
   FEEDBACK_COMMENT_MAX_LEN,
   MODEL_PRICE_TABLE,
@@ -506,6 +507,29 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] top-tools error:", error);
           return c.json({ error: "Failed to fetch tool stats" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/tools/:name/parents",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const toolName = String(c.req.param("name") ?? '').slice(0, 200);
+          if (!toolName.trim()) {
+            return c.json({ error: "Tool name is required" }, 400);
+          }
+          const limit = safeInt(c.req.query("limit"), 20, 1, 50);
+          const data = await getParentCallsForTool(toolName, limit);
+          return c.json({ data });
+        } catch (error) {
+          console.error("[AI-Ops] tool parents error:", error);
+          return c.json({ error: "Failed to fetch parent calls for tool" }, 500);
         }
       };
     },
