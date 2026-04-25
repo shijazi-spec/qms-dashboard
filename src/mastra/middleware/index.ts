@@ -333,29 +333,6 @@ async function applyBodySanitization(c: any, urlPath: string, method: string): P
 }
 
 /**
- * Redacts credential-shaped substrings out of an uncaught error's message
- * before it reaches the default Hono error renderer (and therefore the
- * HTTP response body / Inngest error log). Returns the original error
- * unchanged when no redaction was needed, otherwise returns a new Error
- * that preserves `name`, `stack`, and `cause` so debugging information
- * is not lost.
- *
- * Symmetric with the storage-side scrubbing in eventLogsDatabase.ts:
- * even if a third-party SDK echoes the secret in its exception text,
- * the user-facing response cannot leak it.
- */
-export function redactErrorForRethrow(error: unknown): unknown {
-  const rawMessage = error instanceof Error ? error.message : String(error ?? '');
-  const safeMessage = redactSecretLikeStrings(rawMessage) as string;
-  if (safeMessage === rawMessage) return error;
-  if (!(error instanceof Error)) return safeMessage;
-  const wrapped = new Error(safeMessage, { cause: error });
-  wrapped.name = error.name;
-  wrapped.stack = error.stack;
-  return wrapped;
-}
-
-/**
  * Symmetric defense for the API-response boundary.  We already scrub
  * credential-shaped substrings before WRITING anything to the database
  * (event_logs, change_history, ai_pending_actions) via
@@ -488,11 +465,24 @@ export const globalMiddleware = [
         const safe = redactSecretLikeStrings(error.message) as string;
         throw new NonRetriableError(safe, { cause: error });
       }
-      // For any other uncaught error escaping a route handler, rewrap the
-      // exception so the message reaching the default Hono error renderer
-      // (and therefore the HTTP response body) has credential-shaped
-      // substrings replaced with REDACTED_SENTINEL.
-      throw redactErrorForRethrow(error);
+      // We do NOT need to rewrap `error.message` for credential redaction
+      // here. The Mastra deployer installs an `app.onError` (see
+      // node_modules/@mastra/deployer/dist/server/index.js — `errorHandler`)
+      // which catches every uncaught throw at Hono's per-dispatch level and
+      // converts it into a Response BEFORE this catch block can re-throw:
+      //   - non-HTTPException → `c.json({ error: "Internal Server Error" }, 500)`
+      //     (a static body — `error.message` never reaches the wire), and
+      //   - HTTPException     → `c.json({ error: err.message }, status)` —
+      //     whose body still flows through `redactSecretsInResponse(c)` below
+      //     (the `await next()` above resolves normally because Hono's
+      //     onError has already produced a Response, not re-thrown), so any
+      //     credential echoed in `err.message` is scrubbed there.
+      // A previous version of this file rewrapped the throw with
+      // `redactErrorForRethrow(error)` to defend a "default Hono error
+      // renderer" path that does not exist in our stack — task #538
+      // confirmed the rewrap was dead code in production. Re-throwing the
+      // original preserves stack/name/cause for the Mastra logger above.
+      throw error;
     }
 
     if (isApi && !publicPath && !mastraInternal && c.res.status === 404) {

@@ -1,41 +1,57 @@
 /**
- * Integration test — the global middleware actually invokes the
- * secret-redaction post-processor AND the catch-block error rewrap on a
- * real request flowing through Hono.
+ * Integration test — proves that on a live Hono request flowing through
+ * `globalMiddleware`, the response post-processor `redactSecretsInResponse`
+ * actually scrubs credential-shaped substrings out of 4xx/5xx JSON bodies.
  *
- * Companion to tests/safeErrorResponseRedaction.test.ts: the unit suite
- * calls `redactSecretsInResponse` and `redactErrorForRethrow` directly,
- * which proves the helpers behave correctly but does NOT prove the
- * middleware actually calls them on a live request. Removing either call
- * from `globalMiddleware` would silently regress the leak that task #454
- * was added to prevent — the unit suite would still go green.
+ * Why this companion test exists
+ * ------------------------------
+ * tests/safeErrorResponseRedaction.test.ts unit-tests the helper
+ * `redactSecretsInResponse(c)` directly. That proves the helper behaves
+ * correctly but does NOT prove the middleware actually invokes it on a real
+ * request. Removing `await redactSecretsInResponse(c)` from
+ * `globalMiddleware` would silently regress the leak that task #454 was
+ * added to prevent — the unit suite alone would still pass.
  *
- * This file mounts `globalMiddleware` on a tiny Hono app (the same way
- * `src/mastra/index.ts` does for the real server), drives three routes
- * over Hono's `app.request()` API, and asserts on the live HTTP responses:
+ * Production parity
+ * -----------------
+ * Mastra's deployer (`node_modules/@mastra/deployer/dist/server/index.js`,
+ * line 12240) installs `app.onError((err, c) => errorHandler(err, c, isDev))`
+ * on the Hono app it builds for the server. `errorHandler` renders:
+ *   - non-HTTPException → `c.json({ error: "Internal Server Error" }, 500)`
+ *     (a STATIC body — `error.message` never reaches the wire), and
+ *   - HTTPException     → `c.json({ error: err.message }, status)` — whose
+ *     body still flows through this middleware's `redactSecretsInResponse(c)`
+ *     post-processor because Hono's per-dispatch try/catch (see
+ *     node_modules/hono/dist/compose.js) converts the throw into a Response
+ *     INSIDE compose and the surrounding `await next()` resolves normally.
+ * We mirror that exact `app.onError` here so the test exercises the real
+ * production response-rendering path. Task #538 confirmed that the previous
+ * `redactErrorForRethrow` rewrap branch in `globalMiddleware` was dead code
+ * — Mastra's onError captures the throw before the middleware's outer catch
+ * can ever observe it.
  *
- *   1. `/api/health/json-secret` — `c.json({ details }, 500)` with a
- *      `sk-live-…` credential in `details`. Exercises the post-processor.
- *   2. `/api/health/throw-secret` — throws `Error("...sk-live-...")`.
- *      An outer wrapper middleware (registered before `globalMiddleware`
- *      so its try/catch sits outside Hono's per-dispatch try/catch) catches
- *      the rewrapped error escaping `globalMiddleware` and renders it as
- *      a 500 JSON body — standing in for production renderers (Mastra
- *      workflow execution, Inngest function failure handlers, structured
- *      logger metadata path) that surface re-raised exceptions to clients.
- *   3. `/api/health/ok-with-secret-shape` — happy-path control. 2xx bodies
+ * Routes exercised:
+ *   1. `/api/health/json-secret`   — `c.json({ details }, 500)` with a
+ *      `sk-live-…` credential in `details`. Direct exercise of the
+ *      post-processor on a route-rendered error body.
+ *   2. `/api/health/throw-secret`  — throws `Error("...sk-live-...")`.
+ *      Mastra's onError converts this to a STATIC `"Internal Server Error"`
+ *      body — the secret cannot reach the wire even without any rewrap.
+ *   3. `/api/health/throw-http-secret` — throws
+ *      `new HTTPException(502, { message: "...sk-live-..." })`. Mastra's
+ *      onError renders `{ error: err.message }` → the credential WOULD be
+ *      echoed if the post-processor weren't wired. Asserts the post-
+ *      processor scrubbed it out.
+ *   4. `/api/health/ok-with-secret-shape` — happy-path control. 2xx bodies
  *      MUST NOT be walked.
  *
  * Regression guarantees:
- *   - Remove `await redactSecretsInResponse(c)` → test #1 assertions fail.
- *   - Remove `throw redactErrorForRethrow(error)` → test #2 assertions fail.
- *   The two regressions are detectable independently of each other.
- *
- * Why `app.onError` re-throws: Hono's `compose()` wraps every dispatch
- * level in its own try/catch and shunts errors to `onError` BEFORE the
- * middleware's outer catch can see them (see node_modules/hono/dist/
- * compose.js). Re-throwing from `onError` lets the throw bubble through
- * `await next()` in `globalMiddleware`, exercising the rewrap.
+ *   - Remove `await redactSecretsInResponse(c)` from `globalMiddleware`
+ *     → tests #1 and #3 fail (the credential reappears in the body).
+ *   - Test #2 will keep passing without the post-processor; that's
+ *     intentional — it documents that Mastra's static `"Internal Server
+ *     Error"` is itself the production defense for non-HTTPException throws,
+ *     not the (deleted) catch-block rewrap.
  *
  * Run:  npx tsx tests/safeErrorResponseRedaction.integration.test.ts
  */
@@ -49,6 +65,7 @@ process.env.RATE_LIMIT_DISABLED = "true";
 process.env.REPLIT_DOMAINS = process.env.REPLIT_DOMAINS || "localhost:5000";
 
 import { Hono, type MiddlewareHandler } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { globalMiddleware } from "../src/mastra/middleware/index";
 import { REDACTED_SENTINEL } from "../src/utils/eventLogsDatabase";
 
@@ -70,31 +87,8 @@ function assert(cond: boolean, label: string): void {
   }
 }
 
-interface BuildAppOptions {
-  /** Invoked with the rewrapped error escaping `globalMiddleware` so
-   *  the test can additionally inspect the `cause` chain. */
-  onCaughtError?: (err: unknown) => void;
-}
-
-function buildApp(opts: BuildAppOptions = {}): Hono {
+function buildApp(): Hono {
   const app = new Hono();
-
-  // Outer wrapper — registered BEFORE `globalMiddleware` so its try/catch
-  // sits outside Hono's per-dispatch try/catch around the middleware. It
-  // captures the rewrapped error and renders it into a real HTTP response
-  // body for the test to assert on.
-  app.use("*", async (c, next) => {
-    try {
-      await next();
-    } catch (rewrappedErr) {
-      opts.onCaughtError?.(rewrappedErr);
-      const message =
-        rewrappedErr instanceof Error
-          ? rewrappedErr.message
-          : String(rewrappedErr);
-      return c.json({ error: "Internal", details: message }, 500);
-    }
-  });
 
   // Mount the production middleware exactly the way `src/mastra/index.ts`
   // does. `globalMiddleware` types its handlers as `(c: any, next: any)`
@@ -115,24 +109,39 @@ function buildApp(opts: BuildAppOptions = {}): Hono {
     );
   });
 
-  // Route #2 — uncaught throw with secret in `.message`. Exercises the
-  // catch-block rewrap (or, if removed, leaks the raw secret into the
-  // outer wrapper's rendered body).
+  // Route #2 — uncaught throw with secret in `.message`. In production the
+  // Mastra-installed `app.onError` (mirrored below) converts this to a
+  // static "Internal Server Error" body — the secret never reaches the wire.
   app.get("/api/health/throw-secret", () => {
     throw new Error(`Stripe rejected token ${SECRET}`);
   });
 
-  // Route #3 — happy-path control: a 2xx body containing a credential-
+  // Route #3 — uncaught HTTPException with secret in `.message`. Mastra's
+  // onError DOES echo the message into the body (`{ error: err.message }`),
+  // so this is the path where `redactSecretsInResponse` is the actual
+  // production defense.
+  app.get("/api/health/throw-http-secret", () => {
+    throw new HTTPException(502, {
+      message: `Bad gateway: token ${SECRET} was rejected upstream`,
+    });
+  });
+
+  // Route #4 — happy-path control: a 2xx body containing a credential-
   // shaped substring. The post-processor MUST NOT walk this.
   app.get("/api/health/ok-with-secret-shape", (c) => {
     return c.json({ note: SECRET }, 200);
   });
 
-  // Re-throw from onError so the throw escapes Hono's per-dispatch
-  // try/catch and bubbles through `await next()` in globalMiddleware,
-  // exercising the catch-block rewrap (see file header).
-  app.onError((err) => {
-    throw err;
+  // Mirror the production `app.onError` from
+  // `node_modules/@mastra/deployer/dist/server/index.js` (function
+  // `errorHandler`). Hono's per-dispatch try/catch in `compose()` routes
+  // every uncaught throw to this handler BEFORE the surrounding middleware's
+  // outer catch can observe it (see file header for why this matters).
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) {
+      return c.json({ error: err.message }, err.status);
+    }
+    return c.json({ error: "Internal Server Error" }, 500);
   });
 
   return app;
@@ -165,45 +174,62 @@ function buildApp(opts: BuildAppOptions = {}): Hono {
     );
   }
 
-  // 2. Uncaught throw — proves the catch-block rewrap is wired. Asserts on
-  // the real HTTP response body rendered by the outer wrapper, plus the
-  // `cause` chain on the rewrapped Error captured via `onCaughtError`.
+  // 2. Uncaught plain throw — proves Mastra's production onError is the
+  // defense for this path (renders a static "Internal Server Error" body),
+  // NOT the (removed) catch-block rewrap. The credential cannot leak even
+  // if `redactSecretsInResponse` is removed, because `error.message` never
+  // reaches the wire to begin with.
   {
-    let captured: unknown;
-    const app = buildApp({ onCaughtError: (e) => (captured = e) });
+    const app = buildApp();
     const res = await app.request("/api/health/throw-secret", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });
-    const body = (await res.json()) as { error?: string; details?: string };
+    const body = (await res.json()) as { error?: string };
 
     assert(
       res.status === 500,
-      "throw-secret request renders a 500 HTTP response (rewrap escaped middleware)",
+      "throw-secret request renders a 500 HTTP response (Mastra onError caught the throw)",
     );
     assert(
-      typeof body.details === "string" &&
-        body.details.includes(REDACTED_SENTINEL),
-      "throw-secret HTTP response body has REDACTED sentinel (rewrap fired in middleware catch block)",
+      body.error === "Internal Server Error",
+      "throw-secret response body is the static Mastra fallback (no error.message echo)",
     );
     assert(
-      typeof body.details === "string" && !body.details.includes(SECRET),
+      JSON.stringify(body).indexOf(SECRET) === -1,
       "throw-secret HTTP response body does NOT carry the raw sk-live-… credential",
     );
-    assert(
-      captured instanceof Error,
-      "outer wrapper saw the rewrapped Error escape globalMiddleware",
-    );
-    if (captured instanceof Error) {
-      const cause = (captured as Error & { cause?: unknown }).cause;
-      assert(
-        cause instanceof Error && cause.message.includes(SECRET),
-        "rewrapped Error preserves the original exception as `cause` (debuggability is not lost)",
-      );
-    }
   }
 
-  // 3. 2xx success — regression guard against over-broad scrubbing.
+  // 3. Uncaught HTTPException — Mastra's onError DOES echo `err.message`
+  // into the response body (`{ error: err.message }`), so this is the path
+  // where `redactSecretsInResponse` is the production defense. Removing
+  // `await redactSecretsInResponse(c)` from globalMiddleware regresses
+  // this test.
+  {
+    const app = buildApp();
+    const res = await app.request("/api/health/throw-http-secret", {
+      method: "GET",
+      headers: { "X-Admin-Key": ADMIN_KEY },
+    });
+    const body = (await res.json()) as { error?: string };
+
+    assert(
+      res.status === 502,
+      "throw-http-secret request renders the HTTPException status code (502)",
+    );
+    assert(
+      typeof body.error === "string" &&
+        body.error.includes(REDACTED_SENTINEL),
+      "throw-http-secret response error has REDACTED sentinel (post-processor scrubbed err.message)",
+    );
+    assert(
+      typeof body.error === "string" && !body.error.includes(SECRET),
+      "throw-http-secret response does NOT carry the raw sk-live-… credential from HTTPException.message",
+    );
+  }
+
+  // 4. 2xx success — regression guard against over-broad scrubbing.
   {
     const app = buildApp();
     const res = await app.request("/api/health/ok-with-secret-shape", {

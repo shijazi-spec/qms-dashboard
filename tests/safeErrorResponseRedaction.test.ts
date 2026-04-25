@@ -13,15 +13,27 @@
  * the upstream SDK (e.g. "Invalid token sk-live-…") — was previously
  * returned to the user-facing API caller and surfaced in client toasts.
  *
- * This test exercises the new `redactSecretsInResponse(c)` post-processor
- * and the catch-block error-rewrap to confirm credentials are replaced
- * with REDACTED_SENTINEL on the response boundary symmetric with the
- * storage-side defense.
+ * This test exercises the `redactSecretsInResponse(c)` post-processor to
+ * confirm credentials are replaced with REDACTED_SENTINEL on the response
+ * boundary symmetric with the storage-side defense.
+ *
+ * NOTE: a previous revision of this file additionally exercised
+ * `redactErrorForRethrow`, a helper that wrapped uncaught route throws so
+ * the rewrapped Error.message reaching the "default Hono error renderer"
+ * was credential-clean. Task #538 established that the rewrap was dead
+ * code in production — Mastra's deployer installs an `app.onError` that
+ * intercepts every thrown route handler error inside Hono's per-dispatch
+ * try/catch and either renders a static "Internal Server Error" body
+ * (non-HTTPException) or a `{ error: err.message }` body that still flows
+ * through `redactSecretsInResponse` below. The helper and the dedicated
+ * unit-level coverage for it have been removed; the production-realistic
+ * end-to-end coverage now lives in
+ * tests/safeErrorResponseRedaction.integration.test.ts.
  *
  * Run:  npx tsx tests/safeErrorResponseRedaction.test.ts
  */
 
-import { redactErrorForRethrow, redactSecretsInResponse } from '../src/mastra/middleware/index';
+import { redactSecretsInResponse } from '../src/mastra/middleware/index';
 import { REDACTED_SENTINEL } from '../src/utils/eventLogsDatabase';
 
 let passed = 0;
@@ -201,53 +213,6 @@ async function bodyOf(res: Response): Promise<any> {
     const ctx: any = { res: undefined };
     await redactSecretsInResponse(ctx);
     assert(ctx.res === undefined, 'undefined response is tolerated (no throw)');
-  }
-
-  // 8. redactErrorForRethrow — credential in Error.message is redacted --------
-  // Exercises the catch-block rewrap path inside the global middleware.
-  // Symmetric guarantee: even if a route throws an exception whose `.message`
-  // text contains the credential echoed back by the upstream SDK, the
-  // exception that reaches Hono's default error renderer carries the
-  // REDACTED sentinel instead.
-  {
-    const original = new Error('Stripe rejected token sk-live-1234567890abcdefghij1234567890abcdef');
-    original.name = 'UpstreamError';
-    const wrapped = redactErrorForRethrow(original);
-    assert(wrapped instanceof Error, 'rewrap returns an Error instance for Error inputs');
-    if (wrapped instanceof Error) {
-      assert(wrapped.message.includes(REDACTED_SENTINEL), 'rewrapped Error.message contains REDACTED sentinel');
-      assert(
-        !wrapped.message.includes('sk-live-1234567890abcdefghij1234567890abcdef'),
-        'rewrapped Error.message does not echo the original secret',
-      );
-      assert(wrapped.name === 'UpstreamError', 'rewrapped Error preserves the original name');
-      assert((wrapped as Error & { cause?: unknown }).cause === original, 'rewrapped Error.cause links back to the raw exception');
-    }
-  }
-
-  // 9. redactErrorForRethrow — clean Error is returned unchanged --------------
-  // Avoids unnecessary wrapping (and the cost it imposes on the stack trace
-  // and any `instanceof` checks downstream) when there is nothing to redact.
-  {
-    const original = new Error('A plain validation failure');
-    const wrapped = redactErrorForRethrow(original);
-    assert(wrapped === original, 'rewrap returns the same Error instance when no redaction is needed');
-  }
-
-  // 10. redactErrorForRethrow — non-Error throwables are also handled ---------
-  // Some SDKs throw bare strings or rich plain objects. We must still scrub
-  // any credential-shaped substring from the stringified form so the Hono
-  // renderer's fallback "[object Object]" / "Some text" path is also safe.
-  {
-    const wrapped = redactErrorForRethrow('Token sk-live-1234567890abcdefghij1234567890abcdef rejected');
-    assert(typeof wrapped === 'string', 'rewrap returns a string for string throwables');
-    if (typeof wrapped === 'string') {
-      assert(wrapped.includes(REDACTED_SENTINEL), 'rewrapped string contains REDACTED sentinel');
-      assert(
-        !wrapped.includes('sk-live-1234567890abcdefghij1234567890abcdef'),
-        'rewrapped string does not echo the original secret',
-      );
-    }
   }
 
   // ---------------------------------------------------------------------------
