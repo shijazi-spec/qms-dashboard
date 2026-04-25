@@ -76,6 +76,21 @@
  * those env vars set, so a regression in the route-lockdown middleware
  * fails CI in the same run as the unit tests.
  *
+ * HTTP rate-limiter integration tests: if the env var
+ * `RUN_RATE_LIMITER_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/testRateLimiterHttp.ts` and `tests/testRateLimiterPerUserHttp.ts`
+ * (via `scripts/run-rate-limiter-integration-tests.sh`) against a running
+ * dev server. Both files validate `ADMIN_API_KEY`, `SESSION_SECRET`, and
+ * `DATABASE_URL` themselves and exit non-zero if any is missing. The
+ * dedicated CI workflow `.github/workflows/rate-limiter-integration.yml`
+ * boots the dev server *without* `RATE_LIMIT_DISABLED=true` (so the
+ * limiter actually engages) and sets the env, and the main
+ * `.github/workflows/test.yml` also sets the flag so a regression in the
+ * IP-keyed or user-keyed buckets — including the per-user reset scenario
+ * Task #664 added — fails CI in the same run as the unit tests instead of
+ * only being catchable by manually running `npx tsx tests/testRateLimiter*Http.ts`
+ * with the secret flipped.
+ *
  * AI approval-queue HTTP secret-leak integration test: if the env var
  * `RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1` is set we additionally run
  * `tests/aiApprovalRoutesRedaction.integration.ts` against a running dev
@@ -273,6 +288,38 @@ function runRbacIntegrationSuite(): Promise<RunResult> {
     child.on("error", (err) => {
       console.error(
         `Failed to spawn rbac integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runRateLimiterIntegrationSuite(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label =
+      "tests/testRateLimiterHttp.ts + tests/testRateLimiterPerUserHttp.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-rate-limiter-integration-tests.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn rate-limiter integration suite: ${(err as Error).message}`,
       );
       resolve({
         file: label,
@@ -530,6 +577,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] AI approval-queue HTTP secret-leak integration test — set RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include it.`,
+    );
+  }
+
+  if (process.env.RUN_RATE_LIMITER_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── HTTP rate-limiter integration tests (testRateLimiterHttp + testRateLimiterPerUserHttp, Task #664) ────`,
+    );
+    results.push(await runRateLimiterIntegrationSuite());
+  } else {
+    console.log(
+      `\n[skip] HTTP rate-limiter integration tests — set RUN_RATE_LIMITER_INTEGRATION_E2E=1 with ADMIN_API_KEY, SESSION_SECRET, DATABASE_URL, and the dev server running WITHOUT RATE_LIMIT_DISABLED=true to include them.`,
     );
   }
 

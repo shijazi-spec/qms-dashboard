@@ -1,0 +1,137 @@
+name: Rate-limiter HTTP integration tests
+
+# Runs the HTTP-level rate-limiter integration tests against a freshly
+# booted dev server (Task #664):
+#
+#   - tests/testRateLimiterHttp.ts
+#       Eight scenarios covering write / auth-flow / read / export /
+#       unauth-read / unauth-write buckets, plus window-rollover assertions
+#       for each. Authenticates via X-Admin-Key, so it never exercises the
+#       user-keyed path.
+#
+#   - tests/testRateLimiterPerUserHttp.ts
+#       Two scenarios covering the user-keyed path the IP-keyed script
+#       above cannot reach: per-user isolation under shared X-Forwarded-For
+#       (so a regression that falls back to IP keying for authenticated
+#       users behind one office NAT is caught), and per-user READ_LIMIT
+#       window reset (so a regression that turns a user-keyed bucket into
+#       a permanent ban after one minute is caught).
+#
+# Both files were originally only runnable by hand with `npx tsx ...` and
+# needed the dev server to have rate limiting enabled. In the Replit dev
+# environment the server runs with `RATE_LIMIT_DISABLED=true`, so the
+# limiter short-circuits and the burst phase of every scenario produces
+# zero 429+Retry-After responses — silently degrading the tests to
+# false-positives. This workflow boots the dev server WITHOUT that flag
+# set, so the limiter actually engages and any regression in the IP-keyed
+# or user-keyed buckets fails CI on every push/PR.
+#
+# Why a dedicated workflow as well as the main test.yml hook:
+#   - The standard `Tests` workflow already runs this suite via
+#     RUN_RATE_LIMITER_INTEGRATION_E2E=1, so a regression fails CI alongside
+#     the unit tests on every push/PR (no extra job needed for coverage).
+#   - This dedicated workflow exists so the rate-limiter regression signal
+#     can be re-run / re-triggered in isolation when debugging a flaky
+#     window-boundary failure, mirroring the same dedicated-workflow
+#     pattern used for RBAC and AI approval redaction.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: rate-limiter-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rate-limiter-integration:
+    name: Rate-limiter HTTP integration suite
+    runs-on: ubuntu-latest
+    # Each test file waits ~60 s per reset scenario, parallelised so the
+    # combined wall-clock stays around 2-3 minutes. Plus install + dev
+    # server boot. 20 minutes is a safe ceiling.
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: walaplus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/walaplus_test
+      # Both the dev server and the per-user test harness must use the
+      # same key, otherwise the signed cookies the harness generates fail
+      # HMAC verification, the limiter sees the requests as
+      # unauthenticated, and the user-keyed buckets are never exercised —
+      # silently masking any per-user regression.
+      SESSION_SECRET: ci-session-secret-do-not-use-in-prod
+      ADMIN_API_KEY: ci-admin-key-rate-limiter-integration
+      TEST_ADMIN_KEY: ci-admin-key-rate-limiter-integration
+      RATE_LIMIT_TEST_URL: http://localhost:5000
+      PORT: "5000"
+      DATA_MODE: REAL
+      CI: "true"
+      # Critical: the rate-limiter short-circuit MUST be off for these
+      # tests to assert anything. The Replit dev environment sets this
+      # to "true" via .replit userenv.development, but CI starts from a
+      # clean env so we explicitly set it to "false" to be defensive
+      # against any future inheritance change.
+      RATE_LIMIT_DISABLED: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start dev server
+        run: |
+          npm run dev > server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Wait for /api/health to come up (max 90 s).
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:5000/api/health > /dev/null; then
+              echo "Server ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become healthy in time" >&2
+          tail -200 server.log >&2 || true
+          exit 1
+
+      - name: Run rate-limiter HTTP integration suite
+        run: bash scripts/run-rate-limiter-integration-tests.sh
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rate-limiter-integration-server-log
+          path: server.log
+          if-no-files-found: ignore
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "${SERVER_PID}" 2>/dev/null || true
+          fi

@@ -58,6 +58,20 @@ jobs:
       # path through GET /api/ai/approvals* and POST /approve fails the
       # standard test job — not just the dedicated workflow (Task #348).
       RUN_APPROVAL_REDACTION_INTEGRATION_E2E: "1"
+      # Tells tests/runIntegrationTests.ts to additionally run
+      # tests/testRateLimiterHttp.ts and tests/testRateLimiterPerUserHttp.ts
+      # (via scripts/run-rate-limiter-integration-tests.sh) inside this
+      # same npm test invocation, so a regression in the IP-keyed or
+      # user-keyed rate-limiter buckets — including the per-user reset
+      # scenario added by Task #664 — fails the standard test job, not
+      # just the dedicated workflow.
+      RUN_RATE_LIMITER_INTEGRATION_E2E: "1"
+      # Defensive: explicitly disable the limiter short-circuit so the dev
+      # server below enforces rate limiting. The Replit dev environment
+      # sets this to "true" (see .replit's userenv.development), but in CI
+      # it must be unset/false otherwise every burst sees zero 429s and
+      # the rate-limiter integration tests silently degrade to false-positives.
+      RATE_LIMIT_DISABLED: "false"
 
     steps:
       - name: Check out repository

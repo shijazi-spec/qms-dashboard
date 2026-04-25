@@ -148,3 +148,57 @@ DATABASE_URL=postgresql://... \
 SESSION_SECRET=local-dev-secret \
 npm test
 ```
+
+## HTTP rate-limiter integration tests
+
+Two HTTP-level tests fire concurrent `fetch()` bursts against the running dev
+server and assert that the middleware's distributed rate limiter returns the
+expected `429 + Retry-After` shape and rolls over at the next 60 s window
+boundary. They catch limiter regressions the in-process tests cannot:
+
+- `tests/testRateLimiterHttp.ts` — eight scenarios covering write / auth-flow /
+  read / export / unauth-read / unauth-write buckets (IP-keyed via
+  `X-Admin-Key`), including window-rollover assertions for each.
+- `tests/testRateLimiterPerUserHttp.ts` — per-user isolation under shared
+  `X-Forwarded-For` (catches a regression that falls back to IP keying for
+  authenticated users behind one office NAT) plus per-user `READ_LIMIT` window
+  reset (catches a regression that turns a `user:<userId>` bucket into a
+  permanent ban after one minute).
+
+Both files require `ADMIN_API_KEY`, `SESSION_SECRET` (the **same**
+`SESSION_SECRET` the dev server uses), and `DATABASE_URL`. The dev server
+**must** be running with `RATE_LIMIT_DISABLED` unset or `false` — in the Replit
+dev environment it is set to `"true"` (see `.replit` `userenv.development`),
+which short-circuits the limiter to allow-all and silently degrades the tests
+to false-positives.
+
+The wrapper script checks env vars upfront and runs both files sequentially:
+
+```sh
+ADMIN_API_KEY=... \
+DATABASE_URL=postgresql://... \
+SESSION_SECRET=local-dev-secret \
+bash scripts/run-rate-limiter-integration-tests.sh
+```
+
+CI runs this suite in two places:
+
+- `.github/workflows/test.yml` (standard test job) boots postgres + the dev
+  server with `RATE_LIMIT_DISABLED=false` and
+  `RUN_RATE_LIMITER_INTEGRATION_E2E=1`, so the same `npm test` invocation that
+  runs the unit tests also drives the rate-limiter HTTP integration suite.
+- `.github/workflows/rate-limiter-integration.yml` (dedicated workflow)
+  re-runs only the rate-limiter HTTP integration suite for fast feedback when
+  iterating on the limiter or middleware in isolation.
+
+To include the suite in a local `npm test` run, set
+`RUN_RATE_LIMITER_INTEGRATION_E2E=1` (with the env vars above and the dev
+server reachable at `RATE_LIMIT_TEST_URL`, default `http://localhost:5000`):
+
+```sh
+RUN_RATE_LIMITER_INTEGRATION_E2E=1 \
+ADMIN_API_KEY=... \
+DATABASE_URL=postgresql://... \
+SESSION_SECRET=local-dev-secret \
+npm test
+```
