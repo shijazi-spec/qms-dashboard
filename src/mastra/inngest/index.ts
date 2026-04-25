@@ -785,19 +785,34 @@ const aiFeedbackDigestFunction = inngest.createFunction(
   async ({ step }) => {
     return await step.run("send-ai-feedback-digest", async () => {
       console.log("[AIFeedbackDigest] Weekly AI feedback digest triggered");
-      const { getWeeklyFeedbackDigest } = await import("../../utils/aiFeedbackDatabase");
+      const {
+        getWeeklyFeedbackDigest,
+        summarizeFeedbackTrend,
+      } = await import("../../utils/aiFeedbackDatabase");
       const digest = await getWeeklyFeedbackDigest();
+      const trend = Array.isArray(digest.trend) ? digest.trend : [];
+      const trendSummary = summarizeFeedbackTrend(trend);
       console.log("[AIFeedbackDigest] Digest data:", digest);
+      console.log("[AIFeedbackDigest] Trend summary:", trendSummary);
 
       if (!digest || digest.total === 0) {
         console.log("[AIFeedbackDigest] No feedback this week, skipping notifications");
-        return { skipped: true };
+        return { skipped: true, trend: trendSummary };
       }
 
       const upRate = digest.total > 0 ? Math.round((digest.thumbs_up / digest.total) * 100) : 0;
-      const summary = `AI Consultant received ${digest.total} ratings this week: ${digest.thumbs_up} 👍 (${upRate}%) / ${digest.thumbs_down} 👎. Top issue: ${digest.top_categories?.[0]?.category || 'none'}.`;
+      const trendLabel: Record<typeof trendSummary.direction, string> = {
+        improving: '📈 improving',
+        worsening: '📉 worsening',
+        stable: '➡️ stable',
+        insufficient_data: 'insufficient data',
+      };
+      const peakSuffix = trendSummary.peak_negative_day && trendSummary.peak_negative_count > 0
+        ? `, worst day ${trendSummary.peak_negative_day} (${trendSummary.peak_negative_count} 👎)`
+        : '';
+      const trendLine = `Trend: ${trendLabel[trendSummary.direction]}${peakSuffix}.`;
+      const summary = `AI Consultant received ${digest.total} ratings this week: ${digest.thumbs_up} 👍 (${upRate}%) / ${digest.thumbs_down} 👎. Top issue: ${digest.top_categories?.[0]?.category || 'none'}. ${trendLine}`;
 
-      const trend = Array.isArray(digest.trend) ? digest.trend : [];
       const trendPlainLines = trend.length > 0
         ? [
             'Day         👍   👎',
@@ -825,7 +840,14 @@ const aiFeedbackDigestFunction = inngest.createFunction(
         await sendSlackNotification(slackChannel, slackMessage);
       } catch {}
 
-      return { total: digest.total, thumbsUp: digest.thumbs_up, thumbsDown: digest.thumbs_down, upRate, trendDays: trend.length };
+      return {
+        total: digest.total,
+        thumbsUp: digest.thumbs_up,
+        thumbsDown: digest.thumbs_down,
+        upRate,
+        trendDays: trend.length,
+        trend: trendSummary,
+      };
     });
   },
 );

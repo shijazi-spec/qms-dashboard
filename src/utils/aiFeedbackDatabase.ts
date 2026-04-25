@@ -221,6 +221,85 @@ export async function getFeedbackTrend(days = 30): Promise<FeedbackTrendPoint[]>
   }));
 }
 
+export interface FeedbackTrendSummary {
+  direction: 'improving' | 'worsening' | 'stable' | 'insufficient_data';
+  peak_negative_day: string | null;
+  peak_negative_count: number;
+  total_thumbs_up: number;
+  total_thumbs_down: number;
+  first_half_down_rate: number;
+  second_half_down_rate: number;
+  days_observed: number;
+}
+
+/**
+ * Summarize a feedback time-series for inclusion in scheduled QMS reports.
+ * Returns trend direction (based on thumbs-down rate change between the first
+ * and second half of the window) and the worst single-day spike.
+ */
+export function summarizeFeedbackTrend(trend: FeedbackTrendPoint[]): FeedbackTrendSummary {
+  const points = Array.isArray(trend) ? trend : [];
+  const totalUp = points.reduce((s, p) => s + (p.thumbs_up || 0), 0);
+  const totalDown = points.reduce((s, p) => s + (p.thumbs_down || 0), 0);
+
+  let peakDay: string | null = null;
+  let peakCount = 0;
+  for (const p of points) {
+    if ((p.thumbs_down || 0) > peakCount) {
+      peakCount = p.thumbs_down || 0;
+      peakDay = p.day;
+    }
+  }
+
+  if (points.length < 2 || (totalUp + totalDown) === 0) {
+    return {
+      direction: 'insufficient_data',
+      peak_negative_day: peakDay,
+      peak_negative_count: peakCount,
+      total_thumbs_up: totalUp,
+      total_thumbs_down: totalDown,
+      first_half_down_rate: 0,
+      second_half_down_rate: 0,
+      days_observed: points.length,
+    };
+  }
+
+  const mid = Math.floor(points.length / 2);
+  const firstHalf = points.slice(0, mid);
+  const secondHalf = points.slice(mid);
+
+  const halfRate = (half: FeedbackTrendPoint[]) => {
+    const up = half.reduce((s, p) => s + (p.thumbs_up || 0), 0);
+    const down = half.reduce((s, p) => s + (p.thumbs_down || 0), 0);
+    const total = up + down;
+    return total > 0 ? down / total : 0;
+  };
+
+  const firstRate = halfRate(firstHalf);
+  const secondRate = halfRate(secondHalf);
+  const delta = secondRate - firstRate;
+
+  let direction: FeedbackTrendSummary['direction'];
+  if (Math.abs(delta) < 0.05) {
+    direction = 'stable';
+  } else if (delta > 0) {
+    direction = 'worsening';
+  } else {
+    direction = 'improving';
+  }
+
+  return {
+    direction,
+    peak_negative_day: peakDay,
+    peak_negative_count: peakCount,
+    total_thumbs_up: totalUp,
+    total_thumbs_down: totalDown,
+    first_half_down_rate: Math.round(firstRate * 100) / 100,
+    second_half_down_rate: Math.round(secondRate * 100) / 100,
+    days_observed: points.length,
+  };
+}
+
 export async function getWeeklyFeedbackDigest(): Promise<{
   period: string;
   total: number;
