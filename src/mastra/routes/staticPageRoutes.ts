@@ -1,6 +1,28 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { isAdminAuthorized } from "../../utils/rbacMiddleware";
+import { getSessionFromCookie } from "./authRoutes";
+import { isAdminKeyConfigured, isAdminAuthorized } from "../../utils/rbacMiddleware";
+
+function renderSetupRequiredPage(title: string, panelDescription: string): string {
+  return `<!DOCTYPE html><html><head><title>${title}</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">${title}</h1><p class="text-gray-600 mb-4">${panelDescription}</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`;
+}
+
+function serveDashboardPageWithSetupCheck(filename: string, pageTitle: string, panelDescription: string) {
+  return async (c: any) => {
+    try {
+      const session = getSessionFromCookie(c.req.header('Cookie'));
+      if (!isAdminKeyConfigured() && !session) {
+        return c.html(renderSetupRequiredPage(pageTitle, panelDescription));
+      }
+      const filePath = resolveDashboardFile(filename);
+      if (filePath) return c.html(readFileSync(filePath, "utf-8"));
+      return c.text(`${filename} not found`, 404);
+    } catch (error) {
+      console.error(`Error serving ${filename}:`, error);
+      return c.text(`Error loading ${filename}`, 500);
+    }
+  };
+}
 
 const STATIC_MIME: Record<string, string> = {
   css: 'text/css; charset=utf-8',
@@ -76,6 +98,10 @@ export const staticPageRoutes = [
           const ext = dotIdx > 0 ? rawName.slice(dotIdx + 1).toLowerCase() : '';
 
           if (!ext || ext === 'html') {
+            const session = getSessionFromCookie(c.req.header('Cookie'));
+            if (!isAdminKeyConfigured() && !session) {
+              return c.html(renderSetupRequiredPage("Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`));
+            }
             const baseName = rawName.replace(/\.html$/i, '');
             const htmlPath = resolveDashboardFile(`${baseName}.html`);
             if (htmlPath) return c.html(readFileSync(htmlPath, "utf-8"));
@@ -112,7 +138,7 @@ export const staticPageRoutes = [
       return async (c: any) => {
         try {
           if (!isAdminAuthorized(c)) {
-            return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the admin panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
+            return c.html(renderSetupRequiredPage("Admin Setup Required", `To access the admin panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.`));
           }
           const filePath = resolveDashboardFile("admin.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
@@ -137,7 +163,7 @@ export const staticPageRoutes = [
       return async (c: any) => {
         try {
           if (!isAdminAuthorized(c)) {
-            return c.html(`<!DOCTYPE html><html><head><title>Admin Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">Admin Setup Required</h1><p class="text-gray-600 mb-4">To access the Users &amp; Access panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
+            return c.html(renderSetupRequiredPage("Admin Setup Required", `To access the Users &amp; Access panel, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.`));
           }
           const filePath = resolveDashboardFile("users.html");
           if (filePath) return c.html(readFileSync(filePath, "utf-8"));
@@ -163,44 +189,34 @@ export const staticPageRoutes = [
     // is the actual authorization boundary for QMS data.
     path: "/qms",
     method: "GET",
-    createHandler: async () => {
-      return async (c: any) => {
-        try {
-          if (!isAdminAuthorized(c)) {
-            return c.html(`<!DOCTYPE html><html><head><title>QMS Setup Required</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">QMS Setup Required</h1><p class="text-gray-600 mb-4">To access the QMS dashboard, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret.</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`);
-          }
-          const filePath = resolveDashboardFile("qms.html");
-          if (filePath) return c.html(readFileSync(filePath, "utf-8"));
-          return c.text("QMS Dashboard not found", 404);
-        } catch (error) {
-          console.error("Error serving QMS dashboard:", error);
-          return c.text("Error loading QMS dashboard", 500);
-        }
-      };
-    },
+    createHandler: async () => serveDashboardPageWithSetupCheck(
+      "qms.html",
+      "QMS Setup Required",
+      `To access the QMS dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+    ),
   },
-  { path: "/sandbox", method: "GET", createHandler: async () => serveDashboardPage("sandbox.html") },
-  { path: "/crm", method: "GET", createHandler: async () => serveDashboardPage("crm.html") },
-  { path: "/audits", method: "GET", createHandler: async () => serveDashboardPage("audits.html") },
-  { path: "/compliance", method: "GET", createHandler: async () => serveDashboardPage("compliance.html") },
-  { path: "/policies", method: "GET", createHandler: async () => serveDashboardPage("policies.html") },
-  { path: "/reviews", method: "GET", createHandler: async () => serveDashboardPage("reviews.html") },
-  { path: "/risks", method: "GET", createHandler: async () => serveDashboardPage("risks.html") },
-  { path: "/grc", method: "GET", createHandler: async () => serveDashboardPage("grc.html") },
-  { path: "/pdpl", method: "GET", createHandler: async () => serveDashboardPage("pdpl.html") },
-  { path: "/feedback", method: "GET", createHandler: async () => serveDashboardPage("feedback.html") },
+  { path: "/sandbox", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("sandbox.html", "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/crm", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("crm.html", "CRM Setup Required", `To access the CRM dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/audits", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("audits.html", "Audits Setup Required", `To access the Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/compliance", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("compliance.html", "Compliance Setup Required", `To access the Compliance dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/policies", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("policies.html", "Policies Setup Required", `To access the Policies dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/reviews", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("reviews.html", "Reviews Setup Required", `To access the Management Reviews dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/risks", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("risks.html", "Risks Setup Required", `To access the Risk Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/grc", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("grc.html", "GRC Setup Required", `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/pdpl", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("pdpl.html", "PDPL Setup Required", `To access the PDPL dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/feedback", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("feedback.html", "Feedback Setup Required", `To access the Feedback dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/guide", method: "GET", createHandler: async () => serveDashboardPage("guide.html") },
   { path: "/migration", method: "GET", createHandler: async () => serveDashboardPage("migration.html") },
-  { path: "/logs", method: "GET", createHandler: async () => serveDashboardPage("logs.html") },
-  { path: "/ai-approvals", method: "GET", createHandler: async () => serveDashboardPage("ai-approvals.html") },
-  { path: "/intake", method: "GET", createHandler: async () => serveDashboardPage("intake.html") },
-  { path: "/external-audits", method: "GET", createHandler: async () => serveDashboardPage("external-audits.html") },
-  { path: "/vendors", method: "GET", createHandler: async () => serveDashboardPage("vendors.html") },
-  { path: "/tablef", method: "GET", createHandler: async () => serveDashboardPage("tablef.html") },
-  { path: "/infographic", method: "GET", createHandler: async () => serveDashboardPage("infographic.html") },
-  { path: "/executive.html", method: "GET", createHandler: async () => serveDashboardPage("executive.html") },
-  { path: "/grc.html", method: "GET", createHandler: async () => serveDashboardPage("grc.html") },
-  { path: "/consultant.html", method: "GET", createHandler: async () => serveDashboardPage("consultant.html") },
+  { path: "/logs", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("logs.html", "Logs Setup Required", `To access the Audit Logs, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/ai-approvals", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("ai-approvals.html", "AI Approvals Setup Required", `To access the AI Approvals dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/intake", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("intake.html", "Intake Setup Required", `To access the Intake dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/external-audits", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("external-audits.html", "External Audits Setup Required", `To access the External Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/vendors", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("vendors.html", "Vendors Setup Required", `To access the Vendors dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/tablef", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("tablef.html", "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/infographic", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("infographic.html", "Infographic Setup Required", `To access the Infographic dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/executive.html", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("executive.html", "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/grc.html", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("grc.html", "GRC Setup Required", `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
+  { path: "/consultant.html", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("consultant.html", "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/login.html", method: "GET", createHandler: async () => serveDashboardPage("login.html") },
   {
     path: "/docs/SCOPE_OF_WORK.html",
