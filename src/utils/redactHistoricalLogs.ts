@@ -1196,6 +1196,19 @@ export interface PostRestoreSweepAlertDeps {
   sendEmail?: PostRestoreSweepAlertEmailFn;
   env?: Record<string, string | undefined>;
   logger?: Pick<Console, "log" | "warn" | "error">;
+  /**
+   * Override the recipient resolver (Task #573). Production callers
+   * leave this undefined — the dispatcher dynamically imports
+   * {@link resolveEffectiveRecipients} from `./alertEmailRecipients`
+   * which reads the DB-backed admin list (preferred) and falls back
+   * to the `POST_RESTORE_SWEEP_ALERT_EMAIL` env var when the DB list
+   * is empty. Unit tests inject a stub to assert precedence rules
+   * without touching the DB.
+   */
+  resolveRecipients?: (
+    channel: "post_restore_sweep" | "ai_cost",
+    envValue: string | undefined | null,
+  ) => Promise<{ recipients: string[]; source: "db" | "env" | "none" }>;
 }
 
 /**
@@ -1380,32 +1393,52 @@ export async function dispatchPostRestoreSweepAlert(
     }
   }
 
-  // Channel 3 — opt-in email recipient list (mirrors the
-  // ai-cost-summary cron's AI_COST_ALERT_EMAIL pattern). Skipped
-  // silently — channel not even marked attempted — when:
-  //   - POST_RESTORE_SWEEP_ALERT_EMAIL is unset / whitespace-only, OR
-  //   - the email helper itself is unconfigured (no RESEND_API_KEY, or
-  //     a stub-length value < 20 chars — the same configured-check
-  //     `sendResendEmail` performs internally).
-  // Both branches achieve true parity with the Slack-webhook channel
-  // above, which is also a no-op when its URL is unset.
+  // Channel 3 — opt-in email recipient list. Same gating rules as the
+  // Slack-webhook channel above: skipped silently — channel not even
+  // marked attempted — when there are no recipients OR when the email
+  // helper itself is unconfigured. Once both gates pass, a genuine
+  // send failure (helper throws or returns success:false from a real
+  // Resend API error) is logged as a warning so a degraded upstream
+  // is not silently swallowed.
   //
-  // Once those gates pass, the channel IS counted as attempted and a
-  // genuine send failure (helper throws or returns success:false from
-  // a real Resend API error) is logged as a warning so a degraded
-  // upstream is not silently swallowed.
-  const emailRecipientsRaw = env.POST_RESTORE_SWEEP_ALERT_EMAIL;
-  const emailRecipients = emailRecipientsRaw
-    ? emailRecipientsRaw
-        .split(",")
-        .map((e) => e.trim())
-        .filter(Boolean)
-    : [];
+  // Recipient resolution (Task #573): the DB-backed admin list takes
+  // precedence over `POST_RESTORE_SWEEP_ALERT_EMAIL` so admins can
+  // add/remove people from the dashboard without a redeploy. The env
+  // var continues to work as a fallback when the DB list is empty —
+  // existing deployments that haven't touched the dashboard see no
+  // behaviour change.
+  const { resolveEffectiveRecipients } = await import(
+    "./alertEmailRecipients"
+  );
+  let emailRecipients: string[] = [];
+  let recipientsSource: "db" | "env" | "none" = "none";
+  try {
+    const resolved = await (deps.resolveRecipients
+      ? deps.resolveRecipients("post_restore_sweep", env.POST_RESTORE_SWEEP_ALERT_EMAIL)
+      : resolveEffectiveRecipients(
+          "post_restore_sweep",
+          env.POST_RESTORE_SWEEP_ALERT_EMAIL,
+        ));
+    emailRecipients = resolved.recipients;
+    recipientsSource = resolved.source;
+  } catch (resolveErr) {
+    // Defensive: if the resolver throws (it normally returns [] on DB
+    // error), fall back to parsing the env var directly so we still
+    // page on-call rather than silently dropping the email channel.
+    logger.warn?.(
+      "[Redaction] Post-restore sweep alert: recipient resolver failed; falling back to env var:",
+      resolveErr,
+    );
+    emailRecipients = (env.POST_RESTORE_SWEEP_ALERT_EMAIL ?? "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+    recipientsSource = emailRecipients.length > 0 ? "env" : "none";
+  }
   // Reuse the centralised helper-configured check from `resendMail.ts`
-  // (Task #555 review feedback) so this dispatcher cannot drift from
-  // the helper's own internal length>=20 sentinel-key gate. Imported
-  // dynamically to keep the module usable in CLI contexts that never
-  // touch the email path.
+  // so this dispatcher cannot drift from the helper's own internal
+  // length>=20 sentinel-key gate. Imported dynamically to keep the
+  // module usable in CLI contexts that never touch the email path.
   const { isResendConfigured } = await import("./resendMail");
   const helperConfigured = isResendConfigured(
     env as NodeJS.ProcessEnv,
@@ -1473,7 +1506,8 @@ export async function dispatchPostRestoreSweepAlert(
   logger.log?.(
     `[Redaction] Post-restore sweep alert dispatched ` +
       `(triggers: ${detailLine}; channels succeeded: ` +
-      `${channelsSucceeded.join(",") || "none"})`,
+      `${channelsSucceeded.join(",") || "none"}` +
+      `; recipients_source: ${recipientsSource})`,
   );
 
   return {

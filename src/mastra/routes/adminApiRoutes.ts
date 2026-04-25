@@ -534,6 +534,150 @@ export const adminApiRoutes = [
     },
   },
   {
+    path: "/api/admin/alert-recipients",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) return c.json({ error: 'Insufficient permissions' }, 403);
+          const {
+            parseChannel,
+            listAlertRecipients,
+            listAlertRecipientsAudit,
+            parseRecipientsEnvValue,
+            ALERT_CHANNELS,
+          } = await import("../../utils/alertEmailRecipients");
+          const channelParam = c.req.query("channel");
+          const channel = parseChannel(channelParam);
+          if (!channel) {
+            return c.json({
+              error: "Missing or invalid channel",
+              valid_channels: ALERT_CHANNELS,
+            }, 400);
+          }
+          const [recipients, audit] = await Promise.all([
+            listAlertRecipients(channel),
+            listAlertRecipientsAudit(channel, 25),
+          ]);
+          // Surface the env fallback to the dashboard so the UI can
+          // show "Currently using env-var fallback (3 entries)" when
+          // the DB list is empty and POST_RESTORE_SWEEP_ALERT_EMAIL /
+          // AI_COST_ALERT_EMAIL is set.
+          const envValue =
+            channel === "post_restore_sweep"
+              ? process.env.POST_RESTORE_SWEEP_ALERT_EMAIL
+              : process.env.AI_COST_ALERT_EMAIL;
+          const envFallback = parseRecipientsEnvValue(envValue);
+          return c.json({
+            channel,
+            recipients,
+            audit,
+            env_fallback: envFallback,
+            using_env_fallback: recipients.length === 0 && envFallback.length > 0,
+          });
+        } catch (error) {
+          console.error("Error fetching alert recipients:", error);
+          return c.json({ error: "Failed to fetch alert recipients" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/admin/alert-recipients",
+    method: "POST",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) return c.json({ error: 'Insufficient permissions' }, 403);
+          const body = await c.req.json().catch(() => ({}));
+          const {
+            parseChannel,
+            addAlertRecipient,
+            ALERT_CHANNELS,
+          } = await import("../../utils/alertEmailRecipients");
+          const channel = parseChannel(body?.channel);
+          if (!channel) {
+            return c.json({
+              error: "Missing or invalid channel",
+              valid_channels: ALERT_CHANNELS,
+            }, 400);
+          }
+          if (typeof body?.email !== "string" || body.email.trim() === "") {
+            return c.json({ error: "Missing email" }, 400);
+          }
+          // Identify the admin actor for the audit row. Fall back to a
+          // sentinel value when the admin is using the API-key path
+          // (no session cookie) so the audit row is never NULL.
+          const session = getSessionFromCookie(c.req.header('Cookie'));
+          const changedBy = session?.email || "admin-api-key";
+          let result;
+          try {
+            result = await addAlertRecipient({
+              channel,
+              email: body.email,
+              changedBy,
+              note: typeof body?.note === "string" ? body.note : null,
+            });
+          } catch (validationErr: any) {
+            return c.json({
+              error: validationErr?.message || "Invalid email",
+            }, 400);
+          }
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          console.error("Error adding alert recipient:", error);
+          return c.json({ error: "Failed to add alert recipient" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/admin/alert-recipients",
+    method: "DELETE",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) return c.json({ error: 'Insufficient permissions' }, 403);
+          const body = await c.req.json().catch(() => ({}));
+          const {
+            parseChannel,
+            removeAlertRecipient,
+            ALERT_CHANNELS,
+          } = await import("../../utils/alertEmailRecipients");
+          const channel = parseChannel(body?.channel);
+          if (!channel) {
+            return c.json({
+              error: "Missing or invalid channel",
+              valid_channels: ALERT_CHANNELS,
+            }, 400);
+          }
+          if (typeof body?.email !== "string" || body.email.trim() === "") {
+            return c.json({ error: "Missing email" }, 400);
+          }
+          const session = getSessionFromCookie(c.req.header('Cookie'));
+          const changedBy = session?.email || "admin-api-key";
+          let result;
+          try {
+            result = await removeAlertRecipient({
+              channel,
+              email: body.email,
+              changedBy,
+              note: typeof body?.note === "string" ? body.note : null,
+            });
+          } catch (validationErr: any) {
+            return c.json({
+              error: validationErr?.message || "Invalid email",
+            }, 400);
+          }
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          console.error("Error removing alert recipient:", error);
+          return c.json({ error: "Failed to remove alert recipient" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/admin/redaction-sweep/status",
     method: "GET",
     createHandler: async () => {

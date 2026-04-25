@@ -133,6 +133,26 @@
             </div>
         </div>
 
+        <div id="alertRecipientsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-alert-recipients">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Post-Restore Sweep Alert Recipients</h3>
+                        <p class="text-sm text-gray-500">Email addresses paged when the boot redaction sweep rewrites historical rows</p>
+                    </div>
+                </div>
+                <span id="alertRecipientsBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" data-testid="status-alert-recipients">Loading...</span>
+            </div>
+            <div id="alertRecipientsBody" class="text-sm text-gray-700">
+                <p class="text-gray-500" data-testid="text-alert-recipients-loading">Loading recipient list...</p>
+            </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="logs.sec_activity">Log Activity (Last 7 Days)</h3>
             <div class="chart-container">
@@ -727,10 +747,226 @@
             }
         }
 
+        const ALERT_CHANNEL_POST_RESTORE = 'post_restore_sweep';
+
+        function formatAlertTimestamp(ts) {
+            if (!ts) return '—';
+            try {
+                const d = new Date(ts);
+                if (isNaN(d.getTime())) return String(ts);
+                return d.toLocaleString();
+            } catch (e) { return String(ts); }
+        }
+
+        function renderAlertRecipients(data) {
+            const badge = document.getElementById('alertRecipientsBadge');
+            const body = document.getElementById('alertRecipientsBody');
+            if (!badge || !body) return;
+            const recipients = Array.isArray(data && data.recipients) ? data.recipients : [];
+            const audit = Array.isArray(data && data.audit) ? data.audit : [];
+            const envFallback = Array.isArray(data && data.env_fallback) ? data.env_fallback : [];
+            const usingEnv = !!(data && data.using_env_fallback);
+            if (usingEnv) {
+                badge.textContent = 'Env fallback (' + envFallback.length + ')';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800';
+            } else if (recipients.length > 0) {
+                badge.textContent = recipients.length + ' configured';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
+            } else {
+                badge.textContent = 'No recipients';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600';
+            }
+
+            let recipientRows = '';
+            if (recipients.length === 0) {
+                recipientRows =
+                    '<tr><td colspan="3" class="py-3 text-gray-500" data-testid="text-alert-recipients-empty">' +
+                        'No recipients configured. ' +
+                        (envFallback.length > 0
+                            ? 'Currently falling back to the <code>POST_RESTORE_SWEEP_ALERT_EMAIL</code> env var (' + envFallback.length + ' entries).'
+                            : 'Sweep alert emails are disabled.') +
+                    '</td></tr>';
+            } else {
+                recipientRows = recipients.map(function (r) {
+                    const emailEsc = escapeHtml(r.email || '');
+                    return '<tr data-testid="row-alert-recipient-' + emailEsc + '">' +
+                        '<td class="py-2 pr-4 font-mono text-gray-900" data-testid="text-alert-recipient-email-' + emailEsc + '">' + emailEsc + '</td>' +
+                        '<td class="py-2 pr-4 text-gray-500">' + escapeHtml(r.added_by || '—') + '</td>' +
+                        '<td class="py-2 pr-4 text-gray-500">' + escapeHtml(formatAlertTimestamp(r.added_at)) + '</td>' +
+                        '<td class="py-2 text-right">' +
+                            '<button class="text-red-600 hover:text-red-800 text-xs font-medium" ' +
+                                'data-on-click="removeAlertRecipient" data-args=\'["' + emailEsc + '"]\' ' +
+                                'data-testid="button-remove-alert-recipient-' + emailEsc + '">Remove</button>' +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+
+            const envHint = envFallback.length > 0 && !usingEnv
+                ? '<p class="text-xs text-gray-500 mt-2">Env fallback (<code>POST_RESTORE_SWEEP_ALERT_EMAIL</code>) is also configured with ' +
+                    envFallback.length + ' entries but is currently overridden by the list above.</p>'
+                : '';
+
+            let auditRows = '';
+            if (audit.length === 0) {
+                auditRows = '<tr><td colspan="4" class="py-2 text-gray-400 text-xs">No changes recorded yet.</td></tr>';
+            } else {
+                auditRows = audit.map(function (a) {
+                    const colour = a.action === 'remove' ? 'text-red-700' : 'text-green-700';
+                    return '<tr>' +
+                        '<td class="py-1 pr-4 text-xs text-gray-500">' + escapeHtml(formatAlertTimestamp(a.changed_at)) + '</td>' +
+                        '<td class="py-1 pr-4 text-xs ' + colour + ' font-medium">' + escapeHtml(a.action) + '</td>' +
+                        '<td class="py-1 pr-4 text-xs font-mono text-gray-900">' + escapeHtml(a.email) + '</td>' +
+                        '<td class="py-1 text-xs text-gray-500">' + escapeHtml(a.changed_by) + '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+
+            body.innerHTML =
+                '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-alert-recipients">' +
+                    '<thead><tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th class="py-2 pr-4">Email</th>' +
+                        '<th class="py-2 pr-4">Added by</th>' +
+                        '<th class="py-2 pr-4">Added at</th>' +
+                        '<th class="py-2"></th>' +
+                    '</tr></thead>' +
+                    '<tbody class="divide-y divide-gray-100">' + recipientRows + '</tbody>' +
+                '</table></div>' +
+                envHint +
+                '<form class="mt-4 flex flex-wrap items-end gap-3" data-on-submit="addAlertRecipient" data-pass-event="true">' +
+                    '<div class="flex-1 min-w-[240px]">' +
+                        '<label for="alertRecipientEmailInput" class="block text-xs font-medium text-gray-600 mb-1">Add recipient email</label>' +
+                        '<input id="alertRecipientEmailInput" type="email" required ' +
+                            'placeholder="oncall@example.com" ' +
+                            'class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" ' +
+                            'data-testid="input-alert-recipient-email">' +
+                    '</div>' +
+                    '<button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition" data-testid="button-add-alert-recipient">Add</button>' +
+                '</form>' +
+                '<div id="alertRecipientFormError" class="text-sm text-red-600 mt-2 hidden" data-testid="text-alert-recipient-error"></div>' +
+                '<details class="mt-4">' +
+                    '<summary class="text-xs text-gray-500 cursor-pointer">Recent changes (audit log)</summary>' +
+                    '<div class="overflow-x-auto mt-2"><table class="w-full" data-testid="table-alert-recipients-audit">' +
+                        '<thead><tr class="text-left text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
+                            '<th class="py-1 pr-4">When</th>' +
+                            '<th class="py-1 pr-4">Action</th>' +
+                            '<th class="py-1 pr-4">Email</th>' +
+                            '<th class="py-1">By</th>' +
+                        '</tr></thead>' +
+                        '<tbody class="divide-y divide-gray-50">' + auditRows + '</tbody>' +
+                    '</table></div>' +
+                '</details>';
+        }
+
+        async function loadAlertRecipients() {
+            const badge = document.getElementById('alertRecipientsBadge');
+            const body = document.getElementById('alertRecipientsBody');
+            try {
+                const response = await fetch(
+                    '/api/admin/alert-recipients?channel=' + encodeURIComponent(ALERT_CHANNEL_POST_RESTORE),
+                    { credentials: 'same-origin' }
+                );
+                if (response.status === 401 || response.status === 403) {
+                    if (badge) {
+                        badge.textContent = 'Admin only';
+                        badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500';
+                    }
+                    if (body) {
+                        body.innerHTML = '<p class="text-gray-500" data-testid="text-alert-recipients-forbidden">' +
+                            'Sign in as an administrator to manage alert recipients.' +
+                            '</p>';
+                    }
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                renderAlertRecipients(data);
+            } catch (err) {
+                console.error('Error loading alert recipients:', err);
+                if (badge) {
+                    badge.textContent = 'Unavailable';
+                    badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700';
+                }
+                if (body) {
+                    body.innerHTML = '<p class="text-red-600" data-testid="text-alert-recipients-error">' +
+                        'Could not load the alert recipients list. Please try again later.' +
+                        '</p>';
+                }
+            }
+        }
+
+        function showAlertRecipientError(msg) {
+            const el = document.getElementById('alertRecipientFormError');
+            if (!el) { alert(msg); return; }
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        async function addAlertRecipient(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            const input = document.getElementById('alertRecipientEmailInput');
+            const errEl = document.getElementById('alertRecipientFormError');
+            if (errEl) errEl.classList.add('hidden');
+            if (!input || !input.value.trim()) {
+                showAlertRecipientError('Please enter an email address.');
+                return;
+            }
+            const email = input.value.trim();
+            try {
+                const response = await fetch('/api/admin/alert-recipients', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    showAlertRecipientError(data && data.error ? data.error : ('Add failed (HTTP ' + response.status + ')'));
+                    return;
+                }
+                if (data && data.added === false && data.reason === 'duplicate') {
+                    showAlertRecipientError('This email is already on the list.');
+                } else {
+                    if (input) input.value = '';
+                }
+                loadAlertRecipients();
+            } catch (err) {
+                console.error('Error adding alert recipient:', err);
+                showAlertRecipientError('Network error. Please try again.');
+            }
+        }
+        window.addAlertRecipient = addAlertRecipient;
+
+        async function removeAlertRecipient(email) {
+            if (!email) return;
+            if (!window.confirm('Remove ' + email + ' from the post-restore sweep alert list?')) return;
+            const errEl = document.getElementById('alertRecipientFormError');
+            if (errEl) errEl.classList.add('hidden');
+            try {
+                const response = await fetch('/api/admin/alert-recipients', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ channel: ALERT_CHANNEL_POST_RESTORE, email: email }),
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    showAlertRecipientError(data && data.error ? data.error : ('Remove failed (HTTP ' + response.status + ')'));
+                    return;
+                }
+                loadAlertRecipients();
+            } catch (err) {
+                console.error('Error removing alert recipient:', err);
+                showAlertRecipientError('Network error. Please try again.');
+            }
+        }
+        window.removeAlertRecipient = removeAlertRecipient;
+
         document.addEventListener('DOMContentLoaded', function() {
             loadStats();
             loadLogs(1);
             loadRedactionSweepStatus();
+            loadAlertRecipients();
             refreshLogsExportHint();
 
             const filterIds = ['filterFromDate', 'filterToDate', 'filterActionType', 'filterEntityType', 'filterModule', 'filterSeverity', 'filterAI', 'filterSearch'];

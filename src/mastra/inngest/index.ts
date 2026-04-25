@@ -559,12 +559,39 @@ const aiCostSummaryFunction = inngest.createFunction(
           }
         }
 
-        const emailRecipients = process.env.AI_COST_ALERT_EMAIL
-          ? process.env.AI_COST_ALERT_EMAIL.split(",").map(e => e.trim()).filter(Boolean)
-          : [];
+        // Recipient resolution (Task #573): the DB-backed admin list
+        // takes precedence over `AI_COST_ALERT_EMAIL` so admins can
+        // add/remove recipients from the dashboard without a redeploy.
+        // The env var continues to work as a fallback when the DB list
+        // is empty — unchanged behaviour for existing deployments.
+        let emailRecipients: string[] = [];
+        let recipientsSource: "db" | "env" | "none" = "none";
+        try {
+          const { resolveEffectiveRecipients } = await import(
+            "../../utils/alertEmailRecipients"
+          );
+          const resolved = await resolveEffectiveRecipients(
+            "ai_cost",
+            process.env.AI_COST_ALERT_EMAIL,
+          );
+          emailRecipients = resolved.recipients;
+          recipientsSource = resolved.source;
+        } catch (resolveErr) {
+          console.warn(
+            "[AI-Cost] Recipient resolver failed; falling back to env var:",
+            resolveErr,
+          );
+          emailRecipients = process.env.AI_COST_ALERT_EMAIL
+            ? process.env.AI_COST_ALERT_EMAIL.split(",").map(e => e.trim()).filter(Boolean)
+            : [];
+          recipientsSource = emailRecipients.length > 0 ? "env" : "none";
+        }
         if (emailRecipients.length > 0) {
           try {
             const { sendResendEmail } = await import("../../utils/resendMail");
+            console.log(
+              `[AI-Cost] Sending alert email to ${emailRecipients.length} recipient(s) (source: ${recipientsSource})`,
+            );
             await sendResendEmail({
               to: emailRecipients,
               subject: `⚠️ WalaPlus AI Cost Alert — $${summary.totalCostUsd.toFixed(4)} in 24h`,

@@ -136,6 +136,21 @@ interface DispatcherStub {
     }>;
     env: Record<string, string | undefined>;
     logger: Pick<Console, "log" | "warn" | "error">;
+    /**
+     * Optional Task #573 hook: when set, the dispatcher uses this
+     * stub to resolve the email recipient list (DB-backed admin list,
+     * with env fallback). Tests that don't override this fall back to
+     * the dispatcher's default behaviour, which (in unit-test
+     * contexts where there is no DB) means parsing
+     * `POST_RESTORE_SWEEP_ALERT_EMAIL` from `env`.
+     */
+    resolveRecipients?: (
+      channel: "post_restore_sweep" | "ai_cost",
+      envValue: string | undefined | null,
+    ) => Promise<{
+      recipients: string[];
+      source: "db" | "env" | "none";
+    }>;
   };
 }
 
@@ -228,6 +243,23 @@ function buildStub(
         error: (...a: unknown[]) => {
           stub.errors.push(a);
         },
+      },
+      // Default Task #573 resolver — pure env-var parser (no DB
+      // access). Preserves the legacy behaviour the existing
+      // POST_RESTORE_SWEEP_ALERT_EMAIL assertions depend on while
+      // letting the new tests below override this hook to assert the
+      // DB-takes-precedence path. Without this default, the
+      // dispatcher would dynamically import the real
+      // `alertEmailRecipients` module and try to query the test DB,
+      // making these unit tests flaky / DB-coupled.
+      async resolveRecipients(_channel, envValue) {
+        const list = (envValue ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return list.length > 0
+          ? { recipients: list, source: "env" as const }
+          : { recipients: [], source: "none" as const };
       },
     },
   };
@@ -888,6 +920,183 @@ async function run(): Promise<void> {
     assert(
       !outcome.channelsAttempted.includes("email_recipients"),
       "email_recipients NOT attempted on clean sweep",
+    );
+  }
+
+  console.log(
+    "\n[Task #573] DB-backed recipient list takes precedence over env var",
+  );
+  {
+    // When the admin has saved recipients via the dashboard, the DB
+    // list is the source of truth — the env var must be ignored even
+    // if it is set.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "env-only@walaplus.com",
+    });
+    let resolverCalls = 0;
+    let resolverChannel: string | undefined;
+    let resolverEnvValue: string | undefined | null;
+    stub.deps.resolveRecipients = async (channel, envValue) => {
+      resolverCalls++;
+      resolverChannel = channel;
+      resolverEnvValue = envValue;
+      return {
+        recipients: ["db-admin@walaplus.com", "db-secondary@walaplus.com"],
+        source: "db",
+      };
+    };
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 3 }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "outcome dispatched");
+    assert(resolverCalls === 1, "resolver invoked once");
+    assert(
+      resolverChannel === "post_restore_sweep",
+      "resolver called with post_restore_sweep channel",
+    );
+    assert(
+      resolverEnvValue === "env-only@walaplus.com",
+      "resolver receives the env value (so it can fall back when DB empty)",
+    );
+    assert(stub.emails.length === 1, "one email send invoked");
+    const sent = stub.emails[0];
+    const recipientsList = Array.isArray(sent.to) ? sent.to : [sent.to];
+    assert(
+      recipientsList.length === 2 &&
+        recipientsList.includes("db-admin@walaplus.com") &&
+        recipientsList.includes("db-secondary@walaplus.com"),
+      "DB list used as recipient set",
+    );
+    assert(
+      !recipientsList.includes("env-only@walaplus.com"),
+      "env var recipient NOT included when DB list non-empty",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients channel succeeded",
+    );
+    const dispatchLog = stub.logs.find((entry) =>
+      String(entry[0] ?? "").includes("dispatched"),
+    );
+    assert(
+      dispatchLog !== undefined &&
+        String(dispatchLog[0]).includes("recipients_source: db"),
+      "dispatch log records recipients_source: db",
+    );
+  }
+
+  console.log(
+    "\n[Task #573] Empty DB list falls back to env var (legacy behaviour preserved)",
+  );
+  {
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "legacy-oncall@walaplus.com",
+    });
+    let resolverCalls = 0;
+    stub.deps.resolveRecipients = async (_channel, envValue) => {
+      resolverCalls++;
+      // Mirror the real resolver: parse the env value when DB is empty.
+      const list = (envValue ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return list.length > 0
+        ? { recipients: list, source: "env" as const }
+        : { recipients: [], source: "none" as const };
+    };
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 1 }),
+      stub.deps,
+    );
+    assert(resolverCalls === 1, "resolver invoked");
+    assert(stub.emails.length === 1, "email sent via env-fallback");
+    const recipientsList = Array.isArray(stub.emails[0].to)
+      ? stub.emails[0].to
+      : [stub.emails[0].to];
+    assert(
+      recipientsList.length === 1 &&
+        recipientsList[0] === "legacy-oncall@walaplus.com",
+      "env var used as recipient set when DB empty",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients channel succeeded via env fallback",
+    );
+    const dispatchLog = stub.logs.find((entry) =>
+      String(entry[0] ?? "").includes("dispatched"),
+    );
+    assert(
+      dispatchLog !== undefined &&
+        String(dispatchLog[0]).includes("recipients_source: env"),
+      "dispatch log records recipients_source: env",
+    );
+  }
+
+  console.log(
+    "\n[Task #573] Resolver throws → env-var fallback (no silent drop)",
+  );
+  {
+    // Defensive path: the dispatcher must never silently drop the
+    // email channel just because the resolver threw — it falls back
+    // to parsing the env var directly so on-call still gets paged.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "fallback-oncall@walaplus.com",
+    });
+    stub.deps.resolveRecipients = async () => {
+      throw new Error("boom");
+    };
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ nc_change_history_updated: 1 }),
+      stub.deps,
+    );
+    assert(stub.emails.length === 1, "email still sent on resolver failure");
+    const recipientsList = Array.isArray(stub.emails[0].to)
+      ? stub.emails[0].to
+      : [stub.emails[0].to];
+    assert(
+      recipientsList.length === 1 &&
+        recipientsList[0] === "fallback-oncall@walaplus.com",
+      "env var used as fallback when resolver throws",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients channel succeeded via defensive fallback",
+    );
+    assert(
+      stub.warnings.some((w) =>
+        String(w[0] ?? "").includes("recipient resolver failed"),
+      ),
+      "resolver failure logged as warning",
+    );
+  }
+
+  console.log(
+    "\n[Task #573] Both DB and env empty → email channel skipped silently",
+  );
+  {
+    const stub = buildStub({ slackUrl: "https://hooks.example/x" });
+    stub.deps.resolveRecipients = async () => ({
+      recipients: [],
+      source: "none" as const,
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 1 }),
+      stub.deps,
+    );
+    assert(stub.emails.length === 0, "no email send invoked when no recipients");
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted when no recipients",
+    );
+    assert(
+      !stub.warnings.some((w) =>
+        String(w[0] ?? "").toLowerCase().includes("email"),
+      ),
+      "no email warning when channel silently skipped",
     );
   }
 
