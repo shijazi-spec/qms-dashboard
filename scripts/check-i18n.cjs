@@ -789,11 +789,156 @@ function writeDynamicBaseline(uniqueCurrent) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Check 6 — unused keys (advisory, opt-in via --report-unused)
+ *
+ * Finds keys that exist in en.json / ar.json but are never referenced from:
+ *   a. any `data-i18n*` attribute in a dashboard/*.html page, or
+ *   b. any static string-literal `t('...')` call in dashboard/*.html or
+ *      dashboard/js/*.js.
+ *
+ * Keys whose dotted path starts with a prefix listed in
+ * `dashboard/i18n/.referenced-dynamically.json` are excluded from the report
+ * because they are intentionally looked up at runtime via computed keys (e.g.
+ * `t('dyn.risks.status.' + row.status)`).
+ *
+ * This check is ADVISORY: it always exits 0 so it cannot block the build.
+ * Run it explicitly with:
+ *   node scripts/check-i18n.cjs --report-unused
+ * ------------------------------------------------------------------------ */
+
+const DYNAMIC_ALLOWLIST_PATH = path.join(DASHBOARD_DIR, 'i18n', '.referenced-dynamically.json');
+const JS_DIR = path.join(DASHBOARD_DIR, 'js');
+
+// Captures every quoted string in source that looks like an i18n key: two or
+// more lower-case / underscore segments joined by dots (e.g. `nav.brand`,
+// `login.errors.auth_denied`). The match does not require the string to be
+// the first argument of a t() call — keys are sometimes stored in config maps
+// (e.g. `{ key: 'login.errors.auth_denied', fallback: '...' }`) or passed as
+// a second argument (e.g. `showLoginError(msg, 'login.errors.invalid_admin_key', ...)`).
+//
+// Keeping the pattern broad is intentional: false positives (non-i18n dotted
+// strings that happen to match) only reduce the reported unused count, which
+// is the conservative/safe direction for an advisory check.
+const JS_STATIC_KEY_RE = /(?:'([a-z]\w*(?:\.[a-z]\w*)+(?:\.\w+)*)'|"([a-z]\w*(?:\.[a-z]\w*)+(?:\.\w+)*)")/g;
+
+function listJsFiles() {
+  try {
+    return fs
+      .readdirSync(JS_DIR, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.js'))
+      .map((e) => path.join(JS_DIR, e.name))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function collectReferencedKeys(pages) {
+  const keys = new Set();
+
+  // a. data-i18n* attributes from all HTML pages
+  for (const page of pages) {
+    const html = fs.readFileSync(path.join(DASHBOARD_DIR, page), 'utf8');
+    let m;
+    I18N_ATTR_RE.lastIndex = 0;
+    while ((m = I18N_ATTR_RE.exec(html))) {
+      keys.add(m[1] || m[2]);
+    }
+    // b. static t('key') calls inside the HTML <script> blocks
+    JS_STATIC_KEY_RE.lastIndex = 0;
+    while ((m = JS_STATIC_KEY_RE.exec(html))) {
+      keys.add(m[1] || m[2]);
+    }
+  }
+
+  // c. static t('key') calls AND data-i18n attributes in dashboard/js/*.js files
+  //    (navigation.js and similar files generate HTML markup with data-i18n
+  //    attributes inside template strings, so we must scan JS files too.)
+  for (const jsPath of listJsFiles()) {
+    const src = fs.readFileSync(jsPath, 'utf8');
+    let m;
+    JS_STATIC_KEY_RE.lastIndex = 0;
+    while ((m = JS_STATIC_KEY_RE.exec(src))) {
+      keys.add(m[1] || m[2]);
+    }
+    I18N_ATTR_RE.lastIndex = 0;
+    while ((m = I18N_ATTR_RE.exec(src))) {
+      keys.add(m[1] || m[2]);
+    }
+  }
+
+  return keys;
+}
+
+function loadDynamicPrefixes() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(DYNAMIC_ALLOWLIST_PATH, 'utf8'));
+    if (!Array.isArray(raw.prefixes)) {
+      console.error(
+        `ERROR: ${path.relative(ROOT, DYNAMIC_ALLOWLIST_PATH)} must have a "prefixes" array.`,
+      );
+      process.exit(2);
+    }
+    return raw.prefixes;
+  } catch (err) {
+    // If the file is missing, proceed with an empty allowlist (more noisy but safe).
+    if (err.code === 'ENOENT') return [];
+    console.error(
+      `ERROR: failed to read/parse ${path.relative(ROOT, DYNAMIC_ALLOWLIST_PATH)}: ${err.message}`,
+    );
+    process.exit(2);
+  }
+}
+
+function isDynamicPrefix(key, prefixes) {
+  return prefixes.some((p) => key === p || key.startsWith(p));
+}
+
+function checkUnusedKeys(pages, en) {
+  const referencedKeys = collectReferencedKeys(pages);
+  const dynamicPrefixes = loadDynamicPrefixes();
+  const enFlat = flatten(en);
+
+  const unused = [];
+  for (const [key, type] of enFlat) {
+    if (type !== '<leaf>') continue; // only report leaf strings, not branch markers
+    if (referencedKeys.has(key)) continue;
+    if (isDynamicPrefix(key, dynamicPrefixes)) continue;
+    unused.push(key);
+  }
+
+  if (unused.length === 0) {
+    console.log(
+      `✓ Unused-key scan — every leaf in en.json is referenced by a data-i18n attribute or a static t('...') call`,
+    );
+    return;
+  }
+
+  console.log(`\n⚠  Unused-key report (${unused.length} key(s) in en.json with no detected reference)`);
+  console.log(
+    '   Keys marked ⚠ are candidates for removal. Before deleting, verify they are',
+  );
+  console.log(
+    '   not used dynamically at runtime. If they are, add their prefix to:',
+  );
+  console.log(`   ${path.relative(ROOT, DYNAMIC_ALLOWLIST_PATH)}`);
+  console.log('');
+  for (const k of unused.slice(0, 100)) {
+    console.log(`   ⚠  ${k}`);
+  }
+  if (unused.length > 100) {
+    console.log(`   … and ${unused.length - 100} more (run script to see the full list)`);
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Main
  * ------------------------------------------------------------------------ */
 
 function main() {
   console.log('▶ WalaPlus i18n guardrail (scripts/check-i18n.cjs)\n');
+
+  const reportUnused = process.argv.includes('--report-unused');
 
   const pages = listHtmlPages();
   if (pages.length === 0) {
@@ -810,11 +955,19 @@ function main() {
   const ok4 = checkSwDictionaryParity(en, ar);
   const ok5 = checkJsKeyCoverage(pages, publicPages, en, ar);
 
+  if (reportUnused) {
+    console.log('\n--- Unused-key scan (advisory) ---');
+    checkUnusedKeys(pages, en);
+  }
+
   if (ok1 && ok2 && ok3 && ok4 && ok5) {
     console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, SW dictionary, and JS t() calls are all in sync.');
+    if (reportUnused) {
+      console.log('  (Unused-key scan is advisory and does not affect exit code.)');
+    }
     process.exit(0);
   }
-  console.error('\n✗ i18n guardrail FAILED — see diagnostics above. Re-run with `npm run check:i18n` after fixing.');
+  console.error('\n✗ i18n guardrail FAILED — see diagnostics above. Re-run with `node scripts/check-i18n.cjs` after fixing.');
   process.exit(1);
 }
 
