@@ -57,8 +57,9 @@
  *   npx playwright test tests/aiOpsTabs.spec.ts --reporter=line
  */
 
-import { test, expect, request as pwRequest } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as pg from 'pg';
+import { warmupAiOpsTables } from './helpers/warmupAiOpsTables';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
@@ -169,35 +170,12 @@ async function cleanupAiOpsRows(): Promise<void> {
 test.describe('AI Ops — remaining dashboard tabs', () => {
   test.beforeAll(async () => {
     if (!ADMIN_KEY || !DATABASE_URL) return;
-    // Hit an admin-authenticated AI Ops endpoint first so the server runs
-    // ensureAiMetricsTable() and the table actually exists before we try to
-    // INSERT seed rows directly. Without this, a fresh dev DB will throw
-    // `relation "ai_call_metrics" does not exist` on the first INSERT.
-    const apiCtx = await pwRequest.newContext({
-      baseURL: BASE_URL,
-      extraHTTPHeaders: { 'X-Admin-Key': ADMIN_KEY },
-    });
-    try {
-      // Honor the task's `auth via /api/admin/auth + X-Admin-Key` contract
-      // with a single suite-level login. We do this only once (not per
-      // test) because /api/admin/auth is rate-limited (5 attempts / minute)
-      // — calling it per test made repeated runs flaky with HTTP 429s.
-      const authRes = await apiCtx.post('/api/admin/auth', {
-        data: { key: ADMIN_KEY },
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (authRes.status() !== 200) {
-        throw new Error(`/api/admin/auth login returned HTTP ${authRes.status()}`);
-      }
-
-      const res = await apiCtx.get('/api/ai-ops/summary');
-      // 200 confirms the table is ensured; we don't read the body.
-      if (res.status() !== 200) {
-        throw new Error(`/api/ai-ops/summary warmup returned HTTP ${res.status()}`);
-      }
-    } finally {
-      await apiCtx.dispose();
-    }
+    // Authenticate as admin and trigger the lazy CREATE TABLE IF NOT EXISTS
+    // statements for the AI Ops tables before we INSERT seed rows directly
+    // via the pool. See tests/helpers/warmupAiOpsTables.ts for why this is
+    // needed (otherwise a cold dev DB throws
+    // `relation "ai_call_metrics" does not exist` on the first INSERT).
+    await warmupAiOpsTables(ADMIN_KEY, BASE_URL);
     pool = new pg.Pool({ connectionString: DATABASE_URL });
     await seedAiOpsRows();
   });

@@ -41,8 +41,9 @@
  *   npx playwright test tests/promptVersionTab.spec.ts --reporter=line
  */
 
-import { test, expect, request as pwRequest, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import * as pg from 'pg';
+import { warmupAiOpsTables } from './helpers/warmupAiOpsTables';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 const ADMIN_KEY = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY || '';
@@ -138,34 +139,12 @@ async function authenticateAsAdmin(page: Page): Promise<void> {
 test.describe('AI Ops — Prompt Version tab', () => {
   test.beforeAll(async () => {
     if (!ADMIN_KEY || !DATABASE_URL) return;
-    // Hit an admin-authenticated AI Ops endpoint first so the server runs
-    // ensureAiMetricsTable() AND ensureFeedbackTable() before we try to
-    // INSERT seed rows directly via the pool. Without this warmup, a fresh
-    // dev DB throws `relation "ai_call_feedback" does not exist` on the
-    // first INSERT because the lazy CREATE TABLE IF NOT EXISTS in
-    // aiTelemetry.ts hasn't fired yet.
-    const apiCtx = await pwRequest.newContext({
-      baseURL: BASE_URL,
-      extraHTTPHeaders: { 'X-Admin-Key': ADMIN_KEY },
-    });
-    try {
-      const authRes = await apiCtx.post('/api/admin/auth', {
-        data: { key: ADMIN_KEY },
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (authRes.status() !== 200) {
-        throw new Error(`/api/admin/auth login returned HTTP ${authRes.status()}`);
-      }
-      // /api/ai-ops/prompt-versions calls getFeedbackRateByPromptVersion()
-      // which in turn calls ensureAiMetricsTable() and ensureFeedbackTable(),
-      // guaranteeing both tables exist before we seed directly.
-      const warmupRes = await apiCtx.get('/api/ai-ops/prompt-versions');
-      if (warmupRes.status() !== 200) {
-        throw new Error(`/api/ai-ops/prompt-versions warmup returned HTTP ${warmupRes.status()}`);
-      }
-    } finally {
-      await apiCtx.dispose();
-    }
+    // Authenticate as admin and trigger the lazy CREATE TABLE IF NOT EXISTS
+    // statements for ai_call_metrics + ai_call_feedback before we INSERT
+    // seed rows directly via the pool. See tests/helpers/warmupAiOpsTables.ts
+    // for the rationale (otherwise a cold dev DB throws
+    // `relation "ai_call_feedback" does not exist` on the first INSERT).
+    await warmupAiOpsTables(ADMIN_KEY, BASE_URL);
     pool = new pg.Pool({ connectionString: DATABASE_URL });
     await seedPromptVersionRows();
   });
