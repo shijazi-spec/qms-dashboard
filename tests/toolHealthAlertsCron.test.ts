@@ -28,7 +28,10 @@ import {
   type ToolHealthDeps,
 } from "../src/mastra/workflows/toolHealthAlertsCron";
 import type { ToolWindowAggregate } from "../src/utils/aiTelemetry";
-import type { AIAlert } from "../src/utils/aiAlertsDatabase";
+import type {
+  AIAlert,
+  ToolHealthNotifyDeadLetterInput,
+} from "../src/utils/aiAlertsDatabase";
 import type {
   NotifyToolHealthBreachResult,
   ToolHealthBreachNotification,
@@ -83,6 +86,10 @@ interface NotifyCall {
   notification: ToolHealthBreachNotification;
 }
 
+interface DeadLetterCall {
+  input: ToolHealthNotifyDeadLetterInput;
+}
+
 function makeDeps(opts: {
   aggregates: ToolWindowAggregate[];
   /**
@@ -110,6 +117,11 @@ function makeDeps(opts: {
   recoveryNotifierResult?: NotifyToolHealthRecoveryResult;
   /** When true, the recovery notifier stub throws instead of returning. */
   recoveryNotifierThrows?: boolean;
+  /**
+   * When true, the dead-letter writer stub throws — used to assert the
+   * cron continues despite a transient DB failure on the dead-letter path.
+   */
+  deadLetterThrows?: boolean;
 }): {
   deps: ToolHealthDeps;
   resolves: ResolveCall[];
@@ -128,6 +140,7 @@ function makeDeps(opts: {
   existingDedupeKeys: Set<string>;
   notifies: NotifyCall[];
   recoveryNotifies: Array<{ notification: ToolHealthRecoveryNotification }>;
+  deadLetters: DeadLetterCall[];
 } {
   const resolves: ResolveCall[] = [];
   const lookups: OpenLookupCall[] = [];
@@ -136,6 +149,7 @@ function makeDeps(opts: {
   const aggregateCalls: AggregateCall[] = [];
   const notifies: NotifyCall[] = [];
   const recoveryNotifies: Array<{ notification: ToolHealthRecoveryNotification }> = [];
+  const deadLetters: DeadLetterCall[] = [];
   const openByKey = opts.openAlertsByKey ?? {};
   const pastCooldown = opts.pastCooldown !== false;
   // Mutable so dedupe checks against keys created earlier in the same run
@@ -207,6 +221,19 @@ function makeDeps(opts: {
       if (opts.recoveryNotifierThrows) throw new Error("stub recovery notifier failure");
       return defaultRecoveryNotifyResult;
     },
+    recordNotifyDeadLetter: async (input) => {
+      deadLetters.push({ input });
+      if (opts.deadLetterThrows) throw new Error("stub dead-letter writer failure");
+      return {
+        id: 12345,
+        alert_type: "tool_health",
+        severity: "critical",
+        title: `[Dead-Letter] Tool-health page not delivered: ${input.tool_name}`,
+        description: "stub",
+        status: "open",
+        related_record_id: `${input.related_record_id}:notify_failure`,
+      } as AIAlert;
+    },
   };
 
   return {
@@ -219,6 +246,7 @@ function makeDeps(opts: {
     existingDedupeKeys,
     notifies,
     recoveryNotifies,
+    deadLetters,
   };
 }
 
@@ -881,7 +909,7 @@ await suite.test(
 );
 
 await suite.test(
-  "(n7) notifier throws → cron pass continues, sent counter stays 0",
+  "(n7) notifier throws → cron pass continues, dead-letter row written",
   async () => {
     const agg = makeAggregate({
       tool_name: "page_explodes_tool",
@@ -890,7 +918,7 @@ await suite.test(
       error_rate_pct: 60,
       p95_latency_ms: 1_000,
     });
-    const { deps } = makeDeps({
+    const { deps, deadLetters } = makeDeps({
       aggregates: [agg],
       notifierThrows: true,
     });
@@ -904,6 +932,232 @@ await suite.test(
       suite.expectEqual(out.notificationsSent, 0, "sent counter stays 0 when notifier throws");
       suite.expectEqual(out.notificationsThrottled, 0, "throttle counter stays 0");
       suite.expectEqual(out.notificationsSkipped, 0, "skipped counter stays 0");
+      // Task #288 — a thrown notifier must dead-letter so on-call sees it.
+      suite.expectEqual(
+        out.notificationsDeadLettered,
+        1,
+        "dead-letter counter incremented on thrown notifier",
+      );
+      suite.expectEqual(deadLetters.length, 1, "dead-letter writer invoked once");
+      const dl = deadLetters[0]!.input;
+      suite.expectEqual(
+        dl.related_record_id,
+        "page_explodes_tool:error_rate",
+        "dead-letter carries original breach key",
+      );
+      suite.expectEqual(dl.tool_name, "page_explodes_tool", "tool_name propagated");
+      suite.expectEqual(dl.reason, "error_rate", "reason propagated");
+      suite.expectEqual(dl.breach_severity, "high", "severity propagated");
+      suite.expect(
+        dl.failure_reason.includes("notifier threw"),
+        "failure_reason explains the notifier crash",
+      );
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+// ─── Task #288: dead-letter visibility for missed pages ──────────────────────
+
+await suite.test(
+  "(dl1) notifier returns slackSent=false & emailSent=false → dead-letter row written",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "silent_failure_tool",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, deadLetters } = makeDeps({
+      aggregates: [agg],
+      // Channels were configured (skipped=false) and the notifier wasn't
+      // throttled (throttled=false), but every channel returned ok=false /
+      // success=false — i.e. the page was attempted but never delivered.
+      notifierResult: {
+        slackSent: false,
+        emailSent: false,
+        throttled: false,
+        skipped: false,
+      },
+    });
+
+    // Silence the expected dead-letter log line.
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const out = await runToolHealthCheck(deps);
+      suite.expectEqual(out.alertsCreated, 1, "breach alert still created");
+      suite.expectEqual(out.notificationsSent, 0, "sent counter stays 0");
+      suite.expectEqual(out.notificationsSkipped, 0, "skipped counter stays 0");
+      suite.expectEqual(out.notificationsThrottled, 0, "throttle counter stays 0");
+      suite.expectEqual(
+        out.notificationsDeadLettered,
+        1,
+        "dead-letter counter incremented",
+      );
+      suite.expectEqual(deadLetters.length, 1, "dead-letter writer invoked once");
+      const dl = deadLetters[0]!.input;
+      suite.expectEqual(
+        dl.related_record_id,
+        "silent_failure_tool:error_rate",
+        "dead-letter keyed on original breach",
+      );
+      suite.expect(
+        dl.failure_reason.toLowerCase().includes("success=false"),
+        "failure_reason names the all-channels-failed mode",
+      );
+      suite.expectEqual(
+        dl.breach_alert_id,
+        999,
+        "underlying breach alert id propagated for traceability",
+      );
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "(dl2) at least one channel succeeds → no dead-letter row written",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "partial_success_tool",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, deadLetters } = makeDeps({
+      aggregates: [agg],
+      notifierResult: {
+        slackSent: true, // Slack delivered the page
+        emailSent: false, // email failed (or wasn't configured)
+        throttled: false,
+        skipped: false,
+      },
+    });
+
+    const out = await runToolHealthCheck(deps);
+    suite.expectEqual(out.notificationsSent, 1, "page counted as sent");
+    suite.expectEqual(
+      out.notificationsDeadLettered,
+      0,
+      "no dead-letter when at least one channel delivered",
+    );
+    suite.expectEqual(deadLetters.length, 0, "dead-letter writer NOT invoked");
+  },
+);
+
+await suite.test(
+  "(dl3) notifier reports skipped → no dead-letter (env not configured ≠ failure)",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "unwired_tool_dl",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, deadLetters } = makeDeps({
+      aggregates: [agg],
+      notifierResult: {
+        slackSent: false,
+        emailSent: false,
+        throttled: false,
+        skipped: true,
+      },
+    });
+
+    const out = await runToolHealthCheck(deps);
+    suite.expectEqual(out.notificationsSkipped, 1, "skip counter still incremented");
+    suite.expectEqual(
+      out.notificationsDeadLettered,
+      0,
+      "dead-letter NOT written when no channel was configured",
+    );
+    suite.expectEqual(deadLetters.length, 0, "dead-letter writer NOT invoked");
+  },
+);
+
+await suite.test(
+  "(dl4) notifier reports throttled → no dead-letter (sibling already paged)",
+  async () => {
+    const agg = makeAggregate({
+      tool_name: "throttled_tool_dl",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, deadLetters } = makeDeps({
+      aggregates: [agg],
+      notifierResult: {
+        slackSent: false,
+        emailSent: false,
+        throttled: true,
+        skipped: false,
+      },
+    });
+
+    const out = await runToolHealthCheck(deps);
+    suite.expectEqual(out.notificationsThrottled, 1, "throttle counter incremented");
+    suite.expectEqual(
+      out.notificationsDeadLettered,
+      0,
+      "dead-letter NOT written when a sibling already paged within the throttle window",
+    );
+    suite.expectEqual(deadLetters.length, 0, "dead-letter writer NOT invoked");
+  },
+);
+
+await suite.test(
+  "(dl5) dead-letter writer itself throws → cron pass continues, counter stays 0",
+  async () => {
+    // Simulates the DB being unavailable on the dead-letter path. The
+    // structured log line is the only surviving record, but the cron MUST
+    // still process the rest of the run (silent-tool sweep, recoveries,
+    // etc.) instead of bubbling the failure up.
+    const agg = makeAggregate({
+      tool_name: "double_failure_tool",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60,
+      p95_latency_ms: 1_000,
+    });
+    const { deps, deadLetters } = makeDeps({
+      aggregates: [agg],
+      notifierResult: {
+        slackSent: false,
+        emailSent: false,
+        throttled: false,
+        skipped: false,
+      },
+      deadLetterThrows: true,
+    });
+
+    // Silence the two expected error logs (one for the missed page, one
+    // for the dead-letter write failure).
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const out = await runToolHealthCheck(deps);
+      suite.expectEqual(
+        out.alertsCreated,
+        1,
+        "breach alert still created despite double failure",
+      );
+      suite.expectEqual(
+        out.notificationsDeadLettered,
+        0,
+        "counter NOT incremented when the dead-letter write itself fails",
+      );
+      suite.expectEqual(
+        deadLetters.length,
+        1,
+        "dead-letter writer was invoked exactly once",
+      );
     } finally {
       console.error = origErr;
     }

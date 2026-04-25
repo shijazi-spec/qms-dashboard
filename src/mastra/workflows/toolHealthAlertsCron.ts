@@ -38,6 +38,7 @@ import {
   createAIAlert,
   getOpenAlertsByKey,
   getOpenAlertsByType,
+  recordToolHealthNotifyDeadLetter,
   resolveAlert,
   type AlertSeverity,
 } from "../../utils/aiAlertsDatabase";
@@ -484,6 +485,15 @@ export interface ToolHealthCheckResult {
    * DB-row dedupe).
    */
   notificationsThrottled: number;
+  /**
+   * Counts breaches where the notifier returned without delivering on any
+   * configured channel (or threw outright) and a dead-letter `ai_alerts`
+   * row was written so on-call can see the missed page in the AI Operations
+   * panel (Task #288). Counts attempted writes, not just successful ones —
+   * a DB failure during the dead-letter write itself is logged but does
+   * not increment this counter (see `dispatchBreachNotification`).
+   */
+  notificationsDeadLettered: number;
   breaches: Array<{
     tool_name: string;
     reason: ToolHealthReason;
@@ -573,6 +583,14 @@ export interface ToolHealthDeps {
    * simulate an imminent expiry without touching the DB.
    */
   checkOverrideExpiringSoon?: (windowMs: number) => ReturnType<typeof getToolHealthOverrideExpiringSoon>;
+  /**
+   * Writes a dead-letter `ai_alerts` row when the breach notifier fails
+   * to deliver on any channel (Task #288). Optional so existing stubs need
+   * no churn — the production default delegates to
+   * {@link recordToolHealthNotifyDeadLetter}, and tests can stub it to
+   * capture the dead-letter call without touching the DB.
+   */
+  recordNotifyDeadLetter?: typeof recordToolHealthNotifyDeadLetter;
 }
 
 const DEFAULT_DEPS: Required<ToolHealthDeps> = {
@@ -590,6 +608,7 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   notifyToolHealthRecovery,
   notifyOverrideExpiringSoon: notifyToolHealthOverrideExpiringSoon,
   checkOverrideExpiringSoon: getToolHealthOverrideExpiringSoon,
+  recordNotifyDeadLetter: recordToolHealthNotifyDeadLetter,
 };
 
 /**
@@ -658,10 +677,23 @@ async function dispatchBreachNotification(
       alert_id: alertId,
     });
   } catch (err) {
+    // Notifier itself crashed (not a per-channel failure it could swallow).
+    // Log first so the stack survives even if the dead-letter write also
+    // fails, then attempt the dead-letter so on-call sees the missed page
+    // in the AI Operations panel (Task #288).
     console.error(
       `[ToolHealth] Notifier threw for ${relatedRecordId}:`,
       err,
     );
+    await writeNotifyDeadLetter(deps, {
+      relatedRecordId,
+      tool_name: agg.tool_name,
+      reason,
+      severity,
+      title,
+      alertId,
+      failureReason: `notifier threw: ${err instanceof Error ? err.message : String(err)}`,
+    }, out);
     return;
   }
   if (result.skipped) {
@@ -674,6 +706,76 @@ async function dispatchBreachNotification(
   }
   if (result.slackSent || result.emailSent) {
     out.notificationsSent++;
+    return;
+  }
+  // Notifier ran to completion but neither Slack nor email actually
+  // delivered the page. Either every configured channel returned a
+  // soft-fail (Slack `chat.postMessage` returned `ok:false`, Resend
+  // returned `success:false`, etc.) or the channels we did try all
+  // threw and the notifier swallowed the error. Either way the page
+  // was missed — write a dead-letter row so ops can see it.
+  await writeNotifyDeadLetter(deps, {
+    relatedRecordId,
+    tool_name: agg.tool_name,
+    reason,
+    severity,
+    title,
+    alertId,
+    failureReason:
+      'Slack/email delivery returned success=false on every configured channel',
+  }, out);
+}
+
+/**
+ * Writes a dead-letter `ai_alerts` row capturing a missed on-call page
+ * (Task #288). Wrapped in its own try/catch so a transient DB issue cannot
+ * abort the surrounding cron pass — the structured log line ensures the
+ * miss is still discoverable via the log sink even when the row write
+ * itself fails.
+ *
+ * Increments `out.notificationsDeadLettered` only on a successful row
+ * write so the counter reflects what's actually queryable from the AI
+ * Operations panel; a failed write surfaces only via the structured log.
+ */
+async function writeNotifyDeadLetter(
+  deps: ToolHealthDeps,
+  args: {
+    relatedRecordId: string;
+    tool_name: string;
+    reason: ToolHealthReason;
+    severity: AlertSeverity;
+    title: string;
+    alertId: number | undefined;
+    failureReason: string;
+  },
+  out: ToolHealthCheckResult,
+): Promise<void> {
+  // Structured log line so ops/log-sink users can also count missed pages
+  // without querying the DB. Tag is grep-friendly and stable.
+  console.error(
+    `[ToolHealth][DEAD_LETTER] On-call page not delivered for ` +
+      `${args.relatedRecordId}` +
+      (args.alertId != null ? ` (alert #${args.alertId})` : '') +
+      `: ${args.failureReason}`,
+  );
+  const writer = deps.recordNotifyDeadLetter ?? recordToolHealthNotifyDeadLetter;
+  try {
+    await writer({
+      related_record_id: args.relatedRecordId,
+      tool_name: args.tool_name,
+      reason: args.reason,
+      breach_severity: args.severity,
+      breach_title: args.title,
+      breach_alert_id: args.alertId,
+      failure_reason: args.failureReason,
+    });
+    out.notificationsDeadLettered++;
+  } catch (err) {
+    console.error(
+      `[ToolHealth][DEAD_LETTER] Failed to persist dead-letter row for ` +
+        `${args.relatedRecordId}:`,
+      err,
+    );
   }
 }
 
@@ -976,6 +1078,7 @@ export async function runToolHealthCheck(
     notificationsSent: 0,
     notificationsSkipped: 0,
     notificationsThrottled: 0,
+    notificationsDeadLettered: 0,
     breaches: [],
     recoveries: [],
   };

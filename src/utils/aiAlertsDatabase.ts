@@ -254,6 +254,76 @@ export async function openAlertExistsByKey(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Tool-health notifier dead-letter (Task #288)
+//
+// `notifyToolHealthBreach` swallows Slack/email errors and returns
+// `{ slackSent: false, emailSent: false }`. When BOTH channels fail (or the
+// notifier itself throws) the cron previously moved on with no durable record
+// of the missed page — on-call had no way to learn that alert #N was opened
+// but never delivered.
+//
+// `recordToolHealthNotifyDeadLetter` writes a sibling `ai_alerts` row that
+// surfaces in the existing AI Operations panel (it filters by
+// `alert_type='tool_health'`) so missed pages are visible alongside the
+// breach alert they relate to. The `[Dead-Letter]` title prefix and the
+// `:notify_failure` suffix on `related_record_id` distinguish the dead-letter
+// row from the underlying breach alert and from a future second dead-letter
+// for the same key (the underlying breach alert dedupes once per
+// `<tool_name>:<reason>`, so we naturally get at most one dead-letter per
+// breach lifecycle).
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface ToolHealthNotifyDeadLetterInput {
+  /** Composite key of the breach the notifier failed to deliver. */
+  related_record_id: string;
+  /** Tool whose breach went unpaged. */
+  tool_name: string;
+  /** Which threshold breached (mirrored from the breach alert for context). */
+  reason: 'error_rate' | 'p95_latency';
+  /** Severity of the original breach — preserved for triage prioritisation. */
+  breach_severity: AlertSeverity;
+  /** Title of the breach alert (without the dead-letter prefix). */
+  breach_title: string;
+  /** Id of the underlying breach alert row, when known. */
+  breach_alert_id?: number;
+  /**
+   * Short, human-readable reason the page failed (e.g. "Slack send failed
+   * and no email recipients configured", "notifier threw"). Embedded in the
+   * dead-letter description so on-call can act without crawling logs.
+   */
+  failure_reason: string;
+}
+
+export async function recordToolHealthNotifyDeadLetter(
+  input: ToolHealthNotifyDeadLetterInput,
+): Promise<AIAlert> {
+  const title = `[Dead-Letter] Tool-health page not delivered: ${input.tool_name}`;
+  const idSuffix = input.breach_alert_id != null ? ` (alert #${input.breach_alert_id})` : '';
+  const description =
+    `On-call paging failed for "${input.tool_name}" — neither Slack nor ` +
+    `email delivered the ${input.reason} breach notification` +
+    `${idSuffix}. Reason: ${input.failure_reason}. ` +
+    `Original breach: ${input.breach_title} ` +
+    `(severity: ${input.breach_severity.toUpperCase()}).`;
+  const suggestion =
+    'Inspect the most recent ToolHealthNotifier error in the server logs, ' +
+    'confirm Slack/Resend credentials, and manually notify on-call about the ' +
+    'underlying breach. Once the page is delivered out-of-band, resolve this ' +
+    'dead-letter row with a note pointing at the original breach alert.';
+  return await createAIAlert({
+    alert_type: 'tool_health',
+    severity: 'critical',
+    title,
+    description,
+    suggestion,
+    related_module: 'ai_ops',
+    // Distinct suffix so the breach alert and its dead-letter never collide
+    // in the (alert_type, related_record_id) dedupe space.
+    related_record_id: `${input.related_record_id}:notify_failure`,
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // tool_health_notifications — persistent throttle store
 //
 // Backs the belt-and-braces throttle in toolHealthAlertNotifier.ts so that
