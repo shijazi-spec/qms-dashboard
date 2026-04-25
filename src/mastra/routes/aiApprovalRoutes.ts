@@ -421,7 +421,7 @@ export const aiApprovalRoutes = [
             entityType: 'SYSTEM',
             entityId: rejected.action_code,
             entityName: rejected.tool_label,
-            description: `Rejected AI action ${rejected.action_code}: ${reason}`,
+            description: `Rejected AI action ${rejected.action_code}: ${rejected.rejection_reason}`,
             aiInvolved: true,
             severity: 'INFO',
             module: 'ai-governance',

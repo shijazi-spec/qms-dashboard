@@ -29,7 +29,7 @@ import {
   rejectAction,
   type PendingAction,
 } from '../src/utils/aiApprovalDatabase';
-import { REDACTED_SENTINEL } from '../src/utils/eventLogsDatabase';
+import { REDACTED_SENTINEL, pool as eventLogsPool } from '../src/utils/eventLogsDatabase';
 import { aiApprovalRoutes } from '../src/mastra/routes/aiApprovalRoutes';
 
 let passed = 0;
@@ -388,12 +388,93 @@ async function run(): Promise<void> {
     'GET /api/ai/approvals/:code (rejected) propagates the redaction sentinel from rejection_reason',
   );
 
+  /* ---------- POST /api/ai/approvals/:code/reject — audit-log description ----------
+   * Reset the stored row to 'pending' so the reject handler will accept it,
+   * then intercept the event_logs INSERT to verify the description that
+   * reaches the audit trail is scrubbed rather than the raw reason string.
+   * -------------------------------------------------------------------------*/
+  console.log('\n--- audit-log description redaction (reject route handler) ---');
+
+  if (storedRow) storedRow.status = 'pending';
+
+  let capturedEventLogDescription: string | null | undefined = undefined;
+
+  const originalEventLogQuery = eventLogsPool.query.bind(eventLogsPool);
+  // Intercept event_logs INSERTs to capture the description that reaches the
+  // audit trail.  The stub is cast through `unknown` — not `any` — because pg's
+  // Pool.query is a heavily overloaded function whose full signature cannot be
+  // fully satisfied by a simple async stub without a double-cast.
+  const eventLogStub = async (
+    sql: string | { text: string },
+    params?: ReadonlyArray<unknown>,
+  ): Promise<QueryResult<QueryResultRow>> => {
+    const sqlText = typeof sql === 'string' ? sql : sql.text;
+    if (/INSERT INTO event_logs/i.test(sqlText) && Array.isArray(params)) {
+      capturedEventLogDescription = params[8] as string | null;
+      return {
+        command: 'INSERT',
+        rowCount: 1,
+        oid: 0,
+        fields: [],
+        rows: [{ id: 999, timestamp: new Date(), created_at: new Date() }],
+      };
+    }
+    return { command: '', rowCount: 0, oid: 0, fields: [], rows: [] };
+  };
+  eventLogsPool.query = eventLogStub as unknown as typeof eventLogsPool.query;
+
+  const rejectCtx = {
+    req: {
+      url: `https://test.local/api/ai/approvals/${enqueued.action_code}/reject`,
+      header: (name: string): string | undefined =>
+        name.toLowerCase() === 'cookie' ? adminCookie() : undefined,
+      param: (_name: string): string => enqueued.action_code,
+      json: async () => ({ reason: REASON }),
+    },
+    json(body: unknown, status = 200) { return { status, body }; },
+    html(body: string) { return { status: 200, body }; },
+    text(body: string, status = 200) { return { status, body }; },
+  };
+
+  const rejectRoute = aiApprovalRoutes.find(
+    r => r.path === '/api/ai/approvals/:code/reject' && r.method === 'POST',
+  );
+  if (!rejectRoute) throw new Error('Reject route not found');
+  const rejectHandler = await rejectRoute.createHandler();
+  let rejectRes: { status: number; body: unknown } = { status: 0, body: null };
+  try {
+    rejectRes = (await rejectHandler(rejectCtx as never)) as { status: number; body: unknown };
+  } finally {
+    eventLogsPool.query = originalEventLogQuery;
+  }
+
+  assert(rejectRes.status === 200, 'POST /api/ai/approvals/:code/reject → 200');
+  assert(
+    capturedEventLogDescription !== undefined,
+    'reject handler called logEvent (event_logs INSERT was intercepted)',
+  );
+  const descriptionLeak = findLeakedSecret(capturedEventLogDescription);
+  assert(
+    descriptionLeak === null,
+    `audit-log description contains no plaintext secret (leaked: ${descriptionLeak ?? 'none'})`,
+  );
+  assert(
+    typeof capturedEventLogDescription === 'string' &&
+      capturedEventLogDescription.includes(REDACTED_SENTINEL),
+    'audit-log description contains the redaction sentinel',
+  );
+  assert(
+    typeof capturedEventLogDescription === 'string' &&
+      capturedEventLogDescription.includes('Rejecting because the new key'),
+    'audit-log description retains human-readable prose around the sentinel',
+  );
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.error('\n❌ AI approval-queue rejection-note secret-leak guard FAILED');
     process.exit(1);
   }
-  console.log('\n✅ Rejection notes are scrubbed before reaching any read endpoint');
+  console.log('\n✅ Rejection notes are scrubbed before reaching any read endpoint or audit log');
 }
 
 run()
