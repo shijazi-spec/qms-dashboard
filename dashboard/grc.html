@@ -260,17 +260,21 @@
                         const dateEl    = document.getElementById('grcNextAuditDate');
                         const activeEl  = document.getElementById('grcCertsActive');
                         const expireEl  = document.getElementById('grcCertsExpiring');
+                        if (!titleEl)  console.error('loadExternalAuditsCard: #grcNextAudit not found');
+                        if (!dateEl)   console.error('loadExternalAuditsCard: #grcNextAuditDate not found');
+                        if (!activeEl) console.error('loadExternalAuditsCard: #grcCertsActive not found');
+                        if (!expireEl) console.error('loadExternalAuditsCard: #grcCertsExpiring not found');
                         if (d.next_audit) {
-                            titleEl.textContent = d.next_audit.title;
-                            dateEl.textContent  = d.next_audit.planned_start
+                            if (titleEl) titleEl.textContent = d.next_audit.title;
+                            if (dateEl) dateEl.textContent  = d.next_audit.planned_start
                                 ? new Date(d.next_audit.planned_start).toLocaleDateString()
                                 : (window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.date_tbd') : 'Date TBD');
                         } else {
-                            titleEl.textContent = window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.none_scheduled') : 'None scheduled';
-                            dateEl.textContent  = '—';
+                            if (titleEl) titleEl.textContent = window.WalaPlusI18n ? window.WalaPlusI18n.t('grc.none_scheduled') : 'None scheduled';
+                            if (dateEl) dateEl.textContent  = '—';
                         }
-                        activeEl.textContent = d.certs_active ?? 0;
-                        expireEl.textContent = d.certs_expiring_90d ?? 0;
+                        if (activeEl) activeEl.textContent = d.certs_active ?? 0;
+                        if (expireEl) expireEl.textContent = d.certs_expiring_90d ?? 0;
                     } catch (_) { /* non-fatal */ }
                 })();
             </script>
@@ -630,14 +634,40 @@
                 ? window.WalaPlusI18n.tDynamic(prefix, val)
                 : (val ? String(val) : '');
 
+            // Safely set textContent on an element by id. If the element is
+            // missing (e.g. a summary tile was removed or hidden) we log and
+            // skip the write so the rest of the dashboard keeps loading.
+            function setTextById(id, value, ctx) {
+                const el = document.getElementById(id);
+                if (!el) {
+                    console.error(`${ctx}: #${id} not found`);
+                    return false;
+                }
+                el.textContent = value;
+                return true;
+            }
+
+            // Same as setTextById but for innerHTML writes.
+            function setHTMLById(id, html, ctx) {
+                const el = document.getElementById(id);
+                if (!el) {
+                    console.error(`${ctx}: #${id} not found`);
+                    return false;
+                }
+                el.innerHTML = html;
+                return true;
+            }
+
             async function loadRiskSummary() {
                 try {
                     const response = await fetch("/api/risks/summary");
                     const data = await response.json();
-                    document.getElementById("totalRisks").textContent =
-                        data.summary?.total_risks || 0;
-                    document.getElementById("criticalRisks").textContent =
-                        (data.summary?.critical || 0) + " " + _gt('grc.critical_count');
+                    setTextById("totalRisks",
+                        data.summary?.total_risks || 0,
+                        "loadRiskSummary");
+                    setTextById("criticalRisks",
+                        (data.summary?.critical || 0) + " " + _gt('grc.critical_count'),
+                        "loadRiskSummary");
 
                     if (data.heatmap_data) {
                         for (const cell of data.heatmap_data) {
@@ -656,10 +686,12 @@
                 try {
                     const response = await fetch("/api/policies/summary");
                     const data = await response.json();
-                    document.getElementById("totalPolicies").textContent =
-                        data.policies?.total_policies || 0;
-                    document.getElementById("draftPolicies").textContent =
-                        (data.policies?.draft || 0) + " " + _gt('grc.in_draft');
+                    setTextById("totalPolicies",
+                        data.policies?.total_policies || 0,
+                        "loadPolicySummary");
+                    setTextById("draftPolicies",
+                        (data.policies?.draft || 0) + " " + _gt('grc.in_draft'),
+                        "loadPolicySummary");
                 } catch (error) {
                     console.error("Error loading policy summary:", error);
                 }
@@ -669,10 +701,12 @@
                 try {
                     const response = await fetch("/api/compliance/summary");
                     const data = await response.json();
-                    document.getElementById("complianceScore").textContent =
-                        (data.compliance_score || 0) + "%";
-                    document.getElementById("openObligations").textContent =
-                        (data.summary?.total_obligations || 0) + " " + _gt('grc.obligations_count');
+                    setTextById("complianceScore",
+                        (data.compliance_score || 0) + "%",
+                        "loadComplianceSummary");
+                    setTextById("openObligations",
+                        (data.summary?.total_obligations || 0) + " " + _gt('grc.obligations_count'),
+                        "loadComplianceSummary");
 
                     renderFrameworkCompliance(data.by_regulation || []);
                 } catch (error) {
@@ -684,10 +718,12 @@
                 try {
                     const response = await fetch("/api/audits/summary");
                     const data = await response.json();
-                    document.getElementById("openFindings").textContent =
-                        data.findings?.open || 0;
-                    document.getElementById("criticalFindings").textContent =
-                        (data.findings?.critical || 0) + " " + _gt('grc.critical_count');
+                    setTextById("openFindings",
+                        data.findings?.open || 0,
+                        "loadAuditSummary");
+                    setTextById("criticalFindings",
+                        (data.findings?.critical || 0) + " " + _gt('grc.critical_count'),
+                        "loadAuditSummary");
 
                     const completed = data.audits?.completed || 0;
                     const upcoming = data.audits?.scheduled || 0;
@@ -696,19 +732,20 @@
                     const resolved = data.findings?.resolved || 0;
                     const readiness = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
-                    document.getElementById("auditReadinessScore").textContent = readiness + "%";
-                    document.getElementById("completedAudits").textContent = completed;
-                    document.getElementById("upcomingAudits").textContent = upcoming;
-                    document.getElementById("overdueFindings").textContent = overdue;
+                    setTextById("auditReadinessScore", readiness + "%", "loadAuditSummary");
+                    setTextById("completedAudits", completed, "loadAuditSummary");
+                    setTextById("upcomingAudits", upcoming, "loadAuditSummary");
+                    setTextById("overdueFindings", overdue, "loadAuditSummary");
 
-                    const detailsEl = document.getElementById("auditReadinessDetails");
+                    let readinessHtml;
                     if (readiness >= 80) {
-                        detailsEl.innerHTML = `<p class="text-sm text-green-700 bg-green-50 p-3 rounded-lg">${_gt('grc.audit_readiness_strong')}</p>`;
+                        readinessHtml = `<p class="text-sm text-green-700 bg-green-50 p-3 rounded-lg">${_gt('grc.audit_readiness_strong')}</p>`;
                     } else if (readiness >= 50) {
-                        detailsEl.innerHTML = `<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">${_gt('grc.audit_readiness_improve')}</p>`;
+                        readinessHtml = `<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">${_gt('grc.audit_readiness_improve')}</p>`;
                     } else {
-                        detailsEl.innerHTML = `<p class="text-sm text-red-700 bg-red-50 p-3 rounded-lg">${_gt('grc.audit_readiness_low')}</p>`;
+                        readinessHtml = `<p class="text-sm text-red-700 bg-red-50 p-3 rounded-lg">${_gt('grc.audit_readiness_low')}</p>`;
                     }
+                    setHTMLById("auditReadinessDetails", readinessHtml, "loadAuditSummary");
                 } catch (error) {
                     console.error("Error loading audit summary:", error);
                 }
@@ -718,10 +755,12 @@
                 try {
                     const response = await fetch("/api/vendors/summary");
                     const data = await response.json();
-                    document.getElementById("activeVendors").textContent =
-                        data.vendors?.active || 0;
-                    document.getElementById("highRiskVendors").textContent =
-                        (data.vendors?.critical_vendors || 0) + " " + _gt('grc.high_risk_count');
+                    setTextById("activeVendors",
+                        data.vendors?.active || 0,
+                        "loadVendorSummary");
+                    setTextById("highRiskVendors",
+                        (data.vendors?.critical_vendors || 0) + " " + _gt('grc.high_risk_count'),
+                        "loadVendorSummary");
                 } catch (error) {
                     console.error("Error loading vendor summary:", error);
                 }
@@ -732,10 +771,12 @@
                     const response = await fetch("/api/handoff/summary");
                     const data = await response.json();
 
-                    document.getElementById("totalControls").textContent =
-                        data.controls?.total_controls || 0;
-                    document.getElementById("effectiveControls").textContent =
-                        (data.controls?.effective || 0) + " " + _gt("grc.effective_label");
+                    setTextById("totalControls",
+                        data.controls?.total_controls || 0,
+                        "loadHandoffSummary");
+                    setTextById("effectiveControls",
+                        (data.controls?.effective || 0) + " " + _gt("grc.effective_label"),
+                        "loadHandoffSummary");
 
                     renderRecentEvents(data.recent_events || []);
                 } catch (error) {
