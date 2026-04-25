@@ -760,6 +760,40 @@ export async function pruneOldAiMetrics(retentionDays?: number): Promise<number>
 }
 
 /**
+ * Dry-run counterpart of {@link pruneOldAiMetrics} (Task #550).
+ *
+ * Returns how many `ai_call_metrics` rows WOULD be removed by the next
+ * cron pass if the retention window were tightened to `retentionDays`.
+ * Re-uses the exact same `started_at < NOW() - MAKE_INTERVAL(...)`
+ * predicate as the prune itself so the dashboard preview can never drift
+ * from what the cron actually deletes.
+ *
+ * Throws on invalid input rather than silently returning 0 — the caller
+ * (the AI Ops route) validates the value against
+ * `AI_METRICS_RETENTION_BOUNDS` first, so reaching this function with a
+ * non-positive value is a programmer error.
+ */
+export async function countAiMetricsOlderThan(retentionDays: number): Promise<number> {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    throw new Error('retentionDays must be a positive number');
+  }
+  await ensureAiMetricsTable();
+  const days = Math.max(1, Math.floor(retentionDays));
+  const result = await pool.query<{ count: string | number | null }>(
+    `SELECT COUNT(*)::bigint AS count
+       FROM ai_call_metrics
+      WHERE started_at < NOW() - MAKE_INTERVAL(days => $1)`,
+    [days],
+  );
+  const raw = result.rows[0]?.count ?? 0;
+  // pg returns BIGINT as a string by default. Coerce safely; the table is
+  // pruned daily so the value will always fit in a JS Number long-term,
+  // but we still guard against NaN from an unexpected payload shape.
+  const n = typeof raw === 'string' ? Number(raw) : raw;
+  return Number.isFinite(n) ? Number(n) : 0;
+}
+
+/**
  * Purge telemetry rows for prompt versions that are no longer deployed.
  *
  * A prompt-version is eligible for purging when ALL of the following hold:

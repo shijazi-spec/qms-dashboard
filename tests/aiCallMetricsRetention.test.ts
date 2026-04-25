@@ -59,6 +59,9 @@ const originalQuery = pg.Pool.prototype.query;
   if (/^\s*DELETE FROM ai_call_metrics/i.test(sql)) {
     return { ...empty, command: 'DELETE', rowCount: 7 };
   }
+  if (/^\s*SELECT COUNT\(\*\)::bigint AS count\s+FROM ai_call_metrics/i.test(sql)) {
+    return { ...empty, command: 'SELECT', rowCount: 1, rows: [{ count: '12400' }] };
+  }
   return empty;
 } as typeof pg.Pool.prototype.query;
 
@@ -66,6 +69,7 @@ const {
   pruneOldAiMetrics,
   resolveAiMetricsRetentionDays,
   DEFAULT_AI_METRICS_RETENTION_DAYS,
+  countAiMetricsOlderThan,
 } = await import('../src/utils/aiTelemetry');
 
 let passed = 0;
@@ -85,6 +89,15 @@ function lastDeleteParams(): ReadonlyArray<unknown> | null {
   for (let i = captured.length - 1; i >= 0; i--) {
     if (/^\s*DELETE FROM ai_call_metrics/i.test(captured[i].sql)) {
       return captured[i].params;
+    }
+  }
+  return null;
+}
+
+function lastCountQuery(): CapturedQuery | null {
+  for (let i = captured.length - 1; i >= 0; i--) {
+    if (/^\s*SELECT COUNT\(\*\)::bigint AS count\s+FROM ai_call_metrics/i.test(captured[i].sql)) {
+      return captured[i];
     }
   }
   return null;
@@ -233,6 +246,56 @@ async function main(): Promise<void> {
     params != null && params[0] === 45,
     { params },
   );
+
+  console.log('=== countAiMetricsOlderThan() — preview wiring (Task #550) ===');
+
+  clearCaptured();
+  let count = await countAiMetricsOlderThan(7);
+  let countQ = lastCountQuery();
+  check(
+    'issues a SELECT COUNT(*) when called with a positive integer',
+    countQ != null,
+    { captured },
+  );
+  check(
+    'COUNT uses MAKE_INTERVAL(days => $1) — same predicate as prune',
+    countQ != null && /MAKE_INTERVAL\(days => \$1\)/i.test(countQ.sql),
+    { sql: countQ?.sql },
+  );
+  check(
+    'COUNT param is the value passed in (7)',
+    countQ != null && countQ.params[0] === 7,
+    { params: countQ?.params },
+  );
+  check(
+    'returns the row count from the SELECT (12400)',
+    count === 12400,
+    { count },
+  );
+
+  clearCaptured();
+  count = await countAiMetricsOlderThan(3.9);
+  countQ = lastCountQuery();
+  check(
+    'fractional argument (3.9) is floored to 3 — matches prune behaviour',
+    countQ != null && countQ.params[0] === 3,
+    { params: countQ?.params },
+  );
+
+  for (const bad of [0, -1, NaN, Infinity, -Infinity]) {
+    clearCaptured();
+    let threw = false;
+    try {
+      await countAiMetricsOlderThan(bad);
+    } catch {
+      threw = true;
+    }
+    check(
+      `throws on invalid input (${String(bad)}) instead of silently returning 0`,
+      threw && lastCountQuery() == null,
+      { bad, captured },
+    );
+  }
 
   if (originalEnv === undefined) {
     delete process.env.AI_METRICS_RETENTION_DAYS;

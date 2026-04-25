@@ -1437,6 +1437,75 @@ export const aiOpsRoutes = [
   },
 
   /**
+   * AI usage history retention — preview endpoint (Task #550).
+   *
+   * Returns how many `ai_call_metrics` rows are currently older than the
+   * supplied `?days=N` candidate window so the dashboard can warn the
+   * operator BEFORE they save a tighter window. Re-uses the exact same
+   * SQL predicate as `pruneOldAiMetrics()` so the preview cannot drift
+   * from what the daily cron will actually delete.
+   *
+   * Read-only and side-effect-free, so it is opened to the same
+   * AI_OPS_ROLES that can read the retention config (not just admins) —
+   * non-admin ops should be able to inspect the impact even when they
+   * can't change the value themselves.
+   */
+  {
+    path: "/api/ai-ops/metrics-retention/preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const { AI_METRICS_RETENTION_BOUNDS } = await import(
+            "../../utils/aiMetricsRetentionConfig"
+          );
+
+          const raw = c.req.query("days");
+          if (raw == null || String(raw).trim() === "") {
+            return c.json({ error: "days query parameter is required" }, 400);
+          }
+          const parsed = Number(raw);
+          if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+            return c.json(
+              { error: "days must be a whole number" },
+              400,
+            );
+          }
+          if (
+            parsed < AI_METRICS_RETENTION_BOUNDS.min ||
+            parsed > AI_METRICS_RETENTION_BOUNDS.max
+          ) {
+            return c.json(
+              {
+                error: `days must be between ${AI_METRICS_RETENTION_BOUNDS.min} and ${AI_METRICS_RETENTION_BOUNDS.max}`,
+              },
+              400,
+            );
+          }
+
+          const { countAiMetricsOlderThan } = await import(
+            "../../utils/aiTelemetry"
+          );
+          const rowCount = await countAiMetricsOlderThan(parsed);
+
+          return c.json({
+            data: {
+              candidate_days: parsed,
+              rows_to_delete: rowCount,
+            },
+          });
+        } catch (error) {
+          console.error("[AI-Ops] metrics-retention preview error:", error);
+          return c.json({ error: "Failed to preview retention impact" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
    * AI usage history retention — write endpoint (Task #504).
    *
    * Body: { retention_days: number | null, note?: string }

@@ -2753,9 +2753,23 @@
               placeholder="${envSet ? `env: ${esc(envBaseline)}` : `default: ${esc(def)}`}"
               ${inputDisabled}
               class="${inputClass}"
+              data-on-input="onMetricsRetentionInputChange"
               data-testid="input-metrics-retention-days"
             />
             <p class="text-xs text-gray-400 mt-1">Allowed: ${bounds.min}–${bounds.max}</p>
+            <div class="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                data-on-click="previewMetricsRetentionImpact"
+                class="px-2 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                data-testid="button-metrics-retention-preview"
+              >Preview impact</button>
+              <span
+                id="metrics-retention-preview-status"
+                class="text-xs text-gray-500"
+                data-testid="text-metrics-retention-preview"
+              >Enter a value and click Preview impact to see how many rows the next prune would delete.</span>
+            </div>
           </div>
           <div class="md:col-span-2 text-sm">
             <div class="text-xs text-gray-500 uppercase tracking-wide">Effective</div>
@@ -2832,6 +2846,96 @@
       );
     }
 
+    function setMetricsRetentionPreview(text, kind) {
+      const el = document.getElementById('metrics-retention-preview-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-xs ' + (
+        kind === 'error' ? 'text-red-600'
+        : kind === 'warn' ? 'text-amber-700 font-medium'
+        : kind === 'ok'   ? 'text-gray-700'
+        : kind === 'info' ? 'text-gray-500'
+        : 'text-gray-500'
+      );
+    }
+
+    function readMetricsRetentionCandidate() {
+      const inputEl = document.getElementById('metrics-retention-input');
+      if (!inputEl) return { error: 'Form not loaded.' };
+      const raw = (inputEl.value ?? '').trim();
+      if (raw === '') {
+        return { error: 'Enter a retention value (in days) to preview the impact.' };
+      }
+      const n = Number(raw);
+      if (!Number.isFinite(n) || !Number.isInteger(n)) {
+        return { error: 'Retention must be a whole number of days.' };
+      }
+      const bounds = (metricsRetentionState && metricsRetentionState.bounds) || { min: 1, max: 3650 };
+      if (n < bounds.min || n > bounds.max) {
+        return { error: `Retention must be between ${bounds.min} and ${bounds.max} days.` };
+      }
+      return { days: n };
+    }
+
+    // Cleared whenever the input changes so a stale row count from a
+    // previous "Preview impact" click can never be mistaken for the
+    // current value the operator is about to save.
+    function onMetricsRetentionInputChange() {
+      lastMetricsRetentionPreview = null;
+      setMetricsRetentionPreview('Click "Preview impact" to recount for the new value.', 'info');
+    }
+
+    let lastMetricsRetentionPreview = null;
+    let metricsRetentionPreviewInFlight = false;
+
+    async function fetchMetricsRetentionPreview(days) {
+      const r = await fetch('/api/ai-ops/metrics-retention/preview?days=' + encodeURIComponent(String(days)), {
+        credentials: 'same-origin',
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body?.error || ('HTTP ' + r.status));
+      }
+      const rows = Number(body?.data?.rows_to_delete);
+      if (!Number.isFinite(rows) || rows < 0) {
+        throw new Error('Server returned an invalid row count');
+      }
+      return { days, rows };
+    }
+
+    async function previewMetricsRetentionImpact() {
+      const candidate = readMetricsRetentionCandidate();
+      if (candidate.error) {
+        setMetricsRetentionPreview(candidate.error, 'error');
+        return;
+      }
+      if (metricsRetentionPreviewInFlight) return;
+      metricsRetentionPreviewInFlight = true;
+      setMetricsRetentionPreview('Counting rows older than ' + candidate.days + ' days…', 'info');
+      try {
+        const result = await fetchMetricsRetentionPreview(candidate.days);
+        lastMetricsRetentionPreview = result;
+        const formatted = result.rows.toLocaleString();
+        if (result.rows === 0) {
+          setMetricsRetentionPreview(
+            'No rows older than ' + result.days + ' days — saving will not delete anything on the next prune.',
+            'ok',
+          );
+        } else {
+          setMetricsRetentionPreview(
+            'This will delete ~' + formatted + ' rows older than ' + result.days + ' days on the next prune.',
+            'warn',
+          );
+        }
+      } catch (e) {
+        console.error('Metrics-retention preview error', e);
+        lastMetricsRetentionPreview = null;
+        setMetricsRetentionPreview('Preview failed: ' + (e?.message || 'unknown error'), 'error');
+      } finally {
+        metricsRetentionPreviewInFlight = false;
+      }
+    }
+
     async function saveMetricsRetention() {
       if (!metricsRetentionState) return;
       const inputEl = document.getElementById('metrics-retention-input');
@@ -2855,6 +2959,54 @@
       const note = noteEl?.value?.trim() || '';
       const requestBody = { retention_days };
       if (note) requestBody.note = note;
+
+      // Confirm step (Task #550): re-show the "rows that will be deleted"
+      // count immediately before committing so the operator sees the
+      // impact a second time.
+      //
+      // Only gated on TIGHTENING saves (candidate < current effective)
+      // — widening or matching the existing window can never cause an
+      // additional row to be deleted on the next prune compared to what
+      // the cron is already configured to do, so a destructive
+      // "this will delete ~X rows" warning would be misleading. The
+      // preview button above still works regardless for ad-hoc impact
+      // checks.
+      const currentEffective = Number(metricsRetentionState.effective_days);
+      const tightening = retention_days != null
+        && Number.isFinite(currentEffective)
+        && retention_days < currentEffective;
+      if (tightening) {
+        let preview = lastMetricsRetentionPreview;
+        if (!preview || preview.days !== retention_days) {
+          setMetricsRetentionStatus('Counting rows that would be pruned…', 'info');
+          try {
+            preview = await fetchMetricsRetentionPreview(retention_days);
+            lastMetricsRetentionPreview = preview;
+          } catch (e) {
+            console.error('Metrics-retention pre-save preview error', e);
+            const proceed = confirm(
+              'Could not count how many rows would be deleted (' + (e?.message || 'unknown error') + ').\n\n' +
+              'Tighten retention from ' + currentEffective + ' to ' + retention_days + ' days anyway?'
+            );
+            if (!proceed) {
+              setMetricsRetentionStatus('Save cancelled.', 'info');
+              return;
+            }
+            preview = null;
+          }
+        }
+        if (preview && preview.rows > 0) {
+          const formatted = preview.rows.toLocaleString();
+          const proceed = confirm(
+            'Tightening retention from ' + currentEffective + ' to ' + preview.days + ' days will delete ~' + formatted + ' rows on the next prune.\n\n' +
+            'Save the new retention window?'
+          );
+          if (!proceed) {
+            setMetricsRetentionStatus('Save cancelled — no changes made.', 'info');
+            return;
+          }
+        }
+      }
 
       setMetricsRetentionStatus('Saving…', 'info');
       try {
