@@ -1568,6 +1568,8 @@
       "filter_status_skipped": "Skipped",
       "filter_status_aria": "Show only {status} checks",
       "filter_status_all_aria": "Show checks of all statuses",
+      "no_matching_checks": "No {status} checks in {category}",
+      "clear_filters": "Clear filters",
       "label_skipped": "skipped",
       "label_run_singular": "run",
       "label_runs_plural": "runs",

@@ -1568,6 +1568,8 @@
       "filter_status_skipped": "متخطاة",
       "filter_status_aria": "عرض الفحوصات بحالة {status} فقط",
       "filter_status_all_aria": "عرض الفحوصات بجميع الحالات",
+      "no_matching_checks": "لا توجد فحوصات {status} في {category}",
+      "clear_filters": "مسح الفلاتر",
       "label_skipped": "تم تخطيه",
       "label_run_singular": "تشغيل",
       "label_runs_plural": "تشغيلات",
