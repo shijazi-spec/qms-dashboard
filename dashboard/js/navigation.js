@@ -327,11 +327,12 @@ const WalaPlusNav = {
           // Static skeleton only — no user data interpolated here
           const _t = (k) => (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop());
           const isAr = window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar';
-          // Language toggle hidden for English-only release. The i18n
-          // machinery and en/ar bundles remain in place — flip this back
-          // to true to re-expose the English / العربية picker in the
-          // user dropdown without any other changes.
-          const SHOW_LANG_TOGGLE = false;
+          // Language toggle is exposed in the user dropdown so operators
+          // can switch between English and العربية at runtime. The i18n
+          // module persists the choice (localStorage + server preference)
+          // and reloads the page so all data-i18n elements pick up the
+          // new bundle.
+          const SHOW_LANG_TOGGLE = true;
           container.innerHTML = `
             <div class="relative nav-dropdown" data-group="user-menu">
               <button class="flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="User menu" aria-haspopup="true" aria-expanded="false" data-testid="button-user-menu">

@@ -27,10 +27,10 @@ import { test, expect, Page } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:5000';
 
-// Mirrors SHOW_LANG_TOGGLE in dashboard/js/navigation.js. While the in-app
-// language switcher is hidden (English-only ship), tests that assert on the
-// rendered toggle buttons are skipped. Flip both flags together to re-enable.
-const SHOW_LANG_TOGGLE = false;
+// Mirrors SHOW_LANG_TOGGLE in dashboard/js/navigation.js. The in-app
+// language switcher is exposed so operators can flip between English and
+// العربية from the user dropdown. Keep both flags in sync.
+const SHOW_LANG_TOGGLE = true;
 
 async function setLanguage(page: Page, lang: 'en' | 'ar') {
   // Only seed when the user has not already chosen a language. This allows
