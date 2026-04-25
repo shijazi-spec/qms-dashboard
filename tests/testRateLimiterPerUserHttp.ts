@@ -6,19 +6,34 @@
  *   authenticates with X-Admin-Key (which has no session userId). A regression
  *   that accidentally fell back to IP keying for logged-in users — letting two
  *   users behind one office NAT share a single bucket — would not be caught.
+ *   Likewise, the IP-keyed reset scenarios in testRateLimiterHttp.ts cannot
+ *   prove that a user-keyed bucket (key prefix `user:<userId>`) actually rolls
+ *   over at the next minute boundary; this test fills that gap too.
  *
  * What this test does:
- *   1. Mints two valid signed session cookies for two distinct test users
- *      (created in platform_users for the duration of the run, then deleted).
- *   2. Fires WRITE_LIMIT+5 (15) concurrent POSTs per user against
- *      /api/audit/trigger from the SAME X-Forwarded-For — so if the limiter
- *      ever falls back to IP keying, the two users will contend for the same
- *      bucket and the assertion fails.
- *   3. Asserts each user gets exactly WRITE_LIMIT (10) requests through the
- *      limiter and the remaining 5 receive 429 + Retry-After.
- *   4. Asserts the combined passed count equals 2 * WRITE_LIMIT (20), which
- *      is the unique signature of independent per-user buckets — under shared
- *      IP keying it would be only WRITE_LIMIT (10).
+ *   Scenario 1 — Per-user isolation under shared XFF:
+ *     1. Mints two valid signed session cookies for two distinct test users
+ *        (created in platform_users for the duration of the run, then deleted).
+ *     2. Fires WRITE_LIMIT+5 (15) concurrent POSTs per user against
+ *        /api/audit/trigger from the SAME X-Forwarded-For — so if the limiter
+ *        ever falls back to IP keying, the two users will contend for the same
+ *        bucket and the assertion fails.
+ *     3. Asserts each user gets exactly WRITE_LIMIT (10) requests through the
+ *        limiter and the remaining 5 receive 429 + Retry-After.
+ *     4. Asserts the combined passed count equals 2 * WRITE_LIMIT (20), which
+ *        is the unique signature of independent per-user buckets — under shared
+ *        IP keying it would be only WRITE_LIMIT (10).
+ *   Scenario 2 — Per-user READ_LIMIT window reset:
+ *     1. Mints a signed session cookie for a third test user (admin role so the
+ *        /api/users handler returns 200 instead of 403; the rate limiter still
+ *        runs first either way, so the reset assertion is independent of role).
+ *     2. Fires READ_LIMIT+10 (110) concurrent GETs to /api/users with a fresh
+ *        XFF and the user's session cookie, exhausting the user-keyed bucket.
+ *     3. Confirms the burst produced at least one 429 + Retry-After (proving
+ *        the user-keyed bucket actually engaged before testing rollover).
+ *     4. Waits past the next 60s window boundary and fires one more request
+ *        from the SAME session cookie, asserting the limiter no longer returns
+ *        429 + Retry-After (i.e. the user-keyed bucket rolled over).
  *
  * Distinguishing rate-limit denials from other 429s:
  *   The middleware always sets `Retry-After` when it returns 429. The
@@ -54,7 +69,11 @@
  *   [PerUserRateLimitTest] user A passed=10 blocked=5  ✅
  *   [PerUserRateLimitTest] user B passed=10 blocked=5  ✅
  *   [PerUserRateLimitTest] combined passed=20 (per-user buckets are independent) ✅
+ *   [PerUserRateLimitTest] /api/users per-user read reset: ✅ allowed (limiter reset)
  *   [PerUserRateLimitTest] PASS — per-user rate limiting holds under shared XFF
+ *
+ * Runtime: ~60–90s end-to-end — the isolation scenario completes in seconds,
+ * but the reset scenario must wait for the next ~60s minute boundary.
  *
  * Exit code: 0 on success, 1 on any failed assertion or fatal error.
  */
@@ -70,7 +89,9 @@ const SESSION_SECRET = process.env.SESSION_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const WRITE_LIMIT = 10;
+const READ_LIMIT = 100;
 const N_PER_USER = WRITE_LIMIT + 5;
+const N_READ_RESET = READ_LIMIT + 10;
 const WINDOW_MS = 60_000;
 const WINDOW_HEADROOM_MS = 10_000;
 
@@ -108,6 +129,21 @@ async function waitForWindowHeadroom(): Promise<void> {
     );
     await new Promise(r => setTimeout(r, waitMs));
   }
+}
+
+async function waitForNextWindow(label: string): Promise<void> {
+  // Sleep until the current 60s bucket ends, plus a small buffer so the
+  // follow-up request lands cleanly in the next bucket (no boundary skew).
+  // Mirrors the pattern in tests/testRateLimiterHttp.ts.
+  const now = Date.now();
+  const elapsedInWindow = now % WINDOW_MS;
+  const remaining = WINDOW_MS - elapsedInWindow;
+  const waitMs = remaining + 1500;
+  console.log(
+    `[PerUserRateLimitTest] ${label}: waiting ${waitMs}ms (${(waitMs / 1000).toFixed(1)}s) ` +
+      `for the next window to begin...`,
+  );
+  await new Promise(r => setTimeout(r, waitMs));
 }
 
 function signSession(payload: Record<string, any>, secret: string): string {
@@ -304,15 +340,134 @@ async function testPerUserIsolation(): Promise<boolean> {
   }
 }
 
+async function testPerUserReadWindowReset(): Promise<boolean> {
+  console.log('\n[PerUserRateLimitTest] === Per-user READ_LIMIT window reset (GET /api/users) ===');
+  if (!SESSION_SECRET) {
+    console.error('[PerUserRateLimitTest] SESSION_SECRET is not set — cannot mint session cookies.');
+    return false;
+  }
+  if (!DATABASE_URL) {
+    console.error('[PerUserRateLimitTest] DATABASE_URL is not set — cannot create test users.');
+    return false;
+  }
+
+  const pool = new Pool({ connectionString: DATABASE_URL });
+  const ts = Date.now();
+  // .test TLD is reserved (RFC 2606) — guaranteed to never collide with a real user.
+  // Distinct email from the isolation scenario so the two scenarios never share
+  // a platform_users row even if their cleanup races.
+  const email = `ratelimit-perUser-reset-${ts}@walaplus.test`;
+
+  try {
+    // 'admin' role so /api/users returns 200 instead of 403 — though the
+    // limiter runs BEFORE the role check, so this assertion would still hold
+    // (passedLimiter is true on any non-429-Retry-After response). We pick
+    // admin purely so the burst's status breakdown reads cleanly as 200/429.
+    const userId = await ensureTestUser(pool, email, 'admin');
+    console.log(`[PerUserRateLimitTest] Created test user #${userId} (${email})`);
+
+    const cookie = buildSessionCookie(userId, email, 'admin', SESSION_SECRET);
+
+    await waitForWindowHeadroom();
+
+    // Fresh XFF (different from the isolation scenario) so this user-keyed
+    // bucket starts at 0 even if both scenarios share the same minute window.
+    const xff = uniqueXff('per-user-read-reset');
+    const url = `${BASE_URL}/api/users`;
+    const init: RequestInit = {
+      method: 'GET',
+      headers: {
+        'X-Forwarded-For': xff,
+        Cookie: cookie,
+      },
+    };
+
+    // Phase A: exhaust READ_LIMIT=100 so the next request would be blocked.
+    console.log(
+      `[PerUserRateLimitTest] Phase A: exhaust READ_LIMIT with ${N_READ_RESET} ` +
+        `concurrent GETs (XFF=${xff}, user=#${userId})`,
+    );
+    const burstTasks = Array.from({ length: N_READ_RESET }, () => fireOne(url, init));
+    const burstResults = await Promise.all(burstTasks);
+    const { blocked: burstBlocked } = summarize(
+      `/api/users (per-user read reset burst, user=#${userId})`,
+      burstResults,
+    );
+    if (burstBlocked === 0) {
+      console.error(
+        `[PerUserRateLimitTest]   FAIL — burst produced 0 limiter blocks (no 429 + Retry-After). ` +
+          `Cannot prove the per-user read bucket actually engaged before testing reset. ` +
+          `Either SESSION_SECRET does not match the server (so the limiter saw the ` +
+          `request as unauthenticated and used UNAUTH_READ_LIMIT) or the limiter regressed.`,
+      );
+      return false;
+    }
+    console.log(`[PerUserRateLimitTest] Phase A confirmed: ${burstBlocked} limiter blocks during burst.`);
+
+    // Phase B: wait past the window boundary, then send one more from the SAME
+    // session cookie. The bucket key is `user:<userId>:auth:general:r`, so
+    // rollover here proves the per-user keyed bucket clears at the next minute
+    // boundary — exactly the gap the IP-keyed scenarios in
+    // tests/testRateLimiterHttp.ts cannot cover.
+    await waitForNextWindow('Per-user read reset');
+
+    console.log(
+      `[PerUserRateLimitTest] Phase B: fire 1 follow-up after rollover (XFF=${xff}, user=#${userId})`,
+    );
+    const follow = await fireOne(url, init);
+    console.log(
+      `[PerUserRateLimitTest] follow-up status=${follow.status} ` +
+        `retryAfter=${follow.retryAfter ?? 'none'} ` +
+        `passedLimiter=${follow.passedLimiter}`,
+    );
+
+    const ok = follow.passedLimiter;
+    console.log(
+      `[PerUserRateLimitTest] /api/users per-user read reset: ` +
+        (ok
+          ? '✅ allowed (limiter reset at window boundary)'
+          : '❌ still blocked by limiter (429 + Retry-After) after rollover'),
+    );
+    if (!ok) {
+      console.error(
+        `[PerUserRateLimitTest]   FAIL — follow-up after window rollover was still blocked ` +
+          `by the per-user read limiter. The user:<userId> READ_LIMIT bucket failed to ` +
+          `roll over at the next 60s window boundary.`,
+      );
+    }
+    return ok;
+  } catch (err) {
+    console.error('[PerUserRateLimitTest] Fatal error during per-user reset scenario:', err);
+    return false;
+  } finally {
+    await deleteTestUser(pool, email);
+    await pool.end().catch(() => {});
+  }
+}
+
 async function main() {
   console.log(`[PerUserRateLimitTest] Target server: ${BASE_URL}`);
   const reachable = await ensureServerReachable();
   if (!reachable) process.exit(1);
 
-  const passed = await testPerUserIsolation();
+  // Run isolation and reset scenarios in parallel:
+  //   - Isolation completes in seconds and uses its own pair of test users +
+  //     XFF + bucket keys (POST /api/audit/trigger, write category).
+  //   - Reset waits ~60s for window rollover and uses a third test user +
+  //     a different XFF + a different bucket category (GET /api/users, read).
+  // Their buckets are fully disjoint, so running concurrently keeps the total
+  // runtime near the single ~60s rollover wait instead of stacking them.
+  console.log(
+    '\n[PerUserRateLimitTest] Starting isolation + reset scenarios in parallel — ' +
+      'reset waits ~60s for the next minute boundary.',
+  );
+  const [isolationOk, resetOk] = await Promise.all([
+    testPerUserIsolation(),
+    testPerUserReadWindowReset(),
+  ]);
 
   console.log('');
-  if (passed) {
+  if (isolationOk && resetOk) {
     console.log('[PerUserRateLimitTest] PASS — per-user rate limiting holds under shared XFF');
     process.exit(0);
   } else {
