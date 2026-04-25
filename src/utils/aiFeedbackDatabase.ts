@@ -176,6 +176,29 @@ export interface RecentThumbsDown {
   created_at: string;
 }
 
+export async function getFeedbackByMessageId(
+  messageId: string,
+  userId?: string,
+  userEmail?: string,
+): Promise<{ rating: 'up' | 'down'; category: string | null; comment: string | null } | null> {
+  await initAIFeedbackTable();
+  const res = await pool.query(
+    `SELECT rating, category, comment
+     FROM ai_response_feedback
+     WHERE message_id = $1
+       AND ($2::text IS NULL OR user_id = $2 OR user_email = $3)
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [messageId, userId ?? null, userEmail ?? null]
+  );
+  if (!res.rows[0]) return null;
+  return {
+    rating: res.rows[0].rating as 'up' | 'down',
+    category: res.rows[0].category ?? null,
+    comment: res.rows[0].comment ?? null,
+  };
+}
+
 export async function getRecentThumbsDown(limit = 20): Promise<RecentThumbsDown[]> {
   await initAIFeedbackTable();
 

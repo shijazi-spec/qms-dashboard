@@ -622,6 +622,22 @@
             });
 
             bubble.appendChild(bar);
+
+            if (messageId) {
+                var cachedRating = ratingCacheGet(messageId);
+                if (cachedRating) {
+                    markSelected(cachedRating);
+                } else {
+                    fetch('/api/consultant/feedback/' + encodeURIComponent(messageId), {
+                        credentials: 'same-origin'
+                    }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+                        if (data && data.rating) {
+                            ratingCacheSet(messageId, data.rating);
+                            markSelected(data.rating);
+                        }
+                    }).catch(function() {});
+                }
+            }
         }
 
         var _feedbackModalCallback = null;
@@ -658,6 +674,14 @@
         };
 
         var FEEDBACK_QUEUE_KEY = 'walaplus_feedback_queue';
+        var RATING_CACHE_KEY = 'walaplus_msg_ratings';
+
+        function ratingCacheGet(messageId) {
+            try { var m = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || '{}'); return m[messageId] || null; } catch(e) { return null; }
+        }
+        function ratingCacheSet(messageId, rating) {
+            try { var m = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || '{}'); m[messageId] = rating; localStorage.setItem(RATING_CACHE_KEY, JSON.stringify(m)); } catch(e) {}
+        }
 
         function feedbackQueueGet() {
             try { return JSON.parse(localStorage.getItem(FEEDBACK_QUEUE_KEY) || '[]'); }
@@ -699,6 +723,7 @@
 
         function submitFeedback(messageId, rating, category, comment, promptText, responseText, onDone) {
             if (onDone) onDone(rating);
+            if (messageId) ratingCacheSet(messageId, rating);
             var payload = {
                 messageId: messageId,
                 conversationId: threadId || null,

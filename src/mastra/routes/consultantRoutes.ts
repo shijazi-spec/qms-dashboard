@@ -20,6 +20,7 @@ import {
   getRecentThumbsDown,
   getFeedbackTrend,
   getDistinctFeedbackAgents,
+  getFeedbackByMessageId,
 } from "../../utils/aiFeedbackDatabase";
 import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
@@ -519,6 +520,32 @@ export const consultantRoutes = [
         } catch (error) {
           console.error("[Consultant] Feedback trend error:", error);
           return c.json({ error: "Failed to fetch feedback trend" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/consultant/feedback/:messageId",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const messageId = c.req.param("messageId");
+          if (!messageId || typeof messageId !== "string") {
+            return c.json({ error: "messageId is required" }, 400);
+          }
+
+          const feedback = await getFeedbackByMessageId(messageId, user.userId, user.email);
+          if (!feedback) return c.json({ rating: null });
+
+          return c.json({ rating: feedback.rating, category: feedback.category, comment: feedback.comment });
+        } catch (error) {
+          console.error("[Consultant] Feedback get error:", error);
+          return c.json({ error: "Failed to fetch feedback" }, 500);
         }
       };
     },
