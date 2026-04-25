@@ -270,6 +270,159 @@ console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
 }
 
 // ---------------------------------------------------------------------------
+// Section 4 — credential-shaped strings under NON-sensitive field names
+//
+// A caller may pass a raw credential as the value of an innocuously-named
+// field (e.g. `fieldChanged = "notes"`, value = a JWT or bcrypt hash).  The
+// key-based deny list in redactSensitiveFields() cannot see these because it
+// only inspects field names.  A second, regex-based pass over every string
+// leaf (deepRedactSecretLikeStrings) must scrub them before INSERT.
+// ---------------------------------------------------------------------------
+
+console.log("\n=== credential-shaped values under innocuous field names ===\n");
+
+const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
+  {
+    label: "bcrypt hash",
+    value: "$2b$12$abcdefghijklmnopqrstuOCm5RJ7p2sIcQqL7gKwSxmXJ9pYsZyHa",
+  },
+  {
+    label: "JWT",
+    value:
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSIsIm5hbWUiOiJBbGljZSJ9.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+  },
+  {
+    label: "OpenAI sk- key",
+    value: "sk-proj-ABCdefGHIjklMNOpqrsTUVwxyz0123456789ABCDEF",
+  },
+  {
+    label: "GitHub PAT",
+    value: "ghp_ABCdefGHIjklMNOpqrsTUVwxyz0123456789",
+  },
+  {
+    label: "Stripe live key",
+    value: "sk_live_ABCdefGHIjklMNOpqrsTUVwx",
+  },
+  {
+    label: "Google API key",
+    value: "AIzaSyABcDefGHIjklMNOpqrSTUVWXyz1234567",
+  },
+  {
+    label: "Bearer header",
+    value: "Bearer abc123def456ghi789jkl012mno345pqr678",
+  },
+];
+
+const INNOCUOUS_FIELDS = ["notes", "description", "comment", "title"] as const;
+
+for (const { label, value } of SECRET_LIKE_STRINGS) {
+  for (const field of INNOCUOUS_FIELDS.slice(0, 1)) {
+    captured.length = 0;
+    await logNCChange(
+      42,
+      field,
+      `was: ${value}`,
+      `now: rotated-${value}`,
+      "test-runner",
+      `Found a token in ${field}: ${value}`,
+    );
+    const params = lastInsertParams();
+    assert(params !== null, `NC/${field}/${label}: pool.query was called`);
+    if (params) {
+      const oldParam = String(params[2] ?? "");
+      const newParam = String(params[3] ?? "");
+      const reasonParam = String(params[5] ?? "");
+      const combined = `${oldParam}|${newParam}|${reasonParam}`;
+      assert(
+        !combined.includes(value),
+        `NC/${field}/${label}: raw secret-shaped value is NOT present in INSERT params`,
+      );
+      assert(
+        oldParam.includes(REDACTED_SENTINEL) && newParam.includes(REDACTED_SENTINEL),
+        `NC/${field}/${label}: REDACTED sentinel IS present in old_value AND new_value`,
+      );
+    }
+  }
+
+  for (const field of INNOCUOUS_FIELDS.slice(1, 2)) {
+    captured.length = 0;
+    await logCAPAChange(
+      99,
+      field,
+      `previous ${field}: ${value}`,
+      `updated ${field}: rotated-${value}`,
+      "test-runner",
+    );
+    const params = lastInsertParams();
+    assert(params !== null, `CAPA/${field}/${label}: pool.query was called`);
+    if (params) {
+      const oldParam = String(params[2] ?? "");
+      const newParam = String(params[3] ?? "");
+      const combined = `${oldParam}|${newParam}`;
+      assert(
+        !combined.includes(value),
+        `CAPA/${field}/${label}: raw secret-shaped value is NOT present in INSERT params`,
+      );
+      assert(
+        oldParam.includes(REDACTED_SENTINEL) && newParam.includes(REDACTED_SENTINEL),
+        `CAPA/${field}/${label}: REDACTED sentinel IS present in old_value AND new_value`,
+      );
+    }
+  }
+}
+
+// Also: secret-shaped string nested deep inside an object value under a
+// non-sensitive field name should be scrubbed by the regex pass.
+{
+  captured.length = 0;
+  const jwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.4KtO5KkqwG9w-BjXjoY8xvf4gA1Bk4Z5g3p8sKp1HlA";
+  await logNCChange(
+    1,
+    "audit_metadata",
+    { actor: "alice", trace: { upstream_header: `Authorization: ${jwt}` } },
+    { actor: "alice", trace: { upstream_header: `Authorization: rotated-${jwt}` } },
+    "test-runner",
+  );
+  const params = lastInsertParams();
+  assert(params !== null, "NC/nested-object/jwt: pool.query was called");
+  if (params) {
+    const combined = `${String(params[2] ?? "")}${String(params[3] ?? "")}`;
+    assert(
+      !combined.includes(jwt),
+      "NC/nested-object/jwt: JWT nested deep inside non-sensitive object IS scrubbed",
+    );
+  }
+}
+
+// Negative case: an innocuous string under a non-sensitive field must NOT be
+// scrubbed (anti-tautology — proves the regex is targeted, not nuke-everything).
+{
+  captured.length = 0;
+  await logNCChange(
+    1,
+    "notes",
+    "Customer reported issue ABC-123 on 2025-01-15",
+    "Customer reported issue ABC-456 on 2025-02-20",
+    "test-runner",
+  );
+  const params = lastInsertParams();
+  assert(params !== null, "NC/notes/innocuous: pool.query was called");
+  if (params) {
+    const oldParam = String(params[2] ?? "");
+    const newParam = String(params[3] ?? "");
+    assert(
+      oldParam === "Customer reported issue ABC-123 on 2025-01-15",
+      "NC/notes/innocuous: ordinary prose is preserved verbatim",
+    );
+    assert(
+      !oldParam.includes(REDACTED_SENTINEL) && !newParam.includes(REDACTED_SENTINEL),
+      "NC/notes/innocuous: REDACTED sentinel NOT present (regex is targeted)",
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Results
 // ---------------------------------------------------------------------------
 
