@@ -1,6 +1,7 @@
 import pg from 'pg';
 const { Pool } = pg;
 import { EvaluationFramework, EvaluationCriteria, DealEvaluationResult, EvaluationFinding } from './evaluationSchema';
+import { logger } from './logger';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -185,7 +186,7 @@ async function initQmsSchema(): Promise<void> {
 // (logging them) so a bad DATABASE_URL on a dev box doesn't blow up unrelated
 // imports — the subsequent pool.query() call will surface the real error.
 await initQmsSchema().catch((err) => {
-  console.error('[QMS] schema init failed:', err);
+  logger.error({ err }, '[QMS] schema init failed');
 });
 
 export interface CapaRecord {

@@ -52,3 +52,20 @@ node scripts/check-i18n.cjs
 echo ""
 echo "▶ CI gate: dashboard inline-handler CSP guard (Task #171 / #131)"
 bash scripts/lint-dashboard-handlers.sh
+
+# ----------------------------------------------------------------------------
+# CI gate — console.log / console.error secret-leak guardrail (Task #61)
+#
+# Prevents secrets from leaking through raw console.log / console.error calls:
+#   Part 1: The four high-risk modules migrated to logger.ts must stay clean.
+#   Part 2: No TypeScript file outside the known allow-list may introduce a
+#           new console.* call (stops the problem from spreading to new code).
+#
+# Implementation: scripts/check-console-logs.sh + tests/safeLoggerRedaction.test.ts
+# See also: src/utils/logger.ts — the safe wrapper that runs every payload
+#           through redactSensitiveFields() before forwarding to pino.
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: console.log / console.error guardrail + safeLogger redaction tests (Task #61)"
+bash scripts/check-console-logs.sh
+npx tsx tests/safeLoggerRedaction.test.ts

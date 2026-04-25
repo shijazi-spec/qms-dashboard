@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logger } from './logger';
 
 export const ZohoCRMRecordSchema = z.object({
   id: z.string(),
@@ -66,7 +67,7 @@ async function refreshAccessToken(): Promise<string> {
     throw new Error('CRM integration not configured. Please contact your administrator.');
   }
   
-  console.log('🔄 [ZohoCRM] Refreshing access token...');
+  logger.info('🔄 [ZohoCRM] Refreshing access token...');
   
   const params = new URLSearchParams({
     refresh_token: oauthConfig.refreshToken,
@@ -85,14 +86,14 @@ async function refreshAccessToken(): Promise<string> {
   
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ [ZohoCRM] Token refresh failed:', errorText);
+    logger.error('❌ [ZohoCRM] Token refresh failed', { httpStatus: response.status, errorText });
     throw new Error(`Failed to refresh Zoho access token: ${response.status} - ${errorText}`);
   }
   
   const data = await response.json();
   
   if (data.error) {
-    console.error('❌ [ZohoCRM] Token refresh error:', data.error);
+    logger.error('❌ [ZohoCRM] Token refresh error', { zohoError: data.error });
     throw new Error(`Zoho token refresh error: ${data.error}`);
   }
   
@@ -103,7 +104,7 @@ async function refreshAccessToken(): Promise<string> {
   cachedAccessToken = data.access_token;
   tokenExpiresAt = Date.now() + ((data.expires_in || 3600) - 300) * 1000;
   
-  console.log('✅ [ZohoCRM] Access token refreshed successfully, expires in', data.expires_in, 'seconds');
+  logger.info(`✅ [ZohoCRM] Access token refreshed successfully, expires in ${data.expires_in} seconds`);
   
   return data.access_token;
 }
@@ -134,7 +135,7 @@ export async function getValidAccessToken(): Promise<string> {
   
   const staticToken = process.env.ZOHO_ACCESS_TOKEN;
   if (staticToken) {
-    console.log('⚠️ [ZohoCRM] Using static ZOHO_ACCESS_TOKEN (no auto-refresh configured)');
+    logger.info('⚠️ [ZohoCRM] Using static ZOHO_ACCESS_TOKEN (no auto-refresh configured)');
     return staticToken;
   }
   
@@ -156,7 +157,7 @@ async function makeZohoRequest<T>(
   let response = await requestFn(config);
   
   if (response.status === 401) {
-    console.log('🔄 [ZohoCRM] Access token expired (401), attempting refresh...');
+    logger.info('🔄 [ZohoCRM] Access token expired (401), attempting refresh...');
     
     cachedAccessToken = null;
     tokenExpiresAt = 0;
@@ -262,7 +263,7 @@ export async function fetchZohoRecords(
       try {
         data = JSON.parse(text);
       } catch {
-        console.warn(`⚠️ [ZohoCRM] Non-JSON response on ${module} (status ${response.status}); treating as empty page`);
+        logger.warn(`⚠️ [ZohoCRM] Non-JSON response on ${module} (status ${response.status}); treating as empty page`);
         return [];
       }
       
@@ -300,7 +301,7 @@ export async function fetchAllZohoRecords(
   // records (~150 pages) this drops cold fetches from ~40s to ~10s. Each batch
   // stops the loop early if any page returns < perPage records (last page) or
   // 0 records (overshoot). Order is preserved because we slice by page index.
-  console.log(`📊 [ZohoCRM] Fetching all ${module} records with parallel pagination...`);
+  logger.info(`📊 [ZohoCRM] Fetching all ${module} records with parallel pagination...`);
   const CONCURRENCY = 4;
 
   const fetchPageWithRetry = async (pageNum: number): Promise<ZohoCRMRecord[]> => {
@@ -323,11 +324,11 @@ export async function fetchAllZohoRecords(
         if (error.message?.includes('429') || error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('Too Many')) {
           retries++;
           if (retries > maxRetries) {
-            console.error(`❌ [ZohoCRM] Rate limit exceeded after ${maxRetries} retries for ${module} page ${pageNum}`);
+            logger.error(`❌ [ZohoCRM] Rate limit exceeded after ${maxRetries} retries for ${module} page ${pageNum}`);
             throw error;
           }
           const backoffMs = retries * 5000;
-          console.warn(`⚠️ [ZohoCRM] Rate limited (429) on ${module} page ${pageNum}, retry ${retries}/${maxRetries} in ${backoffMs/1000}s`);
+          logger.warn(`⚠️ [ZohoCRM] Rate limited (429) on ${module} page ${pageNum}, retry ${retries}/${maxRetries} in ${backoffMs/1000}s`);
           await sleep(backoffMs);
           continue;
         }
@@ -349,7 +350,7 @@ export async function fetchAllZohoRecords(
         break;
       }
       allRecords.push(...records);
-      console.log(`📊 [ZohoCRM] Fetched page ${pageNum}: ${records.length} records (total: ${allRecords.length})`);
+      logger.info(`📊 [ZohoCRM] Fetched page ${pageNum}: ${records.length} records (total: ${allRecords.length})`);
       if (records.length < perPage) {
         hasMore = false;
         break;
@@ -365,7 +366,7 @@ export async function fetchAllZohoRecords(
   }
 
   if (allRecords.length > maxRecords) allRecords.length = maxRecords;
-  console.log(`✅ [ZohoCRM] Total ${module} records fetched: ${allRecords.length}`);
+  logger.info(`✅ [ZohoCRM] Total ${module} records fetched: ${allRecords.length}`);
   return allRecords;
 }
 
@@ -459,7 +460,7 @@ export async function fetchDeletedZohoRecords(
   let page = 1;
   let hasMore = true;
 
-  console.log(
+  logger.info(
     `🗑️ [ZohoCRM] Fetching deleted ${module} records (type=${type}` +
       (ifModifiedSince ? `, since=${ifModifiedSince}` : '') +
       ')',
@@ -534,7 +535,7 @@ export async function fetchDeletedZohoRecords(
     }
   }
 
-  console.log(`✅ [ZohoCRM] Found ${all.length} deleted/merged ${module} record(s)`);
+  logger.info(`✅ [ZohoCRM] Found ${all.length} deleted/merged ${module} record(s)`);
   return all;
 }
 
@@ -917,7 +918,7 @@ export async function updateZohoRecordNotes(
   recordId: string,
   noteContent: string
 ): Promise<boolean> {
-  console.log(`📝 [ZohoCRM] Adding note to ${module}/${recordId}`);
+  logger.info(`📝 [ZohoCRM] Adding note to ${module}/${recordId}`);
   
   return makeZohoRequest(
     async (config) => {
@@ -939,12 +940,12 @@ export async function updateZohoRecordNotes(
     async (response) => {
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error('❌ [ZohoCRM] Failed to add note:', error);
+        logger.error('❌ [ZohoCRM] Failed to add note', { error });
         throw new Error(`Zoho API error: ${response.status} - ${error.message || response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('✅ [ZohoCRM] Note added successfully');
+      logger.info('✅ [ZohoCRM] Note added successfully');
       return true;
     }
   );
@@ -955,7 +956,7 @@ export async function updateZohoRecord(
   recordId: string,
   updates: Record<string, any>
 ): Promise<any> {
-  console.log(`📝 [ZohoCRM] Updating ${module}/${recordId}`, Object.keys(updates));
+  logger.info(`📝 [ZohoCRM] Updating ${module}/${recordId}`, { updatedFields: Object.keys(updates) });
   
   return makeZohoRequest(
     async (config) => {
@@ -974,12 +975,12 @@ export async function updateZohoRecord(
     async (response) => {
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error('❌ [ZohoCRM] Failed to update record:', error);
+        logger.error('❌ [ZohoCRM] Failed to update record', { error });
         throw new Error(`Zoho API error: ${response.status} - ${error.message || response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('✅ [ZohoCRM] Record updated successfully');
+      logger.info('✅ [ZohoCRM] Record updated successfully');
       return data.data?.[0] || data;
     }
   );
@@ -989,7 +990,7 @@ export async function createZohoRecord(
   module: string,
   recordData: Record<string, any>
 ): Promise<any> {
-  console.log(`➕ [ZohoCRM] Creating record in ${module}`, Object.keys(recordData));
+  logger.info(`➕ [ZohoCRM] Creating record in ${module}`, { fields: Object.keys(recordData) });
   
   return makeZohoRequest(
     async (config) => {
@@ -1008,12 +1009,12 @@ export async function createZohoRecord(
     async (response) => {
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error('❌ [ZohoCRM] Failed to create record:', error);
+        logger.error('❌ [ZohoCRM] Failed to create record', { error });
         throw new Error(`Zoho API error: ${response.status} - ${error.message || response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('✅ [ZohoCRM] Record created successfully');
+      logger.info('✅ [ZohoCRM] Record created successfully');
       return data.data?.[0]?.details || data.data?.[0] || data;
     }
   );
@@ -1071,7 +1072,7 @@ export async function deleteZohoRecord(
   module: string,
   recordId: string
 ): Promise<boolean> {
-  console.log(`🗑️ [ZohoCRM] Deleting ${module}/${recordId}`);
+  logger.info(`🗑️ [ZohoCRM] Deleting ${module}/${recordId}`);
   
   return makeZohoRequest(
     async (config) => {
@@ -1086,11 +1087,11 @@ export async function deleteZohoRecord(
     async (response) => {
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error('❌ [ZohoCRM] Failed to delete record:', error);
+        logger.error('❌ [ZohoCRM] Failed to delete record', { error });
         throw new Error(`Zoho API error: ${response.status} - ${error.message || response.statusText}`);
       }
       
-      console.log('✅ [ZohoCRM] Record deleted successfully');
+      logger.info('✅ [ZohoCRM] Record deleted successfully');
       return true;
     }
   );

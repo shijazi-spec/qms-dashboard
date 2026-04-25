@@ -1,6 +1,7 @@
 import pg from 'pg';
 const { Pool } = pg;
 import { getSessionUser, unauthorizedResponse } from '../../utils/rbacMiddleware';
+import { logger } from '../../utils/logger';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -36,7 +37,7 @@ export const exportDownloadRoutes = [
           const entries = result.rows.length > 0 ? result.rows[0].entries : [];
           return c.json({ entries });
         } catch (error) {
-          console.error('[ExportDownloads] GET error:', error);
+          logger.error({ err: error }, '[ExportDownloads] GET error');
           return c.json({ entries: [] });
         }
       };
@@ -63,7 +64,7 @@ export const exportDownloadRoutes = [
           );
           return c.json({ success: true });
         } catch (error) {
-          console.error('[ExportDownloads] POST error:', error);
+          logger.error({ err: error }, '[ExportDownloads] POST error');
           return c.json({ error: 'Failed to save recent downloads' }, 500);
         }
       };
@@ -85,7 +86,7 @@ export const exportDownloadRoutes = [
           );
           return c.json({ success: true });
         } catch (error) {
-          console.error('[ExportDownloads] DELETE error:', error);
+          logger.error({ err: error }, '[ExportDownloads] DELETE error');
           return c.json({ error: 'Failed to clear recent downloads' }, 500);
         }
       };

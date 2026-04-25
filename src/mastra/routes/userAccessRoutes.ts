@@ -1,5 +1,6 @@
 import * as userDb from '../../utils/userAccessDatabase';
 import { sendResendEmail } from '../../utils/resendMail';
+import { logger as safeLogger } from '../../utils/logger';
 import { requireAdminOrKey, requireAuthOrKey, getSessionUser, requireRole, unauthorizedResponse, forbiddenResponse, type SessionUser } from '../../utils/rbacMiddleware';
 import type { UserRole } from '../../utils/rbacDatabase';
 
@@ -29,7 +30,7 @@ export const userAccessRoutes = [
           const stats = await userDb.getUserStats();
           return c.json({ success: true, ...stats });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -75,7 +76,7 @@ export const userAccessRoutes = [
           });
           return c.json({ success: true, users: filtered, count: filtered.length });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -104,7 +105,7 @@ export const userAccessRoutes = [
           
           return c.json({ success: true, user, permissions, dataScope });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -129,7 +130,7 @@ export const userAccessRoutes = [
           }));
           return c.json({ success: true, invitations: masked, count: masked.length });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -237,7 +238,7 @@ export const userAccessRoutes = [
               : `Invitation created but email could not be sent. The invite link has been generated for manual sharing.`
           }, 201);
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error creating invitation:', error);
+          safeLogger.error('❌ [UserAccess] Error creating invitation', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -264,7 +265,7 @@ export const userAccessRoutes = [
           
           return c.json({ valid: true, invitation: { email: invitation.email, full_name: invitation.full_name, team: invitation.team, role: invitation.role } });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -314,7 +315,7 @@ export const userAccessRoutes = [
             user: { id: user.id, email: user.email, status: user.status }
           });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error accepting invitation:', error);
+          safeLogger.error('❌ [UserAccess] Error accepting invitation', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -370,7 +371,7 @@ export const userAccessRoutes = [
 
           return c.json({ success: true, user });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error approving user:', error);
+          safeLogger.error('❌ [UserAccess] Error approving user', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -422,7 +423,7 @@ export const userAccessRoutes = [
 
           return c.json({ success: true, user });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error denying user:', error);
+          safeLogger.error('❌ [UserAccess] Error denying user', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -451,7 +452,7 @@ export const userAccessRoutes = [
 
           return c.json({ success: true, user });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -480,7 +481,7 @@ export const userAccessRoutes = [
 
           return c.json({ success: true, user });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -522,7 +523,7 @@ export const userAccessRoutes = [
 
           return c.json({ success: true, user });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -552,7 +553,7 @@ export const userAccessRoutes = [
           const permissions = await userDb.getUserPermissions(id);
           return c.json({ success: true, permissions });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -578,7 +579,7 @@ export const userAccessRoutes = [
           const logs = await userDb.getAccessAuditLog({ event_type, target_email, limit });
           return c.json({ success: true, logs, count: logs.length });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -597,7 +598,7 @@ export const userAccessRoutes = [
           logger?.info('📺 [UserAccess] GET /api/screens');
           return c.json({ success: true, screens: userDb.SCREEN_LIST });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };
@@ -616,7 +617,7 @@ export const userAccessRoutes = [
           logger?.info('🔐 [UserAccess] GET /api/roles/defaults');
           return c.json({ success: true, roles: userDb.DEFAULT_ROLE_PERMISSIONS });
         } catch (error: any) {
-          console.error('❌ [UserAccess] Error:', error);
+          safeLogger.error('❌ [UserAccess] Error', { error });
           return c.json({ error: 'An internal error occurred' }, 500);
         }
       };

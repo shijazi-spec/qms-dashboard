@@ -22,6 +22,7 @@
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 import { redactSensitiveDeep, redactSecretLikeStrings } from './eventLogsDatabase';
+import { logger } from './logger';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -126,7 +127,7 @@ export async function initAIApprovalTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_ai_pending_actions_expires
         ON ai_pending_actions(expires_at) WHERE status = 'pending';
     `);
-    console.log('[AIApproval] ai_pending_actions table ready');
+    logger.info('[AIApproval] ai_pending_actions table ready');
   })();
   return initPromise;
 }

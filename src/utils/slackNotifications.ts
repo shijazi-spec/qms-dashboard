@@ -1,4 +1,5 @@
 import { WebClient } from '@slack/web-api';
+import { logger } from './logger';
 
 let slackClient: WebClient | null = null;
 
@@ -6,7 +7,7 @@ function getSlackClient(): WebClient | null {
   if (slackClient) return slackClient;
   const token = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
   if (!token) {
-    console.log('[Slack Notifications] No bot token configured');
+    logger.info('[Slack Notifications] No bot token configured');
     return null;
   }
   slackClient = new WebClient(token);
@@ -52,10 +53,10 @@ export async function sendSlackNotification(
 
   try {
     await client.chat.postMessage({ channel, text, blocks });
-    console.log(`[Slack Notifications] Message sent to ${channel}`);
+    logger.info(`[Slack Notifications] Message sent to ${channel}`);
     return true;
   } catch (error: any) {
-    console.error('[Slack Notifications] Failed to send:', error?.message || error);
+    logger.error('[Slack Notifications] Failed to send', { error: error?.message || String(error) });
     return false;
   }
 }
