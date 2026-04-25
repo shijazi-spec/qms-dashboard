@@ -179,6 +179,31 @@
       </div>
     </section>
 
+    <!-- Storage Health Alerts banner (Task #578): surfaces open
+         `storage_health` alerts written by the daily prune cron's storage
+         helper (Task #546) so operators can acknowledge / resolve / dismiss
+         them from /ai-ops without falling back to a DB query. Hidden when
+         there are zero open alerts. The Storage Health KPI tile above
+         deep-links to `#storage-health-alerts-section` when amber/red so a
+         degraded prune jumps straight here. -->
+    <section id="storage-health-alerts-section" class="hidden mb-6" data-testid="section-storage-health-alerts" aria-live="polite">
+      <div class="bg-amber-50 border border-amber-200 rounded-xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l2-3h12l2 3M4 7h16M9 11h6"/>
+            </svg>
+            <h2 class="text-lg font-semibold text-amber-900" data-testid="text-storage-health-alerts-heading">
+              Storage health alerts
+              <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-600 text-white" id="storage-health-alerts-count" data-testid="badge-storage-health-alerts-count">0</span>
+            </h2>
+          </div>
+          <p class="text-xs text-amber-800">Open alerts from the AI usage table prune cron. Acknowledge to triage, resolve once the table is back inside the retention window, or dismiss known-noisy ones.</p>
+        </div>
+        <div id="storage-health-alerts-list" class="space-y-2" data-testid="list-storage-health-alerts"></div>
+      </div>
+    </section>
+
     <!-- Tool Health Alerts banner: surfaces open `tool_health` alerts at the
          very top of the panel so ops doesn't have to scroll into the tools
          table to notice a degraded tool. Hidden when there are zero open
@@ -1053,6 +1078,14 @@
         oldestAgeEl.className = 'text-2xl font-bold text-gray-900 mt-1';
         oldestDetailEl.className = 'text-xs text-gray-400 mt-1';
         oldestCardEl.removeAttribute('data-warn');
+        // Strip any deep-link affordance left over from a previous warn
+        // render so a recovered prune drops the click target too.
+        oldestCardEl.removeAttribute('role');
+        oldestCardEl.removeAttribute('tabindex');
+        oldestCardEl.removeAttribute('aria-label');
+        oldestCardEl.style.cursor = '';
+        oldestCardEl.onclick = null;
+        oldestCardEl.onkeydown = null;
         if (stats.exceedsRetention) {
           oldestCardEl.className = 'stat-card border-red-300 bg-red-50';
           oldestAgeEl.className = 'text-2xl font-bold text-red-700 mt-1';
@@ -1062,6 +1095,30 @@
             ts: fmtDate(stats.oldestStartedAt),
             days: stats.retentionDays,
           });
+          // Task #578: when the tile is amber/red, make the whole card a
+          // deep-link to the storage-health alerts banner below so an
+          // operator can jump straight to the triage flow. Wired
+          // programmatically (not as `<a href>`) because the card already
+          // has `stat-card` styling we want to preserve and the page CSP
+          // forbids inline event-handler attributes.
+          oldestCardEl.setAttribute('role', 'link');
+          oldestCardEl.setAttribute('tabindex', '0');
+          oldestCardEl.setAttribute('aria-label', 'Open storage-health alerts');
+          oldestCardEl.style.cursor = 'pointer';
+          const jump = () => {
+            const target = document.getElementById('storage-health-alerts-section');
+            if (target && !target.classList.contains('hidden')) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+              // Fall back to the URL hash so the section becomes the
+              // navigation target even if it's still loading.
+              window.location.hash = '#storage-health-alerts-section';
+            }
+          };
+          oldestCardEl.onclick = jump;
+          oldestCardEl.onkeydown = (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); jump(); }
+          };
         }
 
         const lp = stats.lastPrune;
@@ -1090,6 +1147,140 @@
       } catch (e) {
         console.error('Metrics table stats load error', e);
         if (oldestDetailEl) oldestDetailEl.textContent = _t('dyn.ai_ops.storage_failed_load');
+      }
+    }
+
+    // ── Storage-health alerts (Task #578) ────────────────────────────────
+    // Renders open `storage_health` alerts (opened by the daily prune cron's
+    // storage helper, Task #546) so operators can acknowledge / resolve /
+    // dismiss them from /ai-ops without a DB query. Hidden when there are
+    // zero open alerts so the banner doesn't permanently consume real
+    // estate when the prune is healthy. Acknowledged + resolved entries
+    // disappear from the open list — both states are reachable via the
+    // history endpoint but we deliberately keep the banner focused on
+    // "needs ops attention right now".
+    async function loadStorageHealthAlerts() {
+      const section = document.getElementById('storage-health-alerts-section');
+      const list = document.getElementById('storage-health-alerts-list');
+      const countBadge = document.getElementById('storage-health-alerts-count');
+      if (!section || !list || !countBadge) return;
+      try {
+        const { data } = await apiFetch('/api/ai-ops/storage-health-alerts?limit=20');
+        const alerts = Array.isArray(data) ? data : [];
+        if (alerts.length === 0) {
+          section.classList.add('hidden');
+          list.innerHTML = '';
+          countBadge.textContent = '0';
+          return;
+        }
+        section.classList.remove('hidden');
+        countBadge.textContent = String(alerts.length);
+        list.innerHTML = alerts.map(a => {
+          // Reuse the SEVERITY_BADGE map declared just below for the
+          // tool-health renderer — kept in module scope so both banners
+          // agree on severity colour.
+          const sevClass = SEVERITY_BADGE[a.severity] || SEVERITY_BADGE.info;
+          const recordId = a.related_record_id || 'ai_call_metrics';
+          return `
+          <div class="bg-white border border-amber-200 rounded-lg p-3" data-testid="card-storage-health-alert-${a.id}" data-alert-id="${a.id}">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${sevClass}" data-testid="badge-storage-severity-${a.id}">${esc(a.severity)}</span>
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-800" data-testid="text-storage-record-${a.id}">${esc(recordId)}</span>
+                </div>
+                <p class="text-sm font-semibold text-gray-900" data-testid="text-storage-alert-title-${a.id}">${esc(a.title)}</p>
+                <p class="text-xs text-gray-600 mt-1" data-testid="text-storage-alert-description-${a.id}">${esc(a.description)}</p>
+                ${a.suggestion ? `<p class="text-xs text-gray-500 italic mt-1" data-testid="text-storage-alert-suggestion-${a.id}">${esc(a.suggestion)}</p>` : ''}
+              </div>
+              <div class="flex flex-col gap-1.5 shrink-0">
+                <button type="button"
+                  class="text-xs px-2 py-1 rounded border border-yellow-300 bg-white text-yellow-800 hover:bg-yellow-50"
+                  data-on-click="acknowledgeStorageHealthAlert" data-args='[${Number(a.id)}, "@this"]'
+                  data-testid="button-acknowledge-storage-alert-${a.id}">
+                  Acknowledge
+                </button>
+                <button type="button"
+                  class="text-xs px-2 py-1 rounded border border-green-300 bg-white text-green-800 hover:bg-green-50"
+                  data-on-click="resolveStorageHealthAlert" data-args='[${Number(a.id)}, "@this"]'
+                  data-testid="button-resolve-storage-alert-${a.id}">
+                  Resolve
+                </button>
+                <button type="button"
+                  class="text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                  data-on-click="dismissStorageHealthAlert" data-args='[${Number(a.id)}, "@this"]'
+                  data-testid="button-dismiss-storage-alert-${a.id}">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Storage-health alerts load error', e);
+        section.classList.remove('hidden');
+        list.innerHTML = '<p class="text-sm text-amber-800" data-testid="text-storage-health-alerts-error">Failed to load storage-health alerts.</p>';
+      }
+    }
+
+    async function postAlertAction(id, action) {
+      const r = await fetch(`/api/ai-ops/alerts/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function disableCardButtons(card) {
+      if (!card) return;
+      card.querySelectorAll('button').forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+    }
+
+    function reEnableCardButtons(card) {
+      if (!card) return;
+      card.querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+    }
+
+    async function acknowledgeStorageHealthAlert(id, btn) {
+      const card = btn?.closest('[data-alert-id]');
+      disableCardButtons(card);
+      try {
+        await postAlertAction(id, 'acknowledge');
+        await loadStorageHealthAlerts();
+        // Refresh the KPI tile too — the acknowledged-by stamp doesn't
+        // change the underlying retention signal but ops expects the panel
+        // to feel "live" after a triage action.
+        await loadMetricsTableStats();
+      } catch (e) {
+        console.error('Storage-health acknowledge error', e);
+        reEnableCardButtons(card);
+      }
+    }
+
+    async function resolveStorageHealthAlert(id, btn) {
+      const card = btn?.closest('[data-alert-id]');
+      disableCardButtons(card);
+      try {
+        await postAlertAction(id, 'resolve');
+        await loadStorageHealthAlerts();
+        await loadMetricsTableStats();
+      } catch (e) {
+        console.error('Storage-health resolve error', e);
+        reEnableCardButtons(card);
+      }
+    }
+
+    async function dismissStorageHealthAlert(id, btn) {
+      const card = btn?.closest('[data-alert-id]');
+      disableCardButtons(card);
+      try {
+        await postAlertAction(id, 'dismiss');
+        await loadStorageHealthAlerts();
+      } catch (e) {
+        console.error('Storage-health dismiss error', e);
+        reEnableCardButtons(card);
       }
     }
 
@@ -4819,6 +5010,7 @@
     function refreshAll() {
       loadSummary();
       loadMetricsTableStats();
+      loadStorageHealthAlerts();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
       loadToolHealthAlertsTrend();
@@ -4916,6 +5108,7 @@
       });
       loadSummary();
       loadMetricsTableStats();
+      loadStorageHealthAlerts();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
       initToolHealthHistoryToggle();

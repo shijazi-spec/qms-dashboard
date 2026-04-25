@@ -206,6 +206,15 @@ export async function resolveAlert(
   // directly from the open state (bypassing the acknowledge step). We use
   // COALESCE so that an already-acknowledged row keeps its original
   // acknowledged_by value — the first person who triaged it.
+  //
+  // Status guard (Task #578): only resolve alerts that are still
+  // `open` or `acknowledged`. This makes the call idempotent and closes the
+  // race between an operator clicking "Resolve" in the UI and the next
+  // cron-driven auto-resolve sweep — once a row is `resolved` (or
+  // `dismissed`), the cron's auto-resolve becomes a no-op so the original
+  // resolution_note / resolved_at / acknowledged_by stamped by the UI are
+  // preserved instead of being overwritten with the cron's "auto-resolved"
+  // note.
   const result = await pool.query(
     `UPDATE ai_alerts
         SET status = 'resolved',
@@ -213,6 +222,7 @@ export async function resolveAlert(
             resolution_note = COALESCE($2, resolution_note),
             acknowledged_by = COALESCE(acknowledged_by, $3)
       WHERE id = $1
+        AND status IN ('open', 'acknowledged')
       RETURNING *`,
     [id, note ?? null, resolvedBy ?? null]
   );

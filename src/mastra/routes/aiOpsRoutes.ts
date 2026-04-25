@@ -25,8 +25,10 @@ import {
   getToolHealthAlertTrend,
   acknowledgeAlert,
   resolveAlert,
+  dismissAlert,
   type AIAlert,
 } from "../../utils/aiAlertsDatabase";
+import { STORAGE_HEALTH_DEDUPE_KEY } from "../../utils/storageHealthAlerts";
 import { ACTIVE_AGENT_PROMPT_VERSIONS } from "../agents/promptVersionRegistry";
 import {
   TOOL_HEALTH_DEFAULTS,
@@ -900,6 +902,155 @@ export const aiOpsRoutes = [
         } catch (error) {
           logger.error("[AI-Ops] alert resolve error:", error);
           return c.json({ error: "Failed to resolve alert" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Dismiss an alert from the AI Ops panel. Mirrors the acknowledge / resolve
+   * endpoints above so storage_health (and other AI_OPS_ROLES alert types)
+   * can be triaged out of the open list without claiming "I fixed it" — used
+   * for known-noisy or duplicate alerts that an operator has reviewed but
+   * doesn't intend to action. (Task #578)
+   */
+  {
+    path: "/api/ai-ops/alerts/:id/dismiss",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const id = parseInt(String(c.req.param("id") ?? ''), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "Invalid alert id" }, 400);
+          }
+          const alert = await dismissAlert(id);
+          if (!alert) return c.json({ error: "Alert not found" }, 404);
+          return c.json({ success: true, alert });
+        } catch (error) {
+          console.error("[AI-Ops] alert dismiss error:", error);
+          return c.json({ error: "Failed to dismiss alert" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Open `storage_health` alerts written by the daily prune cron's
+   * storage-health helper (Task #546). Same triage flow as the tool-health
+   * endpoint above — returns the dedupe key, severity, title/description,
+   * and notification-delivery columns so the UI can render
+   * acknowledge / resolve / dismiss actions on each card.
+   *
+   * Returns rows with status='open' only; acknowledged rows have already
+   * been triaged so they shouldn't re-pin to the top of the panel. The
+   * `related_record_id` is the fixed STORAGE_HEALTH_DEDUPE_KEY today
+   * (`ai_call_metrics`) — exposed verbatim so a future multi-table
+   * retention model can extend the same UI without a contract change.
+   */
+  {
+    path: "/api/ai-ops/storage-health-alerts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 20, 1, 100);
+          const { alerts, total } = await getAIAlerts({
+            alert_type: 'storage_health',
+            status: 'open',
+            limit,
+          });
+          const data = alerts.map((a: AIAlert) => ({
+            id: a.id,
+            severity: a.severity,
+            title: a.title,
+            description: a.description,
+            suggestion: a.suggestion,
+            status: a.status,
+            related_record_id: a.related_record_id ?? STORAGE_HEALTH_DEDUPE_KEY,
+            created_at: a.created_at,
+            notified_at: a.notified_at ?? null,
+            notified_channel: a.notified_channel ?? null,
+          }));
+          return c.json({ data, total });
+        } catch (error) {
+          console.error("[AI-Ops] storage-health-alerts error:", error);
+          return c.json({ error: "Failed to fetch storage-health alerts" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Acknowledged + resolved `storage_health` alerts in the last `days` days
+   * (default 7, max 90). Mirrors the tool-health history endpoint so the
+   * dashboard can render a "Recently triaged" list under the open-alerts
+   * banner — surfaces who triaged each alert and whether it was closed
+   * automatically by the cron's recovery sweep (resolution_note prefixed
+   * with "auto-resolved") or manually by an operator.
+   *
+   * The `severity` query param is whitelisted against the allowed enum
+   * before reaching the database layer; unknown values fall through as
+   * "no filter".
+   */
+  {
+    path: "/api/ai-ops/storage-health-alerts/history",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const days  = safeInt(c.req.query("days"),  7,  1, 90);
+          const limit = safeInt(c.req.query("limit"), 20, 1, 100);
+          const ALLOWED_SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
+          const sevRaw = (c.req.query("severity") || '').toLowerCase();
+          const severity = (ALLOWED_SEVERITIES as readonly string[]).includes(sevRaw)
+            ? sevRaw
+            : undefined;
+          // Pull a generous window then filter in memory — `getAIAlerts`
+          // already orders by severity tier + created_at DESC and storage
+          // health typically has a handful of rows at most (it's a single
+          // dedupe-keyed alert), so the extra filtering cost is negligible.
+          const { alerts } = await getAIAlerts({
+            alert_type: 'storage_health',
+            limit: 100,
+          });
+          const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+          const data = alerts
+            .filter((a) => {
+              if (a.status !== 'acknowledged' && a.status !== 'resolved') return false;
+              if (severity && a.severity !== severity) return false;
+              const triagedRaw = a.status === 'resolved'
+                ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at)
+                : (a.acknowledged_at ?? a.created_at);
+              const ts = triagedRaw ? new Date(triagedRaw).getTime() : 0;
+              return ts >= cutoffMs;
+            })
+            .slice(0, limit)
+            .map((a: AIAlert) => {
+              const triagedAt = a.status === 'resolved'
+                ? (a.resolved_at ?? null)
+                : (a.acknowledged_at ?? null);
+              return {
+                id: a.id,
+                severity: a.severity,
+                title: a.title,
+                status: a.status,
+                acknowledged_by: a.acknowledged_by ?? null,
+                triaged_at: triagedAt,
+                created_at: a.created_at,
+                resolution_note: a.resolution_note ?? null,
+              };
+            });
+          return c.json({ data, days, severity: severity ?? null });
+        } catch (error) {
+          console.error("[AI-Ops] storage-health-alerts history error:", error);
+          return c.json({ error: "Failed to fetch storage-health alert history" }, 500);
         }
       };
     },
