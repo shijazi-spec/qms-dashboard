@@ -23,23 +23,23 @@
  *     approval regardless of tier, because cron cannot consent.
  */
 
-import { AsyncLocalStorage } from 'node:async_hooks';
-import { createTool } from '@mastra/core/tools';
-import type { z } from 'zod';
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createTool } from "@mastra/core/tools";
+import type { z } from "zod";
 import {
   enqueuePendingAction,
   getPendingActionByCode,
   recordExecutionResult,
   type PendingAction,
-} from './aiApprovalDatabase';
+} from "./aiApprovalDatabase";
 import {
   getPolicy,
   shouldAutoApprove,
   isGateEnabled,
   type ToolGovernancePolicy,
   type UserApprovalContext,
-} from './aiToolGovernance';
-import { logEvent } from './eventLogsDatabase';
+} from "./aiToolGovernance";
+import { logEvent, redactSecretLikeStrings } from "./eventLogsDatabase";
 
 /* ------------------------------------------------------------------------- *
  * Per-request context storage.
@@ -57,7 +57,7 @@ const context = new AsyncLocalStorage<AgentInvocationContext>();
 
 export function withAgentUserContext<T>(
   ctx: AgentInvocationContext,
-  fn: () => T | Promise<T>
+  fn: () => T | Promise<T>,
 ): T | Promise<T> {
   return context.run(ctx, fn);
 }
@@ -87,19 +87,27 @@ const wrappedRegistry = new Map<string, WrappedTool<any>>();
  * a drop-in replacement — it has the same id, description, schemas, and
  * (when auto-approved or gate disabled) the same runtime behavior.
  */
-export function withApprovalGate<TTool extends { id?: string; execute?: any; inputSchema?: any; outputSchema?: any; description?: string }>(
-  tool: TTool
-): TTool {
+export function withApprovalGate<
+  TTool extends {
+    id?: string;
+    execute?: any;
+    inputSchema?: any;
+    outputSchema?: any;
+    description?: string;
+  },
+>(tool: TTool): TTool {
   const toolId = (tool as any).id;
   if (!toolId) {
-    throw new Error('[withApprovalGate] Tool has no id — cannot apply approval gate.');
+    throw new Error(
+      "[withApprovalGate] Tool has no id — cannot apply approval gate.",
+    );
   }
 
   const policy = getPolicy(toolId);
   if (!policy) {
     throw new Error(
       `[withApprovalGate] No governance policy registered for tool "${toolId}". ` +
-      `Add an entry to TOOL_GOVERNANCE_POLICIES in aiToolGovernance.ts before wrapping.`
+        `Add an entry to TOOL_GOVERNANCE_POLICIES in aiToolGovernance.ts before wrapping.`,
     );
   }
 
@@ -117,13 +125,15 @@ export function withApprovalGate<TTool extends { id?: string; execute?: any; inp
     // Kill-switch: audit every bypass but still gate if user context missing.
     if (!isGateEnabled()) {
       await logEvent({
-        actionType: 'AI_ACTION',
-        entityType: 'SYSTEM',
+        actionType: "AI_ACTION",
+        entityType: "SYSTEM",
         description: `AI tool "${toolId}" executed with HITL gate DISABLED (AI_APPROVAL_GATE_ENABLED=false)`,
         aiInvolved: true,
-        severity: 'WARNING',
-        module: 'ai-governance',
-      }).catch(() => { /* non-fatal */ });
+        severity: "WARNING",
+        module: "ai-governance",
+      }).catch(() => {
+        /* non-fatal */
+      });
       return originalExecute(args);
     }
 
@@ -137,13 +147,15 @@ export function withApprovalGate<TTool extends { id?: string; execute?: any; inp
           userId: agentCtx.user.userId,
           userEmail: agentCtx.user.email || undefined,
           userRole: agentCtx.user.role || undefined,
-          actionType: 'AI_ACTION',
+          actionType: "AI_ACTION",
           entityType: mapEntityType(policy.entityType),
           description: `AI tool "${toolId}" auto-approved per user tier "${agentCtx.user.autoApproveTier}"`,
           aiInvolved: true,
-          severity: 'INFO',
-          module: 'ai-governance',
-        }).catch(() => { /* non-fatal */ });
+          severity: "INFO",
+          module: "ai-governance",
+        }).catch(() => {
+          /* non-fatal */
+        });
         return originalExecute(args);
       }
     }
@@ -167,16 +179,24 @@ export function withApprovalGate<TTool extends { id?: string; execute?: any; inp
       userId: agentCtx?.user?.userId ?? undefined,
       userEmail: agentCtx?.user?.email ?? undefined,
       userRole: agentCtx?.user?.role ?? undefined,
-      actionType: 'AI_ACTION',
+      actionType: "AI_ACTION",
       entityType: mapEntityType(policy.entityType),
       entityId: pending.action_code,
       entityName: policy.label,
       description: `AI proposed ${policy.label} — queued for human approval (${pending.action_code})`,
       aiInvolved: true,
-      severity: policy.riskLevel === 'critical' || policy.riskLevel === 'high' ? 'WARNING' : 'INFO',
-      module: 'ai-governance',
-      newValue: { risk: policy.riskLevel, complianceRefs: policy.complianceRefs },
-    }).catch(() => { /* non-fatal */ });
+      severity:
+        policy.riskLevel === "critical" || policy.riskLevel === "high"
+          ? "WARNING"
+          : "INFO",
+      module: "ai-governance",
+      newValue: {
+        risk: policy.riskLevel,
+        complianceRefs: policy.complianceRefs,
+      },
+    }).catch(() => {
+      /* non-fatal */
+    });
 
     // Shape of the return value is deliberately compatible with the original
     // tool's outputSchema: `success: false` + human-readable `message`. This
@@ -224,12 +244,15 @@ export interface ExecutionOutcome {
 }
 
 export async function executeApprovedAction(
-  action: PendingAction
+  action: PendingAction,
 ): Promise<ExecutionOutcome> {
   const entry = wrappedRegistry.get(action.tool_id);
   if (!entry) {
     const err = `No wrapped tool registered for tool_id "${action.tool_id}"`;
-    await recordExecutionResult(action.action_code, { success: false, error: err });
+    await recordExecutionResult(action.action_code, {
+      success: false,
+      error: err,
+    });
     return { ok: false, error: err };
   }
 
@@ -251,11 +274,13 @@ export async function executeApprovedAction(
       entityType: entry.policy.entityType,
       entityId,
       data: result,
-      error: success ? undefined : (result?.error || result?.message || 'Tool returned success=false'),
+      error: success
+        ? undefined
+        : result?.error || result?.message || "Tool returned success=false",
     });
 
     await logEvent({
-      actionType: success ? 'CREATE' : 'AI_ACTION',
+      actionType: success ? "CREATE" : "AI_ACTION",
       entityType: mapEntityType(entry.policy.entityType),
       entityId,
       entityName: entry.policy.label,
@@ -263,25 +288,37 @@ export async function executeApprovedAction(
         ? `Approved AI action ${action.action_code} executed successfully — ${entry.policy.label}`
         : `Approved AI action ${action.action_code} FAILED during execution`,
       aiInvolved: true,
-      severity: success ? 'INFO' : 'CRITICAL',
-      module: 'ai-governance',
+      severity: success ? "INFO" : "CRITICAL",
+      module: "ai-governance",
       correlationId: action.action_code,
-    }).catch(() => { /* non-fatal */ });
+    }).catch(() => {
+      /* non-fatal */
+    });
 
-    return { ok: success, entityType: entry.policy.entityType, entityId, data: result };
+    return {
+      ok: success,
+      entityType: entry.policy.entityType,
+      entityId,
+      data: result,
+    };
   } catch (err: any) {
     const message = err?.message || String(err);
-    await recordExecutionResult(action.action_code, { success: false, error: message });
+    await recordExecutionResult(action.action_code, {
+      success: false,
+      error: message,
+    });
     await logEvent({
-      actionType: 'AI_ACTION',
-      entityType: 'SYSTEM',
+      actionType: "AI_ACTION",
+      entityType: "SYSTEM",
       entityId: action.action_code,
       description: `Approved AI action ${action.action_code} threw error: ${message}`,
       aiInvolved: true,
-      severity: 'CRITICAL',
-      module: 'ai-governance',
+      severity: "CRITICAL",
+      module: "ai-governance",
       correlationId: action.action_code,
-    }).catch(() => { /* non-fatal */ });
+    }).catch(() => {
+      /* non-fatal */
+    });
     return { ok: false, error: message };
   }
 }
@@ -291,11 +328,20 @@ export async function executeApprovedAction(
  * ------------------------------------------------------------------------- */
 
 function safePreview(policy: ToolGovernancePolicy, payload: any): string {
+  let raw: string;
   try {
-    return policy.buildPreview(payload ?? {});
+    raw = String(policy.buildPreview(payload ?? {}));
   } catch (err) {
-    return `(preview unavailable: ${err instanceof Error ? err.message : 'unknown error'})`;
+    return `(preview unavailable: ${err instanceof Error ? err.message : "unknown error"})`;
   }
+  // Defense-in-depth: even if a tool author interpolates a credential into
+  // the preview string (or a payload field that the buildPreview reads back
+  // verbatim, like `title` / `description` / `evidenceUrl`), strip credential-
+  // shaped substrings here so the value never escapes this function in raw
+  // form. This protects gate-exempt tools too (whose previews bypass the
+  // enqueuePendingAction redaction path) and is covered by
+  // `tests/aiToolPolicyBuildPreview.test.ts`.
+  return redactSecretLikeStrings(raw) as string;
 }
 
 function extractEntityId(result: any, entityType: string): string | undefined {
@@ -322,12 +368,16 @@ function extractEntityId(result: any, entityType: string): string | undefined {
  */
 function mapEntityType(entityType: string): any {
   switch (entityType) {
-    case 'capa':
-    case 'capa_action_item': return 'CAPA';
-    case 'training':
-    case 'training_assignment': return 'TRAINING';
-    case 'nonconformance': return 'CAPA'; // closest existing enum; a future migration should add 'NC'
-    default: return 'SYSTEM';
+    case "capa":
+    case "capa_action_item":
+      return "CAPA";
+    case "training":
+    case "training_assignment":
+      return "TRAINING";
+    case "nonconformance":
+      return "CAPA"; // closest existing enum; a future migration should add 'NC'
+    default:
+      return "SYSTEM";
   }
 }
 
