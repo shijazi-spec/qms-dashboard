@@ -216,6 +216,88 @@ async function run(): Promise<void> {
     "execution_result.data.access_token redacted by key-based deny-list",
   );
 
+  // ---- Deep regex scrubbing of JSONB string leaves under non-sensitive keys
+  // Task #100: redactAiPendingActions must apply deepRedactSecretLikeStrings
+  // AFTER redactSensitiveFields so that credential-shaped substrings embedded
+  // in innocuously-named keys (note, summary, message) are also swept.
+  const deepLeafRows: RowState[] = [
+    {
+      id: 20,
+      payload: {
+        target: "zoho_books",
+        note: `Previous key was ${SECRET_KEY}`,
+        meta: { summary: `issued to ${SECRET_GH}`, count: 5 },
+      },
+      payload_preview: "no secret here",
+      execution_result: {
+        result: "ok",
+        message: `Session token: ${SECRET_JWT}; hash: ${SECRET_BCRYPT}`,
+      },
+    },
+    {
+      id: 21,
+      payload: { target: "stripe", note: "no credential here" },
+      payload_preview: "clean preview",
+      execution_result: null,
+    },
+  ];
+  const stub4 = makeStubClient(deepLeafRows);
+  const result4 = await redactAiPendingActions(stub4.client);
+
+  assert(
+    result4.scanned === 2,
+    `deep-leaf fixture: scanned 2 rows (got ${result4.scanned})`,
+  );
+  assert(
+    result4.payloadChanged === 1,
+    `deep-leaf fixture: payload changed on 1 row (got ${result4.payloadChanged})`,
+  );
+  assert(
+    result4.executionResultChanged === 1,
+    `deep-leaf fixture: execution_result changed on 1 row (got ${result4.executionResultChanged})`,
+  );
+  assert(
+    result4.rowsUpdated === 1,
+    `deep-leaf fixture: 1 row updated total (got ${result4.rowsUpdated})`,
+  );
+
+  const deepRow20 = stub4.rows.find(r => r.id === 20)!;
+  assert(
+    !JSON.stringify(deepRow20.payload).includes(SECRET_KEY),
+    "deep-leaf: sk_ key under innocuous 'note' key removed from payload",
+  );
+  assert(
+    !JSON.stringify(deepRow20.payload).includes(SECRET_GH),
+    "deep-leaf: ghp_ token under 'meta.summary' removed from payload",
+  );
+  assert(
+    deepRow20.payload.meta.count === 5,
+    "deep-leaf: numeric leaf under 'meta.count' preserved in payload",
+  );
+  assert(
+    !JSON.stringify(deepRow20.execution_result).includes(SECRET_JWT) &&
+      !JSON.stringify(deepRow20.execution_result).includes(SECRET_BCRYPT),
+    "deep-leaf: JWT and bcrypt under 'message' removed from execution_result",
+  );
+  assert(
+    deepRow20.execution_result?.result === "ok",
+    "deep-leaf: non-secret 'result' string preserved in execution_result",
+  );
+
+  const deepRow21 = stub4.rows.find(r => r.id === 21)!;
+  assert(
+    deepRow21.payload.note === "no credential here",
+    "deep-leaf: clean row 21 payload is untouched",
+  );
+
+  // ---- Idempotency of the deep-leaf fixture
+  const stub5 = makeStubClient(stub4.rows);
+  const result5 = await redactAiPendingActions(stub5.client);
+  assert(
+    result5.rowsUpdated === 0,
+    `deep-leaf second pass updates 0 rows (got ${result5.rowsUpdated}) — idempotent`,
+  );
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

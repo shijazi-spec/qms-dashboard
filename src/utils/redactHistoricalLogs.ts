@@ -23,6 +23,7 @@ import { Pool } from 'pg';
 import {
   redactSensitiveFields,
   redactSecretLikeStrings,
+  deepRedactSecretLikeStrings,
   isSensitiveField,
   REDACTED_SENTINEL,
   logEvent,
@@ -51,41 +52,62 @@ function addBreadcrumb(obj: any): any {
   return obj;
 }
 
-async function redactEventLogs(client: any): Promise<number> {
+export async function redactEventLogs(client: any): Promise<number> {
   const rows = await client.query(`
-    SELECT id, old_value, new_value
+    SELECT id, description, entity_name, old_value, new_value
     FROM event_logs
-    WHERE old_value IS NOT NULL OR new_value IS NOT NULL
   `);
 
   let updated = 0;
   for (const row of rows.rows) {
+    let description: string | null = row.description ?? null;
+    let entityName: string | null = row.entity_name ?? null;
     let oldVal = row.old_value;
     let newVal = row.new_value;
     let changed = false;
 
-    if (oldVal !== null) {
-      const redacted = redactSensitiveFields(oldVal);
-      if (JSON.stringify(redacted) !== JSON.stringify(oldVal)) {
-        oldVal = addBreadcrumb(redacted);
+    if (typeof description === 'string' && description.length > 0) {
+      const redacted = redactSecretLikeStrings(description) as string;
+      if (redacted !== description) {
+        description = redacted;
         changed = true;
       }
     }
 
-    if (newVal !== null) {
-      const redacted = redactSensitiveFields(newVal);
-      if (JSON.stringify(redacted) !== JSON.stringify(newVal)) {
-        newVal = addBreadcrumb(redacted);
+    if (typeof entityName === 'string' && entityName.length > 0) {
+      const redacted = redactSecretLikeStrings(entityName) as string;
+      if (redacted !== entityName) {
+        entityName = redacted;
+        changed = true;
+      }
+    }
+
+    if (oldVal !== null && oldVal !== undefined) {
+      const keyScrubbed = redactSensitiveFields(oldVal);
+      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+      if (JSON.stringify(fullScrubbed) !== JSON.stringify(oldVal)) {
+        oldVal = addBreadcrumb(fullScrubbed);
+        changed = true;
+      }
+    }
+
+    if (newVal !== null && newVal !== undefined) {
+      const keyScrubbed = redactSensitiveFields(newVal);
+      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+      if (JSON.stringify(fullScrubbed) !== JSON.stringify(newVal)) {
+        newVal = addBreadcrumb(fullScrubbed);
         changed = true;
       }
     }
 
     if (changed) {
       await client.query(
-        `UPDATE event_logs SET old_value = $1, new_value = $2 WHERE id = $3`,
+        `UPDATE event_logs SET description = $1, entity_name = $2, old_value = $3, new_value = $4 WHERE id = $5`,
         [
-          oldVal !== null ? JSON.stringify(oldVal) : null,
-          newVal !== null ? JSON.stringify(newVal) : null,
+          description,
+          entityName,
+          oldVal !== null && oldVal !== undefined ? JSON.stringify(oldVal) : null,
+          newVal !== null && newVal !== undefined ? JSON.stringify(newVal) : null,
           row.id,
         ]
       );
@@ -159,9 +181,10 @@ export async function redactAiPendingActions(
     let execDirty = false;
 
     if (payload !== null && payload !== undefined) {
-      const redacted = redactSensitiveFields(payload);
-      if (JSON.stringify(redacted) !== JSON.stringify(payload)) {
-        payload = redacted;
+      const keyScrubbed = redactSensitiveFields(payload);
+      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+      if (JSON.stringify(fullScrubbed) !== JSON.stringify(payload)) {
+        payload = fullScrubbed;
         payloadDirty = true;
       }
     }
@@ -175,9 +198,10 @@ export async function redactAiPendingActions(
     }
 
     if (execResult !== null && execResult !== undefined) {
-      const redacted = redactSensitiveFields(execResult);
-      if (JSON.stringify(redacted) !== JSON.stringify(execResult)) {
-        execResult = redacted;
+      const keyScrubbed = redactSensitiveFields(execResult);
+      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+      if (JSON.stringify(fullScrubbed) !== JSON.stringify(execResult)) {
+        execResult = fullScrubbed;
         execDirty = true;
       }
     }
