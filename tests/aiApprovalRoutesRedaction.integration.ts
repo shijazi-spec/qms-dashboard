@@ -1,26 +1,52 @@
 /**
- * Integration test — AI approval-queue HTTP read endpoints redact secrets.
+ * Integration test — AI approval-queue HTTP endpoints redact secrets.
  *
  * The companion in-process test (`tests/aiApprovalRoutesRedaction.test.ts`)
  * stubs out the database to exercise route handlers directly. That covers
  * the handler logic but not the full HTTP / middleware stack (auth wiring,
  * response shaping, JSON serializers, edge framing).
  *
- * This script closes that gap: it seeds a row through the real
+ * This script closes that gap: it seeds rows through the real
  * `enqueuePendingAction` against the live database, signs a quality-manager
- * session cookie with the same `SESSION_SECRET` the server uses, then drives
- * `GET /api/ai/approvals`, `GET /api/ai/approvals/pending-count`, and
- * `GET /api/ai/approvals/:code` over HTTP and asserts that:
- *   - none of the seeded plaintext secrets appears in any response body, AND
- *   - the redaction sentinel does appear (so we know the row was actually
- *     surfaced and not silently empty).
+ * session cookie with the same `SESSION_SECRET` the server uses, then drives:
  *
- * The seeded row is cleaned up in a `finally` block.
+ *   GET  /api/ai/approvals                — list endpoint
+ *   GET  /api/ai/approvals/pending-count  — badge count
+ *   GET  /api/ai/approvals/:code          — detail (pending then executed)
+ *   GET  /api/ai/approvals?status=executed
+ *   POST /api/ai/approvals/:code/approve  — success path (fresh secrets in result)
+ *   POST /api/ai/approvals/:code/approve  — throw path  (secret in error.message)
+ *
+ * Assertions:
+ *   - None of the seeded plaintext secrets appear in any response body.
+ *   - The redaction sentinel does appear (the row was surfaced, not silently
+ *     empty).
+ *   - POST /approve preserves the safe `audit_note` field and echoes back
+ *     `actionCode`.
+ *
+ * All seeded rows are cleaned up in a `finally` block.
+ *
+ * POST /approve notes
+ * -------------------
+ * The POST path is the most dangerous exposure point: the route executes the
+ * gated tool synchronously and returns the fresh result directly to the
+ * browser before it is masked on the way into ai_pending_actions. Two
+ * synthetic no-op canary tools are registered in the server at startup
+ * when NODE_ENV !== 'production' (src/utils/integrationTestFixtureTools.ts):
+ *
+ *   integration-test-redaction-canary__ok     — returns credential-shaped values
+ *   integration-test-redaction-canary__throws — throws Error with secret message
+ *
+ * These tools are present in the running dev/test server's wrappedRegistry so
+ * the integration test can drive the full approve execution path without
+ * touching any production data.
  *
  * Run:  npx tsx tests/aiApprovalRoutesRedaction.integration.ts
  * Env:  DATABASE_URL   — Postgres connection string (required)
  *       SESSION_SECRET — HMAC key used to sign session cookies (required)
  *       BASE_URL       — defaults to http://localhost:5000
+ *       NODE_ENV       — must NOT be 'production' for the canary tools to be
+ *                        active in the target server (default: development)
  */
 
 import crypto from 'crypto';
@@ -30,6 +56,15 @@ import {
   aiApprovalPool,
 } from '../src/utils/aiApprovalDatabase';
 import { REDACTED_SENTINEL } from '../src/utils/eventLogsDatabase';
+import {
+  INT_TEST_OK_TOOL_ID,
+  INT_TEST_THROW_TOOL_ID,
+  INT_APPROVE_RESULT_SK_KEY,
+  INT_APPROVE_RESULT_GH_TOKEN,
+  INT_APPROVE_RESULT_BCRYPT,
+  INT_APPROVE_RESULT_ACCESS,
+  INT_APPROVE_THROW_SK_KEY,
+} from '../src/utils/integrationTestFixtureTools';
 
 const TEST_QM_EMAIL = 'redaction-int-qm@walaplus-test.invalid';
 const TEST_QM_NAME = 'Redaction Integration QM';
@@ -99,7 +134,7 @@ async function cleanupTestUser(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
-/* HTTP helper                                                        */
+/* HTTP helpers                                                       */
 /* ------------------------------------------------------------------ */
 
 interface HttpResult {
@@ -111,6 +146,31 @@ interface HttpResult {
 async function httpGet(path: string, cookie: string): Promise<HttpResult> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { Cookie: cookie, Accept: 'application/json' },
+    redirect: 'manual',
+  });
+  const text = await res.text();
+  let body: unknown = null;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+  return { status: res.status, text, body };
+}
+
+async function httpPost(
+  path: string,
+  cookie: string,
+  payload: Record<string, unknown> = {},
+): Promise<HttpResult> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      Cookie: cookie,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
     redirect: 'manual',
   });
   const text = await res.text();
@@ -141,7 +201,7 @@ function assert(condition: boolean, label: string): void {
 }
 
 /* ------------------------------------------------------------------ */
-/* Secrets — distinct strings so we can detect leaks unambiguously    */
+/* Secrets — all distinct strings so we can detect leaks precisely    */
 /* ------------------------------------------------------------------ */
 
 const PAYLOAD_API_KEY = 'sk-live-LEAK_DETECTOR_INT_PAYLOAD_9z8y7x6w5v';
@@ -151,19 +211,55 @@ const PAYLOAD_BCRYPT =
 const RESULT_API_KEY = 'sk-live-LEAK_DETECTOR_INT_RESULT_FRESHKEY_4321';
 const RESULT_ACCESS_TOKEN = 'eyJhbGciLEAKDETECTORINTACCESS_freshtoken';
 
-const SECRETS = [
+// POST /approve test secrets — imported from the fixture tools module so
+// this file and the server-side tool definitions stay in sync.
+const APPROVE_SECRETS = [
+  INT_APPROVE_RESULT_SK_KEY,
+  INT_APPROVE_RESULT_GH_TOKEN,
+  INT_APPROVE_RESULT_BCRYPT,
+  INT_APPROVE_RESULT_ACCESS,
+  INT_APPROVE_THROW_SK_KEY,
+];
+
+const ALL_SECRETS = [
   PAYLOAD_API_KEY,
   PAYLOAD_REFRESH,
   PAYLOAD_BCRYPT,
   RESULT_API_KEY,
   RESULT_ACCESS_TOKEN,
+  ...APPROVE_SECRETS,
 ];
 
 function findLeakedSecret(text: string): string | null {
-  for (const sec of SECRETS) {
+  for (const sec of ALL_SECRETS) {
     if (text.includes(sec)) return sec;
   }
   return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Typed shape of POST /approve response body                         */
+/* ------------------------------------------------------------------ */
+
+interface ApproveOkResult {
+  success?: boolean;
+  rotated?: boolean;
+  new_api_key?: string;
+  access_token?: string;
+  nested?: {
+    free_form_note?: string;
+    legacy_password_hash_blob?: string;
+  };
+  audit_note?: string;
+}
+
+interface ApproveResponseBody {
+  success?: boolean;
+  actionCode?: string;
+  entityType?: string;
+  entityId?: string;
+  result?: ApproveOkResult;
+  error?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -185,6 +281,8 @@ async function main(): Promise<void> {
   }
 
   let actionCode: string | null = null;
+  let approveOkCode: string | null = null;
+  let approveThrowCode: string | null = null;
 
   await setupTestUser();
 
@@ -350,22 +448,152 @@ async function main(): Promise<void> {
       'GET /api/ai/approvals?status=executed seeded row contains the redaction sentinel for execution_result',
     );
 
+    /* ============================================================ */
+    /* POST /approve — success path                                 */
+    /* ============================================================ */
+    console.log('\n--- POST /approve (success path) ---');
+
+    // Seed a pending action for the canary "ok" tool.  The QM user (userId
+    // 998001) is not the requester (998999), so segregation-of-duties passes.
+    const okEnqueued = await enqueuePendingAction({
+      toolId: INT_TEST_OK_TOOL_ID,
+      toolLabel: '[Integration-Test] Redaction Canary (success)',
+      payload: { target_integration: 'redaction_int_test', reason: 'approve-path-test' },
+      payloadPreview: 'Redaction canary — success path (integration test)',
+      riskLevel: 'high',
+      complianceRefs: ['REDACTION-INTEGRATION-TEST'],
+      requestedByUserId: 998999,
+      requestedByEmail: 'redaction-int-requester@walaplus-test.invalid',
+      requestedByName: 'Redaction Integration Requester',
+      threadId: 'thr_redaction_int_approve_ok',
+    });
+    approveOkCode = okEnqueued.action_code;
+
+    const approveOkRes = await httpPost(
+      `/api/ai/approvals/${encodeURIComponent(approveOkCode)}/approve`,
+      cookie,
+    );
+
+    assert(
+      approveOkRes.status === 200,
+      `POST /approve (success) → 200 (got ${approveOkRes.status}, body=${JSON.stringify(approveOkRes.body).slice(0, 300)})`,
+    );
+    const approveOkLeak = findLeakedSecret(approveOkRes.text);
+    assert(
+      approveOkLeak === null,
+      `POST /approve (success) response contains no plaintext secret (leaked: ${approveOkLeak ?? 'none'})`,
+    );
+    assert(
+      approveOkRes.text.includes(REDACTED_SENTINEL),
+      'POST /approve (success) response contains the redaction sentinel',
+    );
+    assert(
+      approveOkRes.text.includes('Integration-test canary rotation completed'),
+      'POST /approve (success) response preserves the safe audit_note field',
+    );
+
+    const approveOkBody = approveOkRes.body as ApproveResponseBody;
+    assert(
+      approveOkBody.success === true,
+      `POST /approve (success) response.success === true (got ${approveOkBody.success})`,
+    );
+    assert(
+      approveOkBody.actionCode === approveOkCode,
+      `POST /approve (success) response.actionCode echoed back (got ${approveOkBody.actionCode})`,
+    );
+
+    // Per-field redaction assertions — each attack surface must be scrubbed.
+    const okResult = approveOkBody.result;
+    assert(
+      okResult?.new_api_key === REDACTED_SENTINEL,
+      `POST /approve (success) key-deny-list redacts result.new_api_key (got: ${okResult?.new_api_key})`,
+    );
+    assert(
+      okResult?.access_token === REDACTED_SENTINEL,
+      `POST /approve (success) key-deny-list redacts result.access_token (got: ${okResult?.access_token})`,
+    );
+    assert(
+      typeof okResult?.nested?.free_form_note === 'string' &&
+        okResult.nested.free_form_note.includes(REDACTED_SENTINEL) &&
+        !okResult.nested.free_form_note.includes(INT_APPROVE_RESULT_GH_TOKEN),
+      `POST /approve (success) regex-deny-list scrubs interpolated GH token in free-form string (got: ${okResult?.nested?.free_form_note})`,
+    );
+    assert(
+      okResult?.nested?.legacy_password_hash_blob === REDACTED_SENTINEL,
+      `POST /approve (success) key-deny-list redacts nested *_hash field (got: ${okResult?.nested?.legacy_password_hash_blob})`,
+    );
+
+    /* ============================================================ */
+    /* POST /approve — throw path                                   */
+    /* ============================================================ */
+    console.log('\n--- POST /approve (throw path) ---');
+
+    // Seed a pending action for the canary "throws" tool.
+    const throwEnqueued = await enqueuePendingAction({
+      toolId: INT_TEST_THROW_TOOL_ID,
+      toolLabel: '[Integration-Test] Redaction Canary (throws)',
+      payload: { target_integration: 'redaction_int_test', reason: 'throw-path-test' },
+      payloadPreview: 'Redaction canary — throw path (integration test)',
+      riskLevel: 'high',
+      complianceRefs: ['REDACTION-INTEGRATION-TEST'],
+      requestedByUserId: 998999,
+      requestedByEmail: 'redaction-int-requester@walaplus-test.invalid',
+      requestedByName: 'Redaction Integration Requester',
+      threadId: 'thr_redaction_int_approve_throw',
+    });
+    approveThrowCode = throwEnqueued.action_code;
+
+    const approveThrowRes = await httpPost(
+      `/api/ai/approvals/${encodeURIComponent(approveThrowCode)}/approve`,
+      cookie,
+    );
+
+    // executeApprovedAction catches the thrown error and returns ok=false with
+    // the (unredacted) error message; the route handler then scrubs it before
+    // including it in the 500 response.
+    assert(
+      approveThrowRes.status === 500,
+      `POST /approve (throw) → 500 (got ${approveThrowRes.status}, body=${JSON.stringify(approveThrowRes.body).slice(0, 300)})`,
+    );
+    const approveThrowLeak = findLeakedSecret(approveThrowRes.text);
+    assert(
+      approveThrowLeak === null,
+      `POST /approve (throw) response contains no plaintext secret (leaked: ${approveThrowLeak ?? 'none'})`,
+    );
+
+    const approveThrowBody = approveThrowRes.body as ApproveResponseBody;
+    assert(
+      approveThrowBody.success === false,
+      `POST /approve (throw) response.success === false (got ${approveThrowBody.success})`,
+    );
+    assert(
+      typeof approveThrowBody.error === 'string' &&
+        approveThrowBody.error.includes(REDACTED_SENTINEL),
+      `POST /approve (throw) response.error contains the redaction sentinel (got: ${approveThrowBody.error})`,
+    );
+    assert(
+      !approveThrowBody.error?.includes(INT_APPROVE_THROW_SK_KEY),
+      `POST /approve (throw) response.error does not contain the raw secret (got: ${approveThrowBody.error})`,
+    );
+
     console.log(`\n${passed} passed, ${failed} failed`);
 
     if (failed > 0) {
       console.error('\n❌ AI approval-queue HTTP secret-leak integration test FAILED');
       process.exit(1);
     }
-    console.log('\n✅ All AI approval-queue HTTP read endpoints redact secrets');
+    console.log('\n✅ All AI approval-queue HTTP endpoints (GET + POST approve) redact secrets');
   } finally {
-    if (actionCode) {
+    // Clean up all seeded rows regardless of test outcome.
+    const codesToDelete = [actionCode, approveOkCode, approveThrowCode].filter(Boolean);
+    for (const code of codesToDelete) {
       try {
         await aiApprovalPool.query(
           'DELETE FROM ai_pending_actions WHERE action_code = $1',
-          [actionCode],
+          [code],
         );
       } catch (err) {
-        console.error(`⚠ Failed to clean up seeded row ${actionCode}:`, err);
+        console.error(`⚠ Failed to clean up seeded row ${code}:`, err);
       }
     }
     try {
