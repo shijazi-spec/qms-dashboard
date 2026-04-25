@@ -38,6 +38,7 @@ import type { QueryResult, QueryResultRow } from 'pg';
 /* return a synthetic active-role row for the two test identities.    */
 /* All other pools have their `.query` shadowed at the instance level */
 /* and therefore bypass this prototype patch.                          */
+/* (Mirrors the fix in tests/aiApprovalRoutesRedaction.test.ts.)      */
 /* ------------------------------------------------------------------ */
 const TEST_PLATFORM_USERS: Record<string, { status: string; role: string }> = {
   'qm@walaplus.test':        { status: 'active', role: 'admin' },
@@ -505,6 +506,84 @@ async function run(): Promise<void> {
     typeof capturedEventLogDescription === 'string' &&
       capturedEventLogDescription.includes('Rejecting because the new key'),
     'audit-log description retains human-readable prose around the sentinel',
+  );
+
+  /* ---------- POST /api/ai/approvals/:code/reject — error.message redaction ----------
+   * Force the reject handler into its catch block by making c.req.param()
+   * throw a credential-bearing exception, then verify the 500 response's
+   * `details` field has been scrubbed by `redactSecretLikeStrings`. This is
+   * the leak surface task-278 closes: the handler used to echo
+   * `error.message` verbatim, which would expose any secret a thrown
+   * exception happened to interpolate into its message.
+   * -------------------------------------------------------------------------*/
+  console.log('\n--- catch-block details redaction (reject route handler) ---');
+
+  // One credential-shaped substring per regex family this guard covers.
+  const ERR_SK_KEY = 'sk-live-LEAK_DETECTOR_REJECT_CATCH_aabbccddeeff112233';
+  const ERR_GH_TOKEN = 'ghp_LEAKDETECTORREJECTCATCHghp1234567890abcdefghij';
+  const ERR_JWT =
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJMRUFLREVURUNUT1JSRUpFQ1RDQVRDSCJ9.LEAKDETECTORREJECTCATCHsignXYZ';
+  const ERR_BCRYPT =
+    '$2b$12$ABCDEFGHIJKLMNOPQRSTUVLEAKDETECTORREJECTCATCH123456XYZ';
+  const ERR_SECRETS = [ERR_SK_KEY, ERR_GH_TOKEN, ERR_JWT, ERR_BCRYPT];
+
+  function findErrLeak(body: unknown): string | null {
+    const text = JSON.stringify(body);
+    for (const sec of ERR_SECRETS) {
+      if (text.includes(sec)) return sec;
+    }
+    return null;
+  }
+
+  const errMessage =
+    `DB connection refused while loading approval ` +
+    `(api_key=${ERR_SK_KEY}, gh=${ERR_GH_TOKEN}, ` +
+    `jwt=${ERR_JWT}, legacy_hash=${ERR_BCRYPT})`;
+
+  const throwCtx = {
+    req: {
+      url: 'https://test.local/api/ai/approvals/whatever/reject',
+      header: (name: string): string | undefined =>
+        name.toLowerCase() === 'cookie' ? adminCookie() : undefined,
+      // Force the handler into its catch block with a message that bundles
+      // every credential-shaped substring the redactor is supposed to strip.
+      param: (_name: string): string => {
+        throw new Error(errMessage);
+      },
+      json: async () => ({ reason: REASON }),
+    },
+    json(body: unknown, status = 200) { return { status, body }; },
+    html(body: string) { return { status: 200, body }; },
+    text(body: string, status = 200) { return { status, body }; },
+  };
+
+  const throwRes = (await rejectHandler(throwCtx as never)) as { status: number; body: unknown };
+
+  assert(
+    throwRes.status === 500,
+    `POST /api/ai/approvals/:code/reject (catch path) → 500 (got ${throwRes.status})`,
+  );
+
+  const errBody = throwRes.body as { error?: string; details?: string };
+  assert(
+    errBody.error === 'Failed to reject',
+    `catch-path response carries the generic error label (got: ${errBody.error})`,
+  );
+
+  const errLeak = findErrLeak(throwRes.body);
+  assert(
+    errLeak === null,
+    `catch-path response.details contains no plaintext secret (leaked: ${errLeak ?? 'none'})`,
+  );
+  assert(
+    typeof errBody.details === 'string' &&
+      errBody.details.includes(REDACTED_SENTINEL),
+    `catch-path response.details contains the redaction sentinel (got: ${errBody.details})`,
+  );
+  assert(
+    typeof errBody.details === 'string' &&
+      errBody.details.includes('DB connection refused'),
+    `catch-path response.details retains human-readable prose around the sentinel (got: ${errBody.details})`,
   );
 
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -475,7 +475,15 @@ const _aiApprovalRoutesRaw = [
           return c.json({ success: true, action: rejected });
         } catch (error: any) {
           console.error('[AI-Approval] reject error:', error);
-          return c.json({ error: 'Failed to reject', details: error.message }, 500);
+          // Same redaction guarantee as the approve handler: a thrown
+          // error message can carry a credential-shaped substring (e.g.
+          // a DB connection string or a key embedded in a third-party
+          // error message). Scrub it before echoing back to the browser.
+          const safeDetails =
+            typeof error?.message === 'string'
+              ? (redactSecretLikeStrings(error.message) as string)
+              : undefined;
+          return c.json({ error: 'Failed to reject', details: safeDetails }, 500);
         }
       };
     },
