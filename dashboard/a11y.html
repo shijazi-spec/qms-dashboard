@@ -64,12 +64,12 @@
           <li>Navigation landmarks (<code>&lt;nav&gt;</code>, <code>&lt;main&gt;</code>, <code>&lt;aside&gt;</code>) are used throughout the dashboard.</li>
           <li>Decorative SVG icons are hidden from assistive technology using <code>aria-hidden="true"</code>.</li>
           <li>All KPI and analytics charts include <code>role="img"</code> with an <code>aria-label</code> describing the chart, and a visually-hidden data summary table so screen reader users can access the underlying data.</li>
+          <li>Navigation tooltips now use a proper ARIA tooltip pattern — each tooltip carries <code>role="tooltip"</code> and is linked to its trigger via <code>aria-describedby</code>. Tooltips appear on both pointer hover and keyboard focus, replacing the previous <code>title</code>-attribute-only approach.</li>
         </ul>
 
         <h2>Known Limitations</h2>
         <ul>
           <li>Some data-heavy tables may lack full <code>scope</code> and <code>headers</code> associations — we are reviewing these.</li>
-          <li>Some legacy pop-up tooltips rely on <code>title</code> attributes only — we plan to replace these with accessible tooltip components.</li>
         </ul>
 
         <h2>Technical Specification</h2>

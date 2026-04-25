@@ -522,10 +522,10 @@ const WalaPlusNav = {
     navContainer.innerHTML = `
       <div class="wp-topstrip bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-3">
         <div class="flex items-center space-x-2">
-          <button id="wp-rail-toggle" class="wp-rail-toggle-btn p-2 rounded-lg text-gray-600 hover:bg-gray-100 items-center" title="Toggle menu" aria-label="Toggle navigation menu" aria-controls="walaplus-nav" aria-expanded="true" data-testid="button-rail-toggle">
+          <button id="wp-rail-toggle" class="wp-rail-toggle-btn p-2 rounded-lg text-gray-600 hover:bg-gray-100 items-center" aria-label="Toggle navigation menu" aria-controls="walaplus-nav" aria-expanded="true" data-testid="button-rail-toggle">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
           </button>
-          <button id="mobile-menu-btn" class="wp-mobile-menu-btn p-2 rounded-lg text-gray-600 hover:bg-gray-100 items-center" title="Open menu" aria-label="Open navigation menu" aria-controls="walaplus-nav" aria-expanded="false" data-testid="button-mobile-menu">
+          <button id="mobile-menu-btn" class="wp-mobile-menu-btn p-2 rounded-lg text-gray-600 hover:bg-gray-100 items-center" aria-label="Open navigation menu" aria-controls="walaplus-nav" aria-expanded="false" data-testid="button-mobile-menu">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
           </button>
           <a href="/" class="flex items-center" data-testid="link-home">
@@ -584,10 +584,11 @@ const WalaPlusNav = {
     const label = this._t('nav.groups.' + group.id) || group.label;
     return `
       <div class="wp-rail-group px-2 mb-1" data-group="${this.escapeHtml(group.id)}" data-open="${open ? 'true' : 'false'}">
-        <button type="button" class="wp-group-toggle w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 transition" aria-expanded="${open ? 'true' : 'false'}" title="${this.escapeHtml(label)}" data-testid="button-group-${this.escapeHtml(group.id)}">
+        <button type="button" class="wp-group-toggle w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 transition relative" aria-expanded="${open ? 'true' : 'false'}" aria-describedby="tooltip-group-${this.escapeHtml(group.id)}" data-testid="button-group-${this.escapeHtml(group.id)}">
           <span class="${colors.text} mr-2 flex-shrink-0">${group.icon}</span>
           <span class="wp-label flex-1 text-left text-xs font-semibold uppercase tracking-wide ${groupActive ? colors.text : 'text-gray-500'}">${this.escapeHtml(label)}</span>
           <svg class="wp-label wp-group-chevron w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <span id="tooltip-group-${this.escapeHtml(group.id)}" role="tooltip" class="wp-nav-tooltip">${this.escapeHtml(label)}</span>
         </button>
         <div class="wp-group-items mt-0.5 space-y-0.5 pl-1">
           ${group.items.map(item => this.renderRailItem(item, colors)).join('')}
@@ -600,18 +601,20 @@ const WalaPlusNav = {
     const isActive = item.id === this.currentPage;
     const target = item.external ? 'target="_blank"' : '';
     const label = this._t('nav.items.' + item.id) || item.label;
+    const tooltipId = `tooltip-nav-${this.escapeHtml(item.id)}`;
     return `
       <a href="${this.escapeHtml(item.href)}" ${target}
-         class="wp-rail-item flex items-center space-x-2 px-2 py-2 rounded-lg text-sm transition
+         class="wp-rail-item relative flex items-center space-x-2 px-2 py-2 rounded-lg text-sm transition
            ${isActive ? `${colors.lightBg} ${colors.text} font-medium` : 'text-gray-700 hover:bg-gray-50'}"
-         title="${this.escapeHtml(label)}"
+         aria-describedby="${tooltipId}"
          data-nav-item
          data-label="${this.escapeHtml(label.toLowerCase())}"
          data-i18n-nav-item="${this.escapeHtml(item.id)}"
          data-testid="link-nav-${this.escapeHtml(item.id)}">
-        <span class="flex-shrink-0">${this.getItemIcon(item.icon)}</span>
+        <span class="flex-shrink-0" aria-hidden="true">${this.getItemIcon(item.icon)}</span>
         <span class="wp-label truncate">${this.escapeHtml(label)}</span>
-        ${item.external ? '<svg class="wp-label w-3 h-3 text-gray-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
+        ${item.external ? '<svg class="wp-label w-3 h-3 text-gray-400 ml-auto flex-shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
+        <span id="${tooltipId}" role="tooltip" class="wp-nav-tooltip">${this.escapeHtml(label)}</span>
       </a>
     `;
   },

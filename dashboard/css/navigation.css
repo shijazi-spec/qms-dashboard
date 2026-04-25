@@ -111,3 +111,72 @@
     gap: 0.125rem;
   }
 }
+
+/* ===== Accessible nav tooltips (role="tooltip" + aria-describedby) ===== */
+/*
+ * Tooltips are hidden by default and become visible on both pointer hover
+ * and keyboard focus, satisfying WCAG 2.1 SC 1.4.13 (Content on Hover or
+ * Focus) and the keyboard-accessible tooltip requirement.
+ */
+.wp-nav-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 200;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* Arrow pointing left toward the trigger */
+.wp-nav-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: #1e293b;
+}
+
+/* Show tooltip on hover or keyboard focus of nav items and group toggles */
+.wp-rail-item:hover .wp-nav-tooltip,
+.wp-rail-item:focus .wp-nav-tooltip,
+.wp-group-toggle:hover .wp-nav-tooltip,
+.wp-group-toggle:focus .wp-nav-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* In expanded mode, the text label is already visible — suppress the
+   visual tooltip on hover only (keyboard focus still shows it for AT users
+   who benefit from the aria-describedby association). */
+body:not(.wp-rail-collapsed) .wp-rail-item:hover .wp-nav-tooltip,
+body:not(.wp-rail-collapsed) .wp-group-toggle:hover .wp-nav-tooltip {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* RTL: flip tooltip to the left side */
+html[dir="rtl"] .wp-nav-tooltip {
+  left: auto;
+  right: calc(100% + 10px);
+}
+
+html[dir="rtl"] .wp-nav-tooltip::before {
+  right: auto;
+  left: 100%;
+  border-right-color: transparent;
+  border-left-color: #1e293b;
+}

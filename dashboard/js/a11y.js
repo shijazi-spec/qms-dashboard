@@ -147,7 +147,29 @@
       ':focus:not(:focus-visible) { outline: none; }',
       '',
       '/* Widget quick-btn as button */',
-      'button.widget-quick-btn { font-family: inherit; background: none; }'
+      'button.widget-quick-btn { font-family: inherit; background: none; }',
+      '',
+      '/* Generic ARIA tooltip (used by WalaPlusA11y.createTooltip) */',
+      '.wp-a11y-tooltip {',
+      '  position: absolute;',
+      '  z-index: 9000;',
+      '  background: #1e293b;',
+      '  color: #f8fafc;',
+      '  font-size: 0.75rem;',
+      '  font-weight: 500;',
+      '  line-height: 1.4;',
+      '  padding: 4px 10px;',
+      '  border-radius: 6px;',
+      '  white-space: nowrap;',
+      '  pointer-events: none;',
+      '  opacity: 0;',
+      '  visibility: hidden;',
+      '  transition: opacity 0.15s ease, visibility 0.15s ease;',
+      '  box-shadow: 0 2px 8px rgba(0,0,0,0.25);',
+      '}',
+      '.wp-a11y-tooltip--visible { opacity: 1; visibility: visible; }',
+      '.wp-a11y-tooltip--right { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }',
+      '.wp-a11y-tooltip--top { bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }'
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -319,6 +341,66 @@
     summary.appendChild(tbody);
   }
 
+  /**
+   * createTooltip(triggerEl, text, options)
+   * Attaches a WCAG-conformant tooltip to triggerEl.
+   *
+   * The tooltip element is injected as a sibling of triggerEl's parent,
+   * positioned via CSS, and linked with role="tooltip" + aria-describedby.
+   * It is shown on both pointer hover and keyboard focus so that keyboard-only
+   * and assistive-technology users receive the same information as mouse users.
+   *
+   * options.id      — explicit id to use on the tooltip element (auto-generated otherwise)
+   * options.placement — 'right' (default) | 'top'
+   *
+   * Returns the created tooltip element.
+   */
+  function createTooltip(triggerEl, text, options) {
+    if (!triggerEl || !text) return null;
+    options = options || {};
+
+    var tooltipId = options.id || ('wp-tt-' + Math.random().toString(36).slice(2, 8));
+    var placement = options.placement || 'right';
+
+    var tip = document.createElement('span');
+    tip.id = tooltipId;
+    tip.setAttribute('role', 'tooltip');
+    tip.className = 'wp-a11y-tooltip wp-a11y-tooltip--' + placement;
+    tip.textContent = text;
+
+    triggerEl.setAttribute('aria-describedby', tooltipId);
+
+    var parent = triggerEl.parentNode;
+    if (parent) parent.appendChild(tip);
+
+    function show() { tip.classList.add('wp-a11y-tooltip--visible'); }
+    function hide() { tip.classList.remove('wp-a11y-tooltip--visible'); }
+
+    triggerEl.addEventListener('mouseenter', show);
+    triggerEl.addEventListener('mouseleave', hide);
+    triggerEl.addEventListener('focus', show);
+    triggerEl.addEventListener('blur', hide);
+
+    return tip;
+  }
+
+  /**
+   * initNavTooltips()
+   * Scans the document for elements with a [data-tooltip] attribute and
+   * upgrades each one with a proper ARIA tooltip via createTooltip().
+   * Safe to call multiple times — skips elements already upgraded.
+   */
+  function initNavTooltips() {
+    document.querySelectorAll('[data-tooltip]:not([data-tooltip-init])').forEach(function (el) {
+      var text = el.getAttribute('data-tooltip');
+      if (!text) return;
+      el.setAttribute('data-tooltip-init', '1');
+      el.removeAttribute('title');
+      createTooltip(el, text, { placement: el.getAttribute('data-tooltip-placement') || 'right' });
+    });
+  }
+  }
+
   window.WalaPlusA11y = {
     init: init,
     openModal: openModal,
@@ -326,7 +408,9 @@
     activateFocusTrap: activateFocusTrap,
     deactivateFocusTrap: deactivateFocusTrap,
     announce: announce,
-    makeChartAccessible: makeChartAccessible
+    makeChartAccessible: makeChartAccessible,
+    createTooltip: createTooltip,
+    initNavTooltips: initNavTooltips
   };
 
   init();
