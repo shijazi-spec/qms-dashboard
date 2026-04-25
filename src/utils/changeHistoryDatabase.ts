@@ -1,6 +1,6 @@
 import pg from 'pg';
 const { Pool } = pg;
-import { redactSensitiveFields } from './eventLogsDatabase';
+import { redactSensitiveFields, redactSecretLikeStrings } from './eventLogsDatabase';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -49,20 +49,22 @@ export async function initChangeHistoryTables(): Promise<void> {
 }
 
 export async function logNCChange(recordId: number, fieldChanged: string, oldValue: any, newValue: any, changedBy: string, reason?: string): Promise<void> {
-  const safeOld = redactSensitiveFields(oldValue, fieldChanged);
-  const safeNew = redactSensitiveFields(newValue, fieldChanged);
+  const safeOld = redactSecretLikeStrings(redactSensitiveFields(oldValue, fieldChanged));
+  const safeNew = redactSecretLikeStrings(redactSensitiveFields(newValue, fieldChanged));
+  const safeReason = reason != null ? (redactSecretLikeStrings(reason) as string) : null;
   await pool.query(
     `INSERT INTO nc_change_history (record_id, field_changed, old_value, new_value, changed_by, change_reason) VALUES ($1, $2, $3, $4, $5, $6)`,
-    [recordId, fieldChanged, safeOld != null ? String(safeOld) : null, safeNew != null ? String(safeNew) : null, changedBy, reason || null]
+    [recordId, fieldChanged, safeOld != null ? String(safeOld) : null, safeNew != null ? String(safeNew) : null, changedBy, safeReason]
   );
 }
 
 export async function logCAPAChange(recordId: number, fieldChanged: string, oldValue: any, newValue: any, changedBy: string, reason?: string): Promise<void> {
-  const safeOld = redactSensitiveFields(oldValue, fieldChanged);
-  const safeNew = redactSensitiveFields(newValue, fieldChanged);
+  const safeOld = redactSecretLikeStrings(redactSensitiveFields(oldValue, fieldChanged));
+  const safeNew = redactSecretLikeStrings(redactSensitiveFields(newValue, fieldChanged));
+  const safeReason = reason != null ? (redactSecretLikeStrings(reason) as string) : null;
   await pool.query(
     `INSERT INTO capa_change_history (record_id, field_changed, old_value, new_value, changed_by, change_reason) VALUES ($1, $2, $3, $4, $5, $6)`,
-    [recordId, fieldChanged, safeOld != null ? String(safeOld) : null, safeNew != null ? String(safeNew) : null, changedBy, reason || null]
+    [recordId, fieldChanged, safeOld != null ? String(safeOld) : null, safeNew != null ? String(safeNew) : null, changedBy, safeReason]
   );
 }
 

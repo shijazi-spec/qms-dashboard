@@ -632,6 +632,158 @@ const TEXT_LEAK_SECRETS = {
   }
 }
 
+// Section 4 — Task #99: NC and CAPA change history write-path tests.
+//
+// logNCChange / logCAPAChange must apply redactSecretLikeStrings to
+// old_value, new_value, and change_reason before INSERT so that a caller
+// who interpolates a freshly-rotated credential into any of those columns
+// never leaks the raw secret into the change-history viewer or exports.
+
+console.log("\n=== Task #99 — NC / CAPA change history write-path tests ===\n");
+
+const { logNCChange, logCAPAChange } = await import("./changeHistoryDatabase");
+
+const CH_SECRETS = {
+  sk: "sk_live_AbCdEfGhIjKlMnOpQrStUvWx9876",
+  ghp: "ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234",
+  jwt:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4OCJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+  bcrypt: "$2b$12$abcdefghijABCDEFGHIJ12./uVwXyZaBcDeFgHiJkLmNoPqRsTuVwXy",
+} as const;
+
+function findInsertForTable(table: string): unknown[] | null {
+  const insertCall = captured.find((c) =>
+    c.sql.replace(/\s+/g, " ").trim().toUpperCase().startsWith(`INSERT INTO ${table.toUpperCase()}`),
+  );
+  return insertCall ? insertCall.params : null;
+}
+
+// NC — sk_ in old_value, ghp_ in new_value, bcrypt in change_reason
+{
+  captured.length = 0;
+  await logNCChange(
+    1,
+    "api_integration_key",
+    `previously sk_live_ was ${CH_SECRETS.sk}`,
+    `rotated to ghp_${CH_SECRETS.ghp.slice(4)}`,
+    "admin",
+    `bcrypt of old key: ${CH_SECRETS.bcrypt}`,
+  );
+  const params = findInsertForTable("nc_change_history");
+  assert(params !== null, "NC sk+ghp+bcrypt: pool.query called for nc_change_history INSERT");
+  if (params) {
+    const oldVal = String(params[2] ?? "");
+    const newVal = String(params[3] ?? "");
+    const reason = String(params[5] ?? "");
+    assert(!oldVal.includes(CH_SECRETS.sk), "NC: sk_live_ in old_value is scrubbed");
+    assert(!newVal.includes(CH_SECRETS.ghp), "NC: ghp_ in new_value is scrubbed");
+    assert(!reason.includes(CH_SECRETS.bcrypt), "NC: bcrypt in change_reason is scrubbed");
+    assert(
+      oldVal.includes(REDACTED_SENTINEL) || newVal.includes(REDACTED_SENTINEL) || reason.includes(REDACTED_SENTINEL),
+      "NC: REDACTED sentinel is present in at least one column",
+    );
+  }
+}
+
+// NC — JWT in change_reason
+{
+  captured.length = 0;
+  await logNCChange(
+    2,
+    "session_token",
+    "old-session",
+    "new-session",
+    "admin",
+    `minted JWT: ${CH_SECRETS.jwt}`,
+  );
+  const params = findInsertForTable("nc_change_history");
+  assert(params !== null, "NC JWT reason: pool.query called");
+  if (params) {
+    const reason = String(params[5] ?? "");
+    assert(!reason.includes(CH_SECRETS.jwt), "NC: JWT in change_reason is scrubbed");
+    assert(reason.includes(REDACTED_SENTINEL), "NC: REDACTED sentinel present in change_reason");
+  }
+}
+
+// NC — non-sensitive values must pass through unchanged
+{
+  captured.length = 0;
+  await logNCChange(7, "status", "open", "closed", "alice", "status updated by QA");
+  const params = findInsertForTable("nc_change_history");
+  assert(params !== null, "NC non-sensitive: pool.query called");
+  if (params) {
+    const oldVal = String(params[2] ?? "");
+    const newVal = String(params[3] ?? "");
+    const reason = String(params[5] ?? "");
+    assert(oldVal === "open", "NC non-sensitive: old_value preserved verbatim");
+    assert(newVal === "closed", "NC non-sensitive: new_value preserved verbatim");
+    assert(reason === "status updated by QA", "NC non-sensitive: change_reason preserved verbatim");
+  }
+}
+
+// CAPA — sk_ in old_value, ghp_ in new_value, bcrypt in change_reason
+{
+  captured.length = 0;
+  await logCAPAChange(
+    10,
+    "webhook_secret",
+    `old secret was ${CH_SECRETS.sk}`,
+    `new token is ${CH_SECRETS.ghp}`,
+    "sysadmin",
+    `bcrypt verification: ${CH_SECRETS.bcrypt}`,
+  );
+  const params = findInsertForTable("capa_change_history");
+  assert(params !== null, "CAPA sk+ghp+bcrypt: pool.query called for capa_change_history INSERT");
+  if (params) {
+    const oldVal = String(params[2] ?? "");
+    const newVal = String(params[3] ?? "");
+    const reason = String(params[5] ?? "");
+    assert(!oldVal.includes(CH_SECRETS.sk), "CAPA: sk_live_ in old_value is scrubbed");
+    assert(!newVal.includes(CH_SECRETS.ghp), "CAPA: ghp_ in new_value is scrubbed");
+    assert(!reason.includes(CH_SECRETS.bcrypt), "CAPA: bcrypt in change_reason is scrubbed");
+    assert(
+      oldVal.includes(REDACTED_SENTINEL) || newVal.includes(REDACTED_SENTINEL) || reason.includes(REDACTED_SENTINEL),
+      "CAPA: REDACTED sentinel is present in at least one column",
+    );
+  }
+}
+
+// CAPA — JWT in change_reason
+{
+  captured.length = 0;
+  await logCAPAChange(
+    11,
+    "auth_token",
+    "expired",
+    "refreshed",
+    "sysadmin",
+    `issued JWT: ${CH_SECRETS.jwt}`,
+  );
+  const params = findInsertForTable("capa_change_history");
+  assert(params !== null, "CAPA JWT reason: pool.query called");
+  if (params) {
+    const reason = String(params[5] ?? "");
+    assert(!reason.includes(CH_SECRETS.jwt), "CAPA: JWT in change_reason is scrubbed");
+    assert(reason.includes(REDACTED_SENTINEL), "CAPA: REDACTED sentinel present in change_reason");
+  }
+}
+
+// CAPA — non-sensitive values must pass through unchanged
+{
+  captured.length = 0;
+  await logCAPAChange(20, "priority", "low", "high", "bob", "escalated by manager");
+  const params = findInsertForTable("capa_change_history");
+  assert(params !== null, "CAPA non-sensitive: pool.query called");
+  if (params) {
+    const oldVal = String(params[2] ?? "");
+    const newVal = String(params[3] ?? "");
+    const reason = String(params[5] ?? "");
+    assert(oldVal === "low", "CAPA non-sensitive: old_value preserved verbatim");
+    assert(newVal === "high", "CAPA non-sensitive: new_value preserved verbatim");
+    assert(reason === "escalated by manager", "CAPA non-sensitive: change_reason preserved verbatim");
+  }
+}
+
 console.log();
 console.log(`Results: ${passed} passed, ${failed} failed`);
 
