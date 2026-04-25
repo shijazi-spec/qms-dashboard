@@ -90,6 +90,21 @@ await suite.test("POST /api/auth/logout — 200 clears session AND admin_key coo
   suite.expect(cookie.includes("walaplus_session="), "Set-Cookie clears session");
   suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
+  // The admin_key clear cookie must always carry HttpOnly + Secure +
+  // SameSite=Strict — browsers will only accept the deletion if the flags
+  // match those used when the cookie was set. The static guardrail in
+  // scripts/check-admin-cookie-flags.sh mirrors this assertion so a
+  // regression fails CI both at runtime (here) and at scan time.
+  // The substring `admin_key=; HttpOnly; Secure; ... SameSite=Strict` is
+  // emitted as a single Set-Cookie value (separate from the session clear),
+  // and our fakeContext joins multiple `Set-Cookie` headers with `, `, so
+  // checking for the flag substrings on the joined value is safe.
+  suite.expect(
+    cookie.includes("HttpOnly") &&
+      cookie.includes("Secure") &&
+      cookie.includes("SameSite=Strict"),
+    "Set-Cookie has HttpOnly + Secure + SameSite=Strict (for admin_key clear)",
+  );
 });
 
 if (ORIGINAL_ADMIN_KEY === undefined) {

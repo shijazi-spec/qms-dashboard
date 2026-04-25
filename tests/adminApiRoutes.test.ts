@@ -52,9 +52,17 @@ await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (sets 
       cookie?.startsWith("admin_key=integration-test-secret-2026") ?? false,
       `Set-Cookie carries admin_key (got: ${cookie})`,
     );
+    // All three flags (HttpOnly, Secure, SameSite=Strict) are required and
+    // unconditional — see scripts/check-admin-cookie-flags.sh for the static
+    // CI guardrail that mirrors this assertion. The admin_key cookie was
+    // silently missing SameSite=Strict for a period of time; both checks
+    // exist so a regression fails at runtime *and* at scan time.
     suite.expect(
-      cookie?.includes("HttpOnly") && cookie?.includes("SameSite=Strict") && cookie?.includes("Max-Age=28800"),
-      "Set-Cookie has HttpOnly + SameSite=Strict + Max-Age=28800",
+      cookie?.includes("HttpOnly") &&
+        cookie?.includes("Secure") &&
+        cookie?.includes("SameSite=Strict") &&
+        cookie?.includes("Max-Age=28800"),
+      "Set-Cookie has HttpOnly + Secure + SameSite=Strict + Max-Age=28800",
     );
   } finally {
     if (original === undefined) delete process.env.ADMIN_API_KEY;
@@ -115,7 +123,16 @@ await suite.test("POST /api/admin/auth/logout — 200 with cookie cleared", asyn
   const cookie = res.headers["Set-Cookie"] ?? "";
   suite.expect(cookie.includes("admin_key="), "Set-Cookie clears admin_key");
   suite.expect(cookie.includes("Max-Age=0"), "Set-Cookie has Max-Age=0");
-  suite.expect(cookie.includes("HttpOnly") && cookie.includes("SameSite=Strict"), "Set-Cookie has HttpOnly + SameSite=Strict");
+  // The clear-cookie response must mirror the same security flags used when
+  // the cookie was originally set — HttpOnly + Secure + SameSite=Strict — so
+  // browsers actually accept the deletion. See
+  // scripts/check-admin-cookie-flags.sh for the matching static CI guardrail.
+  suite.expect(
+    cookie.includes("HttpOnly") &&
+      cookie.includes("Secure") &&
+      cookie.includes("SameSite=Strict"),
+    "Set-Cookie has HttpOnly + Secure + SameSite=Strict",
+  );
 });
 
 await suite.test("PUT /api/admin/scorecard/weights — 403 without auth", async () => {
