@@ -43,6 +43,14 @@ interface CapturedResolve {
   note: string;
 }
 
+interface CapturedRecoveryNotification {
+  alert_id: number;
+  related_record_id: string;
+  agent_name: string;
+  prompt_version: string;
+  note: string;
+}
+
 function makeStub(opts: {
   rows: PromptVersionAggregate[];
   existingKeys?: Set<string>;
@@ -50,11 +58,13 @@ function makeStub(opts: {
 }) {
   const created: CapturedAlert[] = [];
   const resolved: CapturedResolve[] = [];
+  const recoveryCalls: CapturedRecoveryNotification[][] = [];
   const seenExists = new Set(opts.existingKeys ?? []);
   const openAlertsList: AIAlert[] = opts.openAlerts ?? [];
   return {
     created,
     resolved,
+    recoveryCalls,
     deps: {
       fetchAggregates: async (_days: number) => opts.rows,
       alertExists: async (relatedRecordId: string) =>
@@ -66,6 +76,12 @@ function makeStub(opts: {
       resolveAlert: async (id: number, note: string): Promise<AIAlert | null> => {
         resolved.push({ id, note });
         return { id, alert_type: "prompt_regression", severity: "medium", title: "", description: "", status: "resolved" };
+      },
+      // Stub the recovery notifier so tests never touch Slack/email or
+      // process.env.SLACK_WEBHOOK_URL — mirrors `notifyToolHealthRecovery`
+      // dep injection on the tool-health cron.
+      notifyRecovery: async (recoveries: CapturedRecoveryNotification[]) => {
+        recoveryCalls.push(recoveries);
       },
     },
   };
@@ -348,6 +364,20 @@ async function run(): Promise<void> {
       out.recoveries[0].related_record_id === "TestAgent:v2",
       "recovery record identifies TestAgent:v2",
     );
+    assert(
+      out.recoveries[0].agent_name === "TestAgent",
+      `recovery agent_name parsed (got "${out.recoveries[0].agent_name}")`,
+    );
+    assert(
+      out.recoveries[0].prompt_version === "v2",
+      `recovery prompt_version parsed (got "${out.recoveries[0].prompt_version}")`,
+    );
+    assert(
+      stub.recoveryCalls.length === 1 &&
+        stub.recoveryCalls[0].length === 1 &&
+        stub.recoveryCalls[0][0].related_record_id === "TestAgent:v2",
+      "recovery notifier dep was called once with the recovered alert",
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -377,6 +407,10 @@ async function run(): Promise<void> {
     assert(out.alertsSkippedDuplicate === 1, "duplicate skip (alert already open)");
     assert(out.alertsAutoResolved === 0, "still-breaching alert is not auto-resolved");
     assert(stub.resolved.length === 0, "resolve was not called");
+    assert(
+      stub.recoveryCalls.length === 0,
+      "recovery notifier is NOT called when nothing recovered",
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -450,6 +484,98 @@ async function run(): Promise<void> {
       "only alert 10 (v2) resolved, alert 11 (v3) left open",
     );
     assert(out.alertsCreated === 0, "v3 alert already exists — not duplicated");
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 15: Recovery notifier batches multiple recoveries in a single
+  // call so admins get one summary on Slack/email per cron tick instead
+  // of N pages.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n15. Recovery notifier batches multiple recoveries into one call");
+  {
+    const openAlerts: AIAlert[] = [
+      {
+        id: 201,
+        alert_type: "prompt_regression",
+        severity: "high",
+        title: "",
+        description: "",
+        status: "open",
+        related_record_id: "Alpha:v2",
+      },
+      {
+        id: 202,
+        alert_type: "prompt_regression",
+        severity: "medium",
+        title: "",
+        description: "",
+        status: "acknowledged",
+        related_record_id: "Beta:v9",
+      },
+    ];
+    const stub = makeStub({
+      rows: [
+        // Alpha v1/v2 within 5pp → v2 recovered.
+        makeRow({ agent_name: "Alpha", prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ agent_name: "Alpha", prompt_version: "v2", feedback_rate_pct: 88, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        // Beta v9 only has 2 samples now → no longer evaluable → recovered.
+        makeRow({ agent_name: "Beta",  prompt_version: "v8", feedback_rate_pct: 95, total_feedback: 30, thumbs_up: 29, thumbs_down: 1 }),
+        makeRow({ agent_name: "Beta",  prompt_version: "v9", feedback_rate_pct: 0,  total_feedback: 2,  thumbs_up: 0,  thumbs_down: 2 }),
+      ],
+      openAlerts,
+    });
+    const out = await runPromptRegressionCheck(stub.deps);
+    assert(out.alertsAutoResolved === 2, "both alerts auto-resolved");
+    assert(
+      stub.recoveryCalls.length === 1,
+      `notifier called exactly once per cron tick (got ${stub.recoveryCalls.length})`,
+    );
+    const batch = stub.recoveryCalls[0];
+    assert(batch.length === 2, `batch contains both recoveries (got ${batch.length})`);
+    const ids = batch.map((r) => r.alert_id).sort((a, b) => a - b);
+    assert(
+      ids[0] === 201 && ids[1] === 202,
+      `batch carries alert ids 201,202 (got ${ids.join(",")})`,
+    );
+    const alpha = batch.find((r) => r.alert_id === 201)!;
+    assert(alpha.agent_name === "Alpha", `alpha agent parsed (got "${alpha.agent_name}")`);
+    assert(alpha.prompt_version === "v2", `alpha version parsed (got "${alpha.prompt_version}")`);
+    const beta = batch.find((r) => r.alert_id === 202)!;
+    assert(beta.agent_name === "Beta", `beta agent parsed (got "${beta.agent_name}")`);
+    assert(beta.prompt_version === "v9", `beta version parsed (got "${beta.prompt_version}")`);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 16: Recovery notifier is best-effort. If the dep throws, the
+  // helper still returns the recoveries it processed and reports them
+  // in `alertsAutoResolved` — the alert is already resolved in the DB.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n16. Recovery notifier failure does not crash the cron");
+  {
+    const openAlert: AIAlert = {
+      id: 301,
+      alert_type: "prompt_regression",
+      severity: "high",
+      title: "",
+      description: "",
+      status: "open",
+      related_record_id: "TestAgent:v2",
+    };
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 88, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+      ],
+      openAlerts: [openAlert],
+    });
+    const out = await runPromptRegressionCheck({
+      ...stub.deps,
+      notifyRecovery: async () => {
+        throw new Error("simulated Slack outage");
+      },
+    });
+    assert(out.alertsAutoResolved === 1, "alert still reported as auto-resolved");
+    assert(stub.resolved.length === 1, "DB resolve was still called");
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

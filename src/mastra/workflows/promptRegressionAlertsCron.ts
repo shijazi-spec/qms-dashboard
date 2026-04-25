@@ -102,6 +102,10 @@ interface RegressionBreach {
 interface RegressionRecovery {
   alert_id: number;
   related_record_id: string;
+  /** Agent name parsed from the dedupe key (`<agent>:<version>`). */
+  agent_name: string;
+  /** Prompt version parsed from the dedupe key. */
+  prompt_version: string;
   note: string;
 }
 
@@ -134,6 +138,15 @@ export interface PromptRegressionDeps {
   listOpenRegressionAlerts?: () => Promise<AIAlert[]>;
   /** Marks an alert as resolved with an optional audit note. */
   resolveAlert?: (id: number, note: string) => Promise<AIAlert | null>;
+  /**
+   * Page on-call about one or more `prompt_regression` alerts that just
+   * auto-resolved because the regressed version recovered above the
+   * threshold (or no longer has enough samples to evaluate). Mirrors the
+   * `notifyToolHealthRecovery` dep on the tool-health cron — keeping the
+   * notifier behind a dep means unit tests can stub it to a no-op without
+   * touching Slack/email or env vars.
+   */
+  notifyRecovery?: (recoveries: RegressionRecovery[]) => Promise<void>;
 }
 
 const defaultDeps: Required<PromptRegressionDeps> = {
@@ -155,12 +168,35 @@ const defaultDeps: Required<PromptRegressionDeps> = {
   },
   listOpenRegressionAlerts: () => getOpenAlertsByType("prompt_regression"),
   resolveAlert: (id, note) => resolveAlert(id, note),
+  notifyRecovery: (recoveries) => sendPromptRegressionRecoveryNotifications(recoveries),
 };
 
 function toNumOrNull(v: unknown): number | null {
   if (v == null) return null;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Split the dedupe key (`<agent>:<prompt_version>`) back into its parts.
+ * Uses `lastIndexOf` so an agent name that itself contains a colon still
+ * round-trips correctly. If the key has no colon (legacy/malformed row)
+ * we treat the whole thing as the agent name and leave the version
+ * empty — the recovery notification will still go out and identify the
+ * affected alert by id, just without a version label.
+ */
+function parseRegressionRecordId(key: string): {
+  agentName: string;
+  promptVersion: string;
+} {
+  const idx = key.lastIndexOf(":");
+  if (idx <= 0 || idx === key.length - 1) {
+    return { agentName: key, promptVersion: "" };
+  }
+  return {
+    agentName: key.slice(0, idx),
+    promptVersion: key.slice(idx + 1),
+  };
 }
 
 /**
@@ -332,17 +368,38 @@ export async function runPromptRegressionCheck(
       `detected in the ${cfg.windowDays}-day window (version recovered above ` +
       `the ${cfg.dropPctPoints}pp threshold or no longer has enough samples ` +
       `to be evaluated).`;
+    const { agentName, promptVersion } = parseRegressionRecordId(key);
     try {
       const resolved = await deps.resolveAlert(alert.id, note);
       if (resolved) {
         out.alertsAutoResolved++;
-        out.recoveries.push({ alert_id: alert.id, related_record_id: key, note });
+        out.recoveries.push({
+          alert_id: alert.id,
+          related_record_id: key,
+          agent_name: agentName,
+          prompt_version: promptVersion,
+          note,
+        });
         console.log(`[PromptRegression] Auto-resolved alert ${alert.id} (${key}): ${note}`);
       }
     } catch (err) {
       console.error(
         `[PromptRegression] Failed to auto-resolve alert ${alert.id} (${key}):`,
         err,
+      );
+    }
+  }
+
+  // Page on-call once per cron tick when ≥1 recovery happened. Best-effort:
+  // a Slack/email outage must not propagate back into the cron's return
+  // value (the alert is already resolved in the DB by this point).
+  if (out.recoveries.length > 0) {
+    try {
+      await deps.notifyRecovery(out.recoveries);
+    } catch (notifyErr) {
+      console.error(
+        `[PromptRegression] Recovery notifier threw for ${out.recoveries.length} recoveries:`,
+        notifyErr,
       );
     }
   }
@@ -466,6 +523,95 @@ async function sendPromptRegressionNotifications(
       });
     } catch (emailErr) {
       console.warn("[PromptRegression] Email alert failed:", emailErr);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Recovery notification fan-out (Slack + email)
+// Called from the recovery-sweep path when ≥1 prompt-regression alerts
+// auto-resolved in this tick. Mirrors `sendPromptRegressionNotifications`
+// (the breach-side fan-out) so admins on Slack/email see the recovery
+// summary without polling the dashboard. Each channel is caught
+// independently — a Slack outage cannot silence the email and vice-versa.
+// Default impl is wired through `PromptRegressionDeps.notifyRecovery` so
+// unit tests stub it to a no-op.
+// ──────────────────────────────────────────────────────────────────────────────
+async function sendPromptRegressionRecoveryNotifications(
+  recoveries: RegressionRecovery[],
+): Promise<void> {
+  const cfg = PROMPT_REGRESSION_THRESHOLDS;
+  const count = recoveries.length;
+  if (count === 0) return;
+  const plural = count === 1 ? "regression" : "regressions";
+
+  // ── Slack ──────────────────────────────────────────────────────────────────
+  if (process.env.SLACK_WEBHOOK_URL) {
+    try {
+      const lines = recoveries.map(
+        (r) =>
+          `• *${r.agent_name}* — version \`${r.prompt_version || "(unknown)"}\` ` +
+          `(alert #${r.alert_id})`,
+      );
+      const slackMsg =
+        `✅ *Prompt Regression Recovered* — ${count} ${plural} auto-resolved.\n` +
+        lines.join("\n") +
+        `\n_Window: ${cfg.windowDays} days | <${cfg.link}|View in AI Ops>_`;
+
+      await fetch(process.env.SLACK_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: slackMsg }),
+      });
+    } catch (slackErr) {
+      console.warn("[PromptRegression] Slack recovery notification failed:", slackErr);
+    }
+  }
+
+  // ── Email ──────────────────────────────────────────────────────────────────
+  const emailRecipients = process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL
+    ? process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL.split(",")
+        .map((e) => e.trim())
+        .filter(Boolean)
+    : [];
+  if (emailRecipients.length > 0) {
+    try {
+      const { sendResendEmail } = await import("../../utils/resendMail");
+      const rows = recoveries
+        .map(
+          (r) =>
+            `<tr>
+              <td style="padding:4px 8px">${r.agent_name}</td>
+              <td style="padding:4px 8px;font-family:monospace">${r.prompt_version || "(unknown)"}</td>
+              <td style="padding:4px 8px">#${r.alert_id}</td>
+            </tr>`,
+        )
+        .join("\n");
+
+      await sendResendEmail({
+        to: emailRecipients,
+        subject: `✅ WalaPlus Prompt Regression Recovered — ${count} ${plural} auto-resolved`,
+        html: `<h2>Prompt Regression Recovered</h2>
+<p>${count} prompt ${plural} auto-resolved in the last ${cfg.windowDays}-day window
+because the regressed version recovered above the ${cfg.dropPctPoints}pp threshold,
+or no longer has enough samples to be evaluated.</p>
+<table border="1" cellspacing="0" cellpadding="0"
+       style="border-collapse:collapse;font-size:13px">
+  <thead style="background:#f5f5f5">
+    <tr>
+      <th style="padding:4px 8px">Agent</th>
+      <th style="padding:4px 8px">Recovered version</th>
+      <th style="padding:4px 8px">Alert closed</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rows}
+  </tbody>
+</table>
+<p><a href="${cfg.link}">View in AI Operations panel</a></p>`,
+      });
+    } catch (emailErr) {
+      console.warn("[PromptRegression] Email recovery alert failed:", emailErr);
     }
   }
 }
