@@ -125,6 +125,33 @@
       </div>
     </section>
 
+    <!-- Recently triaged tool-health alerts history -->
+    <section id="tool-health-history-section" class="mb-6" data-testid="section-tool-health-history">
+      <div class="border border-gray-200 rounded-xl shadow-sm">
+        <button type="button"
+          id="tool-health-history-toggle"
+          data-testid="button-tool-health-history-toggle"
+          class="w-full flex items-center justify-between px-5 py-3 text-left bg-white rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          aria-expanded="false"
+          aria-controls="tool-health-history-body">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-sm font-semibold text-gray-700">Recently triaged tool-health alerts</span>
+            <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-200 text-gray-700" id="tool-health-history-count" data-testid="badge-tool-health-history-count">—</span>
+            <span class="text-xs text-gray-400">(last 7 days)</span>
+          </div>
+          <svg id="tool-health-history-chevron" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div id="tool-health-history-body" class="hidden border-t border-gray-200 bg-gray-50 rounded-b-xl px-5 py-4" data-testid="panel-tool-health-history">
+          <div id="tool-health-history-list" class="space-y-2" data-testid="list-tool-health-history"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- Summary KPI cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="summary-cards">
       <div class="stat-card" data-testid="card-24h-cost">
@@ -603,8 +630,10 @@
         await postToolHealthAlertAction(id, 'acknowledge');
         // Acknowledged alerts shouldn't keep blocking ops attention at the
         // top of the panel — drop them from this banner and reload the list
-        // so the count badge stays accurate.
+        // so the count badge stays accurate. Also refresh the history toggle
+        // so the newly-acknowledged row appears there immediately.
         await loadToolHealthAlerts();
+        await loadToolHealthAlertsHistory();
       } catch (e) {
         console.error('Acknowledge alert error', e);
         if (card) {
@@ -619,12 +648,73 @@
       try {
         await postToolHealthAlertAction(id, 'resolve');
         await loadToolHealthAlerts();
+        await loadToolHealthAlertsHistory();
       } catch (e) {
         console.error('Resolve alert error', e);
         if (card) {
           card.querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
         }
       }
+    }
+
+    async function loadToolHealthAlertsHistory() {
+      const countBadge = document.getElementById('tool-health-history-count');
+      const list = document.getElementById('tool-health-history-list');
+      if (!list) return;
+      try {
+        const { data } = await apiFetch('/api/ai-ops/tool-health-alerts/history?days=7&limit=20');
+        const alerts = Array.isArray(data) ? data : [];
+        if (countBadge) countBadge.textContent = String(alerts.length);
+        if (alerts.length === 0) {
+          list.innerHTML = '<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">No acknowledged or resolved alerts in the last 7 days.</p>';
+          return;
+        }
+        const STATUS_BADGE = {
+          acknowledged: 'bg-yellow-100 text-yellow-800',
+          resolved:     'bg-green-100 text-green-800',
+        };
+        const REASON_LABEL = { error_rate: 'Error rate', p95_latency: 'p95 latency' };
+        list.innerHTML = alerts.map(a => {
+          const sevClass   = SEVERITY_BADGE[a.severity] || SEVERITY_BADGE.info;
+          const statusCls  = STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-700';
+          const reasonText = REASON_LABEL[a.reason] || 'Tool health';
+          const when       = a.triaged_at ? fmtDate(a.triaged_at) : (a.created_at ? fmtDate(a.created_at) : '—');
+          const who        = a.acknowledged_by ? esc(a.acknowledged_by) : '<span class="italic text-gray-400">system</span>';
+          return `
+          <div class="bg-white border border-gray-200 rounded-lg p-3" data-testid="card-tool-health-history-${a.id}">
+            <div class="flex items-start gap-3 flex-wrap">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${sevClass}" data-testid="badge-history-severity-${a.id}">${esc(a.severity)}</span>
+                  <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${statusCls}" data-testid="badge-history-status-${a.id}">${esc(a.status)}</span>
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500" data-testid="text-history-reason-${a.id}">${esc(reasonText)}</span>
+                  ${a.tool_name ? `<code class="text-xs font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded" data-testid="text-history-tool-${a.id}">${esc(a.tool_name)}</code>` : ''}
+                </div>
+                <p class="text-sm font-semibold text-gray-900 truncate" data-testid="text-history-title-${a.id}">${esc(a.title)}</p>
+              </div>
+              <div class="shrink-0 text-right text-xs text-gray-500 whitespace-nowrap">
+                <p data-testid="text-history-when-${a.id}">${when}</p>
+                <p class="mt-0.5" data-testid="text-history-who-${a.id}">by ${who}</p>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Tool-health history load error', e);
+        if (list) list.innerHTML = '<p class="text-sm text-red-600" data-testid="text-tool-health-history-error">Failed to load alert history.</p>';
+      }
+    }
+
+    function initToolHealthHistoryToggle() {
+      const toggle = document.getElementById('tool-health-history-toggle');
+      const body   = document.getElementById('tool-health-history-body');
+      const chevron = document.getElementById('tool-health-history-chevron');
+      if (!toggle || !body || !chevron) return;
+      toggle.addEventListener('click', () => {
+        const open = body.classList.toggle('hidden');
+        toggle.setAttribute('aria-expanded', String(!open));
+        chevron.style.transform = open ? '' : 'rotate(180deg)';
+      });
     }
 
     // Jumps to the matching row in the Top Tools tab. Switches to that tab
@@ -2025,6 +2115,7 @@
     function refreshAll() {
       loadSummary();
       loadToolHealthAlerts();
+      loadToolHealthAlertsHistory();
       loadToolHealthOverrideBanner();
       loadCostTrend();
       const active = TABS.find(t => !document.getElementById(`content-${t}`).classList.contains('hidden'));
@@ -2077,6 +2168,8 @@
       if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', snoozeToolHealthOverrideBanner);
       loadSummary();
       loadToolHealthAlerts();
+      loadToolHealthAlertsHistory();
+      initToolHealthHistoryToggle();
       loadToolHealthOverrideBanner();
       loadCostTrend();
       // Honor a deep-link like /ai-ops?tab=prompts so notifications can

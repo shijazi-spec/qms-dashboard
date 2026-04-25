@@ -29,6 +29,7 @@ export interface AIAlert {
   related_record_id?: string;
   status: AlertStatus;
   acknowledged_by?: string;
+  acknowledged_at?: Date;
   resolved_at?: Date;
   resolution_note?: string | null;
   created_at?: Date;
@@ -57,6 +58,12 @@ export async function initAIAlertsTable(): Promise<void> {
   // recovery sweep). Pre-existing rows leave this NULL.
   await pool.query(`
     ALTER TABLE ai_alerts ADD COLUMN IF NOT EXISTS resolution_note TEXT
+  `);
+
+  // Idempotent migration: add acknowledged_at so the history view can show
+  // when an alert was triaged (not just who triaged it).
+  await pool.query(`
+    ALTER TABLE ai_alerts ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP
   `);
 
   await pool.query(`
@@ -133,7 +140,7 @@ export async function getUnreadAlertCount(): Promise<number> {
 
 export async function acknowledgeAlert(id: number, acknowledgedBy: string): Promise<AIAlert | null> {
   const result = await pool.query(
-    `UPDATE ai_alerts SET status = 'acknowledged', acknowledged_by = $2 WHERE id = $1 RETURNING *`,
+    `UPDATE ai_alerts SET status = 'acknowledged', acknowledged_by = $2, acknowledged_at = NOW() WHERE id = $1 RETURNING *`,
     [id, acknowledgedBy]
   );
   return result.rows[0] || null;
@@ -142,18 +149,25 @@ export async function acknowledgeAlert(id: number, acknowledgedBy: string): Prom
 export async function resolveAlert(
   id: number,
   note?: string,
+  resolvedBy?: string,
 ): Promise<AIAlert | null> {
   // Only overwrite resolution_note when a note is supplied so manual
   // resolves through the UI (which currently pass none) don't blank an
   // existing note.
+  //
+  // `resolvedBy` captures the operator's identity when an alert is resolved
+  // directly from the open state (bypassing the acknowledge step). We use
+  // COALESCE so that an already-acknowledged row keeps its original
+  // acknowledged_by value — the first person who triaged it.
   const result = await pool.query(
     `UPDATE ai_alerts
         SET status = 'resolved',
             resolved_at = NOW(),
-            resolution_note = COALESCE($2, resolution_note)
+            resolution_note = COALESCE($2, resolution_note),
+            acknowledged_by = COALESCE(acknowledged_by, $3)
       WHERE id = $1
       RETURNING *`,
-    [id, note ?? null]
+    [id, note ?? null, resolvedBy ?? null]
   );
   return result.rows[0] || null;
 }
@@ -270,6 +284,32 @@ export async function getOpenAlertsByType(
         AND status IN ('open', 'acknowledged')
       ORDER BY created_at ASC`,
     [alertType],
+  );
+  return result.rows;
+}
+
+/**
+ * Return the most-recently triaged (acknowledged or resolved) tool-health
+ * alerts within the last `days` days, ordered by triage time descending so
+ * the most-recent action appears first.
+ *
+ * "Triage time" is COALESCE(resolved_at, acknowledged_at, created_at) so
+ * that both status paths surface in the correct chronological position even
+ * for older rows that pre-date the acknowledged_at column migration.
+ */
+export async function getToolHealthAlertHistory(
+  days = 7,
+  limit = 20,
+): Promise<AIAlert[]> {
+  const result = await pool.query(
+    `SELECT *
+       FROM ai_alerts
+      WHERE alert_type = 'tool_health'
+        AND status IN ('acknowledged', 'resolved')
+        AND COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL
+      ORDER BY COALESCE(resolved_at, acknowledged_at, created_at) DESC
+      LIMIT $2`,
+    [days, limit],
   );
   return result.rows;
 }

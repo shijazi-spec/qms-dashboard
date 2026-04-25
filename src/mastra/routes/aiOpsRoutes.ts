@@ -18,6 +18,7 @@ import {
 } from "../../utils/aiTelemetry";
 import {
   getAIAlerts,
+  getToolHealthAlertHistory,
   acknowledgeAlert,
   resolveAlert,
   type AIAlert,
@@ -599,6 +600,48 @@ export const aiOpsRoutes = [
   },
 
   /**
+   * Acknowledged + resolved tool-health alerts from the last 7 days.
+   * Rendered by the "Recently triaged" history toggle on /ai-ops so ops can
+   * see who handled what without navigating away from the page.
+   */
+  {
+    path: "/api/ai-ops/tool-health-alerts/history",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const days  = safeInt(c.req.query("days"),  7,  1, 90);
+          const limit = safeInt(c.req.query("limit"), 20, 1, 100);
+          const alerts = await getToolHealthAlertHistory(days, limit);
+          const data = alerts.map((a: AIAlert) => {
+            const parsed = parseToolHealthRelatedId(a.related_record_id);
+            const triagedAt = a.status === 'resolved'
+              ? (a.resolved_at ?? null)
+              : (a.acknowledged_at ?? null);
+            return {
+              id: a.id,
+              severity: a.severity,
+              title: a.title,
+              status: a.status,
+              tool_name: parsed?.tool_name ?? null,
+              reason: parsed?.reason ?? null,
+              acknowledged_by: a.acknowledged_by ?? null,
+              triaged_at: triagedAt,
+              created_at: a.created_at,
+            };
+          });
+          return c.json({ data, days });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-alerts history error:", error);
+          return c.json({ error: "Failed to fetch tool-health alert history" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
    * Acknowledge a tool-health alert from the AI Ops panel. Thin wrapper
    * around acknowledgeAlert() scoped to AI_OPS_ROLES so the panel doesn't
    * need to call cross-namespace consultant endpoints.
@@ -644,7 +687,8 @@ export const aiOpsRoutes = [
           if (!Number.isFinite(id) || id <= 0) {
             return c.json({ error: "Invalid alert id" }, 400);
           }
-          const alert = await resolveAlert(id);
+          const resolvedBy = user.name || user.email;
+          const alert = await resolveAlert(id, undefined, resolvedBy);
           if (!alert) return c.json({ error: "Alert not found" }, 404);
           return c.json({ success: true, alert });
         } catch (error) {
