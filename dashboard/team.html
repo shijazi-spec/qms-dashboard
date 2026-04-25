@@ -558,6 +558,7 @@
     </div>
 
     <script>
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         let departmentChart, projectStatusChart, statusChart, performanceDeptChart;
         let allMembers = [];
         let currentProjectView = 'table';
@@ -628,7 +629,7 @@
                     count.textContent = columns[col].length;
                     
                     if (columns[col].length === 0) {
-                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">No items</div>';
+                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">' + _t('dyn.team.no_items') + '</div>';
                     } else {
                         container.innerHTML = columns[col].map(p => `
                             <div class="bg-white rounded-lg shadow-sm border p-3 cursor-pointer hover:shadow-md transition">
@@ -662,7 +663,7 @@
                 
                 const tbody = document.getElementById('coursesTable');
                 if (!courses.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No training courses found. Click "Add Course" to create one.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + _t('dyn.team.no_courses') + '</td></tr>';
                 } else {
                     tbody.innerHTML = courses.map(c => `
                         <tr class="hover:bg-gray-50">
@@ -723,16 +724,16 @@
                     loadCourses();
                 } else {
                     const error = await res.json();
-                    alert(error.error || 'Failed to create course');
+                    alert(error.error || _t('dyn.team.failed_create_course'));
                 }
             } catch (error) {
                 console.error('Error creating course:', error);
-                alert('Failed to create course');
+                alert(_t('dyn.team.failed_create_course'));
             }
         }
 
         async function deleteCourse(courseId) {
-            if (!confirm('Are you sure you want to delete this course?')) return;
+            if (!confirm(_t('dyn.team.confirm_delete_course'))) return;
 
             try {
                 const res = await fetch(`/api/team/courses/${courseId}`, { method: 'DELETE' });
@@ -859,7 +860,7 @@
         function renderTopPerformers(performers) {
             const container = document.getElementById('topPerformers');
             if (!performers.length) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-8">No performance data available</p>';
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.team.no_perf_data') + '</p>';
                 return;
             }
 
@@ -899,7 +900,7 @@
 
                 const tbody = document.getElementById('membersTable');
                 if (!allMembers.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No team members found. Click "Add Member" to create one.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + _t('dyn.team.no_members') + '</td></tr>';
                 } else {
                     tbody.innerHTML = allMembers.map(m => `
                         <tr class="hover:bg-gray-50">
@@ -946,7 +947,7 @@
                     `).join('');
                 }
 
-                document.getElementById('membersPagination').textContent = `Showing ${allMembers.length} of ${data.total} members`;
+                document.getElementById('membersPagination').textContent = _t('dyn.team.showing_members', { count: allMembers.length, total: data.total });
                 populateProjectMemberSelect();
             } catch (error) {
                 console.error('Error loading members:', error);
@@ -972,7 +973,7 @@
 
                 const tbody = document.getElementById('projectsTable');
                 if (!projects.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">No project assignments found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">' + _t('dyn.team.no_proj_assignments') + '</td></tr>';
                 } else {
                     tbody.innerHTML = projects.map(p => `
                         <tr class="hover:bg-gray-50">
@@ -1015,7 +1016,7 @@
 
                 const container = document.getElementById('trainingMatrix');
                 if (!members.length) {
-                    container.innerHTML = '<p class="text-gray-500 text-center py-8">No training data available. Add team members and assign training courses.</p>';
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.team.no_training_data') + '</p>';
                     return;
                 }
 
@@ -1099,11 +1100,11 @@
                     loadAnalytics();
                 } else {
                     const error = await res.json();
-                    alert(error.error || 'Failed to create team member');
+                    alert(error.error || _t('dyn.team.failed_create_member'));
                 }
             } catch (error) {
                 console.error('Error creating member:', error);
-                alert('Failed to create team member');
+                alert(_t('dyn.team.failed_create_member'));
             }
         }
 
@@ -1130,16 +1131,16 @@
                     loadAnalytics();
                 } else {
                     const error = await res.json();
-                    alert(error.error || 'Failed to create project assignment');
+                    alert(error.error || _t('dyn.team.failed_create_assignment'));
                 }
             } catch (error) {
                 console.error('Error creating project:', error);
-                alert('Failed to create project assignment');
+                alert(_t('dyn.team.failed_create_assignment'));
             }
         }
 
         async function deleteMember(memberId) {
-            if (!confirm('Are you sure you want to delete this team member?')) return;
+            if (!confirm(_t('dyn.team.confirm_delete_member'))) return;
 
             try {
                 const res = await fetch(`/api/team/members/${memberId}`, { method: 'DELETE' });
@@ -1153,7 +1154,7 @@
         }
 
         async function deleteProject(assignmentId) {
-            if (!confirm('Are you sure you want to delete this assignment?')) return;
+            if (!confirm(_t('dyn.team.confirm_delete_assignment'))) return;
 
             try {
                 const res = await fetch(`/api/team/projects/${assignmentId}`, { method: 'DELETE' });

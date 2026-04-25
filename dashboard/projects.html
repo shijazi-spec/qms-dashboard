@@ -1180,6 +1180,7 @@
     </div>
 
     <script>
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         let projects = [];
         let analytics = {};
         let risks = [];
@@ -1428,13 +1429,13 @@
             document.getElementById('totalChangeImpact').textContent = '$' + totalImpact.toLocaleString();
         }
 
-        function openProcurementModal() { alert('Procurement modal - Coming soon'); }
-        function editProcurement(id) { alert('Edit procurement ' + id); }
-        function deleteProcurement(id) { if(confirm('Delete procurement?')) fetch('/api/pmp/procurement/' + id, {method: 'DELETE'}).then(() => loadProcurement()); }
+        function openProcurementModal() { alert(_t('dyn.projects.procurement_coming_soon')); }
+        function editProcurement(id) { alert(_t('dyn.projects.edit_procurement', { id })); }
+        function deleteProcurement(id) { if(confirm(_t('dyn.projects.confirm_delete_procurement'))) fetch('/api/pmp/procurement/' + id, {method: 'DELETE'}).then(() => loadProcurement()); }
 
-        function openChangeRequestModal() { alert('Change request modal - Coming soon'); }
-        function editChangeRequest(id) { alert('Edit change request ' + id); }
-        function deleteChangeRequest(id) { if(confirm('Delete change request?')) fetch('/api/pmp/change-requests/' + id, {method: 'DELETE'}).then(() => loadChangeRequests()); }
+        function openChangeRequestModal() { alert(_t('dyn.projects.change_request_coming_soon')); }
+        function editChangeRequest(id) { alert(_t('dyn.projects.edit_change_request', { id })); }
+        function deleteChangeRequest(id) { if(confirm(_t('dyn.projects.confirm_delete_change'))) fetch('/api/pmp/change-requests/' + id, {method: 'DELETE'}).then(() => loadChangeRequests()); }
 
         function updateKPIs() {
             document.getElementById('totalProjects').textContent = analytics.totalProjects || 0;
@@ -1611,7 +1612,7 @@
         function renderGanttChart() {
             const container = document.getElementById('ganttChart');
             if (milestones.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-8">No milestones to display</p>';
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.projects.no_milestones') + '</p>';
                 return;
             }
 
@@ -1749,7 +1750,7 @@
         }
 
         function openProjectModal() {
-            document.getElementById('projectModalTitle').textContent = 'New PMP Project';
+            document.getElementById('projectModalTitle').textContent = _t('dyn.projects.modal_new_project');
             document.getElementById('projectForm').reset();
             document.getElementById('projectId').value = '';
             document.getElementById('projectModal').classList.remove('hidden');
@@ -1917,9 +1918,9 @@
             const desc = document.getElementById('wizDescription').value;
             const name = document.getElementById('wizProjectName').value;
             const type = document.getElementById('wizProjectType').value;
-            if (!desc) { alert('Please enter a project description first'); return; }
+            if (!desc) { alert(_t('dyn.projects.enter_description_first')); return; }
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>' + _t('dyn.projects.btn_generating');
             try {
                 const res = await fetch('/api/pmp/generate-charter', {
                     method: 'POST',
@@ -1940,11 +1941,11 @@
                     if (c.milestones) wizardData.milestones = c.milestones.map(m => ({ name: m.name, date: '' }));
                     if (c.recommended_team_structure) wizardData.resources = c.recommended_team_structure.map(r => ({ role: r.role, count: 1 }));
                     renderAllWizardLists();
-                    alert('AI has pre-filled scope elements. Review and modify as needed!');
+                    alert(_t('dyn.projects.ai_prefilled'));
                 }
-            } catch (err) { console.error('AI generation error:', err); alert('Failed to generate scope. Please try again.'); }
+            } catch (err) { console.error('AI generation error:', err); alert(_t('dyn.projects.failed_generate_scope')); }
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-magic mr-2"></i>AI: Generate Scope from Description';
+            btn.innerHTML = '<i class="fas fa-magic mr-2"></i>' + _t('dyn.projects.btn_ai_scope');
         }
 
         async function submitScopeWizard() {
@@ -1999,13 +2000,13 @@
                     loadProjects();
                     loadMilestones();
                     loadStakeholders();
-                    alert('Project created successfully with full scope definition!');
+                    alert(_t('dyn.projects.project_created'));
                 } else {
-                    alert('Error creating project: ' + (data.error || 'Unknown error'));
+                    alert(_t('dyn.projects.error_creating_project', { msg: data.error || _t('dyn.projects.unknown_error') }));
                 }
             } catch (err) {
                 console.error('Error submitting wizard:', err);
-                alert('Failed to create project. Please try again.');
+                alert(_t('dyn.projects.failed_create_project'));
             }
         }
 
@@ -2043,11 +2044,11 @@
                     loadAnalytics();
                 } else {
                     const err = await res.json();
-                    alert(err.error || 'Failed to save project');
+                    alert(err.error || _t('dyn.projects.failed_save_project'));
                 }
             } catch (error) {
                 console.error('Error saving project:', error);
-                alert('Failed to save project');
+                alert(_t('dyn.projects.failed_save_project'));
             }
         }
 
@@ -2063,7 +2064,7 @@
                 history.pushState({ projectId }, '', `/projects?id=${projectId}`);
             } catch (error) {
                 console.error('Error loading project:', error);
-                alert('Failed to load project details');
+                alert(_t('dyn.projects.failed_load_details'));
             }
         }
 
@@ -2160,7 +2161,7 @@
             const el = document.getElementById(containerId);
             if (!el) return;
             if (!items || items.length === 0) {
-                el.innerHTML = '<span class="text-gray-400 text-sm">None defined</span>';
+                el.innerHTML = '<span class="text-gray-400 text-sm">' + _t('dyn.projects.none_defined') + '</span>';
                 return;
             }
             el.innerHTML = items.map(item => `<div class="flex items-center text-sm"><i class="fas fa-check-circle text-green-500 mr-2"></i>${item}</div>`).join('');
@@ -2170,7 +2171,7 @@
             const el = document.getElementById('detailResourcePlan');
             if (!el) return;
             if (!resources || resources.length === 0) {
-                el.innerHTML = '<span class="text-gray-400 text-sm">No resource plan defined</span>';
+                el.innerHTML = '<span class="text-gray-400 text-sm">' + _t('dyn.projects.no_resource_plan') + '</span>';
                 return;
             }
             el.innerHTML = resources.map(r => {
@@ -2185,7 +2186,7 @@
 
         function renderDetailMilestones(miles) {
             const el = document.getElementById('detailMilestones');
-            if (!miles.length) { el.innerHTML = '<p class="text-gray-400">No milestones defined</p>'; return; }
+            if (!miles.length) { el.innerHTML = '<p class="text-gray-400">' + _t('dyn.projects.no_milestones_defined') + '</p>'; return; }
             const statusColors = { pending: 'gray', in_progress: 'blue', completed: 'green', delayed: 'red' };
             el.innerHTML = miles.map(m => `
                 <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
@@ -2203,7 +2204,7 @@
 
         function renderDetailRisks(risks) {
             const el = document.getElementById('detailRisksTable');
-            if (!risks.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No risks identified</td></tr>'; return; }
+            if (!risks.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_risks') + '</td></tr>'; return; }
             el.innerHTML = risks.map(r => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3"><div class="font-medium">${r.risk_description}</div></td>
@@ -2217,7 +2218,7 @@
 
         function renderDetailStakeholders(stakes) {
             const el = document.getElementById('detailStakeTable');
-            if (!stakes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No stakeholders defined</td></tr>'; return; }
+            if (!stakes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_stakeholders') + '</td></tr>'; return; }
             el.innerHTML = stakes.map(s => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 font-medium">${s.name}</td>
@@ -2231,7 +2232,7 @@
 
         function renderDetailProcurement(procs) {
             const el = document.getElementById('detailProcTable');
-            if (!procs.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No procurement records</td></tr>'; return; }
+            if (!procs.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_procurement') + '</td></tr>'; return; }
             el.innerHTML = procs.map(p => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 font-medium">${p.title}</td>
@@ -2245,7 +2246,7 @@
 
         function renderDetailChanges(changes) {
             const el = document.getElementById('detailChangeTable');
-            if (!changes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No change requests</td></tr>'; return; }
+            if (!changes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_changes') + '</td></tr>'; return; }
             const ccbColors = { pending: 'amber', approved: 'green', rejected: 'red', deferred: 'purple' };
             el.innerHTML = changes.map(c => `
                 <tr class="hover:bg-gray-50">
@@ -2285,7 +2286,7 @@
                 const res = await fetch(`/api/pmp/projects/${projectId}`);
                 const project = await res.json();
                 
-                document.getElementById('projectModalTitle').textContent = 'Edit Project';
+                document.getElementById('projectModalTitle').textContent = _t('dyn.projects.modal_edit_project');
                 document.getElementById('projectId').value = projectId;
                 document.getElementById('projectName').value = project.project_name;
                 document.getElementById('projectCode').value = project.project_code;
@@ -2309,7 +2310,7 @@
         }
 
         async function deleteProject(projectId) {
-            if (!confirm('Are you sure you want to delete this project?')) return;
+            if (!confirm(_t('dyn.projects.confirm_delete_project'))) return;
             try {
                 const res = await fetch(`/api/pmp/projects/${projectId}`, { method: 'DELETE' });
                 if (res.ok) {
@@ -2333,7 +2334,7 @@
         async function generateCharter() {
             const btn = document.getElementById('generateCharterBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>' + _t('dyn.projects.btn_generating');
 
             try {
                 const res = await fetch('/api/pmp/generate-charter', {
@@ -2374,14 +2375,14 @@
                     
                     document.getElementById('charterResult').classList.remove('hidden');
                 } else {
-                    alert(data.error || 'Failed to generate charter');
+                    alert(data.error || _t('dyn.projects.failed_generate_charter'));
                 }
             } catch (error) {
                 console.error('Error generating charter:', error);
-                alert('Failed to generate charter');
+                alert(_t('dyn.projects.failed_generate_charter'));
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Generate Charter';
+                btn.innerHTML = '<i class="fas fa-magic mr-2"></i>' + _t('dyn.projects.btn_generate_charter');
             }
         }
 
@@ -2420,24 +2421,24 @@
                     closeCharterModal();
                     loadProjects();
                     loadAnalytics();
-                    alert('Project created successfully from AI charter!');
+                    alert(_t('dyn.projects.project_created_charter'));
                 } else {
                     const err = await res.json();
-                    alert(err.error || 'Failed to create project');
+                    alert(err.error || _t('dyn.projects.failed_create_project_charter'));
                 }
             } catch (error) {
                 console.error('Error creating project:', error);
-                alert('Failed to create project');
+                alert(_t('dyn.projects.failed_create_project_charter'));
             }
         }
 
-        function openRiskModal() { alert('Risk modal - implement form similar to project modal'); }
-        function openMilestoneModal() { alert('Milestone modal - implement form similar to project modal'); }
-        function openStakeholderModal() { alert('Stakeholder modal - implement form similar to project modal'); }
-        function editRisk(id) { alert('Edit risk: ' + id); }
-        function deleteRisk(id) { if (confirm('Delete this risk?')) fetch(`/api/pmp/risks/${id}`, { method: 'DELETE' }).then(() => loadRisks()); }
-        function editStakeholder(id) { alert('Edit stakeholder: ' + id); }
-        function deleteStakeholder(id) { if (confirm('Delete this stakeholder?')) fetch(`/api/pmp/stakeholders/${id}`, { method: 'DELETE' }).then(() => loadStakeholders()); }
+        function openRiskModal() { alert(_t('dyn.projects.risk_modal_stub')); }
+        function openMilestoneModal() { alert(_t('dyn.projects.milestone_modal_stub')); }
+        function openStakeholderModal() { alert(_t('dyn.projects.stakeholder_modal_stub')); }
+        function editRisk(id) { alert(_t('dyn.projects.edit_risk', { id })); }
+        function deleteRisk(id) { if (confirm(_t('dyn.projects.confirm_delete_risk'))) fetch(`/api/pmp/risks/${id}`, { method: 'DELETE' }).then(() => loadRisks()); }
+        function editStakeholder(id) { alert(_t('dyn.projects.edit_stakeholder', { id })); }
+        function deleteStakeholder(id) { if (confirm(_t('dyn.projects.confirm_delete_stakeholder'))) fetch(`/api/pmp/stakeholders/${id}`, { method: 'DELETE' }).then(() => loadStakeholders()); }
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>

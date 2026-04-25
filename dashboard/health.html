@@ -141,19 +141,20 @@
     </div>
 
     <script>
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         const STATUS_COLOR = {
-            healthy:  { card: 'linear-gradient(135deg, #047857, #10B981)', label: 'Healthy' },
-            degraded: { card: 'linear-gradient(135deg, #D97706, #F59E0B)', label: 'Degraded' },
-            critical: { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', label: 'Critical' },
-            down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', label: 'Down' },
+            healthy:  { card: 'linear-gradient(135deg, #047857, #10B981)', get label() { return _t('dyn.health.status_healthy'); } },
+            degraded: { card: 'linear-gradient(135deg, #D97706, #F59E0B)', get label() { return _t('dyn.health.status_degraded'); } },
+            critical: { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return _t('dyn.health.status_critical'); } },
+            down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return _t('dyn.health.status_down'); } },
         };
 
         const CATEGORY_LABELS = {
-            infrastructure: 'Infrastructure',
-            audits: 'Audits',
-            data: 'Data',
-            integrations: 'Integrations',
-            scheduler: 'Scheduler',
+            get infrastructure() { return _t('dyn.health.cat_infrastructure'); },
+            get audits() { return _t('dyn.health.cat_audits'); },
+            get data() { return _t('dyn.health.cat_data'); },
+            get integrations() { return _t('dyn.health.cat_integrations'); },
+            get scheduler() { return _t('dyn.health.cat_scheduler'); },
         };
 
         let historyChart = null;
@@ -192,12 +193,12 @@
             const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
             el('overall-card').style.background = meta.card;
             el('overall-status').textContent = meta.label;
-            el('overall-time').textContent = `Last run · ${fmtRelative(latest.run_at)} · ${latest.duration_ms}ms`;
+            el('overall-time').textContent = _t('dyn.health.last_run_prefix') + fmtRelative(latest.run_at) + ' · ' + latest.duration_ms + 'ms';
 
             el('count-pass').textContent = latest.pass_count ?? 0;
             el('count-warn').textContent = latest.warn_count ?? 0;
             el('count-fail').textContent = latest.fail_count ?? 0;
-            el('count-skipped').textContent = `${latest.skipped_count ?? 0} skipped`;
+            el('count-skipped').textContent = (latest.skipped_count ?? 0) + ' ' + _t('dyn.health.label_skipped');
 
             // Per-check rows
             const grouped = {};
@@ -238,7 +239,7 @@
                 `;
             }).join('');
 
-            el('checks-list').innerHTML = html || '<div class="px-6 py-8 text-center text-gray-500 text-sm">No checks in this run</div>';
+            el('checks-list').innerHTML = html || '<div class="px-6 py-8 text-center text-gray-500 text-sm">' + _t('dyn.health.no_checks') + '</div>';
         }
 
         function renderHistory(history) {
@@ -253,7 +254,7 @@
             const warnData = ordered.map(r => r.warn_count || 0);
             const failData = ordered.map(r => r.fail_count || 0);
 
-            el('history-meta').textContent = `${ordered.length} run${ordered.length === 1 ? '' : 's'}`;
+            el('history-meta').textContent = ordered.length === 1 ? '1 ' + _t('dyn.health.label_run_singular') : ordered.length + ' ' + _t('dyn.health.label_runs_plural');
 
             const ctx = el('historyChart').getContext('2d');
             if (historyChart) historyChart.destroy();
@@ -262,9 +263,9 @@
                 data: {
                     labels,
                     datasets: [
-                        { label: 'Pass', data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
-                        { label: 'Warn', data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
-                        { label: 'Fail', data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: _t('dyn.health.chart_pass'), data: passData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: _t('dyn.health.chart_warn'), data: warnData, borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+                        { label: _t('dyn.health.chart_fail'), data: failData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
                     ]
                 },
                 options: {
@@ -319,22 +320,22 @@
             const btn = el('btn-run');
             const original = btn.textContent;
             btn.disabled = true;
-            btn.textContent = 'Running...';
+            btn.textContent = _t('dyn.health.running');
             btn.classList.add('pulse');
             try {
                 const res = await fetch('/api/health/pulse/run', { method: 'POST', credentials: 'include' });
                 if (res.status === 429) {
-                    alert("Rate limit hit — please wait a moment before running again.");
+                    alert(_t('dyn.health.rate_limit_hit'));
                     return;
                 }
                 if (!res.ok) {
                     const text = await res.text();
-                    alert(`Run failed: ${text.slice(0, 200)}`);
+                    alert(_t('dyn.health.run_failed', { msg: text.slice(0, 200) }));
                     return;
                 }
                 await loadPulse();
             } catch (err) {
-                alert(`Run failed: ${err.message || err}`);
+                alert(_t('dyn.health.run_failed', { msg: err.message || err }));
             } finally {
                 btn.disabled = false;
                 btn.textContent = original;

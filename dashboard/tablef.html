@@ -548,6 +548,7 @@
     </div>
 
     <script>
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         function escapeHtml(str) {
             if (str == null) return '';
             return String(str)
@@ -821,7 +822,7 @@
         function loadDepartmentView() {
             const deptId = document.getElementById('deptSelect').value;
             if (!deptId) {
-                document.getElementById('deptSummaryCards').innerHTML = '<p class="text-gray-500">Select a department to view KPIs</p>';
+                document.getElementById('deptSummaryCards').innerHTML = '<p class="text-gray-500">' + _t('dyn.tablef.select_dept') + '</p>';
                 document.getElementById('deptKpiTable').innerHTML = '';
                 return;
             }
@@ -1020,7 +1021,7 @@
         }
 
         function showAddKpiModal() {
-            document.getElementById('kpiModalTitle').textContent = 'Add New KPI';
+            document.getElementById('kpiModalTitle').textContent = _t('dyn.tablef.add_kpi_title');
             document.getElementById('kpiFormId').value = '';
             document.getElementById('kpiForm').reset();
             document.getElementById('kpiModal').classList.remove('hidden');
@@ -1030,7 +1031,7 @@
             const kpi = kpis.find(k => k.kpi_id === kpiId);
             if (!kpi) return;
             
-            document.getElementById('kpiModalTitle').textContent = 'Edit KPI';
+            document.getElementById('kpiModalTitle').textContent = _t('dyn.tablef.edit_kpi_title');
             document.getElementById('kpiFormId').value = kpi.kpi_id;
             document.getElementById('kpiFormDept').value = kpi.department_id;
             document.getElementById('kpiFormCat').value = kpi.category;
@@ -1077,7 +1078,7 @@
             const kpi = kpis.find(k => k.kpi_id === kpiId);
             if (!kpi) return;
             
-            document.getElementById('perfModalTitle').textContent = 'Update Performance';
+            document.getElementById('perfModalTitle').textContent = _t('dyn.tablef.update_perf_title');
             document.getElementById('perfModalSubtitle').textContent = kpi.name;
             document.getElementById('perfFormKpiId').value = kpi.kpi_id;
             document.getElementById('perfFormTarget').value = kpi.target_monthly || '';
@@ -1149,15 +1150,15 @@
             const btn = event && event.target ? event.target : null;
             const original = btn ? btn.textContent : '';
             try {
-                if (btn) { btn.disabled = true; btn.textContent = 'Refreshing...'; }
+                if (btn) { btn.disabled = true; btn.textContent = _t('dyn.tablef.refreshing'); }
                 await loadData();
                 if (typeof loadInsights === 'function') loadInsights();
-                if (btn) btn.textContent = 'Insights Updated ✓';
-                setTimeout(() => { if (btn) { btn.textContent = original || 'Generate AI Insights'; btn.disabled = false; } }, 1500);
+                if (btn) btn.textContent = _t('dyn.tablef.insights_updated');
+                setTimeout(() => { if (btn) { btn.textContent = original || _t('dyn.tablef.generate_ai_insights'); btn.disabled = false; } }, 1500);
             } catch (e) {
                 console.error('generateAiInsights error', e);
-                if (btn) { btn.textContent = original || 'Generate AI Insights'; btn.disabled = false; }
-                alert('Failed to refresh insights. Check console for details.');
+                if (btn) { btn.textContent = original || _t('dyn.tablef.generate_ai_insights'); btn.disabled = false; }
+                alert(_t('dyn.tablef.failed_refresh_insights'));
             }
         }
 

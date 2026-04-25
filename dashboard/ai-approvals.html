@@ -103,6 +103,7 @@
 
 <script>
 (function () {
+    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
     var listEl = document.getElementById('approvalsList');
     var fltStatus = document.getElementById('fltStatus');
     var fltRisk = document.getElementById('fltRisk');
@@ -125,7 +126,7 @@
     }
 
     function renderEmpty() {
-        listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10 bg-white rounded-lg border border-gray-200">No approvals match the current filters.</div>';
+        listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10 bg-white rounded-lg border border-gray-200">' + _t('dyn.ai_approvals.no_approvals') + '</div>';
     }
 
     function renderPriorViewers(viewers) {
@@ -205,8 +206,8 @@
                 var row = listEl.querySelector('[data-code="' + code + '"]');
                 var actionsEl = row.querySelector('[data-actions]');
                 if (act === 'reject') {
-                    var reason = prompt('Reason for rejection (min 3 chars):');
-                    if (!reason || reason.trim().length < 3) { alert('Reason required.'); return; }
+                    var reason = prompt(_t('dyn.ai_approvals.prompt_rejection_reason'));
+                    if (!reason || reason.trim().length < 3) { alert(_t('dyn.ai_approvals.reason_required')); return; }
                     postAction(code, 'reject', { reason: reason.trim() }, actionsEl);
                 } else {
                     postAction(code, 'approve', {}, actionsEl);
@@ -216,7 +217,7 @@
     }
 
     function postAction(code, act, payload, actionsEl) {
-        actionsEl.innerHTML = '<span class="text-xs text-gray-500">Processing…</span>';
+        actionsEl.innerHTML = '<span class="text-xs text-gray-500">' + _t('dyn.ai_approvals.processing') + '</span>';
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + act, {
             method: 'POST',
             credentials: 'same-origin',
@@ -234,7 +235,7 @@
     }
 
     function load() {
-        listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">Loading…</div>';
+        listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">' + _t('dyn.ai_approvals.loading') + '</div>';
         fetch('/api/ai/approvals?' + buildQuery(), { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
@@ -244,7 +245,7 @@
                 updateSummary(data.rows);
             })
             .catch(function (err) {
-                listEl.innerHTML = '<div class="text-center text-red-600 text-sm py-10">Failed to load approvals. ' +
+                listEl.innerHTML = '<div class="text-center text-red-600 text-sm py-10">' + _t('dyn.ai_approvals.failed_load') + ' ' +
                     (err && err.statusText ? escapeHtml(err.statusText) : '') + '</div>';
             });
     }

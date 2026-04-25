@@ -143,6 +143,7 @@
     </main>
 
     <script>
+        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         const API_BASE = '/api/scorecard';
         let scorecardData = null;
 
@@ -185,7 +186,7 @@
             renderStatusSummary(data.kpis);
             renderKPICards(data.kpis);
 
-            document.getElementById('lastUpdated').textContent = `Last updated: ${new Date(data.generated_at).toLocaleString()}`;
+            document.getElementById('lastUpdated').textContent = _t('dyn.scorecard.last_updated_prefix') + new Date(data.generated_at).toLocaleString();
             
             lucide.createIcons();
         }
@@ -304,7 +305,7 @@
 
         function openNavigationMap(index) {
             const kpi = scorecardData.kpis[index];
-            document.getElementById('modalKpiName').textContent = `Navigation Map: ${kpi.kpi_name}`;
+            document.getElementById('modalKpiName').textContent = _t('dyn.scorecard.navigation_map_prefix') + kpi.kpi_name;
             
             const statusColors = {
                 green: 'border-green-500',
@@ -387,12 +388,12 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('Scorecard snapshot saved successfully!');
+                    alert(_t('dyn.scorecard.snapshot_saved'));
                 } else {
                     throw new Error(result.error);
                 }
             } catch (error) {
-                alert('Error saving snapshot: ' + error.message);
+                alert(_t('dyn.scorecard.error_saving_snapshot', { msg: error.message }));
             }
         }
 

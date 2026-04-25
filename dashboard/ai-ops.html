@@ -528,6 +528,7 @@
   </div>
 
   <script>
+    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
     let costChart = null;
     let feedbackTrendChart = null;
     let toolHealthTrendChart = null;
@@ -608,7 +609,7 @@
             </div>`;
           }).join('');
         } else {
-          catsEl.innerHTML = '<div class="text-sm text-gray-400">No category data yet</div>';
+          catsEl.innerHTML = '<div class="text-sm text-gray-400">' + _t('dyn.ai_ops.no_category_data') + '</div>';
         }
 
         if (!isAdmin) {
@@ -633,10 +634,10 @@
             </div>`;
           }).join('');
         } else {
-          recentEl.innerHTML = '<div class="text-sm text-gray-400">No thumbs-down feedback yet</div>';
+          recentEl.innerHTML = '<div class="text-sm text-gray-400">' + _t('dyn.ai_ops.no_thumbs_down') + '</div>';
         }
       } catch (err) {
-        kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">Failed to load feedback stats</div>';
+        kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">' + _t('dyn.ai_ops.failed_load_feedback') + '</div>';
       }
       loadFeedbackTrend();
     }
@@ -741,7 +742,7 @@
       } catch (err) {
         console.warn('Feedback trend load error', err);
         if (wrapEl)  wrapEl.style.display  = 'none';
-        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = 'Failed to load trend data.'; }
+        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = _t('dyn.ai_ops.failed_load_trend'); }
       }
     }
 
@@ -848,7 +849,7 @@
       } catch (e) {
         console.error('Tool-health alerts load error', e);
         section.classList.remove('hidden');
-        list.innerHTML = '<p class="text-sm text-red-700" data-testid="text-tool-health-alerts-error">Failed to load tool-health alerts.</p>';
+        list.innerHTML = '<p class="text-sm text-red-700" data-testid="text-tool-health-alerts-error">' + _t('dyn.ai_ops.failed_load_alerts') + '</p>';
       }
     }
 
@@ -930,12 +931,10 @@
           : allAlerts;
         if (countBadge) countBadge.textContent = String(alerts.length);
         if (alerts.length === 0) {
-          // Distinct empty-state copy when filters are active so ops know
-          // the silence is from filtering, not an empty database.
           const filtersActive = !!severity || !!toolText || days !== 7;
           const msg = filtersActive
-            ? 'No acknowledged or resolved alerts match the current filters.'
-            : `No acknowledged or resolved alerts in the last ${days} day${days === 1 ? '' : 's'}.`;
+            ? _t('dyn.ai_ops.no_alert_history_filtered')
+            : _t('dyn.ai_ops.no_alert_history');
           list.innerHTML = `<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">${esc(msg)}</p>`;
           return;
         }
@@ -1001,7 +1000,7 @@
         }).join('');
       } catch (e) {
         console.error('Tool-health history load error', e);
-        if (list) list.innerHTML = '<p class="text-sm text-red-600" data-testid="text-tool-health-history-error">Failed to load alert history.</p>';
+        if (list) list.innerHTML = '<p class="text-sm text-red-600" data-testid="text-tool-health-history-error">' + _t('dyn.ai_ops.failed_load_alert_history') + '</p>';
       }
     }
 
@@ -1659,7 +1658,7 @@
       const el = document.getElementById('latency-table');
       try {
         const { data } = await apiFetch('/api/ai-ops/agent-latency');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No data in the last 7 days.</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_data_7_days') + '</p>'; return; }
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-agent-latency">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -1690,7 +1689,7 @@
             </tbody>
           </table>`;
       } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">Failed to load latency data.</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_latency') + '</p>';
       }
     }
 
@@ -1763,7 +1762,7 @@
           ? parseInt(versionsRes.min_feedback)
           : 5;
         if (!data.length) {
-          el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-prompts-empty">No prompt-version data in the selected window.</p>';
+          el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-prompts-empty">' + _t('dyn.ai_ops.no_prompt_data') + '</p>';
           return;
         }
 
@@ -1899,7 +1898,7 @@
         el.innerHTML = blocks;
       } catch (e) {
         console.error('Prompt versions error', e);
-        el.innerHTML = '<p class="text-red-500 text-sm">Failed to load prompt-version comparison.</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_prompt_compare') + '</p>';
       }
     }
 
@@ -1911,7 +1910,7 @@
         const { data, agents } = await apiFetch(url);
         syncToolAgentOptions(agents);
         if (!data.length) {
-          el.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tools-empty">No tool calls recorded in the last 7 days${agent ? ` for agent "${esc(agent)}"` : ''}.</p>`;
+          el.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tools-empty">${_t('dyn.ai_ops.no_tool_calls')}${agent ? ' ' + _t('dyn.ai_ops.for_agent_prefix') + '"' + esc(agent) + '"' : ''}</p>`;
           return;
         }
         el.innerHTML = `
@@ -1936,7 +1935,7 @@
             </tbody>
           </table>`;
       } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">Failed to load tool stats.</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_tools') + '</p>';
       }
     }
 
@@ -1944,7 +1943,7 @@
       const el = document.getElementById('issues-table');
       try {
         const { data } = await apiFetch('/api/ai-ops/recent-issues?limit=25');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No slow or failed calls in the last 7 days.</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_slow_calls') + '</p>'; return; }
         data.forEach(r => issueDataCache.set(String(r.id), r));
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-recent-issues">
@@ -2029,7 +2028,7 @@
           });
         });
       } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">Failed to load recent issues.</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_issues') + '</p>';
       }
     }
 
@@ -2057,19 +2056,19 @@
         renderChildren(container, childrenCache.get(parentId));
         return;
       }
-      container.innerHTML = '<span class="text-gray-400">Loading child tool calls…</span>';
+      container.innerHTML = '<span class="text-gray-400">' + _t('dyn.ai_ops.loading_children') + '</span>';
       try {
         const { data } = await apiFetch(`/api/ai-ops/calls/${encodeURIComponent(parentId)}/children`);
         childrenCache.set(parentId, data);
         renderChildren(container, data);
       } catch (e) {
-        container.innerHTML = '<span class="text-red-500">Failed to load child tool calls.</span>';
+        container.innerHTML = '<span class="text-red-500">' + _t('dyn.ai_ops.failed_load_children') + '</span>';
       }
     }
 
     function renderChildren(container, rows) {
       if (!rows || !rows.length) {
-        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">No child tool calls were recorded for this agent invocation.</span>';
+        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">' + _t('dyn.ai_ops.no_children') + '</span>';
         return;
       }
       container.innerHTML = `
@@ -2106,7 +2105,7 @@
       const el = document.getElementById('negative-table');
       try {
         const { data } = await apiFetch('/api/ai-ops/negative-feedback?limit=50');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No thumbs-down feedback in the last 30 days.</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_neg_feedback') + '</p>'; return; }
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-negative-feedback">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -2157,7 +2156,7 @@
         const { data } = await apiFetch(`/api/ai-ops/call/${encodeURIComponent(callId)}`);
         openCallDetailModal(data);
       } catch (e) {
-        alert(`Could not load call #${callId}: ${e.message || e}`);
+        alert(_t('dyn.ai_ops.could_not_load_call', { id: callId, msg: e.message || e }));
       }
     }
 
@@ -2301,8 +2300,8 @@
       const metaEl = document.getElementById('thresholds-updated-meta');
       const expiryMetaEl = document.getElementById('thresholds-expiry-meta');
       errEl.classList.add('hidden');
-      formEl.innerHTML = '<p class="text-sm text-gray-400">Loading current thresholds…</p>';
-      auditEl.innerHTML = '<p class="text-sm text-gray-400">Loading…</p>';
+      formEl.innerHTML = '<p class="text-sm text-gray-400">' + _t('dyn.ai_ops.loading_thresholds') + '</p>';
+      auditEl.innerHTML = '<p class="text-sm text-gray-400">' + _t('dyn.ai_ops.loading_short') + '</p>';
       if (expiryMetaEl) expiryMetaEl.innerHTML = '';
       try {
         const { data } = await apiFetch('/api/ai-ops/tool-health-config');
@@ -2314,19 +2313,19 @@
         renderThresholdsForm(data);
         renderThresholdsAudit(data.audit || []);
         if (data.updated_at) {
-          const who = data.updated_by ? ` by ${esc(data.updated_by)}` : '';
-          metaEl.innerHTML = `Last edited ${esc(fmtDate(data.updated_at))}${who}`;
+          const who = data.updated_by ? ' ' + _t('dyn.ai_ops.by_prefix') + esc(data.updated_by) : '';
+          metaEl.innerHTML = _t('dyn.ai_ops.last_edited_prefix') + esc(fmtDate(data.updated_at)) + who;
         } else {
-          metaEl.textContent = 'No overrides yet — running on env / compile-time defaults.';
+          metaEl.textContent = _t('dyn.ai_ops.no_overrides');
         }
         if (expiryMetaEl) {
           if (data.expires_at) {
             const cls = data.expired ? 'text-amber-700' : 'text-gray-600';
             const tag = data.expired
-              ? ' (expired — pending reaper sweep)'
-              : ' (auto-revert scheduled)';
+              ? ' (' + _t('dyn.ai_ops.tag_expired') + ')'
+              : ' (' + _t('dyn.ai_ops.tag_auto_revert') + ')';
             expiryMetaEl.className = `mt-1 ${cls}`;
-            expiryMetaEl.textContent = `Overrides expire ${fmtDate(data.expires_at)}${tag}`;
+            expiryMetaEl.textContent = _t('dyn.ai_ops.overrides_expire_prefix') + fmtDate(data.expires_at) + tag;
           } else {
             expiryMetaEl.className = 'mt-1';
             expiryMetaEl.textContent = '';
@@ -2338,7 +2337,7 @@
         auditEl.innerHTML = '';
         metaEl.textContent = '';
         if (expiryMetaEl) expiryMetaEl.textContent = '';
-        errEl.textContent = 'Failed to load tool-health config: ' + (e?.message || 'unknown error');
+        errEl.textContent = _t('dyn.ai_ops.failed_load_config') + (e?.message || 'unknown error');
         errEl.classList.remove('hidden');
       }
     }
@@ -2591,8 +2590,8 @@
       const panel = document.getElementById('thresholds-preview-result');
       if (!panel) return;
       panel.classList.remove('hidden');
-      panel.innerHTML = `<div class="p-4 text-sm text-gray-500" data-testid="text-thresholds-preview-loading">Running dry-run against the current window…</div>`;
-      setSaveStatus('Previewing…', 'info');
+      panel.innerHTML = `<div class="p-4 text-sm text-gray-500" data-testid="text-thresholds-preview-loading">${_t('dyn.ai_ops.preview_loading')}</div>`;
+      setSaveStatus(_t('dyn.ai_ops.previewing'), 'info');
       try {
         const r = await fetch('/api/ai-ops/tool-health-config/preview', {
           method: 'POST',
@@ -2603,16 +2602,16 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok) {
           const detail = body?.details ? ` (${body.details.join('; ')})` : '';
-          panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">Preview failed: ${esc(body?.error || 'HTTP ' + r.status)}${esc(detail)}</div>`;
-          setSaveStatus(`Preview failed: ${body?.error || 'HTTP ' + r.status}${detail}`, 'error');
+          panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">${_t('dyn.ai_ops.preview_failed')}${esc(body?.error || 'HTTP ' + r.status)}${esc(detail)}</div>`;
+          setSaveStatus(`${_t('dyn.ai_ops.preview_failed')}${body?.error || 'HTTP ' + r.status}${detail}`, 'error');
           return;
         }
         renderThresholdsPreview(body.data);
-        setSaveStatus('Preview ready — review impact below before saving.', 'ok');
+        setSaveStatus(_t('dyn.ai_ops.preview_ready'), 'ok');
       } catch (e) {
         console.error('Threshold preview error', e);
-        panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">Preview failed: ${esc(e?.message || 'unknown error')}</div>`;
-        setSaveStatus(`Preview failed: ${e?.message || 'unknown error'}`, 'error');
+        panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">${_t('dyn.ai_ops.preview_failed')}${esc(e?.message || 'unknown error')}</div>`;
+        setSaveStatus(`${_t('dyn.ai_ops.preview_failed')}${e?.message || 'unknown error'}`, 'error');
       }
     }
 
@@ -2755,7 +2754,7 @@
     function renderThresholdsAudit(rows) {
       const el = document.getElementById('thresholds-audit');
       if (!rows || rows.length === 0) {
-        el.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-thresholds-audit-empty">No threshold changes recorded yet.</p>';
+        el.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-thresholds-audit-empty">' + _t('dyn.ai_ops.no_threshold_changes') + '</p>';
         return;
       }
       el.innerHTML = rows.map((r, i) => {

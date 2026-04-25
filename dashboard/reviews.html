@@ -175,6 +175,7 @@
     </div>
 
     <script>
+    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
     const API = '';
     let currentReviews = [];
 
@@ -191,7 +192,7 @@
             currentReviews = data.reviews || [];
             renderReviews();
         } catch (e) {
-            document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-400">Failed to load</td></tr>';
+            document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-400">' + _t('dyn.reviews.failed_load') + '</td></tr>';
         }
 
         loadActionSummary();
@@ -211,7 +212,7 @@
     function renderReviews() {
         const tbody = document.getElementById('reviewsBody');
         if (!currentReviews.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">No management reviews found. Click "New Review" to create one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">' + _t('dyn.reviews.no_reviews') + '</td></tr>';
             return;
         }
         tbody.innerHTML = currentReviews.map(r => `
@@ -237,7 +238,7 @@
     }
 
     function showCreateModal() {
-        document.getElementById('modalTitle').textContent = 'New Management Review';
+        document.getElementById('modalTitle').textContent = _t('dyn.reviews.new_review_title');
         document.getElementById('editId').value = '';
         document.getElementById('reviewForm').reset();
         document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
@@ -248,7 +249,7 @@
         try {
             const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: 'include' });
             const review = await res.json();
-            document.getElementById('modalTitle').textContent = 'Edit Review';
+            document.getElementById('modalTitle').textContent = _t('dyn.reviews.edit_review_title');
             document.getElementById('editId').value = id;
             document.getElementById('formTitle').value = review.title || '';
             document.getElementById('formDate').value = review.review_date ? review.review_date.split('T')[0] : '';
@@ -259,7 +260,7 @@
             document.getElementById('formMinutes').value = review.minutes || '';
             document.getElementById('formOutput').value = review.output_summary || '';
             showModal('createModal');
-        } catch { alert('Failed to load review'); }
+        } catch { alert(_t('dyn.reviews.failed_load_review')); }
     }
 
     async function saveReview(e) {
@@ -284,19 +285,19 @@
             if (!res.ok) throw new Error('Save failed');
             hideModal('createModal');
             loadReviews();
-        } catch { alert('Failed to save review'); }
+        } catch { alert(_t('dyn.reviews.failed_save_review')); }
     }
 
     async function gatherInputs(id) {
-        if (!confirm('Auto-gather current QMS data as review inputs?')) return;
+        if (!confirm(_t('dyn.reviews.confirm_gather_inputs'))) return;
         try {
             const res = await fetch(`${API}/api/management-reviews/${id}/gather-inputs`, { method: 'POST', credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                alert('Inputs gathered successfully! Open the review to see the data.');
+                alert(_t('dyn.reviews.inputs_gathered'));
                 loadReviews();
             } else throw new Error();
-        } catch { alert('Failed to gather inputs'); }
+        } catch { alert(_t('dyn.reviews.failed_gather_inputs')); }
     }
 
     async function showDetail(id) {
@@ -372,7 +373,7 @@
                     </div>
                 </div>`;
             showModal('detailModal');
-        } catch { alert('Failed to load review details'); }
+        } catch { alert(_t('dyn.reviews.failed_load_details')); }
     }
 
     async function addAction(reviewId) {
@@ -380,7 +381,7 @@
         const assigned = document.getElementById('newActionAssign').value;
         const due = document.getElementById('newActionDue').value;
         const priority = document.getElementById('newActionPriority').value;
-        if (!desc || !assigned || !due) { alert('Fill in all action fields'); return; }
+        if (!desc || !assigned || !due) { alert(_t('dyn.reviews.fill_action_fields')); return; }
         try {
             const res = await fetch(`${API}/api/management-reviews/${reviewId}/actions`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
@@ -389,7 +390,7 @@
             if (!res.ok) throw new Error();
             showDetail(reviewId);
             loadActionSummary();
-        } catch { alert('Failed to add action'); }
+        } catch { alert(_t('dyn.reviews.failed_add_action')); }
     }
 
     async function completeAction(actionId) {
@@ -400,7 +401,7 @@
             });
             if (!res.ok) throw new Error();
             loadReviews();
-        } catch { alert('Failed to complete action'); }
+        } catch { alert(_t('dyn.reviews.failed_complete_action')); }
     }
 
     function showModal(id) { document.getElementById(id).classList.add('active'); }
