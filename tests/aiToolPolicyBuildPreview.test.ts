@@ -39,6 +39,7 @@ import {
 import {
   REDACTED_SENTINEL,
   redactSecretLikeStrings,
+  detectCredentialLikeFields,
 } from "../src/utils/eventLogsDatabase";
 
 let passed = 0;
@@ -115,6 +116,8 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
       result_entity_id: null,
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
+      credential_warnings:
+        params[13] != null ? JSON.parse(String(params[13])) : [],
     };
     return {
       ...empty,
@@ -440,7 +443,112 @@ async function run(): Promise<void> {
           ? ` (LEAKED: ${heuristicPayloadLeaks.map((s) => s.slice(0, 24) + "…").join(", ")})`
           : ""),
     );
+
+    // ---- (c) credential warnings surface to the operator UI (Task #477) ----
+    //
+    // Redaction at storage scrubs the secret out of the persisted row, but
+    // the AI tool boundary should ALSO emit a structured warning so the
+    // operator approval card can show "this submission contained credential-
+    // shaped values, route through the secret store next time". The warnings
+    // are computed in `enqueuePendingAction()` against the pre-redaction
+    // payload and persisted to the new `credential_warnings` JSONB column.
+    const persistedWarningsRaw = String(insertCall.params[13] ?? "[]");
+    let persistedWarnings: Array<{ path: string; kind: string; patternName?: string }>;
+    try {
+      persistedWarnings = JSON.parse(persistedWarningsRaw);
+    } catch {
+      persistedWarnings = [];
+    }
+
+    assert(
+      Array.isArray(persistedWarnings),
+      `[${policy.toolId}] credential_warnings INSERT param is a JSON array`,
+    );
+
+    assert(
+      persistedWarnings.length > 0,
+      `[${policy.toolId}] enqueue surfaces credential_warnings to the operator UI ` +
+        `(payload contained credential-shaped values that should have been flagged)`,
+    );
+
+    // The fixture interpolates regex-detectable secrets into many
+    // payload fields and ALSO heuristic-detectable secrets into
+    // `handoff_summary` / `reviewer_note`. Whichever subset of those
+    // fields the tool's payload schema actually accepts, the warning
+    // list must reference at least one of them.
+    const flaggedKinds = new Set(persistedWarnings.map((w) => w.kind));
+    assert(
+      flaggedKinds.has("regex") ||
+        flaggedKinds.has("password") ||
+        flaggedKinds.has("entropy") ||
+        flaggedKinds.has("sensitive-key"),
+      `[${policy.toolId}] credential_warnings include at least one detector kind ` +
+        `(found: ${[...flaggedKinds].join(", ") || "none"})`,
+    );
+
+    // Each warning must carry a non-empty path so the UI can show WHICH
+    // field tripped the detector — a warning with no path is useless to
+    // the reviewer.
+    assert(
+      persistedWarnings.every((w) => typeof w.path === "string" && w.path.length > 0),
+      `[${policy.toolId}] every credential_warning carries a non-empty field path`,
+    );
   }
+
+  /* -------------------------------------------------------------- *
+   * Standalone detector smoke check                                *
+   *                                                                *
+   * Runs the detector directly on a hand-built payload that mixes  *
+   * key-name, regex, and heuristic credential leaks plus prose to  *
+   * make sure each detector kind fires and that ordinary field     *
+   * names do NOT produce false positives. This is the unit-level   *
+   * complement to the policy-driven assertions above.              *
+   * -------------------------------------------------------------- */
+  console.log(`\n[detector] standalone detectCredentialLikeFields() smoke test`);
+  const detectorPayload = {
+    api_key: SECRETS.apiKey, // key-name match
+    note: `rotated to ${SECRETS.ghPat}`, // regex match (gh PAT)
+    handoff_summary: `creds: ${HEURISTIC_PASSWORD}`, // password heuristic
+    session_blob: HEURISTIC_ENTROPY, // entropy heuristic
+    title: "Quarterly review", // benign — must NOT match
+    items: [{ note: "ordinary slug-id-2026" }, { note: SECRETS.jwt }],
+  };
+  const detectorPreview = `Operator preview: token=${SECRETS.apiKey}`;
+  const warnings = detectCredentialLikeFields(detectorPayload, detectorPreview);
+
+  const kinds = new Set(warnings.map((w) => w.kind));
+  assert(kinds.has("sensitive-key"), `detector flags sensitive-keyed fields`);
+  assert(kinds.has("regex"), `detector flags vendor-prefix regex matches`);
+  assert(kinds.has("password"), `detector flags password-strength heuristic hits`);
+  assert(kinds.has("entropy"), `detector flags high-entropy heuristic hits`);
+
+  const paths = new Set(warnings.map((w) => w.path));
+  assert(paths.has("payload.api_key"), `detector path includes payload.api_key`);
+  assert(paths.has("payload.note"), `detector path includes payload.note`);
+  assert(
+    paths.has("payload.handoff_summary"),
+    `detector path includes payload.handoff_summary (heuristic)`,
+  );
+  assert(
+    paths.has("payload.session_blob"),
+    `detector path includes payload.session_blob (heuristic)`,
+  );
+  assert(
+    paths.has("payload.items[1].note"),
+    `detector recurses into arrays — payload.items[1].note flagged`,
+  );
+  assert(
+    paths.has("payload_preview"),
+    `detector also scans the optional preview string`,
+  );
+  assert(
+    !paths.has("payload.title"),
+    `detector does NOT flag ordinary prose titles (no false positive)`,
+  );
+  assert(
+    !paths.has("payload.items[0].note"),
+    `detector does NOT flag innocent slugs in array elements (no false positive)`,
+  );
 
   console.log(`\nResult: ${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exit(1);

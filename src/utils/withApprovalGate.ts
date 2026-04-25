@@ -175,6 +175,14 @@ export function withApprovalGate<
       threadId: agentCtx?.threadId ?? null,
     });
 
+    // Task #477: a payload that tripped the credential detector deserves
+    // WARNING-level severity even on a low/medium-risk tool, because it
+    // tells SOC reviewers a user accidentally pasted a key into chat.
+    const hasCredentialWarning = (pending.credential_warnings ?? []).length > 0;
+    const severity =
+      policy.riskLevel === "critical" || policy.riskLevel === "high" || hasCredentialWarning
+        ? "WARNING"
+        : "INFO";
     await logEvent({
       userId: agentCtx?.user?.userId ?? undefined,
       userEmail: agentCtx?.user?.email ?? undefined,
@@ -183,16 +191,20 @@ export function withApprovalGate<
       entityType: mapEntityType(policy.entityType),
       entityId: pending.action_code,
       entityName: policy.label,
-      description: `AI proposed ${policy.label} — queued for human approval (${pending.action_code})`,
+      description:
+        `AI proposed ${policy.label} — queued for human approval (${pending.action_code})` +
+        (hasCredentialWarning
+          ? ` [credential-shaped values detected in ${(pending.credential_warnings ?? []).length} field(s)]`
+          : ""),
       aiInvolved: true,
-      severity:
-        policy.riskLevel === "critical" || policy.riskLevel === "high"
-          ? "WARNING"
-          : "INFO",
+      severity,
       module: "ai-governance",
       newValue: {
         risk: policy.riskLevel,
         complianceRefs: policy.complianceRefs,
+        // Persist the warning structure (paths only, no raw values) so the
+        // audit trail records WHY this row was flagged at submission time.
+        credentialWarnings: pending.credential_warnings ?? [],
       },
     }).catch(() => {
       /* non-fatal */
@@ -202,17 +214,37 @@ export function withApprovalGate<
     // tool's outputSchema: `success: false` + human-readable `message`. This
     // means no change needed in the LLM reasoning — it just sees a failure
     // with a clear, actionable reason.
+    //
+    // Task #477: if the structural detector running inside
+    // `enqueuePendingAction()` flagged any payload field as
+    // credential-shaped, bubble that signal back to the LLM so the user
+    // is told NOT to paste credentials into chat. The reviewer UI also
+    // shows the warning, but mentioning it here closes the loop with
+    // the requester immediately rather than waiting for an approver to
+    // notice and explain.
+    const credentialWarnings = pending.credential_warnings ?? [];
+    const credentialNotice =
+      credentialWarnings.length > 0
+        ? ` SECURITY NOTE: the submitted payload contained ${credentialWarnings.length} ` +
+          `value(s) that look like credentials (offending field path(s): ` +
+          `${credentialWarnings.slice(0, 5).map(w => w.path).join(', ')}). ` +
+          `The reviewer will see a warning. Tell the user to use the secret ` +
+          `store / a secret reference rather than pasting raw credentials into chat, ` +
+          `and to redact and resend if this was unintentional.`
+        : '';
+
     return {
       success: false,
       queued: true,
       actionCode: pending.action_code,
       riskLevel: policy.riskLevel,
       complianceRefs: policy.complianceRefs,
+      credentialWarnings,
       message:
         `[HITL GATE] Proposed ${policy.label} has been queued for human approval ` +
         `(ticket: ${pending.action_code}, risk: ${policy.riskLevel}). ` +
         `Do NOT retry this tool. Tell the user you've prepared a draft and ask them ` +
-        `to click Approve or Reject in the chat.`,
+        `to click Approve or Reject in the chat.` + credentialNotice,
     };
   };
 

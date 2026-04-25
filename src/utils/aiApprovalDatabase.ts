@@ -21,7 +21,12 @@
 
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
-import { redactSensitiveDeep, redactSecretLikeStrings } from './eventLogsDatabase';
+import {
+  redactSensitiveDeep,
+  redactSecretLikeStrings,
+  detectCredentialLikeFields,
+  type CredentialWarning,
+} from './eventLogsDatabase';
 import { logger } from './logger';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -62,6 +67,16 @@ export interface PendingAction {
   created_at: Date;
   expires_at: Date;
   payload_checksum: string;
+  /**
+   * Structured warnings emitted by `detectCredentialLikeFields()` at
+   * submission time (Task #477). One entry per offending field path so
+   * the operator approval UI can highlight which payload value(s) look
+   * like credentials and recommend routing the real secret through the
+   * secret store instead of through chat. Always present (defaults to
+   * `[]`) on rows enqueued after the migration; legacy rows hydrate to
+   * `[]` through the column default.
+   */
+  credential_warnings: CredentialWarning[];
 }
 
 export interface EnqueueInput {
@@ -113,8 +128,20 @@ export async function initAIApprovalTable(): Promise<void> {
         result_entity_id       VARCHAR(100),
 
         created_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        expires_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW() + INTERVAL '24 hours'
+        expires_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW() + INTERVAL '24 hours',
+
+        -- Task #477: structured warnings emitted by the AI tool boundary
+        -- when the submitted payload contains values that look like
+        -- credentials. Stored as JSONB so the operator approval UI can
+        -- enumerate the offending field paths. Defaults to '[]' so
+        -- pre-migration rows hydrate to an empty list.
+        credential_warnings    JSONB        NOT NULL DEFAULT '[]'::jsonb
       );
+
+      -- Backfill the column on existing deployments where CREATE TABLE
+      -- was a no-op (the table already existed with the older schema).
+      ALTER TABLE ai_pending_actions
+        ADD COLUMN IF NOT EXISTS credential_warnings JSONB NOT NULL DEFAULT '[]'::jsonb;
 
       CREATE INDEX IF NOT EXISTS idx_ai_pending_actions_status_created
         ON ai_pending_actions(status, created_at DESC);
@@ -175,6 +202,19 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   // checksummed, and BEFORE it is returned to any caller — so no downstream
   // consumer (audit dashboard, /approvals API, audit log backfill) can
   // re-leak the original secret.
+  // SECURITY (Task #477 — catch credential leaks at the AI tool boundary):
+  // Run the structural detector against the ORIGINAL (pre-redaction)
+  // payload + preview so we can surface a "this submission contained
+  // credential-shaped values" warning to the human reviewer alongside the
+  // usual scrubbing. The redaction below removes the secrets from the
+  // persisted row, but without these warnings the operator would never
+  // know the submitter accidentally pasted a key — so they couldn't
+  // coach the requester to use the secret store next time.
+  const credentialWarnings = detectCredentialLikeFields(
+    input.payload,
+    input.payloadPreview ?? null,
+  );
+
   const safePayload = redactSensitiveDeep(input.payload);
   const checksum = checksumPayload(safePayload);
 
@@ -194,8 +234,8 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
           action_code, tool_id, tool_label, payload, payload_preview, payload_checksum,
           risk_level, compliance_refs,
           requested_by_user_id, requested_by_email, requested_by_name, thread_id,
-          expires_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW() + ($13 || ' hours')::interval)
+          expires_at, credential_warnings
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW() + ($13 || ' hours')::interval, $14)
         RETURNING *`,
         [
           code,
@@ -211,6 +251,7 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
           input.requestedByName,
           input.threadId,
           String(ttlHours),
+          JSON.stringify(credentialWarnings),
         ]
       );
       return res.rows[0];

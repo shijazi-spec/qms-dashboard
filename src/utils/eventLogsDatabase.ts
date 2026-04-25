@@ -228,6 +228,172 @@ export function redactCredentialLikeTokens(input: unknown): unknown {
   });
 }
 
+/* -------------------------------------------------------------------------
+ * Credential-leak DETECTION (read-only, structural)
+ * -------------------------------------------------------------------------
+ * `redactSecretLikeStrings()` and friends mutate the value graph to scrub
+ * secrets out of strings before they hit storage. That defends the
+ * persisted row but says nothing about the original payload — the raw
+ * value still passed through the AI tool call, was visible to model
+ * context, and may surface in operator-facing previews assembled outside
+ * the redaction path.
+ *
+ * `detectCredentialLikeFields()` runs the SAME three-layer check
+ * (key-name deny-list + vendor-prefix regex + heuristic token scanner)
+ * NON-DESTRUCTIVELY against an input value graph and returns a structured
+ * list of offending field paths.  Callers (notably the AI approval-gate
+ * boundary in `withApprovalGate.ts` / `enqueuePendingAction()`) attach
+ * the warnings to the pending row so the operator approval UI can show
+ * "this payload contains values that look like credentials — route the
+ * real secret through the secret store, not through chat" alongside the
+ * usual redaction (Task #477).
+ *
+ * Path notation matches the JSON pointer convention used in our other
+ * audit messages — e.g. `payload.note`, `payload.items[2].secret`,
+ * `payload_preview` for the free-form preview string.
+ * -------------------------------------------------------------------------*/
+
+export type CredentialWarningKind =
+  | 'sensitive-key'  // value sits under a deny-listed key (api_key, password, …)
+  | 'regex'          // value contains a substring matching a SECRET_LIKE_PATTERN
+  | 'password'       // a token in the value matches the password-strength heuristic
+  | 'entropy';       // a token in the value matches the high-entropy heuristic
+
+export interface CredentialWarning {
+  /** JSON-pointer-ish path from the supplied root, e.g. `payload.items[2].note`. */
+  path: string;
+  /** Which detector fired — used by the UI to colour-code / explain the hit. */
+  kind: CredentialWarningKind;
+  /** When kind === 'regex', the SECRET_LIKE_PATTERNS entry name (jwt / sk-key / …). */
+  patternName?: string;
+}
+
+function detectInString(
+  value: string,
+  parentKey: string | undefined,
+  path: string,
+  out: CredentialWarning[],
+): void {
+  if (value.length === 0) return;
+
+  // 1) Key-name deny-list — only meaningful when the string is the value
+  //    of a sensitive-named field (we cannot detect "the user named this
+  //    field `apiKey`" purely from the string itself).
+  if (parentKey && isSensitiveField(parentKey)) {
+    out.push({ path, kind: 'sensitive-key' });
+    return;
+  }
+
+  // 2) Vendor-prefix regex deny-list (sk-…, ghp_…, JWT, bcrypt, AKIA, …).
+  //    Use `String#match` rather than `RegExp#test` so the global flag's
+  //    `lastIndex` cursor is not mutated across calls (would otherwise
+  //    cause spurious misses on the second invocation of the same regex).
+  for (const { name, regex } of SECRET_LIKE_PATTERNS) {
+    if (value.match(regex)) {
+      out.push({ path, kind: 'regex', patternName: name });
+      return;
+    }
+  }
+
+  // 3) Heuristic token scanner — split the string on whitespace and check
+  //    each non-trivial token. This catches credentials interpolated into
+  //    prose like `note: "rotated to P@ssw0rd!_PlainText"`. Surrounding
+  //    quoting punctuation is stripped exactly the way the redactor does
+  //    so the two stay consistent.
+  for (const token of value.split(/\s+/)) {
+    if (token.length < 12 || token.length > 80) continue;
+    if (isPasswordLikeToken(token)) {
+      out.push({ path, kind: 'password' });
+      return;
+    }
+    if (isHighEntropyToken(token)) {
+      out.push({ path, kind: 'entropy' });
+      return;
+    }
+    const lead = TRIM_LEAD_RE.exec(token)?.[0] ?? '';
+    const tail = TRIM_TAIL_RE.exec(token)?.[0] ?? '';
+    if (lead.length > 0 || tail.length > 0) {
+      const core = token.slice(lead.length, token.length - tail.length);
+      if (core.length >= 12 && core.length <= 80) {
+        if (isPasswordLikeToken(core)) {
+          out.push({ path, kind: 'password' });
+          return;
+        }
+        if (isHighEntropyToken(core)) {
+          out.push({ path, kind: 'entropy' });
+          return;
+        }
+      }
+    }
+  }
+}
+
+function detectWalk(
+  value: unknown,
+  path: string,
+  parentKey: string | undefined,
+  out: CredentialWarning[],
+): void {
+  if (value === null || value === undefined) return;
+  if (typeof value === 'string') {
+    detectInString(value, parentKey, path, out);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      detectWalk(value[i], `${path}[${i}]`, undefined, out);
+    }
+    return;
+  }
+  if (typeof value === 'object') {
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      detectWalk(child, `${path}.${key}`, key, out);
+    }
+  }
+}
+
+/**
+ * Non-destructively scans a payload (and optional preview string) for
+ * credential-shaped values. Returns one warning per offending leaf so the
+ * operator UI can render an "offending fields" list. Used by the AI
+ * approval gate at submission time — see Task #477.
+ *
+ * The returned array is intentionally bounded (`maxWarnings` defaults to
+ * 32) so a pathologically large payload cannot DoS the approval list view.
+ */
+export function detectCredentialLikeFields(
+  payload: unknown,
+  preview?: string | null,
+  options: { rootPath?: string; previewPath?: string; maxWarnings?: number } = {},
+): CredentialWarning[] {
+  const rootPath = options.rootPath ?? 'payload';
+  const previewPath = options.previewPath ?? 'payload_preview';
+  const maxWarnings = options.maxWarnings ?? 32;
+
+  const collected: CredentialWarning[] = [];
+  detectWalk(payload, rootPath, undefined, collected);
+  if (typeof preview === 'string' && preview.length > 0) {
+    detectInString(preview, undefined, previewPath, collected);
+  }
+
+  // Deduplicate identical {path,kind,patternName} entries — a payload that
+  // recursively embeds the same value (cyclic-ish refs serialised twice)
+  // should not flood the warning list.
+  const seen = new Set<string>();
+  const deduped: CredentialWarning[] = [];
+  for (const w of collected) {
+    const key = `${w.path}|${w.kind}|${w.patternName ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(w);
+    if (deduped.length >= maxWarnings) break;
+  }
+  return deduped;
+}
+
+/** Re-exported for unit tests and any caller that needs the raw heuristic. */
+export { isPasswordLikeToken, isHighEntropyToken };
+
 /**
  * Replaces credential-shaped substrings inside a free-form string with
  * REDACTED_SENTINEL.  Non-string inputs (and null/undefined) are returned
