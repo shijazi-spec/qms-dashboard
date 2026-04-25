@@ -66,6 +66,27 @@ const PII_PATTERNS: [RegExp, string][] = [
   [/\b(?:password|secret|token|key|auth)\s*[:=]\s*\S+/gi, '[REDACTED]'],
 ];
 
+/**
+ * Scrub a string destined for the `ai_call_metrics.error_message` TEXT column.
+ *
+ * Tool / LLM error strings frequently echo the input that triggered them
+ * (e.g. "Connection failed with key sk-live-…"), so we route every write
+ * path through the regex deny-list in `redactSecretLikeStrings()` BEFORE
+ * truncating to the column's 500-char budget. Returns null for empty input
+ * so callers can pass the redacted result straight into a SQL parameter.
+ *
+ * Mirrors the protection already applied to `prompt_preview`,
+ * `tool_input_preview`, `tool_output_preview`, and the `execution_result.error`
+ * leaf in `ai_pending_actions` (Task #256).
+ */
+export function redactErrorMessageForStorage(
+  message: string | null | undefined,
+): string | null {
+  if (!message) return null;
+  const scrubbed = String(redactSecretLikeStrings(message));
+  return scrubbed.slice(0, 500);
+}
+
 export function redactPromptPreview(prompt: string, maxLen = 300): string {
   // Run the secret-like deny list (sk-…, ghp_…, JWTs, bcrypt hashes, AWS
   // access keys, etc.) BEFORE the basic PII_PATTERNS pass so prompt_preview
@@ -236,7 +257,7 @@ export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number |
         cost,
         row.success,
         row.error_class ?? null,
-        row.error_message ? row.error_message.slice(0, 500) : null,
+        redactErrorMessageForStorage(row.error_message),
         row.prompt_preview ?? null,
         row.tool_input_preview ?? null,
         row.tool_output_preview ?? null,
@@ -337,7 +358,7 @@ async function finalizeAiCallMetric(
         cost,
         finals.success,
         finals.errorClass ?? null,
-        finals.errorMessage ? finals.errorMessage.slice(0, 500) : null,
+        redactErrorMessageForStorage(finals.errorMessage),
       ]
     );
   } catch (err) {
