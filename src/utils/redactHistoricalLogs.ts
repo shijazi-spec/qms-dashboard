@@ -64,7 +64,7 @@ const BREADCRUMB_KEY = "_redacted_at";
  * workspace root in either case without relying on package.json detection
  * (Mastra places its own package.json inside .mastra/output/).
  */
-function resolveAuditEvidenceDir(): string {
+export function resolveAuditEvidenceDir(): string {
   return path.resolve(__dirname, "../../audit-evidence");
 }
 

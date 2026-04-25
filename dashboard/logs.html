@@ -113,6 +113,26 @@
             </div>
         </div>
 
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-redaction-sweep">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Last Redaction Sweep</h3>
+                        <p class="text-sm text-gray-500">Boot-time secret-redaction status</p>
+                    </div>
+                </div>
+                <span id="sweepStatusBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" data-testid="status-redaction-sweep">Loading...</span>
+            </div>
+            <div id="sweepBody" class="text-sm text-gray-700">
+                <p class="text-gray-500" data-testid="text-sweep-loading">Loading last sweep status...</p>
+            </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="logs.sec_activity">Log Activity (Last 7 Days)</h3>
             <div class="chart-container">
@@ -596,9 +616,121 @@
             return streamingDownloadFromEvent(event || null, url, { filename: `event-logs-${ts}.csv` });
         }
 
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+            });
+        }
+
+        function formatSweepTimestamp(iso) {
+            if (!iso) return 'Unknown';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return escapeHtml(iso);
+            return d.toLocaleString();
+        }
+
+        function renderSweepBreakdownRow(label, info) {
+            if (info && typeof info === 'object' && 'skipped' in info) {
+                return '<tr>' +
+                    '<td class="py-1 pr-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                    '<td class="py-1 text-gray-400 italic">skipped (' + escapeHtml(info.skipped) + ')</td>' +
+                    '</tr>';
+            }
+            const updated = info && typeof info === 'object' && 'rows_updated' in info ? info.rows_updated : info;
+            const scanned = info && typeof info === 'object' && 'scanned' in info ? info.scanned : null;
+            let value = escapeHtml(updated == null ? 0 : updated);
+            if (scanned !== null) value += ' <span class="text-gray-400">(scanned ' + escapeHtml(scanned) + ')</span>';
+            return '<tr>' +
+                '<td class="py-1 pr-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                '<td class="py-1 text-gray-900 font-medium">' + value + '</td>' +
+                '</tr>';
+        }
+
+        function renderRedactionSweep(payload) {
+            const badge = document.getElementById('sweepStatusBadge');
+            const body = document.getElementById('sweepBody');
+            if (!badge || !body) return;
+
+            if (!payload || !payload.recorded || !payload.sweep) {
+                badge.textContent = 'No sweep recorded yet';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700';
+                body.innerHTML = '<p class="text-gray-500" data-testid="text-sweep-empty">' +
+                    'No on-boot redaction sweep has been recorded yet. The status will appear here after the next application startup.' +
+                    '</p>';
+                return;
+            }
+
+            const sweep = payload.sweep;
+            const total = Number(sweep.total_rows_updated || 0);
+            badge.textContent = total === 0 ? 'Clean (0 rows redacted)' : total + ' rows redacted';
+            badge.className = 'px-3 py-1 rounded-full text-xs font-medium ' +
+                (total === 0 ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700');
+
+            const rows = [
+                renderSweepBreakdownRow('event_logs', sweep.event_logs_updated),
+                renderSweepBreakdownRow('nc_change_history', sweep.nc_change_history_updated),
+                renderSweepBreakdownRow('  ↳ change_reason', sweep.nc_change_history_change_reason_updated),
+                renderSweepBreakdownRow('capa_change_history', sweep.capa_change_history_updated),
+                renderSweepBreakdownRow('  ↳ change_reason', sweep.capa_change_history_change_reason_updated),
+                renderSweepBreakdownRow('ai_pending_actions', sweep.ai_pending_actions),
+                renderSweepBreakdownRow('ai_pending_actions credential warnings', sweep.ai_pending_actions_credential_warnings),
+                renderSweepBreakdownRow('ai_call_metrics', sweep.ai_call_metrics)
+            ].join('');
+
+            body.innerHTML =
+                '<div class="flex flex-wrap gap-x-8 gap-y-2 mb-4">' +
+                    '<div><span class="text-gray-500">Sweep timestamp:</span> ' +
+                        '<span class="text-gray-900 font-medium" data-testid="text-sweep-timestamp">' +
+                            escapeHtml(formatSweepTimestamp(sweep.sweep_timestamp)) +
+                        '</span></div>' +
+                    '<div><span class="text-gray-500">Total rows updated:</span> ' +
+                        '<span class="text-gray-900 font-medium" data-testid="text-sweep-total">' +
+                            escapeHtml(total) +
+                        '</span></div>' +
+                '</div>' +
+                '<div class="overflow-x-auto"><table class="text-sm" data-testid="table-sweep-breakdown">' +
+                    '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
+                '</table></div>';
+        }
+
+        async function loadRedactionSweepStatus() {
+            const badge = document.getElementById('sweepStatusBadge');
+            const body = document.getElementById('sweepBody');
+            try {
+                const response = await fetch('/api/admin/redaction-sweep/status', { credentials: 'same-origin' });
+                if (response.status === 401 || response.status === 403) {
+                    if (badge) {
+                        badge.textContent = 'Admin only';
+                        badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500';
+                    }
+                    if (body) {
+                        body.innerHTML = '<p class="text-gray-500" data-testid="text-sweep-forbidden">' +
+                            'Sign in as an administrator to view the redaction sweep status.' +
+                            '</p>';
+                    }
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                renderRedactionSweep(data);
+            } catch (err) {
+                console.error('Error loading redaction sweep status:', err);
+                if (badge) {
+                    badge.textContent = 'Unavailable';
+                    badge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700';
+                }
+                if (body) {
+                    body.innerHTML = '<p class="text-red-600" data-testid="text-sweep-error">' +
+                        'Could not load the redaction sweep status. Please try again later.' +
+                        '</p>';
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             loadStats();
             loadLogs(1);
+            loadRedactionSweepStatus();
             refreshLogsExportHint();
 
             const filterIds = ['filterFromDate', 'filterToDate', 'filterActionType', 'filterEntityType', 'filterModule', 'filterSeverity', 'filterAI', 'filterSearch'];

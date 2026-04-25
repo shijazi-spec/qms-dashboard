@@ -75,6 +75,8 @@ export const ROUTE_MANIFEST = {
     { path: '/api/system/events', method: 'GET', file: 'routes/adminApiRoutes.ts' },
     { path: '/api/activity/feed', method: 'GET', file: 'routes/adminApiRoutes.ts' },
     { path: '/api/activity/stats', method: 'GET', file: 'routes/adminApiRoutes.ts' },
+    { path: '/api/admin/rate-limit-stats', method: 'GET', file: 'routes/adminApiRoutes.ts' },
+    { path: '/api/admin/redaction-sweep/status', method: 'GET', file: 'routes/adminApiRoutes.ts' },
   ],
 
   qms: [

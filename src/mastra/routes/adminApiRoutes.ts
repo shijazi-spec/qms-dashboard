@@ -533,4 +533,60 @@ export const adminApiRoutes = [
       };
     },
   },
+  {
+    path: "/api/admin/redaction-sweep/status",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) return c.json({ error: 'Insufficient permissions' }, 403);
+          const fs = await import("fs");
+          const path = await import("path");
+          const { resolveAuditEvidenceDir } = await import("../../utils/redactHistoricalLogs");
+          const summaryPath = path.join(resolveAuditEvidenceDir(), "last-sweep.json");
+          if (!fs.existsSync(summaryPath)) {
+            return c.json({ recorded: false });
+          }
+          const raw = fs.readFileSync(summaryPath, "utf8");
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (parseErr) {
+            console.error("Error parsing last-sweep.json:", parseErr);
+            return c.json({ error: "Sweep summary file is malformed" }, 500);
+          }
+          // Lightweight shape validation against SweepResult so a tampered
+          // or pre-format-change file does not silently render as garbage
+          // on the dashboard. We only check the top-level keys the UI
+          // actually reads — the per-table sub-objects already have a
+          // `skipped` fallback path on the frontend.
+          const isObj = (v: unknown): v is Record<string, unknown> =>
+            !!v && typeof v === "object" && !Array.isArray(v);
+          const isSweepShape = (v: unknown): boolean => {
+            if (!isObj(v)) return false;
+            return (
+              typeof v.sweep_timestamp === "string" &&
+              typeof v.event_logs_updated === "number" &&
+              typeof v.nc_change_history_updated === "number" &&
+              typeof v.capa_change_history_updated === "number" &&
+              typeof v.total_rows_updated === "number"
+            );
+          };
+          if (!isSweepShape(parsed)) {
+            console.error(
+              "last-sweep.json does not match expected SweepResult shape",
+            );
+            return c.json(
+              { error: "Sweep summary file has an unexpected shape" },
+              500,
+            );
+          }
+          return c.json({ recorded: true, sweep: parsed });
+        } catch (error) {
+          console.error("Error reading redaction sweep status:", error);
+          return c.json({ error: "Failed to read redaction sweep status" }, 500);
+        }
+      };
+    },
+  },
 ];
