@@ -711,6 +711,41 @@
                 '</tr>';
         }
 
+        /* ----------------------------------------------------------------
+         * Task #625: surface the flagged_action_codes evidence list (added
+         * by Task #488 to last-sweep.json) directly in the dashboard panel
+         * so operators don't have to crack open the raw JSON file to see
+         * WHICH legacy approval rows the credential sweep retroactively
+         * flagged. Each code links to the AI approvals page with the
+         * existing ?code= deep link, which auto-opens the detail modal
+         * for that ticket. We render nothing when the list is empty (the
+         * common "clean sweep" case) to avoid visual noise.
+         * ---------------------------------------------------------------- */
+        function renderFlaggedActionCodesRow(info) {
+            if (!info || typeof info !== 'object' || 'skipped' in info) return '';
+            const codes = Array.isArray(info.flagged_action_codes) ? info.flagged_action_codes : [];
+            if (codes.length === 0) return '';
+            const truncated = Number(info.flagged_action_codes_truncated || 0);
+            const links = codes.map(function (code) {
+                const safe = escapeHtml(code);
+                return '<a href="/ai-approvals?code=' + encodeURIComponent(code) + '" ' +
+                    'class="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline" ' +
+                    'data-testid="link-flagged-action-code-' + safe + '">' + safe + '</a>';
+            }).join(' <span class="text-gray-300">·</span> ');
+            let suffix = '';
+            if (truncated > 0) {
+                suffix = ' <span class="text-gray-400 text-xs" data-testid="text-flagged-action-codes-truncated">' +
+                    '+' + escapeHtml(truncated) + ' more (see audit-evidence/last-sweep.json)' +
+                    '</span>';
+            }
+            return '<tr data-testid="row-flagged-action-codes">' +
+                '<td class="py-1 pr-4 text-gray-500 align-top">  ↳ flagged approvals</td>' +
+                '<td class="py-1 text-gray-900">' +
+                    '<div class="flex flex-wrap gap-x-2 gap-y-1 items-center">' + links + suffix + '</div>' +
+                '</td>' +
+                '</tr>';
+        }
+
         function renderRedactionSweep(payload) {
             const badge = document.getElementById('sweepStatusBadge');
             const body = document.getElementById('sweepBody');
@@ -739,6 +774,7 @@
                 renderSweepBreakdownRow('  ↳ change_reason', sweep.capa_change_history_change_reason_updated),
                 renderSweepBreakdownRow('ai_pending_actions', sweep.ai_pending_actions),
                 renderSweepBreakdownRow('ai_pending_actions credential warnings', sweep.ai_pending_actions_credential_warnings),
+                renderFlaggedActionCodesRow(sweep.ai_pending_actions_credential_warnings),
                 renderSweepBreakdownRow('ai_call_metrics', sweep.ai_call_metrics)
             ].join('');
 
