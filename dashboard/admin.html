@@ -697,6 +697,47 @@
                         </div>
                     </div>
 
+                    <!-- 24h spike summary card -->
+                    <div class="mb-6 border rounded-xl overflow-hidden">
+                        <div class="flex items-center justify-between px-4 py-3 bg-amber-50 border-b border-amber-100">
+                            <div class="flex items-center gap-2">
+                                <span id="spike24h-badge" data-testid="badge-spike24h" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">24h Spike</span>
+                                <h3 class="text-sm font-semibold text-gray-700">Last 24 h — rate-limit spike summary</h3>
+                            </div>
+                            <p class="text-xs text-gray-500">From <code class="text-xs">system_events</code> audit rows</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-white">
+                            <div class="bg-gray-50 rounded-lg p-4 border">
+                                <p class="text-xs uppercase tracking-wide text-gray-500">Total 429 events (24h)</p>
+                                <p class="text-2xl font-semibold text-gray-900 mt-1" id="spike24h-total" data-testid="text-spike24h-total">—</p>
+                                <p class="text-xs text-gray-500 mt-1">Logged audit rows in the last 24 hours</p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4 border">
+                                <p class="text-xs uppercase tracking-wide text-gray-500">Total suppressed (24h)</p>
+                                <p class="text-2xl font-semibold text-gray-900 mt-1" id="spike24h-suppressed" data-testid="text-spike24h-suppressed">—</p>
+                                <p class="text-xs text-gray-500 mt-1">Sum of <code class="text-xs">suppressed_in_previous_minute</code></p>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 bg-white">
+                            <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 offending IPs (24h)</p>
+                            <div class="overflow-x-auto border rounded-lg">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-gray-50 text-gray-600">
+                                        <tr>
+                                            <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
+                                            <th scope="col" class="px-4 py-2 text-left font-medium">IP</th>
+                                            <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
+                                            <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="spike24h-top-ips" data-testid="table-spike24h-top-ips">
+                                        <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-sm font-semibold text-gray-700">Top 10 keys this window</h3>
                         <p class="text-xs text-gray-500" id="rate-limits-window">Window: —</p>
@@ -2274,6 +2315,37 @@
                                 '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
                                 '<td class="px-4 py-2 font-mono text-xs text-gray-800">' + escapeHtml(row.key) + '</td>' +
                                 '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.count)) + '</td>' +
+                            '</tr>'
+                        )
+                        .join("");
+                }
+
+                // 24h spike summary card
+                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [] };
+                document.getElementById("spike24h-total").textContent = String(spike.total429 ?? 0);
+                document.getElementById("spike24h-suppressed").textContent = String(spike.totalSuppressed ?? 0);
+
+                // Colour the badge red when the 24h total is non-zero
+                const badge = document.getElementById("spike24h-badge");
+                if (spike.total429 > 0) {
+                    badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200";
+                    badge.textContent = "24h Spike \u26A0";
+                } else {
+                    badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200";
+                    badge.textContent = "24h Spike \u2714";
+                }
+
+                const spikeTbody = document.getElementById("spike24h-top-ips");
+                if (!spike.topIps || spike.topIps.length === 0) {
+                    spikeTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">No 429 events in the last 24 hours</td></tr>';
+                } else {
+                    spikeTbody.innerHTML = spike.topIps
+                        .map((row, i) =>
+                            '<tr class="border-t" data-testid="row-spike24h-ip-' + i + '">' +
+                                '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
+                                '<td class="px-4 py-2 font-mono text-xs text-gray-800">' + escapeHtml(row.ip) + '</td>' +
+                                '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
+                                '<td class="px-4 py-2 text-right text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
                             '</tr>'
                         )
                         .join("");

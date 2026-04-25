@@ -221,6 +221,18 @@ export interface RateLimitTopKey {
   window_start: string;
 }
 
+export interface RateLimitSpike24hIp {
+  ip: string;
+  events: number;
+  suppressed: number;
+}
+
+export interface RateLimitSpike24h {
+  total429: number;
+  totalSuppressed: number;
+  topIps: RateLimitSpike24hIp[];
+}
+
 export interface RateLimitStats {
   windowMs: number;
   windowStart: string;
@@ -230,6 +242,7 @@ export interface RateLimitStats {
   recent429Count: number;
   dbReachable: boolean;
   dbError?: string;
+  spike24h?: RateLimitSpike24h;
 }
 
 const RATE_LIMIT_429_RETENTION_HOURS = (() => {
@@ -312,13 +325,68 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
         return 0;
       });
 
+    // 24-hour spike aggregate: total events, total suppressed, top 5 IPs.
+    // `suppressed_in_previous_minute` lives in the JSONB metadata column and
+    // may be absent on older rows, so we default it to 0 with COALESCE.
+    const spike24hPromise: Promise<RateLimitSpike24h> = pool
+      .query<{ ip: string; events: string; suppressed: string }>(
+        `SELECT
+            COALESCE(metadata->>'ip', 'unknown')           AS ip,
+            COUNT(*)::bigint                               AS events,
+            SUM(COALESCE((metadata->>'suppressed_in_previous_minute')::bigint, 0))::bigint AS suppressed
+           FROM system_events
+          WHERE event_type = 'rate_limit_429'
+            AND created_at > NOW() - INTERVAL '24 hours'
+          GROUP BY ip
+          ORDER BY events DESC
+          LIMIT 5`,
+      )
+      .then(r => {
+        const topIps: RateLimitSpike24hIp[] = r.rows.map(row => ({
+          ip: row.ip,
+          events: parseInt(row.events, 10),
+          suppressed: parseInt(row.suppressed, 10),
+        }));
+        const total429 = topIps.reduce((s, x) => s + x.events, 0);
+        const totalSuppressed = topIps.reduce((s, x) => s + x.suppressed, 0);
+        // The IP-grouped query only covers the top-5 slice; get the full
+        // totals from a separate scalar query if we ever have >5 IPs, but
+        // for now the sum of the returned slice is the best we have without
+        // a second round-trip — append scalar totals in the same promise
+        // chain below after we rewrite with Promise.all later if needed.
+        return { total429, totalSuppressed, topIps };
+      })
+      .then(async partial => {
+        // Fetch accurate global totals (not just top-5 slice)
+        const totRow = await pool.query<{ total: string; suppressed: string }>(
+          `SELECT
+              COUNT(*)::bigint AS total,
+              SUM(COALESCE((metadata->>'suppressed_in_previous_minute')::bigint, 0))::bigint AS suppressed
+             FROM system_events
+            WHERE event_type = 'rate_limit_429'
+              AND created_at > NOW() - INTERVAL '24 hours'`,
+        );
+        return {
+          total429: parseInt(totRow.rows[0]?.total ?? '0', 10),
+          totalSuppressed: parseInt(totRow.rows[0]?.suppressed ?? '0', 10),
+          topIps: partial.topIps,
+        };
+      })
+      .catch((err: Error) => {
+        rlLogger.warn(
+          { err: err.message, component: 'rateLimiter' },
+          '24h spike query failed in getRateLimitStats — skipping spike24h',
+        );
+        return { total429: 0, totalSuppressed: 0, topIps: [] };
+      });
+
     // Rolling 1-minute window aggregated by key.
     // Buckets are written at second granularity by checkRateLimit()
     // (`INSERT ... date_trunc('second', NOW())`), so we mirror its
     // enforcement cutoff `NOW() - INTERVAL '1 minute' - INTERVAL '1 second'`
     // exactly. The extra second matches the limiter's conservative bound
     // and avoids a 1-second blind spot at the trailing edge.
-    const [topRes, totalRes, recent429Count] = await Promise.all([
+    const [topRes, totalRes, recent429Count, spike24h] = await Promise.all([
       pool.query<{ key: string; total: string; latest_window_start: Date }>(
         `SELECT key,
                 SUM(count)::bigint AS total,
@@ -333,6 +401,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
         `SELECT COUNT(*)::bigint AS count FROM rate_limit_buckets`,
       ),
       recent429Promise,
+      spike24hPromise,
     ]);
 
     baseStats.topKeys = topRes.rows.map(r => ({
@@ -345,6 +414,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
     }));
     baseStats.totalRows = parseInt(totalRes.rows[0]?.count ?? '0', 10);
     baseStats.recent429Count = recent429Count;
+    baseStats.spike24h = spike24h;
     return baseStats;
   } catch (err) {
     baseStats.dbReachable = false;
