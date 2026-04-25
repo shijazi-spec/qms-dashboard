@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 /**
- * WalaPlus dashboard — RTL physical-direction class guardrail (Task #315).
+ * WalaPlus dashboard — RTL physical-direction class guardrail
+ * (Tasks #315 / #628).
  *
  * The dashboard supports Arabic (RTL) via `html[dir="rtl"]` set by
  * `dashboard/js/i18n.js`. Per the "RTL Layout Convention" section of
  * `replit.md`, layout details that should mirror in RTL must be expressed
  * with CSS logical-direction utilities (`text-start`, `border-s-4`, `ms-2`,
- * `me-2`, …) — NOT physical-direction Tailwind classes (`text-left`,
- * `text-right`, `border-l-4`, `border-r-4`, `ml-*`, `mr-*`, …). Physical
- * classes pin the layout to LTR and silently break the Arabic experience.
+ * `me-2`, `rounded-s-lg`, `gap-2`, …) — NOT physical-direction Tailwind
+ * classes (`text-left`, `text-right`, `border-l-4`, `border-r-4`, `ml-*`,
+ * `mr-*`, `space-x-*`, `rounded-l-*`, `rounded-r-*`, …). Physical classes
+ * pin the layout to LTR and silently break the Arabic experience.
  *
  * This guard scans `dashboard/*.html` and fails (exit 1) when it spots any
- * of the three high-impact patterns developers most commonly reintroduce on
- * new pages:
+ * of the high-impact patterns developers most commonly reintroduce on new
+ * pages:
  *
  *   1. `<th>` elements whose `class="…"` contains `text-left` or `text-right`
  *      → use `text-start` / `text-end` instead (table headers must mirror).
@@ -22,6 +24,19 @@
  *   3. `<button>` elements whose `class="…"` contains `ml-<n>` or `mr-<n>`
  *      → use `ms-<n>` / `me-<n>` instead (icon gutters / button margins
  *      must flip with writing direction).
+ *   4. Any element whose `class="…"` contains `space-x-<n>`
+ *      → use `gap-<n>` instead. Tailwind's `space-x-*` compiles to a
+ *      physical `margin-left` on the children's `> * + *` selector and
+ *      does not flip in RTL; `gap-*` is direction-neutral.
+ *   5. Any element whose `class="…"` contains `rounded-l-*` or `rounded-r-*`
+ *      → use `rounded-s-*` / `rounded-e-*` instead (so the rounded edge
+ *      lands on the inline-start / inline-end side in both writing
+ *      directions). Bare `rounded-l` / `rounded-r` (no value) are also
+ *      flagged.
+ *   6. Any non-`<th>` element whose `class="…"` contains `text-left` or
+ *      `text-right` (e.g. `<td>`, `<div>`, `<p>`, `<li>`, `<span>`) →
+ *      use `text-start` / `text-end` instead (so cell values, headings,
+ *      and inline labels mirror in Arabic). Rule 1 still owns `<th>`.
  *
  * The scan is HTML-tag aware (the same tokeniser used by
  * `scripts/check-handlers.cjs`): only attributes inside real opening tags
@@ -38,7 +53,8 @@
  * HTML files (or removing a file from an allowlist) are subject to the
  * full rule and will fail CI immediately. Per-rule allowlisting also
  * means an existing page that, say, has legacy `<th text-left>` rows is
- * still blocked from picking up a new `border-l-4` accent card.
+ * still blocked from picking up a new `border-l-4` accent card or a new
+ * `space-x-2` flex group.
  *
  * Per-line opt-out
  * ----------------
@@ -127,6 +143,38 @@ const ALLOWLISTS = {
     "dashboard/tablef.html",
     "dashboard/users.html",
   ]),
+  spaceX: new Set([
+    "dashboard/a11y.html",
+    "dashboard/admin.html",
+    "dashboard/ai-ops.html",
+    "dashboard/calls.html",
+    "dashboard/crm.html",
+    "dashboard/executive.html",
+    "dashboard/feedback.html",
+    "dashboard/index.html",
+    "dashboard/logs.html",
+    "dashboard/onboarding.html",
+    "dashboard/pdpl.html",
+    "dashboard/projects.html",
+    "dashboard/qms.html",
+    "dashboard/roi.html",
+    "dashboard/scorecard.html",
+    "dashboard/tablef.html",
+    "dashboard/team.html",
+    "dashboard/users.html",
+  ]),
+  // No legacy violators today — left intentionally empty so the very
+  // first new `rounded-l-*` / `rounded-r-*` to land in `dashboard/` is
+  // caught by CI.
+  roundedLR: new Set([]),
+  textLRNonTh: new Set([
+    "dashboard/ai-ops.html",
+    "dashboard/consultant.html",
+    "dashboard/grc.html",
+    "dashboard/onboarding.html",
+    "dashboard/projects.html",
+    "dashboard/roi.html",
+  ]),
 };
 
 const TAG_OPEN_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b/;
@@ -158,6 +206,44 @@ const RULES = [
     // line up with the way Tailwind tokens sit inside the class attribute.
     classRegex: /(?<=^|\s)(m[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|reverse|\[[^\]]+\]))(?=\s|$)/,
     fix: "Use `ms-…` / `me-…` (logical) so the icon-gutter margin flips with writing direction.",
+  },
+  {
+    id: "spaceX",
+    // Matches every Tailwind variant of space-x-: numeric (`space-x-2`,
+    // `space-x-1.5`), keyword (`space-x-px`, `space-x-reverse`), and
+    // arbitrary value (`space-x-[3px]`). Deliberately does NOT match
+    // `space-y-*` (already direction-neutral) or the `gap-x-*` family
+    // (logical-friendly). Lookarounds match how Tailwind tokens sit inside
+    // the class attribute (whitespace boundaries, not `\b`, since `\b`
+    // misbehaves after `]`).
+    label: "uses physical space-x- (margin-left between children)",
+    appliesToTag: () => true,
+    classRegex: /(?<=^|\s)(space-x-(?:[0-9]+(?:\.[0-9]+)?|px|reverse|\[[^\]]+\]))(?=\s|$)/,
+    fix: "Use `gap-…` on a `flex` / `grid` container instead — `space-x-*` compiles to physical `margin-left` between children and does not flip in RTL.",
+  },
+  {
+    id: "roundedLR",
+    // Matches `rounded-l-<value>` / `rounded-r-<value>` for every value
+    // Tailwind exposes (`none`, `sm`, `md`, `lg`, `xl`, `2xl`, `3xl`,
+    // `full`, numeric, arbitrary `[...]`) AND the bare `rounded-l` /
+    // `rounded-r` shorthand. Carefully excludes the much-more-common
+    // `rounded-lg` (left-radius shorthand vs. radius-large) by requiring
+    // the next char after `l`/`r` to be a token boundary or `-`.
+    label: "uses physical rounded-l-/rounded-r- corner radius",
+    appliesToTag: () => true,
+    classRegex: /(?<=^|\s)(rounded-[lr](?:-(?:none|sm|md|lg|xl|2xl|3xl|full|[0-9]+(?:\.[0-9]+)?|\[[^\]]+\]))?)(?=\s|$)/,
+    fix: "Use `rounded-s-…` / `rounded-e-…` (logical) so the rounded edge lands on the inline-start / inline-end side in Arabic RTL.",
+  },
+  {
+    id: "textLRNonTh",
+    // Mirror of `thTextAlign` but for everything OTHER than `<th>`. The
+    // two rules together cover the full "no `text-left` / `text-right`
+    // anywhere in dashboard HTML" policy without losing the per-file
+    // grandfathering granularity we need to land green.
+    label: "uses physical text-left/text-right",
+    appliesToTag: (tag) => tag !== "th",
+    classRegex: /\b(text-left|text-right)\b/,
+    fix: "Use `text-start` / `text-end` (logical) so the text alignment mirrors in Arabic RTL.",
   },
 ];
 
@@ -312,7 +398,7 @@ function main() {
 
   if (allViolations.length === 0) {
     console.log(
-      `✓ RTL physical-direction guardrail PASS — scanned ${files.length} dashboard HTML file(s); no forbidden physical-direction classes found on <th>, stat-card borders, or <button> margins.`,
+      `✓ RTL physical-direction guardrail PASS — scanned ${files.length} dashboard HTML file(s); no forbidden physical-direction classes found (text-left/right on <th> or other tags, border-l-4/r-4, <button> ml-/mr-, space-x-, or rounded-l-/r-).`,
     );
     process.exit(0);
   }
@@ -331,14 +417,17 @@ function main() {
   console.error("Why this matters:");
   console.error("  Dashboard pages are served to both English (LTR) and Arabic (RTL)");
   console.error("  users. Physical-direction Tailwind classes (`text-left`, `border-l-4`,");
-  console.error("  `ml-*`, …) pin the layout to LTR and silently break the Arabic");
-  console.error("  experience. See replit.md → \"RTL Layout Convention\" for the full list");
-  console.error("  of logical-direction equivalents.");
+  console.error("  `ml-*`, `space-x-*`, `rounded-l-*`, …) pin the layout to LTR and silently");
+  console.error("  break the Arabic experience. See replit.md → \"RTL Layout Convention\"");
+  console.error("  for the full list of logical-direction equivalents.");
   console.error("");
   console.error("Fix recipe:");
   console.error("  • <th class=\"… text-left …\">     →  <th class=\"… text-start …\">");
+  console.error("  • <td class=\"… text-right …\">    →  <td class=\"… text-end …\">");
   console.error("  • <div class=\"… border-l-4 …\">   →  <div class=\"… border-s-4 …\">");
   console.error("  • <button class=\"… mr-2 …\">       →  <button class=\"… me-2 …\">");
+  console.error("  • <div class=\"… space-x-2 …\">    →  <div class=\"… gap-2 …\">  (on flex/grid)");
+  console.error("  • <div class=\"… rounded-l-lg …\"> →  <div class=\"… rounded-s-lg …\">");
   console.error("");
   console.error(
     "If a specific element genuinely must NOT mirror in RTL (rare!), add a trailing",

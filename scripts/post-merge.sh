@@ -104,14 +104,22 @@ npx tsx tests/safeLoggerRedaction.test.ts
 # CI gate — dashboard RTL physical-direction class guard (Task #315)
 #
 # Blocks merges that reintroduce physical-direction Tailwind classes on the
-# three highest-impact dashboard surfaces:
+# the highest-impact dashboard surfaces (Tasks #315 / #628):
 #   * `<th>` headers using `text-left` / `text-right`
 #   * stat-card borders using `border-l-4` / `border-r-4`
 #   * `<button>` icon gutters using `ml-<n>` / `mr-<n>`
+#   * any element using `space-x-<n>` (margin-left between flex children;
+#     does not flip in RTL — use `gap-<n>` instead)
+#   * any element using `rounded-l-*` / `rounded-r-*` (use `rounded-s-*` /
+#     `rounded-e-*`)
+#   * any non-`<th>` element using `text-left` / `text-right` such as
+#     `<td>`, `<div>`, `<p>`, `<li>`, `<span>` (use `text-start` /
+#     `text-end`)
 # These pin the layout to LTR and silently break the Arabic (RTL)
 # experience served via `html[dir="rtl"]` set by `dashboard/js/i18n.js`.
 # Equivalent behaviour MUST use logical-direction utilities: `text-start`,
-# `border-s-4`, `ms-<n>`, `me-<n>` (see replit.md → "RTL Layout Convention").
+# `border-s-4`, `ms-<n>`, `me-<n>`, `gap-<n>`, `rounded-s-*` (see
+# replit.md → "RTL Layout Convention").
 #
 # All currently-violating pages are grandfathered via per-rule allowlists in
 # the script; new dashboard HTML files (or removing one from the allowlist)
@@ -119,5 +127,5 @@ npx tsx tests/safeLoggerRedaction.test.ts
 # `tests/noPhysicalDirectionClasses.test.ts` (auto-discovered by `npm test`).
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: dashboard RTL physical-direction class guard (Task #315)"
+echo "▶ CI gate: dashboard RTL physical-direction class guard (Tasks #315 / #628)"
 node scripts/check-rtl-classes.cjs
