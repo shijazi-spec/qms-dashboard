@@ -2387,6 +2387,144 @@ describe('streamingDownload (browser helper)', () => {
       const after = env.win.localStorage.getItem(userKey);
       expect(after === null || after === '[]').toBe(true);
     });
+
+    it('remove(id) deletes a specific entry and leaves others intact', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(20);
+
+      await env.win.streamingDownload('/api/exports/first.csv', { filename: 'first.csv' });
+      await env.win.streamingDownload('/api/exports/second.csv', { filename: 'second.csv' });
+
+      const before = env.win.streamingDownload.history.list();
+      expect(before).toHaveLength(2);
+
+      const idToRemove = before.find((e: any) => e.filename === 'first.csv')!.id;
+      env.win.streamingDownload.history.remove(idToRemove);
+
+      const after = env.win.streamingDownload.history.list();
+      expect(after).toHaveLength(1);
+      expect(after[0].filename).toBe('second.csv');
+    });
+
+    it('remove(id) with the only entry collapses the tray DOM', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(21);
+      await env.win.streamingDownload('/api/exports/sole.csv', { filename: 'sole.csv' });
+
+      expect(env.win.streamingDownload.history.list()).toHaveLength(1);
+      const idToRemove = env.win.streamingDownload.history.list()[0].id;
+      env.win.streamingDownload.history.remove(idToRemove);
+
+      expect(env.win.streamingDownload.history.list()).toHaveLength(0);
+      // Tray DOM should be removed when the list is empty.
+      expect(
+        env.win.document.getElementById('streaming-download-history-tray')
+      ).toBeNull();
+    });
+
+    it('per-row dismiss button calls remove(id) and re-renders the tray', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(22);
+
+      await env.win.streamingDownload('/api/exports/keep.csv', { filename: 'keep.csv' });
+      await env.win.streamingDownload('/api/exports/remove-me.csv', { filename: 'remove-me.csv' });
+
+      const list = env.win.streamingDownload.history.list();
+      expect(list).toHaveLength(2);
+      const targetId = list.find((e: any) => e.filename === 'remove-me.csv')!.id;
+
+      // Open the tray so the rows are rendered.
+      const tray = env.win.document.getElementById('streaming-download-history-tray')!;
+      const toggle = tray.querySelector('[data-testid="button-recent-downloads-toggle"]') as HTMLButtonElement;
+      toggle.click();
+
+      // Each row should have a dismiss button with the correct testid.
+      const dismissBtn = env.win.document.querySelector(
+        `[data-testid="button-remove-download-${targetId}"]`
+      ) as HTMLButtonElement | null;
+      expect(dismissBtn).not.toBeNull();
+
+      dismissBtn!.click();
+
+      // The targeted entry is gone; the other survives.
+      const after = env.win.streamingDownload.history.list();
+      expect(after).toHaveLength(1);
+      expect(after[0].filename).toBe('keep.csv');
+
+      // The removed row's dismiss button is no longer in the DOM.
+      expect(
+        env.win.document.querySelector(`[data-testid="button-remove-download-${targetId}"]`)
+      ).toBeNull();
+    });
+
+    it('"Clear all" header button calls clear() after confirmation', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(23);
+      await env.win.streamingDownload('/api/exports/a.csv', { filename: 'a.csv' });
+
+      // Stub confirm to approve the dialog.
+      env.win.confirm = vi.fn(() => true);
+
+      const clearAllBtn = env.win.document.querySelector(
+        '[data-testid="button-clear-all-downloads"]'
+      ) as HTMLButtonElement | null;
+      expect(clearAllBtn).not.toBeNull();
+
+      clearAllBtn!.click();
+
+      expect(env.win.confirm).toHaveBeenCalledOnce();
+      expect(env.win.streamingDownload.history.list()).toEqual([]);
+    });
+
+    it('"Clear all" header button does nothing when confirmation is cancelled', async () => {
+      env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+      env.win.fetch = vi.fn(async () =>
+        new (globalThis as any).Response(streamFromChunks([new Uint8Array([1])]), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' },
+        })
+      );
+      env.win.streamingDownload.history.setUser(24);
+      await env.win.streamingDownload('/api/exports/b.csv', { filename: 'b.csv' });
+
+      // Stub confirm to reject the dialog.
+      env.win.confirm = vi.fn(() => false);
+
+      const clearAllBtn = env.win.document.querySelector(
+        '[data-testid="button-clear-all-downloads"]'
+      ) as HTMLButtonElement | null;
+      expect(clearAllBtn).not.toBeNull();
+
+      clearAllBtn!.click();
+
+      expect(env.win.confirm).toHaveBeenCalledOnce();
+      // History must be untouched.
+      expect(env.win.streamingDownload.history.list()).toHaveLength(1);
+    });
   });
 
   describe('streaming-fallback advisory notice', () => {

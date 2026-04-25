@@ -1240,6 +1240,21 @@
         renderHistoryTray();
     }
 
+    function removeHistory(id) {
+        if (!id) return;
+        var arr = loadHistory();
+        arr = arr.filter(function (e) { return e && e.id !== id; });
+        saveHistory(arr);
+        // If the removed entry was in the last-seen snapshot, drop it there
+        // too so the unread badge doesn't reference a ghost id.
+        var seen = loadLastSeen();
+        if (seen && Object.prototype.hasOwnProperty.call(seen, id)) {
+            delete seen[id];
+            saveLastSeen(seen);
+        }
+        renderHistoryTray();
+    }
+
     function timeAgoShort(iso) {
         if (!iso) return '';
         var then = Date.parse(iso);
@@ -1330,9 +1345,14 @@
         card.className = 'bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden text-sm text-gray-800';
         container.appendChild(card);
 
+        // Header row: toggle button (flex-1) + "Clear all" button side-by-side.
+        var headerRow = document.createElement('div');
+        headerRow.className = 'flex items-stretch';
+        card.appendChild(headerRow);
+
         var headerBtn = document.createElement('button');
         headerBtn.type = 'button';
-        headerBtn.className = 'w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset';
+        headerBtn.className = 'flex-1 min-w-0 flex items-center justify-between gap-2 px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset';
         headerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
         headerBtn.setAttribute('aria-controls', TRAY_CONTAINER_ID + '-body');
         headerBtn.setAttribute('data-testid', 'button-recent-downloads-toggle');
@@ -1387,7 +1407,22 @@
             saveTrayOpen(!loadTrayOpen());
             renderHistoryTray();
         });
-        card.appendChild(headerBtn);
+        headerRow.appendChild(headerBtn);
+
+        // "Clear all" button sits to the right of the toggle in the header.
+        var clearAllBtn = document.createElement('button');
+        clearAllBtn.type = 'button';
+        clearAllBtn.className = 'flex-shrink-0 text-xs text-gray-500 hover:text-red-600 px-3 py-2 border-l border-gray-100 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500';
+        clearAllBtn.textContent = 'Clear all';
+        clearAllBtn.setAttribute('data-testid', 'button-clear-all-downloads');
+        clearAllBtn.setAttribute('aria-label', 'Clear all download history');
+        clearAllBtn.addEventListener('click', function () {
+            if (typeof global.confirm === 'function' && !global.confirm(tr('downloads.confirm_clear_all', 'Remove all download history?'))) {
+                return;
+            }
+            clearHistory();
+        });
+        headerRow.appendChild(clearAllBtn);
 
         if (!open) return;
 
@@ -1447,19 +1482,24 @@
                 row.appendChild(retry);
             }
 
+            // Per-row dismiss button — removes this entry immediately.
+            (function (entryId, entryFilename) {
+                var dismissBtn = document.createElement('button');
+                dismissBtn.type = 'button';
+                dismissBtn.className = 'flex-shrink-0 text-gray-300 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded p-0.5 ml-1';
+                dismissBtn.setAttribute('aria-label', 'Remove ' + (entryFilename || 'download') + ' from history');
+                dismissBtn.setAttribute('data-testid', 'button-remove-download-' + entryId);
+                dismissBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+                dismissBtn.addEventListener('click', function () {
+                    removeHistory(entryId);
+                });
+                row.appendChild(dismissBtn);
+            })(entry.id, entry.filename);
+
             body.appendChild(row);
         });
 
-        var footer = document.createElement('div');
-        footer.className = 'flex items-center justify-end px-3 py-2 bg-gray-50 border-t border-gray-100';
-        var clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className = 'text-xs text-gray-600 hover:text-gray-900 hover:underline focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1';
-        clearBtn.textContent = 'Clear list';
-        clearBtn.setAttribute('data-testid', 'button-clear-recent-downloads');
-        clearBtn.addEventListener('click', function () { clearHistory(); });
-        footer.appendChild(clearBtn);
-        card.appendChild(footer);
     }
 
     function retryHistoryEntry(id) {
@@ -2757,6 +2797,7 @@
     streamingDownload.history = {
         list: loadHistory,
         clear: clearHistory,
+        remove: removeHistory,
         retry: retryHistoryEntry,
         renderTray: renderHistoryTray,
         // Wire up the signed-in user so the tray persists across browser
