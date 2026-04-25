@@ -250,6 +250,63 @@ export async function getAiMetricsRetentionAudit(
 }
 
 /**
+ * Default thresholds for the Save-button inline confirm step (Task #561).
+ *
+ * The dashboard requires an explicit "yes I want to delete this" click
+ * before tightening the retention window when EITHER the row count OR
+ * the day-span of telemetry being pruned crosses the matching threshold.
+ *
+ * Defaults to 1 / 1 — i.e. any tightening that would actually delete
+ * something requires confirmation. Operators who want a quieter UX in
+ * low-volume environments can raise the row threshold via
+ * `AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD` and / or
+ * `AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD`. Setting either to `0`
+ * disables that arm of the check; setting both to `0` disables the
+ * inline confirm entirely (useful in CI / test fixtures).
+ */
+export const AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS = {
+  rows: 1,
+  days: 1,
+} as const;
+
+export interface AiMetricsRetentionConfirmThreshold {
+  /** Minimum rows-to-delete that triggers the confirm step. `0` disables this arm. */
+  rows: number;
+  /** Minimum days-to-delete that triggers the confirm step. `0` disables this arm. */
+  days: number;
+}
+
+function parseNonNegativeInt(raw: unknown, fallback: number): number {
+  if (raw == null || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.floor(n);
+}
+
+/**
+ * Read the configurable confirm-step threshold from env vars
+ * (Task #561). Returned values are non-negative integers and are safe to
+ * surface to the dashboard verbatim.
+ *
+ * Either arm being met (`rows >= rows-threshold` OR `days >= days-threshold`)
+ * with a non-zero threshold value triggers the inline confirm step on
+ * Save. The thresholds are reported on the GET retention endpoint so the
+ * client can apply them without a second round-trip.
+ */
+export function getAiMetricsRetentionConfirmThreshold(): AiMetricsRetentionConfirmThreshold {
+  return {
+    rows: parseNonNegativeInt(
+      process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD,
+      AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS.rows,
+    ),
+    days: parseNonNegativeInt(
+      process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD,
+      AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS.days,
+    ),
+  };
+}
+
+/**
  * True when an env-var lock is engaged via
  * `AI_METRICS_RETENTION_DAYS_LOCK`. Lock mode forces the env value to
  * win over any dashboard override; the UI surfaces a banner so admins

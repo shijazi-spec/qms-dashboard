@@ -62,6 +62,17 @@ const originalQuery = pg.Pool.prototype.query;
   if (/^\s*SELECT COUNT\(\*\)::bigint AS count\s+FROM ai_call_metrics/i.test(sql)) {
     return { ...empty, command: 'SELECT', rowCount: 1, rows: [{ count: '12400' }] };
   }
+  // Task #561 — previewAiMetricsPruneImpact returns a row count + the
+  // age-in-days of the oldest row in the deletion bucket so the
+  // dashboard can show "spans X days of telemetry".
+  if (/SELECT[\s\S]+COUNT\(\*\)::bigint[\s\S]+oldest_age_days[\s\S]+FROM ai_call_metrics[\s\S]+WHERE started_at < NOW\(\) - MAKE_INTERVAL/i.test(sql)) {
+    return {
+      ...empty,
+      command: 'SELECT',
+      rowCount: 1,
+      rows: [{ count: '12400', oldest_age_days: 79.4 }],
+    };
+  }
   return empty;
 } as typeof pg.Pool.prototype.query;
 
@@ -70,6 +81,7 @@ const {
   resolveAiMetricsRetentionDays,
   DEFAULT_AI_METRICS_RETENTION_DAYS,
   countAiMetricsOlderThan,
+  previewAiMetricsPruneImpact,
 } = await import('../src/utils/aiTelemetry');
 
 let passed = 0;
@@ -293,6 +305,81 @@ async function main(): Promise<void> {
     check(
       `throws on invalid input (${String(bad)}) instead of silently returning 0`,
       threw && lastCountQuery() == null,
+      { bad, captured },
+    );
+  }
+
+  console.log('=== previewAiMetricsPruneImpact() — preview wiring (Task #561) ===');
+
+  function lastImpactQuery(): CapturedQuery | null {
+    for (let i = captured.length - 1; i >= 0; i--) {
+      if (/COUNT\(\*\)::bigint[\s\S]+oldest_age_days[\s\S]+FROM ai_call_metrics[\s\S]+WHERE started_at < NOW\(\) - MAKE_INTERVAL/i.test(captured[i].sql)) {
+        return captured[i];
+      }
+    }
+    return null;
+  }
+
+  clearCaptured();
+  let impact = await previewAiMetricsPruneImpact(7);
+  let impactQ = lastImpactQuery();
+  check(
+    'issues a single SELECT that returns count + oldest_age_days',
+    impactQ != null,
+    { captured },
+  );
+  check(
+    'preview SQL uses MAKE_INTERVAL(days => $1) — same predicate as prune / count',
+    impactQ != null && /MAKE_INTERVAL\(days => \$1\)/i.test(impactQ.sql),
+    { sql: impactQ?.sql },
+  );
+  check(
+    'preview SQL parameter is the candidate value passed in (7)',
+    impactQ != null && impactQ.params[0] === 7,
+    { params: impactQ?.params },
+  );
+  check(
+    'preview returns the row count from the SELECT (12400)',
+    impact.rowCount === 12400,
+    { impact },
+  );
+  check(
+    'preview returns the oldest row age in days (79.4)',
+    impact.oldestRowAgeDays === 79.4,
+    { impact },
+  );
+  check(
+    'preview computes daysToDelete = ceil(oldest) - candidate (ceil(79.4) - 7 = 73)',
+    impact.daysToDelete === 73,
+    { impact },
+  );
+  check(
+    'preview echoes back the (floored) candidate days field',
+    impact.candidateDays === 7,
+    { impact },
+  );
+
+  // Fractional candidate is floored, just like the prune itself.
+  clearCaptured();
+  impact = await previewAiMetricsPruneImpact(3.9);
+  impactQ = lastImpactQuery();
+  check(
+    'fractional candidate (3.9) is floored to 3 — matches prune behaviour',
+    impactQ != null && impactQ.params[0] === 3 && impact.candidateDays === 3,
+    { params: impactQ?.params, impact },
+  );
+
+  for (const bad of [0, -1, NaN, Infinity, -Infinity]) {
+    clearCaptured();
+    let threw = false;
+    try {
+      await previewAiMetricsPruneImpact(bad);
+    } catch {
+      threw = true;
+    }
+    check(
+      `preview throws on invalid input (${String(bad)}) instead of silently returning 0`,
+      threw && lastImpactQuery() == null,
       { bad, captured },
     );
   }

@@ -1109,6 +1109,91 @@ export async function countAiMetricsOlderThan(retentionDays: number): Promise<nu
 }
 
 /**
+ * Result of a dry-run prune impact preview (Task #561).
+ *
+ * `rowCount` is the number of rows that WOULD be deleted by the next prune
+ * pass at the candidate retention window. `oldestRowAgeDays` is the age in
+ * days of the oldest row in the deletion bucket — i.e. `MIN(started_at)`
+ * among rows older than the candidate window. `daysToDelete` is the span
+ * of telemetry (in whole days, rounded up) that would be removed:
+ * `ceil(oldestRowAgeDays) - candidateDays`. Both age fields are `null` /
+ * `0` when no rows are older than the candidate window.
+ */
+export interface AiMetricsPruneImpactPreview {
+  candidateDays: number;
+  rowCount: number;
+  oldestRowAgeDays: number | null;
+  daysToDelete: number;
+}
+
+/**
+ * Live impact preview for the dashboard's retention edit form (Task #561).
+ *
+ * Reports BOTH the row count AND the time span of telemetry that the next
+ * prune cron tick would delete if the operator saved `candidateDays`. The
+ * dashboard needs the days-span figure so the inline confirm step can say
+ * "this will delete ~80 days of telemetry" even when the row volume is
+ * relatively small (e.g. a quiet test environment). Computed in a single
+ * round-trip and re-uses the same `started_at < NOW() - MAKE_INTERVAL`
+ * predicate as `pruneOldAiMetrics()` and `countAiMetricsOlderThan()` so
+ * the preview cannot drift from what the cron will actually delete.
+ *
+ * Throws on non-positive / non-finite input rather than silently returning
+ * 0 — the caller (the AI Ops route) validates against
+ * `AI_METRICS_RETENTION_BOUNDS` first.
+ */
+export async function previewAiMetricsPruneImpact(
+  candidateDays: number,
+): Promise<AiMetricsPruneImpactPreview> {
+  if (!Number.isFinite(candidateDays) || candidateDays <= 0) {
+    throw new Error('candidateDays must be a positive number');
+  }
+  await ensureAiMetricsTable();
+  const days = Math.max(1, Math.floor(candidateDays));
+  const result = await pool.query<{
+    count: string | number | null;
+    oldest_age_days: string | number | null;
+  }>(
+    `SELECT COUNT(*)::bigint                                             AS count,
+            EXTRACT(EPOCH FROM (NOW() - MIN(started_at))) / 86400.0      AS oldest_age_days
+       FROM ai_call_metrics
+      WHERE started_at < NOW() - MAKE_INTERVAL(days => $1)`,
+    [days],
+  );
+  const row = result.rows[0] ?? {};
+  const rawCount = row.count ?? 0;
+  const rowCountNum = typeof rawCount === 'string' ? Number(rawCount) : rawCount;
+  const rowCount = Number.isFinite(rowCountNum) ? Number(rowCountNum) : 0;
+
+  let oldestRowAgeDays: number | null = null;
+  if (row.oldest_age_days != null) {
+    const n =
+      typeof row.oldest_age_days === 'string'
+        ? Number(row.oldest_age_days)
+        : row.oldest_age_days;
+    if (Number.isFinite(n)) oldestRowAgeDays = Number(n);
+  }
+
+  // Span (in whole days, rounded up so a 79.4-day-old oldest row at
+  // candidate=7 reports "73 days of telemetry deleted" rather than
+  // 72 — the operator should err on the side of the larger number).
+  // Only meaningful when the deletion bucket is non-empty; an empty
+  // bucket reports 0 days even if oldestRowAgeDays happens to be null.
+  let daysToDelete = 0;
+  if (rowCount > 0 && oldestRowAgeDays != null) {
+    const span = Math.ceil(oldestRowAgeDays) - days;
+    daysToDelete = span > 0 ? span : 0;
+  }
+
+  return {
+    candidateDays: days,
+    rowCount,
+    oldestRowAgeDays,
+    daysToDelete,
+  };
+}
+
+/**
  * Purge telemetry rows for prompt versions that are no longer deployed.
  *
  * A prompt-version is eligible for purging when ALL of the following hold:

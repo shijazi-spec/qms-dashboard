@@ -124,6 +124,8 @@ const {
 } = await import('../src/utils/aiTelemetry');
 const {
   AI_METRICS_RETENTION_BOUNDS,
+  AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS,
+  getAiMetricsRetentionConfirmThreshold,
   isAiMetricsRetentionLocked,
   setAiMetricsRetentionConfig,
   __resetInitPromiseForTests,
@@ -353,6 +355,63 @@ async function main(): Promise<void> {
     auditInsert != null && typeof auditInsert.params[3] === 'string' && (auditInsert.params[3] as string).length === 500,
     { len: auditInsert ? (auditInsert.params[3] as string)?.length : null },
   );
+
+  console.log('=== getAiMetricsRetentionConfirmThreshold() — env parsing (Task #561) ===');
+  const originalRowEnv = process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD;
+  const originalDayEnv = process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD;
+  delete process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD;
+  delete process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD;
+  let threshold = getAiMetricsRetentionConfirmThreshold();
+  check(
+    'defaults: rows=1 days=1 — any tightening that deletes ≥1 row or spans ≥1 day prompts confirm',
+    threshold.rows === AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS.rows
+      && threshold.days === AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS.days
+      && threshold.rows === 1
+      && threshold.days === 1,
+    { threshold },
+  );
+
+  process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD = '5000';
+  process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD = '14';
+  threshold = getAiMetricsRetentionConfirmThreshold();
+  check(
+    'reads custom row threshold (5000) and day threshold (14) from env',
+    threshold.rows === 5000 && threshold.days === 14,
+    { threshold },
+  );
+
+  process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD = '0';
+  process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD = '0';
+  threshold = getAiMetricsRetentionConfirmThreshold();
+  check(
+    '0 disables that arm of the check (returned verbatim)',
+    threshold.rows === 0 && threshold.days === 0,
+    { threshold },
+  );
+
+  process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD = 'banana';
+  process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD = '-50';
+  threshold = getAiMetricsRetentionConfirmThreshold();
+  check(
+    'non-numeric / negative env values fall back to defaults',
+    threshold.rows === AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS.rows
+      && threshold.days === AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS.days,
+    { threshold },
+  );
+
+  process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD = '12.7';
+  process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD = '3.9';
+  threshold = getAiMetricsRetentionConfirmThreshold();
+  check(
+    'fractional env values are floored to whole numbers',
+    threshold.rows === 12 && threshold.days === 3,
+    { threshold },
+  );
+
+  if (originalRowEnv === undefined) delete process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD;
+  else process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD = originalRowEnv;
+  if (originalDayEnv === undefined) delete process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD;
+  else process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD = originalDayEnv;
 
   // Restore env vars.
   if (originalEnvDays === undefined) delete process.env.AI_METRICS_RETENTION_DAYS;

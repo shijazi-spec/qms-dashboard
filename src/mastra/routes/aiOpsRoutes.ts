@@ -1433,6 +1433,7 @@ export const aiOpsRoutes = [
             AI_METRICS_RETENTION_BOUNDS,
             getAiMetricsRetentionConfig,
             getAiMetricsRetentionAudit,
+            getAiMetricsRetentionConfirmThreshold,
             isAiMetricsRetentionLocked,
           } = await import("../../utils/aiMetricsRetentionConfig");
 
@@ -1443,6 +1444,11 @@ export const aiOpsRoutes = [
           ]);
           const envBaseline = resolveAiMetricsRetentionDays();
           const envLocked = isAiMetricsRetentionLocked();
+          // Task #561: surface the configurable confirm-step threshold so
+          // the dashboard can decide locally whether tightening this far
+          // requires the inline "are you sure" panel — without a second
+          // round-trip per keystroke.
+          const confirmThreshold = getAiMetricsRetentionConfirmThreshold();
 
           return c.json({
             data: {
@@ -1457,6 +1463,7 @@ export const aiOpsRoutes = [
               updated_at: row.updated_at,
               bounds: AI_METRICS_RETENTION_BOUNDS,
               audit,
+              confirm_threshold: confirmThreshold,
               can_edit:
                 AI_METRICS_RETENTION_WRITE_ROLES.includes(
                   user.role as UserRole,
@@ -1521,15 +1528,21 @@ export const aiOpsRoutes = [
             );
           }
 
-          const { countAiMetricsOlderThan } = await import(
+          const { previewAiMetricsPruneImpact } = await import(
             "../../utils/aiTelemetry"
           );
-          const rowCount = await countAiMetricsOlderThan(parsed);
+          // Task #561: report BOTH rows-to-delete AND days-of-telemetry
+          // span so the dashboard's live preview can warn about widely
+          // tightened windows even in low-volume environments where the
+          // row count alone undersells the impact.
+          const impact = await previewAiMetricsPruneImpact(parsed);
 
           return c.json({
             data: {
-              candidate_days: parsed,
-              rows_to_delete: rowCount,
+              candidate_days: impact.candidateDays,
+              rows_to_delete: impact.rowCount,
+              oldest_row_age_days: impact.oldestRowAgeDays,
+              days_to_delete: impact.daysToDelete,
             },
           });
         } catch (error) {

@@ -3011,7 +3011,7 @@
               data-testid="input-metrics-retention-days"
             />
             <p class="text-xs text-gray-400 mt-1">Allowed: ${bounds.min}–${bounds.max}</p>
-            <div class="mt-2 flex items-center gap-2">
+            <div class="mt-2 flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 data-on-click="previewMetricsRetentionImpact"
@@ -3022,7 +3022,7 @@
                 id="metrics-retention-preview-status"
                 class="text-xs text-gray-500"
                 data-testid="text-metrics-retention-preview"
-              >Enter a value and click Preview impact to see how many rows the next prune would delete.</span>
+              >Enter a tighter value to see how many rows / days of telemetry the next prune would delete.</span>
             </div>
           </div>
           <div class="md:col-span-2 text-sm">
@@ -3047,11 +3047,32 @@
           />
         </div>`;
 
+      // Task #561: inline confirm panel sits between the Save row and the
+      // status line. Hidden by default; renderMetricsRetentionConfirm()
+      // populates and shows it when the proposed save crosses the
+      // configurable threshold. Replaces the previous browser-native
+      // confirm() dialog so the warning surface matches the rest of the
+      // dashboard chrome and is keyboard-navigable / screen-readable.
       const buttons = canEdit
         ? `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
              <button type="button" data-on-click="saveMetricsRetention" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-metrics-retention-save">Save retention</button>
              <button type="button" data-on-click="clearMetricsRetentionOverride" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-metrics-retention-clear">Clear override</button>
              <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
+           </div>
+           <div id="metrics-retention-confirm-panel" class="hidden mt-3 px-4 py-3 rounded border border-amber-300 bg-amber-50 text-amber-900" role="alertdialog" aria-labelledby="metrics-retention-confirm-title" data-testid="panel-metrics-retention-confirm">
+             <div class="flex items-start gap-2">
+               <svg class="h-5 w-5 mt-0.5 flex-shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/>
+               </svg>
+               <div class="flex-1">
+                 <p id="metrics-retention-confirm-title" class="text-sm font-semibold" data-testid="text-metrics-retention-confirm-title">Confirm tightened retention window</p>
+                 <p id="metrics-retention-confirm-body" class="text-sm mt-1" data-testid="text-metrics-retention-confirm-body"></p>
+               </div>
+             </div>
+             <div class="mt-3 flex flex-wrap gap-2">
+               <button type="button" data-on-click="confirmSaveMetricsRetention" class="px-3 py-1.5 bg-amber-600 text-white text-sm font-medium rounded hover:bg-amber-700" data-testid="button-metrics-retention-confirm-save">Confirm &amp; save</button>
+               <button type="button" data-on-click="cancelMetricsRetentionConfirm" class="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 text-sm font-medium rounded hover:bg-amber-100" data-testid="button-metrics-retention-confirm-cancel">Cancel</button>
+             </div>
            </div>`
         : `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
              <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
@@ -3131,16 +3152,68 @@
       return { days: n };
     }
 
-    // Cleared whenever the input changes so a stale row count from a
-    // previous "Preview impact" click can never be mistaken for the
-    // current value the operator is about to save.
-    function onMetricsRetentionInputChange() {
-      lastMetricsRetentionPreview = null;
-      setMetricsRetentionPreview('Click "Preview impact" to recount for the new value.', 'info');
-    }
-
+    // Task #561: live preview is debounced ~400ms so each keystroke does
+    // not fire a fresh COUNT(*). The button still works as an immediate
+    // trigger for operators who want to skip the debounce. The hide-side
+    // also clears stale state so a stale row count from a previous run
+    // can never be mistaken for the current value the operator is about
+    // to save.
     let lastMetricsRetentionPreview = null;
     let metricsRetentionPreviewInFlight = false;
+    let metricsRetentionLivePreviewTimer = null;
+    const METRICS_RETENTION_LIVE_PREVIEW_DEBOUNCE_MS = 400;
+
+    function clearMetricsRetentionConfirmPanel() {
+      const panel = document.getElementById('metrics-retention-confirm-panel');
+      if (panel) panel.classList.add('hidden');
+    }
+
+    function onMetricsRetentionInputChange() {
+      lastMetricsRetentionPreview = null;
+      // Always hide a stale confirm panel — the operator's edit invalidates
+      // any "are you sure" decision that was tied to the previous value.
+      clearMetricsRetentionConfirmPanel();
+      // Schedule a live recount. If the candidate is invalid or not
+      // tighter than the current effective window we surface a hint
+      // instead of a network request.
+      if (metricsRetentionLivePreviewTimer != null) {
+        clearTimeout(metricsRetentionLivePreviewTimer);
+        metricsRetentionLivePreviewTimer = null;
+      }
+      metricsRetentionLivePreviewTimer = setTimeout(() => {
+        metricsRetentionLivePreviewTimer = null;
+        runMetricsRetentionLivePreview();
+      }, METRICS_RETENTION_LIVE_PREVIEW_DEBOUNCE_MS);
+    }
+
+    function runMetricsRetentionLivePreview() {
+      const candidate = readMetricsRetentionCandidate();
+      if (candidate.error) {
+        // Don't shout when the input is empty — that's the form's
+        // resting state, not a user error.
+        const inputEl = document.getElementById('metrics-retention-input');
+        if (!inputEl || (inputEl.value ?? '').trim() === '') {
+          setMetricsRetentionPreview(
+            'Enter a tighter value to see how many rows / days of telemetry the next prune would delete.',
+            'info',
+          );
+          return;
+        }
+        setMetricsRetentionPreview(candidate.error, 'error');
+        return;
+      }
+      const currentEffective = Number(
+        metricsRetentionState && metricsRetentionState.effective_days,
+      );
+      if (Number.isFinite(currentEffective) && candidate.days >= currentEffective) {
+        setMetricsRetentionPreview(
+          'Not tighter than the current effective window (' + currentEffective + ' days) — the next prune will not delete anything new.',
+          'info',
+        );
+        return;
+      }
+      previewMetricsRetentionImpact();
+    }
 
     async function fetchMetricsRetentionPreview(days) {
       const r = await fetch('/api/ai-ops/metrics-retention/preview?days=' + encodeURIComponent(String(days)), {
@@ -3154,7 +3227,28 @@
       if (!Number.isFinite(rows) || rows < 0) {
         throw new Error('Server returned an invalid row count');
       }
-      return { days, rows };
+      // Task #561: server now also returns the days-of-telemetry span
+      // and oldest-row age. days_to_delete may be missing on older
+      // servers — coerce to a safe 0 so the UI never says "NaN days".
+      const daysSpan = Number(body?.data?.days_to_delete);
+      const oldestAge = Number(body?.data?.oldest_row_age_days);
+      return {
+        days,
+        rows,
+        daysToDelete: Number.isFinite(daysSpan) && daysSpan > 0 ? Math.floor(daysSpan) : 0,
+        oldestRowAgeDays: Number.isFinite(oldestAge) ? oldestAge : null,
+      };
+    }
+
+    function formatMetricsRetentionImpactText(result) {
+      const formattedRows = result.rows.toLocaleString();
+      if (result.rows === 0) {
+        return 'No rows older than ' + result.days + ' days — saving will not delete anything on the next prune.';
+      }
+      const dayPart = result.daysToDelete > 0
+        ? ' spanning ~' + result.daysToDelete + ' day' + (result.daysToDelete === 1 ? '' : 's') + ' of telemetry'
+        : '';
+      return 'Next prune will delete ~' + formattedRows + ' row' + (result.rows === 1 ? '' : 's') + dayPart + ' (older than ' + result.days + ' days).';
     }
 
     async function previewMetricsRetentionImpact() {
@@ -3169,18 +3263,10 @@
       try {
         const result = await fetchMetricsRetentionPreview(candidate.days);
         lastMetricsRetentionPreview = result;
-        const formatted = result.rows.toLocaleString();
-        if (result.rows === 0) {
-          setMetricsRetentionPreview(
-            'No rows older than ' + result.days + ' days — saving will not delete anything on the next prune.',
-            'ok',
-          );
-        } else {
-          setMetricsRetentionPreview(
-            'This will delete ~' + formatted + ' rows older than ' + result.days + ' days on the next prune.',
-            'warn',
-          );
-        }
+        setMetricsRetentionPreview(
+          formatMetricsRetentionImpactText(result),
+          result.rows === 0 ? 'ok' : 'warn',
+        );
       } catch (e) {
         console.error('Metrics-retention preview error', e);
         lastMetricsRetentionPreview = null;
@@ -3188,6 +3274,51 @@
       } finally {
         metricsRetentionPreviewInFlight = false;
       }
+    }
+
+    // Pending save state — populated by saveMetricsRetention() when the
+    // tightening crosses the configurable confirm threshold and the
+    // operator must click the inline "Confirm & save" button before the
+    // PUT actually fires (Task #561).
+    let pendingMetricsRetentionSave = null;
+
+    function showMetricsRetentionConfirmPanel(message) {
+      const panel = document.getElementById('metrics-retention-confirm-panel');
+      const body = document.getElementById('metrics-retention-confirm-body');
+      if (!panel || !body) return;
+      body.textContent = message;
+      panel.classList.remove('hidden');
+      // Move keyboard focus onto the destructive action so the panel is
+      // immediately keyboard-actionable, but leave the cancel button as
+      // the visible default escape.
+      const confirmBtn = panel.querySelector('[data-testid="button-metrics-retention-confirm-save"]');
+      if (confirmBtn && typeof confirmBtn.focus === 'function') {
+        try { confirmBtn.focus(); } catch (_) { /* ignore */ }
+      }
+    }
+
+    function buildMetricsRetentionConfirmMessage(currentEffective, retentionDays, preview) {
+      if (!preview || preview.rows === 0) {
+        return 'Tightening the retention window from ' + currentEffective + ' to ' + retentionDays +
+          ' days. Confirm to proceed — the next prune will not delete anything new today, but future rows older than ' +
+          retentionDays + ' days will be removed.';
+      }
+      const rows = preview.rows.toLocaleString();
+      const dayPart = preview.daysToDelete > 0
+        ? ' spanning ~' + preview.daysToDelete + ' day' + (preview.daysToDelete === 1 ? '' : 's') + ' of telemetry'
+        : '';
+      return 'This will delete ~' + rows + ' row' + (preview.rows === 1 ? '' : 's') + dayPart +
+        ' on the next prune (window goes from ' + currentEffective + ' → ' + retentionDays + ' days). Confirm to proceed.';
+    }
+
+    function metricsRetentionImpactCrossesThreshold(preview) {
+      if (!preview) return false;
+      const threshold = (metricsRetentionState && metricsRetentionState.confirm_threshold) || { rows: 1, days: 1 };
+      const rowArm = Number(threshold.rows);
+      const dayArm = Number(threshold.days);
+      const rowTrip = Number.isFinite(rowArm) && rowArm > 0 && preview.rows >= rowArm;
+      const dayTrip = Number.isFinite(dayArm) && dayArm > 0 && preview.daysToDelete >= dayArm;
+      return rowTrip || dayTrip;
     }
 
     async function saveMetricsRetention() {
@@ -3214,17 +3345,15 @@
       const requestBody = { retention_days };
       if (note) requestBody.note = note;
 
-      // Confirm step (Task #550): re-show the "rows that will be deleted"
-      // count immediately before committing so the operator sees the
-      // impact a second time.
-      //
-      // Only gated on TIGHTENING saves (candidate < current effective)
-      // — widening or matching the existing window can never cause an
-      // additional row to be deleted on the next prune compared to what
-      // the cron is already configured to do, so a destructive
-      // "this will delete ~X rows" warning would be misleading. The
-      // preview button above still works regardless for ad-hoc impact
-      // checks.
+      // Hide any prior confirm panel so a stale prompt cannot be acted
+      // on after the operator has changed the value.
+      clearMetricsRetentionConfirmPanel();
+
+      // Confirm step (Task #561): only gate on TIGHTENING saves
+      // (candidate < current effective). Widening / matching the existing
+      // window can never cause an additional row to be deleted on the
+      // next prune compared to what the cron already does, so the
+      // destructive "this will delete X rows" warning would be misleading.
       const currentEffective = Number(metricsRetentionState.effective_days);
       const tightening = retention_days != null
         && Number.isFinite(currentEffective)
@@ -3238,30 +3367,47 @@
             lastMetricsRetentionPreview = preview;
           } catch (e) {
             console.error('Metrics-retention pre-save preview error', e);
-            const proceed = confirm(
-              'Could not count how many rows would be deleted (' + (e?.message || 'unknown error') + ').\n\n' +
-              'Tighten retention from ' + currentEffective + ' to ' + retention_days + ' days anyway?'
+            // Could not count — surface an inline confirm with the
+            // failure reason instead of the regular preview message,
+            // and let the operator decide whether to proceed blind.
+            pendingMetricsRetentionSave = { requestBody, retention_days, currentEffective };
+            setMetricsRetentionStatus('', 'info');
+            showMetricsRetentionConfirmPanel(
+              'Could not count how many rows would be deleted (' + (e?.message || 'unknown error') +
+              '). Tighten retention from ' + currentEffective + ' to ' + retention_days + ' days anyway?'
             );
-            if (!proceed) {
-              setMetricsRetentionStatus('Save cancelled.', 'info');
-              return;
-            }
-            preview = null;
-          }
-        }
-        if (preview && preview.rows > 0) {
-          const formatted = preview.rows.toLocaleString();
-          const proceed = confirm(
-            'Tightening retention from ' + currentEffective + ' to ' + preview.days + ' days will delete ~' + formatted + ' rows on the next prune.\n\n' +
-            'Save the new retention window?'
-          );
-          if (!proceed) {
-            setMetricsRetentionStatus('Save cancelled — no changes made.', 'info');
             return;
           }
         }
+        if (metricsRetentionImpactCrossesThreshold(preview)) {
+          pendingMetricsRetentionSave = { requestBody, retention_days, currentEffective };
+          setMetricsRetentionStatus('', 'info');
+          showMetricsRetentionConfirmPanel(
+            buildMetricsRetentionConfirmMessage(currentEffective, retention_days, preview)
+          );
+          return;
+        }
       }
 
+      // No confirmation needed — fire immediately.
+      await performMetricsRetentionPut(requestBody);
+    }
+
+    async function confirmSaveMetricsRetention() {
+      const pending = pendingMetricsRetentionSave;
+      pendingMetricsRetentionSave = null;
+      clearMetricsRetentionConfirmPanel();
+      if (!pending) return;
+      await performMetricsRetentionPut(pending.requestBody);
+    }
+
+    function cancelMetricsRetentionConfirm() {
+      pendingMetricsRetentionSave = null;
+      clearMetricsRetentionConfirmPanel();
+      setMetricsRetentionStatus('Save cancelled — no changes made.', 'info');
+    }
+
+    async function performMetricsRetentionPut(requestBody) {
       setMetricsRetentionStatus('Saving…', 'info');
       try {
         const r = await fetch('/api/ai-ops/metrics-retention', {
