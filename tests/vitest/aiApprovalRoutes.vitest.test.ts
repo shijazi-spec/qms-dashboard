@@ -16,6 +16,69 @@ process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+// Per-test session-user override. The default rbac path inside the route file
+// is the admin-key fallback (returns userId=0, role='admin') which keeps the
+// existing happy-path tests working unchanged. Failure-path tests that need
+// to assert segregation-of-duties / role-gate / requester-vs-approver
+// behaviour install a non-admin user via setTestUser() before invoking the
+// handler. A vi.hoisted shim is required because vi.mock factories are
+// hoisted above local module-scope variables.
+const { setTestUser, getTestUser } = vi.hoisted(() => {
+  let user: any = null;
+  return {
+    setTestUser: (u: any) => {
+      user = u;
+    },
+    getTestUser: () => user,
+  };
+});
+
+vi.mock("../../src/utils/rbacMiddleware", () => {
+  const adminFromKey = (c: any) => {
+    const key = c?.req?.header?.("X-Admin-Key");
+    if (key && key === process.env.ADMIN_API_KEY) {
+      return { userId: 0, email: "admin-key@system", name: "Admin API", role: "admin" };
+    }
+    return null;
+  };
+  return {
+    getSessionUser: (c: any) => getTestUser() ?? adminFromKey(c),
+    requireRole: async (c: any, roles: string[]) => {
+      const user = getTestUser() ?? adminFromKey(c);
+      if (!user) return null;
+      if (!roles.includes(user.role)) return null;
+      return user;
+    },
+    requireAuthOrKey: (c: any) => getTestUser() ?? adminFromKey(c),
+    unauthorizedResponse: (c: any) => c.json({ error: "Authentication required" }, 401),
+    forbiddenResponse: (c: any, detail?: string) =>
+      c.json({ error: detail || "Insufficient permissions" }, 403),
+    // Pass-through outer gate; aiApprovalGate inside the route file already
+    // enforces per-route role lists via the mocked requireRole above.
+    gateApiRoute: <T,>(route: T): T => route,
+    hasValidAdminApiKey: (c: any) => {
+      const key = c?.req?.header?.("X-Admin-Key");
+      return !!(key && key === process.env.ADMIN_API_KEY);
+    },
+  };
+});
+
+// fs is mocked so the GET /ai-approvals HTML route can be steered between
+// the "file found -> 200 HTML" and "no candidate path exists -> 404" branches
+// without depending on the on-disk dashboard file. The mock spreads the real
+// module so other fs consumers (path resolution, test runner internals) keep
+// working; only existsSync/readFileSync are replaced with vi.fn() shims that
+// default to the real implementations.
+vi.mock("fs", async () => {
+  const actual = await vi.importActual<typeof import("fs")>("fs");
+  return {
+    ...actual,
+    default: actual,
+    existsSync: vi.fn(actual.existsSync),
+    readFileSync: vi.fn(actual.readFileSync),
+  };
+});
+
 vi.mock("../../src/utils/aiApprovalDatabase", () => ({
   initAIApprovalTable: vi.fn(async () => undefined),
   listPendingActions: vi.fn(),
@@ -124,6 +187,9 @@ beforeEach(async () => {
   registry = await import("../../src/utils/controlledDocumentRegistry");
   eventLogs = await import("../../src/utils/eventLogsDatabase");
   vi.clearAllMocks();
+  // Drop any non-admin user installed by a prior failure-path test so the
+  // happy-path tests fall back to the admin-key synth user via the rbac mock.
+  setTestUser(null);
   vi.mocked(approvalDb.initAIApprovalTable).mockResolvedValue(undefined);
   vi.mocked(eventLogs.logEvent).mockResolvedValue({ id: 1 });
   vi.mocked(eventLogs.getActionViewersBatch).mockResolvedValue({});
@@ -404,6 +470,165 @@ describe("POST /api/ai/approvals/:code/approve", () => {
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Approval action not found" });
   });
+
+  test("403 segregation-of-duties: non-admin requester cannot approve their own action", async () => {
+    // requested_by_user_id = 99 on the canned action; install a non-admin
+    // session user with the same userId so the SoD branch (WP-DOC-005) fires.
+    setTestUser({
+      userId: 99,
+      email: "qm@example.com",
+      name: "QM User",
+      role: "quality_manager",
+    });
+    const action = makeAction({ requested_by_user_id: 99 });
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    // Approver-role check passes so the handler reaches the SoD guard.
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(true);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/approve", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        params: { code: "ACT-2026-0001" },
+        body: {},
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error:
+        "Segregation of duties: you cannot approve your own AI proposal. See WP-DOC-005.",
+    });
+    // SoD short-circuits before any state mutation.
+    expect(approvalDb.claimForApproval).not.toHaveBeenCalled();
+    expect(approvalGate.executeApprovedAction).not.toHaveBeenCalled();
+  });
+
+  test("403 role gate: isAllowedApprover() false yields per-risk forbidden message", async () => {
+    // quality_manager passes the outer aiApprovalGate role list, but we
+    // force the per-risk approver check to fail so the in-handler role gate
+    // is the branch under test.
+    setTestUser({
+      userId: 42,
+      email: "qm@example.com",
+      name: "QM User",
+      role: "quality_manager",
+    });
+    const action = makeAction({ risk_level: "critical" });
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(false);
+    vi.mocked(governance.getApproverRolesFor).mockReturnValueOnce(["admin"]);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/approve", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        params: { code: "ACT-2026-0001" },
+        body: {},
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error:
+        'Role "quality_manager" is not permitted to approve critical-risk AI actions. Required roles: admin.',
+    });
+    expect(approvalDb.claimForApproval).not.toHaveBeenCalled();
+  });
+
+  test("409 when isToolGated() is false (defense-in-depth registry check)", async () => {
+    const action = makeAction({ tool_id: "ghost_tool" });
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(true);
+    vi.mocked(approvalGate.isToolGated).mockReturnValueOnce(false);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/approve", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: ADMIN_HEADERS,
+        params: { code: "ACT-2026-0001" },
+        body: {},
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: 'Tool "ghost_tool" is no longer registered as gated. Approval blocked.',
+    });
+    expect(approvalDb.claimForApproval).not.toHaveBeenCalled();
+  });
+
+  test("409 when claimForApproval() returns null (race lost) and surfaces currentStatus", async () => {
+    const action = makeAction();
+    vi.mocked(approvalDb.getPendingActionByCode)
+      .mockResolvedValueOnce(action)
+      // Second lookup happens after the failed claim so the response can
+      // report whatever state the row landed in.
+      .mockResolvedValueOnce(makeAction({ status: "rejected" }));
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(true);
+    vi.mocked(approvalGate.isToolGated).mockReturnValueOnce(true);
+    vi.mocked(approvalDb.claimForApproval).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/approve", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: ADMIN_HEADERS,
+        params: { code: "ACT-2026-0001" },
+        body: {},
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error:
+        "Could not claim approval — it may have been handled by another reviewer or expired.",
+      currentStatus: "rejected",
+    });
+    expect(approvalGate.executeApprovedAction).not.toHaveBeenCalled();
+  });
+
+  test("500 path runs error.message through redactSecretLikeStrings before echoing", async () => {
+    const action = makeAction();
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(true);
+    vi.mocked(approvalGate.isToolGated).mockReturnValueOnce(true);
+
+    // Force a thrown error AFTER the static checks have passed so control
+    // lands in the catch block. The message embeds a credential-shaped
+    // substring so we can verify the redactor sees it before it ever leaves
+    // the handler.
+    const leakyMessage =
+      "rotate failed: AKIAIOSFODNN7EXAMPLEKEYZZ leaked from upstream";
+    vi.mocked(approvalDb.claimForApproval).mockRejectedValueOnce(
+      new Error(leakyMessage),
+    );
+    vi.mocked(eventLogs.redactSecretLikeStrings).mockImplementationOnce(
+      () => "rotate failed: [REDACTED] leaked from upstream",
+    );
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/approve", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: ADMIN_HEADERS,
+        params: { code: "ACT-2026-0001" },
+        body: {},
+      }),
+    );
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({
+      error: "Failed to approve",
+      details: "rotate failed: [REDACTED] leaked from upstream",
+    });
+    // The credential-bearing original message must have been the input to
+    // the redactor — proving a thrown error never echoes a raw key.
+    expect(eventLogs.redactSecretLikeStrings).toHaveBeenCalledWith(leakyMessage);
+    errSpy.mockRestore();
+  });
 });
 
 describe("POST /api/ai/approvals/:code/reject", () => {
@@ -467,5 +692,126 @@ describe("POST /api/ai/approvals/:code/reject", () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Approval action not found" });
+  });
+
+  test("requester (not approver) may reject their own draft -> 200", async () => {
+    // The auditor role passes the outer reject-roles gate; isAllowedApprover
+    // is false, but isRequester is true (matching userId), so rejection
+    // succeeds as a self-cancel.
+    setTestUser({
+      userId: 99,
+      email: "auditor@example.com",
+      name: "Self-Canceller",
+      role: "auditor",
+    });
+    const action = makeAction({ requested_by_user_id: 99 });
+    const rejected = makeAction({
+      requested_by_user_id: 99,
+      status: "rejected",
+      rejection_reason: "Changed my mind",
+    });
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(false);
+    vi.mocked(approvalDb.rejectAction).mockResolvedValueOnce(rejected);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/reject", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        params: { code: "ACT-2026-0001" },
+        body: { reason: "Changed my mind" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, action: rejected });
+    expect(approvalDb.rejectAction).toHaveBeenCalledWith(
+      "ACT-2026-0001",
+      expect.objectContaining({ userId: 99, email: "auditor@example.com" }),
+      "Changed my mind",
+    );
+  });
+
+  test("403 when caller is neither requester nor approver", async () => {
+    // Auditor role passes the outer reject-roles gate. They are not the
+    // requester (different userId) and isAllowedApprover is mocked false,
+    // so the in-handler authorization check is the branch under test.
+    setTestUser({
+      userId: 7,
+      email: "auditor@example.com",
+      name: "Random Auditor",
+      role: "auditor",
+    });
+    const action = makeAction({ requested_by_user_id: 99 });
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(false);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/reject", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        params: { code: "ACT-2026-0001" },
+        body: { reason: "Looks wrong" },
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "Not authorized to reject this approval." });
+    expect(approvalDb.rejectAction).not.toHaveBeenCalled();
+  });
+
+  test("409 when rejectAction() returns null (state changed mid-request)", async () => {
+    const action = makeAction();
+    vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
+    vi.mocked(governance.isAllowedApprover).mockReturnValueOnce(true);
+    vi.mocked(approvalDb.rejectAction).mockResolvedValueOnce(null);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/reject", "POST");
+    const res = await handler(
+      makeContext({
+        method: "POST",
+        headers: ADMIN_HEADERS,
+        params: { code: "ACT-2026-0001" },
+        body: { reason: "Not in policy" },
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "Could not reject — state may have changed." });
+  });
+});
+
+describe("GET /ai-approvals (HTML dashboard route)", () => {
+  test("200 returns the dashboard HTML when a candidate file exists", async () => {
+    const fs = await import("fs");
+    // existsSync defaults to the real implementation, which finds
+    // dashboard/ai-approvals.html in this repo, but we steer the value
+    // explicitly so the test does not depend on the on-disk layout: first
+    // candidate hits, returns canned HTML.
+    vi.mocked(fs.existsSync).mockReturnValueOnce(true);
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(
+      "<html><body>AI Approvals</body></html>",
+    );
+
+    const handler = await buildHandler(aiApprovalRoutes, "/ai-approvals", "GET");
+    const res = await handler(makeContext({ method: "GET" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe("<html><body>AI Approvals</body></html>");
+    expect(res.headers["Content-Type"]).toMatch(/text\/html/);
+  });
+
+  test("404 fallback when no candidate path exists", async () => {
+    const fs = await import("fs");
+    // The handler probes two candidate paths; force both to miss so the
+    // fallback branch is the one under test.
+    vi.mocked(fs.existsSync).mockReturnValueOnce(false).mockReturnValueOnce(false);
+
+    const handler = await buildHandler(aiApprovalRoutes, "/ai-approvals", "GET");
+    const res = await handler(makeContext({ method: "GET" }));
+
+    expect(res.status).toBe(404);
+    expect(res.body).toBe("AI Approvals dashboard not found");
+    expect(fs.readFileSync).not.toHaveBeenCalled();
   });
 });
