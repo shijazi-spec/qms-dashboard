@@ -841,6 +841,45 @@ export async function initializeEventLogsTable(): Promise<void> {
 
     await copyBackupDataToPartitions();
 
+    // ---------------------------------------------------------------------
+    // Index plan for event_logs
+    // ---------------------------------------------------------------------
+    // Each index below is annotated with the query it primarily serves.
+    // Indexes are created on the partitioned parent — Postgres 11+
+    // automatically propagates CREATE INDEX on a partitioned parent to every
+    // existing and future child partition, so we don't enumerate partitions
+    // here. Keep this list in sync with the consumer queries when adding a
+    // new index.
+    //
+    //   idx_event_logs_timestamp          → admin event-log feed (ORDER BY
+    //                                       timestamp DESC paging in
+    //                                       eventLogsRoutes.ts).
+    //   idx_event_logs_user_id            → "events I caused" filter on the
+    //                                       admin event-log page.
+    //   idx_event_logs_action_type        → action_type facet filter.
+    //   idx_event_logs_entity_type        → entity_type facet filter.
+    //   idx_event_logs_module             → module facet filter.
+    //   idx_event_logs_severity           → severity facet filter.
+    //   idx_event_logs_correlation_id     → "show me everything in this
+    //                                       request" lookup (single
+    //                                       correlation_id, all rows).
+    //   idx_event_logs_created_at         → audit export ordering.
+    //   idx_event_logs_view_audit         → Task #514 partial composite for
+    //                                       the AI-approval review-status
+    //                                       NOT EXISTS sub-query in
+    //                                       aiApprovalDatabase.listPendingActions
+    //                                       (`reviewFilter` = 'unreviewed_by_me'
+    //                                       and 'no_reviewers'). The
+    //                                       predicate (action_type='AI_ACTION'
+    //                                       AND description ILIKE 'Viewed%')
+    //                                       restricts the index to view-audit
+    //                                       rows only — typically a tiny
+    //                                       fraction of event_logs — keeping
+    //                                       the index small and the planner's
+    //                                       NOT EXISTS short-circuit on
+    //                                       (correlation_id, user_id) cheap
+    //                                       even when event_logs grows into
+    //                                       the millions.
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp ON event_logs(timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_event_logs_user_id ON event_logs(user_id);
@@ -850,6 +889,10 @@ export async function initializeEventLogsTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_event_logs_severity ON event_logs(severity);
       CREATE INDEX IF NOT EXISTS idx_event_logs_correlation_id ON event_logs(correlation_id);
       CREATE INDEX IF NOT EXISTS idx_event_logs_created_at ON event_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_event_logs_view_audit
+        ON event_logs(correlation_id, user_id)
+        WHERE action_type = 'AI_ACTION'
+          AND description ILIKE 'Viewed%';
     `);
     
     console.log('📋 [EventLogs] Partitioned table and indexes created successfully');

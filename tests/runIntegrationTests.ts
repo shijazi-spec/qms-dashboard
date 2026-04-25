@@ -46,6 +46,15 @@
  * sets the env after standing up the dev server, so a regression in any
  * single export endpoint fails CI for that workflow.
  *
+ * Review-filter partial-index EXPLAIN test: if `RUN_REVIEW_FILTER_INDEX_E2E=1`
+ * is set we additionally run `tests/aiApprovalReviewFilterIndex.integration.ts`
+ * which seeds ≥100k synthetic event_logs rows and asserts that the AI
+ * approval queue's `reviewFilter` NOT EXISTS sub-query uses the
+ * `idx_event_logs_view_audit` partial index rather than seq-scanning a
+ * partition. The test validates `DATABASE_URL` itself and exits with a
+ * clear error if it's missing. Wired so a future schema change that
+ * accidentally drops or renames the index fails CI.
+ *
  * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
  * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
  * `tests/rbacReportRoutes.integration.ts` against a running dev server.
@@ -233,6 +242,37 @@ function runRbacIntegrationSuite(): Promise<RunResult> {
   });
 }
 
+function runReviewFilterIndex(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/aiApprovalReviewFilterIndex.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/aiApprovalReviewFilterIndex.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn review-filter index suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 function runStreamingExportLatency(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
@@ -337,6 +377,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] streaming-export latency HTTP integration tests — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  if (process.env.RUN_REVIEW_FILTER_INDEX_E2E === "1") {
+    console.log(
+      `\n──── Review-filter partial-index EXPLAIN integration test ────`,
+    );
+    results.push(await runReviewFilterIndex());
+  } else {
+    console.log(
+      `\n[skip] review-filter partial-index EXPLAIN test — set RUN_REVIEW_FILTER_INDEX_E2E=1 with DATABASE_URL to seed ≥100k rows and verify idx_event_logs_view_audit is used.`,
     );
   }
 
