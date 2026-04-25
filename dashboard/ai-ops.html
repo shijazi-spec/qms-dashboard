@@ -1214,11 +1214,41 @@
       if (current && seen.has(current)) sel.value = current;
     }
 
+    // localStorage keys for persisting the Prompt Version tab's filter
+    // controls so admins running rollouts with a non-default floor (e.g. 25)
+    // don't have to re-pick the value every page load. (Task #243)
+    const PROMPT_DAYS_STORAGE_KEY = 'aiOps.promptVersions.days';
+    const PROMPT_MIN_FEEDBACK_STORAGE_KEY = 'aiOps.promptVersions.minFeedback';
+
+    function restorePromptVersionPrefs() {
+      try {
+        const daysEl = document.getElementById('prompt-days');
+        if (daysEl) {
+          const savedDays = localStorage.getItem(PROMPT_DAYS_STORAGE_KEY);
+          if (savedDays && Array.from(daysEl.options).some(o => o.value === savedDays)) {
+            daysEl.value = savedDays;
+          }
+        }
+        const minEl = document.getElementById('prompt-min-feedback');
+        if (minEl) {
+          const savedMin = localStorage.getItem(PROMPT_MIN_FEEDBACK_STORAGE_KEY);
+          if (savedMin && Array.from(minEl.options).some(o => o.value === savedMin)) {
+            minEl.value = savedMin;
+          }
+        }
+      } catch (_e) { /* localStorage unavailable (private mode, etc.) */ }
+    }
+
     async function loadPromptVersions() {
       const el = document.getElementById('prompts-table');
       const days = document.getElementById('prompt-days').value;
       const minFeedbackParam = document.getElementById('prompt-min-feedback')?.value || '5';
       const showArchived = !!document.getElementById('prompt-show-archived')?.checked;
+      // Persist the current filter choices so they survive the next page load.
+      try {
+        localStorage.setItem(PROMPT_DAYS_STORAGE_KEY, String(days));
+        localStorage.setItem(PROMPT_MIN_FEEDBACK_STORAGE_KEY, String(minFeedbackParam));
+      } catch (_e) { /* localStorage unavailable — silently skip */ }
       try {
         // Active versions and historical rows in parallel.
         const [versionsRes, activeRes] = await Promise.all([
@@ -2302,6 +2332,10 @@
       if (overrideDismissBtn) overrideDismissBtn.addEventListener('click', dismissToolHealthOverrideBanner);
       const overrideSnoozeBtn = document.getElementById('tool-health-override-banner-snooze');
       if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', snoozeToolHealthOverrideBanner);
+      // Restore the persisted Prompt Version filters BEFORE any code path
+      // can read their values (deep-link to ?tab=prompts, refreshAll, etc.),
+      // so the first data fetch already uses the saved choice. (Task #243)
+      restorePromptVersionPrefs();
       loadSummary();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
