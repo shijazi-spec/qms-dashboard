@@ -296,11 +296,31 @@ export async function getOpenAlertsByType(
  * "Triage time" is COALESCE(resolved_at, acknowledged_at, created_at) so
  * that both status paths surface in the correct chronological position even
  * for older rows that pre-date the acknowledged_at column migration.
+ *
+ * `severity`, when provided, narrows the result set to a single severity
+ * tier (critical / high / medium / low / info). The route layer is
+ * responsible for whitelisting the value before it lands here, so the
+ * column comparison is safe to perform as a parameterised equality check.
  */
 export async function getToolHealthAlertHistory(
   days = 7,
   limit = 20,
+  severity?: string,
 ): Promise<AIAlert[]> {
+  if (severity) {
+    const result = await pool.query(
+      `SELECT *
+         FROM ai_alerts
+        WHERE alert_type = 'tool_health'
+          AND status IN ('acknowledged', 'resolved')
+          AND severity = $3
+          AND COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL
+        ORDER BY COALESCE(resolved_at, acknowledged_at, created_at) DESC
+        LIMIT $2`,
+      [days, limit, severity],
+    );
+    return result.rows;
+  }
   const result = await pool.query(
     `SELECT *
        FROM ai_alerts

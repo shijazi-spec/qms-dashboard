@@ -614,7 +614,15 @@ export const aiOpsRoutes = [
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const days  = safeInt(c.req.query("days"),  7,  1, 90);
           const limit = safeInt(c.req.query("limit"), 20, 1, 100);
-          const alerts = await getToolHealthAlertHistory(days, limit);
+          // Whitelist severity here so the database layer never sees a
+          // free-form string. Unknown / "all" / blank values fall through
+          // as `undefined`, which keeps the unfiltered query path.
+          const ALLOWED_SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
+          const sevRaw = (c.req.query("severity") || '').toLowerCase();
+          const severity = (ALLOWED_SEVERITIES as readonly string[]).includes(sevRaw)
+            ? sevRaw
+            : undefined;
+          const alerts = await getToolHealthAlertHistory(days, limit, severity);
           const data = alerts.map((a: AIAlert) => {
             const parsed = parseToolHealthRelatedId(a.related_record_id);
             const triagedAt = a.status === 'resolved'
@@ -637,7 +645,7 @@ export const aiOpsRoutes = [
               resolution_note: a.resolution_note ?? null,
             };
           });
-          return c.json({ data, days });
+          return c.json({ data, days, severity: severity ?? null });
         } catch (error) {
           console.error("[AI-Ops] tool-health-alerts history error:", error);
           return c.json({ error: "Failed to fetch tool-health alert history" }, 500);

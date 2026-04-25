@@ -236,6 +236,138 @@ if (!HAS_DB) {
       }
     }
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tool-health alert history severity filter (Task #319)
+  //
+  // Seeds two acknowledged tool-health alerts of different severities
+  // (high + medium), then verifies that:
+  //   - omitting `severity` returns both rows
+  //   - `severity=high` returns only the high one
+  //   - `severity=medium` returns only the medium one
+  //   - an unknown / "all" severity falls through to the unfiltered query
+  //   - the response shape includes the resolved `severity` field
+  // ─────────────────────────────────────────────────────────────────────────
+  const HISTORY_SUFFIX = `${Date.now()}`;
+  const HIGH_TOOL    = `test_history_high_${HISTORY_SUFFIX}`;
+  const MEDIUM_TOOL  = `test_history_medium_${HISTORY_SUFFIX}`;
+  let highId: number | null = null;
+  let mediumId: number | null = null;
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/history filters by severity", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const { acknowledgeAlert } = await import("../src/utils/aiAlertsDatabase");
+    try {
+      // Seed two alerts with distinct severities, then acknowledge each so
+      // they show up in the triage-history listing.
+      const high = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "high",
+        title: `History test HIGH ${HIGH_TOOL}`,
+        description: "Task #319 history-filter test seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `${HIGH_TOOL}:error_rate`,
+        metadata: { tool_name: HIGH_TOOL, reason: "error_rate" },
+      });
+      highId = high.id;
+      await acknowledgeAlert(highId, "history-filter-test");
+
+      const medium = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "medium",
+        title: `History test MEDIUM ${MEDIUM_TOOL}`,
+        description: "Task #319 history-filter test seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `${MEDIUM_TOOL}:p95_latency`,
+        metadata: { tool_name: MEDIUM_TOOL, reason: "p95_latency" },
+      });
+      mediumId = medium.id;
+      await acknowledgeAlert(mediumId, "history-filter-test");
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/history",
+        "GET",
+      );
+
+      // 1. No severity → both seeded alerts are returned.
+      const noFilter = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100" },
+        }),
+      );
+      suite.expectEqual(noFilter.status, 200, "no-filter status");
+      suite.expectEqual(noFilter.body?.severity, null, "no-filter severity echoed as null");
+      const noFilterIds = (noFilter.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(noFilterIds.includes(highId), "no-filter contains high seed");
+      suite.expect(noFilterIds.includes(mediumId), "no-filter contains medium seed");
+
+      // 2. severity=high → only the high seed comes back.
+      const highOnly = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", severity: "high" },
+        }),
+      );
+      suite.expectEqual(highOnly.status, 200, "high-only status");
+      suite.expectEqual(highOnly.body?.severity, "high", "high-only severity echoed");
+      const highOnlyRows = (highOnly.body?.data ?? []) as any[];
+      suite.expect(
+        highOnlyRows.every((a) => a.severity === "high"),
+        "high-only rows are all severity=high",
+      );
+      suite.expect(highOnlyRows.some((a) => a.id === highId), "high-only contains high seed");
+      suite.expect(!highOnlyRows.some((a) => a.id === mediumId), "high-only excludes medium seed");
+
+      // 3. severity=medium → only the medium seed comes back.
+      const mediumOnly = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", severity: "medium" },
+        }),
+      );
+      suite.expectEqual(mediumOnly.status, 200, "medium-only status");
+      const mediumOnlyRows = (mediumOnly.body?.data ?? []) as any[];
+      suite.expect(
+        mediumOnlyRows.every((a) => a.severity === "medium"),
+        "medium-only rows are all severity=medium",
+      );
+      suite.expect(mediumOnlyRows.some((a) => a.id === mediumId), "medium-only contains medium seed");
+      suite.expect(!mediumOnlyRows.some((a) => a.id === highId), "medium-only excludes high seed");
+
+      // 4. Unknown severity ("all" / garbage) falls through to unfiltered.
+      const allFallback = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", severity: "all" },
+        }),
+      );
+      suite.expectEqual(allFallback.status, 200, "fallback status");
+      suite.expectEqual(allFallback.body?.severity, null, "unknown severity echoed as null");
+      const fallbackIds = (allFallback.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(fallbackIds.includes(highId), "fallback contains high seed");
+      suite.expect(fallbackIds.includes(mediumId), "fallback contains medium seed");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      // Clean up the two seeded alerts so the dev DB doesn't accumulate
+      // test rows across reruns.
+      for (const id of [highId, mediumId]) {
+        if (id != null) {
+          try { await resolveAlert(id, "history-filter-test", "cleanup"); }
+          catch { /* best-effort */ }
+        }
+      }
+    }
+  });
 }
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -141,13 +141,53 @@
             </svg>
             <span class="text-sm font-semibold text-gray-700">Recently triaged tool-health alerts</span>
             <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-200 text-gray-700" id="tool-health-history-count" data-testid="badge-tool-health-history-count">—</span>
-            <span class="text-xs text-gray-400">(last 7 days)</span>
+            <span class="text-xs text-gray-400" id="tool-health-history-window-label" data-testid="text-tool-health-history-window">(last 7 days)</span>
           </div>
           <svg id="tool-health-history-chevron" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
         </button>
         <div id="tool-health-history-body" class="hidden border-t border-gray-200 bg-gray-50 rounded-b-xl px-5 py-4" data-testid="panel-tool-health-history">
+          <!-- Filter bar (Task #319): lets ops narrow the triage history by
+               date range, severity, and a free-text tool-name match before
+               scanning the list. Server-side filters drive `days` + `severity`
+               on the API; tool-name search is applied client-side over the
+               returned window so it stays responsive. -->
+          <div class="flex flex-wrap items-end gap-3 mb-3 pb-3 border-b border-gray-200" data-testid="filters-tool-health-history">
+            <div class="flex flex-col">
+              <label for="tool-health-history-days" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Date range</label>
+              <select id="tool-health-history-days"
+                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      data-testid="select-tool-health-history-days">
+                <option value="1">Last 1 day</option>
+                <option value="7" selected>Last 7 days</option>
+                <option value="30">Last 30 days</option>
+              </select>
+            </div>
+            <div class="flex flex-col">
+              <label for="tool-health-history-severity" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Severity</label>
+              <select id="tool-health-history-severity"
+                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      data-testid="select-tool-health-history-severity">
+                <option value="">All severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+              </select>
+            </div>
+            <div class="flex flex-col flex-1 min-w-[160px]">
+              <label for="tool-health-history-tool" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Tool name</label>
+              <input type="search"
+                     id="tool-health-history-tool"
+                     placeholder="e.g. searchTool"
+                     class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                     data-testid="input-tool-health-history-tool">
+            </div>
+            <button type="button"
+                    id="tool-health-history-reset"
+                    class="text-xs font-medium text-gray-600 hover:text-gray-900 underline self-center mb-1"
+                    data-testid="button-tool-health-history-reset">Reset</button>
+          </div>
           <div id="tool-health-history-list" class="space-y-2" data-testid="list-tool-health-history"></div>
         </div>
       </div>
@@ -747,13 +787,39 @@
     async function loadToolHealthAlertsHistory() {
       const countBadge = document.getElementById('tool-health-history-count');
       const list = document.getElementById('tool-health-history-list');
+      const windowLabel = document.getElementById('tool-health-history-window-label');
       if (!list) return;
+      // Read filters from the bar above the list. These are server-side
+      // filters (`days`, `severity`) plus a client-side `tool` substring
+      // match applied to the returned window.
+      const daysSel = document.getElementById('tool-health-history-days');
+      const sevSel  = document.getElementById('tool-health-history-severity');
+      const toolInp = document.getElementById('tool-health-history-tool');
+      const days     = daysSel ? (parseInt(daysSel.value, 10) || 7) : 7;
+      const severity = sevSel  ? sevSel.value : '';
+      const toolText = toolInp ? toolInp.value.trim().toLowerCase() : '';
+      if (windowLabel) {
+        windowLabel.textContent = days === 1 ? '(last 1 day)' : `(last ${days} days)`;
+      }
+      const params = new URLSearchParams({ days: String(days), limit: '20' });
+      if (severity) params.set('severity', severity);
       try {
-        const { data } = await apiFetch('/api/ai-ops/tool-health-alerts/history?days=7&limit=20');
-        const alerts = Array.isArray(data) ? data : [];
+        const { data } = await apiFetch(`/api/ai-ops/tool-health-alerts/history?${params.toString()}`);
+        const allAlerts = Array.isArray(data) ? data : [];
+        // Tool-name search runs client-side against the returned window so
+        // typing in the box doesn't fire a request per keystroke.
+        const alerts = toolText
+          ? allAlerts.filter(a => (a.tool_name || '').toLowerCase().includes(toolText))
+          : allAlerts;
         if (countBadge) countBadge.textContent = String(alerts.length);
         if (alerts.length === 0) {
-          list.innerHTML = '<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">No acknowledged or resolved alerts in the last 7 days.</p>';
+          // Distinct empty-state copy when filters are active so ops know
+          // the silence is from filtering, not an empty database.
+          const filtersActive = !!severity || !!toolText || days !== 7;
+          const msg = filtersActive
+            ? 'No acknowledged or resolved alerts match the current filters.'
+            : `No acknowledged or resolved alerts in the last ${days} day${days === 1 ? '' : 's'}.`;
+          list.innerHTML = `<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">${esc(msg)}</p>`;
           return;
         }
         const STATUS_BADGE = {
@@ -832,6 +898,31 @@
         toggle.setAttribute('aria-expanded', String(!open));
         chevron.style.transform = open ? '' : 'rotate(180deg)';
       });
+
+      // Wire the filter bar (Task #319). Date range and severity hit the
+      // backend; tool-name is debounced so each keystroke doesn't trigger
+      // a refetch — the loader applies that one client-side anyway.
+      const daysSel = document.getElementById('tool-health-history-days');
+      const sevSel  = document.getElementById('tool-health-history-severity');
+      const toolInp = document.getElementById('tool-health-history-tool');
+      const reset   = document.getElementById('tool-health-history-reset');
+      if (daysSel) daysSel.addEventListener('change', () => loadToolHealthAlertsHistory());
+      if (sevSel)  sevSel .addEventListener('change', () => loadToolHealthAlertsHistory());
+      if (toolInp) {
+        let toolDebounce;
+        toolInp.addEventListener('input', () => {
+          clearTimeout(toolDebounce);
+          toolDebounce = setTimeout(() => loadToolHealthAlertsHistory(), 200);
+        });
+      }
+      if (reset) {
+        reset.addEventListener('click', () => {
+          if (daysSel) daysSel.value = '7';
+          if (sevSel)  sevSel.value  = '';
+          if (toolInp) toolInp.value = '';
+          loadToolHealthAlertsHistory();
+        });
+      }
     }
 
     // Jumps to the matching row in the Top Tools tab. Switches to that tab
