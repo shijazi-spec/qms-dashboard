@@ -576,7 +576,7 @@
             return bubble;
         }
 
-        function attachFeedbackUI(bubble, messageId, promptText, responseText, callId) {
+        function attachFeedbackUI(bubble, messageId, promptText, responseText, callId, promptVersion) {
             if (bubble.querySelector('.feedback-bar')) return;
             var bar = document.createElement('div');
             bar.className = 'feedback-bar';
@@ -607,7 +607,7 @@
 
             upBtn.addEventListener('click', function() {
                 if (messageId) {
-                    submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected);
+                    submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected, promptVersion);
                 }
                 if (callId) {
                     sendFeedbackByCallId(bar, 'thumbs_up', null, callId, markSelected);
@@ -617,7 +617,7 @@
                 if (callId) {
                     showCommentPrompt(bar, markSelected);
                 } else {
-                    openThumbsDownModal(messageId, promptText, responseText, markSelected);
+                    openThumbsDownModal(messageId, promptText, responseText, markSelected, promptVersion);
                 }
             });
 
@@ -642,8 +642,8 @@
 
         var _feedbackModalCallback = null;
 
-        function openThumbsDownModal(messageId, promptText, responseText, onDone) {
-            _feedbackModalCallback = { messageId: messageId, promptText: promptText, responseText: responseText, onDone: onDone };
+        function openThumbsDownModal(messageId, promptText, responseText, onDone, promptVersion) {
+            _feedbackModalCallback = { messageId: messageId, promptText: promptText, responseText: responseText, onDone: onDone, promptVersion: promptVersion };
             var modal = document.getElementById('feedbackModal');
             var catBtns = modal.querySelectorAll('.feedback-category-btn');
             catBtns.forEach(function(b) { b.classList.remove('selected'); });
@@ -669,7 +669,7 @@
             var categories = Array.from(catBtns).map(function(b) { return b.dataset.cat; }).join(',');
             var comment = (document.getElementById('feedbackComment').value || '').trim();
             var cb = _feedbackModalCallback;
-            submitFeedback(cb.messageId, 'down', categories || null, comment || null, cb.promptText, cb.responseText, cb.onDone);
+            submitFeedback(cb.messageId, 'down', categories || null, comment || null, cb.promptText, cb.responseText, cb.onDone, cb.promptVersion);
             closeFeedbackModal();
         };
 
@@ -721,7 +721,7 @@
 
         setTimeout(feedbackQueueDrain, 2000);
 
-        function submitFeedback(messageId, rating, category, comment, promptText, responseText, onDone) {
+        function submitFeedback(messageId, rating, category, comment, promptText, responseText, onDone, promptVersion) {
             if (onDone) onDone(rating);
             if (messageId) ratingCacheSet(messageId, rating);
             var payload = {
@@ -732,6 +732,14 @@
                 comment: comment || null,
                 promptPreview: promptText ? promptText.substring(0, 300) : null,
                 responsePreview: responseText ? responseText.substring(0, 500) : null,
+                // Echo back the prompt revision the user actually saw
+                // (captured from the chat stream's done frame). Server
+                // validates and forwards via buildAiCallFeedbackMetadata
+                // so analytics can join thumbs-up/down to the exact
+                // prompt revision in ai_response_feedback.metadata.
+                promptVersion: promptVersion || null,
+                ratingSource: 'inline_thumbs',
+                clientSurface: 'web',
             };
             feedbackQueueAdd(payload);
             fetch('/api/consultant/feedback', {
@@ -967,6 +975,7 @@
             var streamOk = false;
             var capturedMessageId = null;
             var assistantCallId = null;
+            var assistantPromptVersion = null;
 
             try {
                 var response = await fetch('/api/consultant/chat/stream', {
@@ -1004,6 +1013,7 @@
                                 if (parsed.text) { fullText += parsed.text; bubble.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                                 if (parsed.content) { fullText += parsed.content; bubble.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                                 if (parsed.callId) { assistantCallId = parsed.callId; }
+                                if (parsed.promptVersion) { assistantPromptVersion = parsed.promptVersion; }
                                 if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; bubble.innerHTML = renderMarkdown(fullText); }
                             } catch (pe) {
                                 fullText += data;
@@ -1022,7 +1032,7 @@
                 if (isArabic(fullText)) bubble.setAttribute('dir', 'rtl');
                 chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
                 if (fullText.trim()) {
-                    attachFeedbackUI(bubble, capturedMessageId, text, fullText, assistantCallId);
+                    attachFeedbackUI(bubble, capturedMessageId, text, fullText, assistantCallId, assistantPromptVersion);
                 }
             } catch (err) {
                 if (!streamOk) {
@@ -1041,7 +1051,7 @@
                         if (isArabic(respText)) bubble.setAttribute('dir', 'rtl');
                         chatMessages.push({ role: 'assistant', content: respText, time: new Date().toISOString() });
                         if (respText.trim()) {
-                            attachFeedbackUI(bubble, data.messageId, text, respText, data.callId);
+                            attachFeedbackUI(bubble, data.messageId, text, respText, data.callId, data.promptVersion);
                         }
                     } catch (fallbackErr) {
                         bubble = createAssistantMessage();
@@ -1052,7 +1062,7 @@
                     if (fullText.trim()) {
                         bubble.innerHTML = renderMarkdown(fullText + '\n\n*⚠️ Response was interrupted.*');
                         chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
-                        if (capturedMessageId) attachFeedbackUI(bubble, capturedMessageId, text, fullText);
+                        if (capturedMessageId) attachFeedbackUI(bubble, capturedMessageId, text, fullText, assistantCallId, assistantPromptVersion);
                     } else {
                         bubble.innerHTML = renderMarkdown('**Error:** The response stream was interrupted. Please try again.');
                     }

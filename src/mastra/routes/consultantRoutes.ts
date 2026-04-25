@@ -134,6 +134,12 @@ export const consultantRoutes = [
               response: response.text,
               callId: callId ?? undefined,
               messageId,
+              // Surface the prompt revision active for THIS turn so the
+              // client can echo it back when the user thumbs-up/down,
+              // letting analytics correlate ratings to the exact prompt
+              // the user actually saw (instead of the latest server-side
+              // constant at rating-save time).
+              promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
             });
           } finally {
             clearTimeout(timer);
@@ -247,7 +253,7 @@ export const consultantRoutes = [
                 // messageId comes from main and is used by the client to
                 // address an individual assistant turn for editing/threading.
                 streamController.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined })}\n\n`)
+                  encoder.encode(`data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`)
                 );
                 streamController.close();
               } catch (err) {
@@ -443,23 +449,46 @@ export const consultantRoutes = [
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const body = await c.req.json();
-          const { messageId, conversationId, rating, category, comment, promptPreview, responsePreview, toolsCalled } = body;
+          const {
+            messageId, conversationId, rating, category, comment,
+            promptPreview, responsePreview, toolsCalled,
+            promptVersion: clientPromptVersion,
+            ratingSource: clientRatingSource,
+            clientSurface: clientSurfaceInput,
+          } = body;
 
           if (!messageId || !rating || !['up', 'down'].includes(rating)) {
             return c.json({ error: "messageId and valid rating ('up'|'down') are required" }, 400);
           }
 
+          // Validate caller-supplied metadata strings: trim, drop empties,
+          // and clamp length so a malicious / buggy client can't push a
+          // multi-MB blob into the JSONB column. The closed allow-list
+          // already prevents arbitrary KEYS from being persisted (see
+          // buildAiCallFeedbackMetadata); this guards the VALUES.
+          const safeMetaString = (value: unknown, max: number): string | undefined => {
+            if (typeof value !== 'string') return undefined;
+            const trimmed = value.trim();
+            if (!trimmed) return undefined;
+            return trimmed.substring(0, max);
+          };
+
           // Always route metadata through buildAiCallFeedbackMetadata so the
           // closed allow-list (Task #512) is enforced at the call site.
           // promptVersion lets analytics correlate thumbs-up/down to the
-          // exact consultant prompt revision the user reacted to;
-          // ratingSource / clientSurface mark this as the inline thumbs UI
-          // on the web consultant chat (other surfaces — Slack, mobile —
-          // would supply different values when wired up).
+          // exact consultant prompt revision the user reacted to — we
+          // prefer the value the CLIENT echoed back (captured at the
+          // moment the response was rendered) and fall back to the
+          // current server-side constant only when the client didn't
+          // send one (older clients that haven't been updated yet).
+          // ratingSource / clientSurface mark which UI surface produced
+          // the rating; defaults match the inline thumbs on the web
+          // consultant chat (other surfaces — Slack, mobile, embedded
+          // widget — supply different values when wired up).
           const feedbackMetadata = buildAiCallFeedbackMetadata({
-            promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
-            ratingSource: 'inline_thumbs',
-            clientSurface: 'web',
+            promptVersion: safeMetaString(clientPromptVersion, 100) ?? QMS_CONSULTANT_PROMPT_VERSION,
+            ratingSource: safeMetaString(clientRatingSource, 50) ?? 'inline_thumbs',
+            clientSurface: safeMetaString(clientSurfaceInput, 50) ?? 'web',
           });
 
           const result = await saveFeedback({

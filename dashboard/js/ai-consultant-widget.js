@@ -434,7 +434,7 @@
         return bubble;
     }
 
-    function widgetAttachFeedback(bubble, messageId, promptText, responseText) {
+    function widgetAttachFeedback(bubble, messageId, promptText, responseText, promptVersion) {
         if (!messageId || bubble.querySelector('.widget-feedback-bar')) return;
         var bar = document.createElement('div');
         bar.className = 'widget-feedback-bar';
@@ -461,10 +461,10 @@
         }
 
         upBtn.addEventListener('click', function() {
-            widgetSubmitFeedback(messageId, 'up', null, null, promptText, responseText, markDone);
+            widgetSubmitFeedback(messageId, 'up', null, null, promptText, responseText, markDone, promptVersion);
         });
         downBtn.addEventListener('click', function() {
-            widgetOpenDownModal(messageId, promptText, responseText, markDone);
+            widgetOpenDownModal(messageId, promptText, responseText, markDone, promptVersion);
         });
 
         bubble.appendChild(bar);
@@ -486,8 +486,8 @@
 
     var _wModalCb = null;
 
-    function widgetOpenDownModal(messageId, promptText, responseText, onDone) {
-        _wModalCb = { messageId: messageId, promptText: promptText, responseText: responseText, onDone: onDone };
+    function widgetOpenDownModal(messageId, promptText, responseText, onDone, promptVersion) {
+        _wModalCb = { messageId: messageId, promptText: promptText, responseText: responseText, onDone: onDone, promptVersion: promptVersion };
         var modal = document.getElementById('widget-down-modal');
         if (!modal) {
             var m = document.createElement('div');
@@ -540,7 +540,7 @@
         var cats = Array.from(modal.querySelectorAll('.widget-cat-btn.sel')).map(function(b) { return b.dataset.cat; }).join(',');
         var comment = (document.getElementById('widget-feedback-comment').value || '').trim();
         var cb = _wModalCb;
-        widgetSubmitFeedback(cb.messageId, 'down', cats || null, comment || null, cb.promptText, cb.responseText, cb.onDone);
+        widgetSubmitFeedback(cb.messageId, 'down', cats || null, comment || null, cb.promptText, cb.responseText, cb.onDone, cb.promptVersion);
         widgetCloseDownModal();
     };
 
@@ -579,7 +579,7 @@
     }
     setTimeout(wFbQueueDrain, 2000);
 
-    function widgetSubmitFeedback(messageId, rating, category, comment, promptText, responseText, onDone) {
+    function widgetSubmitFeedback(messageId, rating, category, comment, promptText, responseText, onDone, promptVersion) {
         if (onDone) onDone(rating);
         if (messageId) wRatingCacheSet(messageId, rating);
         var payload = {
@@ -590,6 +590,9 @@
             comment: comment || null,
             promptPreview: promptText ? promptText.substring(0, 300) : null,
             responsePreview: responseText ? responseText.substring(0, 500) : null,
+            promptVersion: promptVersion || null,
+            ratingSource: 'inline_thumbs',
+            clientSurface: 'web_widget',
         };
         wFbQueueAdd(payload);
         fetch('/api/consultant/feedback', {
@@ -636,6 +639,7 @@
         var fullText = '';
         var streamOk = false;
         var capturedMessageId = null;
+        var capturedPromptVersion = null;
 
         try {
             var response = await fetch('/api/consultant/chat/stream', {
@@ -674,6 +678,7 @@
                                 sessionStorage.setItem('widget_consultant_threadId', threadId);
                             }
                             if (parsed.messageId) { capturedMessageId = parsed.messageId; }
+                            if (parsed.promptVersion) { capturedPromptVersion = parsed.promptVersion; }
                             if (parsed.text) { fullText += parsed.text; bubble.innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
                             if (parsed.content) { fullText += parsed.content; bubble.innerHTML = renderMarkdown(fullText); widgetScrollBottom(); }
                             if (parsed.error) { fullText += '\n\n**Error:** ' + parsed.error; bubble.innerHTML = renderMarkdown(fullText); }
@@ -692,7 +697,7 @@
             }
 
             if (capturedMessageId && fullText.trim()) {
-                widgetAttachFeedback(bubble, capturedMessageId, text, fullText);
+                widgetAttachFeedback(bubble, capturedMessageId, text, fullText, capturedPromptVersion);
             }
 
         } catch (err) {
@@ -711,7 +716,7 @@
                     var respText = data.response || data.message || 'No response received.';
                     bubble.innerHTML = renderMarkdown(respText);
                     if (data.messageId && respText.trim()) {
-                        widgetAttachFeedback(bubble, data.messageId, text, respText);
+                        widgetAttachFeedback(bubble, data.messageId, text, respText, data.promptVersion);
                     }
                 } catch (fallbackErr) {
                     bubble = widgetCreateAI();
@@ -720,7 +725,7 @@
             } else if (bubble && fullText.trim()) {
                 fullText += '\n\n---\n*Response interrupted.*';
                 bubble.innerHTML = renderMarkdown(fullText);
-                if (capturedMessageId) widgetAttachFeedback(bubble, capturedMessageId, text, fullText);
+                if (capturedMessageId) widgetAttachFeedback(bubble, capturedMessageId, text, fullText, capturedPromptVersion);
             }
         } finally {
             widgetHideTyping();
