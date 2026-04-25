@@ -1,7 +1,57 @@
 import type { Pool as PgPool } from 'pg';
 import { streamCsv, stageStreamingExportFromHono } from "../../utils/excelExport";
 import { escapeCSVValue } from "../../utils/inputSanitizer";
-import { gateApiRoute } from "../../utils/rbacMiddleware";
+import { gateApiRoute, requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacDatabase";
+
+const QMS_GOVERNANCE_READ: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'];
+const QMS_GOVERNANCE_WRITE: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'];
+const QMS_CLOSURE_ROLES: UserRole[] = ['admin', 'quality_manager', 'head_of_operations_quality'];
+const QMS_CAPA_PATCH_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor'];
+const EVIDENCE_READ_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive'];
+const EVIDENCE_DELETE_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'];
+
+function qmsGate<T extends { path: string; method: string; createHandler: (deps: any) => any }>(route: T): T {
+  if (!route.path.startsWith('/api/')) return route;
+
+  let roles: UserRole[];
+  const p = route.path;
+  const m = route.method;
+  if (p === '/api/pdpl/export' || p === '/api/pdpl/export/estimate') {
+    roles = ['admin'];
+  } else if (
+    p.startsWith('/api/qms/nc/export') || p.startsWith('/api/qms/capa/export') ||
+    p.startsWith('/api/qms/capa-export-xlsx') || p.startsWith('/api/compliance/export') ||
+    p.startsWith('/api/vendors/export') || p.startsWith('/api/kpis/export')
+  ) {
+    roles = p.startsWith('/api/kpis/export') ? QMS_GOVERNANCE_READ : QMS_GOVERNANCE_WRITE;
+  } else if ((p.endsWith('/approve-closure') || p.endsWith('/effectiveness')) && m === 'POST') {
+    roles = QMS_CLOSURE_ROLES;
+  } else if (p.match(/^\/api\/qms\/capa\/:[^/]+$/) && m === 'PATCH') {
+    roles = QMS_CAPA_PATCH_ROLES;
+  } else if (p === '/api/evidence-pack' || p === '/api/evidence-summary') {
+    roles = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor', 'quality_specialist'];
+  } else if (m === 'DELETE' && p.startsWith('/api/evidence/')) {
+    roles = EVIDENCE_DELETE_ROLES;
+  } else if (p.startsWith('/api/evidence')) {
+    roles = EVIDENCE_READ_ROLES;
+  } else {
+    roles = QMS_GOVERNANCE_WRITE;
+  }
+
+  const originalCreate = route.createHandler;
+  return {
+    ...route,
+    createHandler: async (deps: any) => {
+      const inner = await originalCreate(deps);
+      return async (c: any) => {
+        const user = await requireRole(c, roles);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions for QMS data');
+        return inner(c);
+      };
+    },
+  };
+}
 
 const evidenceRoutes = [
   {
@@ -1109,4 +1159,4 @@ const _qmsEnhancedRoutesRaw = [
   },
 ];
 
-export const qmsEnhancedRoutes = _qmsEnhancedRoutesRaw.map(gateApiRoute);
+export const qmsEnhancedRoutes = _qmsEnhancedRoutesRaw.map(qmsGate).map(gateApiRoute);

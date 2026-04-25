@@ -302,6 +302,9 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/compliance\/controls/, methods: ['POST', 'PUT', 'DELETE'], permission: 'can_edit_controls' },
   { pattern: /^\/api\/compliance\/capa/, methods: ['POST', 'PUT'], permission: 'can_create_capa' },
   { pattern: /^\/api\/compliance/, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'grc_manager', 'quality_manager'] },
+  // Compliance export endpoints carry the same governance-write restriction as
+  // other QMS exports — executive may not download raw compliance export data.
+  { pattern: /^\/api\/compliance\/export/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
   // Compliance reads — governance roles and senior leadership only
   { pattern: /^\/api\/compliance/, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
 
@@ -335,7 +338,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   { pattern: /^\/api\/event-logs/, methods: ['DELETE'], roles: ['admin'] },
 
-  { pattern: /^\/api\/audit\/trigger$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'team_lead', 'auditor', 'quality_specialist', 'department_viewer', 'ai_specialist', 'bu_owner', 'executive'] },
+  { pattern: /^\/api\/audit\/trigger$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'team_lead', 'auditor', 'quality_specialist', 'ai_specialist', 'bu_owner', 'executive'] },
 
   { pattern: /^\/api\/team\//, methods: ['POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
   { pattern: /^\/api\/team$/, methods: ['POST', 'PUT', 'PATCH', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
@@ -406,6 +409,78 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // sensitive aggregated data externally and is restricted to governance write roles.
   { pattern: /^\/api\/infographic\/[^/]+\/share\/(slack|email)$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
   { pattern: /^\/api\/infographic(\/.+)?$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PMP (Project Management Portfolio) — project, risk, milestone, stakeholder,
+  // procurement, and change-request data.  BU owners participate in
+  // project governance for their own business unit.
+  // AI charter generation additionally requires ai_specialist access.
+  // ─────────────────────────────────────────────────────────────────────────
+  { pattern: /^\/api\/pmp\/generate-charter$/, methods: ['POST'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist', 'bu_owner'] },
+  { pattern: /^\/api\/pmp\//, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'bu_owner'] },
+  { pattern: /^\/api\/pmp\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive', 'bu_owner'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TableF (Department COPC KPI scorecard) — department-level performance
+  // KPIs, actuals, snapshots, and user assignments.
+  // BU owners may read their department data; only quality/governance roles
+  // may write.
+  // ─────────────────────────────────────────────────────────────────────────
+  { pattern: /^\/api\/tablef\//, methods: ['POST', 'PUT', 'DELETE'], roles: ['admin', 'head_of_operations_quality', 'quality_manager', 'grc_manager'] },
+  { pattern: /^\/api\/tablef\//, methods: ['GET'], roles: ['admin', 'head_of_operations_quality', 'quality_manager', 'grc_manager', 'executive', 'bu_owner'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // AI Approvals (HITL governance queue) — pending, detail, approve, reject.
+  // The handler enforces per-user row filtering and segregation of duties;
+  // ROUTE_PERMISSION_MAP prevents department_viewer reaching the handler at
+  // all.  Approve is restricted to governance write roles; reject is broader
+  // to allow requesters to cancel their own draft (handler enforces SoD).
+  // ─────────────────────────────────────────────────────────────────────────
+  { pattern: /^\/api\/ai\/approvals\/[^/]+\/approve$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/ai\/approvals\/[^/]+\/reject$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead'] },
+  { pattern: /^\/api\/ai\/approvals/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // QMS Enhanced — evidence records, QMS exports, NC/CAPA closure approvals.
+  // PDPL export exposes the full PII data inventory — admin only.
+  // QMS NC/CAPA CSV/XLSX exports stream large sensitive datasets — governance
+  // write roles only.  Evidence records are ISO 9001 §7.5 audit evidence;
+  // auditors and quality specialists may read and attach, but only governance
+  // roles may delete (to protect audit-trail integrity).
+  // ─────────────────────────────────────────────────────────────────────────
+  { pattern: /^\/api\/pdpl\/export/, methods: ['GET'], roles: ['admin'] },
+  { pattern: /^\/api\/qms\/nc\/export/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/qms\/capa-export-xlsx/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/qms\/capa\/export/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/kpis\/export/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/qms\/(nc|capa)\/bulk-update$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/qms\/(nc|capa)\/[^/]+\/history$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/qms\/nc\/\d+\/approve-closure$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/qms\/capa\/\d+\/(approve-closure|effectiveness)$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/qms\/capa\/\d+$/, methods: ['PATCH'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor'] },
+  { pattern: /^\/api\/evidence-pack$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor', 'quality_specialist'] },
+  { pattern: /^\/api\/evidence-summary$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor', 'quality_specialist'] },
+  { pattern: /^\/api\/evidence\/\w/, methods: ['DELETE'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/evidence/, methods: ['GET', 'POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'auditor', 'quality_specialist', 'team_lead', 'bu_owner', 'ai_specialist', 'executive'] },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Dashboard & audit — quality KPIs, audit history, scorecard, governance
+  // document, CRM data, and agent performance.  All are governance-read
+  // (admin / quality managers / GRC / head-of-ops / executive).  Write
+  // operations (audit trigger, CRM enrich) require governance-write.
+  // /api/inngest is an internal Inngest webhook and is excluded from RBAC
+  // (Inngest itself validates the signing key).
+  // ─────────────────────────────────────────────────────────────────────────
+  { pattern: /^\/api\/audit\//, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/dashboard\//, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/dashboard$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/scorecards$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/scorecard$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/governance$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/crm\/enrich$/, methods: ['POST'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'] },
+  { pattern: /^\/api\/crm\/data$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/agents\/performance$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
+  { pattern: /^\/api\/integrations\/status$/, methods: ['GET'], roles: ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'] },
 ];
 
 export async function enforceRoutePermission(c: any, path: string, method: string): Promise<{ allowed: boolean; error?: string }> {

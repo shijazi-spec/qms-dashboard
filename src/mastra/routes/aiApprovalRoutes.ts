@@ -41,7 +41,12 @@ import {
   getPolicy,
 } from '../../utils/aiToolGovernance';
 import { resolveControlledDocuments } from '../../utils/controlledDocumentRegistry';
-import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../utils/rbacMiddleware';
+import { getSessionUser, requireRole, unauthorizedResponse, forbiddenResponse, gateApiRoute } from '../../utils/rbacMiddleware';
+import type { UserRole } from '../../utils/rbacDatabase';
+
+const AI_APPROVAL_READ_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead'];
+const AI_APPROVAL_APPROVE_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'];
+const AI_APPROVAL_REJECT_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'ai_specialist', 'bu_owner', 'executive', 'quality_specialist', 'auditor', 'team_lead'];
 import {
   logEvent,
   redactSensitiveDeep,
@@ -94,7 +99,31 @@ function canSeeAll(role: string | null | undefined): boolean {
   return role === 'admin' || role === 'quality_manager';
 }
 
-export const aiApprovalRoutes = [
+function aiApprovalGate<T extends { path: string; method: string; createHandler: (deps: any) => any }>(route: T): T {
+  if (!route.path.startsWith('/api/')) return route;
+  let roles: UserRole[];
+  if (route.path.endsWith('/approve')) {
+    roles = AI_APPROVAL_APPROVE_ROLES;
+  } else if (route.path.endsWith('/reject')) {
+    roles = AI_APPROVAL_REJECT_ROLES;
+  } else {
+    roles = AI_APPROVAL_READ_ROLES;
+  }
+  const originalCreate = route.createHandler;
+  return {
+    ...route,
+    createHandler: async (deps: any) => {
+      const inner = await originalCreate(deps);
+      return async (c: any) => {
+        const user = await requireRole(c, roles);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions for AI approval data');
+        return inner(c);
+      };
+    },
+  };
+}
+
+const _aiApprovalRoutesRaw = [
   /* -------------------------------------------------------------------- */
   /* GET /api/ai/approvals                                                */
   /* -------------------------------------------------------------------- */
@@ -474,3 +503,5 @@ export const aiApprovalRoutes = [
     },
   },
 ];
+
+export const aiApprovalRoutes = _aiApprovalRoutesRaw.map(aiApprovalGate).map(gateApiRoute);

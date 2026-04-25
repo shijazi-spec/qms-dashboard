@@ -1,3 +1,25 @@
+import type { UserRole } from "../../utils/rbacDatabase";
+import { requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+
+const TABLEF_READ_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'quality_manager', 'grc_manager', 'executive', 'bu_owner'];
+const TABLEF_WRITE_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'quality_manager', 'grc_manager'];
+
+function tablefGate<T extends { path: string; method: string; createHandler: (deps: any) => any }>(route: T): T {
+  const roles: UserRole[] = ['POST', 'PUT', 'DELETE'].includes(route.method) ? TABLEF_WRITE_ROLES : TABLEF_READ_ROLES;
+  const originalCreate = route.createHandler;
+  return {
+    ...route,
+    createHandler: async (deps: any) => {
+      const inner = await originalCreate(deps);
+      return async (c: any) => {
+        const user = await requireRole(c, roles);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions for TableF data');
+        return inner(c);
+      };
+    },
+  };
+}
+
 export const tablefApiRoutes = [
   {
     path: "/api/tablef/departments",
@@ -143,4 +165,4 @@ export const tablefApiRoutes = [
       };
     },
   },
-];
+].map(tablefGate);

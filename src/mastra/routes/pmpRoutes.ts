@@ -1,4 +1,29 @@
-import { gateApiRoute } from "../../utils/rbacMiddleware";
+import { gateApiRoute, requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacDatabase";
+
+const PMP_READ_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive', 'bu_owner'];
+const PMP_WRITE_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'bu_owner'];
+const PMP_CHARTER_ROLES: UserRole[] = ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist', 'bu_owner'];
+
+function pmpGate<T extends { path: string; method: string; createHandler: (deps: any) => any }>(route: T): T {
+  if (!route.path.startsWith('/api/')) return route;
+  const roles =
+    route.path === '/api/pmp/generate-charter' ? PMP_CHARTER_ROLES :
+    ['POST', 'PUT', 'DELETE'].includes(route.method) ? PMP_WRITE_ROLES :
+    PMP_READ_ROLES;
+  const originalCreate = route.createHandler;
+  return {
+    ...route,
+    createHandler: async (deps: any) => {
+      const inner = await originalCreate(deps);
+      return async (c: any) => {
+        const user = await requireRole(c, roles);
+        if (!user) return forbiddenResponse(c, 'Insufficient permissions for PMP data');
+        return inner(c);
+      };
+    },
+  };
+}
 
 const _pmpRoutesRaw = [
   // ============================================
@@ -1214,4 +1239,4 @@ Ensure all content is practical, actionable, and follows PMP best practices.`;
   }
 ];
 
-export const pmpRoutes = _pmpRoutesRaw.map(gateApiRoute);
+export const pmpRoutes = _pmpRoutesRaw.map(pmpGate).map(gateApiRoute);

@@ -1,8 +1,40 @@
 import { getSessionFromCookie } from "./authRoutes";
 import { inngest, inngestServe } from "../inngest";
-import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
+import { hasValidAdminApiKey, gateApiRoute, requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacDatabase";
 
-export const dashboardApiRoutes = [
+const DASHBOARD_READ_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'executive'];
+const DASHBOARD_WRITE_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality'];
+const AUDIT_TRIGGER_ROLES: UserRole[] = ['admin', 'quality_manager', 'grc_manager', 'head_of_operations_quality', 'team_lead', 'auditor', 'quality_specialist', 'ai_specialist', 'bu_owner', 'executive'];
+
+const INNGEST_PATH = '/api/inngest';
+const AUDIT_TRIGGER_PATH = '/api/audit/trigger';
+
+const dashboardGate = (route: any) => {
+  if (route.path === INNGEST_PATH) return route;
+  return {
+    ...route,
+    createHandler: async (deps: any) => {
+      const originalHandler = await route.createHandler(deps);
+      return async (c: any) => {
+        const method = c.req.method.toUpperCase();
+        let roles: UserRole[];
+        if (route.path === AUDIT_TRIGGER_PATH && method === 'POST') {
+          roles = AUDIT_TRIGGER_ROLES;
+        } else if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+          roles = DASHBOARD_WRITE_ROLES;
+        } else {
+          roles = DASHBOARD_READ_ROLES;
+        }
+        const allowed = await requireRole(c, roles);
+        if (!allowed) return forbiddenResponse(c);
+        return originalHandler(c);
+      };
+    },
+  };
+};
+
+const _dashboardApiRoutesRaw = [
   {
     path: "/api/inngest",
     method: "ALL",
@@ -484,3 +516,7 @@ export const dashboardApiRoutes = [
     },
   },
 ];
+
+export const dashboardApiRoutes = _dashboardApiRoutesRaw
+  .map(dashboardGate)
+  .map((route) => (route.path === INNGEST_PATH ? route : gateApiRoute(route)));
