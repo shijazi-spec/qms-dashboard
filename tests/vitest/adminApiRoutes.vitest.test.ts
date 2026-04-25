@@ -284,18 +284,6 @@ describe("GET /api/admin/activities — real data path", () => {
     expect(args.startDate).toBeInstanceOf(Date);
     expect(args.endDate).toBeInstanceOf(Date);
   });
-
-  test("500 with deterministic body when getAdminActivities throws", async () => {
-    vi.mocked(db.getAdminActivities).mockRejectedValueOnce(new Error("db down"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const handler = await buildHandler(adminApiRoutes, "/api/admin/activities", "GET");
-    const res = await handler(makeContext({ method: "GET", headers: AUTH_HEADERS }));
-
-    expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: "Failed to fetch admin activities" });
-    errSpy.mockRestore();
-  });
 });
 
 describe("GET /api/workflow/runs — real data path", () => {
@@ -856,4 +844,245 @@ describe("POST /api/admin/seed-defaults — real data path", () => {
     expect(db.logAdminActivity).toHaveBeenCalledTimes(1);
     expect(vi.mocked(db.logAdminActivity).mock.calls[0][0].action_type).toBe("seed_defaults");
   });
+});
+
+/**
+ * Error-path coverage — every db-backed admin route returns a deterministic
+ * 500 body when its underlying data-layer call rejects. Without this, a
+ * production DB exception would surface as a non-deterministic 500 message,
+ * making operational failures hard to diagnose. Each row here mirrors the
+ * exact `c.json({ error: "..." }, 500)` literal from
+ * src/mastra/routes/adminApiRoutes.ts so any drift in error wording is
+ * caught at test time.
+ */
+type ErrorCase = {
+  name: string;
+  path: string;
+  method: string;
+  /** Property on the mocked `db` module to make reject. */
+  dbFn: keyof typeof db;
+  /** Exact `error` string the handler returns on 500. */
+  errorMessage: string;
+  body?: unknown;
+  params?: Record<string, string>;
+  query?: Record<string, string>;
+};
+
+const ERROR_CASES: ErrorCase[] = [
+  {
+    name: "GET /api/admin/documents",
+    path: "/api/admin/documents",
+    method: "GET",
+    dbFn: "getAllGovernanceDocuments",
+    errorMessage: "Failed to fetch documents",
+  },
+  {
+    name: "POST /api/admin/documents",
+    path: "/api/admin/documents",
+    method: "POST",
+    dbFn: "saveGovernanceDocument",
+    errorMessage: "Failed to save document",
+    body: {
+      name: "Doc",
+      document_type: "sales",
+      version: "v1",
+      content_text: "x",
+      rules_json: {},
+    },
+  },
+  {
+    name: "PUT /api/admin/documents/:id/activate",
+    path: "/api/admin/documents/:id/activate",
+    method: "PUT",
+    dbFn: "activateGovernanceDocument",
+    errorMessage: "Failed to activate document",
+    params: { id: "1" },
+  },
+  {
+    name: "PUT /api/admin/scorecard/weights",
+    path: "/api/admin/scorecard/weights",
+    method: "PUT",
+    dbFn: "updateScorecardWeights",
+    errorMessage: "Failed to update weights",
+    body: { people: 33, process: 33, governance: 34 },
+  },
+  {
+    name: "POST /api/admin/scorecard/attributes",
+    path: "/api/admin/scorecard/attributes",
+    method: "POST",
+    dbFn: "addScorecardAttribute",
+    errorMessage: "Failed to add attribute",
+    body: { name: "Attr", dimension: "people", weight: 10 },
+  },
+  {
+    name: "PUT /api/admin/scorecard/link-doc",
+    path: "/api/admin/scorecard/link-doc",
+    method: "PUT",
+    dbFn: "linkScorecardToGovernanceDoc",
+    errorMessage: "Failed to link document",
+    body: { governance_doc_id: 1, crm_module: "sales", team_name: "alpha" },
+  },
+  {
+    name: "GET /api/admin/scorecards",
+    path: "/api/admin/scorecards",
+    method: "GET",
+    dbFn: "getScorecardsByModuleAndTeam",
+    errorMessage: "Failed to fetch scorecards",
+  },
+  {
+    name: "POST /api/admin/scorecards",
+    path: "/api/admin/scorecards",
+    method: "POST",
+    dbFn: "createScorecard",
+    errorMessage: "Failed to create scorecard",
+    body: { name: "SC", dimensions: [], crm_module: "sales", team_name: "alpha" },
+  },
+  {
+    name: "PUT /api/admin/scorecards/:id",
+    path: "/api/admin/scorecards/:id",
+    method: "PUT",
+    dbFn: "updateScorecard",
+    errorMessage: "Failed to update scorecard",
+    params: { id: "1" },
+    body: { name: "X" },
+  },
+  {
+    name: "DELETE /api/admin/scorecards/:id",
+    path: "/api/admin/scorecards/:id",
+    method: "DELETE",
+    dbFn: "deleteScorecard",
+    errorMessage: "Failed to delete scorecard",
+    params: { id: "1" },
+  },
+  {
+    name: "PUT /api/admin/scorecards/:id/activate",
+    path: "/api/admin/scorecards/:id/activate",
+    method: "PUT",
+    dbFn: "setActiveScorecardForTeam",
+    errorMessage: "Failed to activate scorecard",
+    params: { id: "1" },
+    body: { crm_module: "sales", team_name: "alpha" },
+  },
+  {
+    name: "POST /api/admin/scorecards/:id/clone",
+    path: "/api/admin/scorecards/:id/clone",
+    method: "POST",
+    dbFn: "cloneScorecard",
+    errorMessage: "Failed to clone scorecard",
+    params: { id: "1" },
+    body: { name: "Cloned", version: "v2" },
+  },
+  {
+    name: "GET /api/admin/scorecards/:id/attributes",
+    path: "/api/admin/scorecards/:id/attributes",
+    method: "GET",
+    dbFn: "getScorecardAttributes",
+    errorMessage: "Failed to fetch attributes",
+    params: { id: "1" },
+  },
+  {
+    name: "POST /api/admin/scorecards/:id/attributes",
+    path: "/api/admin/scorecards/:id/attributes",
+    method: "POST",
+    dbFn: "createScorecardAttribute",
+    errorMessage: "Failed to create attribute",
+    params: { id: "1" },
+    body: { attribute_name: "Attr", dimension: "people", weight: 10, order_index: 0 },
+  },
+  {
+    name: "PUT /api/admin/attributes/:id",
+    path: "/api/admin/attributes/:id",
+    method: "PUT",
+    dbFn: "updateScorecardAttribute",
+    errorMessage: "Failed to update attribute",
+    params: { id: "1" },
+    body: { weight: 5 },
+  },
+  {
+    name: "DELETE /api/admin/attributes/:id",
+    path: "/api/admin/attributes/:id",
+    method: "DELETE",
+    dbFn: "deleteScorecardAttribute",
+    errorMessage: "Failed to delete attribute",
+    params: { id: "1" },
+  },
+  {
+    name: "PUT /api/admin/scorecards/:id/attributes/reorder",
+    path: "/api/admin/scorecards/:id/attributes/reorder",
+    method: "PUT",
+    dbFn: "reorderScorecardAttributes",
+    errorMessage: "Failed to reorder attributes",
+    params: { id: "1" },
+    body: { attribute_ids: [1, 2, 3] },
+  },
+  {
+    name: "POST /api/admin/seed-defaults",
+    path: "/api/admin/seed-defaults",
+    method: "POST",
+    dbFn: "saveGovernanceDocument",
+    errorMessage: "Failed to seed defaults",
+  },
+  {
+    name: "GET /api/admin/activities",
+    path: "/api/admin/activities",
+    method: "GET",
+    dbFn: "getAdminActivities",
+    errorMessage: "Failed to fetch admin activities",
+  },
+  {
+    name: "GET /api/workflow/runs",
+    path: "/api/workflow/runs",
+    method: "GET",
+    dbFn: "getWorkflowRuns",
+    errorMessage: "Failed to fetch workflow runs",
+  },
+  {
+    name: "GET /api/workflow/runs/:id",
+    path: "/api/workflow/runs/:id",
+    method: "GET",
+    dbFn: "getWorkflowRunById",
+    errorMessage: "Failed to fetch workflow run",
+    params: { id: "1" },
+  },
+  {
+    name: "GET /api/system/events",
+    path: "/api/system/events",
+    method: "GET",
+    dbFn: "getSystemEvents",
+    errorMessage: "Failed to fetch system events",
+  },
+  {
+    name: "GET /api/activity/feed",
+    path: "/api/activity/feed",
+    method: "GET",
+    dbFn: "getActivityFeed",
+    errorMessage: "Failed to fetch activity feed",
+  },
+  {
+    name: "GET /api/activity/stats",
+    path: "/api/activity/stats",
+    method: "GET",
+    dbFn: "getActivityStats",
+    errorMessage: "Failed to fetch activity stats",
+  },
+];
+
+describe("error-path coverage — every db-backed admin route returns deterministic 500 body", () => {
+  test.each(ERROR_CASES)(
+    "$name returns 500 with exact error body when $dbFn rejects",
+    async ({ path, method, dbFn, errorMessage, body, params, query }) => {
+      const fn = db[dbFn] as unknown as ReturnType<typeof vi.fn>;
+      vi.mocked(fn).mockRejectedValueOnce(new Error("simulated db failure"));
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const handler = await buildHandler(adminApiRoutes, path, method);
+      const res = await handler(
+        makeContext({ method, headers: AUTH_HEADERS, body, params, query }),
+      );
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: errorMessage });
+      errSpy.mockRestore();
+    },
+  );
 });
