@@ -67,7 +67,10 @@ const PII_PATTERNS: [RegExp, string][] = [
 ];
 
 export function redactPromptPreview(prompt: string, maxLen = 300): string {
-  let preview = prompt.slice(0, maxLen + 100);
+  // Run the secret-like deny list (sk-…, ghp_…, JWTs, bcrypt hashes, AWS
+  // access keys, etc.) BEFORE the basic PII_PATTERNS pass so prompt_preview
+  // gets the same protection as tool_input_preview / tool_output_preview.
+  let preview = String(redactSecretLikeStrings(prompt)).slice(0, maxLen + 100);
   for (const [pattern, replacement] of PII_PATTERNS) {
     preview = preview.replace(pattern, replacement);
   }

@@ -15,6 +15,7 @@
  */
 
 import {
+  redactPromptPreview,
   redactToolPayloadPreview,
   wrapToolWithTelemetry,
 } from '../src/utils/aiTelemetry';
@@ -189,6 +190,51 @@ async function main(): Promise<void> {
       safeSurvives.includes('zoho_books') &&
       safeSurvives.includes('Scheduled quarterly rotation'),
     'non-sensitive fields are preserved through deep redaction',
+  );
+
+  // ─── redactPromptPreview() — same secret fixtures (parity with tool previews) ─
+  // Both prompt_preview and tool_*_preview columns are persisted to
+  // ai_call_metrics; they must offer identical leak protection so that
+  // the prompt text sent to a model can never become a secret-exfiltration
+  // sink even when the tool payload pipeline is the one that's audited.
+  console.log('\nredactPromptPreview() — secret deny-list parity:');
+
+  const openAiPrompt = redactPromptPreview(`Use this key: ${OPENAI_KEY} to call the API`);
+  assert(
+    !openAiPrompt.includes(OPENAI_KEY),
+    'OpenAI sk-… key in prompt text is redacted',
+  );
+
+  const ghPatPrompt = redactPromptPreview(`Authorize with ${GH_PAT} on github`);
+  assert(
+    !ghPatPrompt.includes(GH_PAT),
+    'GitHub ghp_… PAT in prompt text is redacted',
+  );
+
+  const bcryptPrompt = redactPromptPreview(`Stored hash is ${BCRYPT_HASH} for the user`);
+  assert(
+    !bcryptPrompt.includes('$2b$12$'),
+    'bcrypt hash in prompt text is redacted',
+  );
+
+  const jwtPrompt = redactPromptPreview(`Session token: ${JWT} expired`);
+  assert(
+    !jwtPrompt.includes('eyJhbGciOiJIUzI1NiJ9'),
+    'JWT in prompt text is redacted',
+  );
+
+  const awsPrompt = redactPromptPreview(`Provision against ${AWS_KEY} in us-east-1`);
+  assert(
+    !awsPrompt.includes(AWS_KEY),
+    'AWS AKIA… access key in prompt text is redacted',
+  );
+
+  const safePrompt = redactPromptPreview(
+    'Please summarize the latest CAPA rotation for zoho_books',
+  );
+  assert(
+    safePrompt.includes('zoho_books') && safePrompt.includes('CAPA rotation'),
+    'non-sensitive prompt text passes through unchanged',
   );
 
   // ─── Structural sanity check on wrapToolWithTelemetry ─────────────────
