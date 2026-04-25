@@ -455,7 +455,7 @@
                             >Quality-GRC Integration</span
                         >
                     </div>
-                    <div class="overflow-x-auto" tabindex="0"
+                    <div class="overflow-x-auto" tabindex="0">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -522,7 +522,7 @@
                             >Control Mapping</span
                         >
                     </div>
-                    <div class="overflow-x-auto" tabindex="0"
+                    <div class="overflow-x-auto" tabindex="0">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -737,11 +737,6 @@
                     document.getElementById("effectiveControls").textContent =
                         (data.controls?.effective || 0) + " " + _gt("grc.effective_label");
 
-                    renderRulesTable(
-                        data.rules,
-                        data.by_source_module,
-                        data.by_target_module,
-                    );
                     renderRecentEvents(data.recent_events || []);
                 } catch (error) {
                     console.error("Error loading handoff summary:", error);
@@ -770,7 +765,8 @@
 
             function renderRulesTable(rules) {
                 const tbody = document.getElementById("rulesTableBody");
-                if (!rules || rules.length === 0) {
+                if (!tbody) { console.error("renderRulesTable: #rulesTableBody not found"); return; }
+                if (!Array.isArray(rules) || rules.length === 0) {
                     tbody.innerHTML =
                         `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">${_gt("grc.no_rules")}</td></tr>`;
                     return;
@@ -803,6 +799,7 @@
 
             function renderControlsTable(controls) {
                 const tbody = document.getElementById("controlsTableBody");
+                if (!tbody) { console.error("renderControlsTable: #controlsTableBody not found"); return; }
                 if (!controls || controls.length === 0) {
                     tbody.innerHTML =
                         `<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">${_gt("grc.no_controls")}</td></tr>`;
