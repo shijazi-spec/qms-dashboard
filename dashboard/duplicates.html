@@ -1012,48 +1012,48 @@
 
             if (is_cross_module) {
                 html += `<div data-testid="banner-cross-module" class="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
-                    <strong>Heads up:</strong> Zoho does not allow cross-module merges. Records of the same module
-                    (e.g. two Accounts) get a native <strong>MERGE</strong>. Cross-module children
-                    (Contact / Deal / Task under an Account) get a <strong>LINK</strong> — set the
+                    <strong>${_t('dyn.duplicates.cross_module_heads_up')}:</strong> ${_t('dyn.duplicates.cross_module_no_cross_merge')}
+                    <strong>MERGE</strong>. ${_t('dyn.duplicates.cross_module_cross_children')}
+                    <strong>LINK</strong> ${_t('dyn.duplicates.cross_module_set_the')}
                     <code class="bg-amber-100 px-1 rounded">Account_Name</code> /
-                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> field in Zoho on the child record.
-                    A Lead superseded by a real Account/Contact/Deal should be <strong>CLOSED</strong> or converted.
+                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${_t('dyn.duplicates.cross_module_field_in_zoho')}
+                    ${_t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${_t('dyn.duplicates.cross_module_or_converted')}
                 </div>`;
             }
 
             // Side-by-side comparison table
             html += `<div class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Field</th>`;
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">${_t('dyn.duplicates.col_field')}</th>`;
             records.forEach((r, i) => {
                 html += `<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}Record ${i+1} (${escapeHtml(r.record_type)})</th>`;
             });
             html += '</tr></thead><tbody>';
 
             const fields = [
-                { key: 'record_name', label: 'Name' },
-                { key: 'zoho_record_id', label: 'Zoho ID', render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
-                { key: 'company_name', label: 'Company' },
-                { key: 'email', label: 'Email' },
-                { key: 'phone', label: 'Phone' },
-                { key: 'mobile', label: 'Mobile' },
-                { key: 'owner_name', label: 'Owner' },
-                { key: 'status', label: 'Status' },
-                { key: 'stage', label: 'Stage' },
-                { key: 'deal_value', label: 'Value', render: v => v ? formatCurrency(v) : '-' },
-                { key: 'source', label: 'Source' },
-                { key: 'layout_name', label: 'Layout' },
-                { key: 'zoho_module', label: 'Module' },
-                { key: 'pipeline', label: 'Pipeline' },
-                { key: 'contact_name', label: 'Contact' },
-                { key: 'account_name', label: 'Account' },
-                { key: 'cr_number', label: 'CR Number' },
-                { key: 'vat_number', label: 'VAT Number' },
-                { key: 'website', label: 'Website' },
-                { key: 'country', label: 'Country' },
-                { key: 'industry', label: 'Industry' },
-                { key: 'title', label: 'Title' },
-                { key: 'created_date', label: 'Created', render: v => formatDate(v) },
-                { key: 'modified_date', label: 'Modified', render: v => formatDate(v) },
+                { key: 'record_name', label: _t('dyn.duplicates.field_name') },
+                { key: 'zoho_record_id', label: _t('dyn.duplicates.field_zoho_id'), render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
+                { key: 'company_name', label: _t('dyn.duplicates.field_company') },
+                { key: 'email', label: _t('dyn.duplicates.field_email') },
+                { key: 'phone', label: _t('dyn.duplicates.field_phone') },
+                { key: 'mobile', label: _t('dyn.duplicates.field_mobile') },
+                { key: 'owner_name', label: _t('dyn.duplicates.field_owner') },
+                { key: 'status', label: _t('dyn.duplicates.field_status') },
+                { key: 'stage', label: _t('dyn.duplicates.field_stage') },
+                { key: 'deal_value', label: _t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
+                { key: 'source', label: _t('dyn.duplicates.field_source') },
+                { key: 'layout_name', label: _t('dyn.duplicates.field_layout') },
+                { key: 'zoho_module', label: _t('dyn.duplicates.field_module') },
+                { key: 'pipeline', label: _t('dyn.duplicates.field_pipeline') },
+                { key: 'contact_name', label: _t('dyn.duplicates.field_contact') },
+                { key: 'account_name', label: _t('dyn.duplicates.field_account') },
+                { key: 'cr_number', label: _t('dyn.duplicates.field_cr_number') },
+                { key: 'vat_number', label: _t('dyn.duplicates.field_vat_number') },
+                { key: 'website', label: _t('dyn.duplicates.field_website') },
+                { key: 'country', label: _t('dyn.duplicates.field_country') },
+                { key: 'industry', label: _t('dyn.duplicates.field_industry') },
+                { key: 'title', label: _t('dyn.duplicates.field_title') },
+                { key: 'created_date', label: _t('dyn.duplicates.field_created'), render: v => formatDate(v) },
+                { key: 'modified_date', label: _t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
             ];
 
             fields.forEach(f => {
@@ -1066,7 +1066,7 @@
             });
 
             // AI recommendation row
-            html += `<tr class="border-t bg-blue-50"><td class="px-3 py-2 font-medium text-blue-700">AI Recommendation</td>`;
+            html += `<tr class="border-t bg-blue-50"><td class="px-3 py-2 font-medium text-blue-700">${_t('dyn.duplicates.ai_recommendation')}</td>`;
             records.forEach(r => {
                 const rec = recMap[r.id];
                 if (rec) {
@@ -1086,15 +1086,15 @@
             // Action buttons — label depends on whether the cluster is cross-module
             if (cluster.status === 'active') {
                 const resolveLabel = is_cross_module
-                    ? 'Mark Resolved (merge same-module + link cross-module in Zoho)'
-                    : 'Mark Resolved (Merged in Zoho)';
+                    ? _t('dyn.duplicates.resolve_label_cross')
+                    : _t('dyn.duplicates.resolve_label_simple');
                 html += `<div class="border-t pt-4">
                     <div class="flex flex-wrap gap-3 mb-2">
                         <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;resolve&quot;]" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
-                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Ignore (false positive)</button>
+                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${_t('dyn.duplicates.ignore_label')}</button>
                     </div>
                     <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
-                        After merging or linking inside Zoho, click <strong>Scan from Zoho</strong> for an immediate refresh — otherwise the auto-sync picks it up within ~6 hours.
+                        ${_t('dyn.duplicates.post_merge_hint')}
                     </p>
                 </div>`;
             }
