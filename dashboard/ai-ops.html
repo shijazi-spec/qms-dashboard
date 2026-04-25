@@ -2276,6 +2276,8 @@
       panel.innerHTML = headline + summaryRow + newSection + resolvedSection + sevSection + noChanges;
     }
 
+    const SYSTEM_REAPER_ATTRIBUTION = "system: override expired";
+
     function renderThresholdsAudit(rows) {
       const el = document.getElementById('thresholds-audit');
       if (!rows || rows.length === 0) {
@@ -2296,10 +2298,21 @@
         // (e.g. the override auto-revert post — Task #213) deep-link
         // straight to the row that was just written.
         const anchorId = r.id != null ? ` id="threshold-audit-${esc(r.id)}"` : '';
+        const isAutoRevert = r.changed_by === SYSTEM_REAPER_ATTRIBUTION;
+        const autoRevertBadge = isAutoRevert
+          ? `<span
+               class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300"
+               title="This change was made automatically by the system when the override expiry time was reached."
+               data-testid="badge-auto-revert-${i}"
+             >auto-revert</span>`
+          : '';
         return `
-          <div${anchorId} class="px-3 py-2 border border-gray-200 rounded text-xs" data-testid="row-thresholds-audit-${i}">
+          <div${anchorId} class="px-3 py-2 border ${isAutoRevert ? 'border-amber-300 bg-amber-50' : 'border-gray-200'} rounded text-xs" data-testid="row-thresholds-audit-${i}">
             <div class="flex items-center justify-between flex-wrap gap-2">
-              <div class="font-medium text-gray-800">${esc(r.changed_by || 'unknown')}</div>
+              <div class="flex items-center gap-2 font-medium text-gray-800">
+                ${esc(r.changed_by || 'unknown')}
+                ${autoRevertBadge}
+              </div>
               <div class="text-gray-500">${esc(fmtDate(r.changed_at))}</div>
             </div>
             <div class="mt-1 text-gray-700 font-mono break-words">${diffStr}</div>
