@@ -16,6 +16,7 @@ import {
   initHealthPulseTables,
   getLatestPulseRun,
   getRecentPulseRuns,
+  buildPerCheckHistory,
 } from "../../utils/platformHealthPulse";
 import { hasValidAdminApiKey, requireRole } from "../../utils/rbacMiddleware";
 
@@ -47,6 +48,11 @@ export const healthPulseRoutes = [
         await initHealthPulseTables();
         const latest = await getLatestPulseRun();
         const history = await getRecentPulseRuns(50);
+        // Per-check history powers the inline sparkline shown in each
+        // expanded check row on the Health Pulse dashboard. Capped to the
+        // last 30 entries per check to keep the payload bounded even as
+        // the run history grows beyond 50.
+        const perCheckHistory = buildPerCheckHistory(history, 30);
         return c.json({
           latest,
           history: history.map((h) => ({
@@ -59,6 +65,7 @@ export const healthPulseRoutes = [
             skipped_count: h.skipped_count,
             duration_ms: h.duration_ms,
           })),
+          perCheckHistory,
         });
       } catch (err: any) {
         return c.json({ error: err?.message || String(err) }, 500);

@@ -1565,7 +1565,11 @@
       "chart_warn": "Warn",
       "chart_fail": "Fail",
       "alert_failing_title": "{fail} check(s) failing, {warn} warning(s) — review details below",
-      "alert_warning_title": "{warn} check(s) warning — review details below"
+      "alert_warning_title": "{warn} check(s) warning — review details below",
+      "sparkline_label": "Last {count} runs",
+      "sparkline_aria": "Status sparkline for the last {count} runs of check {id}",
+      "sparkline_no_history": "No prior runs recorded for this check yet",
+      "sparkline_one_run": "Only one run recorded — sparkline appears after additional runs"
     },
     "admin": {
       "no_audit_entries": "No audit entries found",

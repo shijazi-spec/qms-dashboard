@@ -599,3 +599,51 @@ export async function getLatestPulseRun(): Promise<PulseRun | null> {
   const runs = await getRecentPulseRuns(1);
   return runs[0] || null;
 }
+
+export interface PerCheckHistoryEntry {
+  run_at: Date;
+  status: CheckStatus;
+}
+
+/**
+ * Collapse a list of recent pulse runs into a per-check status history,
+ * keyed by check id. Entries are returned in chronological order
+ * (oldest first → newest last) so callers can render a left-to-right
+ * sparkline directly. The most recent `limitPerCheck` entries are kept
+ * for each check id; older entries are dropped.
+ *
+ * Tolerates legacy rows whose `checks` payload is missing or malformed —
+ * those runs simply contribute no entries.
+ */
+export function buildPerCheckHistory(
+  runs: PulseRun[],
+  limitPerCheck = 30,
+): Record<string, PerCheckHistoryEntry[]> {
+  const ordered = [...runs].reverse();
+  const perCheck: Record<string, PerCheckHistoryEntry[]> = {};
+
+  for (const run of ordered) {
+    const checks = Array.isArray(run.checks) ? run.checks : [];
+    for (const c of checks) {
+      if (!c || typeof c.id !== "string" || !c.id) continue;
+      const status: CheckStatus =
+        c.status === "pass" || c.status === "warn" ||
+        c.status === "fail" || c.status === "skipped"
+          ? c.status
+          : "skipped";
+      (perCheck[c.id] = perCheck[c.id] || []).push({
+        run_at: run.run_at,
+        status,
+      });
+    }
+  }
+
+  for (const id of Object.keys(perCheck)) {
+    const entries = perCheck[id];
+    if (entries.length > limitPerCheck) {
+      perCheck[id] = entries.slice(entries.length - limitPerCheck);
+    }
+  }
+
+  return perCheck;
+}

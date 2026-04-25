@@ -59,6 +59,20 @@
         .filter-chip-count {
             font-variant-numeric: tabular-nums; opacity: 0.85; font-size: 11px;
         }
+        .sparkline-row {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 10px;
+        }
+        .sparkline-label {
+            font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+            color: #6B7280; text-transform: uppercase; white-space: nowrap;
+        }
+        .sparkline-svg { display: block; }
+        .sparkline-svg rect { transition: opacity 0.15s; }
+        .sparkline-svg rect:hover { opacity: 0.75; }
+        .sparkline-empty {
+            font-size: 11px; color: #9CA3AF; font-style: italic;
+        }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -185,6 +199,15 @@
             down:     { card: 'linear-gradient(135deg, #B91C1C, #EF4444)', get label() { return _t('dyn.health.status_down'); } },
         };
 
+        // Same palette as the .dot-* classes — kept in sync so the inline
+        // per-check sparkline reads the same as the pill on its row.
+        const STATUS_BAR_COLOR = {
+            pass:    '#10B981',
+            warn:    '#F59E0B',
+            fail:    '#EF4444',
+            skipped: '#9CA3AF',
+        };
+
         const CATEGORY_LABELS = {
             get infrastructure() { return _t('dyn.health.cat_infrastructure'); },
             get audits() { return _t('dyn.health.cat_audits'); },
@@ -223,6 +246,9 @@
         let selectedCategory = readInitialFilter();
         // Cached so chip clicks can re-render without re-fetching.
         let lastLatest = null;
+        // Cached per-check history so chip clicks reuse the same sparkline
+        // payload from the last /api/health/pulse fetch.
+        let lastPerCheckHistory = {};
         let historyChart = null;
 
         function persistFilter(cat) {
@@ -266,6 +292,46 @@
 
         function escapeHtml(s) {
             return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        /**
+         * Build a small inline SVG sparkline showing this check's status
+         * across recent runs. Each rect is one run (oldest left → newest
+         * right) and carries a native <title> tooltip with the run
+         * timestamp + status, so hovering any bar surfaces the context.
+         */
+        function renderCheckSparkline(checkId, history) {
+            if (!Array.isArray(history) || history.length === 0) {
+                return '<div class="sparkline-empty" data-testid="sparkline-empty-' + escapeHtml(checkId) + '">' + _t('dyn.health.sparkline_no_history') + '</div>';
+            }
+            if (history.length < 2) {
+                return '<div class="sparkline-empty" data-testid="sparkline-single-' + escapeHtml(checkId) + '">' + _t('dyn.health.sparkline_one_run') + '</div>';
+            }
+            const barWidth = 6;
+            const barGap = 2;
+            const barHeight = 20;
+            const total = history.length;
+            const width = total * (barWidth + barGap) - barGap;
+            const bars = history.map((entry, i) => {
+                const x = i * (barWidth + barGap);
+                const status = entry && entry.status ? entry.status : 'skipped';
+                const color = STATUS_BAR_COLOR[status] || STATUS_BAR_COLOR.skipped;
+                const tip = fmtTime(entry && entry.run_at) + ' — ' + status.toUpperCase();
+                return '<rect x="' + x + '" y="0" width="' + barWidth + '" height="' + barHeight + '" fill="' + color + '" rx="1">'
+                    + '<title>' + escapeHtml(tip) + '</title>'
+                    + '</rect>';
+            }).join('');
+            const labelText = _t('dyn.health.sparkline_label', { count: total });
+            const ariaLabel = _t('dyn.health.sparkline_aria', { count: total, id: checkId });
+            return '<div class="sparkline-row" data-testid="sparkline-row-' + escapeHtml(checkId) + '">'
+                + '<span class="sparkline-label">' + escapeHtml(labelText) + '</span>'
+                + '<svg class="sparkline-svg" viewBox="0 0 ' + width + ' ' + barHeight + '" '
+                + 'width="' + width + '" height="' + barHeight + '" '
+                + 'role="img" aria-label="' + escapeHtml(ariaLabel) + '" '
+                + 'data-testid="sparkline-' + escapeHtml(checkId) + '">'
+                + bars
+                + '</svg>'
+                + '</div>';
         }
 
         function renderAlertBanner(latest) {
@@ -313,8 +379,9 @@
             banner.classList.remove('hidden');
         }
 
-        function renderLatest(latest) {
+        function renderLatest(latest, perCheckHistory) {
             lastLatest = latest;
+            lastPerCheckHistory = perCheckHistory || {};
             const status = latest.overall_status || 'healthy';
             const meta = STATUS_COLOR[status] || STATUS_COLOR.healthy;
             el('overall-card').style.background = meta.card;
@@ -370,7 +437,8 @@
             const html = visibleCats.map(cat => {
                 const rows = grouped[cat].map(c => {
                     const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
-                    const message = c.message ? `<div class="text-sm text-gray-600 mt-1">${escapeHtml(c.message)}</div>` : '';
+                    const message = c.message ? `<div class="text-sm text-gray-600 mt-1 mb-2">${escapeHtml(c.message)}</div>` : '';
+                    const sparkline = renderCheckSparkline(c.id, lastPerCheckHistory[c.id]);
                     return `
                         <details class="check-row border-t border-gray-100" data-testid="row-check-${escapeHtml(c.id)}">
                             <summary class="flex items-center gap-3 px-6 py-3">
@@ -384,6 +452,7 @@
                             </summary>
                             <div class="px-6 pb-4 pl-16">
                                 ${message}
+                                ${sparkline}
                                 ${detailJson}
                             </div>
                         </details>
@@ -523,7 +592,7 @@
                 hide('empty-state');
                 show('main-content');
 
-                renderLatest(data.latest);
+                renderLatest(data.latest, data.perCheckHistory || {});
                 renderHistory(data.history || []);
             } catch (err) {
                 hide('loading-state');
