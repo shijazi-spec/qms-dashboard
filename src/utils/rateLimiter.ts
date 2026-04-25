@@ -227,10 +227,17 @@ export interface RateLimitSpike24hIp {
   suppressed: number;
 }
 
+export interface RateLimitSpike24hPath {
+  path: string;
+  events: number;
+  suppressed: number;
+}
+
 export interface RateLimitSpike24h {
   total429: number;
   totalSuppressed: number;
   topIps: RateLimitSpike24hIp[];
+  topPaths: RateLimitSpike24hPath[];
   /**
    * Effective alert threshold (from RATE_LIMIT_429_24H_ALERT_THRESHOLD,
    * default 500). `0` means the alert is disabled. Surfaced so the
@@ -338,11 +345,22 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
         return 0;
       });
 
-    // 24-hour spike aggregate: total events, total suppressed, top 5 IPs.
+    // 24-hour spike aggregate: global totals + top 5 IPs + top 5 paths.
     // `suppressed_in_previous_minute` lives in the JSONB metadata column and
     // may be absent on older rows, so we default it to 0 with COALESCE.
-    const spike24hPromise: Promise<RateLimitSpike24h> = pool
-      .query<{ ip: string; events: string; suppressed: string }>(
+    // The top-5 IP and top-5 path slices are independent groupings — a path
+    // may aggregate hits from many IPs and vice versa — so we run them as
+    // separate queries and combine with the scalar totals.
+    const spike24hPromise: Promise<RateLimitSpike24h> = Promise.all([
+      pool.query<{ total: string; suppressed: string }>(
+        `SELECT
+            COUNT(*)::bigint AS total,
+            SUM(COALESCE((metadata->>'suppressed_in_previous_minute')::bigint, 0))::bigint AS suppressed
+           FROM system_events
+          WHERE event_type = 'rate_limit_429'
+            AND created_at > NOW() - INTERVAL '24 hours'`,
+      ),
+      pool.query<{ ip: string; events: string; suppressed: string }>(
         `SELECT
             COALESCE(metadata->>'ip', 'unknown')           AS ip,
             COUNT(*)::bigint                               AS events,
@@ -353,41 +371,41 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           GROUP BY ip
           ORDER BY events DESC
           LIMIT 5`,
-      )
-      .then(r => {
-        const topIps: RateLimitSpike24hIp[] = r.rows.map(row => ({
+      ),
+      pool.query<{ path: string; events: string; suppressed: string }>(
+        `SELECT
+            COALESCE(NULLIF(metadata->>'path', ''), 'unknown') AS path,
+            COUNT(*)::bigint                                   AS events,
+            SUM(COALESCE((metadata->>'suppressed_in_previous_minute')::bigint, 0))::bigint AS suppressed
+           FROM system_events
+          WHERE event_type = 'rate_limit_429'
+            AND created_at > NOW() - INTERVAL '24 hours'
+          GROUP BY path
+          ORDER BY events DESC
+          LIMIT 5`,
+      ),
+    ])
+      .then(async ([totRes, ipRes, pathRes]) => {
+        const topIps: RateLimitSpike24hIp[] = ipRes.rows.map(row => ({
           ip: row.ip,
           events: parseInt(row.events, 10),
           suppressed: parseInt(row.suppressed, 10),
         }));
-        const total429 = topIps.reduce((s, x) => s + x.events, 0);
-        const totalSuppressed = topIps.reduce((s, x) => s + x.suppressed, 0);
-        // The IP-grouped query only covers the top-5 slice; get the full
-        // totals from a separate scalar query if we ever have >5 IPs, but
-        // for now the sum of the returned slice is the best we have without
-        // a second round-trip — append scalar totals in the same promise
-        // chain below after we rewrite with Promise.all later if needed.
-        return { total429, totalSuppressed, topIps };
-      })
-      .then(async partial => {
-        // Fetch accurate global totals (not just top-5 slice)
-        const totRow = await pool.query<{ total: string; suppressed: string }>(
-          `SELECT
-              COUNT(*)::bigint AS total,
-              SUM(COALESCE((metadata->>'suppressed_in_previous_minute')::bigint, 0))::bigint AS suppressed
-             FROM system_events
-            WHERE event_type = 'rate_limit_429'
-              AND created_at > NOW() - INTERVAL '24 hours'`,
-        );
-        const total429 = parseInt(totRow.rows[0]?.total ?? '0', 10);
+        const topPaths: RateLimitSpike24hPath[] = pathRes.rows.map(row => ({
+          path: row.path,
+          events: parseInt(row.events, 10),
+          suppressed: parseInt(row.suppressed, 10),
+        }));
+        const total429 = parseInt(totRes.rows[0]?.total ?? '0', 10);
         // Annotate with the alert evaluation so the dashboard banner and
         // the cron's system_event alert use the same source of truth.
         const { evaluateRateLimit24hSpikeAlert } = await import('./rateLimit429SpikeAlert');
         const evalResult = evaluateRateLimit24hSpikeAlert(total429);
         return {
           total429,
-          totalSuppressed: parseInt(totRow.rows[0]?.suppressed ?? '0', 10),
-          topIps: partial.topIps,
+          totalSuppressed: parseInt(totRes.rows[0]?.suppressed ?? '0', 10),
+          topIps,
+          topPaths,
           alertThreshold: evalResult.threshold,
           alertActive: evalResult.active,
         };
@@ -401,6 +419,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           total429: 0,
           totalSuppressed: 0,
           topIps: [],
+          topPaths: [],
           alertThreshold: 0,
           alertActive: false,
         };

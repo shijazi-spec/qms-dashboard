@@ -730,22 +730,42 @@
                                 <p class="text-xs text-gray-500 mt-1">Sum of <code class="text-xs">suppressed_in_previous_minute</code></p>
                             </div>
                         </div>
-                        <div class="px-4 pb-4 bg-white">
-                            <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 offending IPs (24h)</p>
-                            <div class="overflow-x-auto border rounded-lg">
-                                <table class="min-w-full text-sm">
-                                    <thead class="bg-gray-50 text-gray-600">
-                                        <tr>
-                                            <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                            <th scope="col" class="px-4 py-2 text-left font-medium">IP</th>
-                                            <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
-                                            <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="spike24h-top-ips" data-testid="table-spike24h-top-ips">
-                                        <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
-                                    </tbody>
-                                </table>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4 bg-white">
+                            <div>
+                                <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 offending IPs (24h)</p>
+                                <div class="overflow-x-auto border rounded-lg">
+                                    <table class="min-w-full text-sm">
+                                        <thead class="bg-gray-50 text-gray-600">
+                                            <tr>
+                                                <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
+                                                <th scope="col" class="px-4 py-2 text-left font-medium">IP</th>
+                                                <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="spike24h-top-ips" data-testid="table-spike24h-top-ips">
+                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 hammered paths (24h)</p>
+                                <div class="overflow-x-auto border rounded-lg">
+                                    <table class="min-w-full text-sm">
+                                        <thead class="bg-gray-50 text-gray-600">
+                                            <tr>
+                                                <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
+                                                <th scope="col" class="px-4 py-2 text-left font-medium">Path</th>
+                                                <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="spike24h-top-paths" data-testid="table-spike24h-top-paths">
+                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2329,7 +2349,7 @@
                 }
 
                 // 24h spike summary card
-                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], alertThreshold: 0, alertActive: false };
+                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], topPaths: [], alertThreshold: 0, alertActive: false };
                 document.getElementById("spike24h-total").textContent = String(spike.total429 ?? 0);
                 document.getElementById("spike24h-suppressed").textContent = String(spike.totalSuppressed ?? 0);
 
@@ -2380,6 +2400,22 @@
                             '<tr class="border-t" data-testid="row-spike24h-ip-' + i + '">' +
                                 '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
                                 '<td class="px-4 py-2 font-mono text-xs text-gray-800">' + escapeHtml(row.ip) + '</td>' +
+                                '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
+                                '<td class="px-4 py-2 text-right text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
+                            '</tr>'
+                        )
+                        .join("");
+                }
+
+                const spikePathsTbody = document.getElementById("spike24h-top-paths");
+                if (!spike.topPaths || spike.topPaths.length === 0) {
+                    spikePathsTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">' + _t('dyn.admin.no_429_events') + '</td></tr>';
+                } else {
+                    spikePathsTbody.innerHTML = spike.topPaths
+                        .map((row, i) =>
+                            '<tr class="border-t" data-testid="row-spike24h-path-' + i + '">' +
+                                '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
+                                '<td class="px-4 py-2 font-mono text-xs text-gray-800 break-all">' + escapeHtml(row.path) + '</td>' +
                                 '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
                                 '<td class="px-4 py-2 text-right text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
                             '</tr>'
