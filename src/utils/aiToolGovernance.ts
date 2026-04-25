@@ -244,14 +244,433 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
   },
 
   // --- tools explicitly exempted from the gate ---
+  //
+  // Every entry below sets `requiresApproval: false` because the tool
+  // either (a) only reads from the platform, (b) only emits an internal
+  // notification, or (c) is owned by a background workflow whose own
+  // governance covers the side-effect. They are included here so the
+  // static policy-coverage check (`tests/aiToolPolicyCoverage.test.ts`)
+  // confirms every `createTool({ id })` in `src/mastra/tools/` has a
+  // matching governance entry — there is no allowlist escape hatch.
+  // A new tool that adds a write or external side-effect MUST flip
+  // `requiresApproval` to `true`, raise the risk level, and add the
+  // appropriate `complianceRefs`.
   'create-alert': {
     toolId: 'create-alert',
     label: 'Create internal AI alert',
     riskLevel: 'low',
     requiresApproval: false, // internal notification only, no external side-effect
-    complianceRefs: [],
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — internal notification surface, no external side-effect',
+    ],
     entityType: 'alert',
     buildPreview: (p: any) => `${p?.severity ?? 'info'}: ${trim(p?.title, 100)}`,
+  },
+
+  // --- read-only platform queries / analytics ---
+  'query-platform-data': {
+    toolId: 'query-platform-data',
+    label: 'Query platform data (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only query, no platform write',
+    ],
+    entityType: 'platform_query',
+    buildPreview: (p: any) =>
+      `Module: ${p?.module ?? '—'}` +
+      (p?.status ? ` · status=${p.status}` : '') +
+      (p?.severity ? ` · severity=${p.severity}` : '') +
+      (typeof p?.limit === 'number' ? ` · limit=${p.limit}` : ''),
+  },
+
+  'analyze-nonconformities': {
+    toolId: 'analyze-nonconformities',
+    label: 'Analyze nonconformity patterns (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only NC analytics',
+    ],
+    entityType: 'nc_analysis',
+    buildPreview: (p: any) =>
+      `Analysis: ${p?.analysisType ?? '—'}` +
+      (typeof p?.dayRange === 'number' ? ` · last ${p.dayRange} days` : ''),
+  },
+
+  'suggest-improvements': {
+    toolId: 'suggest-improvements',
+    label: 'Suggest quality improvements (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only quality analytics',
+    ],
+    entityType: 'improvement_suggestion',
+    buildPreview: (p: any) =>
+      `Focus: ${p?.focusArea ?? '—'}` +
+      (typeof p?.dayRange === 'number' ? ` · last ${p.dayRange} days` : ''),
+  },
+
+  'check-regulation-compliance': {
+    toolId: 'check-regulation-compliance',
+    label: 'Check regulation compliance score (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only compliance scoring',
+    ],
+    entityType: 'compliance_check',
+    buildPreview: (p: any) => `Regulation: ${p?.regulation ?? 'all'}`,
+  },
+
+  'review-document': {
+    toolId: 'review-document',
+    label: 'Review governance document (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only document review',
+    ],
+    entityType: 'document_review',
+    buildPreview: (p: any) =>
+      `Type: ${p?.documentType ?? '—'}` +
+      (p?.documentId ? ` · doc #${p.documentId}` : ' · all active'),
+  },
+
+  'monitor-risks': {
+    toolId: 'monitor-risks',
+    label: 'Monitor risk register (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only risk monitoring',
+    ],
+    entityType: 'risk_check',
+    buildPreview: (p: any) =>
+      `Check: ${p?.checkType ?? '—'}` +
+      (typeof p?.riskThreshold === 'number'
+        ? ` · threshold=${p.riskThreshold}`
+        : ''),
+  },
+
+  'monitor-kpis': {
+    toolId: 'monitor-kpis',
+    label: 'Monitor KPI performance (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only KPI monitoring',
+    ],
+    entityType: 'kpi_check',
+    buildPreview: (p: any) =>
+      `Check: ${p?.checkType ?? '—'}` +
+      (typeof p?.periodCount === 'number' ? ` · last ${p.periodCount} periods` : ''),
+  },
+
+  'search-knowledge-base': {
+    toolId: 'search-knowledge-base',
+    label: 'Search regulatory knowledge base (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only KB lookup',
+    ],
+    entityType: 'kb_search',
+    buildPreview: (p: any) =>
+      `Action: ${p?.action ?? '—'}` +
+      (p?.query ? ` · "${trim(p.query, 60)}"` : '') +
+      (p?.documentType ? ` · type=${p.documentType}` : ''),
+  },
+
+  'get-nonconformance-list': {
+    toolId: 'get-nonconformance-list',
+    label: 'List nonconformances (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only NC list',
+    ],
+    entityType: 'nc_list',
+    buildPreview: (p: any) =>
+      `NC list` +
+      (p?.status ? ` · status=${p.status}` : '') +
+      (p?.severity ? ` · severity=${p.severity}` : '') +
+      (typeof p?.limit === 'number' ? ` · limit=${p.limit}` : ''),
+  },
+
+  'get-capa-list': {
+    toolId: 'get-capa-list',
+    label: 'List CAPA records (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CAPA list',
+    ],
+    entityType: 'capa_list',
+    buildPreview: (p: any) =>
+      `CAPA list` +
+      (p?.status ? ` · status=${p.status}` : '') +
+      (p?.severity ? ` · severity=${p.severity}` : '') +
+      (p?.assignedTo ? ` · assignee=${trim(p.assignedTo, 40)}` : ''),
+  },
+
+  'get-capa-details': {
+    toolId: 'get-capa-details',
+    label: 'Get CAPA details (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CAPA detail',
+    ],
+    entityType: 'capa_detail',
+    buildPreview: (p: any) => `CAPA #${p?.capaId ?? '—'}`,
+  },
+
+  'get-training-list': {
+    toolId: 'get-training-list',
+    label: 'List training records (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only training list',
+    ],
+    entityType: 'training_list',
+    buildPreview: (p: any) =>
+      `Training list` +
+      (p?.trainingType ? ` · type=${p.trainingType}` : '') +
+      (typeof p?.isActive === 'boolean' ? ` · active=${p.isActive}` : ''),
+  },
+
+  'get-training-assignments': {
+    toolId: 'get-training-assignments',
+    label: 'List training assignments (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only training assignment list',
+    ],
+    entityType: 'training_assignment_list',
+    buildPreview: (p: any) =>
+      `Training assignments` +
+      (p?.employeeId ? ` · employee=${trim(p.employeeId, 40)}` : '') +
+      (p?.status ? ` · status=${p.status}` : ''),
+  },
+
+  'run-checklist': {
+    toolId: 'run-checklist',
+    label: 'Run audit checklist (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only audit checklist execution',
+    ],
+    entityType: 'checklist_run',
+    buildPreview: (p: any) =>
+      `Action: ${p?.action ?? '—'}` +
+      (p?.checklistId ? ` · checklist #${p.checklistId}` : '') +
+      (p?.standard ? ` · standard=${trim(p.standard, 60)}` : ''),
+  },
+
+  // --- read-only / external-data ingestion (no platform write) ---
+  'call-analysis-tool': {
+    toolId: 'call-analysis-tool',
+    label: 'Analyze call transcript (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only call analysis, no CRM write',
+    ],
+    entityType: 'call_analysis',
+    buildPreview: (p: any) =>
+      `Call #${p?.call_record_id ?? '—'} · ${p?.agent_type ?? 'sdr'}` +
+      (typeof p?.include_qa_scoring === 'boolean'
+        ? ` · qa=${p.include_qa_scoring}`
+        : ''),
+  },
+
+  'call-ingest-tool': {
+    toolId: 'call-ingest-tool',
+    label: 'Ingest call recording metadata (read-only catalog)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — call catalog only, no CRM write',
+    ],
+    entityType: 'call_ingest',
+    buildPreview: (p: any) =>
+      `Source: ${p?.source ?? '—'} · call=${trim(p?.call_id, 40)}` +
+      (p?.direction ? ` · ${p.direction}` : ''),
+  },
+
+  'meeting-mom-tool': {
+    toolId: 'meeting-mom-tool',
+    label: 'Generate meeting minutes (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only MoM generation',
+    ],
+    entityType: 'meeting_mom',
+    buildPreview: (p: any) =>
+      `Meeting: ${trim(p?.meeting_title, 80)}` +
+      (p?.meeting_date ? ` · ${trim(p.meeting_date, 20)}` : ''),
+  },
+
+  'fetch-calendar-events': {
+    toolId: 'fetch-calendar-events',
+    label: 'Fetch Google Calendar events (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only calendar fetch',
+    ],
+    entityType: 'calendar_fetch',
+    buildPreview: (p: any) =>
+      `Range: ${p?.startDate ?? '—'} → ${p?.endDate ?? '—'}` +
+      (p?.calendarId ? ` · cal=${trim(p.calendarId, 40)}` : ''),
+  },
+
+  'list-calendars': {
+    toolId: 'list-calendars',
+    label: 'List Google Calendars (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only calendar list',
+    ],
+    entityType: 'calendar_list',
+    buildPreview: () => `List all available calendars`,
+  },
+
+  'audit-crm-hygiene': {
+    toolId: 'audit-crm-hygiene',
+    label: 'Audit CRM hygiene (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CRM audit, no Zoho write',
+    ],
+    entityType: 'crm_audit',
+    buildPreview: (p: any) =>
+      `Modules: ${Array.isArray(p?.modules) ? p.modules.join(', ') : '—'}` +
+      (typeof p?.pageSize === 'number' ? ` · pageSize=${p.pageSize}` : '') +
+      (Array.isArray(p?.customRules) && p.customRules.length
+        ? ` · ${p.customRules.length} custom rule(s)`
+        : ''),
+  },
+
+  'check-crm-activity': {
+    toolId: 'check-crm-activity',
+    label: 'Check CRM activity inactivity (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CRM activity check',
+    ],
+    entityType: 'crm_activity_check',
+    buildPreview: (p: any) =>
+      `CRM activity check` +
+      (Array.isArray(p?.modules) ? ` · modules=${p.modules.join(', ')}` : '') +
+      (typeof p?.inactivityDays === 'number'
+        ? ` · idle≥${p.inactivityDays}d`
+        : ''),
+  },
+
+  'crm-compliance-tool': {
+    toolId: 'crm-compliance-tool',
+    label: 'Check CRM compliance for a call (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CRM compliance check',
+    ],
+    entityType: 'crm_compliance_check',
+    buildPreview: (p: any) =>
+      `Call #${p?.call_record_id ?? '—'}` +
+      (p?.lead_id ? ` · lead=${trim(p.lead_id, 24)}` : '') +
+      (p?.deal_id ? ` · deal=${trim(p.deal_id, 24)}` : '') +
+      (typeof p?.check_window_hours === 'number'
+        ? ` · window=${p.check_window_hours}h`
+        : ''),
+  },
+
+  'evaluate-deals': {
+    toolId: 'evaluate-deals',
+    label: 'Evaluate batch of deals (read-only scoring)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only deal scoring; downstream NC/CAPA creation is gated separately',
+    ],
+    entityType: 'deal_evaluation',
+    buildPreview: (p: any) =>
+      `Source: ${p?.source ?? '—'}` +
+      (Array.isArray(p?.dealIds) ? ` · ${p.dealIds.length} deal(s)` : '') +
+      (typeof p?.pageSize === 'number' ? ` · pageSize=${p.pageSize}` : ''),
+  },
+
+  'evaluate-single-deal': {
+    toolId: 'evaluate-single-deal',
+    label: 'Evaluate a single deal (read-only scoring)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only single-deal scoring',
+    ],
+    entityType: 'deal_evaluation_single',
+    buildPreview: (p: any) =>
+      `Deal: ${trim(p?.dealId ?? p?.deal_id, 40)}`,
+  },
+
+  // --- email-out tools used by background workflows only ---
+  // These are NOT wrapped with the chat-driven approval gate because
+  // the workflow that owns them is itself governed (cron schedule,
+  // recipient allowlist). They are listed here so the static check
+  // confirms the policy decision was made deliberately.
+  'send-quality-report': {
+    toolId: 'send-quality-report',
+    label: 'Send quality report email (background workflow)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-SOP-009 (Nonconformity, Violation and Corrective Action Process) — periodic quality report',
+      'WP-DOC-004 (AI Adoption Guidelines) — background workflow, recipient allowlist governs distribution',
+    ],
+    entityType: 'quality_report_email',
+    buildPreview: (p: any) =>
+      `Report: ${trim(p?.reportTitle, 100)}` +
+      (typeof p?.qualityScores?.overallScore === 'number'
+        ? ` · overall=${p.qualityScores.overallScore}`
+        : ''),
+  },
+
+  'send-alert': {
+    toolId: 'send-alert',
+    label: 'Send alert email (background workflow)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — background alert workflow, recipient allowlist governs distribution',
+    ],
+    entityType: 'alert_email',
+    buildPreview: (p: any) =>
+      `${p?.severity ?? 'info'}: ${trim(p?.subject ?? p?.title, 100)}`,
+  },
+
+  // --- scaffolding / docs ---
+  'example-tool': {
+    toolId: 'example-tool',
+    label: 'Example scaffolding tool (no platform effect)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — scaffolding only, no platform read or write',
+    ],
+    entityType: 'example',
+    buildPreview: (p: any) =>
+      `Message: ${trim(p?.message, 100)}` +
+      (typeof p?.count === 'number' ? ` · count=${p.count}` : ''),
   },
 };
 
