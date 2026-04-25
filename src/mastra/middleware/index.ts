@@ -1,6 +1,3 @@
-import { MastraError } from "@mastra/core/error";
-import { NonRetriableError } from "inngest";
-import { z } from "zod";
 import { randomBytes } from "crypto";
 import { getSessionFromCookie } from "../routes/authRoutes";
 import { sanitizeRequestBody } from "../../utils/inputSanitizer";
@@ -452,36 +449,58 @@ export const globalMiddleware = [
     try {
       await next();
     } catch (error) {
+      // ──────────────────────────────────────────────────────────────────
+      // This catch is defense-in-depth ONLY. In production it is
+      // unreachable: the Mastra deployer installs an `app.onError`
+      // handler (see node_modules/@mastra/deployer/dist/server/index.js —
+      // function `errorHandler`, registered at line 12240) which is
+      // invoked by Hono's per-dispatch try/catch in `compose()` BEFORE
+      // this `await next()` can reject. Hono's compose converts every
+      // uncaught throw into a Response inside the per-dispatch try/catch
+      // and the surrounding `await next()` resolves normally — so any
+      // throw originating from a downstream route, middleware or Mastra
+      // workflow surface comes back to us as a rendered Response, never
+      // as a re-throw.
+      //
+      // Concretely, three classes of throw all hit Mastra's onError and
+      // never reach this block:
+      //   1. plain Error / MastraError / ZodError / any non-HTTPException
+      //      → rendered as the static `{ error: "Internal Server Error" }`
+      //        body (status 500); `error.message` never reaches the wire.
+      //   2. HTTPException → rendered as `{ error: err.message }` at the
+      //        configured status; the body still flows through
+      //        `redactSecretsInResponse(c)` below, so any credential
+      //        echoed in `err.message` is scrubbed there.
+      //   3. Throws from inside Inngest `step.run` callbacks invoked via
+      //        `/api/inngest` → captured by Inngest's serve handler and
+      //        reported in its 200 response payload (the HTTP request
+      //        itself does not reject), so they likewise never escape
+      //        `await next()` as a throw.
+      //
+      // History: an earlier version of this file had an
+      //   if (error instanceof MastraError) { throw new NonRetriableError(...) }
+      //   else if (error instanceof z.ZodError) { throw new NonRetriableError(...) }
+      // ladder followed by a `throw redactErrorForRethrow(error)` at the
+      // bottom. Task #538 proved the bottom rewrap was dead code and
+      // removed it. Task #576 verified the two `instanceof` branches were
+      // dead by exactly the same mechanism (they live inside the same
+      // unreachable catch block) and removed them too — they cannot fire
+      // in any production code path because Mastra's onError takes the
+      // throw first; wrapping in `NonRetriableError` therefore had no
+      // effect on Inngest's serve handler. The integration test
+      // `tests/safeErrorResponseRedaction.integration.test.ts` exercises
+      // the MastraError- and ZodError-throwing paths through the real
+      // Mastra/Hono dispatch and asserts the static fallback is what
+      // reaches the wire — making the regression observable if a future
+      // edit re-adds the dead branches.
+      //
+      // We still keep the `try { await next() }` wrapper as a belt-and-
+      // suspenders log line: if a future Mastra upgrade ever removes
+      // `app.onError`, an unscrubbed throw would still hit this block
+      // and we want at least a structured log entry pointing at the URL
+      // that failed before it bubbles further.
+      // ──────────────────────────────────────────────────────────────────
       logger?.error("[Response]", { method: c.req.method, url: c.req.url });
-      if (error instanceof MastraError) {
-        if (error.id === "AGENT_MEMORY_MISSING_RESOURCE_ID") {
-          // Surface a redacted version of the message so a credential echoed
-          // back by an upstream SDK can't leak through Inngest/Mastra's
-          // error-rendering path.
-          const safe = redactSecretLikeStrings(error.message) as string;
-          throw new NonRetriableError(safe, { cause: error });
-        }
-      } else if (error instanceof z.ZodError) {
-        const safe = redactSecretLikeStrings(error.message) as string;
-        throw new NonRetriableError(safe, { cause: error });
-      }
-      // We do NOT need to rewrap `error.message` for credential redaction
-      // here. The Mastra deployer installs an `app.onError` (see
-      // node_modules/@mastra/deployer/dist/server/index.js — `errorHandler`)
-      // which catches every uncaught throw at Hono's per-dispatch level and
-      // converts it into a Response BEFORE this catch block can re-throw:
-      //   - non-HTTPException → `c.json({ error: "Internal Server Error" }, 500)`
-      //     (a static body — `error.message` never reaches the wire), and
-      //   - HTTPException     → `c.json({ error: err.message }, status)` —
-      //     whose body still flows through `redactSecretsInResponse(c)` below
-      //     (the `await next()` above resolves normally because Hono's
-      //     onError has already produced a Response, not re-thrown), so any
-      //     credential echoed in `err.message` is scrubbed there.
-      // A previous version of this file rewrapped the throw with
-      // `redactErrorForRethrow(error)` to defend a "default Hono error
-      // renderer" path that does not exist in our stack — task #538
-      // confirmed the rewrap was dead code in production. Re-throwing the
-      // original preserves stack/name/cause for the Mastra logger above.
       throw error;
     }
 

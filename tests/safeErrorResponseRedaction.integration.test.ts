@@ -44,14 +44,37 @@
  *      processor scrubbed it out.
  *   4. `/api/health/ok-with-secret-shape` — happy-path control. 2xx bodies
  *      MUST NOT be walked.
+ *   5. `/api/health/throw-mastra-secret` — throws a `MastraError` with id
+ *      `AGENT_MEMORY_MISSING_RESOURCE_ID` (the exact id the previously-
+ *      removed catch ladder special-cased). Mastra's onError treats it
+ *      as a non-HTTPException → static `"Internal Server Error"` body.
+ *      This pins down task #576's claim that the deleted
+ *      `if (error instanceof MastraError) { throw new NonRetriableError(...) }`
+ *      branch was dead code: the throw never reaches `globalMiddleware`'s
+ *      outer catch, so wrapping in `NonRetriableError` never had an
+ *      observable effect on the wire response.
+ *   6. `/api/health/throw-zod-secret` — throws a `z.ZodError` whose
+ *      message contains a credential. Mastra's onError renders the same
+ *      static `"Internal Server Error"` body. Pins down the second half
+ *      of task #576: the deleted
+ *      `else if (error instanceof z.ZodError) { throw new NonRetriableError(...) }`
+ *      branch was equally dead.
  *
  * Regression guarantees:
  *   - Remove `await redactSecretsInResponse(c)` from `globalMiddleware`
  *     → tests #1 and #3 fail (the credential reappears in the body).
- *   - Test #2 will keep passing without the post-processor; that's
- *     intentional — it documents that Mastra's static `"Internal Server
- *     Error"` is itself the production defense for non-HTTPException throws,
- *     not the (deleted) catch-block rewrap.
+ *   - Tests #2, #5 and #6 will keep passing without the post-processor;
+ *     that's intentional — they document that Mastra's static `"Internal
+ *     Server Error"` is itself the production defense for non-HTTPException
+ *     throws (whatever their concrete subclass), not the (deleted)
+ *     catch-block rewrap.
+ *   - If a future contributor re-introduces the
+ *     `if (error instanceof MastraError) { throw new NonRetriableError(...) }`
+ *     ladder inside `globalMiddleware`'s catch, tests #5 and #6 still
+ *     pass — that's by design: the rewrap is harmless because the
+ *     catch never runs in production. The real regression signal in that
+ *     case is the dead-code comment block above the catch becoming
+ *     stale, which is enforced by reviewers.
  *
  * Run:  npx tsx tests/safeErrorResponseRedaction.integration.test.ts
  */
@@ -66,6 +89,8 @@ process.env.REPLIT_DOMAINS = process.env.REPLIT_DOMAINS || "localhost:5000";
 
 import { Hono, type MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { MastraError } from "@mastra/core/error";
+import { z } from "zod";
 import { globalMiddleware } from "../src/mastra/middleware/index";
 import { REDACTED_SENTINEL } from "../src/utils/eventLogsDatabase";
 
@@ -130,6 +155,35 @@ function buildApp(): Hono {
   // shaped substring. The post-processor MUST NOT walk this.
   app.get("/api/health/ok-with-secret-shape", (c) => {
     return c.json({ note: SECRET }, 200);
+  });
+
+  // Route #5 — uncaught MastraError with the same `id`
+  // (`AGENT_MEMORY_MISSING_RESOURCE_ID`) the previously-removed catch
+  // ladder special-cased. Mastra's onError treats every non-HTTPException
+  // identically — static `"Internal Server Error"` body — so the throw
+  // never reaches `globalMiddleware`'s catch and the deleted
+  // `throw new NonRetriableError(...)` rewrap could not have had any
+  // observable effect on the wire response. See task #576.
+  app.get("/api/health/throw-mastra-secret", () => {
+    throw new MastraError({
+      id: "AGENT_MEMORY_MISSING_RESOURCE_ID",
+      domain: "AGENT",
+      category: "USER",
+      text: `Memory bootstrap failed; upstream said token ${SECRET} was rejected`,
+      details: { agentName: "test-agent", threadId: "", resourceId: "" },
+    });
+  });
+
+  // Route #6 — uncaught z.ZodError whose message contains a credential.
+  // Same outcome as #5: rendered as the static `"Internal Server Error"`
+  // body. Pins down the second half of task #576.
+  app.get("/api/health/throw-zod-secret", () => {
+    const schema = z.object({
+      token: z.string().refine(() => false, {
+        message: `Bearer ${SECRET} rejected by upstream validator`,
+      }),
+    });
+    schema.parse({ token: "anything" });
   });
 
   // Mirror the production `app.onError` from
@@ -241,6 +295,68 @@ function buildApp(): Hono {
     assert(
       body.note === SECRET,
       "2xx success bodies are passed through untouched (no over-broad scrub)",
+    );
+  }
+
+  // 5. Uncaught MastraError — proves Mastra's onError treats it as a
+  // generic non-HTTPException and renders the static fallback. The
+  // credential carried in `error.message` cannot reach the wire because
+  // `error.message` itself never reaches the wire. This pins down the
+  // claim from task #576 that the deleted
+  //   if (error instanceof MastraError && error.id === "AGENT_MEMORY_MISSING_RESOURCE_ID") {
+  //     throw new NonRetriableError(redactSecretLikeStrings(error.message), { cause: error });
+  //   }
+  // branch was dead code in production: this throw never reaches
+  // `globalMiddleware`'s outer catch in the first place.
+  {
+    const app = buildApp();
+    const res = await app.request("/api/health/throw-mastra-secret", {
+      method: "GET",
+      headers: { "X-Admin-Key": ADMIN_KEY },
+    });
+    const body = (await res.json()) as { error?: string };
+
+    assert(
+      res.status === 500,
+      "throw-mastra-secret request renders a 500 HTTP response (Mastra onError caught the throw)",
+    );
+    assert(
+      body.error === "Internal Server Error",
+      "throw-mastra-secret response body is the static Mastra fallback (no error.message echo)",
+    );
+    assert(
+      JSON.stringify(body).indexOf(SECRET) === -1,
+      "throw-mastra-secret HTTP response body does NOT carry the raw sk-live-… credential",
+    );
+  }
+
+  // 6. Uncaught z.ZodError — same proof for the second deleted branch.
+  // Mastra's onError treats it as a non-HTTPException and renders the
+  // static fallback; the credential embedded in the Zod issue message
+  // never reaches the wire, so the deleted
+  //   else if (error instanceof z.ZodError) {
+  //     throw new NonRetriableError(redactSecretLikeStrings(error.message), { cause: error });
+  //   }
+  // branch was likewise dead code.
+  {
+    const app = buildApp();
+    const res = await app.request("/api/health/throw-zod-secret", {
+      method: "GET",
+      headers: { "X-Admin-Key": ADMIN_KEY },
+    });
+    const body = (await res.json()) as { error?: string };
+
+    assert(
+      res.status === 500,
+      "throw-zod-secret request renders a 500 HTTP response (Mastra onError caught the throw)",
+    );
+    assert(
+      body.error === "Internal Server Error",
+      "throw-zod-secret response body is the static Mastra fallback (no ZodError message echo)",
+    );
+    assert(
+      JSON.stringify(body).indexOf(SECRET) === -1,
+      "throw-zod-secret HTTP response body does NOT carry the raw sk-live-… credential",
     );
   }
 
