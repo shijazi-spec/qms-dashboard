@@ -236,6 +236,35 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
     const refreshed = await getRetention();
     expect(refreshed.override_days).toBe(SAVED_RETENTION_DAYS);
     expect(refreshed.effective_days).toBe(SAVED_RETENTION_DAYS);
+
+    // Task #645: ambient scheduled-prune preview must be exposed on the
+    // GET payload AND surfaced inline in the retention card so operators
+    // can see "if I do nothing, the next cron pass will delete N rows"
+    // without clicking the destructive Prune-now button. The exact row
+    // count depends on the live ai_call_metrics table contents, so we
+    // assert shape (well-formed object OR explicit null fallback) and
+    // — when the server returned a number — that the UI line renders it
+    // verbatim. Either branch must produce a visible preview line so
+    // the operator never sees a blank row in the card.
+    expect(
+      refreshed,
+      'GET payload must include the scheduled_preview field (Task #645)',
+    ).toHaveProperty('scheduled_preview');
+    const previewLine = page.locator('[data-testid="text-metrics-retention-scheduled-preview"]');
+    await expect(previewLine, 'scheduled-preview line should be visible (unlocked path)').toBeVisible();
+    await expect(previewLine).toContainText(/Next scheduled cron pass would delete/i);
+    if (refreshed.scheduled_preview && Number.isFinite(Number(refreshed.scheduled_preview.rows_to_delete))) {
+      const expectedRows = Number(refreshed.scheduled_preview.rows_to_delete).toLocaleString();
+      await expect(
+        page.locator('[data-testid="text-metrics-retention-scheduled-preview-rows"]'),
+        'rendered row count should match GET payload',
+      ).toHaveText(expectedRows);
+    } else {
+      await expect(
+        page.locator('[data-testid="text-metrics-retention-scheduled-preview-rows"]'),
+        'fallback to muted "—" when server could not compute the preview',
+      ).toHaveText('—');
+    }
   });
 
   test('Lock-engaged path: dashboard renders the lock banner, hides Save, and surfaces the 409 to the operator', async ({ page }) => {
@@ -330,6 +359,16 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
     const input = page.locator('[data-testid="input-metrics-retention-days"]');
     await expect(input).toBeVisible();
     await expect(input, 'retention input should be disabled when locked').toBeDisabled();
+
+    // Task #645: the ambient "next scheduled cron pass would delete N
+    // rows" line is hidden under the locked path because the operator
+    // can't act on it from the UI anyway. Hiding it keeps the lock
+    // banner the unambiguous focal point and avoids implying the
+    // dashboard could change anything.
+    await expect(
+      page.locator('[data-testid="text-metrics-retention-scheduled-preview"]'),
+      'scheduled-preview line must NOT render when env_locked=true',
+    ).toHaveCount(0);
 
     // Sanity-check the PUT-side of the lock contract: even though the
     // Save button is hidden, an operator who curls /api/ai-ops/metrics-retention

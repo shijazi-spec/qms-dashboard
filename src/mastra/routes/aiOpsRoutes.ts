@@ -1658,6 +1658,42 @@ export const aiOpsRoutes = [
           // round-trip per keystroke.
           const confirmThreshold = getAiMetricsRetentionConfirmThreshold();
 
+          // Task #645: ambient dry-run preview of the *next scheduled cron
+          // pass* against the current effective window so operators can
+          // answer "if I do nothing, how much telemetry will tonight's
+          // prune delete?" without having to click the destructive
+          // "Prune now" button or query the DB directly. Re-uses the
+          // exact helper the prune-now endpoint calls, so the preview
+          // cannot drift from what the cron will actually delete.
+          //
+          // Best-effort: a failure here (e.g. transient DB hiccup, table
+          // missing on a fresh install) must NOT block the rest of the
+          // payload — the dashboard renders a muted "—" in that case
+          // and the operator can still edit the window.
+          let scheduledPreview:
+            | { rows_to_delete: number; oldest_row_age_days: number | null; days_to_delete: number; effective_days: number }
+            | null = null;
+          if (Number.isFinite(effective) && effective > 0) {
+            try {
+              const { previewAiMetricsPruneImpact } = await import(
+                "../../utils/aiTelemetry"
+              );
+              const impact = await previewAiMetricsPruneImpact(effective);
+              scheduledPreview = {
+                rows_to_delete: impact.rowCount,
+                oldest_row_age_days: impact.oldestRowAgeDays,
+                days_to_delete: impact.daysToDelete,
+                effective_days: impact.candidateDays,
+              };
+            } catch (previewErr) {
+              console.error(
+                "[AI-Ops] metrics-retention scheduled-preview error (non-fatal):",
+                previewErr,
+              );
+              scheduledPreview = null;
+            }
+          }
+
           return c.json({
             data: {
               default_days: DEFAULT_AI_METRICS_RETENTION_DAYS,
@@ -1679,6 +1715,7 @@ export const aiOpsRoutes = [
               audit_to: auditTo ? auditTo.toISOString() : null,
               audit_max_limit: AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
               confirm_threshold: confirmThreshold,
+              scheduled_preview: scheduledPreview,
               can_edit:
                 AI_METRICS_RETENTION_WRITE_ROLES.includes(
                   user.role as UserRole,

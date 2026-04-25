@@ -3229,6 +3229,37 @@
         ? `<span class="text-xs text-gray-400" data-testid="text-metrics-retention-fallback">Using ${fallbackText}</span>`
         : `<span class="text-xs text-blue-600" data-testid="text-metrics-retention-override-active">Override active — fallback would be ${fallbackText}</span>`;
 
+      // Task #645: ambient preview of what tonight's scheduled cron pass
+      // would delete, computed against the live `effective_days` window
+      // by the GET endpoint (re-uses the same `previewAiMetricsPruneImpact`
+      // helper as the destructive "Prune now" button). Hidden under the
+      // env-locked path because the operator can't act on it from the UI
+      // anyway, and a muted "—" is shown when the server failed to
+      // compute the preview so the rest of the card keeps working.
+      let scheduledPreviewLine = '';
+      if (!locked) {
+        const preview = data.scheduled_preview;
+        if (preview && Number.isFinite(Number(preview.rows_to_delete))) {
+          const rows = Number(preview.rows_to_delete);
+          const oldestAge = preview.oldest_row_age_days;
+          const oldestText = (oldestAge != null && Number.isFinite(Number(oldestAge)) && Number(oldestAge) > 0)
+            ? ` (oldest is ${esc(Math.ceil(Number(oldestAge)))} days)`
+            : '';
+          const verb = rows === 1 ? 'row' : 'rows';
+          scheduledPreviewLine = `
+            <div class="text-xs text-gray-600 mt-2" data-testid="text-metrics-retention-scheduled-preview">
+              Next scheduled cron pass would delete
+              <span class="font-mono text-gray-900" data-testid="text-metrics-retention-scheduled-preview-rows">${esc(rows.toLocaleString())}</span>
+              ${verb}${oldestText}.
+            </div>`;
+        } else {
+          scheduledPreviewLine = `
+            <div class="text-xs text-gray-400 mt-2" data-testid="text-metrics-retention-scheduled-preview">
+              Next scheduled cron pass would delete <span class="font-mono" data-testid="text-metrics-retention-scheduled-preview-rows">—</span> rows.
+            </div>`;
+        }
+      }
+
       const inputDisabled = (!canEdit) ? 'disabled' : '';
       const inputClass = `w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}`;
 
@@ -3343,7 +3374,7 @@
              <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
            </div>`;
 
-      formEl.innerHTML = lockBanner + readonlyBanner + rows + noteRow + buttons;
+      formEl.innerHTML = lockBanner + readonlyBanner + rows + scheduledPreviewLine + noteRow + buttons;
     }
 
     function renderMetricsRetentionAudit(data) {
