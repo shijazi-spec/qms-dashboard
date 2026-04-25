@@ -46,6 +46,7 @@ export interface FakeContext {
   json: (body: any, status?: number) => CapturedResponse;
   header: (name: string, value: string, options?: { append?: boolean }) => void;
   text: (body: string, status?: number) => CapturedResponse;
+  html: (body: string, status?: number) => CapturedResponse;
   body: (body: any, status?: number) => CapturedResponse;
   redirect: (url: string, status?: number) => CapturedResponse;
   responseHeaders: Record<string, string>;
@@ -86,6 +87,11 @@ export function makeContext(init: FakeRequestInit = {}): FakeContext {
       status: status ?? 200,
       body,
       headers: { ...responseHeaders },
+    }),
+    html: (body: string, status?: number) => ({
+      status: status ?? 200,
+      body,
+      headers: { ...responseHeaders, "Content-Type": "text/html; charset=utf-8" },
     }),
     body: (body: any, status?: number) => ({
       status: status ?? 200,

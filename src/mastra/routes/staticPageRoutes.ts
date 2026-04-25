@@ -184,16 +184,34 @@ export const staticPageRoutes = [
     // Access semantics: same OR-style gate as `/admin` and `/users` for
     // consistency — the page shell is served when EITHER the caller has a
     // valid admin API key (cookie/header) OR a session with role='admin'.
-    // The QMS-backing API routes (audits, policies, compliance, risks, etc.)
-    // perform their own per-role RBAC via `enforceRoutePermission`, which
-    // is the actual authorization boundary for QMS data.
+    // Non-admin sessions (e.g. role='user', 'department_viewer') are
+    // explicitly blocked; this matches the `isAdminAuthorized` check that
+    // every QMS-backing API route in `qmsApiRoutes.ts` performs, so the
+    // page shell can never be rendered for a caller whose APIs would all
+    // 403 anyway.  The QMS-backing API routes (audits, policies,
+    // compliance, risks, etc.) perform their own per-role RBAC via
+    // `enforceRoutePermission`, which is the actual authorization
+    // boundary for QMS data.
     path: "/qms",
     method: "GET",
-    createHandler: async () => serveDashboardPageWithSetupCheck(
-      "qms.html",
-      "QMS Setup Required",
-      `To access the QMS dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
-    ),
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) {
+            return c.html(renderSetupRequiredPage(
+              "QMS Setup Required",
+              `To access the QMS dashboard, sign in with an admin account or set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret in your environment.`,
+            ));
+          }
+          const filePath = resolveDashboardFile("qms.html");
+          if (filePath) return c.html(readFileSync(filePath, "utf-8"));
+          return c.text("QMS dashboard not found", 404);
+        } catch (error) {
+          console.error("Error serving QMS dashboard:", error);
+          return c.text("Error loading QMS dashboard", 500);
+        }
+      };
+    },
   },
   { path: "/sandbox", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("sandbox.html", "Setup Required", `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
   { path: "/crm", method: "GET", createHandler: async () => serveDashboardPageWithSetupCheck("crm.html", "CRM Setup Required", `To access the CRM dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`) },
