@@ -269,26 +269,6 @@ export async function claimToolHealthNotifySlot(
 }
 
 /**
- * Returns every open / acknowledged alert of the given alert_type.
- * Used by the prompt-regression auto-resolve sweep which needs to scan ALL
- * open regression alerts (not just those for a single key) so it can close
- * whichever ones have recovered.
- */
-export async function getOpenAlertsByType(
-  alertType: AlertType,
-): Promise<AIAlert[]> {
-  const result = await pool.query(
-    `SELECT *
-       FROM ai_alerts
-      WHERE alert_type = $1
-        AND status IN ('open', 'acknowledged')
-      ORDER BY created_at ASC`,
-    [alertType],
-  );
-  return result.rows;
-}
-
-/**
  * Return the most-recently triaged (acknowledged or resolved) tool-health
  * alerts within the last `days` days, ordered by triage time descending so
  * the most-recent action appears first.

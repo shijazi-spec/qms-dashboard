@@ -109,7 +109,15 @@ async function main(): Promise<void> {
     );
     assert(
       typeof hr?.tool_input_preview === 'string'
-        && hr.tool_input_preview.includes('[REDACTED]')
+        // Either marker is acceptable evidence of redaction:
+        //   * `[REDACTED]` — emitted by the PII_PATTERNS regex pass when a
+        //     `secret=…` substring is found inside a non-sensitive field.
+        //   * `***REDACTED***` (REDACTED_SENTINEL) — emitted by the
+        //     stronger key-based deny-list (`redactSensitiveDeep`) when the
+        //     surrounding field name itself is sensitive (e.g. `token`),
+        //     which now runs before PII_PATTERNS sees the value.
+        && (hr.tool_input_preview.includes('[REDACTED]')
+            || hr.tool_input_preview.includes('***REDACTED***'))
         && !hr.tool_input_preview.includes('hunter2-not-stored-raw'),
       'persisted tool_input_preview redacts secret=… values',
     );

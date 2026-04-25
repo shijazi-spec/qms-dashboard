@@ -9,19 +9,71 @@
  * Run via:  npx vitest run tests/vitest/tablefApiRoutes.vitest.test.ts
  */
 
+import crypto from "crypto";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+
+// Task #60 wraps every tablef route with `tablefGate(...)` → `requireRole(c,
+// roles)`. That helper checks for BOTH a valid session cookie AND (when no
+// admin API key is present) a row in the platform users table. To keep this
+// suite self-contained — no DB, no real session-store — we forge a session
+// cookie with role='admin' AND send the matching X-Admin-Key header. With
+// the admin key present, requireRole() skips the platform-user lookup
+// (rbacMiddleware.ts L107). Both env vars must be set BEFORE any module that
+// reads them (rbacMiddleware, authRoutes) is imported.
+const TEST_ADMIN_KEY = "vitest-tablef-admin-key-2026";
+const TEST_SESSION_SECRET = "vitest-tablef-session-secret";
+process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+
 import { tablefApiRoutes } from "../../src/mastra/routes/tablefApiRoutes";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
-const mockQuery = vi.fn();
-const mockEnd = vi.fn().mockResolvedValue(undefined);
-const mockPool = { query: mockQuery, end: mockEnd };
+// Replicate the private signSession() in authRoutes.ts so we can mint a
+// cryptographically valid `walaplus_session` cookie without exporting it.
+function signSession(payload: Record<string, unknown>): string {
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto
+    .createHmac("sha256", TEST_SESSION_SECRET)
+    .update(data)
+    .digest("base64url");
+  return `${data}.${sig}`;
+}
 
-vi.mock("pg", () => ({
-  Pool: vi.fn(function (this: any) {
-    return mockPool;
-  }),
-}));
+const ADMIN_SESSION_COOKIE =
+  "walaplus_session=" +
+  encodeURIComponent(
+    signSession({ userId: 1, email: "tester@example.com", name: "Test", role: "admin" }),
+  );
+
+const ADMIN_HEADERS = {
+  "X-Admin-Key": TEST_ADMIN_KEY,
+  Cookie: ADMIN_SESSION_COOKIE,
+};
+
+// `pg` is a CJS module that exports both a default object (`pg.Pool`,
+// `pg.Client`, …) and named exports (`{ Pool, Client }`). When ESM consumers
+// do `await import("pg")` (as the route handler does at runtime), Vitest's
+// module mock must expose BOTH the named export and a `default` property so
+// the synthetic-namespace contains `default.Pool` for any transitive dep that
+// reaches `pg` via the default export. Omit `default` here and Vitest fails
+// at module-graph load with: `No "default" export is defined on the "pg" mock`.
+//
+// Bonus subtlety: `vi.mock(...)` is hoisted to the top of the file by Vitest,
+// so it runs BEFORE any `const`/`let` declarations in module body — meaning
+// the factory cannot close over plain top-level constants without hitting a
+// TDZ ReferenceError when transitive `import 'pg'` evaluation triggers
+// `new Pool()` at module-graph load time. Use `vi.hoisted({...})` so the
+// shared mock objects are themselves hoisted alongside the mock factory.
+const { mockQuery, mockEnd, mockPool } = vi.hoisted(() => {
+  const q = vi.fn();
+  const e = vi.fn().mockResolvedValue(undefined);
+  return { mockQuery: q, mockEnd: e, mockPool: { query: q, end: e } };
+});
+
+vi.mock("pg", () => {
+  const PoolMock = vi.fn(function (this: any) { return mockPool; });
+  return { Pool: PoolMock, default: { Pool: PoolMock } };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,7 +86,7 @@ describe("GET /api/tablef/departments — real data path", () => {
     mockQuery.mockResolvedValueOnce({ rows });
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/departments", "GET");
-    const res = await handler(makeContext({ method: "GET" }));
+    const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ departments: rows });
@@ -47,7 +99,7 @@ describe("GET /api/tablef/departments — real data path", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/departments", "GET");
-    const res = await handler(makeContext({ method: "GET" }));
+    const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
     expect(res.status).toBe(500);
     expect(res.body).toMatchObject({ error: "Failed to fetch departments", departments: [] });
@@ -61,7 +113,7 @@ describe("GET /api/tablef/kpis — real data path", () => {
     mockQuery.mockResolvedValueOnce({ rows });
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/kpis", "GET");
-    const res = await handler(makeContext({ method: "GET" }));
+    const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ kpis: rows });
@@ -74,7 +126,7 @@ describe("GET /api/tablef/kpis — real data path", () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/kpis", "GET");
-    await handler(makeContext({ method: "GET", query: { department_id: "d-1" } }));
+    await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS, query: { department_id: "d-1" } }));
 
     const [query, params] = mockQuery.mock.calls[0];
     expect(query).toContain("department_id = $1");
@@ -88,7 +140,7 @@ describe("GET /api/tablef/performance — real data path", () => {
     mockQuery.mockResolvedValueOnce({ rows });
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/performance", "GET");
-    const res = await handler(makeContext({ method: "GET" }));
+    const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ performance: rows });
@@ -106,6 +158,7 @@ describe("POST /api/tablef/performance — real data path", () => {
     const res = await handler(
       makeContext({
         method: "POST",
+        headers: ADMIN_HEADERS,
         body: {
           kpi_id: "KPI-1",
           department_id: "d-1",
@@ -136,6 +189,7 @@ describe("POST /api/tablef/performance — real data path", () => {
     const res = await handler(
       makeContext({
         method: "POST",
+        headers: ADMIN_HEADERS,
         body: { kpi_id: "KPI-2", department_id: "d-1", period_month: "2026-04", target: 100, achieved: 93 },
       }),
     );
@@ -153,6 +207,7 @@ describe("POST /api/tablef/performance — real data path", () => {
     const res = await handler(
       makeContext({
         method: "POST",
+        headers: ADMIN_HEADERS,
         body: { kpi_id: "KPI-3", department_id: "d-1", period_month: "2026-04", target: 100, achieved: 95 },
       }),
     );
@@ -167,7 +222,7 @@ describe("GET /api/tablef/users — real data path", () => {
     mockQuery.mockResolvedValueOnce({ rows });
 
     const handler = await buildHandler(tablefApiRoutes, "/api/tablef/users", "GET");
-    const res = await handler(makeContext({ method: "GET" }));
+    const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ users: rows });

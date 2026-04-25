@@ -23,6 +23,17 @@ import { buildHandler, makeContext } from "./_helpers/fakeContext";
 const suite = new TestSuite("dashboardApiRoutes");
 const HAS_DB = !!process.env.DATABASE_URL;
 
+// Task #60 / Task #197 — every dashboard API route is now wrapped by
+// `gateApiRoute()` which rejects unauthenticated callers with `401
+// Authentication required`. These tests are exercising the *business
+// logic* of each handler (200 happy paths, 400 validation errors), not
+// the auth layer (which has its own dedicated test in
+// tests/gateApiRoute.test.ts). Bypass the gate by sending the admin API
+// key on every request — the same key real CI/operator scripts use.
+const ADMIN_KEY = process.env.ADMIN_API_KEY || "test-admin-key";
+if (!process.env.ADMIN_API_KEY) process.env.ADMIN_API_KEY = ADMIN_KEY;
+const ADMIN_HEADERS = { "X-Admin-Key": ADMIN_KEY };
+
 console.log("\n=== dashboardApiRoutes integration tests ===\n");
 
 await suite.test("every route exposes path, method and createHandler", async () => {
@@ -36,7 +47,7 @@ await suite.test("every route exposes path, method and createHandler", async () 
 
 await suite.test("GET /api/integrations/status — 200 with full body shape (no DB)", async () => {
   const handler = await buildHandler(dashboardApiRoutes, "/api/integrations/status", "GET");
-  const res = await handler(makeContext({ method: "GET" }));
+  const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
   suite.expectEqual(res.status, 200, "status");
   suite.expect(res.body && typeof res.body === "object", "body is object");
   for (const key of ["zoho", "googleCalendar", "email"] as const) {
@@ -60,7 +71,7 @@ await suite.test("GET /api/crm/data — 400 with structured error when Zoho not 
   delete process.env.ZOHO_ACCESS_TOKEN;
   try {
     const handler = await buildHandler(dashboardApiRoutes, "/api/crm/data", "GET");
-    const res = await handler(makeContext({ method: "GET", query: { module: "Leads" } }));
+    const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS, query: { module: "Leads" } }));
     suite.expectEqual(res.status, 400, "status");
     suite.expectEqual(res.body?.success, false, "body.success");
     suite.expectEqual(res.body?.error, "Zoho CRM not configured", "body.error");
@@ -75,7 +86,7 @@ await suite.test("GET /api/crm/data — 400 with structured error when Zoho not 
 await suite.test("GET /api/agents/performance — 400 on malformed createdStart date", async () => {
   const handler = await buildHandler(dashboardApiRoutes, "/api/agents/performance", "GET");
   const res = await handler(
-    makeContext({ method: "GET", query: { createdStart: "not-a-date", createdEnd: "2025-01-31" } }),
+    makeContext({ method: "GET", headers: ADMIN_HEADERS, query: { createdStart: "not-a-date", createdEnd: "2025-01-31" } }),
   );
   suite.expectEqual(res.status, 400, "status");
   suite.expectEqual(res.body?.success, false, "body.success");
@@ -88,7 +99,7 @@ await suite.test("GET /api/agents/performance — 400 on malformed createdStart 
 await suite.test("GET /api/agents/performance — 400 when createdStart is after createdEnd", async () => {
   const handler = await buildHandler(dashboardApiRoutes, "/api/agents/performance", "GET");
   const res = await handler(
-    makeContext({ method: "GET", query: { createdStart: "2025-02-01", createdEnd: "2025-01-01" } }),
+    makeContext({ method: "GET", headers: ADMIN_HEADERS, query: { createdStart: "2025-02-01", createdEnd: "2025-01-01" } }),
   );
   suite.expectEqual(res.status, 400, "status");
   suite.expectEqual(res.body?.success, false, "body.success");
@@ -102,7 +113,7 @@ await suite.test("GET /api/agents/performance — 400 when createdStart is after
 await suite.test("GET /api/agents/performance — 400 when modifiedStart is after modifiedEnd", async () => {
   const handler = await buildHandler(dashboardApiRoutes, "/api/agents/performance", "GET");
   const res = await handler(
-    makeContext({ method: "GET", query: { modifiedStart: "2025-02-01", modifiedEnd: "2025-01-01" } }),
+    makeContext({ method: "GET", headers: ADMIN_HEADERS, query: { modifiedStart: "2025-02-01", modifiedEnd: "2025-01-01" } }),
   );
   suite.expectEqual(res.status, 400, "status");
   suite.expectEqual(res.body?.success, false, "body.success");

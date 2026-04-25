@@ -2287,7 +2287,7 @@
             <div class="w-28 flex-shrink-0 text-right text-gray-600 font-mono truncate text-[10px]" title="${toolLabel}">${toolLabel}</div>
             <div class="relative flex-1 h-5">
               <div class="absolute h-full rounded ${color} ${hoverColor} cursor-default transition-colors"
-                   style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%"
+                   data-style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%"
                    title="${tooltip}"
                    data-testid="waterfall-bar-${c.id}">
                 <span class="sr-only">${tooltip}</span>
@@ -2298,7 +2298,7 @@
       }).join('');
 
       const axisHtml = axisLabels.map(a =>
-        `<div class="absolute text-[9px] text-gray-400 whitespace-nowrap" style="left:${a.pct.toFixed(1)}%;transform:translateX(-50%)">${a.label}</div>`
+        `<div class="absolute text-[9px] text-gray-400 whitespace-nowrap" data-style="left:${a.pct.toFixed(1)}%;transform:translateX(-50%)">${a.label}</div>`
       ).join('');
 
       return `
@@ -2311,7 +2311,7 @@
           <div class="flex items-center gap-2 mb-2">
             <div class="w-28 flex-shrink-0"></div>
             <div class="flex-1 h-px bg-gray-200 relative">
-              ${axisLabels.map(a => `<div class="absolute top-0 h-2 w-px bg-gray-300" style="left:${a.pct.toFixed(1)}%;transform:translateX(-50%)"></div>`).join('')}
+              ${axisLabels.map(a => `<div class="absolute top-0 h-2 w-px bg-gray-300" data-style="left:${a.pct.toFixed(1)}%;transform:translateX(-50%)"></div>`).join('')}
             </div>
             <div class="w-14 flex-shrink-0"></div>
           </div>
@@ -2340,11 +2340,11 @@
             <button type="button"
               data-testid="btn-view-table-${containerId}"
               class="px-2 py-0.5 rounded border text-xs ${currentView === 'table' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}"
-              onclick="switchChildView('${containerId}', 'table')">Table</button>
+              data-child-view="table" data-child-container="${containerId}">Table</button>
             <button type="button"
               data-testid="btn-view-timeline-${containerId}"
               class="px-2 py-0.5 rounded border text-xs ${currentView === 'timeline' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}"
-              onclick="switchChildView('${containerId}', 'timeline')">Timeline</button>
+              data-child-view="timeline" data-child-container="${containerId}">Timeline</button>
           </div>
         </div>`;
 
@@ -3154,7 +3154,7 @@
       // Snooze split-button (Task #333): the trigger toggles the popover,
       // each menu item picks a duration and calls the (now duration-aware)
       // snoozeToolHealthOverrideBanner. Wired here from the nonced script
-      // because CSP forbids inline `onclick=` handlers.
+      // because CSP forbids inline `onclick=` handlers. // csp-safe-inline-handler: comment text, not an actual attribute
       const overrideSnoozeBtn = document.getElementById('tool-health-override-banner-snooze');
       if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', toggleToolHealthOverrideSnoozeMenu);
       document.querySelectorAll('#tool-health-override-banner-snooze-menu [data-snooze-minutes]')
@@ -3169,7 +3169,7 @@
 
       // Delegated listener for breach-detail toggle buttons (Task #208).
       // Buttons are rendered dynamically via renderThresholdsAudit, so
-      // inline onclick= is blocked by CSP — we use event delegation instead.
+      // inline onclick= is blocked by CSP — we use event delegation instead. // csp-safe-inline-handler: comment text, not an actual attribute
       const auditEl = document.getElementById('thresholds-audit');
       if (auditEl) {
         auditEl.addEventListener('click', (e) => {
@@ -3182,6 +3182,18 @@
       }
       const configWarningsDismissBtn = document.getElementById('tool-health-config-warnings-dismiss');
       if (configWarningsDismissBtn) configWarningsDismissBtn.addEventListener('click', dismissToolHealthConfigWarnings);
+      // Delegated listener for the per-row Table/Timeline view toggle on the
+      // child-tool-call panel (Task #103). Buttons are rendered dynamically by
+      // renderChildren() so we attach a single delegated handler at body scope.
+      document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-child-view][data-child-container]');
+        if (!btn) return;
+        const containerId = btn.getAttribute('data-child-container');
+        const view = btn.getAttribute('data-child-view');
+        if (containerId && (view === 'table' || view === 'timeline')) {
+          switchChildView(containerId, view);
+        }
+      });
       loadSummary();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();

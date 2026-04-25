@@ -2592,6 +2592,17 @@ describe('streamingDownload (browser helper)', () => {
             headers: { 'content-type': 'text/plain' },
           });
         }
+        // Server-sync of the recent-downloads tray (commit 6433b03) fires a
+        // background `fetch('/api/exports/recent-downloads')` on every
+        // setUser() call. It's harmless cross-device sync, NOT an export
+        // attempt — answer it with an empty payload and don't let it consume
+        // a slot in the realCallCount sequence below.
+        if (typeof url === 'string' && url.indexOf('/recent-downloads') !== -1) {
+          return new (globalThis as any).Response(JSON.stringify({ entries: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         realCallCount++;
         if (realCallCount === 1) {
           return new (globalThis as any).Response('boom', {
@@ -2630,6 +2641,14 @@ describe('streamingDownload (browser helper)', () => {
           return new (globalThis as any).Response('not found', {
             status: 404,
             headers: { 'content-type': 'text/plain' },
+          });
+        }
+        // See the upstream block: ignore the cross-device sync probe so it
+        // doesn't get counted as an export retry attempt.
+        if (typeof url === 'string' && url.indexOf('/recent-downloads') !== -1) {
+          return new (globalThis as any).Response(JSON.stringify({ entries: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
           });
         }
         retryCallCount++;

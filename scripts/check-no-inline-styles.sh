@@ -44,6 +44,10 @@ ALLOWLIST_FILES=(
   "src/mastra/routes/infographicRoutes.ts"
   "src/mastra/tools/emailReportTool.ts"
   "src/mastra/workflows/qualityAuditWorkflow.ts"
+  # Sends prompt-regression / recovery alert emails via Slack/email — the
+  # `style="..."` attributes go into the HTML body of an email, never into
+  # a browser page subject to CSP.
+  "src/mastra/workflows/promptRegressionAlertsCron.ts"
 )
 
 # Build ripgrep --glob exclusions for the allowlist + CSS files.
