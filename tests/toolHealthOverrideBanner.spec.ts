@@ -329,6 +329,174 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
     await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
   });
 
+  test('Cross-tab sync: dismiss, snooze, and fresh expires_at propagate to sibling tabs (Task #332)', async ({ browser }) => {
+    if (!ADMIN_KEY) {
+      test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+      return;
+    }
+
+    // Seed an override scheduled 6h out so the banner shows in both tabs
+    // and the snooze cap (60 min) never trims the assertion windows below.
+    await putConfig(apiCtx, {
+      overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
+      expires_at: isoOffsetFromNow(6 * 60 * 60 * 1000),
+      note: 'Task #332 e2e — cross-tab seed',
+    });
+
+    // Two browser contexts simulate two separate browser windows the same
+    // operator has open (the realistic "dashboard in tab A, thresholds in
+    // tab B" scenario the task is targeting). Same-context pages would
+    // share localStorage but storage events DON'T fire in the writing tab,
+    // so we'd only ever observe one direction. Distinct contexts also
+    // mean we have to re-pin admin auth on each.
+    const ctxA = await browser.newContext({
+      extraHTTPHeaders: { 'X-Admin-Key': ADMIN_KEY },
+    });
+    const ctxB = await browser.newContext({
+      extraHTTPHeaders: { 'X-Admin-Key': ADMIN_KEY },
+    });
+
+    try {
+      const tabA = await ctxA.newPage();
+      const tabB = await ctxB.newPage();
+
+      await tabA.goto(`${BASE_URL}/ai-ops`);
+      await tabB.goto(`${BASE_URL}/ai-ops`);
+      await tabA.waitForLoadState('domcontentloaded');
+      await tabB.waitForLoadState('domcontentloaded');
+
+      // Both tabs see the seeded banner before any cross-tab traffic.
+      await expect(tabA.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+      await expect(tabB.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+
+      // ---- Direction 0: Dismiss in tab A → tab B hides without reload ----
+      // Same code path as snooze, but the dismiss key is a different
+      // localStorage entry so we exercise it explicitly.
+      await tabA.locator('[data-testid="button-tool-health-override-banner-dismiss"]').click();
+      await expect(tabA.locator('[data-testid="section-tool-health-override-banner"]'))
+        .toHaveClass(/hidden/);
+      const dismissRecord = await tabA.evaluate(
+        () => localStorage.getItem('wp.toolHealthOverrideBanner.dismissedFor'),
+      );
+      expect(dismissRecord, 'tab A should have persisted a dismiss record').toBeTruthy();
+
+      await tabB.evaluate((raw) => {
+        const KEY = 'wp.toolHealthOverrideBanner.dismissedFor';
+        const oldValue = localStorage.getItem(KEY);
+        localStorage.setItem(KEY, raw as string);
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: KEY,
+          oldValue,
+          newValue: raw as string,
+          storageArea: localStorage,
+          url: location.href,
+        }));
+      }, dismissRecord);
+
+      await expect(
+        tabB.locator('[data-testid="section-tool-health-override-banner"]'),
+        'tab B should auto-hide after sibling tab dismissed',
+      ).toHaveClass(/hidden/, { timeout: 10000 });
+
+      // Re-seed a fresh expires_at so the snooze step below has a
+      // not-yet-dismissed window to act on (dismiss is sticky per-expiry).
+      await putConfig(apiCtx, {
+        overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
+        expires_at: isoOffsetFromNow(6 * 60 * 60 * 1000 + 30 * 60 * 1000),
+        note: 'Task #332 e2e — cross-tab reseed for snooze',
+      });
+      // Bump configRevision so both tabs refetch and the banner reappears.
+      const reseedStamp = String(Date.now());
+      for (const tab of [tabA, tabB]) {
+        await tab.evaluate((stamp) => {
+          const KEY = 'wp.toolHealthOverrideBanner.configRevision';
+          const oldValue = localStorage.getItem(KEY);
+          localStorage.setItem(KEY, stamp);
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: KEY,
+            oldValue,
+            newValue: stamp,
+            storageArea: localStorage,
+            url: location.href,
+          }));
+        }, reseedStamp);
+      }
+      await expect(tabA.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible({ timeout: 10000 });
+      await expect(tabB.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible({ timeout: 10000 });
+
+      // ---- Direction 1: Snooze in tab A → tab B hides without reload ----
+      // Two separate contexts have independent localStorage, so the
+      // browser won't fan the storage event across them on its own. We
+      // mirror the snooze write into tab B's localStorage and dispatch a
+      // synthetic StorageEvent — that's exactly what the same-origin
+      // browser would do natively in a single profile, and it's the
+      // contract our handler is coded against.
+      await tabA.locator('[data-testid="button-tool-health-override-banner-snooze"]').click();
+      await expect(tabA.locator('[data-testid="section-tool-health-override-banner"]'))
+        .toHaveClass(/hidden/);
+      const snoozeRecord = await tabA.evaluate(
+        () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
+      );
+      expect(snoozeRecord, 'tab A should have persisted a snooze record').toBeTruthy();
+
+      await tabB.evaluate((raw) => {
+        const KEY = 'wp.toolHealthOverrideBanner.snoozedUntilFor';
+        const oldValue = localStorage.getItem(KEY);
+        localStorage.setItem(KEY, raw as string);
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: KEY,
+          oldValue,
+          newValue: raw as string,
+          storageArea: localStorage,
+          url: location.href,
+        }));
+      }, snoozeRecord);
+
+      // Tab B's storage handler should refetch the config and hide the
+      // banner because the snooze key now matches the live expires_at.
+      await expect(
+        tabB.locator('[data-testid="section-tool-health-override-banner"]'),
+        'tab B should auto-hide after sibling tab snoozed',
+      ).toHaveClass(/hidden/, { timeout: 10000 });
+
+      // ---- Direction 2: Reschedule in tab A's Thresholds tab → tab B re-shows ----
+      // saveThresholds() bumps wp.toolHealthOverrideBanner.configRevision
+      // after a successful PUT. We do the PUT directly here so the test
+      // doesn't depend on the threshold form's full UI flow, then mirror
+      // the configRevision bump into tab B (same cross-context caveat as
+      // above) and confirm the banner reappears with the new expires_at.
+      await putConfig(apiCtx, {
+        overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
+        expires_at: isoOffsetFromNow(5 * 60 * 60 * 1000), // different value
+        note: 'Task #332 e2e — cross-tab reschedule',
+      });
+
+      const revStamp = String(Date.now());
+      await tabB.evaluate((stamp) => {
+        const KEY = 'wp.toolHealthOverrideBanner.configRevision';
+        const oldValue = localStorage.getItem(KEY);
+        localStorage.setItem(KEY, stamp);
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: KEY,
+          oldValue,
+          newValue: stamp,
+          storageArea: localStorage,
+          url: location.href,
+        }));
+      }, revStamp);
+
+      // The new expires_at doesn't match the stored snooze key, so the
+      // banner should come back into view in tab B.
+      await expect(
+        tabB.locator('[data-testid="banner-tool-health-override-expiry"]'),
+        'tab B should re-show after sibling tab rescheduled expires_at',
+      ).toBeVisible({ timeout: 10000 });
+    } finally {
+      await ctxA.close();
+      await ctxB.close();
+    }
+  });
+
   test('Banner turns amber when <30 minutes remain', async ({ page }) => {
     if (!ADMIN_KEY) {
       test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');

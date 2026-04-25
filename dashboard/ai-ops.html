@@ -1036,6 +1036,14 @@
     // SNOOZE_MS and the banner reappears (without a reload) so the impending
     // revert remains visible.
     const TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY = 'wp.toolHealthOverrideBanner.snoozedUntilFor';
+    // Cross-tab sync marker (Task #332). The dismiss/snooze keys above are
+    // automatically observed by other tabs via the `storage` event because
+    // those values change whenever the operator clicks Dismiss/Snooze. New
+    // expires_at schedules from the Alert Thresholds tab don't touch
+    // localStorage on their own, so saveThresholds() bumps this revision
+    // key after a successful PUT to nudge sibling tabs to refetch the
+    // tool-health config and re-show the banner without a manual reload.
+    const TOOL_HEALTH_OVERRIDE_BANNER_CONFIG_REV_KEY = 'wp.toolHealthOverrideBanner.configRevision';
     const TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS = 60 * 60 * 1000;
     const TOOL_HEALTH_OVERRIDE_BANNER_AMBER_MS = 30 * 60 * 1000;
     const TOOL_HEALTH_OVERRIDE_BANNER_NEUTRAL_CLASSES =
@@ -1240,6 +1248,51 @@
         const tab = document.getElementById('content-thresholds');
         if (tab) tab.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
+    }
+
+    // Cross-tab sync (Task #332). The browser fires `storage` events on
+    // every OTHER same-origin window/tab whenever localStorage is mutated,
+    // so we use it as a zero-dependency fan-out:
+    //   • Dismiss/Snooze in tab A writes the dismiss/snooze key — sibling
+    //     tabs pick that up here and re-evaluate visibility, so the banner
+    //     hides everywhere immediately instead of waiting for a reload.
+    //   • saveThresholds() bumps the configRevision marker after a
+    //     successful PUT — sibling tabs pick that up here and refetch the
+    //     tool-health config, so a freshly scheduled expires_at re-shows
+    //     the banner everywhere without manual refresh.
+    // We re-run the full loadToolHealthOverrideBanner() (which fetches
+    // /api/ai-ops/tool-health-config) rather than reusing the last cached
+    // expires_at because (a) the configRevision case explicitly needs the
+    // server-side value and (b) it keeps all visibility rules
+    // (dismiss/snooze/expiry/amber) in a single code path.
+    function handleToolHealthOverrideBannerStorageEvent(e) {
+      // Cross-window storage events have e.storageArea set; same-window
+      // dispatches (rare, mostly tests) may omit it. We only care about
+      // localStorage mutations from sibling tabs, so guard defensively.
+      if (e && e.storageArea && e.storageArea !== window.localStorage) return;
+      // e.key === null means localStorage.clear() was called — refetch to
+      // be safe (covers the "snooze record nuked elsewhere" edge case).
+      if (e && e.key != null
+          && e.key !== TOOL_HEALTH_OVERRIDE_BANNER_DISMISS_KEY
+          && e.key !== TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY
+          && e.key !== TOOL_HEALTH_OVERRIDE_BANNER_CONFIG_REV_KEY) {
+        return;
+      }
+      loadToolHealthOverrideBanner();
+    }
+
+    // Bump the configRevision marker so sibling tabs refetch the
+    // tool-health config (Task #332). Stamped with Date.now() so the value
+    // is unique per save — `storage` events only fire when newValue !==
+    // oldValue, and back-to-back saves within the same millisecond would
+    // otherwise be silently swallowed.
+    function broadcastToolHealthOverrideBannerConfigChange() {
+      try {
+        localStorage.setItem(
+          TOOL_HEALTH_OVERRIDE_BANNER_CONFIG_REV_KEY,
+          String(Date.now()),
+        );
+      } catch (_e) { /* private mode — best-effort only */ }
     }
 
     function renderPriceTable(pt) {
@@ -2218,6 +2271,12 @@
           return;
         }
         setSaveStatus('Saved. Next cron pass will pick up the new thresholds.', 'ok');
+        // Refresh the banner here too: a fresh expires_at scheduled in
+        // this tab should re-show / hide the banner immediately, not on
+        // the next cron-driven refresh. Sibling tabs are notified via the
+        // configRevision broadcast below.
+        loadToolHealthOverrideBanner();
+        broadcastToolHealthOverrideBannerConfigChange();
         await loadThresholdsForm();
       } catch (e) {
         console.error('Threshold save error', e);
@@ -2496,6 +2555,9 @@
       if (overrideDismissBtn) overrideDismissBtn.addEventListener('click', dismissToolHealthOverrideBanner);
       const overrideSnoozeBtn = document.getElementById('tool-health-override-banner-snooze');
       if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', snoozeToolHealthOverrideBanner);
+      // Cross-tab sync (Task #332): listen for sibling-tab snooze/dismiss
+      // and for fresh expires_at schedules from the Alert Thresholds tab.
+      window.addEventListener('storage', handleToolHealthOverrideBannerStorageEvent);
       // Restore the persisted Prompt Version filters BEFORE any code path
       // can read their values (deep-link to ?tab=prompts, refreshAll, etc.),
       // so the first data fetch already uses the saved choice. (Task #243)
