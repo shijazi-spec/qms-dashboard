@@ -348,6 +348,8 @@ async function createMonthlyPartition(year: number, month: number): Promise<void
       )
     `, [partitionName]);
     
+    // Defensive: bail out if the catalog query returned no rows (stubbed pool).
+    if (checkResult.rows.length === 0) return;
     if (!checkResult.rows[0].exists) {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ${partitionName} PARTITION OF event_logs
@@ -384,6 +386,14 @@ async function migrateToPartitionedTable(): Promise<void> {
     SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'event_logs_backup')
   `);
   
+  // Defensive: if the pool returned no rows (e.g. a test stub that hasn't
+  // been wired for this catalog query), abort the migration rather than
+  // crashing on `rows[0].exists`. The init was best-effort anyway.
+  if (backupExists.rows.length === 0) {
+    console.warn('📋 [EventLogs] Skipping migration: pg_tables check returned no rows (likely a stubbed pool).');
+    return;
+  }
+
   if (backupExists.rows[0].exists) {
     await pool.query(`DROP TABLE IF EXISTS event_logs_backup CASCADE`);
   }
@@ -429,7 +439,8 @@ async function copyBackupDataToPartitions(): Promise<void> {
     SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'event_logs_backup')
   `);
   
-  if (!backupExists.rows[0].exists) {
+  // Defensive: bail out if catalog query returned no rows (stubbed pool).
+  if (backupExists.rows.length === 0 || !backupExists.rows[0].exists) {
     return;
   }
   
@@ -491,7 +502,16 @@ export async function initializeEventLogsTable(): Promise<void> {
         AND tablename = 'event_logs'
       )
     `);
-    
+
+    // Defensive: if the pool returned no rows (e.g. a test stub that hasn't
+    // been wired for this catalog query), abort init rather than crashing on
+    // `rows[0].exists`. The init was best-effort — tests stub all reads they
+    // need and don't rely on the real catalog at all.
+    if (tableCheck.rows.length === 0) {
+      console.warn('📋 [EventLogs] Skipping init: pg_tables check returned no rows (likely a stubbed pool).');
+      return;
+    }
+
     if (tableCheck.rows[0].exists) {
       const isPartitioned = await isTablePartitioned();
       if (!isPartitioned) {

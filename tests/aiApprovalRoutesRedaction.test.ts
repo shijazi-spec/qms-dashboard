@@ -16,7 +16,45 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL || 'postgres://localhost:1/none';
 
 import crypto from 'crypto';
+import pg from 'pg';
 import type { QueryResult, QueryResultRow } from 'pg';
+
+/* ------------------------------------------------------------------ */
+/* Stub the platform_users lookup performed by requireRole().         */
+/* aiApprovalRoutes is now wrapped in aiApprovalGate() (Task #60),    */
+/* which calls requireRole(c, AI_APPROVAL_*_ROLES). requireRole       */
+/* delegates to getPlatformUser(email), which queries the private     */
+/* `platformPool` inside rbacMiddleware via                           */
+/*    SELECT status, role FROM platform_users WHERE email = $1        */
+/* The per-instance pool stubs below shadow aiApprovalPool and        */
+/* eventLogsPool, but the platformPool is not exported, so we patch   */
+/* `pg.Pool.prototype.query` to intercept ONLY that catalog query and */
+/* return a synthetic active-role row for the two test identities.    */
+/* All other pools have their `.query` shadowed at the instance level */
+/* and therefore bypass this prototype patch.                          */
+/* ------------------------------------------------------------------ */
+const TEST_PLATFORM_USERS: Record<string, { status: string; role: string }> = {
+  'qm@walaplus.test':        { status: 'active', role: 'admin' },
+  'requester@walaplus.test': { status: 'active', role: 'executive' },
+};
+const _origPoolQuery = pg.Pool.prototype.query;
+pg.Pool.prototype.query = function (this: pg.Pool, ...args: unknown[]): any {
+  const sql = String((args[0] as { text?: string } | string | undefined) ?? '');
+  if (/SELECT status, role FROM platform_users WHERE email\s*=\s*\$1/i.test(sql)) {
+    const params = args[1] as ReadonlyArray<unknown> | undefined;
+    const email = String(params?.[0] ?? '');
+    const row = TEST_PLATFORM_USERS[email];
+    return Promise.resolve({
+      command: 'SELECT',
+      rowCount: row ? 1 : 0,
+      oid: 0,
+      fields: [],
+      rows: row ? [row] : [],
+    } as QueryResult<QueryResultRow>);
+  }
+  return (_origPoolQuery as any).apply(this, args);
+} as typeof pg.Pool.prototype.query;
+
 import {
   aiApprovalPool,
   enqueuePendingAction,
