@@ -47,6 +47,7 @@ import {
   logEvent,
 } from "./eventLogsDatabase";
 import { redactPromptPreview, redactToolPayloadPreview } from "./aiTelemetry";
+import { previewBreadcrumbSetFragment } from "./aiCallMetricsPreviewBreadcrumb";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const REDACT_DATE = new Date().toISOString();
@@ -808,12 +809,24 @@ export async function redactAiCallMetrics(
         // actually changed — a row that was already clean (with or
         // without an existing timestamp) is skipped above and never
         // re-stamped.
+        //
+        // Task #575: the breadcrumb-fragment helper is shared with
+        // `backfillAiCallMetricsRedaction()` so the two sweeps cannot
+        // drift on the decision rule. In this sweep the fragment is
+        // always non-empty (we only enter this branch when a preview
+        // column changed), but routing through the helper keeps the
+        // contract symmetric and lets the unit test catch any future
+        // shift in one place.
+        const breadcrumbFragment = previewBreadcrumbSetFragment({
+          promptPreview: promptDirty,
+          toolInputPreview: inputDirty,
+          toolOutputPreview: outputDirty,
+        });
         await client.query(
           `UPDATE ai_call_metrics
               SET prompt_preview       = $1,
                   tool_input_preview   = $2,
-                  tool_output_preview  = $3,
-                  previews_redacted_at = NOW()
+                  tool_output_preview  = $3${breadcrumbFragment}
             WHERE id = $4`,
           [promptPreview, toolInputPreview, toolOutputPreview, row.id],
         );

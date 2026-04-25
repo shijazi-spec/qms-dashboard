@@ -49,6 +49,7 @@ import {
   REDACTED_SENTINEL,
   logEvent,
 } from "../utils/eventLogsDatabase";
+import { previewBreadcrumbSetFragment } from "../utils/aiCallMetricsPreviewBreadcrumb";
 
 /**
  * Default keyset-pagination batch size. 500 keeps each round trip under a
@@ -204,10 +205,18 @@ export async function backfillAiCallMetricsRedaction(
         // those columns are not surfaced as previews and the badge would
         // be misleading. Idempotency is preserved because we only enter
         // this branch when at least one column actually changed.
-        const previewDirty = promptDirty || toolInputDirty || toolOutputDirty;
-        const previewBreadcrumbAssignment = previewDirty
-          ? `, previews_redacted_at = NOW()`
-          : ``;
+        //
+        // Task #575: the breadcrumb decision (and the exact SQL fragment
+        // that splices `, previews_redacted_at = NOW()` into the SET
+        // clause) is delegated to the shared helper so this sweep and
+        // `redactAiCallMetrics()` cannot drift on the rule. Any future
+        // change to the preview-column list lives in one place and the
+        // helper's unit test fails fast.
+        const previewBreadcrumbAssignment = previewBreadcrumbSetFragment({
+          promptPreview: promptDirty,
+          toolInputPreview: toolInputDirty,
+          toolOutputPreview: toolOutputDirty,
+        });
         await client.query(
           `UPDATE ai_call_metrics
               SET error_message       = $1,
