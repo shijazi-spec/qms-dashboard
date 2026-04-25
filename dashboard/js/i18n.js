@@ -150,27 +150,33 @@
 
   /**
    * Persist language preference: localStorage + server (if authenticated).
+   * Returns a Promise that resolves once the server request settles (or fails).
    * Does NOT reload automatically — caller must decide.
    */
   function _persistLang(lang) {
     try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) {}
-    fetch(PREF_ENDPOINT, {
+    return fetch(PREF_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      keepalive: true,
       body: JSON.stringify({ lang: lang })
     }).catch(function () {});
   }
 
   /**
-   * Switch language and reload the page.
+   * Switch language, wait for the server to acknowledge, then reload the page.
+   * Awaiting the persist call eliminates the race where the old server-side
+   * preference was returned on the next page load before the write completed.
+   * A 5-second timeout ensures the page always reloads, even if the server
+   * stalls or is unreachable (localStorage is already updated, so the correct
+   * language will be applied on reload regardless).
    */
   function setLang(lang) {
     if (SUPPORTED.indexOf(lang) === -1) return;
-    _persistLang(lang);
-    // Reload to re-apply all templates
-    window.location.reload();
+    var timeout = new Promise(function (resolve) { setTimeout(resolve, 5000); });
+    Promise.race([_persistLang(lang), timeout]).then(function () {
+      window.location.reload();
+    });
   }
 
   /**
