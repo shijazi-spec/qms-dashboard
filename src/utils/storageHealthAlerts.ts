@@ -54,6 +54,14 @@ export interface StorageHealthAlertResult {
   inAppCreated: boolean;
   /** Echoed for callers that want to log the underlying signal. */
   exceedsRetention: boolean;
+  /**
+   * True when the current cron pass fell inside the configured quiet-hours
+   * window and Slack / email pushes were intentionally suppressed. The
+   * `ai_alerts` row and in-app notification are still created in real time
+   * (so the morning view shows the issue immediately) — only the noisy
+   * channels that would page on-call at 3 a.m. are skipped.
+   */
+  quietHoursSuppressed: boolean;
 }
 
 export interface StorageHealthAlertDeps {
@@ -97,6 +105,125 @@ export interface StorageHealthAlertDeps {
   }) => Promise<boolean>;
   /** Reads env vars (for tests). Defaults to `process.env`. */
   env?: NodeJS.ProcessEnv;
+  /**
+   * Returns the "current time" used to evaluate the quiet-hours window.
+   * Injected so unit tests can pin the clock to e.g. 03:00 Riyadh and
+   * assert suppression deterministically. Defaults to `new Date()`.
+   */
+  now?: () => Date;
+}
+
+/**
+ * Quiet-hours window (UTC by default) during which Slack / email pushes are
+ * suppressed for storage-health pages. The in-app notification and the
+ * `ai_alerts` row are still created in real time so the morning view shows
+ * the issue immediately.
+ *
+ * Resolved from env vars:
+ *   • `STORAGE_HEALTH_QUIET_HOURS_START` — integer hour 0–23 inclusive.
+ *   • `STORAGE_HEALTH_QUIET_HOURS_END`   — integer hour 0–23 inclusive.
+ *   • `STORAGE_HEALTH_QUIET_HOURS_TZ`    — IANA timezone name. Defaults to
+ *                                          `UTC`. Invalid values fall back
+ *                                          to UTC (logged once per call).
+ *
+ * Both START and END must be valid integers in [0, 23] for the window to
+ * activate; otherwise quiet-hours are disabled. The window is half-open
+ * `[start, end)` and wraps midnight when `start > end` (the typical
+ * overnight case, e.g. 22→07). When `start === end` the window is empty
+ * (disabled) — anything else would suppress alerts 24/7.
+ */
+export interface QuietHoursWindow {
+  /** True when both START and END parsed cleanly. */
+  enabled: boolean;
+  /** Hour of day 0–23 the window opens (in `tz`). Undefined when disabled. */
+  startHour?: number;
+  /** Hour of day 0–23 the window closes (in `tz`). Undefined when disabled. */
+  endHour?: number;
+  /** Resolved IANA timezone name (always set; defaults to `UTC`). */
+  tz: string;
+}
+
+function parseQuietHourEnv(raw: string | undefined): number | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  if (!Number.isInteger(n) || n < 0 || n > 23) return null;
+  return n;
+}
+
+/**
+ * Resolve the quiet-hours window from env vars. Exported for unit tests so
+ * the parsing rules can be asserted independently of the alert flow.
+ */
+export function resolveQuietHoursWindow(env: NodeJS.ProcessEnv): QuietHoursWindow {
+  const startHour = parseQuietHourEnv(env.STORAGE_HEALTH_QUIET_HOURS_START);
+  const endHour = parseQuietHourEnv(env.STORAGE_HEALTH_QUIET_HOURS_END);
+  const tzRaw = (env.STORAGE_HEALTH_QUIET_HOURS_TZ ?? '').trim();
+  let tz = tzRaw || 'UTC';
+  // Validate the timezone with Intl — invalid values throw a RangeError.
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+  } catch {
+    logger.warn('[StorageHealthAlerts] Invalid STORAGE_HEALTH_QUIET_HOURS_TZ; falling back to UTC', {
+      provided: tzRaw,
+    });
+    tz = 'UTC';
+  }
+  if (startHour == null || endHour == null || startHour === endHour) {
+    return { enabled: false, tz };
+  }
+  return { enabled: true, startHour, endHour, tz };
+}
+
+/**
+ * Hour-of-day (0–23) for `now` rendered in the quiet-hours timezone.
+ * Uses Intl so DST transitions are handled correctly in zones that observe
+ * them. Returns the UTC hour as a fallback if the formatter fails (it
+ * shouldn't, but the cron must never crash on a bad locale install).
+ */
+function hourInZone(now: Date, tz: string): number {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      hour12: false,
+    });
+    // formatToParts is the only way to get the bare numeric hour without
+    // locale-dependent formatting (e.g. "0" vs "24").
+    const parts = fmt.formatToParts(now);
+    const hourPart = parts.find((p) => p.type === 'hour');
+    if (hourPart) {
+      const n = Number(hourPart.value);
+      // Some ICU builds emit "24" for midnight; normalise to 0.
+      if (Number.isInteger(n) && n >= 0 && n <= 24) return n === 24 ? 0 : n;
+    }
+  } catch (err) {
+    logger.warn('[StorageHealthAlerts] Failed to compute hour in tz; falling back to UTC', {
+      tz,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return now.getUTCHours();
+}
+
+/**
+ * True when `now` falls inside the configured quiet-hours window. Exported
+ * for unit tests so wrap-around behaviour can be asserted without going
+ * through the full alert flow.
+ */
+export function isInQuietHours(window: QuietHoursWindow, now: Date): boolean {
+  if (!window.enabled || window.startHour == null || window.endHour == null) {
+    return false;
+  }
+  const hour = hourInZone(now, window.tz);
+  const { startHour, endHour } = window;
+  if (startHour < endHour) {
+    // Same-day window, e.g. 01–05 → suppress from 01:00 inclusive to 05:00 exclusive.
+    return hour >= startHour && hour < endHour;
+  }
+  // Wrap-around window, e.g. 22–07 → suppress 22, 23, 0, 1, 2, 3, 4, 5, 6.
+  return hour >= startHour || hour < endHour;
 }
 
 /**
@@ -163,6 +290,9 @@ export async function evaluateAndAlertStorageHealth(
   deps: StorageHealthAlertDeps,
 ): Promise<StorageHealthAlertResult> {
   const env = deps.env ?? process.env;
+  const nowFn = deps.now ?? (() => new Date());
+  const quietHours = resolveQuietHoursWindow(env);
+  const inQuietHours = quietHours.enabled && isInQuietHours(quietHours, nowFn());
   const result: StorageHealthAlertResult = {
     alertCreated: false,
     alertDeduped: false,
@@ -171,6 +301,7 @@ export async function evaluateAndAlertStorageHealth(
     emailSent: false,
     inAppCreated: false,
     exceedsRetention: stats.exceedsRetention,
+    quietHoursSuppressed: false,
   };
 
   if (!stats.exceedsRetention) {
@@ -290,6 +421,25 @@ export async function evaluateAndAlertStorageHealth(
     logger.warn('[StorageHealthAlerts] In-app notification failed', {
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+
+  // Quiet-hours suppression. The breach is real and the in-app
+  // notification + ai_alerts row above are already in place — we just
+  // skip the noisy Slack / email channels until the window closes so
+  // on-call isn't paged at 3 a.m. about a backlog they cannot act on
+  // until morning. The morning view shows the issue immediately because
+  // the alert row was created in real time.
+  if (inQuietHours) {
+    result.quietHoursSuppressed = true;
+    logger.info(
+      '[StorageHealthAlerts] Quiet hours active — Slack/email suppressed',
+      {
+        startHour: quietHours.startHour,
+        endHour: quietHours.endHour,
+        tz: quietHours.tz,
+      },
+    );
+    return result;
   }
 
   // Slack — re-uses the existing AI_COST cron's webhook so ops doesn't

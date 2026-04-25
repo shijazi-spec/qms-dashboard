@@ -22,6 +22,8 @@ import { TestSuite } from './_helpers/runner';
 import {
   buildStorageHealthMessage,
   evaluateAndAlertStorageHealth,
+  isInQuietHours,
+  resolveQuietHoursWindow,
   STORAGE_HEALTH_DEDUPE_KEY,
   type StorageHealthAlertDeps,
 } from '../src/utils/storageHealthAlerts';
@@ -72,9 +74,10 @@ interface Harness {
   setDedupeFailure: (err: Error | null) => void;
   setSlackOk: (ok: boolean) => void;
   setEmailOk: (ok: boolean) => void;
+  setNow: (now: Date) => void;
 }
 
-function makeHarness(env: NodeJS.ProcessEnv): Harness {
+function makeHarness(env: NodeJS.ProcessEnv, initialNow?: Date): Harness {
   const createdAlerts: CreatedAlertRecord[] = [];
   const notifications: NotificationRecord[] = [];
   const slacks: SlackRecord[] = [];
@@ -86,6 +89,7 @@ function makeHarness(env: NodeJS.ProcessEnv): Harness {
   let dedupeFailure: Error | null = null;
   let slackOk = true;
   let emailOk = true;
+  let now = initialNow ?? new Date('2026-04-25T12:00:00.000Z');
 
   const deps: StorageHealthAlertDeps = {
     openAlertExistsByKey: async (alertType, relatedRecordId) => {
@@ -147,6 +151,7 @@ function makeHarness(env: NodeJS.ProcessEnv): Harness {
       return emailOk;
     },
     env,
+    now: () => now,
   };
 
   return {
@@ -170,6 +175,9 @@ function makeHarness(env: NodeJS.ProcessEnv): Harness {
     },
     setEmailOk: (ok) => {
       emailOk = ok;
+    },
+    setNow: (next) => {
+      now = next;
     },
   };
 }
@@ -357,6 +365,231 @@ await suite.test(
     suite.expect(result.inAppCreated, 'in-app still fires (always available)');
     suite.expectEqual(harness.slacks.length, 0, 'no Slack calls');
     suite.expectEqual(harness.emails.length, 0, 'no email calls');
+  },
+);
+
+await suite.test(
+  'suppresses Slack/email during quiet hours but still creates ai_alerts row + in-app notification',
+  async () => {
+    // Window: 22:00–07:00 UTC. Pin clock to 03:00 UTC — squarely inside.
+    const harness = makeHarness(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+        AI_COST_ALERT_EMAIL: 'ops@example.com',
+        STORAGE_HEALTH_QUIET_HOURS_START: '22',
+        STORAGE_HEALTH_QUIET_HOURS_END: '7',
+      },
+      new Date('2026-04-25T03:00:00.000Z'),
+    );
+    harness.setOpenAlertExists(false);
+
+    const result = await evaluateAndAlertStorageHealth(breachingStats, harness.deps);
+
+    suite.expect(result.alertCreated, 'alertCreated should still be true');
+    suite.expect(
+      result.quietHoursSuppressed,
+      'quietHoursSuppressed should be true at 03:00 UTC inside 22-07 window',
+    );
+    suite.expect(!result.slackSent, 'Slack must be suppressed in quiet hours');
+    suite.expect(!result.emailSent, 'Email must be suppressed in quiet hours');
+    suite.expect(
+      result.inAppCreated,
+      'In-app notification still fires so morning view shows the issue',
+    );
+
+    suite.expectEqual(harness.createdAlerts.length, 1, 'ai_alerts row still inserted');
+    suite.expectEqual(harness.notifications.length, 1, 'in-app notification still created');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack call attempted');
+    suite.expectEqual(harness.emails.length, 0, 'no email call attempted');
+  },
+);
+
+await suite.test(
+  'pages Slack/email normally when quiet hours are configured but the clock is outside the window',
+  async () => {
+    // Window: 22-07 UTC. Pin clock to 12:00 UTC — squarely outside.
+    const harness = makeHarness(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+        AI_COST_ALERT_EMAIL: 'ops@example.com',
+        STORAGE_HEALTH_QUIET_HOURS_START: '22',
+        STORAGE_HEALTH_QUIET_HOURS_END: '7',
+      },
+      new Date('2026-04-25T12:00:00.000Z'),
+    );
+    harness.setOpenAlertExists(false);
+
+    const result = await evaluateAndAlertStorageHealth(breachingStats, harness.deps);
+
+    suite.expect(result.alertCreated, 'alertCreated true');
+    suite.expect(
+      !result.quietHoursSuppressed,
+      'quietHoursSuppressed should be false outside the window',
+    );
+    suite.expect(result.slackSent, 'Slack should fire outside quiet hours');
+    suite.expect(result.emailSent, 'Email should fire outside quiet hours');
+    suite.expectEqual(harness.slacks.length, 1, 'one Slack call');
+    suite.expectEqual(harness.emails.length, 1, 'one email call');
+  },
+);
+
+await suite.test(
+  'quiet-hours window honours STORAGE_HEALTH_QUIET_HOURS_TZ (Asia/Riyadh = UTC+3)',
+  async () => {
+    // Window: 00:00–06:00 Riyadh time (= 21:00–03:00 UTC). Pin clock to
+    // 23:30 UTC — inside Riyadh window (02:30 local).
+    const harness = makeHarness(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+        STORAGE_HEALTH_QUIET_HOURS_START: '0',
+        STORAGE_HEALTH_QUIET_HOURS_END: '6',
+        STORAGE_HEALTH_QUIET_HOURS_TZ: 'Asia/Riyadh',
+      },
+      new Date('2026-04-25T23:30:00.000Z'),
+    );
+    harness.setOpenAlertExists(false);
+
+    const result = await evaluateAndAlertStorageHealth(breachingStats, harness.deps);
+
+    suite.expect(
+      result.quietHoursSuppressed,
+      'quietHoursSuppressed should be true (02:30 Riyadh is inside 0-6 window)',
+    );
+    suite.expect(!result.slackSent, 'Slack suppressed');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+
+    // Now move the clock to 09:00 UTC (= 12:00 Riyadh) — outside the window.
+    harness.setNow(new Date('2026-04-25T09:00:00.000Z'));
+    harness.setOpenAlertExists(false);
+    const result2 = await evaluateAndAlertStorageHealth(breachingStats, harness.deps);
+    suite.expect(
+      !result2.quietHoursSuppressed,
+      'quietHoursSuppressed should be false at 12:00 Riyadh (outside 0-6)',
+    );
+    suite.expect(result2.slackSent, 'Slack fires outside Riyadh quiet hours');
+  },
+);
+
+await suite.test(
+  'invalid quiet-hours env vars are treated as disabled (no suppression)',
+  async () => {
+    const harness = makeHarness(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+        STORAGE_HEALTH_QUIET_HOURS_START: 'banana',
+        STORAGE_HEALTH_QUIET_HOURS_END: '24', // out of range
+      },
+      new Date('2026-04-25T03:00:00.000Z'),
+    );
+    harness.setOpenAlertExists(false);
+
+    const result = await evaluateAndAlertStorageHealth(breachingStats, harness.deps);
+    suite.expect(
+      !result.quietHoursSuppressed,
+      'invalid env vars must disable the window, not suppress everything',
+    );
+    suite.expect(result.slackSent, 'Slack still fires when window is disabled');
+  },
+);
+
+await suite.test(
+  'isInQuietHours: same-day window matches half-open [start, end)',
+  async () => {
+    const win = resolveQuietHoursWindow({
+      STORAGE_HEALTH_QUIET_HOURS_START: '1',
+      STORAGE_HEALTH_QUIET_HOURS_END: '5',
+    });
+    suite.expect(win.enabled, 'window enabled');
+    suite.expect(
+      isInQuietHours(win, new Date('2026-04-25T01:00:00.000Z')),
+      '01:00 should be inside (start is inclusive)',
+    );
+    suite.expect(
+      isInQuietHours(win, new Date('2026-04-25T04:59:00.000Z')),
+      '04:59 should be inside',
+    );
+    suite.expect(
+      !isInQuietHours(win, new Date('2026-04-25T05:00:00.000Z')),
+      '05:00 should be outside (end is exclusive)',
+    );
+    suite.expect(
+      !isInQuietHours(win, new Date('2026-04-25T00:59:00.000Z')),
+      '00:59 should be outside',
+    );
+  },
+);
+
+await suite.test(
+  'isInQuietHours: wrap-around window (start > end) covers both sides of midnight',
+  async () => {
+    const win = resolveQuietHoursWindow({
+      STORAGE_HEALTH_QUIET_HOURS_START: '22',
+      STORAGE_HEALTH_QUIET_HOURS_END: '7',
+    });
+    suite.expect(win.enabled, 'wrap-around window enabled');
+    suite.expect(
+      isInQuietHours(win, new Date('2026-04-25T22:30:00.000Z')),
+      '22:30 should be inside',
+    );
+    suite.expect(
+      isInQuietHours(win, new Date('2026-04-25T03:00:00.000Z')),
+      '03:00 (post-midnight) should be inside',
+    );
+    suite.expect(
+      isInQuietHours(win, new Date('2026-04-25T06:59:00.000Z')),
+      '06:59 should be inside',
+    );
+    suite.expect(
+      !isInQuietHours(win, new Date('2026-04-25T07:00:00.000Z')),
+      '07:00 should be outside (end is exclusive)',
+    );
+    suite.expect(
+      !isInQuietHours(win, new Date('2026-04-25T12:00:00.000Z')),
+      '12:00 should be outside',
+    );
+    suite.expect(
+      !isInQuietHours(win, new Date('2026-04-25T21:59:00.000Z')),
+      '21:59 should be outside',
+    );
+  },
+);
+
+await suite.test(
+  'resolveQuietHoursWindow: start === end disables the window (avoids 24/7 suppression)',
+  async () => {
+    const win = resolveQuietHoursWindow({
+      STORAGE_HEALTH_QUIET_HOURS_START: '5',
+      STORAGE_HEALTH_QUIET_HOURS_END: '5',
+    });
+    suite.expect(!win.enabled, 'equal start/end must disable');
+  },
+);
+
+await suite.test(
+  'recovery path is not affected by quiet hours (always auto-resolves + recovery in-app)',
+  async () => {
+    // Quiet hours active, but stats show recovery — we must still auto-
+    // resolve open alerts and emit the recovery in-app notification so the
+    // alerts feed isn't stuck on a stale "OPEN" badge until 07:00.
+    const harness = makeHarness(
+      {
+        STORAGE_HEALTH_QUIET_HOURS_START: '22',
+        STORAGE_HEALTH_QUIET_HOURS_END: '7',
+      },
+      new Date('2026-04-25T03:00:00.000Z'),
+    );
+    harness.setOpenAlerts([{ id: 99, status: 'open' } as AIAlert]);
+
+    const result = await evaluateAndAlertStorageHealth(recoveredStats, harness.deps);
+    suite.expectEqual(result.alertsResolved, 1, 'recovery resolves the open alert');
+    suite.expect(
+      result.inAppCreated,
+      'recovery in-app notification fires even during quiet hours',
+    );
+    suite.expect(
+      !result.quietHoursSuppressed,
+      'quietHoursSuppressed only flips on the breach path (no Slack/email on recovery anyway)',
+    );
   },
 );
 
