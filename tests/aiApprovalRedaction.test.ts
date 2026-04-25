@@ -383,6 +383,105 @@ async function run(): Promise<void> {
   );
 
   // -----------------------------------------------------------------------
+  // Heuristic detection: free-form passwords and high-entropy tokens hidden
+  // in non-credential-named fields (Task #463).
+  //
+  // The key-name deny-list is blind to fields like `assignedTo`,
+  // `description`, or `note`, and the regex deny-list is blind to values
+  // that lack a vendor prefix (a free-form password reads like prose). The
+  // heuristic layer added in this task catches:
+  //
+  //   - password-strength tokens   (12-80 chars, mix of upper/lower/digit
+  //                                 + a "strong" special char)
+  //   - high-entropy tokens        (24-80 chars, base64-ish alphabet,
+  //                                 >= 3 char classes, Shannon H >= 4.0)
+  //
+  // before they reach the JSONB payload column or the payload_preview text.
+  // -----------------------------------------------------------------------
+  console.log("\n[aiApprovalDatabase] heuristic detection of free-form passwords / high-entropy tokens");
+
+  captured.length = 0;
+  const FREE_FORM_PASSWORD = "P@ssw0rd!_FreeFormInProse_X1";       // password-strength heuristic
+  const ENTROPY_TOKEN      = "aB3xKp9zQrLm4vN2YwSdEfXyZTw";        // 28-char base64-ish
+  const SLUG_SAFE          = "Test-Project-2026-Final-v3";          // must NOT be redacted
+  const UUID_SAFE          = "123e4567-e89b-12d3-a456-426614174000"; // must NOT be redacted
+
+  await enqueuePendingAction({
+    toolId: "assign_task",
+    toolLabel: "Assign Task",
+    payload: {
+      action: "assign",
+      // Innocuous field names — neither key-deny-list nor vendor-regex
+      // can catch the credential value buried inside.
+      assignedTo: FREE_FORM_PASSWORD,
+      description: `Initial credential is ${FREE_FORM_PASSWORD}, please rotate.`,
+      note: `Old session token: ${ENTROPY_TOKEN}`,
+      // Safe values that must survive to prove the heuristic is conservative.
+      project_slug: SLUG_SAFE,
+      correlation_id: UUID_SAFE,
+      assignee_email: "alice@example.com",
+    },
+    payloadPreview:
+      `Assign task to user — credential ${FREE_FORM_PASSWORD}, ` +
+      `session ${ENTROPY_TOKEN} (project ${SLUG_SAFE}, ref ${UUID_SAFE})`,
+    riskLevel: "medium",
+    complianceRefs: [],
+    requestedByUserId: 1,
+    requestedByEmail: "ops@walaplus.com",
+    requestedByName: "Ops",
+    threadId: null,
+  });
+
+  const heuristicInsertCall = captured.find(c =>
+    /INSERT INTO ai_pending_actions/i.test(c.sql),
+  );
+  assert(!!heuristicInsertCall, "[heuristic] INSERT INTO ai_pending_actions was issued");
+  const heuristicPayloadJson = String(heuristicInsertCall!.params[3]);
+  const heuristicPreview     = String(heuristicInsertCall!.params[4]);
+
+  assert(
+    !heuristicPayloadJson.includes(FREE_FORM_PASSWORD),
+    "[heuristic] payload.assignedTo does NOT contain the free-form password",
+  );
+  assert(
+    !heuristicPayloadJson.includes(ENTROPY_TOKEN),
+    "[heuristic] payload.note does NOT contain the high-entropy session token",
+  );
+  assert(
+    !heuristicPreview.includes(FREE_FORM_PASSWORD),
+    "[heuristic] payload_preview does NOT contain the free-form password",
+  );
+  assert(
+    !heuristicPreview.includes(ENTROPY_TOKEN),
+    "[heuristic] payload_preview does NOT contain the high-entropy session token",
+  );
+  assert(
+    heuristicPayloadJson.includes(REDACTED_SENTINEL),
+    "[heuristic] payload contains the redaction sentinel",
+  );
+  assert(
+    heuristicPreview.includes(REDACTED_SENTINEL),
+    "[heuristic] payload_preview contains the redaction sentinel",
+  );
+
+  // Conservative: slug- and UUID-shaped IDs must NOT be redacted (no false
+  // positive). These shapes intentionally fail the heuristic — slug has no
+  // strong special char, UUID is hex-only (only 2 char classes).
+  assert(
+    heuristicPayloadJson.includes(SLUG_SAFE),
+    "[heuristic] slug-style identifier is preserved (no false positive)",
+  );
+  assert(
+    heuristicPayloadJson.includes(UUID_SAFE),
+    "[heuristic] UUID is preserved (no false positive)",
+  );
+  assert(
+    heuristicPayloadJson.includes("alice@example.com") &&
+      heuristicPayloadJson.includes('"action":"assign"'),
+    "[heuristic] safe non-credential fields are preserved",
+  );
+
+  // -----------------------------------------------------------------------
   // Regression: result.error is a plain string that may contain credential-
   // shaped text (e.g. a runtime error message that echoes the rotated key).
   // redactSecretLikeStrings must scrub it before the row is persisted

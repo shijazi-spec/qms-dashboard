@@ -162,6 +162,34 @@ const PLAIN_PASSWORD = "P@ssw0rd!_BuildPreview_PlainText";
 
 const REGEX_DETECTABLE_SECRETS: ReadonlyArray<string> = Object.values(SECRETS);
 
+/* ------------------------------------------------------------------ *
+ * Heuristic-detectable fixtures (Task #463)                           *
+ *                                                                    *
+ * These have NO vendor prefix and would slip past every regex in     *
+ * SECRET_LIKE_PATTERNS. They look like prose to the eye but match    *
+ * one of the new heuristic detectors:                                *
+ *                                                                    *
+ *   - HEURISTIC_PASSWORD: 12-80 char token with upper/lower/digit/   *
+ *     strong-special — caught by the password-strength heuristic.    *
+ *   - HEURISTIC_ENTROPY:  28-char base64-ish, Shannon H ≥ 4.5 —      *
+ *     caught by the high-entropy heuristic.                          *
+ *                                                                    *
+ * The interesting failure mode is when these values are interpolated *
+ * into INNOCUOUSLY-NAMED payload fields like `assignedTo`,           *
+ * `description`, `note`, `category`, etc. The key-name deny-list     *
+ * cannot help, the regex deny-list cannot help — the heuristic       *
+ * detectors inside `redactSecretLikeStrings()` are the last line of  *
+ * defense before the row hits the database.                          *
+ * ------------------------------------------------------------------ */
+
+const HEURISTIC_PASSWORD = "P@ssw0rd!_FreeForm_BuildPreview_Y2";
+const HEURISTIC_ENTROPY  = "aB3xKp9zQrLm4vN2YwSdEfXyZTwQ";
+
+const HEURISTIC_DETECTABLE_SECRETS: ReadonlyArray<string> = [
+  HEURISTIC_PASSWORD,
+  HEURISTIC_ENTROPY,
+];
+
 /**
  * The union of every payload field referenced by any registered
  * `buildPreview` callback today, plus generic credential field names
@@ -229,11 +257,24 @@ function buildPayloadWithSecretsFor(
     note: `rotated to ${SECRETS.apiKey}`,
     message: `auth header: Bearer ${SECRETS.ghPat}`,
     config_diff: `old=${SECRETS.bcrypt}`,
+
+    // Heuristic-detectable values hiding in innocuous prose fields
+    // (Task #463). Neither the key-name deny-list nor the vendor-prefix
+    // regex layer can catch these — only the heuristic detectors inside
+    // redactSecretLikeStrings() do.
+    handoff_summary:
+      `Initial credential is ${HEURISTIC_PASSWORD}; ` +
+      `prior session token was ${HEURISTIC_ENTROPY}.`,
+    reviewer_note: `please rotate ${HEURISTIC_PASSWORD} immediately`,
   };
 }
 
 function regexDetectableLeaksIn(haystack: string): string[] {
   return REGEX_DETECTABLE_SECRETS.filter((s) => haystack.includes(s));
+}
+
+function heuristicDetectableLeaksIn(haystack: string): string[] {
+  return HEURISTIC_DETECTABLE_SECRETS.filter((s) => haystack.includes(s));
 }
 
 /* ------------------------------------------------------------------ *
@@ -382,6 +423,22 @@ async function run(): Promise<void> {
       persistedPayload.includes(REDACTED_SENTINEL),
       `[${policy.toolId}] persisted payload includes the redaction sentinel ` +
         `(proves the deny-list ran)`,
+    );
+
+    // Heuristic-detectable secrets (free-form password, high-entropy token)
+    // hidden in innocuous prose fields like `handoff_summary` / `reviewer_note`
+    // must also be scrubbed before the row is persisted (Task #463). The key-
+    // name deny-list cannot help (key is innocuous), the vendor-prefix regex
+    // deny-list cannot help (no shape) — the heuristic layer is the only
+    // defense for this class of leak.
+    const heuristicPayloadLeaks = heuristicDetectableLeaksIn(persistedPayload);
+    assert(
+      heuristicPayloadLeaks.length === 0,
+      `[${policy.toolId}] persisted payload JSONB scrubs heuristic-detectable ` +
+        `secrets buried in non-credential-named fields` +
+        (heuristicPayloadLeaks.length
+          ? ` (LEAKED: ${heuristicPayloadLeaks.map((s) => s.slice(0, 24) + "…").join(", ")})`
+          : ""),
     );
   }
 

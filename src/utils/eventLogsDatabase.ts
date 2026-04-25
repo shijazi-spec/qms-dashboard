@@ -123,10 +123,121 @@ const SECRET_LIKE_PATTERNS: SecretPattern[] = [
   { name: 'bearer', regex: /\bBearer\s+[A-Za-z0-9_\-.=+/]{20,}/gi },
 ];
 
+/* -------------------------------------------------------------------------
+ * Heuristic detectors: password-shaped and high-entropy substrings
+ * -------------------------------------------------------------------------
+ * The vendor-prefix regexes above only catch credentials with a distinctive
+ * shape (`sk-…`, `ghp_…`, AKIA…, JWT, bcrypt, etc.). They are blind to a
+ * secret that looks like ordinary prose — most importantly, a free-form
+ * password buried in an innocuously-named field like `assignedTo`,
+ * `description`, or `note` (e.g. 'P@ssw0rd!_plaintext'). The key-name
+ * deny-list is also blind to these because the surrounding key name is not
+ * on the sensitive list.
+ *
+ * Two heuristics close that gap (Task #463):
+ *
+ *   1. Password-strength tokens — a non-whitespace token of 12-80 chars
+ *      that contains uppercase, lowercase, digit, and at least one
+ *      "strong" special char from `!@#$%^&*()+={}[]|\:;"'<>?~``. The
+ *      "strong" set deliberately excludes `,` `.` `-` `_` because those
+ *      appear constantly in prose, slugs ("Test-Project-2026"), filenames,
+ *      and acronym lists — including them would generate false positives.
+ *
+ *   2. High-entropy tokens — a non-whitespace token of 24-80 chars drawn
+ *      from the base64/base64url alphabet `[A-Za-z0-9+/=_-]` that contains
+ *      AT LEAST 3 of {upper, lower, digit} and has Shannon entropy
+ *      >= 4.5 bits/char. This catches random session IDs and base64
+ *      tokens without a vendor prefix. The "3 classes" floor filters out
+ *      hex hashes (lowercase + digit only) and UUIDs (same), and the 4.5
+ *      threshold is comfortably below random-base64 (~5.5+) but above the
+ *      ceiling of mixed slugs like "Test-Project-2026-Final-v3" (~4.05).
+ *
+ * False-positive scope (verified against existing test fixtures):
+ *   - English prose, emails, URLs, ISO dates, UUIDs, SHA hashes, slug
+ *     identifiers, and ordinary alphanumeric IDs do NOT match either rule.
+ *
+ * New patterns must be covered by additions in `aiApprovalRedaction.test.ts`
+ * and `aiToolPolicyBuildPreview.test.ts`.
+ * -------------------------------------------------------------------------*/
+
+const STRONG_SPECIAL_CHAR_RE = /[!@#$%^&*()+={}\[\]|\\:;"'<>?~`]/;
+const TRIM_LEAD_RE = /^[("'`\[{<,]+/;
+const TRIM_TAIL_RE = /[)"'`\]}>,.]+$/;
+const ENTROPY_ALPHABET_RE = /^[A-Za-z0-9+/=_\-]+$/;
+
+function isPasswordLikeToken(token: string): boolean {
+  const len = token.length;
+  if (len < 12 || len > 80) return false;
+  if (!/[A-Z]/.test(token)) return false;
+  if (!/[a-z]/.test(token)) return false;
+  if (!/\d/.test(token)) return false;
+  if (!STRONG_SPECIAL_CHAR_RE.test(token)) return false;
+  return true;
+}
+
+function shannonEntropy(s: string): number {
+  const counts = new Map<string, number>();
+  for (const c of s) counts.set(c, (counts.get(c) || 0) + 1);
+  const len = s.length;
+  let h = 0;
+  for (const n of counts.values()) {
+    const p = n / len;
+    h -= p * Math.log2(p);
+  }
+  return h;
+}
+
+function isHighEntropyToken(token: string): boolean {
+  const len = token.length;
+  if (len < 24 || len > 80) return false;
+  if (!ENTROPY_ALPHABET_RE.test(token)) return false;
+  let classes = 0;
+  if (/[A-Z]/.test(token)) classes++;
+  if (/[a-z]/.test(token)) classes++;
+  if (/\d/.test(token)) classes++;
+  if (classes < 3) return false;
+  return shannonEntropy(token) >= 4.5;
+}
+
+/**
+ * Scans a string for non-whitespace tokens that match the password-strength
+ * or high-entropy heuristic and replaces them with REDACTED_SENTINEL. Trims
+ * one run of common surrounding punctuation (quotes, parens, commas) so a
+ * credential wrapped in prose-quoting like `"P@ssw0rd!"` is still caught.
+ *
+ * Exported for direct unit testing; production code reaches it indirectly
+ * through `redactSecretLikeStrings()`.
+ */
+export function redactCredentialLikeTokens(input: unknown): unknown {
+  if (typeof input !== 'string' || input.length === 0) return input;
+  return input.replace(/\S+/g, (token) => {
+    if (token.length < 12 || token.length > 80) return token;
+    if (isPasswordLikeToken(token) || isHighEntropyToken(token)) {
+      return REDACTED_SENTINEL;
+    }
+    const lead = TRIM_LEAD_RE.exec(token)?.[0] ?? '';
+    const tail = TRIM_TAIL_RE.exec(token)?.[0] ?? '';
+    if (lead.length > 0 || tail.length > 0) {
+      const core = token.slice(lead.length, token.length - tail.length);
+      if (core.length >= 12 && core.length <= 80 &&
+          (isPasswordLikeToken(core) || isHighEntropyToken(core))) {
+        return lead + REDACTED_SENTINEL + tail;
+      }
+    }
+    return token;
+  });
+}
+
 /**
  * Replaces credential-shaped substrings inside a free-form string with
  * REDACTED_SENTINEL.  Non-string inputs (and null/undefined) are returned
  * unchanged so callers can pipe optional values through unconditionally.
+ *
+ * Layered defense:
+ *   1. Vendor-prefix regexes  — sk-…, ghp_…, JWT, bcrypt, AKIA, …
+ *   2. Heuristic token scanner — password-strength + high-entropy tokens
+ *      that the regex layer cannot match because they have no distinctive
+ *      shape (Task #463).
  */
 export function redactSecretLikeStrings(input: unknown): unknown {
   if (typeof input !== 'string' || input.length === 0) return input;
@@ -134,6 +245,7 @@ export function redactSecretLikeStrings(input: unknown): unknown {
   for (const { regex } of SECRET_LIKE_PATTERNS) {
     out = out.replace(regex, REDACTED_SENTINEL);
   }
+  out = redactCredentialLikeTokens(out) as string;
   return out;
 }
 
