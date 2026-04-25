@@ -41,6 +41,7 @@ import {
   redactSensitiveFields,
   redactSecretLikeStrings,
   deepRedactSecretLikeStrings,
+  detectCredentialLikeFields,
   isSensitiveField,
   REDACTED_SENTINEL,
   logEvent,
@@ -209,6 +210,29 @@ export interface AiPendingActionsSweepResult {
   previewChanged: number;
   executionResultChanged: number;
   rowsUpdated: number;
+}
+
+/**
+ * Result counters for the ai_pending_actions credential-warnings backfill
+ * sweep (Task #480). Reported in the console output and the audit-log
+ * entry emitted by main() / onBootRedactionSweep().
+ *
+ *   - `scanned`         — rows whose `credential_warnings` column was
+ *                         empty (`'[]'::jsonb`) at SELECT time. These
+ *                         are the legacy / pre-Task-#477 rows the
+ *                         backfill exists to cover.
+ *   - `warningsAdded`   — total `CredentialWarning` entries written to
+ *                         the column across all updated rows. Lets the
+ *                         audit-log entry report the volume of newly
+ *                         surfaced offending field paths, not just how
+ *                         many rows changed.
+ *   - `rowsUpdated`     — distinct rows that received a non-empty
+ *                         credential_warnings array on this pass.
+ */
+export interface AiPendingActionsCredentialWarningsBackfillResult {
+  scanned: number;
+  rowsUpdated: number;
+  warningsAdded: number;
 }
 
 /**
@@ -411,11 +435,19 @@ export async function redactChangeHistoryTable(
         // Layer 1 — key-based deny list: blanket-redact any non-null,
         // non-already-sentinel value. Preserve null (no leak risk in null)
         // and skip already-sentinel values so re-runs are idempotent.
-        if (oldVal !== null && oldVal !== undefined && oldVal !== REDACTED_SENTINEL) {
+        if (
+          oldVal !== null &&
+          oldVal !== undefined &&
+          oldVal !== REDACTED_SENTINEL
+        ) {
           oldVal = REDACTED_SENTINEL;
           valuesChanged = true;
         }
-        if (newVal !== null && newVal !== undefined && newVal !== REDACTED_SENTINEL) {
+        if (
+          newVal !== null &&
+          newVal !== undefined &&
+          newVal !== REDACTED_SENTINEL
+        ) {
           newVal = REDACTED_SENTINEL;
           valuesChanged = true;
         }
@@ -427,14 +459,14 @@ export async function redactChangeHistoryTable(
         // only mark dirty when the scrubbed text differs byte-for-byte.
         // Non-string / null inputs short-circuit to identity inside
         // redactSecretLikeStrings.
-        if (typeof oldVal === 'string' && oldVal.length > 0) {
+        if (typeof oldVal === "string" && oldVal.length > 0) {
           const scrubbed = redactSecretLikeStrings(oldVal) as string;
           if (scrubbed !== oldVal) {
             oldVal = scrubbed;
             valuesChanged = true;
           }
         }
-        if (typeof newVal === 'string' && newVal.length > 0) {
+        if (typeof newVal === "string" && newVal.length > 0) {
           const scrubbed = redactSecretLikeStrings(newVal) as string;
           if (scrubbed !== newVal) {
             newVal = scrubbed;
@@ -446,7 +478,7 @@ export async function redactChangeHistoryTable(
       // change_reason is operator-supplied free-form prose on every row
       // regardless of field_changed, so it always gets the regex pass
       // (matches the write-time path in logNCChange / logCAPAChange).
-      if (typeof reason === 'string' && reason.length > 0) {
+      if (typeof reason === "string" && reason.length > 0) {
         const scrubbed = redactSecretLikeStrings(reason) as string;
         if (scrubbed !== reason) {
           reason = scrubbed;
@@ -588,6 +620,103 @@ export async function redactAiPendingActions(
 }
 
 /**
+ * Task #480: backfills `ai_pending_actions.credential_warnings` for rows
+ * that pre-date the Task #477 detector.
+ *
+ * Why this exists
+ * ---------------
+ * Task #477 wired `detectCredentialLikeFields()` into the live submission
+ * path (`enqueuePendingAction()` in `aiApprovalDatabase.ts`) so every new
+ * approval row records — alongside the redacted payload — a structured
+ * list of fields whose values look like credentials. Rows enqueued
+ * BEFORE that change have an empty array (`'[]'::jsonb`, the column
+ * default), so the operator approval UI shows no red warning banner on
+ * them even when the persisted payload still contains tell-tale
+ * token-prefix shapes the redactor missed.
+ *
+ * What this sweep does
+ * --------------------
+ * For every row whose `credential_warnings` column is empty, run the
+ * SAME detector used at submission time over the persisted (redacted)
+ * `payload` + `payload_preview` and write the resulting warnings back.
+ * Detection happens AFTER the in-process redaction sweep
+ * (`redactAiPendingActions`) above so the warnings reflect what is
+ * actually still on disk after every known cleanup has run — i.e. the
+ * "shapes the redactor missed" the task is targeting.
+ *
+ * Idempotency
+ * -----------
+ *   - The `WHERE credential_warnings = '[]'::jsonb` filter naturally
+ *     excludes rows already covered by the live path or by a previous
+ *     backfill pass, so re-runs ignore them.
+ *   - The UPDATE re-asserts the same `'[]'::jsonb` predicate so a
+ *     concurrent live INSERT that happens between SELECT and UPDATE
+ *     cannot have its newer non-empty warnings overwritten by the sweep.
+ *   - Rows whose detector pass returns 0 warnings are not UPDATEd at all
+ *     — the column stays at the default `'[]'`, matching what the live
+ *     path would have written for that payload.
+ *
+ * Memory-safe: walks the table in keyset-paginated batches (Task #289).
+ */
+export async function backfillAiPendingActionsCredentialWarnings(
+  client: any,
+  batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
+): Promise<AiPendingActionsCredentialWarningsBackfillResult> {
+  let scanned = 0;
+  let rowsUpdated = 0;
+  let warningsAdded = 0;
+  let cursor = 0;
+
+  while (true) {
+    const page = await client.query(
+      `SELECT id, payload, payload_preview
+         FROM ai_pending_actions
+        WHERE id > $1
+          AND credential_warnings = '[]'::jsonb
+        ORDER BY id ASC
+        LIMIT $2`,
+      [cursor, batchSize],
+    );
+
+    if (!page.rows || page.rows.length === 0) break;
+
+    for (const row of page.rows) {
+      scanned++;
+
+      const preview =
+        typeof row.payload_preview === "string" ? row.payload_preview : null;
+      const warnings = detectCredentialLikeFields(row.payload, preview);
+
+      if (warnings.length > 0) {
+        // Re-assert the empty-array predicate in the UPDATE so a
+        // concurrent live INSERT (which would have populated the
+        // column itself) cannot have its warnings clobbered by the
+        // sweep. This is belt-and-braces — `enqueuePendingAction()`
+        // never UPDATEs an existing row's credential_warnings — but
+        // it keeps the sweep safe under any future write path that
+        // might.
+        const res = await client.query(
+          `UPDATE ai_pending_actions
+              SET credential_warnings = $1
+            WHERE id = $2
+              AND credential_warnings = '[]'::jsonb`,
+          [JSON.stringify(warnings), row.id],
+        );
+        if ((res.rowCount ?? 0) > 0) {
+          rowsUpdated++;
+          warningsAdded += warnings.length;
+        }
+      }
+    }
+
+    cursor = page.rows[page.rows.length - 1].id;
+    if (page.rows.length < batchSize) break;
+  }
+
+  return { scanned, rowsUpdated, warningsAdded };
+}
+
+/**
  * Backfill the ai_call_metrics preview columns (Task #453).
  *
  *   - `prompt_preview`        (TEXT) -> redactPromptPreview
@@ -638,7 +767,7 @@ export async function redactAiCallMetrics(
       let inputDirty = false;
       let outputDirty = false;
 
-      if (typeof promptPreview === 'string' && promptPreview.length > 0) {
+      if (typeof promptPreview === "string" && promptPreview.length > 0) {
         const cleaned = redactPromptPreview(promptPreview);
         if (cleaned !== promptPreview) {
           promptPreview = cleaned;
@@ -646,7 +775,7 @@ export async function redactAiCallMetrics(
         }
       }
 
-      if (typeof toolInputPreview === 'string' && toolInputPreview.length > 0) {
+      if (typeof toolInputPreview === "string" && toolInputPreview.length > 0) {
         const cleaned = redactToolPayloadPreview(toolInputPreview) ?? null;
         if (cleaned !== toolInputPreview) {
           toolInputPreview = cleaned;
@@ -654,7 +783,10 @@ export async function redactAiCallMetrics(
         }
       }
 
-      if (typeof toolOutputPreview === 'string' && toolOutputPreview.length > 0) {
+      if (
+        typeof toolOutputPreview === "string" &&
+        toolOutputPreview.length > 0
+      ) {
         const cleaned = redactToolPayloadPreview(toolOutputPreview) ?? null;
         if (cleaned !== toolOutputPreview) {
           toolOutputPreview = cleaned;
@@ -719,6 +851,10 @@ async function main() {
           `capa_change_history=${result.capa_change_history_updated} ` +
           `(change_reason=${result.capa_change_history_change_reason_updated}), ` +
           `ai_pending_actions=${"rows_updated" in result.ai_pending_actions ? result.ai_pending_actions.rows_updated : 0}, ` +
+          `ai_pending_actions_credential_warnings=` +
+          `${"rows_updated" in result.ai_pending_actions_credential_warnings ? result.ai_pending_actions_credential_warnings.rows_updated : 0} ` +
+          `(scanned=${"scanned" in result.ai_pending_actions_credential_warnings ? result.ai_pending_actions_credential_warnings.scanned : 0}, ` +
+          `warnings_added=${"warnings_added" in result.ai_pending_actions_credential_warnings ? result.ai_pending_actions_credential_warnings.warnings_added : 0}), ` +
           `ai_call_metrics=${"rows_updated" in result.ai_call_metrics ? result.ai_call_metrics.rows_updated : 0} (rows updated).`,
         newValue: result,
         aiInvolved: false,
@@ -750,6 +886,17 @@ export interface AiPendingActionsSnapshot {
 }
 
 /**
+ * Snake-case JSON snapshot of the ai_pending_actions credential-warnings
+ * backfill counters (Task #480) as stored in SweepResult and
+ * last-sweep.json. Snake-case to match the surrounding JSON structure.
+ */
+export interface AiPendingActionsCredentialWarningsBackfillSnapshot {
+  scanned: number;
+  rows_updated: number;
+  warnings_added: number;
+}
+
+/**
  * Snake-case JSON snapshot of the ai_call_metrics sweep counters as
  * stored in SweepResult and last-sweep.json. (Task #453.)
  */
@@ -773,6 +920,18 @@ export interface SweepResult {
   capa_change_history_updated: number;
   capa_change_history_change_reason_updated: number;
   ai_pending_actions: AiPendingActionsSnapshot | { skipped: string };
+  /**
+   * Task #480 — credential-warnings backfill counters for the
+   * ai_pending_actions table. Tracked separately from
+   * `ai_pending_actions` (which is the in-place secret-redaction
+   * sweep) because the two phases have different idempotency semantics
+   * and different audit-evidence value. `{ skipped: ... }` when the
+   * table itself is missing (cold-start race already handled by
+   * waitForTablesReady, but kept symmetric for direct CLI invocations).
+   */
+  ai_pending_actions_credential_warnings:
+    | AiPendingActionsCredentialWarningsBackfillSnapshot
+    | { skipped: string };
   ai_call_metrics: AiCallMetricsSnapshot | { skipped: string };
   total_rows_updated: number;
 }
@@ -802,6 +961,9 @@ export async function runSweepWithClient(
   let metricsCount = 0;
   let metricsResult: AiCallMetricsSweepResult | null = null;
   let metricsSkipReason: string | null = null;
+  let credWarnResult: AiPendingActionsCredentialWarningsBackfillResult | null =
+    null;
+  let credWarnSkipReason: string | null = null;
 
   try {
     const ncResult = await redactChangeHistoryTable(
@@ -865,6 +1027,29 @@ export async function runSweepWithClient(
     }
   }
 
+  // Task #480: backfill credential_warnings on legacy ai_pending_actions
+  // rows. Runs AFTER `redactAiPendingActions` above so the detector sees
+  // the post-redaction payload that the operator will actually be looking
+  // at — i.e. it surfaces tell-tale shapes the redactor missed.
+  try {
+    credWarnResult = await backfillAiPendingActionsCredentialWarnings(client);
+    console.log(
+      `[Redaction] ai_pending_actions.credential_warnings backfill: ` +
+        `${credWarnResult.rowsUpdated} rows flagged ` +
+        `(scanned=${credWarnResult.scanned}, ` +
+        `warnings_added=${credWarnResult.warningsAdded})`,
+    );
+  } catch (e: any) {
+    if (e.code === "42P01") {
+      credWarnSkipReason = "table_missing";
+      console.log(
+        "[Redaction] ai_pending_actions table does not exist — credential_warnings backfill skipped",
+      );
+    } else {
+      throw e;
+    }
+  }
+
   try {
     metricsResult = await redactAiCallMetrics(client);
     metricsCount = metricsResult.rowsUpdated;
@@ -876,13 +1061,19 @@ export async function runSweepWithClient(
         `tool_output_preview=${metricsResult.toolOutputPreviewChanged})`,
     );
   } catch (e: any) {
-    if (e.code === '42P01') {
-      metricsSkipReason = 'table_missing';
-      console.log('[Redaction] ai_call_metrics table does not exist — skipped');
-    } else { throw e; }
+    if (e.code === "42P01") {
+      metricsSkipReason = "table_missing";
+      console.log("[Redaction] ai_call_metrics table does not exist — skipped");
+    } else {
+      throw e;
+    }
   }
 
-  const total = elCount + ncCount + capaCount + aiCount + metricsCount;
+  // Task #480: include the credential-warnings backfill in the aggregate
+  // so audit-evidence reports do not undercount sweep activity.
+  const credWarnCount = credWarnResult?.rowsUpdated ?? 0;
+  const total =
+    elCount + ncCount + capaCount + aiCount + credWarnCount + metricsCount;
   console.log(`[Redaction] Sweep complete. Total rows updated: ${total}`);
 
   return {
@@ -901,6 +1092,13 @@ export async function runSweepWithClient(
           rows_updated: aiResult.rowsUpdated,
         }
       : { skipped: aiSkipReason ?? "unknown" },
+    ai_pending_actions_credential_warnings: credWarnResult
+      ? {
+          scanned: credWarnResult.scanned,
+          rows_updated: credWarnResult.rowsUpdated,
+          warnings_added: credWarnResult.warningsAdded,
+        }
+      : { skipped: credWarnSkipReason ?? "unknown" },
     ai_call_metrics: metricsResult
       ? {
           scanned: metricsResult.scanned,
@@ -1002,6 +1200,10 @@ export async function onBootRedactionSweep(): Promise<void> {
           `capa_change_history=${result.capa_change_history_updated} ` +
           `(change_reason=${result.capa_change_history_change_reason_updated}), ` +
           `ai_pending_actions=${"rows_updated" in result.ai_pending_actions ? result.ai_pending_actions.rows_updated : 0}, ` +
+          `ai_pending_actions_credential_warnings=` +
+          `${"rows_updated" in result.ai_pending_actions_credential_warnings ? result.ai_pending_actions_credential_warnings.rows_updated : 0} ` +
+          `(scanned=${"scanned" in result.ai_pending_actions_credential_warnings ? result.ai_pending_actions_credential_warnings.scanned : 0}, ` +
+          `warnings_added=${"warnings_added" in result.ai_pending_actions_credential_warnings ? result.ai_pending_actions_credential_warnings.warnings_added : 0}), ` +
           `ai_call_metrics=${"rows_updated" in result.ai_call_metrics ? result.ai_call_metrics.rows_updated : 0} (rows updated).`,
         newValue: result,
         aiInvolved: false,
