@@ -15,9 +15,13 @@
  * inside a real opening tag are considered violations.
  *
  * Pass `--check-inline-scripts` to additionally flag bare `<script>...</script>`
- * blocks that lack a `nonce=` attribute (defence-in-depth — the CSP
- * middleware already auto-injects a nonce, but routes that bypass the
- * middleware would slip through without this check).
+ * blocks that lack a `nonce=` attribute. The CSP middleware auto-injects a
+ * nonce on every served `<script>`, so pages legitimately served via that
+ * middleware are listed in `INLINE_SCRIPT_NONCE_ALLOWLIST` below; any new
+ * HTML page that adds an inline `<script>` and is NOT on the allowlist will
+ * fail the check (catching pages that accidentally bypass the middleware
+ * and would silently fail in production). The allowlist also fails on
+ * stale entries so it cannot rot. Wired into `scripts/post-merge.sh`.
  *
  * Exit codes:
  *   0  guardrail PASS
@@ -38,6 +42,73 @@ const TAG_OPEN_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b/;
 
 const args = new Set(process.argv.slice(2));
 const checkInlineScripts = args.has("--check-inline-scripts");
+
+// ---------------------------------------------------------------------------
+// Inline-<script> nonce allowlist (Task #248)
+//
+// Every entry in this set is an HTML page that intentionally relies on the
+// global CSP middleware (`src/mastra/middleware/index.ts` →
+// `injectCspNonce`) to rewrite each `<script>` open tag into
+// `<script nonce="…">` at request time. Because the nonce is per-request, it
+// CANNOT live in the source HTML — so under `--check-inline-scripts` these
+// pages would otherwise produce false positives.
+//
+// All 38 of the current dashboard pages are served by routes that flow
+// through `globalMiddleware`, so they are listed here. The allowlist
+// deliberately does NOT use a glob — adding a new HTML page is a conscious
+// act and must be paired with a deliberate add here, which is exactly the
+// signal we want: the author has confirmed the new route is wired through
+// the nonce-injecting middleware (and not, for example, served via a custom
+// handler that bypasses it).
+//
+// Stale entries (an allowlisted file with no inline <script> or no longer
+// present on disk) are surfaced as a hard error so the list cannot rot.
+// ---------------------------------------------------------------------------
+const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
+  "dashboard/a11y.html",
+  "dashboard/accept-invite.html",
+  "dashboard/admin.html",
+  "dashboard/ai-approvals.html",
+  "dashboard/ai-ops.html",
+  "dashboard/audits.html",
+  "dashboard/calls.html",
+  "dashboard/compliance.html",
+  "dashboard/consultant.html",
+  "dashboard/crm.html",
+  "dashboard/duplicates.html",
+  "dashboard/executive.html",
+  "dashboard/external-audits.html",
+  "dashboard/feedback.html",
+  "dashboard/grc.html",
+  "dashboard/guide.html",
+  "dashboard/health.html",
+  "dashboard/index.html",
+  "dashboard/infographic.html",
+  "dashboard/intake.html",
+  "dashboard/kpis.html",
+  "dashboard/login.html",
+  "dashboard/logs.html",
+  "dashboard/migration.html",
+  "dashboard/onboarding.html",
+  "dashboard/pdpl.html",
+  "dashboard/policies.html",
+  "dashboard/projects.html",
+  "dashboard/qms.html",
+  "dashboard/reviews.html",
+  "dashboard/risks.html",
+  "dashboard/roi.html",
+  "dashboard/scorecard.html",
+  "dashboard/sop.html",
+  "dashboard/tablef.html",
+  "dashboard/team.html",
+  "dashboard/users.html",
+  "dashboard/vendors.html",
+]);
+
+function toRelKey(absPath) {
+  // Normalise to forward slashes so the allowlist is portable.
+  return path.relative(ROOT, absPath).split(path.sep).join("/");
+}
 
 function listHtmlFiles() {
   const out = [];
@@ -158,10 +229,12 @@ function lineColAt(html, offset) {
 }
 
 function scanFile(absPath) {
-  const rel = path.relative(ROOT, absPath);
+  const rel = toRelKey(absPath);
   const html = fs.readFileSync(absPath, "utf8");
   const tokens = tokenize(html);
   const violations = [];
+  const allowlistedForInlineScripts = INLINE_SCRIPT_NONCE_ALLOWLIST.has(rel);
+  let inlineScriptCount = 0;
 
   for (const tok of tokens) {
     if (tok.kind === "tag") {
@@ -188,20 +261,23 @@ function scanFile(absPath) {
       const isExternal = /\ssrc\s*=/.test(open);
       const hasNonce = /\snonce\s*=/.test(open);
       if (!isExternal && !hasNonce && tok.text.trim() !== "") {
-        const { line, col } = lineColAt(html, tok.start);
-        violations.push({
-          file: rel,
-          line,
-          col,
-          kind: "inline-script-no-nonce",
-          message: "Inline <script> block without nonce= attribute (CSP requires a nonce).",
-          snippet: open,
-        });
+        inlineScriptCount++;
+        if (!allowlistedForInlineScripts) {
+          const { line, col } = lineColAt(html, tok.start);
+          violations.push({
+            file: rel,
+            line,
+            col,
+            kind: "inline-script-no-nonce",
+            message: "Inline <script> block without nonce= attribute. Either (a) load the JS from an external file under /js/ via <script src=…>, or (b) confirm this page is served via the global CSP middleware (src/mastra/middleware/index.ts) and add it to INLINE_SCRIPT_NONCE_ALLOWLIST in scripts/check-handlers.cjs.",
+            snippet: open,
+          });
+        }
       }
     }
   }
 
-  return violations;
+  return { violations, inlineScriptCount, allowlistedForInlineScripts };
 }
 
 function main() {
@@ -213,10 +289,17 @@ function main() {
 
   let total = 0;
   const allViolations = [];
+  // Track which allowlisted files were actually exercised so we can flag
+  // stale entries (file deleted, or all inline <script>s removed).
+  const usedAllowlistEntries = new Set();
   for (const f of files) {
     try {
-      const v = scanFile(f);
-      allViolations.push(...v);
+      const result = scanFile(f);
+      allViolations.push(...result.violations);
+      const rel = toRelKey(f);
+      if (result.allowlistedForInlineScripts && result.inlineScriptCount > 0) {
+        usedAllowlistEntries.add(rel);
+      }
     } catch (err) {
       console.error(`✗ Failed to scan ${path.relative(ROOT, f)}: ${err && err.message ? err.message : err}`);
       process.exit(2);
@@ -224,17 +307,35 @@ function main() {
     total++;
   }
 
-  if (allViolations.length === 0) {
+  // Stale-allowlist detection (only meaningful when --check-inline-scripts is on,
+  // since otherwise we never visited any inline-script tokens).
+  const staleAllowlist = [];
+  if (checkInlineScripts) {
+    for (const entry of INLINE_SCRIPT_NONCE_ALLOWLIST) {
+      if (!usedAllowlistEntries.has(entry)) {
+        staleAllowlist.push(entry);
+      }
+    }
+  }
+
+  if (allViolations.length === 0 && staleAllowlist.length === 0) {
+    const allowedNote = checkInlineScripts
+      ? ` (${INLINE_SCRIPT_NONCE_ALLOWLIST.size} page(s) on the middleware-nonce allowlist)`
+      : "";
     console.log(
       `✓ Inline-handler CSP guardrail PASS — scanned ${total} HTML file(s); no inline on*= attributes${
         checkInlineScripts ? " or unnonced inline <script> blocks" : ""
-      } found.`
+      } found${allowedNote}.`
     );
     process.exit(0);
   }
 
   console.error("");
-  console.error(`✗ Inline-handler CSP guardrail FAIL — ${allViolations.length} violation(s):`);
+  console.error(
+    `✗ Inline-handler CSP guardrail FAIL — ${allViolations.length} violation(s)${
+      staleAllowlist.length > 0 ? `, ${staleAllowlist.length} stale allowlist entry/entries` : ""
+    }:`
+  );
   console.error("");
   for (const v of allViolations) {
     console.error(`  ${v.file}:${v.line}:${v.col}  [${v.kind}]  ${v.message}`);
@@ -242,12 +343,21 @@ function main() {
       console.error(`      → ${v.snippet.replace(/\s+/g, " ").trim()}`);
     }
   }
+  if (staleAllowlist.length > 0) {
+    console.error("");
+    console.error("Stale INLINE_SCRIPT_NONCE_ALLOWLIST entries (file missing or no longer has any unnonced inline <script> blocks):");
+    for (const entry of staleAllowlist) {
+      console.error(`  • ${entry}`);
+    }
+    console.error("Remove these from scripts/check-handlers.cjs to keep the allowlist tight.");
+  }
   console.error("");
   console.error("Fix recipe:");
   console.error("  • Replace inline `onclick=\"foo(event)\"` with `data-on-click=\"foo\"` and load");
   console.error("    `dashboard/js/safe-actions.js` from the page.");
-  console.error("  • For <script> blocks without nonce=, prefer an external file under /js/ or");
-  console.error("    rely on the CSP middleware's auto-injected nonce (do not bypass it).");
+  console.error("  • For <script> blocks without nonce=, prefer an external file under /js/. If");
+  console.error("    the page is genuinely served via the global CSP middleware, add it to");
+  console.error("    INLINE_SCRIPT_NONCE_ALLOWLIST in scripts/check-handlers.cjs.");
   process.exit(1);
 }
 

@@ -50,21 +50,31 @@ echo "▶ CI gate: i18n coverage (Task #125 / #150)"
 node scripts/check-i18n.cjs
 
 # ----------------------------------------------------------------------------
-# CI gate — dashboard inline-handler CSP guard (Task #171 / Task #131)
+# CI gate — dashboard inline-handler + inline-<script> CSP guard
+#                                          (Task #171 / Task #131 / Task #248)
 #
-# Blocks merges that reintroduce inline `onclick=` / `onchange=` / etc. on any
-# `dashboard/*.html` or `public/*.html` page. These would be silently dropped
-# by the strict CSP (`script-src` has no `'unsafe-inline'`), turning the
-# affected button into a no-op in production. Equivalent behaviour MUST go
-# through `dashboard/js/safe-actions.js` using the `data-on-{event}` pattern.
+# Blocks merges that:
+#   1. Reintroduce inline `onclick=` / `onchange=` / etc. on any
+#      `dashboard/*.html` or `public/*.html` page. These would be silently
+#      dropped by the strict CSP (`script-src` has no `'unsafe-inline'`),
+#      turning the affected button into a no-op in production. Equivalent
+#      behaviour MUST go through `dashboard/js/safe-actions.js` using the
+#      `data-on-{event}` pattern.
+#   2. (Task #248) Add a NEW HTML page with bare `<script>…</script>` blocks
+#      lacking `nonce=` that is not on the explicit allowlist in
+#      `scripts/check-handlers.cjs` (`INLINE_SCRIPT_NONCE_ALLOWLIST`). This
+#      catches pages that accidentally bypass the global CSP middleware
+#      (`src/mastra/middleware/index.ts` → `injectCspNonce`) — those scripts
+#      would silently fail in production. The allowlist also fails on stale
+#      entries so it cannot rot.
 #
-# All 38 dashboard HTML files are now fully migrated (including
-# dashboard/ai-ops.html and dashboard/consultant.html — the last two
-# migrated in Task #131). The gate enforces zero-tolerance going forward.
+# All 38 dashboard HTML files are migrated for (1) (the last two — ai-ops
+# and consultant — were finished in Task #131) and listed in the allowlist
+# for (2). The gate enforces zero-tolerance going forward.
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: dashboard inline-handler CSP guard (Task #171 / #131)"
-bash scripts/lint-dashboard-handlers.sh
+echo "▶ CI gate: dashboard inline-handler + inline-<script> CSP guard (Task #171 / #131 / #248)"
+bash scripts/lint-dashboard-handlers.sh --check-inline-scripts
 
 # ----------------------------------------------------------------------------
 # CI gate — console.log / console.error secret-leak guardrail (Task #61)
