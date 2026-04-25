@@ -1,0 +1,118 @@
+name: Browser suite — CSP, AI Ops tabs, Prompt Version tab
+
+# Runs the three Playwright specs that previously only ran on demand:
+#   tests/csp.spec.ts           — CSP header + nonce + AI-widget inline-style checks
+#   tests/aiOpsTabs.spec.ts     — AI Ops admin surface tab navigation & rendering
+#   tests/promptVersionTab.spec.ts — Prompt Version tab admin surface checks
+#
+# CSP regressions are particularly dangerous because they silently break pages
+# in production. The AI Ops / prompt-version tabs are admin surfaces that rarely
+# get manual smoke testing, so wiring them into CI is the best safety net.
+#
+# Pattern mirrors .github/workflows/i18n-tests.yml and
+# .github/workflows/streaming-download-smoke.yml (postgres service, health-check
+# wait loop, server-log upload on failure).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: browser-suite-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-suite:
+    name: CSP / AI Ops / Prompt Version — Playwright suite (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: walaplus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/walaplus_test
+      SESSION_SECRET: ci-session-secret-do-not-use-in-prod
+      ADMIN_API_KEY: ci-admin-key-browser-suite
+      TEST_ADMIN_KEY: ci-admin-key-browser-suite
+      BASE_URL: http://localhost:5000
+      PORT: "5000"
+      DATA_MODE: REAL
+      CI: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: |
+          npm run dev > server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Wait for /api/health to come up (max 90 s).
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:5000/api/health > /dev/null; then
+              echo "Server ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become healthy in time" >&2
+          tail -200 server.log >&2 || true
+          exit 1
+
+      - name: Run CSP Playwright suite
+        run: npx playwright test tests/csp.spec.ts --reporter=list
+
+      - name: Run AI Ops tabs Playwright suite
+        run: npx playwright test tests/aiOpsTabs.spec.ts --reporter=list
+
+      - name: Run Prompt Version tab Playwright suite
+        run: npx playwright test tests/promptVersionTab.spec.ts --reporter=list
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-suite-playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-suite-server-log
+          path: server.log
+          if-no-files-found: ignore
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "${SERVER_PID}" 2>/dev/null || true
+          fi
