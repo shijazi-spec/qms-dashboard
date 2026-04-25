@@ -34,6 +34,17 @@
  * sets that env after standing up the prerequisites, so a regression in
  * any browser engine fails CI for that workflow.
  *
+ * Streaming-export latency HTTP integration test: if the env var
+ * `RUN_STREAMING_EXPORT_LATENCY_E2E=1` is set we additionally run
+ * `tests/streamingExportLatency.integration.ts` against a running dev
+ * server. It hits every export endpoint that goes through
+ * `stageStreamingExportFromHono` and asserts the `X-Stream-TTFB-Ms`
+ * header is present and within `EXPORT_TTFB_BUDGET_MS` — catching
+ * server-side buffering regressions the browser smoke test cannot see.
+ * The dedicated CI workflow `.github/workflows/streaming-download-smoke.yml`
+ * sets the env after standing up the dev server, so a regression in any
+ * single export endpoint fails CI for that workflow.
+ *
  * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
  * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
  * `tests/rbacReportRoutes.integration.ts` against a running dev server.
@@ -192,6 +203,37 @@ function runRbacIntegrationSuite(): Promise<RunResult> {
   });
 }
 
+function runStreamingExportLatency(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingExportLatency.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/streamingExportLatency.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn streaming-export latency suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 function runStreamingDownloadSmoke(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
@@ -254,6 +296,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] streamingDownload.spec.ts — set RUN_STREAMING_DOWNLOAD_E2E=1 with the dev server running and Playwright browsers installed to include it.`,
+    );
+  }
+
+  if (process.env.RUN_STREAMING_EXPORT_LATENCY_E2E === "1") {
+    console.log(
+      `\n──── Streaming-export latency HTTP integration tests ────`,
+    );
+    results.push(await runStreamingExportLatency());
+  } else {
+    console.log(
+      `\n[skip] streaming-export latency HTTP integration tests — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
     );
   }
 

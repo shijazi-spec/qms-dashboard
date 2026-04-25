@@ -7,6 +7,16 @@ name: Streaming download — cross-browser smoke
 # CSP changes that block the SW. This workflow does — and fails CI for any
 # engine that regresses.
 #
+# In addition, this workflow now runs a server-side latency check against
+# every export endpoint (vendors, QMS NC/CAPA, compliance, PDPL, KPIs,
+# risks, duplicates, policies, event logs). The browser smoke above only
+# exercises an intercepted ~80-byte fixture so it cannot detect a
+# buffering regression in a single real export route. The new step
+# tests/streamingExportLatency.integration.ts hits each route over HTTP
+# and asserts the `X-Stream-TTFB-Ms` header (stamped by the streaming
+# wrapper) is present and within EXPORT_TTFB_BUDGET_MS / EXPORT_TOTAL_BUDGET_MS,
+# both defined in src/utils/excelExport.ts.
+#
 # Latency budget
 # ──────────────
 # Each browser run records the wall-clock duration of the download and
@@ -113,6 +123,10 @@ jobs:
       # Picked up by tests/runIntegrationTests.ts so contributors who run
       # `npm test` inside this same CI job opt into the playwright leg too.
       RUN_STREAMING_DOWNLOAD_E2E: "1"
+      # Picked up by tests/runIntegrationTests.ts so contributors who run
+      # `npm test` inside this same CI job opt into the server-side
+      # streaming-export latency check too.
+      RUN_STREAMING_EXPORT_LATENCY_E2E: "1"
 
     steps:
       - name: Check out repository
@@ -147,6 +161,15 @@ jobs:
 
       - name: Run streaming-download smoke (all 3 engines)
         run: npx playwright test tests/streamingDownload.spec.ts --reporter=list
+
+      - name: Run streaming-export latency (server-side, every export endpoint)
+        # Hits every export endpoint over HTTP and asserts the
+        # X-Stream-TTFB-Ms header (set by `instrumentExportResponseTiming`
+        # inside `stageStreamingExportFromHono`) is present and within
+        # EXPORT_TTFB_BUDGET_MS. Catches backend buffering regressions in
+        # any single export route — the browser smoke above only exercises
+        # an intercepted ~80-byte fixture and would miss them.
+        run: npx tsx tests/streamingExportLatency.integration.ts
 
       - name: Summarise latency results
         if: always()

@@ -988,6 +988,200 @@ export interface StreamingExportStagingOptions {
   ttlMs?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Streaming-export latency budget — applied to every streaming export
+// ---------------------------------------------------------------------------
+//
+// The Playwright smoke test in tests/streamingDownload.spec.ts checks the
+// browser-side download latency against an intercepted ~80-byte CSV. That
+// validates the dashboard's service-worker / FSA pipeline but never touches
+// the real backend route — a regression that buffers the full body before
+// emitting the first byte (e.g. someone forgetting to use streamCsv /
+// stageStreamingExportFromHono and going back to `c.body(buffer)`) would
+// not be caught by that test.
+//
+// To plug that gap, every streaming export response built through
+// `stageStreamingExportFromHono` is wrapped with `instrumentExportResponseTiming`
+// which:
+//
+//   1. Stamps `X-Stream-TTFB-Ms` on the response — the wall-clock duration
+//      between the wrapper being invoked and the response object being
+//      handed back to the framework. For a staged-and-served response that
+//      is essentially "build + drain to disk" time and is what the client
+//      sees as time-to-first-byte.
+//   2. Echoes the budget on `X-Stream-TTFB-Budget-Ms` and
+//      `X-Stream-Total-Budget-Ms` so an integration test can assert against
+//      the budget without hard-coding it.
+//   3. Wraps the response body in a transparent passthrough that records
+//      total transfer duration and bytes written, then logs a single line
+//      to the server log when the stream finishes (or is cancelled).
+//
+// The integration test `tests/streamingExportLatency.integration.ts` hits
+// every export endpoint against a freshly seeded dev server and asserts
+// `X-Stream-TTFB-Ms <= EXPORT_TTFB_BUDGET_MS`. CI runs it via the existing
+// `streaming-download-smoke` workflow.
+//
+// Re-baselining: if a legitimate change raises the expected latency (e.g.
+// a new auth/audit middleware step), update the constants below AND the
+// values referenced in the smoke workflow + integration test, and explain
+// the new range in the commit message.
+//
+// Budget rationale (small dev-mode payload, ~hundreds of rows max):
+//   * EXPORT_TTFB_BUDGET_MS = 5_000 ms — generous for a dev container
+//     under cold-start load (DB pool init + ExcelJS workbook setup) but
+//     well under a "user notices it stalled" threshold. A regression that
+//     trips this almost always means we accidentally introduced full-body
+//     buffering or stalled the promise chain.
+//   * EXPORT_TOTAL_BUDGET_MS = 10_000 ms — wall-clock cap for total
+//     transfer of a small payload to localhost. A staged-and-served file
+//     whose body cannot be drained inside this window is broken in a way
+//     the user will feel.
+export const EXPORT_TTFB_BUDGET_MS = 5_000;
+export const EXPORT_TOTAL_BUDGET_MS = 10_000;
+
+/** Header names — exported so tests don't drift from the implementation. */
+export const EXPORT_TIMING_HEADERS = {
+  ttfb: "X-Stream-TTFB-Ms",
+  ttfbBudget: "X-Stream-TTFB-Budget-Ms",
+  totalBudget: "X-Stream-Total-Budget-Ms",
+} as const;
+
+/**
+ * Wrap a Response so that:
+ *   - `X-Stream-TTFB-Ms` records (now - startedAt) at the moment this
+ *     wrapper is called (i.e. just before the framework hands the
+ *     response back to the network layer). This is what the client
+ *     actually sees as time-to-first-byte.
+ *   - The response body is piped through a tee that counts bytes and
+ *     records last-byte timing, logged once when the stream finishes.
+ *
+ * The wrapper is a no-op for headerless / bodyless edge cases (e.g.
+ * `instrumentExportResponseTiming` invoked on a 304 with no body) — it
+ * still stamps the TTFB header but skips the body wrapping.
+ *
+ * Designed to be cheap: no extra allocation per chunk beyond what the
+ * existing ReadableStream pipeline already does, and no I/O on the hot
+ * path (the single log line is written when the stream closes).
+ */
+export function instrumentExportResponseTiming(
+  resp: Response,
+  startedAt: number,
+  routeLabel: string,
+): Response {
+  const ttfbMs = Math.max(0, Math.round(performance.now() - startedAt));
+  const newHeaders = new Headers(resp.headers);
+  newHeaders.set(EXPORT_TIMING_HEADERS.ttfb, String(ttfbMs));
+  newHeaders.set(EXPORT_TIMING_HEADERS.ttfbBudget, String(EXPORT_TTFB_BUDGET_MS));
+  newHeaders.set(EXPORT_TIMING_HEADERS.totalBudget, String(EXPORT_TOTAL_BUDGET_MS));
+
+  // Surface a same-origin-readable subset so a fetch() integration test
+  // can actually see the X-Stream-* headers (CORS-agnostic same-origin
+  // reads include them already, but explicitly listing keeps them visible
+  // even when the response is cross-origin via a future proxy).
+  const existingExpose = newHeaders.get("Access-Control-Expose-Headers");
+  const exposeList = [
+    existingExpose,
+    EXPORT_TIMING_HEADERS.ttfb,
+    EXPORT_TIMING_HEADERS.ttfbBudget,
+    EXPORT_TIMING_HEADERS.totalBudget,
+  ]
+    .filter((s): s is string => !!s && s.length > 0)
+    .join(", ");
+  newHeaders.set("Access-Control-Expose-Headers", exposeList);
+
+  if (ttfbMs > EXPORT_TTFB_BUDGET_MS) {
+    console.warn(
+      `[export-timing] TTFB OVER BUDGET on ${routeLabel}: ${ttfbMs}ms > ${EXPORT_TTFB_BUDGET_MS}ms ` +
+        `— check for accidental full-body buffering before stageStreamingExportFromHono returned.`,
+    );
+  }
+
+  const origBody = resp.body;
+  if (!origBody) {
+    console.log(
+      `[export-timing] ${routeLabel} ttfb=${ttfbMs}ms total=${ttfbMs}ms bytes=0 status=no-body`,
+    );
+    return new Response(null, {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: newHeaders,
+    });
+  }
+
+  // Backpressure-safe passthrough: we use a `pull`-based ReadableStream
+  // (NOT `start`) so the upstream `origBody` is only consumed when the
+  // downstream consumer asks for more. A `start`-driven `while(true)
+  // reader.read()` loop would eagerly drain the entire upstream into the
+  // wrapper's internal queue, which is exactly the full-body buffering
+  // failure mode this whole task is trying to detect — defeating its own
+  // purpose and inflating memory on large exports.
+  //
+  // Total duration is captured at three completion points so it always
+  // reflects the real end-of-transfer wall clock:
+  //   - close: upstream signalled `done` AND we just enqueued the close
+  //     to the consumer (i.e. last byte is on its way to the network),
+  //   - cancel: consumer (or a network disconnect) abandoned the read,
+  //   - error: upstream threw mid-stream.
+  // Each fires exactly once, guarded by `completed`.
+  let bytesObserved = 0;
+  let completed = false;
+  const reader = origBody.getReader();
+
+  const finish = (
+    status: "ok" | "over-budget" | "cancelled" | "error",
+    extra?: string,
+  ): void => {
+    if (completed) return;
+    completed = true;
+    const totalMs = Math.max(0, Math.round(performance.now() - startedAt));
+    const effectiveStatus =
+      status === "ok" && totalMs > EXPORT_TOTAL_BUDGET_MS ? "over-budget" : status;
+    console.log(
+      `[export-timing] ${routeLabel} ttfb=${ttfbMs}ms total=${totalMs}ms ` +
+        `bytes=${bytesObserved} budget_ttfb=${EXPORT_TTFB_BUDGET_MS}ms ` +
+        `budget_total=${EXPORT_TOTAL_BUDGET_MS}ms status=${effectiveStatus}` +
+        (extra ? ` ${extra}` : ""),
+    );
+    if (effectiveStatus === "over-budget") {
+      console.warn(
+        `[export-timing] TOTAL OVER BUDGET on ${routeLabel}: ${totalMs}ms ` +
+          `> ${EXPORT_TOTAL_BUDGET_MS}ms (${bytesObserved} bytes). A small ` +
+          `payload that takes this long indicates a streaming pipeline ` +
+          `regression — check stageAndServeStreamingExport / createReadStream.`,
+      );
+    }
+    try { reader.releaseLock(); } catch { /* noop */ }
+  };
+
+  const wrapped = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          try { controller.close(); } catch { /* already closed */ }
+          finish("ok");
+          return;
+        }
+        if (value) bytesObserved += value.byteLength;
+        controller.enqueue(value);
+      } catch (err) {
+        try { controller.error(err); } catch { /* already errored */ }
+        finish("error", `err=${(err as Error)?.message ?? err}`);
+      }
+    },
+    async cancel(reason) {
+      try { await reader.cancel(reason); } catch { /* noop */ }
+      finish("cancelled", `reason=${String(reason ?? "")}`);
+    },
+  });
+
+  return new Response(wrapped, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: newHeaders,
+  });
+}
+
 /**
  * Stage a streaming Response to a per-job temp file, then serve it with
  * full HTTP Range support so the client-side streaming-download helper can
@@ -1210,6 +1404,11 @@ export async function stageStreamingExportFromHono(
   build: () => Promise<Response> | Response,
   options: StreamingExportStagingOptions = {}
 ): Promise<Response> {
+  // Capture wall-clock entry time so we can stamp the response with TTFB
+  // and total transfer duration. See § "Streaming-export latency budget"
+  // above for the rationale and budget values.
+  const startedAt = performance.now();
+
   const reqHeaders: Record<string, string> = {};
   const range = c.req.header("Range") || c.req.header("range");
   if (range) reqHeaders["range"] = range;
@@ -1229,5 +1428,26 @@ export async function stageStreamingExportFromHono(
     url: `${method} ${c.req.url}`,
     userIdentity,
   });
-  return stageAndServeStreamingExport(reqHeaders, jobKey, build, options);
+
+  // Build a stable, low-cardinality route label for log lines. Strip the
+  // query string so log aggregation groups requests for the same export
+  // endpoint together (different filters land on the same line) and
+  // numeric path segments collapse so e.g. /api/audits/42/export-xlsx
+  // and /api/audits/99/export-xlsx aggregate to the same label.
+  let routeLabel: string;
+  try {
+    const u = new URL(c.req.url, "http://x");
+    routeLabel = `${method} ${u.pathname.replace(/\/\d+(?=\/|$)/g, "/:id")}`;
+  } catch {
+    routeLabel = `${method} ${c.req.url}`;
+  }
+
+  const resp = await stageAndServeStreamingExport(reqHeaders, jobKey, build, options);
+
+  // Only instrument 2xx/206 responses — passthrough errors (401/403/500)
+  // are not export bodies and would skew the latency log.
+  const isStreamingBody = resp.status === 200 || resp.status === 206;
+  if (!isStreamingBody) return resp;
+
+  return instrumentExportResponseTiming(resp, startedAt, routeLabel);
 }
