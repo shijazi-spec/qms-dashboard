@@ -34,6 +34,24 @@
  *     4. Waits past the next 60s window boundary and fires one more request
  *        from the SAME session cookie, asserting the limiter no longer returns
  *        429 + Retry-After (i.e. the user-keyed bucket rolled over).
+ *   Scenario 3 — Per-user AUTH_LIMIT (authflow) window reset:
+ *     1. Mints a signed session cookie for a fourth test user (any role; the
+ *        target endpoint is /api/auth/me, which serves any authenticated user).
+ *     2. Fires AUTH_LIMIT+5 (10) concurrent GETs to /api/auth/me with a fresh
+ *        XFF and the user's session cookie, exhausting the user-keyed
+ *        `user:<userId>:authflow` bucket. /api/auth/me starts with /api/auth/
+ *        which matches AUTH_PATHS in src/utils/rateLimiter.ts, so getCategory
+ *        returns 'auth' and the bucket key uses the `:authflow` suffix with
+ *        AUTH_LIMIT=5 — distinct from the READ_LIMIT bucket exercised by
+ *        Scenario 2.
+ *     3. Confirms the burst produced at least one 429 + Retry-After (proving
+ *        the user-keyed authflow bucket actually engaged before testing rollover).
+ *     4. Waits past the next 60s window boundary and fires one more request
+ *        from the SAME session cookie, asserting the limiter no longer returns
+ *        429 + Retry-After (i.e. the user-keyed authflow bucket rolled over).
+ *        This guards specifically against a regression that broke per-user
+ *        rollover for the authflow category — a gap Scenario 2 cannot cover
+ *        because it only exercises the `:auth:general:r` (READ) bucket.
  *
  * Distinguishing rate-limit denials from other 429s:
  *   The middleware always sets `Retry-After` when it returns 429. The
@@ -70,6 +88,7 @@
  *   [PerUserRateLimitTest] user B passed=10 blocked=5  ✅
  *   [PerUserRateLimitTest] combined passed=20 (per-user buckets are independent) ✅
  *   [PerUserRateLimitTest] /api/users per-user read reset: ✅ allowed (limiter reset)
+ *   [PerUserRateLimitTest] /api/auth/me per-user authflow reset: ✅ allowed (limiter reset)
  *   [PerUserRateLimitTest] PASS — per-user rate limiting holds under shared XFF
  *
  * Runtime: ~60–90s end-to-end — the isolation scenario completes in seconds,
@@ -91,8 +110,10 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
 const WRITE_LIMIT = 10;
 const READ_LIMIT = 100;
+const AUTH_LIMIT = 5;
 const N_PER_USER = WRITE_LIMIT + 5;
 const N_READ_RESET = READ_LIMIT + 10;
+const N_AUTH_RESET = AUTH_LIMIT + 5;
 const WINDOW_MS = 60_000;
 const WINDOW_HEADROOM_MS = 10_000;
 
@@ -434,29 +455,146 @@ async function testPerUserReadWindowReset(): Promise<boolean> {
   }
 }
 
+async function testPerUserAuthFlowWindowReset(): Promise<boolean> {
+  console.log('\n[PerUserRateLimitTest] === Per-user AUTH_LIMIT (authflow) window reset (GET /api/auth/me) ===');
+  if (!SESSION_SECRET) {
+    console.error('[PerUserRateLimitTest] SESSION_SECRET is not set — cannot mint session cookies.');
+    return false;
+  }
+  if (!DATABASE_URL) {
+    console.error('[PerUserRateLimitTest] DATABASE_URL is not set — cannot create test users.');
+    return false;
+  }
+
+  const pool = new Pool({ connectionString: DATABASE_URL });
+  const ts = Date.now();
+  // .test TLD is reserved (RFC 2606) — guaranteed to never collide with a real user.
+  // Distinct email from the other scenarios so the buckets / cleanup never race.
+  const email = `ratelimit-perUser-authflow-reset-${ts}@walaplus.test`;
+
+  try {
+    // Role doesn't matter here — /api/auth/me serves any authenticated user
+    // and the limiter runs before any role checks anyway. We use
+    // 'department_viewer' to make it obvious this is not exercising any
+    // admin-only behavior.
+    const userId = await ensureTestUser(pool, email, 'department_viewer');
+    console.log(`[PerUserRateLimitTest] Created test user #${userId} (${email})`);
+
+    const cookie = buildSessionCookie(userId, email, 'department_viewer', SESSION_SECRET);
+
+    await waitForWindowHeadroom();
+
+    // Fresh XFF (different from every other scenario) so this user-keyed
+    // authflow bucket starts at 0 even if scenarios share the same minute window.
+    const xff = uniqueXff('per-user-authflow-reset');
+    // /api/auth/me starts with /api/auth/, which is in AUTH_PATHS, so the
+    // limiter places this in the `auth` category and uses the bucket key
+    // `user:<userId>:authflow` with limit AUTH_LIMIT=5. This is a separate
+    // bucket from the `user:<userId>:auth:general:r` bucket exercised by the
+    // READ reset scenario, so a regression that broke per-user rollover
+    // specifically for the authflow category would slip through that test
+    // but not this one.
+    const url = `${BASE_URL}/api/auth/me`;
+    const init: RequestInit = {
+      method: 'GET',
+      headers: {
+        'X-Forwarded-For': xff,
+        Cookie: cookie,
+      },
+    };
+
+    // Phase A: exhaust AUTH_LIMIT=5 so the next request would be blocked.
+    console.log(
+      `[PerUserRateLimitTest] Phase A: exhaust AUTH_LIMIT with ${N_AUTH_RESET} ` +
+        `concurrent GETs (XFF=${xff}, user=#${userId})`,
+    );
+    const burstTasks = Array.from({ length: N_AUTH_RESET }, () => fireOne(url, init));
+    const burstResults = await Promise.all(burstTasks);
+    const { blocked: burstBlocked } = summarize(
+      `/api/auth/me (per-user authflow reset burst, user=#${userId})`,
+      burstResults,
+    );
+    if (burstBlocked === 0) {
+      console.error(
+        `[PerUserRateLimitTest]   FAIL — burst produced 0 limiter blocks (no 429 + Retry-After). ` +
+          `Cannot prove the per-user authflow bucket actually engaged before testing reset. ` +
+          `Either SESSION_SECRET does not match the server (so the limiter saw the ` +
+          `request as unauthenticated and used a different bucket) or the limiter regressed.`,
+      );
+      return false;
+    }
+    console.log(`[PerUserRateLimitTest] Phase A confirmed: ${burstBlocked} limiter blocks during burst.`);
+
+    // Phase B: wait past the window boundary, then send one more from the SAME
+    // session cookie. The bucket key is `user:<userId>:authflow`, so rollover
+    // here proves the per-user keyed authflow bucket clears at the next minute
+    // boundary — exactly the gap the READ reset scenario above cannot cover
+    // because that bucket key has a different suffix (`auth:general:r`).
+    await waitForNextWindow('Per-user authflow reset');
+
+    console.log(
+      `[PerUserRateLimitTest] Phase B: fire 1 follow-up after rollover (XFF=${xff}, user=#${userId})`,
+    );
+    const follow = await fireOne(url, init);
+    console.log(
+      `[PerUserRateLimitTest] follow-up status=${follow.status} ` +
+        `retryAfter=${follow.retryAfter ?? 'none'} ` +
+        `passedLimiter=${follow.passedLimiter}`,
+    );
+
+    const ok = follow.passedLimiter;
+    console.log(
+      `[PerUserRateLimitTest] /api/auth/me per-user authflow reset: ` +
+        (ok
+          ? '✅ allowed (limiter reset at window boundary)'
+          : '❌ still blocked by limiter (429 + Retry-After) after rollover'),
+    );
+    if (!ok) {
+      console.error(
+        `[PerUserRateLimitTest]   FAIL — follow-up after window rollover was still blocked ` +
+          `by the per-user authflow limiter. The user:<userId>:authflow bucket failed to ` +
+          `roll over at the next 60s window boundary.`,
+      );
+    }
+    return ok;
+  } catch (err) {
+    console.error('[PerUserRateLimitTest] Fatal error during per-user authflow reset scenario:', err);
+    return false;
+  } finally {
+    await deleteTestUser(pool, email);
+    await pool.end().catch(() => {});
+  }
+}
+
 async function main() {
   console.log(`[PerUserRateLimitTest] Target server: ${BASE_URL}`);
   const reachable = await ensureServerReachable();
   if (!reachable) process.exit(1);
 
-  // Run isolation and reset scenarios in parallel:
+  // Run isolation + both reset scenarios in parallel:
   //   - Isolation completes in seconds and uses its own pair of test users +
   //     XFF + bucket keys (POST /api/audit/trigger, write category).
-  //   - Reset waits ~60s for window rollover and uses a third test user +
-  //     a different XFF + a different bucket category (GET /api/users, read).
-  // Their buckets are fully disjoint, so running concurrently keeps the total
-  // runtime near the single ~60s rollover wait instead of stacking them.
+  //   - Read reset waits ~60s for window rollover and uses a third test user +
+  //     a different XFF + a different bucket category (GET /api/users, read,
+  //     bucket key suffix `:auth:general:r`).
+  //   - Authflow reset waits ~60s for window rollover and uses a fourth test
+  //     user + a different XFF + the authflow bucket (GET /api/auth/me,
+  //     bucket key suffix `:authflow`, limit AUTH_LIMIT=5).
+  // All three sets of buckets are fully disjoint (distinct users, XFFs, and
+  // bucket key suffixes), so running concurrently keeps the total runtime
+  // near the single ~60s rollover wait instead of stacking them.
   console.log(
-    '\n[PerUserRateLimitTest] Starting isolation + reset scenarios in parallel — ' +
-      'reset waits ~60s for the next minute boundary.',
+    '\n[PerUserRateLimitTest] Starting isolation + read-reset + authflow-reset scenarios in parallel — ' +
+      'reset scenarios wait ~60s for the next minute boundary.',
   );
-  const [isolationOk, resetOk] = await Promise.all([
+  const [isolationOk, resetOk, authflowResetOk] = await Promise.all([
     testPerUserIsolation(),
     testPerUserReadWindowReset(),
+    testPerUserAuthFlowWindowReset(),
   ]);
 
   console.log('');
-  if (isolationOk && resetOk) {
+  if (isolationOk && resetOk && authflowResetOk) {
     console.log('[PerUserRateLimitTest] PASS — per-user rate limiting holds under shared XFF');
     process.exit(0);
   } else {
