@@ -22,6 +22,9 @@
  *   TOOL_HEALTH_APP_URL — base origin of the deployed app; when set the Slack
  *                         message will include an "Open AI Operations panel"
  *                         button with an absolute URL.
+ *   TOOL_HEALTH_CONFIG_NOTIFY=1 — opts in to the additional threshold-tuning
+ *                         Slack smoke test (`notifyToolHealthConfigChange`).
+ *                         Off by default to keep the suite lightweight.
  *
  * Run:
  *   npx tsx tests/toolHealthAlertNotifier.integration.ts
@@ -32,9 +35,12 @@
 
 import {
   notifyToolHealthBreach,
+  notifyToolHealthConfigChange,
   _resetToolHealthNotifierThrottleForTests,
   type ToolHealthBreachNotification,
+  type ToolHealthConfigChangeNotification,
 } from "../src/utils/toolHealthAlertNotifier";
+import type { ToolHealthConfigAuditEntry } from "../src/utils/toolHealthConfigDatabase";
 
 const SLACK_BOT_TOKEN   = process.env.SLACK_BOT_TOKEN;
 const SLACK_TEST_CHANNEL = process.env.SLACK_TEST_CHANNEL;
@@ -43,6 +49,7 @@ const RESEND_TEST_EMAIL  = process.env.RESEND_TEST_EMAIL;
 
 const slackReady  = !!(SLACK_BOT_TOKEN && SLACK_TEST_CHANNEL);
 const emailReady  = !!(RESEND_API_KEY && RESEND_TEST_EMAIL);
+const configNotifyOptIn = process.env.TOOL_HEALTH_CONFIG_NOTIFY === "1";
 
 if (!slackReady && !emailReady) {
   console.log(
@@ -165,6 +172,109 @@ async function runSlackTests(): Promise<void> {
   }
 }
 
+// ─── Threshold-change Slack integration (Task #190 / #287) ───────────────────
+//
+// Exercises `notifyToolHealthConfigChange` against the real Slack API so the
+// dedicated Block Kit renderer (header, diff section, "Recent changes" list,
+// and primary action button) is validated end-to-end alongside the breach
+// notifier. Gated on the same `slackReady` flag *and* an explicit
+// `TOOL_HEALTH_CONFIG_NOTIFY=1` opt-in to match the production gating in
+// `notifyToolHealthConfigChange` itself, so unconfigured CI runs stay silent.
+//
+// We inject a `getAudit` stub via `depsOverride` so the test does not require
+// a database connection — the renderer will still produce the "Recent changes"
+// section using the stubbed entries.
+
+async function runConfigChangeSlackTests(): Promise<void> {
+  console.log("\n── Threshold-change Slack integration ──\n");
+
+  const restoreEnv = patchEnv({
+    TOOL_HEALTH_SLACK_CHANNEL: SLACK_TEST_CHANNEL,
+    TOOL_HEALTH_ALERT_EMAIL: undefined,
+    TOOL_HEALTH_CONFIG_NOTIFY: "1",
+  });
+
+  try {
+    const notification: ToolHealthConfigChangeNotification = {
+      changedBy: "integration-test@example.com",
+      before: {
+        errorRateHighPct: 25,
+        latencyCriticalMs: 3000,
+      },
+      after: {
+        errorRateHighPct: 30,
+        errorRateCriticalPct: 50,
+        latencyCriticalMs: 4000,
+      },
+      note: 'Integration test — threshold tuning [DO NOT PAGE]. Characters: <script> & "quotes".',
+      audit_id: 999_999,
+    };
+
+    console.log(
+      `  Sending threshold-change alert to channel: ${SLACK_TEST_CHANNEL}`,
+    );
+
+    const result = await notifyToolHealthConfigChange(notification, {
+      // Stub the DB-backed loader so the test doesn't need a Postgres
+      // connection. Returning a couple of recent rows also exercises the
+      // "Recent changes" block.
+      getAudit: async (limit: number): Promise<ToolHealthConfigAuditEntry[]> => {
+        const rows: ToolHealthConfigAuditEntry[] = [
+          {
+            id: 999_999,
+            changed_at: new Date(),
+            changed_by: "integration-test@example.com",
+            before_values: notification.before,
+            after_values: notification.after,
+            note: notification.note ?? null,
+            breach_diff: null,
+          },
+          {
+            id: 999_998,
+            changed_at: new Date(Date.now() - 60 * 60 * 1000),
+            changed_by: "alice@example.com",
+            before_values: { errorRateHighPct: 20 },
+            after_values: { errorRateHighPct: 25 },
+            note: null,
+            breach_diff: null,
+          },
+        ];
+        return rows.slice(0, limit);
+      },
+    });
+
+    assert(
+      result.slackSent === true,
+      "notifyToolHealthConfigChange returns slackSent=true",
+    );
+    assert(
+      result.emailSent === false,
+      "emailSent=false when only Slack is configured",
+    );
+    assert(result.disabled === false, "not disabled (TOOL_HEALTH_CONFIG_NOTIFY=1)");
+    assert(result.skipped === false, "not skipped");
+    assert(result.noChanges === false, "diff was non-empty");
+
+    // Re-send with a single-field change and no note to verify the renderer
+    // still produces a valid Block Kit payload (Slack rejects empty fields).
+    const minimalResult = await notifyToolHealthConfigChange(
+      {
+        changedBy: "integration-test@example.com",
+        before: { windowMinutes: 10 },
+        after: { windowMinutes: 15 },
+        audit_id: null,
+      },
+      { getAudit: async () => [] },
+    );
+    assert(
+      minimalResult.slackSent === true,
+      "single-field change with no note also delivered successfully",
+    );
+  } finally {
+    restoreEnv();
+  }
+}
+
 // ─── Email integration ───────────────────────────────────────────────────────
 
 async function runEmailTests(): Promise<void> {
@@ -259,10 +369,14 @@ async function main(): Promise<void> {
   console.log("\n=== toolHealthAlertNotifier — Slack/Email integration tests ===\n");
   console.log(
     `Slack ready: ${slackReady ? `yes (channel: ${SLACK_TEST_CHANNEL})` : "no"}\n` +
-    `Email ready: ${emailReady ? `yes (to: ${RESEND_TEST_EMAIL})` : "no"}\n`,
+    `Email ready: ${emailReady ? `yes (to: ${RESEND_TEST_EMAIL})` : "no"}\n` +
+    `Threshold-change Slack opt-in (TOOL_HEALTH_CONFIG_NOTIFY=1): ${
+      configNotifyOptIn ? "yes" : "no (skipped)"
+    }\n`,
   );
 
   if (slackReady) await runSlackTests();
+  if (slackReady && configNotifyOptIn) await runConfigChangeSlackTests();
   if (emailReady) await runEmailTests();
   if (slackReady && emailReady) await runCombinedTests();
 
