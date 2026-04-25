@@ -19,10 +19,19 @@
  *     admin re-saving to update the note) must not generate noise.
  *
  * Configuration:
- *   - `AI_METRICS_RETENTION_NOTIFY`        — must be "1" to opt in.
+ *   - `AI_METRICS_RETENTION_NOTIFY`        — must be "1" to opt in to
+ *                                            config-change (PUT) notifications.
+ *   - `AI_METRICS_RETENTION_PRUNE_NOTIFY`  — must be "1" to opt in to
+ *                                            manual "Prune now" notifications
+ *                                            (Task #644). Independent of the
+ *                                            PUT notify knob so an ops team
+ *                                            can choose to be paged on one
+ *                                            but not the other.
  *   - `AI_METRICS_RETENTION_SLACK_CHANNEL` — Slack channel id/name to page.
+ *                                            Shared by both notifiers.
  *   - `AI_METRICS_RETENTION_ALERT_EMAIL`   — comma-separated recipient list
- *                                            forwarded to Resend.
+ *                                            forwarded to Resend. Shared by
+ *                                            both notifiers.
  *   - `TOOL_HEALTH_APP_URL`                — public origin used to build the
  *                                            deep-link to the AI Ops panel.
  *                                            Reused so admins only have to
@@ -348,6 +357,347 @@ export async function notifyAiMetricsRetentionChange(
       logger.error(
         "[AiMetricsRetentionNotifier] Email send threw for retention change",
         err as Error,
+      );
+      result.emailSent = false;
+    }
+  }
+
+  return result;
+}
+
+/* -------------------------------------------------------------------------- *
+ *  Manual "Prune now" notifier (Task #644)
+ * -------------------------------------------------------------------------- *
+ * Task #558 added a "Prune now" button on the AI Ops dashboard that
+ * immediately deletes telemetry rows outside the retention window and
+ * writes a database audit row. The PUT-config notifier above does NOT
+ * fire for that path because a prune is not a config-value change.
+ *
+ * However, an immediate manual deletion of telemetry is operationally
+ * as significant as a config change — ops teams reviewing Slack history
+ * during an incident currently won't see that someone clicked Prune
+ * now until they go look at the audit timeline. This peer notifier
+ * closes that gap on an opt-in basis (gated by
+ * `AI_METRICS_RETENTION_PRUNE_NOTIFY=1`) so existing deployments stay
+ * silent unless explicitly turned on.
+ *
+ * Same resilience contract as `notifyAiMetricsRetentionChange`:
+ *   - Best-effort, never throws back to the caller.
+ *   - Skipped when neither Slack nor email is configured (route handler
+ *     can call us unconditionally without paging on-call from a fresh
+ *     checkout).
+ *   - The PUT "no-op when before === after" rule does NOT apply here:
+ *     every successful manual prune click is operationally noteworthy,
+ *     even when the deleted-rows count is 0 (the operator confirmed
+ *     there was nothing to delete — that's still useful audit context).
+ *  -------------------------------------------------------------------------- */
+
+export interface AiMetricsRetentionPruneNowNotification {
+  /** Operator who clicked Prune now (display name / email / "user:<id>"). */
+  changedBy: string;
+  /** Effective retention window in days used for the prune. */
+  retentionDays: number;
+  /**
+   * Rows the dry-run preview said would be deleted. `null` when the
+   * preview itself failed (the route handler still runs the prune in
+   * that case and reports `previewed_rows: null` to the dashboard).
+   */
+  previewedRows: number | null;
+  /** Rows actually deleted by `pruneOldAiMetrics()`. */
+  deletedRows: number;
+  /** Optional free-form note from the operator (already length-capped). */
+  note?: string | null;
+  /** Audit-row id from `ai_metrics_retention_audit` for traceability. */
+  audit_id?: number | null;
+}
+
+export interface NotifyAiMetricsRetentionPruneNowResult {
+  slackSent: boolean;
+  emailSent: boolean;
+  /** True when `AI_METRICS_RETENTION_PRUNE_NOTIFY` is not opted in. */
+  disabled: boolean;
+  /** True when neither Slack nor email is configured. */
+  skipped: boolean;
+}
+
+/**
+ * Compute previewed-vs-actual drift. Surfaced explicitly in the
+ * Slack/email body so on-call doesn't have to do the subtraction
+ * by hand when reviewing the message during an incident. Returns
+ * `null` when the preview was unavailable (preview itself failed).
+ */
+function computePruneDrift(
+  previewedRows: number | null,
+  deletedRows: number,
+): number | null {
+  if (previewedRows == null) return null;
+  return deletedRows - previewedRows;
+}
+
+function formatPruneDriftMrkdwn(drift: number | null): string {
+  if (drift == null) return "_preview unavailable_";
+  if (drift === 0) return "`0` (preview matched actual)";
+  const sign = drift > 0 ? "+" : "";
+  return `\`${sign}${drift}\` row${Math.abs(drift) === 1 ? "" : "s"}`;
+}
+
+function buildPruneNowBlocks(
+  n: AiMetricsRetentionPruneNowNotification,
+  link: string,
+  linkIsAbsolute: boolean,
+): any[] {
+  const drift = computePruneDrift(n.previewedRows, n.deletedRows);
+  const previewedStr =
+    n.previewedRows == null ? "_unavailable_" : `\`${n.previewedRows}\``;
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: ":wastebasket: AI metrics manual prune executed",
+        emoji: true,
+      },
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Operator:*\n${n.changedBy || "—"}` },
+        {
+          type: "mrkdwn",
+          text: `*Audit row:*\n${n.audit_id != null ? `#${n.audit_id}` : "—"}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Retention window:*\n\`${n.retentionDays}\` day${n.retentionDays === 1 ? "" : "s"}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Previewed rows:*\n${previewedStr}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Deleted rows:*\n\`${n.deletedRows}\``,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Drift (deleted - previewed):*\n${formatPruneDriftMrkdwn(drift)}`,
+        },
+      ],
+    },
+  ];
+
+  if (n.note) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Note:*\n${n.note}` },
+    });
+  }
+
+  // Slack rejects relative URLs in actions.button.url; degrade to a plain
+  // mrkdwn link section in that case (mirrors the PUT-config notifier).
+  if (linkIsAbsolute) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Open AI Operations panel",
+            emoji: true,
+          },
+          url: link,
+          style: "primary",
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:link: AI Operations panel: \`${link}\`\n` +
+          `_Set \`TOOL_HEALTH_APP_URL\` to enable a clickable link._`,
+      },
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text:
+          ":robot_face: _WalaPlus AI metrics retention | manual prune executed_",
+      },
+    ],
+  });
+  return blocks;
+}
+
+function buildPruneNowEmailHtml(
+  n: AiMetricsRetentionPruneNowNotification,
+  link: string,
+): string {
+  const drift = computePruneDrift(n.previewedRows, n.deletedRows);
+  const previewedStr =
+    n.previewedRows == null
+      ? "<em>unavailable</em>"
+      : escapeHtml(String(n.previewedRows));
+  const driftStr =
+    drift == null
+      ? "<em>preview unavailable</em>"
+      : drift === 0
+        ? "0 (preview matched actual)"
+        : `${drift > 0 ? "+" : ""}${drift} row${Math.abs(drift) === 1 ? "" : "s"}`;
+  const noteHtml = n.note
+    ? `<p><strong>Note:</strong><br>${escapeHtml(n.note)}</p>`
+    : "";
+  return [
+    `<h2 style="margin:0 0 12px 0;">AI metrics manual prune executed</h2>`,
+    `<p><strong>Operator:</strong> ${escapeHtml(n.changedBy || "—")}<br>`,
+    n.audit_id != null
+      ? `<strong>Audit row:</strong> #${n.audit_id}</p>`
+      : `</p>`,
+    `<p><strong>Retention window:</strong> ${escapeHtml(String(n.retentionDays))} day${n.retentionDays === 1 ? "" : "s"}</p>`,
+    `<p><strong>Previewed rows:</strong> ${previewedStr}<br>`,
+    `<strong>Deleted rows:</strong> ${escapeHtml(String(n.deletedRows))}<br>`,
+    `<strong>Drift (deleted - previewed):</strong> ${driftStr}</p>`,
+    noteHtml,
+    `<p><a href="${link}">Open the AI Operations panel</a></p>`,
+    `<p style="color:#888;font-size:12px;">WalaPlus AI metrics retention | manual prune executed</p>`,
+  ].join("");
+}
+
+function buildPruneNowEmailText(
+  n: AiMetricsRetentionPruneNowNotification,
+  link: string,
+): string {
+  const drift = computePruneDrift(n.previewedRows, n.deletedRows);
+  const previewedStr = n.previewedRows == null
+    ? "unavailable"
+    : String(n.previewedRows);
+  const driftStr =
+    drift == null
+      ? "preview unavailable"
+      : drift === 0
+        ? "0 (preview matched actual)"
+        : `${drift > 0 ? "+" : ""}${drift} row${Math.abs(drift) === 1 ? "" : "s"}`;
+  return [
+    "AI metrics manual prune executed",
+    "",
+    `Operator: ${n.changedBy || "—"}`,
+    n.audit_id != null ? `Audit row: #${n.audit_id}` : "",
+    "",
+    `Retention window: ${n.retentionDays} day${n.retentionDays === 1 ? "" : "s"}`,
+    `Previewed rows: ${previewedStr}`,
+    `Deleted rows: ${n.deletedRows}`,
+    `Drift (deleted - previewed): ${driftStr}`,
+    n.note ? `Note: ${n.note}` : "",
+    "",
+    `Open the AI Operations panel: ${link}`,
+  ]
+    .filter((s) => s !== "")
+    .join("\n");
+}
+
+/**
+ * Post a Slack message and/or send an email summarising a successful
+ * manual "Prune now" run. Best-effort: never throws, returns a result
+ * object so the caller can log/count.
+ *
+ * Safe to call unconditionally — when `AI_METRICS_RETENTION_PRUNE_NOTIFY`
+ * is not "1", or when neither Slack nor email is configured, the
+ * function returns `{ disabled: true }` / `{ skipped: true }` without
+ * sending anything.
+ *
+ * Unlike the PUT-config notifier this DOES fire even when
+ * `deletedRows === 0` — every manual prune click is operationally
+ * noteworthy because an operator deliberately confirmed the action.
+ */
+export async function notifyAiMetricsRetentionPruneNow(
+  notification: AiMetricsRetentionPruneNowNotification,
+  depsOverride: AiMetricsRetentionChangeNotifierDeps = {},
+): Promise<NotifyAiMetricsRetentionPruneNowResult> {
+  const result: NotifyAiMetricsRetentionPruneNowResult = {
+    slackSent: false,
+    emailSent: false,
+    disabled: false,
+    skipped: false,
+  };
+
+  if (process.env.AI_METRICS_RETENTION_PRUNE_NOTIFY !== "1") {
+    result.disabled = true;
+    return result;
+  }
+
+  const cfg = readConfig();
+  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+    result.skipped = true;
+    return result;
+  }
+
+  const drift = computePruneDrift(
+    notification.previewedRows,
+    notification.deletedRows,
+  );
+
+  if (cfg.slackChannel) {
+    const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+    const previewedStr =
+      notification.previewedRows == null
+        ? "?"
+        : String(notification.previewedRows);
+    const driftFallback =
+      drift == null
+        ? ""
+        : drift === 0
+          ? " (preview matched)"
+          : ` (drift ${drift > 0 ? "+" : ""}${drift})`;
+    const fallback =
+      `:wastebasket: AI metrics manual prune by ` +
+      `${notification.changedBy || "—"}: ` +
+      `deleted ${notification.deletedRows} row` +
+      `${notification.deletedRows === 1 ? "" : "s"}` +
+      ` (previewed ${previewedStr}${driftFallback}, ` +
+      `${notification.retentionDays}d window)`;
+    try {
+      result.slackSent = await sendSlack(
+        cfg.slackChannel,
+        fallback,
+        buildPruneNowBlocks(notification, cfg.link, cfg.linkIsAbsolute),
+      );
+    } catch (err) {
+      console.error(
+        "[AiMetricsRetentionNotifier] Slack send threw for manual prune:",
+        err,
+      );
+      result.slackSent = false;
+    }
+  }
+
+  if (cfg.emailRecipients.length > 0) {
+    const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+    const subject =
+      `[AI Metrics Retention · Pruned] ` +
+      `${notification.deletedRows} row` +
+      `${notification.deletedRows === 1 ? "" : "s"}` +
+      ` (${notification.retentionDays}d window) ` +
+      `by ${notification.changedBy || "—"}`;
+    try {
+      const sendResult = await sendEmail({
+        to: cfg.emailRecipients,
+        subject,
+        html: buildPruneNowEmailHtml(notification, cfg.link),
+        text: buildPruneNowEmailText(notification, cfg.link),
+      });
+      result.emailSent = !!sendResult?.success;
+    } catch (err) {
+      console.error(
+        "[AiMetricsRetentionNotifier] Email send threw for manual prune:",
+        err,
       );
       result.emailSent = false;
     }

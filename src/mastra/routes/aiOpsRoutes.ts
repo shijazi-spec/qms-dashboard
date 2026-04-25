@@ -2278,6 +2278,34 @@ export const aiOpsRoutes = [
             note,
           });
 
+          // Best-effort Slack/email notification so the rest of the AI-ops
+          // team sees that someone clicked Prune now (Task #644). Audit
+          // rows are checked only after something has gone wrong, so a
+          // silent immediate deletion of telemetry is operationally as
+          // significant as a config change. Gated by
+          // AI_METRICS_RETENTION_PRUNE_NOTIFY=1 inside the notifier so
+          // existing deployments stay silent unless explicitly turned on.
+          // Never blocks or fails the prune — the deletion has already
+          // happened and is audited regardless of notification outcome.
+          try {
+            const { notifyAiMetricsRetentionPruneNow } = await import(
+              "../../utils/aiMetricsRetentionNotifier"
+            );
+            await notifyAiMetricsRetentionPruneNow({
+              changedBy,
+              retentionDays,
+              previewedRows,
+              deletedRows,
+              note,
+              audit_id,
+            });
+          } catch (notifyErr) {
+            console.error(
+              "[AI-Ops] metrics-retention prune-now notify error (best-effort):",
+              notifyErr,
+            );
+          }
+
           return c.json({
             success: true,
             retention_days: retentionDays,
