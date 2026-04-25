@@ -2131,10 +2131,10 @@
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700" data-testid="text-feedback-comment-${r.feedback_id}">
                   ${r.comment
-                    ? `<div class="whitespace-pre-wrap break-words" style="max-width:24rem">${esc(r.comment)}</div>`
+                    ? `<div class="whitespace-pre-wrap break-words max-w-24r">${esc(r.comment)}</div>`
                     : '<span class="text-gray-400 italic">— no comment —</span>'}
                 </td>
-                <td class="px-3 py-2 text-xs text-gray-500" style="max-width:18rem">
+                <td class="px-3 py-2 text-xs text-gray-500 max-w-18r">
                   ${r.prompt_preview
                     ? `<div class="truncate italic" title="${esc(r.prompt_preview)}">&ldquo;${esc(r.prompt_preview.slice(0,120))}&rdquo;</div>`
                     : '<span class="text-gray-400">—</span>'}

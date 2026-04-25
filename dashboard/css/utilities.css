@@ -111,3 +111,7 @@
   border-start-end-radius: 0.5rem;
   border-end-end-radius:   0.5rem;
 }
+
+/* Max-width caps for AI-Ops feedback table cells (replaces style="max-width:…") */
+.max-w-24r { max-width: 24rem; }
+.max-w-18r { max-width: 18rem; }
