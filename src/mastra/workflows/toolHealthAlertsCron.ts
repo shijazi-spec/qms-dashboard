@@ -1244,6 +1244,18 @@ export async function runToolHealthCheck(
     TOOL_HEALTH_SILENT_COOLDOWN_MULT * cfg.windowMinutes;
   await runSilentToolSweep(deps, silentCooldownMinutes, out);
 
+  // NOTE (Task #639): Unlike the sibling prompt-regression cron, this cron
+  // has no batch breach-summary notifier call after the per-tool loop, so
+  // there is nothing to gate on `out.breaches.length > 0` here. Pages are
+  // dispatched per-breach inside `dispatchBreachNotification`, only from the
+  // `if (result.created)` branches above — so on a recovery-only tick (every
+  // would-be breach skipped as a duplicate, only auto-resolves happening)
+  // the breach notifier is structurally never reached and admins do not get
+  // an empty "0 new regressions detected" Slack/email page. The recovery-
+  // only-tick test in tests/toolHealthAlertsCron.test.ts locks this contract
+  // in so a future refactor that adds a digest-style summary notifier here
+  // cannot reintroduce that bug without first updating the test.
+
   if (
     out.alertsCreated > 0 ||
     out.breaches.length > 0 ||

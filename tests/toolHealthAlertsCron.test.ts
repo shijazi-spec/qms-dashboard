@@ -2287,4 +2287,89 @@ await suite.test(
   },
 );
 
+// Task #639: recovery-only tick — no new breach was actually created (every
+// would-be breach was a duplicate-skip against an existing open alert), but a
+// different tool's previous breach has cleared and gets auto-resolved. The
+// breach notifier MUST stay silent: the sibling prompt-regression cron used
+// to call its batch notifier here with an empty payload, which produced
+// "0 new regressions detected" Slack/email pages on recovery-only ticks.
+// The tool-health cron is structurally protected because pages are only
+// dispatched per-breach inside `dispatchBreachNotification`, which is only
+// reached from the `if (result.created)` branch — but lock that contract in
+// here so a future refactor that adds a digest/summary notifier cannot
+// reintroduce the bug without first updating this test.
+await suite.test(
+  "(R7) recovery-only tick — every breach was a duplicate-skip → breach notifier NOT invoked",
+  async () => {
+    // Tool A: still above threshold but the alert is already open → dedupe-skip.
+    const stillBreachingAgg = makeAggregate({
+      tool_name: "tool_still_breaching",
+      call_count: 20,
+      error_count: 12,
+      error_rate_pct: 60, // above threshold
+      p95_latency_ms: 1_000,
+    });
+    // Tool B: previously alerted, now back below threshold → recovery + page.
+    const recoveringAgg = makeAggregate({
+      tool_name: "tool_recovering",
+      call_count: 50,
+      error_count: 1,
+      error_rate_pct: 2, // below threshold → recovery
+      p95_latency_ms: 500,
+    });
+
+    const { deps, notifies, recoveryNotifies } = makeDeps({
+      aggregates: [stillBreachingAgg, recoveringAgg],
+      // Tool A's open alert is already in the dedupe set so the new breach
+      // attempt is skipped (alertsCreated stays 0 for it). Tool B has an
+      // open alert that the recovery sweep will close.
+      existingOpenDedupeKeys: ["tool_health:tool_still_breaching:error_rate"],
+      openAlertsByKey: {
+        "tool_recovering:error_rate": [
+          {
+            id: 4242,
+            alert_type: "tool_health",
+            severity: "medium",
+            title: "stub",
+            description: "stub",
+            status: "open",
+          } as any,
+        ],
+      },
+      pastCooldown: true,
+    });
+
+    const out = await runToolHealthCheck(deps);
+
+    // Tool B was auto-resolved; Tool A was dedupe-skipped. No NEW alerts.
+    suite.expectEqual(out.alertsCreated, 0, "no new breach alerts created");
+    suite.expectEqual(out.alertsSkippedDuplicate, 1, "one breach attempt deduped");
+    suite.expectEqual(out.alertsAutoResolved, 1, "one alert auto-resolved");
+
+    // The contract under test: the breach notifier MUST NOT fire on a
+    // recovery-only tick where every would-be breach was a duplicate-skip.
+    suite.expectEqual(
+      notifies.length,
+      0,
+      "breach notifier NOT invoked when every alert was dedupe-skipped",
+    );
+    suite.expectEqual(out.notificationsSent, 0, "notificationsSent stays 0");
+    suite.expectEqual(out.notificationsSkipped, 0, "notificationsSkipped stays 0");
+    suite.expectEqual(out.notificationsThrottled, 0, "notificationsThrottled stays 0");
+
+    // Recovery notifier still fires for the tool that came back to healthy.
+    suite.expectEqual(recoveryNotifies.length, 1, "recovery notifier fires for the recovering tool");
+    suite.expectEqual(
+      recoveryNotifies[0]?.notification.tool_name,
+      "tool_recovering",
+      "recovery page is for the recovering tool, not the duplicate-skipped one",
+    );
+    suite.expectEqual(
+      recoveryNotifies[0]?.notification.alert_id,
+      4242,
+      "recovery page references the resolved alert id",
+    );
+  },
+);
+
 suite.finishOrExit();
