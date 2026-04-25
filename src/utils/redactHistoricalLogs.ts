@@ -229,12 +229,48 @@ export interface AiPendingActionsSweepResult {
  *                         many rows changed.
  *   - `rowsUpdated`     — distinct rows that received a non-empty
  *                         credential_warnings array on this pass.
+ *   - `flaggedActionCodes` — Task #488: the human-readable
+ *                         `action_code` of every row the backfill
+ *                         flagged on this pass. Capped at
+ *                         {@link FLAGGED_ACTION_CODES_LIMIT} so a
+ *                         sweep that touches thousands of legacy rows
+ *                         cannot balloon the audit-evidence file. Only
+ *                         populated when the row's UPDATE actually
+ *                         landed (predicate held) — codes from rows
+ *                         that lost the optimistic-concurrency race
+ *                         against a live INSERT are NOT recorded.
+ *   - `flaggedActionCodesTruncated` — count of additional flagged
+ *                         action_codes that were dropped because the
+ *                         cap was already reached. The list +
+ *                         truncation counter together let auditors
+ *                         say "the sweep flagged these N rows; M more
+ *                         were flagged but omitted from the evidence
+ *                         file" without needing to query the database.
  */
 export interface AiPendingActionsCredentialWarningsBackfillResult {
   scanned: number;
   rowsUpdated: number;
   warningsAdded: number;
+  flaggedActionCodes: string[];
+  flaggedActionCodesTruncated: number;
 }
+
+/**
+ * Maximum number of `action_code` values the credential-warnings backfill
+ * embeds in {@link AiPendingActionsCredentialWarningsBackfillResult.flaggedActionCodes}
+ * (Task #488). Anything beyond this is summarised by
+ * `flaggedActionCodesTruncated` so the audit-evidence file stays bounded
+ * even when a sweep retroactively flags thousands of legacy rows.
+ *
+ * 50 was chosen because:
+ *   - At ~16 chars per action_code (e.g. `act_2025_01ABC123`), the
+ *     embedded list adds well under 1 KB to last-sweep.json — small
+ *     enough to inline into Slack/email evidence without paging.
+ *   - Auditors investigating a sweep usually spot-check a handful of
+ *     flagged rows; 50 covers any realistic spot-check budget while
+ *     still surfacing patterns (same prefix repeated → bulk import).
+ */
+export const FLAGGED_ACTION_CODES_LIMIT = 50;
 
 /**
  * Result counters for the ai_call_metrics preview-column sweep
@@ -666,11 +702,20 @@ export async function backfillAiPendingActionsCredentialWarnings(
   let scanned = 0;
   let rowsUpdated = 0;
   let warningsAdded = 0;
+  // Task #488: capture the human-readable `action_code` of every row
+  // the sweep actually flagged. Capped at FLAGGED_ACTION_CODES_LIMIT;
+  // any further codes are counted in `flaggedActionCodesTruncated` so
+  // auditors can verify the cap was hit without looking at the DB.
+  const flaggedActionCodes: string[] = [];
+  let flaggedActionCodesTruncated = 0;
   let cursor = 0;
 
   while (true) {
+    // Task #488: select `action_code` alongside the detector inputs so
+    // we can include the operator-visible identifier of every flagged
+    // row in the evidence file.
     const page = await client.query(
-      `SELECT id, payload, payload_preview
+      `SELECT id, action_code, payload, payload_preview
          FROM ai_pending_actions
         WHERE id > $1
           AND credential_warnings = '[]'::jsonb
@@ -706,6 +751,20 @@ export async function backfillAiPendingActionsCredentialWarnings(
         if ((res.rowCount ?? 0) > 0) {
           rowsUpdated++;
           warningsAdded += warnings.length;
+          // Only record action_codes for rows whose UPDATE actually
+          // landed. Rows that lost the optimistic-concurrency race
+          // (predicate failed → rowCount === 0) had their warnings
+          // written by the live path and are not "flagged by the
+          // sweep" in the audit-evidence sense.
+          const actionCode =
+            typeof row.action_code === "string" ? row.action_code : null;
+          if (actionCode) {
+            if (flaggedActionCodes.length < FLAGGED_ACTION_CODES_LIMIT) {
+              flaggedActionCodes.push(actionCode);
+            } else {
+              flaggedActionCodesTruncated++;
+            }
+          }
         }
       }
     }
@@ -714,7 +773,13 @@ export async function backfillAiPendingActionsCredentialWarnings(
     if (page.rows.length < batchSize) break;
   }
 
-  return { scanned, rowsUpdated, warningsAdded };
+  return {
+    scanned,
+    rowsUpdated,
+    warningsAdded,
+    flaggedActionCodes,
+    flaggedActionCodesTruncated,
+  };
 }
 
 /**
@@ -912,11 +977,20 @@ export interface AiPendingActionsSnapshot {
  * Snake-case JSON snapshot of the ai_pending_actions credential-warnings
  * backfill counters (Task #480) as stored in SweepResult and
  * last-sweep.json. Snake-case to match the surrounding JSON structure.
+ *
+ * Task #488 added the `flagged_action_codes` list + truncation counter
+ * so auditors reviewing `audit-evidence/last-sweep.json` can verify
+ * which legacy approval rows the sweep retroactively flagged without
+ * having to issue a separate database query. The list is bounded
+ * ({@link FLAGGED_ACTION_CODES_LIMIT}); any overflow is summarised by
+ * `flagged_action_codes_truncated`.
  */
 export interface AiPendingActionsCredentialWarningsBackfillSnapshot {
   scanned: number;
   rows_updated: number;
   warnings_added: number;
+  flagged_action_codes: string[];
+  flagged_action_codes_truncated: number;
 }
 
 /**
@@ -1056,11 +1130,24 @@ export async function runSweepWithClient(
   // at — i.e. it surfaces tell-tale shapes the redactor missed.
   try {
     credWarnResult = await backfillAiPendingActionsCredentialWarnings(client);
+    // Task #488: log a sample of the flagged action_codes so operators
+    // tailing the boot output get the same evidence the JSON file
+    // carries, without having to open it. The full list is bounded by
+    // FLAGGED_ACTION_CODES_LIMIT inside the backfill helper, so this
+    // line cannot blow up the log buffer either.
+    const sample =
+      credWarnResult.flaggedActionCodes.length > 0
+        ? `, flagged_action_codes=[${credWarnResult.flaggedActionCodes.join(", ")}` +
+          (credWarnResult.flaggedActionCodesTruncated > 0
+            ? `, +${credWarnResult.flaggedActionCodesTruncated} more`
+            : "") +
+          `]`
+        : "";
     console.log(
       `[Redaction] ai_pending_actions.credential_warnings backfill: ` +
         `${credWarnResult.rowsUpdated} rows flagged ` +
         `(scanned=${credWarnResult.scanned}, ` +
-        `warnings_added=${credWarnResult.warningsAdded})`,
+        `warnings_added=${credWarnResult.warningsAdded})${sample}`,
     );
   } catch (e: any) {
     if (e.code === "42P01") {
@@ -1120,6 +1207,13 @@ export async function runSweepWithClient(
           scanned: credWarnResult.scanned,
           rows_updated: credWarnResult.rowsUpdated,
           warnings_added: credWarnResult.warningsAdded,
+          // Task #488: ship the flagged action_codes through to the
+          // JSON evidence file so auditors do not need to re-query the
+          // database to see WHICH legacy rows the sweep flagged. The
+          // list is already capped inside the backfill helper.
+          flagged_action_codes: credWarnResult.flaggedActionCodes,
+          flagged_action_codes_truncated:
+            credWarnResult.flaggedActionCodesTruncated,
         }
       : { skipped: credWarnSkipReason ?? "unknown" },
     ai_call_metrics: metricsResult

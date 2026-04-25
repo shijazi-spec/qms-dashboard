@@ -150,6 +150,8 @@ function buildSyntheticResult(
       scanned: 0,
       rows_updated: 0,
       warnings_added: 0,
+      flagged_action_codes: [],
+      flagged_action_codes_truncated: 0,
     },
     ai_call_metrics: {
       scanned: 0,

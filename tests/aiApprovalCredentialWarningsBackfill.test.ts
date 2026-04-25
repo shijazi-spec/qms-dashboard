@@ -23,6 +23,7 @@
 
 import {
   backfillAiPendingActionsCredentialWarnings,
+  FLAGGED_ACTION_CODES_LIMIT,
   type AiPendingActionsCredentialWarningsBackfillResult,
 } from "../src/utils/redactHistoricalLogs";
 
@@ -41,6 +42,12 @@ function assert(condition: boolean, label: string): void {
 
 interface RowState {
   id: number;
+  /**
+   * Operator-visible identifier of the approval row. Task #488 surfaces
+   * these in the audit-evidence file so reviewers can see WHICH legacy
+   * rows the sweep flagged without re-querying the database.
+   */
+  action_code: string;
   payload: any;
   payload_preview: string;
   /** Stored as the parsed JS array, mirroring how `pg` hydrates JSONB. */
@@ -84,6 +91,7 @@ function makeStubClient(initialRows: RowState[]): {
         .slice(0, limit)
         .map((r) => ({
           id: r.id,
+          action_code: r.action_code,
           payload: r.payload,
           payload_preview: r.payload_preview,
         }));
@@ -129,6 +137,7 @@ async function run(): Promise<void> {
     {
       // Legacy row: leaked sk-… in payload.note + ghp_… in preview.
       id: 1,
+      action_code: "act_legacy_001",
       payload: {
         target_integration: "zoho_books",
         note: `previous=${SECRET_KEY}`,
@@ -139,6 +148,7 @@ async function run(): Promise<void> {
     {
       // Legacy row: clean payload, only a JWT in the preview.
       id: 2,
+      action_code: "act_legacy_002",
       payload: { target: "auth_session" },
       payload_preview: `Replay session token=${SECRET_JWT}`,
       credential_warnings: [],
@@ -146,6 +156,7 @@ async function run(): Promise<void> {
     {
       // Legacy row: clean — nothing for the detector to flag.
       id: 3,
+      action_code: "act_legacy_003_clean",
       payload: { target_integration: "stripe", note: "no secret here" },
       payload_preview: "Rotate Stripe webhook signing key (id=we_abc123)",
       credential_warnings: [],
@@ -154,6 +165,7 @@ async function run(): Promise<void> {
       // Post-Task-#477 row that already has a non-empty warning array —
       // the backfill must NOT touch it (would double-warn or clobber).
       id: 4,
+      action_code: "act_modern_004",
       payload: { target: "zoho_books", note: SAFE_PROSE },
       payload_preview: SAFE_PROSE,
       credential_warnings: [{ path: "payload.api_key", kind: "sensitive-key" }],
@@ -177,6 +189,34 @@ async function run(): Promise<void> {
     `warningsAdded sums per-row warning counts (got ${result1.warningsAdded})`,
   );
   assert(stub1.updates.length === 2, "exactly 2 UPDATE statements issued");
+
+  // Task #488: verify the action_codes of every flagged row are returned
+  // in insertion order (i.e. the same order the SELECT visited them).
+  // This is the list that lands in audit-evidence/last-sweep.json so
+  // auditors can verify which legacy rows were retroactively flagged
+  // without issuing a separate database query.
+  assert(
+    Array.isArray(result1.flaggedActionCodes) &&
+      result1.flaggedActionCodes.length === 2,
+    `flaggedActionCodes lists the 2 flagged rows (got ${JSON.stringify(result1.flaggedActionCodes)})`,
+  );
+  assert(
+    result1.flaggedActionCodes[0] === "act_legacy_001" &&
+      result1.flaggedActionCodes[1] === "act_legacy_002",
+    "flaggedActionCodes preserves SELECT visit order (id ASC)",
+  );
+  assert(
+    !result1.flaggedActionCodes.includes("act_legacy_003_clean"),
+    "flaggedActionCodes excludes row 3 (clean control — no UPDATE was issued)",
+  );
+  assert(
+    !result1.flaggedActionCodes.includes("act_modern_004"),
+    "flaggedActionCodes excludes row 4 (already-flagged — excluded by WHERE filter)",
+  );
+  assert(
+    result1.flaggedActionCodesTruncated === 0,
+    `flaggedActionCodesTruncated stays at 0 when below the cap (got ${result1.flaggedActionCodesTruncated})`,
+  );
 
   const row1 = stub1.rows.find((r) => r.id === 1)!;
   assert(
@@ -247,6 +287,7 @@ async function run(): Promise<void> {
   const racy: RowState[] = [
     {
       id: 50,
+      action_code: "act_racy_050",
       payload: { note: `previous=${SECRET_KEY}` },
       payload_preview: SAFE_PROSE,
       credential_warnings: [],
@@ -289,6 +330,70 @@ async function run(): Promise<void> {
     racyStub.rows[0].credential_warnings.length === 1 &&
       racyStub.rows[0].credential_warnings[0].path === "payload.api_key",
     "racy fixture: live-path warnings preserved verbatim — not overwritten by the sweep",
+  );
+  // Task #488: a row that lost the optimistic-concurrency race is NOT
+  // "flagged by the sweep" — its action_code must NOT appear in the
+  // evidence list (otherwise auditors would chase a row whose warnings
+  // came from the live path, not the sweep).
+  assert(
+    Array.isArray(racyResult.flaggedActionCodes) &&
+      racyResult.flaggedActionCodes.length === 0,
+    `racy fixture: flaggedActionCodes excludes rows whose UPDATE predicate failed (got ${JSON.stringify(racyResult.flaggedActionCodes)})`,
+  );
+  assert(
+    racyResult.flaggedActionCodesTruncated === 0,
+    "racy fixture: flaggedActionCodesTruncated stays at 0 when no rows landed",
+  );
+
+  // ---- Cap: a sweep that flags more than FLAGGED_ACTION_CODES_LIMIT
+  // rows must include exactly the cap's worth of codes verbatim and
+  // count any further codes in flaggedActionCodesTruncated. This is
+  // the bound that prevents audit-evidence/last-sweep.json from
+  // ballooning when a backfill retroactively flags thousands of rows.
+  const overflowCount = FLAGGED_ACTION_CODES_LIMIT + 7;
+  const overflow: RowState[] = Array.from({ length: overflowCount }, (_, i) => {
+    const id = 1000 + i;
+    return {
+      id,
+      action_code: `act_bulk_${String(id).padStart(5, "0")}`,
+      payload: { note: `previous=${SECRET_KEY}` },
+      payload_preview: SAFE_PROSE,
+      credential_warnings: [] as any[],
+    };
+  });
+  const overflowStub = makeStubClient(overflow);
+  const overflowResult = await backfillAiPendingActionsCredentialWarnings(
+    overflowStub.client,
+  );
+
+  assert(
+    overflowResult.scanned === overflowCount,
+    `cap fixture: every legacy row was scanned (got scanned=${overflowResult.scanned}, expected=${overflowCount})`,
+  );
+  assert(
+    overflowResult.rowsUpdated === overflowCount,
+    `cap fixture: every legacy row was flagged (got rowsUpdated=${overflowResult.rowsUpdated}, expected=${overflowCount})`,
+  );
+  assert(
+    overflowResult.flaggedActionCodes.length === FLAGGED_ACTION_CODES_LIMIT,
+    `cap fixture: flaggedActionCodes is capped at ${FLAGGED_ACTION_CODES_LIMIT} (got ${overflowResult.flaggedActionCodes.length})`,
+  );
+  assert(
+    overflowResult.flaggedActionCodesTruncated ===
+      overflowCount - FLAGGED_ACTION_CODES_LIMIT,
+    `cap fixture: flaggedActionCodesTruncated counts the dropped codes (got ${overflowResult.flaggedActionCodesTruncated}, expected=${overflowCount - FLAGGED_ACTION_CODES_LIMIT})`,
+  );
+  assert(
+    overflowResult.flaggedActionCodes[0] === overflow[0].action_code &&
+      overflowResult.flaggedActionCodes[FLAGGED_ACTION_CODES_LIMIT - 1] ===
+        overflow[FLAGGED_ACTION_CODES_LIMIT - 1].action_code,
+    "cap fixture: the kept codes are the first FLAGGED_ACTION_CODES_LIMIT in SELECT order (id ASC)",
+  );
+  assert(
+    !overflowResult.flaggedActionCodes.includes(
+      overflow[FLAGGED_ACTION_CODES_LIMIT].action_code,
+    ),
+    "cap fixture: the first dropped action_code is NOT present in the list",
   );
 
   console.log(`\n${passed} passed, ${failed} failed`);
