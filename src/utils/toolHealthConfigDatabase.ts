@@ -38,7 +38,10 @@
  *     up Postgres.
  */
 
-import { sharedPool as pool } from "./sharedPool";
+import { sharedPool } from "./sharedPool";
+import { wrapPoolForRedaction } from "./redactedPool";
+
+const pool = wrapPoolForRedaction(sharedPool);
 
 /**
  * The full set of tunables exposed in the AI Operations panel. Every key is

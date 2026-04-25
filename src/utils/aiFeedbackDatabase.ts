@@ -3,10 +3,11 @@ import {
   redactSecretLikeStrings,
   deepRedactSecretLikeStrings,
 } from './eventLogsDatabase';
+import { wrapPoolForRedaction } from './redactedPool';
 
 const { Pool } = pg;
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = wrapPoolForRedaction(new Pool({ connectionString: process.env.DATABASE_URL }));
 
 let tableReady: Promise<void> | null = null;
 

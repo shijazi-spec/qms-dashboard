@@ -1,5 +1,8 @@
-import { pool } from './database';
+import { pool as basePool } from './database';
+import { wrapPoolForRedaction } from './redactedPool';
 import crypto from 'crypto';
+
+const pool = wrapPoolForRedaction(basePool);
 
 export type DataCategory = 'personal' | 'sensitive' | 'business' | 'public';
 export type RetentionStatus = 'active' | 'pending_deletion' | 'anonymized' | 'deleted';

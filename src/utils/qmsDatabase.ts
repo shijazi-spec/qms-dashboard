@@ -1,9 +1,8 @@
-import pg from 'pg';
-const { Pool } = pg;
+import { createRedactedPool } from './redactedPool';
 import { EvaluationFramework, EvaluationCriteria, DealEvaluationResult, EvaluationFinding } from './evaluationSchema';
 import { logger } from './logger';
 
-const pool = new Pool({
+const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 

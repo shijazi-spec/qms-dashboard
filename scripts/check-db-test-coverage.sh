@@ -58,35 +58,12 @@ COMPANION_TESTS["src/utils/eventLogsDatabase.ts"]="src/utils/redactSensitiveFiel
 # Grandfathered modules — must eventually receive a secret-leak test.
 # DO NOT add new entries. New *Database.ts files MUST ship with a companion
 # *.test.ts in src/utils/ following the rules in src/utils/README.md.
+#
+# Task #459 backfilled secret-leak tests for all 27 historically grandfathered
+# `src/utils/*Database.ts` writers; the allow-list is now empty and any new
+# writer ships with its companion test on day one.
 # ----------------------------------------------------------------------------
 declare -A GRANDFATHERED
-GRANDFATHERED["src/utils/aiAlertsDatabase.ts"]=1
-GRANDFATHERED["src/utils/aiApprovalDatabase.ts"]=1
-GRANDFATHERED["src/utils/aiFeedbackDatabase.ts"]=1
-GRANDFATHERED["src/utils/auditDatabase.ts"]=1
-GRANDFATHERED["src/utils/auditProgrammeDatabase.ts"]=1
-GRANDFATHERED["src/utils/auditTriggerDatabase.ts"]=1
-GRANDFATHERED["src/utils/checklistDatabase.ts"]=1
-GRANDFATHERED["src/utils/complianceDatabase.ts"]=1
-GRANDFATHERED["src/utils/duplicateRadarDatabase.ts"]=1
-GRANDFATHERED["src/utils/evidenceDatabase.ts"]=1
-GRANDFATHERED["src/utils/handoffDatabase.ts"]=1
-GRANDFATHERED["src/utils/knowledgeDatabase.ts"]=1
-GRANDFATHERED["src/utils/kpiDatabase.ts"]=1
-GRANDFATHERED["src/utils/managementReviewDatabase.ts"]=1
-GRANDFATHERED["src/utils/migrationDatabase.ts"]=1
-GRANDFATHERED["src/utils/onboardingDatabase.ts"]=1
-GRANDFATHERED["src/utils/pdplDatabase.ts"]=1
-GRANDFATHERED["src/utils/policyDatabase.ts"]=1
-GRANDFATHERED["src/utils/qmsDatabase.ts"]=1
-GRANDFATHERED["src/utils/rbacDatabase.ts"]=1
-GRANDFATHERED["src/utils/riskDatabase.ts"]=1
-GRANDFATHERED["src/utils/roiDatabase.ts"]=1
-GRANDFATHERED["src/utils/scorecardDatabase.ts"]=1
-GRANDFATHERED["src/utils/teamDatabase.ts"]=1
-GRANDFATHERED["src/utils/toolHealthConfigDatabase.ts"]=1
-GRANDFATHERED["src/utils/userAccessDatabase.ts"]=1
-GRANDFATHERED["src/utils/vendorDatabase.ts"]=1
 
 PASS=0
 FAIL=0

@@ -1,8 +1,7 @@
-import pg from 'pg';
 import crypto from 'crypto';
-const { Pool } = pg;
+import { createRedactedPool } from './redactedPool';
 
-const pool = new Pool({
+const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 

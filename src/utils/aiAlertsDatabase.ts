@@ -1,5 +1,8 @@
-import { sharedPool as pool } from './sharedPool';
+import { sharedPool } from './sharedPool';
+import { wrapPoolForRedaction } from './redactedPool';
 import { logger } from './logger';
+
+const pool = wrapPoolForRedaction(sharedPool);
 
 export type AlertType =
   | 'nc_detection'

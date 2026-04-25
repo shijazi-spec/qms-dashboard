@@ -1,6 +1,6 @@
-import { Pool } from 'pg';
+import { createRedactedPool } from './redactedPool';
 
-const pool = new Pool({
+const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 

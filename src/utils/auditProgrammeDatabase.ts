@@ -26,9 +26,9 @@
  *     extraction path in manual_audit_findings).
  */
 
-import { Pool } from 'pg';
+import { createRedactedPool } from './redactedPool';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
 
 /* ------------------------------------------------------------------------- *
  * Types

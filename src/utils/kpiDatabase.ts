@@ -1,7 +1,6 @@
-import pg from 'pg';
-const { Pool } = pg;
+import { createRedactedPool } from './redactedPool';
 
-export const pool = new Pool({
+export const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 

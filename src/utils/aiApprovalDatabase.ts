@@ -28,8 +28,9 @@ import {
   type CredentialWarning,
 } from './eventLogsDatabase';
 import { logger } from './logger';
+import { wrapPoolForRedaction } from './redactedPool';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = wrapPoolForRedaction(new Pool({ connectionString: process.env.DATABASE_URL }));
 
 export type ApprovalStatus =
   | 'pending'
