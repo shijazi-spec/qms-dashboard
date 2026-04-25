@@ -14,7 +14,8 @@ export type AlertType =
   | 'audit_decline'
   | 'sla_breach'
   | 'tool_health'
-  | 'prompt_regression';
+  | 'prompt_regression'
+  | 'storage_health';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved' | 'dismissed';

@@ -410,6 +410,80 @@ const aiCostSummaryFunction = inngest.createFunction(
         );
       }
 
+      // Task #546: page operators when the prune cron leaves rows outside
+      // the retention window — i.e. the prune has fallen behind or is
+      // failing. The helper opens at most one storage_health alert at a
+      // time (dedup by related_record_id) and auto-resolves it on the next
+      // pass once the table is back inside the window.
+      try {
+        const { getAiMetricsTableStats } = await import("../../utils/aiTelemetry");
+        const { evaluateAndAlertStorageHealth } = await import(
+          "../../utils/storageHealthAlerts"
+        );
+        const {
+          openAlertExistsByKey,
+          createAIAlert,
+          getOpenAlertsByKey,
+          resolveAlert,
+        } = await import("../../utils/aiAlertsDatabase");
+        const { createNotification } = await import("../../utils/notificationHub");
+        const { sendResendEmail } = await import("../../utils/resendMail");
+
+        const stats = await getAiMetricsTableStats();
+        const storageResult = await evaluateAndAlertStorageHealth(stats, {
+          openAlertExistsByKey,
+          createAIAlert,
+          getOpenAlertsByKey,
+          resolveAlert,
+          // Map the helper's neutral shape onto notificationHub's actual
+          // schema (module/priority/channel/action_url) instead of relying
+          // on a structural cast — the `notifications` table requires
+          // `module` NOT NULL so we surface that here explicitly.
+          createNotification: (input) =>
+            createNotification({
+              module: 'ai_ops',
+              priority: input.severity,
+              channel: 'in_app',
+              title: input.title,
+              message: input.message,
+              action_url: input.link,
+            }),
+          sendSlack: async (webhookUrl, text) => {
+            try {
+              const resp = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+              });
+              return resp.ok;
+            } catch {
+              return false;
+            }
+          },
+          sendEmail: async ({ to, subject, html }) => {
+            const sendResult = await sendResendEmail({ to, subject, html });
+            return Boolean(sendResult?.success);
+          },
+        });
+
+        if (storageResult.alertCreated) {
+          console.warn(
+            `[AI-Cost] Storage-health alert opened: ai_call_metrics oldest row ` +
+              `${stats.oldestAgeDays?.toFixed?.(1) ?? "?"}d > retention ${stats.retentionDays}d ` +
+              `(slack=${storageResult.slackSent}, email=${storageResult.emailSent})`,
+          );
+        } else if (storageResult.alertsResolved > 0) {
+          console.log(
+            `[AI-Cost] Storage-health auto-resolved ${storageResult.alertsResolved} alert(s)`,
+          );
+        }
+      } catch (storageErr) {
+        console.warn(
+          "[AI-Cost] Storage-health evaluation failed (non-fatal):",
+          storageErr,
+        );
+      }
+
       // Task #469 + #475: scrub credential-shaped substrings from any
       // pre-Task-#452 rows that may have leaked secrets into ai_call_metrics
       // free-form TEXT columns (error_message, prompt_preview,
