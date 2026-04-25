@@ -50,6 +50,7 @@ import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
 import {
   type AlertSeverity,
   claimToolHealthNotifySlot,
+  recordAlertNotificationResult,
 } from "./aiAlertsDatabase";
 import type { ToolHealthConfigOverrides, ToolHealthConfigAuditEntry } from "./toolHealthConfigDatabase";
 
@@ -104,6 +105,14 @@ export interface ToolHealthNotifierDeps {
    * Defaults to `claimToolHealthNotifySlot`.
    */
   claimDb?: (notificationKey: string, nowMs: number, throttleMs: number) => Promise<boolean>;
+  /**
+   * Persist the on-call notification delivery result on the matching
+   * `ai_alerts` row so the dashboard can render a "Notified" column
+   * (Task #284). Defaults to `recordAlertNotificationResult`. Tests
+   * inject a stub to assert the channel label/timestamp without touching
+   * the DB.
+   */
+  recordResult?: (alertId: number | null | undefined, channel: string, whenMs: number) => Promise<void>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -327,6 +336,7 @@ export async function notifyToolHealthBreach(
   const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
   const nowFn = depsOverride.now ?? Date.now;
   const claimDb = depsOverride.claimDb ?? claimToolHealthNotifySlot;
+  const recordResult = depsOverride.recordResult ?? recordAlertNotificationResult;
 
   const result: NotifyToolHealthBreachResult = {
     slackSent: false,
@@ -335,9 +345,29 @@ export async function notifyToolHealthBreach(
     skipped: false,
   };
 
+  // Best-effort recorder: persist the outcome on the matching ai_alerts
+  // row so the AI Operations panel can render a "Notified" column. Wraps
+  // the injected callback in a try/catch so a transient DB write failure
+  // never escapes back to the cron — the page itself has already been
+  // attempted, and a failed UPDATE merely leaves the dashboard column
+  // showing the previous (or NULL) value until the next paging attempt.
+  const persist = async (channel: string): Promise<void> => {
+    try {
+      await recordResult(notification.alert_id ?? null, channel, nowFn());
+    } catch (err) {
+      console.error(
+        `[ToolHealthNotifier] recordResult threw for ${notification.related_record_id}:`,
+        err,
+      );
+    }
+  };
+
   if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
     // Nothing configured — explicitly mark as skipped so callers can log/count.
+    // Persist 'not_configured' so the dashboard can surface a warning that
+    // ops needs to set TOOL_HEALTH_SLACK_CHANNEL / TOOL_HEALTH_ALERT_EMAIL.
     result.skipped = true;
+    await persist("not_configured");
     return result;
   }
 
@@ -350,6 +380,7 @@ export async function notifyToolHealthBreach(
     const inProcessLastAt = lastNotifiedAt.get(key);
     if (inProcessLastAt != null && now - inProcessLastAt < cfg.throttleMs) {
       result.throttled = true;
+      await persist("throttled");
       return result;
     }
 
@@ -370,6 +401,7 @@ export async function notifyToolHealthBreach(
       // so subsequent calls skip the DB round-trip for the rest of this window.
       lastNotifiedAt.set(key, now);
       result.throttled = true;
+      await persist("throttled");
       return result;
     }
 
@@ -415,6 +447,24 @@ export async function notifyToolHealthBreach(
       result.emailSent = false;
     }
   }
+
+  // Compute the channel label for persistence. Knowing what was *configured*
+  // vs what *actually delivered* matters: an "email_only" outcome with Slack
+  // configured but failing tells ops "Slack is broken" — distinct from
+  // "email" (where Slack was simply not set up).
+  const slackConfigured = !!cfg.slackChannel;
+  const emailConfigured = cfg.emailRecipients.length > 0;
+  let channel: string;
+  if (result.slackSent && result.emailSent) {
+    channel = "slack+email";
+  } else if (result.slackSent) {
+    channel = emailConfigured ? "slack_only" : "slack";
+  } else if (result.emailSent) {
+    channel = slackConfigured ? "email_only" : "email";
+  } else {
+    channel = "failed";
+  }
+  await persist(channel);
 
   return result;
 }

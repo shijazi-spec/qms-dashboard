@@ -50,6 +50,7 @@ interface EmailCall {
 }
 
 interface DbClaimCall { key: string; nowMs: number; throttleMs: number }
+interface RecordResultCall { alertId: number | null | undefined; channel: string; whenMs: number }
 
 function makeStubs(opts: {
   slackResult?: boolean | Error;
@@ -61,15 +62,19 @@ function makeStubs(opts: {
    * `false`           = a sibling already paged within the window (throttled).
    */
   claimDbResult?: boolean;
+  /** When provided, the recordResult stub throws this error. */
+  recordResultThrows?: Error;
 } = {}): {
   deps: ToolHealthNotifierDeps;
   slackCalls: SlackCall[];
   emailCalls: EmailCall[];
   dbClaimCalls: DbClaimCall[];
+  recordResultCalls: RecordResultCall[];
 } {
   const slackCalls: SlackCall[] = [];
   const emailCalls: EmailCall[] = [];
   const dbClaimCalls: DbClaimCall[] = [];
+  const recordResultCalls: RecordResultCall[] = [];
   const deps: ToolHealthNotifierDeps = {
     sendSlack: async (channel, text, blocks) => {
       slackCalls.push({ channel, text, blocks });
@@ -91,8 +96,12 @@ function makeStubs(opts: {
       dbClaimCalls.push({ key, nowMs, throttleMs });
       return opts.claimDbResult ?? true;
     },
+    recordResult: async (alertId, channel, whenMs) => {
+      recordResultCalls.push({ alertId, channel, whenMs });
+      if (opts.recordResultThrows) throw opts.recordResultThrows;
+    },
   };
-  return { deps, slackCalls, emailCalls, dbClaimCalls };
+  return { deps, slackCalls, emailCalls, dbClaimCalls, recordResultCalls };
 }
 
 function sample(
@@ -1568,6 +1577,191 @@ await suite.test(
       json.includes("/dashboard/ai-ops.html"),
       "still surfaces the relative path as text",
     );
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Notification delivery-status persistence (Task #284)
+//
+// Each terminal state of the breach notifier must call recordResult() with
+// the matching channel label so the AI Ops dashboard can render a "Notified"
+// column. Verified per outcome:
+//   • not_configured (Slack + email both unset)
+//   • throttled (in-process and DB claim paths)
+//   • slack-only success
+//   • email-only success
+//   • slack+email success
+//   • slack_only / email_only when one side fails
+//   • failed (both sides fail)
+//   • alert_id missing → recordResult is still called (notifier no-ops the
+//     alertId-null case downstream so the call is harmless)
+//   • recordResult throwing must NOT escape back to the cron
+// ──────────────────────────────────────────────────────────────────────────────
+
+await suite.test(
+  "task#284: not_configured → recordResult called with 'not_configured' and notifier-clock timestamp",
+  async () => {
+    clearEnv();
+    const NOW = 5_555_000;
+    const { deps, recordResultCalls } = makeStubs({ now: NOW });
+    const result = await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(result.skipped, true, "still reports skipped");
+    suite.expectEqual(recordResultCalls.length, 1, "one persist call");
+    suite.expectEqual(recordResultCalls[0]?.channel, "not_configured", "channel");
+    suite.expectEqual(recordResultCalls[0]?.alertId, 123, "forwards alert_id from notification");
+    suite.expectEqual(recordResultCalls[0]?.whenMs, NOW, "uses notifier clock");
+  },
+);
+
+await suite.test(
+  "task#284: in-process throttle → recordResult called with 'throttled'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    let now = 1_000_000;
+    const { deps, recordResultCalls } = makeStubs();
+    await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
+    // Re-call inside window — must hit the in-process fast path.
+    now = 1_000_000 + 30 * 60_000;
+    const second = await notifyToolHealthBreach(sample(), {
+      ...deps,
+      now: () => now,
+    });
+    suite.expectEqual(second.throttled, true, "second call is throttled");
+    // First call -> 'slack', second call -> 'throttled'
+    suite.expectEqual(recordResultCalls.length, 2, "two persist calls");
+    suite.expectEqual(recordResultCalls[0]?.channel, "slack", "first persists slack");
+    suite.expectEqual(recordResultCalls[1]?.channel, "throttled", "second persists throttled");
+    suite.expectEqual(recordResultCalls[1]?.whenMs, now, "throttled timestamp uses fresh clock");
+  },
+);
+
+await suite.test(
+  "task#284: DB-claim throttle → recordResult called with 'throttled'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+    const { deps, recordResultCalls, slackCalls } = makeStubs({
+      claimDbResult: false, // a sibling instance already paged
+    });
+    const result = await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(result.throttled, true, "throttled");
+    suite.expectEqual(slackCalls.length, 0, "no Slack send when DB-throttled");
+    suite.expectEqual(recordResultCalls.length, 1, "persist called once");
+    suite.expectEqual(recordResultCalls[0]?.channel, "throttled", "channel");
+  },
+);
+
+await suite.test(
+  "task#284: Slack-only configured + send ok → recordResult called with 'slack'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, recordResultCalls } = makeStubs();
+    const result = await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(result.slackSent, true, "slack sent");
+    suite.expectEqual(recordResultCalls.length, 1, "one persist call");
+    suite.expectEqual(recordResultCalls[0]?.channel, "slack", "channel");
+  },
+);
+
+await suite.test(
+  "task#284: Email-only configured + send ok → recordResult called with 'email'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, recordResultCalls } = makeStubs();
+    const result = await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(result.emailSent, true, "email sent");
+    suite.expectEqual(recordResultCalls.length, 1, "one persist call");
+    suite.expectEqual(recordResultCalls[0]?.channel, "email", "channel");
+  },
+);
+
+await suite.test(
+  "task#284: Slack+email both ok → recordResult called with 'slack+email'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, recordResultCalls } = makeStubs();
+    await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(recordResultCalls.length, 1, "one persist call");
+    suite.expectEqual(recordResultCalls[0]?.channel, "slack+email", "channel");
+  },
+);
+
+await suite.test(
+  "task#284: Slack ok + email fails (configured) → 'slack_only' surfaces the asymmetric outcome",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, recordResultCalls } = makeStubs({
+      emailResult: { success: false, error: "rate-limited" },
+    });
+    await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(recordResultCalls[0]?.channel, "slack_only", "slack_only when email fails");
+  },
+);
+
+await suite.test(
+  "task#284: Email ok + Slack fails (configured) → 'email_only' surfaces the asymmetric outcome",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, recordResultCalls } = makeStubs({
+      slackResult: false,
+    });
+    await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(recordResultCalls[0]?.channel, "email_only", "email_only when Slack fails");
+  },
+);
+
+await suite.test(
+  "task#284: both senders fail (both configured) → 'failed'",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    const { deps, recordResultCalls } = makeStubs({
+      slackResult: false,
+      emailResult: { success: false },
+    });
+    const result = await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(result.slackSent, false, "slack failed");
+    suite.expectEqual(result.emailSent, false, "email failed");
+    suite.expectEqual(recordResultCalls[0]?.channel, "failed", "failed channel");
+  },
+);
+
+await suite.test(
+  "task#284: recordResult throwing does NOT escape — notifier still returns its result",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps } = makeStubs({
+      recordResultThrows: new Error("boom"),
+    });
+    // Must not throw out — the cron relies on this contract.
+    const result = await notifyToolHealthBreach(sample(), deps);
+    suite.expectEqual(result.slackSent, true, "send still succeeded");
+  },
+);
+
+await suite.test(
+  "task#284: missing alert_id still calls recordResult (recorder is responsible for the no-op)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, recordResultCalls } = makeStubs();
+    await notifyToolHealthBreach(sample({ alert_id: undefined }), deps);
+    suite.expectEqual(recordResultCalls.length, 1, "still called");
+    suite.expectEqual(recordResultCalls[0]?.alertId, null, "alert_id forwarded as null");
+    suite.expectEqual(recordResultCalls[0]?.channel, "slack", "channel reflects the send");
   },
 );
 

@@ -165,6 +165,60 @@ if (!HAS_DB) {
       suite.expectEqual(found.tool_name, TOOL_NAME, "parsed tool_name");
       suite.expectEqual(found.reason, REASON, "parsed reason");
       suite.expectEqual(found.status, "open", "status filter only returns open");
+      // Task #284: notification delivery surface fields are always present
+      // in the response shape (null until the notifier records a result).
+      suite.expect(
+        Object.prototype.hasOwnProperty.call(found, "notified_at"),
+        "response includes notified_at field",
+      );
+      suite.expect(
+        Object.prototype.hasOwnProperty.call(found, "notified_channel"),
+        "response includes notified_channel field",
+      );
+      suite.expectEqual(found.notified_at, null, "notified_at null until notifier records");
+      suite.expectEqual(found.notified_channel, null, "notified_channel null until notifier records");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
+  await suite.test("happy: recordAlertNotificationResult persists onto ai_alerts and surfaces on the route", async () => {
+    if (createdId == null) throw new Error("seed alert was not created");
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const { recordAlertNotificationResult, initAIAlertsTable } = await import(
+      "../src/utils/aiAlertsDatabase"
+    );
+    try {
+      // The Task #284 columns are added via an idempotent ALTER TABLE inside
+      // initAIAlertsTable. Tests don't go through the server bootstrap path,
+      // so call it explicitly to make sure the migration has been applied
+      // against the test database before exercising the helper.
+      await initAIAlertsTable();
+      const NOW = Date.now();
+      await recordAlertNotificationResult(createdId, "slack+email", NOW);
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts",
+        "GET",
+      );
+      const res = await handler(
+        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+      );
+      suite.expectEqual(res.status, 200, "status");
+      const list: any[] = res.body?.data ?? [];
+      const found = list.find((a) => a.id === createdId);
+      suite.expect(!!found, "seeded alert is in response");
+      suite.expectEqual(found.notified_channel, "slack+email", "channel persisted");
+      suite.expect(found.notified_at != null, "notified_at populated");
+      // Roundtrip through Postgres TIMESTAMP loses sub-second precision, so
+      // accept ±2s of drift between what we wrote and what comes back.
+      const seen = new Date(found.notified_at).getTime();
+      suite.expect(
+        Math.abs(seen - NOW) < 2_000,
+        `notified_at is close to wall clock (drift=${seen - NOW}ms)`,
+      );
     } finally {
       if (original === undefined) delete process.env.ADMIN_API_KEY;
       else process.env.ADMIN_API_KEY = original;

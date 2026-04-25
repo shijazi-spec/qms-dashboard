@@ -647,6 +647,12 @@ export const aiOpsRoutes = [
               tool_name: parsed?.tool_name ?? null,
               reason: parsed?.reason ?? null,
               created_at: a.created_at,
+              // Notification delivery surface (Task #284): the dashboard
+              // renders a "Notified" line on each alert card so ops can
+              // see whether the on-call page actually went out (and via
+              // which channel) without needing to grep server logs.
+              notified_at: a.notified_at ?? null,
+              notified_channel: a.notified_channel ?? null,
             };
           });
           return c.json({ data, total });

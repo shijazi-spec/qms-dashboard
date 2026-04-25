@@ -848,6 +848,87 @@
       p95_latency: 'p95 latency',
     };
 
+    /**
+     * Render the "Notified" delivery-status block (Task #284) for a single
+     * tool-health alert card. Distinct visual treatment per outcome so ops
+     * can scan at a glance whether each open alert was successfully paged.
+     *   • not_configured → amber warning + env-var hint
+     *   • throttled      → muted gray
+     *   • failed         → red
+     *   • slack/email/+  → green with channel label
+     *   • null           → "Pending" (older alerts pre-dating the column,
+     *                       or in-flight rows on the next cron tick)
+     */
+    function renderToolHealthNotified(a) {
+      const id = a.id;
+      const ch = a.notified_channel;
+      const ts = a.notified_at;
+      const tsLabel = ts ? formatNotifiedTimestamp(ts) : '';
+      // No record yet — pre-existing alert from before the column was added,
+      // or the cron hasn't reached the notifier on this tool yet.
+      if (!ch && !ts) {
+        return `
+          <p class="text-xs text-gray-500 mt-2 flex items-center gap-1.5" data-testid="text-notified-${id}">
+            <span class="font-semibold text-gray-600">Notified:</span>
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-medium" data-testid="badge-notified-channel-${id}" data-notified-channel="pending">Pending</span>
+          </p>`;
+      }
+      if (ch === 'not_configured') {
+        return `
+          <div class="mt-2 px-2 py-1.5 rounded border border-amber-200 bg-amber-50" data-testid="warning-notified-not-configured-${id}">
+            <p class="text-xs text-amber-800 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/>
+              </svg>
+              <span class="font-semibold">Notified:</span>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 text-[10px] font-bold uppercase" data-testid="badge-notified-channel-${id}" data-notified-channel="not_configured">Not configured</span>
+            </p>
+            <p class="text-[11px] text-amber-700 mt-0.5">
+              No on-call page sent — set <code class="font-mono">TOOL_HEALTH_SLACK_CHANNEL</code> or <code class="font-mono">TOOL_HEALTH_ALERT_EMAIL</code> in the platform secrets.
+              ${tsLabel ? `<span class="text-amber-600"> (last attempt ${esc(tsLabel)})</span>` : ''}
+            </p>
+          </div>`;
+      }
+      // Outcome-specific colour + label. We render the configured channels
+      // (when known) so operators can tell whether email failing silently
+      // dropped a row to "slack_only".
+      const PILL = {
+        slack:          { cls: 'bg-emerald-100 text-emerald-800', text: 'Slack' },
+        email:          { cls: 'bg-emerald-100 text-emerald-800', text: 'Email' },
+        'slack+email':  { cls: 'bg-emerald-100 text-emerald-800', text: 'Slack + Email' },
+        slack_only:     { cls: 'bg-emerald-100 text-emerald-800', text: 'Slack (email failed)' },
+        email_only:     { cls: 'bg-emerald-100 text-emerald-800', text: 'Email (Slack failed)' },
+        throttled:      { cls: 'bg-gray-200 text-gray-700',       text: 'Throttled' },
+        failed:         { cls: 'bg-red-100 text-red-800',         text: 'Send failed' },
+      };
+      const pill = PILL[ch] || { cls: 'bg-gray-100 text-gray-700', text: String(ch) };
+      const tsHtml = tsLabel
+        ? `<span class="text-gray-500" data-testid="text-notified-at-${id}">${esc(tsLabel)}</span>`
+        : '';
+      return `
+        <p class="text-xs text-gray-600 mt-2 flex items-center gap-1.5 flex-wrap" data-testid="text-notified-${id}">
+          <span class="font-semibold text-gray-700">Notified:</span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded ${pill.cls} text-[10px] font-bold uppercase" data-testid="badge-notified-channel-${id}" data-notified-channel="${esc(ch)}">${esc(pill.text)}</span>
+          ${tsHtml}
+        </p>`;
+    }
+
+    /**
+     * Format an ISO timestamp into a short, locale-aware "Apr 25, 2026 14:30 UTC"
+     * label. Falls back to the raw string when parsing fails so we never
+     * silently drop a value the API said it had.
+     */
+    function formatNotifiedTimestamp(ts) {
+      try {
+        const d = new Date(ts);
+        if (Number.isNaN(d.getTime())) return String(ts);
+        // YYYY-MM-DD HH:MM UTC — short, sortable, unambiguous across locales.
+        return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+      } catch (_e) {
+        return String(ts);
+      }
+    }
+
     async function loadToolHealthAlerts() {
       const section = document.getElementById('tool-health-alerts-section');
       const list = document.getElementById('tool-health-alerts-list');
@@ -881,6 +962,20 @@
                  View tool row →
                </button>`
             : `<span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-500" data-testid="text-no-tool-link-${a.id}">No linked tool row</span>`;
+          // Notification delivery surface (Task #284): renders a "Notified"
+          // line so ops can see whether the on-call page actually went out
+          // (and via which channel). Distinct visual treatments:
+          //   • not_configured   → amber warning with the env-var hint, so
+          //                          ops knows to set TOOL_HEALTH_SLACK_CHANNEL
+          //                          / TOOL_HEALTH_ALERT_EMAIL
+          //   • throttled        → muted gray pill (a sibling page already
+          //                          fired within the throttle window)
+          //   • failed           → red pill (every configured surface threw)
+          //   • slack/email/both → green pill with the channel label
+          //   • null             → muted gray "Pending" pill (older alerts
+          //                          that pre-date the column, or rows still
+          //                          in-flight on the next cron tick)
+          const notifiedBlock = renderToolHealthNotified(a);
           return `
           <div class="bg-white border border-red-200 rounded-lg p-3" data-testid="card-tool-health-alert-${a.id}" data-alert-id="${a.id}" data-tool-name="${esc(a.tool_name || '')}">
             <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -893,6 +988,7 @@
                 <p class="text-sm font-semibold text-gray-900" data-testid="text-alert-title-${a.id}">${esc(a.title)}</p>
                 <p class="text-xs text-gray-600 mt-1" data-testid="text-alert-description-${a.id}">${esc(a.description)}</p>
                 ${a.suggestion ? `<p class="text-xs text-gray-500 italic mt-1" data-testid="text-alert-suggestion-${a.id}">${esc(a.suggestion)}</p>` : ''}
+                ${notifiedBlock}
               </div>
               <div class="flex flex-col gap-1.5 shrink-0">
                 ${linkBtn}

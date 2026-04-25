@@ -1,4 +1,5 @@
 import { sharedPool as pool } from './sharedPool';
+import { logger } from './logger';
 
 export type AlertType =
   | 'nc_detection'
@@ -32,6 +33,19 @@ export interface AIAlert {
   acknowledged_at?: Date;
   resolved_at?: Date;
   resolution_note?: string | null;
+  /**
+   * Timestamp of the most recent on-call notification attempt for this
+   * alert (Task #284). NULL when no attempt has been recorded — older
+   * tool-health rows that pre-date the column will read as NULL until
+   * they're re-paged.
+   */
+  notified_at?: Date | null;
+  /**
+   * Outcome label for the notification attempt. See
+   * {@link initAIAlertsTable} for the documented value set. NULL when no
+   * attempt has been recorded.
+   */
+  notified_channel?: string | null;
   created_at?: Date;
 }
 
@@ -64,6 +78,35 @@ export async function initAIAlertsTable(): Promise<void> {
   // when an alert was triaged (not just who triaged it).
   await pool.query(`
     ALTER TABLE ai_alerts ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP
+  `);
+
+  // Idempotent migration (Task #284): persist the on-call notification
+  // delivery result on the alert row so the AI Operations panel can show
+  // ops whether/where/when each alert was paged.
+  //
+  // `notified_channel` is a free-form short label rather than an enum so
+  // future delivery surfaces (PagerDuty, Opsgenie, …) can be added without
+  // an enum migration. Known values today:
+  //   • 'slack'           — Slack send succeeded; email not configured
+  //   • 'email'           — Email send succeeded; Slack not configured
+  //   • 'slack+email'     — Both surfaces succeeded
+  //   • 'slack_only'      — Slack ok, email configured but failed
+  //   • 'email_only'      — Email ok, Slack configured but failed
+  //   • 'not_configured'  — Neither TOOL_HEALTH_SLACK_CHANNEL nor
+  //                          TOOL_HEALTH_ALERT_EMAIL was set; ops needs
+  //                          to configure a channel
+  //   • 'throttled'       — A sibling page already sent within the
+  //                          TOOL_HEALTH_NOTIFY_THROTTLE_MIN window
+  //   • 'failed'          — Attempted on every configured surface but all
+  //                          transports threw or returned failure
+  // `notified_at` is set whenever the notifier reaches a terminal state
+  // (success, throttled, skipped, or failed) so the dashboard can show
+  // an "Attempted at" timestamp regardless of outcome.
+  await pool.query(`
+    ALTER TABLE ai_alerts ADD COLUMN IF NOT EXISTS notified_at TIMESTAMP
+  `);
+  await pool.query(`
+    ALTER TABLE ai_alerts ADD COLUMN IF NOT EXISTS notified_channel VARCHAR(50)
   `);
 
   await pool.query(`
@@ -266,6 +309,45 @@ export async function claimToolHealthNotifySlot(
     [notificationKey, nowMs, thresholdMs],
   );
   return result.rows.length > 0;
+}
+
+/**
+ * Persist the on-call notification delivery result on an `ai_alerts` row
+ * (Task #284). Called by {@link notifyToolHealthBreach} once the attempt
+ * has reached a terminal state (success / throttled / skipped / failed)
+ * so the AI Operations panel can render a "Notified" column showing when
+ * and via which channel each open alert was paged.
+ *
+ * `alertId` may be `null`/`undefined` when the underlying `createAIAlert`
+ * call returned no row (extremely rare — only if the DB is offline). In
+ * that case this function is a no-op so the notifier does not have to
+ * special-case it.
+ *
+ * Errors are logged and swallowed so a transient DB write failure cannot
+ * abort the cron pass — the page itself has already been delivered to
+ * the operator's pager, and the missing row will simply read as NULL on
+ * the dashboard until the next paging attempt for this key updates it.
+ */
+export async function recordAlertNotificationResult(
+  alertId: number | null | undefined,
+  channel: string,
+  whenMs: number = Date.now(),
+): Promise<void> {
+  if (alertId == null) return;
+  try {
+    await pool.query(
+      `UPDATE ai_alerts
+          SET notified_at = TO_TIMESTAMP($2 / 1000.0),
+              notified_channel = $3
+        WHERE id = $1`,
+      [alertId, whenMs, channel],
+    );
+  } catch (err) {
+    logger.error(
+      `[aiAlertsDatabase] recordAlertNotificationResult failed for alert ${alertId}:`,
+      err,
+    );
+  }
 }
 
 /**
