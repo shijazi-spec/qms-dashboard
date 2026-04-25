@@ -705,6 +705,42 @@ export function resolveAiMetricsRetentionDays(): number {
   return Math.max(1, Math.floor(parsed));
 }
 
+/**
+ * Resolve the EFFECTIVE retention window (in days) consulted by the
+ * daily prune cron. Layers in precedence:
+ *
+ *   1. `AI_METRICS_RETENTION_DAYS_LOCK` (truthy) — forces the env-derived
+ *      value to win regardless of any DB override (Task #504).
+ *   2. The `ai_metrics_retention_config` row written by the AI Ops
+ *      "Retention" control on the dashboard, if a positive integer.
+ *   3. {@link resolveAiMetricsRetentionDays} (env var → default).
+ *
+ * Done as a separate async function so the env-only sync resolver above
+ * stays available to callers that can't afford to await a DB hit (and so
+ * the existing pure unit tests for env parsing keep working unchanged).
+ *
+ * Failures reading the override row fall back silently to the env-only
+ * resolver — a transient DB hiccup should never cause the cron to wipe
+ * rows that the operator wanted to keep.
+ */
+export async function resolveEffectiveAiMetricsRetentionDays(): Promise<number> {
+  const envValue = resolveAiMetricsRetentionDays();
+  try {
+    const { isAiMetricsRetentionLocked, getAiMetricsRetentionConfig } = await import(
+      './aiMetricsRetentionConfig'
+    );
+    if (isAiMetricsRetentionLocked()) return envValue;
+    const cfg = await getAiMetricsRetentionConfig();
+    if (cfg.retention_days != null && Number.isFinite(cfg.retention_days) && cfg.retention_days > 0) {
+      return Math.max(1, Math.floor(cfg.retention_days));
+    }
+    return envValue;
+  } catch (err) {
+    console.error('[aiTelemetry] resolveEffectiveAiMetricsRetentionDays fallback:', err);
+    return envValue;
+  }
+}
+
 export async function pruneOldAiMetrics(retentionDays?: number): Promise<number> {
   try {
     await ensureAiMetricsTable();

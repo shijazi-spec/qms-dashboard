@@ -542,6 +542,38 @@
           <p class="text-sm text-gray-400">Loading…</p>
         </div>
       </div>
+
+      <!-- AI usage history retention (Task #504).
+           Lets admins change how long the `ai_call_metrics` telemetry table
+           is kept by the daily prune cron, without redeploying. The env
+           var (`AI_METRICS_RETENTION_DAYS`) keeps working as a fallback,
+           and `AI_METRICS_RETENTION_DAYS_LOCK` engages a hard lock that
+           disables this form. -->
+      <div class="bg-white rounded-xl shadow-sm border p-6 mt-6" data-testid="section-metrics-retention">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-gray-900">AI usage history retention</h3>
+            <p class="text-sm text-gray-500 mt-1">
+              Controls how many days of <code class="bg-gray-100 px-1 rounded">ai_call_metrics</code> rows the
+              daily prune cron keeps. Tighten the window for a perf experiment, widen it for trend analysis.
+              Changes apply on the next cron pass — no redeploy needed.
+            </p>
+          </div>
+          <div class="text-right text-xs text-gray-500" data-testid="text-metrics-retention-meta">
+            <div id="metrics-retention-updated-meta">—</div>
+          </div>
+        </div>
+        <div id="metrics-retention-load-error" class="hidden mb-4 px-3 py-2 text-sm rounded border border-red-200 bg-red-50 text-red-700" data-testid="text-metrics-retention-load-error"></div>
+        <div id="metrics-retention-form" class="space-y-4" data-testid="form-metrics-retention">
+          <p class="text-sm text-gray-400">Loading current retention…</p>
+        </div>
+        <div class="mt-6 border-t pt-4">
+          <h4 class="text-sm font-semibold text-gray-700 mb-2">Recent retention changes</h4>
+          <div id="metrics-retention-audit" class="space-y-2" data-testid="list-metrics-retention-audit">
+            <p class="text-sm text-gray-400">Loading…</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Price Table Info -->
@@ -2558,7 +2590,238 @@
       return [{ label: 'Keep current expiry', ms: -1 }, ...tail];
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // AI usage history retention (Task #504)
+    // Mounted inside the Alert Thresholds tab — admins-only form that
+    // tunes the daily prune window for `ai_call_metrics`.
+    // ─────────────────────────────────────────────────────────────────
+    let metricsRetentionState = null;
+
+    async function loadMetricsRetentionForm() {
+      const formEl = document.getElementById('metrics-retention-form');
+      const errEl = document.getElementById('metrics-retention-load-error');
+      const auditEl = document.getElementById('metrics-retention-audit');
+      const metaEl = document.getElementById('metrics-retention-updated-meta');
+      if (!formEl || !errEl || !auditEl || !metaEl) return;
+      errEl.classList.add('hidden');
+      formEl.innerHTML = '<p class="text-sm text-gray-400">Loading current retention…</p>';
+      auditEl.innerHTML = '<p class="text-sm text-gray-400">Loading…</p>';
+      try {
+        const { data } = await apiFetch('/api/ai-ops/metrics-retention');
+        metricsRetentionState = data;
+        renderMetricsRetentionForm(data);
+        renderMetricsRetentionAudit(data.audit || []);
+        if (data.updated_at) {
+          const who = data.updated_by ? ' by ' + esc(data.updated_by) : '';
+          metaEl.innerHTML = 'Last edited ' + esc(fmtDate(data.updated_at)) + who;
+        } else {
+          metaEl.textContent = 'No dashboard override set';
+        }
+      } catch (e) {
+        console.error('Metrics-retention load error', e);
+        formEl.innerHTML = '';
+        auditEl.innerHTML = '';
+        metaEl.textContent = '';
+        errEl.textContent = 'Failed to load retention config: ' + (e?.message || 'unknown error');
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function renderMetricsRetentionForm(data) {
+      const formEl = document.getElementById('metrics-retention-form');
+      if (!formEl) return;
+      const canEdit = !!data.can_edit;
+      const bounds = data.bounds || { min: 1, max: 3650 };
+      const override = data.override_days;
+      const effective = data.effective_days;
+      const envBaseline = data.env_baseline_days;
+      const def = data.default_days;
+      const envSet = !!data.env_var_set;
+      const locked = !!data.env_locked;
+
+      const lockBanner = locked
+        ? `<div class="px-3 py-2 mb-3 text-sm rounded border border-amber-200 bg-amber-50 text-amber-800" data-testid="text-metrics-retention-lock-banner">
+             <strong>Env lock engaged.</strong> <code class="bg-amber-100 px-1 rounded">AI_METRICS_RETENTION_DAYS_LOCK</code> is set,
+             so the env baseline (${esc(envBaseline)} days) wins over any dashboard override. Saves are disabled
+             until the lock is cleared.
+           </div>`
+        : '';
+
+      const readonlyBanner = (!canEdit && !locked)
+        ? `<div class="px-3 py-2 mb-3 text-sm rounded border border-amber-200 bg-amber-50 text-amber-800" data-testid="text-metrics-retention-readonly-banner">
+             Read-only view — only admins can edit the retention window.
+           </div>`
+        : '';
+
+      const fallbackText = envSet
+        ? `env baseline (${esc(envBaseline)} days)`
+        : `compile-time default (${esc(def)} days)`;
+      const fallbackNote = override == null
+        ? `<span class="text-xs text-gray-400" data-testid="text-metrics-retention-fallback">Using ${fallbackText}</span>`
+        : `<span class="text-xs text-blue-600" data-testid="text-metrics-retention-override-active">Override active — fallback would be ${fallbackText}</span>`;
+
+      const inputDisabled = (!canEdit) ? 'disabled' : '';
+      const inputClass = `w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}`;
+
+      const rows = `
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start py-3" data-testid="row-metrics-retention">
+          <div class="md:col-span-5">
+            <label for="metrics-retention-input" class="block text-sm font-medium text-gray-800">Retention window (days)</label>
+            <p class="text-xs text-gray-500 mt-1">
+              Telemetry rows older than this are deleted by the daily cron. Leave empty to fall back to the env
+              baseline / compile-time default.
+            </p>
+          </div>
+          <div class="md:col-span-3">
+            <input
+              type="number"
+              step="1"
+              min="${bounds.min}"
+              max="${bounds.max}"
+              id="metrics-retention-input"
+              name="retention_days"
+              value="${override == null ? '' : esc(override)}"
+              placeholder="${envSet ? `env: ${esc(envBaseline)}` : `default: ${esc(def)}`}"
+              ${inputDisabled}
+              class="${inputClass}"
+              data-testid="input-metrics-retention-days"
+            />
+            <p class="text-xs text-gray-400 mt-1">Allowed: ${bounds.min}–${bounds.max}</p>
+          </div>
+          <div class="md:col-span-2 text-sm">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Effective</div>
+            <div class="font-mono text-gray-900" data-testid="text-metrics-retention-effective">${effective != null ? esc(effective) + ' days' : '—'}</div>
+          </div>
+          <div class="md:col-span-2 text-xs text-gray-500">${fallbackNote}</div>
+        </div>`;
+
+      const noteRow = `
+        <div class="pt-4 border-t">
+          <label for="metrics-retention-note" class="block text-sm font-medium text-gray-800">Change note (optional)</label>
+          <p class="text-xs text-gray-500 mt-1">Captured in the audit log so future-you knows why this was tuned.</p>
+          <input
+            type="text"
+            id="metrics-retention-note"
+            maxlength="500"
+            ${inputDisabled}
+            placeholder="e.g. INC-1234 — tightening to 30d during perf experiment"
+            class="mt-2 w-full px-3 py-2 border border-gray-300 rounded text-sm ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}"
+            data-testid="input-metrics-retention-note"
+          />
+        </div>`;
+
+      const buttons = canEdit
+        ? `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
+             <button type="button" data-on-click="saveMetricsRetention" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-metrics-retention-save">Save retention</button>
+             <button type="button" data-on-click="clearMetricsRetentionOverride" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-metrics-retention-clear">Clear override</button>
+             <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
+           </div>`
+        : `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
+             <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
+           </div>`;
+
+      formEl.innerHTML = lockBanner + readonlyBanner + rows + noteRow + buttons;
+    }
+
+    function renderMetricsRetentionAudit(rows) {
+      const auditEl = document.getElementById('metrics-retention-audit');
+      if (!auditEl) return;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        auditEl.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-metrics-retention-audit-empty">No retention changes recorded yet.</p>';
+        return;
+      }
+      auditEl.innerHTML = rows.map(r => {
+        const before = r.before_days == null ? '—' : esc(r.before_days) + 'd';
+        const after = r.after_days == null ? '—' : esc(r.after_days) + 'd';
+        const who = esc(r.changed_by || 'unknown');
+        const when = esc(fmtDate(r.changed_at));
+        const note = r.note ? `<div class="text-xs text-gray-500 mt-1 italic">${esc(r.note)}</div>` : '';
+        return `<div class="border rounded p-3 bg-gray-50" data-testid="row-metrics-retention-audit-${esc(r.id)}">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="text-sm text-gray-800">
+              <span class="font-mono">${before}</span>
+              <span class="text-gray-400 mx-1">→</span>
+              <span class="font-mono font-semibold">${after}</span>
+              <span class="text-xs text-gray-500 ml-2">by ${who}</span>
+            </div>
+            <div class="text-xs text-gray-500">${when}</div>
+          </div>
+          ${note}
+        </div>`;
+      }).join('');
+    }
+
+    function setMetricsRetentionStatus(text, kind) {
+      const el = document.getElementById('metrics-retention-save-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-sm ml-2 ' + (
+        kind === 'error' ? 'text-red-600'
+        : kind === 'ok'  ? 'text-green-700'
+        : kind === 'info' ? 'text-gray-600'
+        : ''
+      );
+    }
+
+    async function saveMetricsRetention() {
+      if (!metricsRetentionState) return;
+      const inputEl = document.getElementById('metrics-retention-input');
+      const noteEl = document.getElementById('metrics-retention-note');
+      if (!inputEl) return;
+      const raw = (inputEl.value ?? '').trim();
+      let retention_days = null;
+      if (raw !== '') {
+        const n = Number(raw);
+        if (!Number.isFinite(n) || !Number.isInteger(n)) {
+          setMetricsRetentionStatus('Retention must be a whole number of days.', 'error');
+          return;
+        }
+        const bounds = metricsRetentionState.bounds || { min: 1, max: 3650 };
+        if (n < bounds.min || n > bounds.max) {
+          setMetricsRetentionStatus(`Retention must be between ${bounds.min} and ${bounds.max} days.`, 'error');
+          return;
+        }
+        retention_days = n;
+      }
+      const note = noteEl?.value?.trim() || '';
+      const requestBody = { retention_days };
+      if (note) requestBody.note = note;
+
+      setMetricsRetentionStatus('Saving…', 'info');
+      try {
+        const r = await fetch('/api/ai-ops/metrics-retention', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setMetricsRetentionStatus(`Save failed: ${body?.error || 'HTTP ' + r.status}`, 'error');
+          return;
+        }
+        setMetricsRetentionStatus(
+          `Saved. Effective window is now ${body.effective_days} days. Next cron pass will pick it up.`,
+          'ok',
+        );
+        await loadMetricsRetentionForm();
+      } catch (e) {
+        console.error('Metrics-retention save error', e);
+        setMetricsRetentionStatus(`Save failed: ${e?.message || 'unknown error'}`, 'error');
+      }
+    }
+
+    function clearMetricsRetentionOverride() {
+      const inputEl = document.getElementById('metrics-retention-input');
+      if (inputEl) inputEl.value = '';
+      setMetricsRetentionStatus('Override cleared — click "Save retention" to fall back to env / default.', 'info');
+    }
+
     async function loadThresholdsForm() {
+      // Load the new retention control alongside the threshold form so
+      // the operator sees both in a single round-trip when they open the
+      // Alert Thresholds tab. They share a tab but not state.
+      loadMetricsRetentionForm();
       const formEl = document.getElementById('thresholds-form');
       const errEl = document.getElementById('thresholds-load-error');
       const auditEl = document.getElementById('thresholds-audit');

@@ -390,10 +390,15 @@ const aiCostSummaryFunction = inngest.createFunction(
   { cron: process.env.AI_COST_SUMMARY_CRON || "0 6 * * *" }, // daily @ 06:00 UTC
   async ({ step }) => {
     return await step.run("check-ai-cost-and-prune", async () => {
-      const { getDailyCostSummary, pruneOldAiMetrics, resolveAiMetricsRetentionDays } =
+      const { getDailyCostSummary, pruneOldAiMetrics, resolveEffectiveAiMetricsRetentionDays } =
         await import("../../utils/aiTelemetry");
 
-      const retentionDays = resolveAiMetricsRetentionDays();
+      // Task #504: prefer the dashboard override (ai_metrics_retention_config)
+      // over the env baseline so admins can tighten/widen the prune window
+      // without a redeploy. Falls back to the env var when no override is
+      // set, and respects AI_METRICS_RETENTION_DAYS_LOCK as an env-side
+      // hard lock.
+      const retentionDays = await resolveEffectiveAiMetricsRetentionDays();
       const [summary, pruned] = await Promise.all([
         getDailyCostSummary(),
         pruneOldAiMetrics(retentionDays),

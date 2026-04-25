@@ -60,6 +60,15 @@ const AI_OPS_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head
 const TOOL_HEALTH_CONFIG_WRITE_ROLES: UserRole[] = ['admin'];
 
 /**
+ * Tightening / loosening the AI usage history retention window directly
+ * affects how much telemetry the platform keeps for trend analysis and
+ * how fast the underlying table stays. Restrict the write endpoint to
+ * admins; the read endpoint stays open to all AI_OPS_ROLES so non-admin
+ * ops can verify the live window while triaging perf issues.
+ */
+const AI_METRICS_RETENTION_WRITE_ROLES: UserRole[] = ['admin'];
+
+/**
  * Per-field validation bounds for the tool-health threshold form. Picked to
  * cover every legitimate tuning operators have asked for (e.g. 5%–90% error
  * floors, 1s–10min p95 ceilings) while still rejecting obviously broken
@@ -1333,6 +1342,185 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] tool-health-config preview error:", error);
           return c.json({ error: "Failed to preview tool-health config" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * AI usage history retention — read endpoint (Task #504).
+   *
+   * Returns the merged effective retention window plus the underlying
+   * layers so the dashboard can render "currently effective", "your
+   * override", and "env baseline" side by side. Available to all
+   * AI_OPS_ROLES so non-admin ops can inspect the live window even when
+   * they can't change it.
+   */
+  {
+    path: "/api/ai-ops/metrics-retention",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const {
+            DEFAULT_AI_METRICS_RETENTION_DAYS,
+            resolveAiMetricsRetentionDays,
+            resolveEffectiveAiMetricsRetentionDays,
+          } = await import("../../utils/aiTelemetry");
+          const {
+            AI_METRICS_RETENTION_BOUNDS,
+            getAiMetricsRetentionConfig,
+            getAiMetricsRetentionAudit,
+            isAiMetricsRetentionLocked,
+          } = await import("../../utils/aiMetricsRetentionConfig");
+
+          const [row, audit, effective] = await Promise.all([
+            getAiMetricsRetentionConfig(),
+            getAiMetricsRetentionAudit(25),
+            resolveEffectiveAiMetricsRetentionDays(),
+          ]);
+          const envBaseline = resolveAiMetricsRetentionDays();
+          const envLocked = isAiMetricsRetentionLocked();
+
+          return c.json({
+            data: {
+              default_days: DEFAULT_AI_METRICS_RETENTION_DAYS,
+              env_baseline_days: envBaseline,
+              env_var_set: process.env.AI_METRICS_RETENTION_DAYS != null
+                && process.env.AI_METRICS_RETENTION_DAYS !== "",
+              env_locked: envLocked,
+              override_days: row.retention_days,
+              effective_days: effective,
+              updated_by: row.updated_by,
+              updated_at: row.updated_at,
+              bounds: AI_METRICS_RETENTION_BOUNDS,
+              audit,
+              can_edit:
+                AI_METRICS_RETENTION_WRITE_ROLES.includes(
+                  user.role as UserRole,
+                ) && !envLocked,
+            },
+          });
+        } catch (error) {
+          console.error("[AI-Ops] metrics-retention GET error:", error);
+          return c.json({ error: "Failed to load retention config" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * AI usage history retention — write endpoint (Task #504).
+   *
+   * Body: { retention_days: number | null, note?: string }
+   *   • A positive integer within AI_METRICS_RETENTION_BOUNDS sets/replaces
+   *     the override.
+   *   • `null` clears the override (falls back to env baseline / default).
+   *
+   * Admin-only; further refused with 409 when AI_METRICS_RETENTION_DAYS_LOCK
+   * is engaged so the lock can be enforced server-side rather than relying
+   * on the UI to disable the form.
+   *
+   * Audited via setAiMetricsRetentionConfig() — every successful write
+   * appends an `ai_metrics_retention_audit` row capturing before/after
+   * and the operator name.
+   */
+  {
+    path: "/api/ai-ops/metrics-retention",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_METRICS_RETENTION_WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const {
+            AI_METRICS_RETENTION_BOUNDS,
+            isAiMetricsRetentionLocked,
+            setAiMetricsRetentionConfig,
+          } = await import("../../utils/aiMetricsRetentionConfig");
+
+          if (isAiMetricsRetentionLocked()) {
+            return c.json(
+              {
+                error:
+                  "AI_METRICS_RETENTION_DAYS_LOCK is engaged — clear the env lock to edit retention from the dashboard.",
+              },
+              409,
+            );
+          }
+
+          let body: any;
+          try {
+            body = await c.req.json();
+          } catch {
+            return c.json({ error: "Request body must be valid JSON" }, 400);
+          }
+          if (!body || typeof body !== "object") {
+            return c.json({ error: "Request body must be an object" }, 400);
+          }
+          if (!Object.prototype.hasOwnProperty.call(body, "retention_days")) {
+            return c.json({ error: "retention_days is required" }, 400);
+          }
+
+          let retentionDays: number | null;
+          const raw = body.retention_days;
+          if (raw === null) {
+            retentionDays = null;
+          } else if (typeof raw === "number" && Number.isFinite(raw)) {
+            const n = Math.floor(raw);
+            if (
+              n < AI_METRICS_RETENTION_BOUNDS.min ||
+              n > AI_METRICS_RETENTION_BOUNDS.max
+            ) {
+              return c.json(
+                {
+                  error: `retention_days must be between ${AI_METRICS_RETENTION_BOUNDS.min} and ${AI_METRICS_RETENTION_BOUNDS.max}`,
+                },
+                400,
+              );
+            }
+            retentionDays = n;
+          } else {
+            return c.json(
+              { error: "retention_days must be a positive integer or null" },
+              400,
+            );
+          }
+
+          let note: string | null = null;
+          if (body.note != null) {
+            if (typeof body.note !== "string") {
+              return c.json({ error: "note must be a string" }, 400);
+            }
+            note = body.note.length > 500 ? body.note.slice(0, 500) : body.note;
+          }
+
+          const changedBy = user.name || user.email || `user:${user.userId}`;
+          const result = await setAiMetricsRetentionConfig({
+            retentionDays,
+            changedBy,
+            note,
+          });
+
+          const { resolveEffectiveAiMetricsRetentionDays } = await import(
+            "../../utils/aiTelemetry"
+          );
+          const effective = await resolveEffectiveAiMetricsRetentionDays();
+
+          return c.json({
+            success: true,
+            before: result.before,
+            after: result.after,
+            effective_days: effective,
+            audit_id: result.audit_id,
+          });
+        } catch (error) {
+          console.error("[AI-Ops] metrics-retention PUT error:", error);
+          return c.json({ error: "Failed to update retention config" }, 500);
         }
       };
     },
