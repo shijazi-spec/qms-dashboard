@@ -886,7 +886,7 @@ async function maybeResolveRecoveredAlert(
  * went silent" so it is distinguishable from the "metric back below
  * threshold" note written by `maybeResolveRecoveredAlert`.
  */
-async function runSilentToolSweep(
+export async function runSilentToolSweep(
   deps: ToolHealthDeps,
   silentCooldownMinutes: number,
   out: ToolHealthCheckResult,
