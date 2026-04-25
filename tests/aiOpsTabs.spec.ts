@@ -298,20 +298,18 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
       return;
     }
 
+    await page.goto(`${BASE_URL}/ai-ops`);
+    await page.waitForLoadState('domcontentloaded');
 
-    // Use the dashboard's `?tab=` deep-link instead of clicking the tab
-    // button. The buttons rely on inline `onclick="switchTab(...)"`
-    // attributes, which the page's CSP (script-src 'self' 'nonce-…') blocks
-    // because hashes/nonces don't apply to inline event handlers. The
-    // DOMContentLoaded handler reads ?tab= and calls switchTab() from a
-    // properly-nonced inline <script>, so the loader fires reliably.
+    // Click the tab button directly — safe-actions.js wires `data-on-click`
+    // via event delegation so the click triggers switchTab() without any
+    // inline onclick= handler (which the CSP would block).
     const latencyResPromise = page.waitForResponse(
       r => r.url().includes('/api/ai-ops/agent-latency'),
       { timeout: 15000 },
     );
 
-    await page.goto(`${BASE_URL}/ai-ops?tab=latency`);
-    await page.waitForLoadState('domcontentloaded');
+    await page.locator('[data-testid="tab-latency"]').click();
 
     const latencyRes = await latencyResPromise;
     expect(latencyRes.status()).toBe(200);
@@ -347,15 +345,17 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
     }
 
 
-    // Use the deep-link to land on the Tools tab — see the latency test for
-    // why we can't drive this through the inline-onclick tab buttons.
+    await page.goto(`${BASE_URL}/ai-ops`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Click the tab button — safe-actions.js event delegation handles
+    // `data-on-click="switchTab"` and triggers loadTools() for us.
     const initialToolsResPromise = page.waitForResponse(
       r => r.url().includes('/api/ai-ops/top-tools'),
       { timeout: 15000 },
     );
 
-    await page.goto(`${BASE_URL}/ai-ops?tab=tools`);
-    await page.waitForLoadState('domcontentloaded');
+    await page.locator('[data-testid="tab-tools"]').click();
     await initialToolsResPromise;
 
     // The agent filter is populated asynchronously inside loadTools(). Wait
@@ -364,10 +364,9 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
     await expect(agentFilter).toBeVisible();
     await expect(agentFilter.locator(`option[value="${AGENT_NAME}"]`)).toHaveCount(1, { timeout: 10000 });
 
-    // The <select> binds with inline `onchange="loadTools()"`, which CSP
-    // blocks. Set the value via selectOption (works regardless of CSP) and
-    // then invoke loadTools() directly through page.evaluate so the
-    // filtered fetch actually fires.
+    // The <select> uses data-on-change="loadTools" handled by safe-actions.js.
+    // Playwright's selectOption fires a real change event, so event delegation
+    // calls loadTools() automatically — no page.evaluate needed.
     const filteredToolsResPromise = page.waitForResponse(
       r =>
         r.url().includes('/api/ai-ops/top-tools') &&
@@ -375,7 +374,6 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
       { timeout: 15000 },
     );
     await agentFilter.selectOption(AGENT_NAME);
-    await page.evaluate(() => (window as any).loadTools && (window as any).loadTools());
     const filteredRes = await filteredToolsResPromise;
     expect(filteredRes.status()).toBe(200);
 
@@ -405,15 +403,17 @@ test.describe('AI Ops — remaining dashboard tabs', () => {
     expect(seededFailedCallId, 'seed step should have produced a failed-call id').not.toBeNull();
 
 
-    // Use the deep-link to land on the Issues tab — see the latency test for
-    // why we can't drive this through the inline-onclick tab buttons.
+    await page.goto(`${BASE_URL}/ai-ops`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Click the tab button directly — safe-actions.js handles data-on-click
+    // via event delegation, so this triggers switchTab('issues') → loadIssues().
     const issuesResPromise = page.waitForResponse(
       r => r.url().includes('/api/ai-ops/recent-issues'),
       { timeout: 15000 },
     );
 
-    await page.goto(`${BASE_URL}/ai-ops?tab=issues`);
-    await page.waitForLoadState('domcontentloaded');
+    await page.locator('[data-testid="tab-issues"]').click();
 
     const issuesRes = await issuesResPromise;
     expect(issuesRes.status()).toBe(200);
