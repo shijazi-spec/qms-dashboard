@@ -231,6 +231,9 @@
 
         const FILTER_STORAGE_KEY = 'health.filterCategory';
         const FILTER_QUERY_PARAM = 'category';
+        const STATUS_STORAGE_KEY = 'health.filterStatus';
+        const STATUS_QUERY_PARAM = 'status';
+        const STATUS_VALUES = ['all', 'fail', 'warn', 'pass', 'skipped'];
 
         function readInitialFilter() {
             try {
@@ -243,7 +246,21 @@
             } catch { return 'all'; }
         }
 
+        function readInitialStatusFilter() {
+            try {
+                const url = new URL(window.location.href);
+                const fromQuery = url.searchParams.get(STATUS_QUERY_PARAM);
+                if (fromQuery && STATUS_VALUES.includes(fromQuery)) return fromQuery;
+            } catch { /* noop */ }
+            try {
+                const stored = sessionStorage.getItem(STATUS_STORAGE_KEY);
+                if (stored && STATUS_VALUES.includes(stored)) return stored;
+            } catch { /* noop */ }
+            return 'all';
+        }
+
         let selectedCategory = readInitialFilter();
+        let selectedStatus = readInitialStatusFilter();
         // Cached so chip clicks can re-render without re-fetching.
         let lastLatest = null;
         // Cached per-check history so chip clicks reuse the same sparkline
@@ -257,6 +274,16 @@
                 const url = new URL(window.location.href);
                 if (cat === 'all') url.searchParams.delete(FILTER_QUERY_PARAM);
                 else url.searchParams.set(FILTER_QUERY_PARAM, cat);
+                window.history.replaceState({}, '', url.toString());
+            } catch { /* noop */ }
+        }
+
+        function persistStatusFilter(status) {
+            try { sessionStorage.setItem(STATUS_STORAGE_KEY, status); } catch { /* noop */ }
+            try {
+                const url = new URL(window.location.href);
+                if (status === 'all') url.searchParams.delete(STATUS_QUERY_PARAM);
+                else url.searchParams.set(STATUS_QUERY_PARAM, status);
                 window.history.replaceState({}, '', url.toString());
             } catch { /* noop */ }
         }
@@ -400,13 +427,26 @@
             renderChecksWithFilter();
         }
 
+        function statusFilterLabel(status) {
+            switch (status) {
+                case 'all': return _t('dyn.health.filter_status_all');
+                case 'fail': return _t('dyn.health.filter_status_fail');
+                case 'warn': return _t('dyn.health.filter_status_warn');
+                case 'pass': return _t('dyn.health.filter_status_pass');
+                case 'skipped': return _t('dyn.health.filter_status_skipped');
+                default: return status;
+            }
+        }
+
         function renderChecksWithFilter() {
             const latest = lastLatest;
             if (!latest) return;
 
+            const allChecks = Array.isArray(latest.checks) ? latest.checks : [];
+
             // Group checks by category (preserving order)
             const grouped = {};
-            for (const c of (latest.checks || [])) {
+            for (const c of allChecks) {
                 const cat = c.category || 'other';
                 (grouped[cat] = grouped[cat] || []).push(c);
             }
@@ -428,14 +468,36 @@
                 persistFilter('all');
             }
 
-            renderFilterChips(orderedCats, grouped);
+            // Counts for category chips reflect the active status filter
+            // (and vice-versa) so an admin can see at a glance how many
+            // results would remain after composing the two filters.
+            const categoryCounts = {};
+            for (const cat of orderedCats) {
+                categoryCounts[cat] = grouped[cat].filter(c => matchesStatus(c, selectedStatus)).length;
+            }
+            const categoryTotal = Object.values(categoryCounts).reduce((a, b) => a + b, 0);
+
+            const checksForStatusCounts = selectedCategory === 'all'
+                ? allChecks
+                : (grouped[selectedCategory] || []);
+            const statusCounts = {
+                all: checksForStatusCounts.length,
+                fail: checksForStatusCounts.filter(c => c.status === 'fail').length,
+                warn: checksForStatusCounts.filter(c => c.status === 'warn').length,
+                pass: checksForStatusCounts.filter(c => c.status === 'pass').length,
+                skipped: checksForStatusCounts.filter(c => c.status === 'skipped').length,
+            };
+
+            renderFilterChips(orderedCats, categoryCounts, categoryTotal, statusCounts);
 
             const visibleCats = selectedCategory === 'all'
                 ? orderedCats
                 : orderedCats.filter(c => c === selectedCategory);
 
             const html = visibleCats.map(cat => {
-                const rows = grouped[cat].map(c => {
+                const rowsArr = grouped[cat].filter(c => matchesStatus(c, selectedStatus));
+                if (rowsArr.length === 0) return '';
+                const rows = rowsArr.map(c => {
                     const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
                     const message = c.message ? `<div class="text-sm text-gray-600 mt-1 mb-2">${escapeHtml(c.message)}</div>` : '';
                     const sparkline = renderCheckSparkline(c.id, lastPerCheckHistory[c.id]);
@@ -468,10 +530,15 @@
                 `;
             }).join('');
 
-            el('checks-list').innerHTML = html || '<div class="px-6 py-8 text-center text-gray-500 text-sm">' + _t('dyn.health.no_checks') + '</div>';
+            el('checks-list').innerHTML = html || '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-checks">' + _t('dyn.health.no_checks') + '</div>';
         }
 
-        function renderFilterChips(orderedCats, grouped) {
+        function matchesStatus(check, status) {
+            if (status === 'all') return true;
+            return check.status === status;
+        }
+
+        function renderFilterChips(orderedCats, categoryCounts, categoryTotal, statusCounts) {
             const container = el('checks-filter');
             if (!orderedCats.length) {
                 container.classList.add('hidden');
@@ -480,29 +547,50 @@
             }
             container.classList.remove('hidden');
 
-            const totalCount = orderedCats.reduce((n, c) => n + grouped[c].length, 0);
-
-            const chips = [];
+            // Category chips
+            const catChips = [];
             const allActive = selectedCategory === 'all';
-            chips.push(
-                '<button type="button" class="filter-chip" data-cat="all"'
+            catChips.push(
+                '<button type="button" class="filter-chip" data-filter="category" data-value="all"'
                 + ' aria-pressed="' + allActive + '"'
                 + ' aria-label="' + escapeHtml(_t('dyn.health.filter_all_aria')) + '"'
                 + ' data-testid="chip-filter-all">'
                 + '<span>' + escapeHtml(_t('dyn.health.filter_all')) + '</span>'
-                + '<span class="filter-chip-count">' + totalCount + '</span>'
+                + '<span class="filter-chip-count">' + categoryTotal + '</span>'
                 + '</button>'
             );
             for (const cat of orderedCats) {
                 const active = selectedCategory === cat;
                 const label = categoryLabel(cat);
-                chips.push(
-                    '<button type="button" class="filter-chip" data-cat="' + escapeHtml(cat) + '"'
+                catChips.push(
+                    '<button type="button" class="filter-chip" data-filter="category" data-value="' + escapeHtml(cat) + '"'
                     + ' aria-pressed="' + active + '"'
                     + ' aria-label="' + escapeHtml(_t('dyn.health.filter_aria', { category: label })) + '"'
                     + ' data-testid="chip-filter-' + escapeHtml(cat) + '">'
                     + '<span>' + escapeHtml(label) + '</span>'
-                    + '<span class="filter-chip-count">' + grouped[cat].length + '</span>'
+                    + '<span class="filter-chip-count">' + (categoryCounts[cat] || 0) + '</span>'
+                    + '</button>'
+                );
+            }
+
+            // Status chips
+            const statusChips = [];
+            for (const status of STATUS_VALUES) {
+                const active = selectedStatus === status;
+                const label = statusFilterLabel(status);
+                const ariaKey = status === 'all'
+                    ? 'dyn.health.filter_status_all_aria'
+                    : 'dyn.health.filter_status_aria';
+                const ariaLabel = status === 'all'
+                    ? _t(ariaKey)
+                    : _t(ariaKey, { status: label });
+                statusChips.push(
+                    '<button type="button" class="filter-chip" data-filter="status" data-value="' + escapeHtml(status) + '"'
+                    + ' aria-pressed="' + active + '"'
+                    + ' aria-label="' + escapeHtml(ariaLabel) + '"'
+                    + ' data-testid="chip-status-' + escapeHtml(status) + '">'
+                    + '<span>' + escapeHtml(label) + '</span>'
+                    + '<span class="filter-chip-count">' + (statusCounts[status] || 0) + '</span>'
                     + '</button>'
                 );
             }
@@ -512,16 +600,32 @@
                 + ' id="checks-filter-label">'
                 + escapeHtml(_t('dyn.health.filter_label')) + '</div>'
                 + '<div class="flex flex-wrap gap-2" role="toolbar"'
-                + ' aria-labelledby="checks-filter-label">'
-                + chips.join('')
+                + ' aria-labelledby="checks-filter-label"'
+                + ' data-testid="toolbar-filter-category">'
+                + catChips.join('')
+                + '</div>'
+                + '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-3 mb-2"'
+                + ' id="checks-filter-status-label">'
+                + escapeHtml(_t('dyn.health.filter_status_label')) + '</div>'
+                + '<div class="flex flex-wrap gap-2" role="toolbar"'
+                + ' aria-labelledby="checks-filter-status-label"'
+                + ' data-testid="toolbar-filter-status">'
+                + statusChips.join('')
                 + '</div>';
 
             container.querySelectorAll('.filter-chip').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const cat = btn.getAttribute('data-cat') || 'all';
-                    if (cat === selectedCategory) return;
-                    selectedCategory = cat;
-                    persistFilter(cat);
+                    const filter = btn.getAttribute('data-filter');
+                    const value = btn.getAttribute('data-value') || 'all';
+                    if (filter === 'status') {
+                        if (value === selectedStatus) return;
+                        selectedStatus = value;
+                        persistStatusFilter(value);
+                    } else {
+                        if (value === selectedCategory) return;
+                        selectedCategory = value;
+                        persistFilter(value);
+                    }
                     renderChecksWithFilter();
                 });
             });

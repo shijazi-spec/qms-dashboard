@@ -72,7 +72,7 @@ The platform is built on the Mastra AI agent framework and Hono HTTP server.
     -   **Frontend**: Static HTML dashboards, styled with compiled Tailwind CSS.
     -   **Backend**: Mastra API routes are handled by Hono.
     -   **Database**: PostgreSQL manages over 103 tables across 21 module groups using a shared connection pool.
-    -   **AI Integration**: GPT-4o powers AI agent functionalities through Replit AI/OpenAI. AI Observability is implemented via an `ai_call_metrics` table, tracking token usage, cost, latency, and errors for every LLM call, visualized in an "AI Operations" panel.
+    -   **AI Integration**: GPT-4o powers AI agent functionalities through Replit AI/OpenAI. AI Observability via `ai_call_metrics` tracks token usage, cost, latency, and errors for LLM calls, visualized in an "AI Operations" panel.
     -   **Workflows**: Inngest orchestrates event-driven processes like background scanning, KPI calculation, and AI approval expiry.
     -   **Authentication**: Replit OIDC (Google, GitHub, Apple, email) with HMAC-SHA256 signed cookies for session management. An Admin API key provides alternative access.
     -   **Authorization**: Role-Based Access Control (RBAC) with 11 roles ensures granular access to API endpoints and dashboards via `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
