@@ -16,6 +16,7 @@ import {
 import {
   initAIFeedbackTable,
   saveFeedback,
+  buildAiCallFeedbackMetadata,
   getFeedbackStats,
   getRecentThumbsDown,
   getFeedbackTrend,
@@ -448,6 +449,19 @@ export const consultantRoutes = [
             return c.json({ error: "messageId and valid rating ('up'|'down') are required" }, 400);
           }
 
+          // Always route metadata through buildAiCallFeedbackMetadata so the
+          // closed allow-list (Task #512) is enforced at the call site.
+          // promptVersion lets analytics correlate thumbs-up/down to the
+          // exact consultant prompt revision the user reacted to;
+          // ratingSource / clientSurface mark this as the inline thumbs UI
+          // on the web consultant chat (other surfaces — Slack, mobile —
+          // would supply different values when wired up).
+          const feedbackMetadata = buildAiCallFeedbackMetadata({
+            promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+            ratingSource: 'inline_thumbs',
+            clientSurface: 'web',
+          });
+
           const result = await saveFeedback({
             message_id: messageId,
             conversation_id: conversationId || undefined,
@@ -460,6 +474,7 @@ export const consultantRoutes = [
             prompt_preview: promptPreview || undefined,
             response_preview: responsePreview || undefined,
             tools_called: toolsCalled ? JSON.stringify(toolsCalled).substring(0, 1000) : undefined,
+            metadata: feedbackMetadata,
           });
 
           return c.json({ success: true, id: result.id });

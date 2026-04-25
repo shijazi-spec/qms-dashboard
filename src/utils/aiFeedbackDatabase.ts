@@ -1,5 +1,8 @@
 import pg from 'pg';
-import { redactSecretLikeStrings } from './eventLogsDatabase';
+import {
+  redactSecretLikeStrings,
+  deepRedactSecretLikeStrings,
+} from './eventLogsDatabase';
 
 const { Pool } = pg;
 
@@ -25,6 +28,7 @@ export async function initAIFeedbackTable(): Promise<void> {
           prompt_preview TEXT,
           response_preview TEXT,
           tools_called  TEXT,
+          metadata      JSONB DEFAULT '{}'::jsonb,
           created_at    TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_ai_feedback_message_id ON ai_response_feedback(message_id);
@@ -34,6 +38,7 @@ export async function initAIFeedbackTable(): Promise<void> {
       `);
       await pool.query(`
         ALTER TABLE ai_response_feedback ADD COLUMN IF NOT EXISTS tools_called TEXT;
+        ALTER TABLE ai_response_feedback ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
       `);
     } catch (err) {
       tableReady = null;
@@ -49,6 +54,139 @@ function safeRedactPreview(text: string | undefined | null): string | undefined 
   return typeof redacted === 'string' ? redacted : text.substring(0, 500);
 }
 
+/**
+ * Closed allow-list of keys that may appear in `ai_response_feedback.metadata`.
+ *
+ * Mirrors the protection added for `ai_call_metrics.metadata` by
+ * `AiCallTelemetryMetadata` / `buildAiCallTelemetryMetadata()` in
+ * `aiTelemetry.ts` (Task #484). Replaces a freeform `Record<string, unknown>`
+ * shape so a developer cannot accidentally pass
+ * `{ note: caughtError.message, debug: rawHeaders }` from a `catch` block —
+ * which would land plaintext credentials in the JSONB column. The WRITE-path
+ * scrubber `redactFeedbackMetadataForStorage()` defends against that one
+ * layer too late: by the time it runs, the secret has already been
+ * constructed in memory and (typically) logged to stdout via `console.error`
+ * / Pino BEFORE the scrubber redacts it for the DB. This typed shape is the
+ * source-side prevention; build it via `buildAiCallFeedbackMetadata()`.
+ *
+ * To add a new key:
+ *   1. Add the snake_case field here.
+ *   2. Add the camelCase field on `AiCallFeedbackMetadataInput`.
+ *   3. Map it in `buildAiCallFeedbackMetadata()`.
+ *   4. Update the test in `src/utils/__tests__/aiFeedbackMetadata.test.ts`.
+ */
+export interface AiCallFeedbackMetadata {
+  /** Stable hash of the agent's instruction prompt (e.g. `qms@deadbeef`). */
+  prompt_version?: string;
+  /** Identifier for an A/B feature flag bucket. */
+  feature_flag?: string;
+  /** Identifier for an experiment arm (e.g. `control`, `treatment-1`). */
+  experiment_arm?: string;
+  /** Name of the orchestrating workflow (e.g. `qualityAuditWorkflow`). */
+  workflow?: string;
+  /** Step within a workflow (e.g. `sdr-audit`, `sales-audit`). */
+  step?: string;
+  /** Where the rating was captured (e.g. `inline_thumbs`, `detail_modal`). */
+  rating_source?: string;
+  /** Surface that produced the rating (e.g. `web`, `mobile`, `slack`). */
+  client_surface?: string;
+}
+
+/**
+ * camelCase mirror of `AiCallFeedbackMetadata` used as the input shape for
+ * `buildAiCallFeedbackMetadata()`. Keeping the snake_case ↔ camelCase
+ * boundary inside the helper means call-sites read naturally in TS while
+ * the persisted JSONB stays in the snake_case shape (mirroring the sibling
+ * `metadata->>'prompt_version'` SQL expressions used against
+ * `ai_call_metrics.metadata`).
+ */
+export interface AiCallFeedbackMetadataInput {
+  promptVersion?: string;
+  featureFlag?: string;
+  experimentArm?: string;
+  workflow?: string;
+  step?: string;
+  ratingSource?: string;
+  clientSurface?: string;
+}
+
+const FEEDBACK_METADATA_KEY_MAP: Record<keyof AiCallFeedbackMetadataInput, keyof AiCallFeedbackMetadata> = {
+  promptVersion: 'prompt_version',
+  featureFlag: 'feature_flag',
+  experimentArm: 'experiment_arm',
+  workflow: 'workflow',
+  step: 'step',
+  ratingSource: 'rating_source',
+  clientSurface: 'client_surface',
+};
+
+/**
+ * Build a typed `metadata` payload for `ai_response_feedback` rows.
+ *
+ * MUST be used at every `saveFeedback()` call site that wants to attach
+ * metadata, instead of an inline object literal. The closed allow-list
+ * (see `AiCallFeedbackMetadataInput`) prevents the pattern of stuffing
+ * dynamic strings derived from `catch (err)`, raw HTTP headers, or tool
+ * output into `metadata` — which would land plaintext credentials in the
+ * JSONB column.
+ *
+ * Defense-in-depth runtime guard: even if a caller bypasses the type
+ * system via `as any`, unexpected keys are dropped and a `console.warn`
+ * is emitted with an actionable message so the regression shows up in
+ * the operator console rather than silently persisting.
+ */
+export function buildAiCallFeedbackMetadata(
+  input: AiCallFeedbackMetadataInput,
+): AiCallFeedbackMetadata {
+  const out: AiCallFeedbackMetadata = {};
+  const loose = input as Record<string, unknown>;
+  for (const inputKey of Object.keys(loose)) {
+    const mapped = FEEDBACK_METADATA_KEY_MAP[inputKey as keyof AiCallFeedbackMetadataInput];
+    if (!mapped) {
+      console.warn(
+        `[aiFeedbackDatabase] buildAiCallFeedbackMetadata received unexpected key "${inputKey}". ` +
+        `Allowed keys: ${Object.keys(FEEDBACK_METADATA_KEY_MAP).join(', ')}. ` +
+        `The key was dropped to prevent credential-shaped substrings from reaching ai_response_feedback.metadata.`,
+      );
+      continue;
+    }
+    const value = loose[inputKey];
+    if (value === undefined) continue;
+    (out as Record<string, unknown>)[mapped] = value;
+  }
+  return out;
+}
+
+/**
+ * Scrub the caller-supplied `metadata` JSONB blob destined for
+ * `ai_response_feedback.metadata` before it is `JSON.stringify`-ed into the
+ * INSERT/UPDATE parameter slot.
+ *
+ * Mirrors `redactMetadataForStorage()` in `aiTelemetry.ts`: runs every
+ * string leaf through `deepRedactSecretLikeStrings()` so a careless caller
+ * cannot land a credential-shaped substring (sk-…, ghp_…, JWT, bcrypt
+ * hash, AWS key) under an allowed key and have it persist in plaintext.
+ *
+ * Note: this is the second layer of defense. The first is the typed
+ * `AiCallFeedbackMetadata` allow-list enforced at the call site by
+ * `buildAiCallFeedbackMetadata()`, which prevents free-form keys derived
+ * from `catch (err)` / raw headers / tool output from ever being
+ * constructed in memory in the first place.
+ *
+ * Returns a plain object — never null — so callers can pass the result
+ * straight into `JSON.stringify` without an extra `?? {}`.
+ */
+export function redactFeedbackMetadataForStorage(
+  metadata: AiCallFeedbackMetadata | Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!metadata) return {};
+  const scrubbed = deepRedactSecretLikeStrings(metadata);
+  if (scrubbed && typeof scrubbed === 'object' && !Array.isArray(scrubbed)) {
+    return scrubbed as Record<string, unknown>;
+  }
+  return {};
+}
+
 export interface FeedbackRecord {
   message_id: string;
   conversation_id?: string;
@@ -61,6 +199,7 @@ export interface FeedbackRecord {
   prompt_preview?: string;
   response_preview?: string;
   tools_called?: string;
+  metadata?: AiCallFeedbackMetadata;
 }
 
 export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> {
@@ -74,18 +213,30 @@ export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> 
 
   const redactedPrompt = safeRedactPreview(fb.prompt_preview);
   const redactedResponse = safeRedactPreview(fb.response_preview);
+  // Only serialize metadata when the caller actually provided it. On the
+  // UPDATE branch we want to preserve the existing JSONB if the caller
+  // omits it (mirrors the `tools_called=COALESCE(...)` preservation pattern
+  // a few lines down) — otherwise a follow-up rating tweak from the same
+  // user would erase the prompt_version / experiment_arm / rating_source
+  // recorded with the original thumbs-up/down.
+  const metadataJson =
+    fb.metadata !== undefined
+      ? JSON.stringify(redactFeedbackMetadataForStorage(fb.metadata))
+      : null;
 
   if (existing.rows[0]) {
     const res = await pool.query(
       `UPDATE ai_response_feedback
           SET rating=$1, category=$2, comment=$3,
               prompt_preview=$4, response_preview=$5,
-              tools_called=COALESCE($6, tools_called), created_at=NOW()
-        WHERE id=$7
+              tools_called=COALESCE($6, tools_called),
+              metadata=COALESCE($7::jsonb, metadata),
+              created_at=NOW()
+        WHERE id=$8
         RETURNING id`,
       [fb.rating, fb.category || null, fb.comment || null,
        redactedPrompt || null, redactedResponse || null,
-       fb.tools_called || null, existing.rows[0].id]
+       fb.tools_called || null, metadataJson, existing.rows[0].id]
     );
     return { id: res.rows[0].id };
   }
@@ -93,8 +244,8 @@ export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> 
   const res = await pool.query(
     `INSERT INTO ai_response_feedback
        (message_id, conversation_id, agent, rating, category, comment,
-        user_id, user_email, prompt_preview, response_preview, tools_called)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        user_id, user_email, prompt_preview, response_preview, tools_called, metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,COALESCE($12::jsonb, '{}'::jsonb))
      RETURNING id`,
     [
       fb.message_id,
@@ -108,6 +259,7 @@ export async function saveFeedback(fb: FeedbackRecord): Promise<{ id: number }> 
       redactedPrompt || null,
       redactedResponse || null,
       fb.tools_called ? fb.tools_called.substring(0, 1000) : null,
+      metadataJson,
     ]
   );
   return { id: res.rows[0].id };
