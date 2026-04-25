@@ -382,22 +382,27 @@ inngestFunctions.push(aiApprovalExpiryFunction);
 // Daily AI cost summary + pruning cron
 // Emits a Slack/email alert when the trailing-24h cost exceeds
 // AI_DAILY_COST_ALERT_USD (default $10.00).
-// Also prunes ai_call_metrics rows older than 90 days.
+// Also prunes ai_call_metrics rows older than the configured retention window
+// (AI_METRICS_RETENTION_DAYS, default 90 days).
 // ──────────────────────────────────────────────────────────────────────────────
 const aiCostSummaryFunction = inngest.createFunction(
   { id: "ai-cost-summary" },
   { cron: process.env.AI_COST_SUMMARY_CRON || "0 6 * * *" }, // daily @ 06:00 UTC
   async ({ step }) => {
     return await step.run("check-ai-cost-and-prune", async () => {
-      const { getDailyCostSummary, pruneOldAiMetrics } = await import("../../utils/aiTelemetry");
+      const { getDailyCostSummary, pruneOldAiMetrics, resolveAiMetricsRetentionDays } =
+        await import("../../utils/aiTelemetry");
 
+      const retentionDays = resolveAiMetricsRetentionDays();
       const [summary, pruned] = await Promise.all([
         getDailyCostSummary(),
-        pruneOldAiMetrics(),
+        pruneOldAiMetrics(retentionDays),
       ]);
 
       if (pruned > 0) {
-        console.log(`[AI-Cost] Pruned ${pruned} stale ai_call_metrics rows (>90 days)`);
+        console.log(
+          `[AI-Cost] Pruned ${pruned} stale ai_call_metrics rows (>${retentionDays} days)`,
+        );
       }
 
       // Task #469 + #475: scrub credential-shaped substrings from any
@@ -500,7 +505,12 @@ exceeding the configured threshold of <strong>$${thresholdUsd}</strong>.</p>
         }
       }
 
-      return { summary, pruned, thresholdExceeded: summary.totalCostUsd >= thresholdUsd };
+      return {
+        summary,
+        pruned,
+        retentionDays,
+        thresholdExceeded: summary.totalCostUsd >= thresholdUsd,
+      };
     });
   },
 );

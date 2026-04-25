@@ -672,13 +672,49 @@ export async function recordStreamTelemetry(params: {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 90-day pruning — called from the daily cost-summary cron
+// Configurable retention pruning — called from the daily cost-summary cron
+//
+// `ai_call_metrics` is append-only, so without an automatic prune the table
+// grows without bound. With high-volume agents this slows every query (even
+// the indexed ones) over time. The daily cron runs `pruneOldAiMetrics()` to
+// delete rows whose `started_at` is older than the configured retention
+// window.
+//
+// Operators tune the window via the `AI_METRICS_RETENTION_DAYS` env var
+// (default 90). Values are clamped to >= 1 day so a misconfiguration cannot
+// wipe rows newer than 24h. Non-numeric / NaN / <= 0 values fall back to the
+// default. An explicit argument to `pruneOldAiMetrics(retentionDays)` always
+// wins over the env var, which is useful for tests and one-off sweeps.
 // ──────────────────────────────────────────────────────────────────────────────
-export async function pruneOldAiMetrics(): Promise<number> {
+export const DEFAULT_AI_METRICS_RETENTION_DAYS = 90;
+
+/**
+ * Resolve the effective retention window (in days) for `ai_call_metrics`.
+ * Reads `AI_METRICS_RETENTION_DAYS` from the environment, validates it as a
+ * positive integer, and clamps to a minimum of 1. Falls back to
+ * {@link DEFAULT_AI_METRICS_RETENTION_DAYS} when the env var is absent,
+ * non-numeric, NaN, zero, or negative.
+ */
+export function resolveAiMetricsRetentionDays(): number {
+  const raw = process.env.AI_METRICS_RETENTION_DAYS;
+  if (raw == null || raw === '') return DEFAULT_AI_METRICS_RETENTION_DAYS;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_AI_METRICS_RETENTION_DAYS;
+  }
+  return Math.max(1, Math.floor(parsed));
+}
+
+export async function pruneOldAiMetrics(retentionDays?: number): Promise<number> {
   try {
     await ensureAiMetricsTable();
+    const days =
+      typeof retentionDays === 'number' && Number.isFinite(retentionDays) && retentionDays > 0
+        ? Math.max(1, Math.floor(retentionDays))
+        : resolveAiMetricsRetentionDays();
     const result = await pool.query(
-      `DELETE FROM ai_call_metrics WHERE started_at < NOW() - INTERVAL '90 days'`
+      `DELETE FROM ai_call_metrics WHERE started_at < NOW() - MAKE_INTERVAL(days => $1)`,
+      [days],
     );
     return result.rowCount ?? 0;
   } catch (err) {
