@@ -528,6 +528,356 @@ async function testBreachClaimDbThrowsFallsThroughToSend(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Section 1b — persist()/recordResult error containment + channel labels
+//
+// The persist() helper inside notifyToolHealthBreach wraps recordResult in
+// a try/catch so a transient DB write failure (the "Notified" column UPDATE)
+// never escapes back to the cron tick. Task #560 covered the Slack/email
+// throw paths; this section pins the *third* try/catch — the one around
+// recordResult — for every terminal state.
+//
+// Why this matters (Task #577): a regression that turned the swallow into
+// a re-throw would crash the cron *after* a successful page, so operators
+// would see the Slack/email but the cron would silently stop until the next
+// process restart. The "Notified" column would also stay frozen on the
+// previous (or NULL) value, defeating the dashboard's whole purpose.
+// ---------------------------------------------------------------------------
+
+async function testBreachRecordResultThrowsAfterSlackSuccess(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — recordResult throws after Slack success ⇒ slackSent stays true, no throw escapes",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  let slackCalls = 0;
+  let recordCalls = 0;
+  let recordChannel: string | null = null;
+  // Suppress the expected "[ToolHealthNotifier] recordResult threw …" log so
+  // the test output stays readable; restore in `finally` so any unrelated
+  // error path still surfaces.
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "record-throw-slack:error_rate", alert_id: 7 }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          return true;
+        },
+        sendEmail: async () => ({ success: false, error: "should not be called" }),
+        claimDb: async () => true,
+        recordResult: async (_id, channel) => {
+          recordCalls++;
+          recordChannel = channel;
+          throw new Error("simulated DB UPDATE failure");
+        },
+        now: () => 1_700_000_010_000,
+      },
+    );
+    // Critical contract: a persist() failure must NEVER undo a successful
+    // Slack send. Without this guarantee a transient DB error would leave
+    // operators thinking the page failed when it actually went out, AND
+    // would crash the cron tick that has already paged on-call.
+    assertEqual(result.slackSent, true, "result.slackSent stays true despite recordResult throw");
+    assertEqual(result.emailSent, false, "result.emailSent stays false (no email config)");
+    assertEqual(result.throttled, false, "not throttled — claim succeeded before send");
+    assertEqual(result.skipped, false, "not skipped — Slack channel was configured");
+    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once");
+    assertEqual(recordCalls, 1, "recordResult was invoked exactly once");
+    assertEqual(recordChannel, "slack", "channel persisted is 'slack' (Slack-only configured)");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testBreachRecordResultThrowsOnSkippedPath(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — recordResult throws on the 'skipped' persist path ⇒ skipped stays true, no throw escapes",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  // No Slack channel and no email recipients ⇒ persist("not_configured")
+  // is the only call site exercised on this path.
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  let recordCalls = 0;
+  let recordChannel: string | null = null;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "record-throw-skipped:error_rate", alert_id: 8 }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          return true;
+        },
+        sendEmail: async () => {
+          emailCalls++;
+          return { success: true };
+        },
+        claimDb: async () => true,
+        recordResult: async (_id, channel) => {
+          recordCalls++;
+          recordChannel = channel;
+          throw new Error("simulated DB UPDATE failure");
+        },
+      },
+    );
+    assertEqual(result.skipped, true, "result.skipped stays true despite recordResult throw");
+    assertEqual(result.slackSent, false, "no Slack send recorded");
+    assertEqual(result.emailSent, false, "no email send recorded");
+    assertEqual(result.throttled, false, "throttled is false (skip is the reason)");
+    assertEqual(slackCalls, 0, "sendSlack was not invoked (nothing configured)");
+    assertEqual(emailCalls, 0, "sendEmail was not invoked (nothing configured)");
+    assertEqual(recordCalls, 1, "recordResult was invoked exactly once on the skip path");
+    assertEqual(recordChannel, "not_configured", "skip path persists 'not_configured' channel");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testBreachRecordResultThrowsOnThrottledPath(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — recordResult throws on the 'throttled' persist path ⇒ throttled stays true, no throw escapes",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+
+  let slackCalls = 0;
+  let recordCalls = 0;
+  let recordChannel: string | null = null;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "record-throw-throttled:error_rate", alert_id: 9 }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          return true;
+        },
+        sendEmail: async () => ({ success: true }),
+        // A sibling instance already holds the slot ⇒ persist("throttled").
+        claimDb: async () => false,
+        recordResult: async (_id, channel) => {
+          recordCalls++;
+          recordChannel = channel;
+          throw new Error("simulated DB UPDATE failure");
+        },
+        now: () => 1_700_000_011_000,
+      },
+    );
+    assertEqual(result.throttled, true, "result.throttled stays true despite recordResult throw");
+    assertEqual(result.slackSent, false, "Slack stays false — claim was lost to a sibling");
+    assertEqual(result.emailSent, false, "email stays false — claim was lost to a sibling");
+    assertEqual(result.skipped, false, "not skipped");
+    assertEqual(slackCalls, 0, "sendSlack was not invoked (claim lost)");
+    assertEqual(recordCalls, 1, "recordResult was invoked exactly once on the throttle path");
+    assertEqual(recordChannel, "throttled", "throttle path persists 'throttled' channel");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testBreachRecordResultThrowsOnFailedPath(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — recordResult throws on the 'failed' persist path ⇒ result mirrors actual outcome, no throw escapes",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+
+  let recordCalls = 0;
+  let recordChannel: string | null = null;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "record-throw-failed:error_rate", alert_id: 10 }),
+      {
+        // Both transports report failure WITHOUT throwing, so the only
+        // try/catch that fires here is the one around recordResult.
+        sendSlack: async () => false,
+        sendEmail: async () => ({ success: false, error: "Resend rejected" }),
+        claimDb: async () => true,
+        recordResult: async (_id, channel) => {
+          recordCalls++;
+          recordChannel = channel;
+          throw new Error("simulated DB UPDATE failure");
+        },
+        now: () => 1_700_000_012_000,
+      },
+    );
+    assertEqual(result.slackSent, false, "result.slackSent stays false (transport returned false)");
+    assertEqual(result.emailSent, false, "result.emailSent stays false (transport returned false)");
+    assertEqual(result.throttled, false, "not throttled");
+    assertEqual(result.skipped, false, "not skipped");
+    assertEqual(recordCalls, 1, "recordResult was invoked exactly once on the failed path");
+    assertEqual(recordChannel, "failed", "failed path persists 'failed' channel");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — recordResult is invoked with the correct channel label for each terminal state",
+  );
+
+  // Each terminal state writes a distinct channel string that the AI Ops
+  // panel uses to render the "what was configured vs what delivered"
+  // distinction. Pin the exact label per state so a refactor that, say,
+  // collapsed `slack_only` into `slack` would fail loudly here instead of
+  // silently regressing the dashboard's filtering.
+  type Capture = { channel: string; alertId: number | null | undefined; whenMs: number };
+  const captures: Record<string, Capture[]> = {};
+  function makeRecorder(label: string) {
+    captures[label] = [];
+    return async (alertId: number | null | undefined, channel: string, whenMs: number) => {
+      captures[label].push({ channel, alertId, whenMs });
+    };
+  }
+
+  // -- not_configured: no Slack channel, no email recipients --
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "ch-notconfigured:error_rate", alert_id: 100 }),
+    {
+      sendSlack: async () => true,
+      sendEmail: async () => ({ success: true }),
+      claimDb: async () => true,
+      recordResult: makeRecorder("not_configured"),
+      now: () => 1_700_000_020_000,
+    },
+  );
+
+  // -- throttled: claimDb returns false (sibling holds the slot) --
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+  await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "ch-throttled:error_rate", alert_id: 101 }),
+    {
+      sendSlack: async () => true,
+      sendEmail: async () => ({ success: true }),
+      claimDb: async () => false,
+      recordResult: makeRecorder("throttled"),
+      now: () => 1_700_000_021_000,
+    },
+  );
+
+  // -- slack+email: both configured, both succeed --
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+  await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "ch-both:error_rate", alert_id: 102 }),
+    {
+      sendSlack: async () => true,
+      sendEmail: async () => ({ success: true }),
+      claimDb: async () => true,
+      recordResult: makeRecorder("slack+email"),
+      now: () => 1_700_000_022_000,
+    },
+  );
+
+  // -- slack_only: Slack OK, email configured but failed (the
+  //    "Slack delivered, email is broken" signal for ops). --
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+  await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "ch-slackonly:error_rate", alert_id: 103 }),
+    {
+      sendSlack: async () => true,
+      sendEmail: async () => ({ success: false, error: "Resend rejected" }),
+      claimDb: async () => true,
+      recordResult: makeRecorder("slack_only"),
+      now: () => 1_700_000_023_000,
+    },
+  );
+
+  // -- email_only: email OK, Slack configured but failed (the
+  //    "email delivered, Slack is broken" signal for ops). --
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+  await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "ch-emailonly:error_rate", alert_id: 104 }),
+    {
+      sendSlack: async () => false,
+      sendEmail: async () => ({ success: true }),
+      claimDb: async () => true,
+      recordResult: makeRecorder("email_only"),
+      now: () => 1_700_000_024_000,
+    },
+  );
+
+  // -- failed: both configured, both fail --
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+  await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "ch-failed:error_rate", alert_id: 105 }),
+    {
+      sendSlack: async () => false,
+      sendEmail: async () => ({ success: false, error: "Resend rejected" }),
+      claimDb: async () => true,
+      recordResult: makeRecorder("failed"),
+      now: () => 1_700_000_025_000,
+    },
+  );
+
+  for (const expected of [
+    "not_configured",
+    "throttled",
+    "slack+email",
+    "slack_only",
+    "email_only",
+    "failed",
+  ]) {
+    const recs = captures[expected] ?? [];
+    assertEqual(
+      recs.length,
+      1,
+      `recordResult invoked exactly once for terminal state '${expected}'`,
+    );
+    assertEqual(
+      recs[0]?.channel,
+      expected,
+      `recordResult received channel='${expected}' for terminal state '${expected}'`,
+    );
+  }
+  // Spot-check that persist() forwards alert_id and the injected clock to
+  // recordResult — the "Notified" column relies on both to render an
+  // accurate row + timestamp.
+  assertEqual(
+    captures["slack+email"][0].alertId,
+    102,
+    "slack+email persist forwards the alert_id from the breach payload",
+  );
+  assertEqual(
+    captures["slack+email"][0].whenMs,
+    1_700_000_022_000,
+    "slack+email persist forwards the injected clock to recordResult",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section 2 — notifyToolHealthOverrideExpired
 // ---------------------------------------------------------------------------
 
@@ -1663,6 +2013,11 @@ async function main(): Promise<void> {
     await testBreachEmailRejectedKeepsEmailSentFalse();
     await testBreachEmailThrowsDoesNotPropagate();
     await testBreachClaimDbThrowsFallsThroughToSend();
+    await testBreachRecordResultThrowsAfterSlackSuccess();
+    await testBreachRecordResultThrowsOnSkippedPath();
+    await testBreachRecordResultThrowsOnThrottledPath();
+    await testBreachRecordResultThrowsOnFailedPath();
+    await testBreachRecordResultChannelLabelPerTerminalState();
     await testOverrideExpiredSlackPost();
     await testOverrideExpiredSlackThrowsDoesNotPropagate();
     await testOverrideExpiredSkippedWithoutChannel();
