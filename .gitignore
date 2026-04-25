@@ -9,3 +9,4 @@ dist
 a11y-report.json
 a11y-playwright-report.json
 test-results/
+audit-evidence/last-sweep.json
