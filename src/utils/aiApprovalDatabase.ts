@@ -21,7 +21,7 @@
 
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
-import { redactSensitiveFields, redactSecretLikeStrings } from './eventLogsDatabase';
+import { redactSensitiveDeep, redactSecretLikeStrings } from './eventLogsDatabase';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -163,11 +163,17 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   // SECURITY (PDPL Art. 16 / PCI DSS §3.5 / ISO 27001 A.5.34):
   // The tool-invocation context can contain credentials (e.g. an API-key
   // rotation tool whose payload is the new key, a refresh-token swap, etc.).
-  // Strip every deny-listed field BEFORE the value reaches the JSONB column,
-  // BEFORE it is checksummed, and BEFORE it is returned to any caller — so
-  // that no downstream consumer (audit dashboard, /approvals API, audit log
-  // backfill) can re-leak the original secret.
-  const safePayload = redactSensitiveFields(input.payload);
+  // `redactSensitiveDeep` applies BOTH defenses in one pass:
+  //   1. Key-based deny list — values under sensitive field names (api_key,
+  //      password, token, …) are replaced with REDACTED_SENTINEL.
+  //   2. Regex deny list — every string leaf is scrubbed of credential-shaped
+  //      substrings (sk-…, ghp_…, JWT, bcrypt, AWS, …) so a tool author who
+  //      embeds a secret in an innocuous field like `notes` is also covered.
+  // This happens BEFORE the value reaches the JSONB column, BEFORE it is
+  // checksummed, and BEFORE it is returned to any caller — so no downstream
+  // consumer (audit dashboard, /approvals API, audit log backfill) can
+  // re-leak the original secret.
+  const safePayload = redactSensitiveDeep(input.payload);
   const checksum = checksumPayload(safePayload);
 
   // SECURITY: payload_preview is a free-form TEXT column built by each tool's
@@ -365,7 +371,7 @@ export async function recordExecutionResult(
   // result.data through the same deny-list helper used for `payload` and
   // the audit log so the JSONB column never stores raw credentials.
   const safeExecutionResult = JSON.stringify({
-    data: redactSensitiveFields(result.data),
+    data: redactSensitiveDeep(result.data),
     error: result.error,
   });
 

@@ -281,6 +281,68 @@ async function run(): Promise<void> {
     "Returned execution_result.data exposes redacted secrets only",
   );
 
+  // -----------------------------------------------------------------------
+  // Credential-shaped strings inside non-sensitive payload leaves
+  //
+  // This is the scenario fixed by swapping redactSensitiveFields() for
+  // redactSensitiveDeep() in enqueuePendingAction():
+  //   - The payload field name ("notes") is NOT on the key deny-list, so
+  //     redactSensitiveFields() would have left its value untouched.
+  //   - redactSensitiveDeep() applies the regex deny-list to every string
+  //     leaf, catching credential-shaped substrings regardless of key name.
+  // -----------------------------------------------------------------------
+  console.log("\n[aiApprovalDatabase] credential-shaped strings in non-sensitive payload leaves");
+
+  const capturedLengthBefore = captured.length;
+
+  const INLINE_GHP = "ghp_InlineSecretInsideNoteField1234567890abc";
+  const INLINE_SK  = "sk-live-InlineSecretInsideNoteField_9876543210";
+
+  await enqueuePendingAction({
+    toolId: "update_notes",
+    toolLabel: "Update Notes",
+    payload: {
+      action: "update",
+      notes: `Please rotate — old key was ${INLINE_GHP} and fallback was ${INLINE_SK}`,
+      metadata: {
+        author: "ops@walaplus.com",
+        context: `bearer token: Bearer ${INLINE_GHP}`,
+      },
+    },
+    payloadPreview: "Update notes for integration record",
+    riskLevel: "low",
+    complianceRefs: [],
+    requestedByUserId: 1,
+    requestedByEmail: "ops@walaplus.com",
+    requestedByName: "Ops",
+    threadId: null,
+  });
+
+  const inlineInsertCall = captured
+    .slice(capturedLengthBefore)
+    .find(c => /INSERT INTO ai_pending_actions/i.test(c.sql));
+  assert(!!inlineInsertCall, "[inline] INSERT INTO ai_pending_actions was issued");
+
+  const inlinePayloadJson = String(inlineInsertCall!.params[3]);
+
+  assert(
+    !inlinePayloadJson.includes(INLINE_GHP),
+    "[inline] payload does not contain ghp_… token embedded in 'notes' field",
+  );
+  assert(
+    !inlinePayloadJson.includes(INLINE_SK),
+    "[inline] payload does not contain sk-… token embedded in 'notes' field",
+  );
+  assert(
+    inlinePayloadJson.includes(REDACTED_SENTINEL),
+    "[inline] payload contains the redaction sentinel for embedded credentials",
+  );
+  assert(
+    inlinePayloadJson.includes("ops@walaplus.com") &&
+      inlinePayloadJson.includes('"action":"update"'),
+    "[inline] payload preserves safe non-credential fields",
+  );
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);
