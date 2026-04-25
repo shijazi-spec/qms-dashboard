@@ -217,7 +217,7 @@ async function run(): Promise<void> {
   );
 
   // ---- Deep regex scrubbing of JSONB string leaves under non-sensitive keys
-  // Task #100: redactAiPendingActions must apply deepRedactSecretLikeStrings
+  // Task #100/#102: redactAiPendingActions must apply the deep-string redaction
   // AFTER redactSensitiveFields so that credential-shaped substrings embedded
   // in innocuously-named keys (note, summary, message) are also swept.
   const deepLeafRows: RowState[] = [
@@ -296,6 +296,189 @@ async function run(): Promise<void> {
   assert(
     result5.rowsUpdated === 0,
     `deep-leaf second pass updates 0 rows (got ${result5.rowsUpdated}) — idempotent`,
+  );
+
+  // -----------------------------------------------------------------------
+  // Value-level (substring) redaction in innocuously-named JSONB fields.
+  //
+  // Task #102: the key-based deny-list is blind to credentials stored under
+  // field names that don't match the deny-list patterns (e.g. `note`,
+  // `message`, `config_diff`, `curl_example`).  This fixture covers the
+  // additional secret formats Task #102 cared about (ids 40-42 to avoid
+  // colliding with the deep-leaf fixture above).
+  // -----------------------------------------------------------------------
+  const innocuousSecret = "sk-live-INNOCUOUS_FIELD_LEAKING_VALUE_ABCDEFGH";
+  const innocuousGh = "ghp_innocuousFieldGhTokenValue1234567890abc";
+  const innocuousJwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI4ODg4ODgifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const innocuousSafe = "operation completed for tenant acme-corp";
+
+  const innocuousRows: RowState[] = [
+    {
+      id: 40,
+      // `note` and `message` are NOT in the key deny-list — only value-level
+      // regex redaction can remove the credentials they contain.
+      payload: {
+        target: "zoho_books",
+        note: `key=sk-live-${innocuousSecret.slice(3)}`,
+        message: `rotated to ${innocuousSecret}`,
+      },
+      payload_preview: innocuousSafe,
+      execution_result: null,
+    },
+    {
+      id: 41,
+      payload: { action: "rotate", description: innocuousSafe },
+      payload_preview: innocuousSafe,
+      // `curl_example` and `error_detail` are NOT in the key deny-list.
+      execution_result: {
+        data: {
+          curl_example: `curl -H 'Authorization: Bearer ${innocuousGh}' https://api.example.com`,
+          error_detail: `JWT was ${innocuousJwt}`,
+          audit_note: innocuousSafe,
+        },
+      },
+    },
+    {
+      id: 42,
+      // Clean row — no credentials anywhere; must not be touched.
+      payload: { target: "stripe", description: "webhook re-registration" },
+      payload_preview: "Register Stripe webhook (id=we_def456)",
+      execution_result: { data: { status: "ok", hook_id: "we_def456" } },
+    },
+  ];
+
+  const stub8 = makeStubClient(innocuousRows);
+  const result8 = await redactAiPendingActions(stub8.client);
+
+  assert(result8.scanned === 3, `value-level fixture: scanned 3 rows (got ${result8.scanned})`);
+  assert(
+    result8.payloadChanged === 1,
+    `value-level fixture: payload changed on 1 row (got ${result8.payloadChanged})`,
+  );
+  assert(
+    result8.executionResultChanged === 1,
+    `value-level fixture: execution_result changed on 1 row (got ${result8.executionResultChanged})`,
+  );
+  assert(
+    result8.rowsUpdated === 2,
+    `value-level fixture: 2 rows updated (got ${result8.rowsUpdated})`,
+  );
+  assert(stub8.updates.length === 2, "value-level fixture: exactly 2 UPDATE statements issued");
+
+  const innocuousRow40 = stub8.rows.find(r => r.id === 40)!;
+  assert(
+    !JSON.stringify(innocuousRow40.payload).includes(innocuousSecret),
+    "row 40 payload.note/message no longer contain the sk-… credential (value-level redaction)",
+  );
+  assert(
+    JSON.stringify(innocuousRow40.payload).includes(REDACTED_SENTINEL),
+    "row 40 payload contains the redaction sentinel after value-level sweep",
+  );
+  assert(
+    innocuousRow40.payload.target === "zoho_books",
+    "row 40 payload.target (non-secret) is preserved",
+  );
+
+  const innocuousRow41 = stub8.rows.find(r => r.id === 41)!;
+  const execJson41 = JSON.stringify(innocuousRow41.execution_result);
+  assert(
+    !execJson41.includes(innocuousGh),
+    "row 41 execution_result.data.curl_example no longer contains the ghp_… token (value-level redaction)",
+  );
+  assert(
+    !execJson41.includes(innocuousJwt),
+    "row 41 execution_result.data.error_detail no longer contains the JWT (value-level redaction)",
+  );
+  assert(
+    execJson41.includes(REDACTED_SENTINEL),
+    "row 41 execution_result contains the redaction sentinel after value-level sweep",
+  );
+  assert(
+    innocuousRow41.execution_result?.data?.audit_note === innocuousSafe,
+    "row 41 execution_result.data.audit_note (non-secret) is preserved",
+  );
+
+  const innocuousRow42 = stub8.rows.find(r => r.id === 42)!;
+  assert(
+    innocuousRow42.payload.target === "stripe" &&
+      innocuousRow42.execution_result?.data?.status === "ok",
+    "row 42 (clean control) is byte-identical — no UPDATE issued",
+  );
+
+  // Idempotency on value-level-cleaned rows
+  const stub9 = makeStubClient(stub8.rows);
+  const result9 = await redactAiPendingActions(stub9.client);
+  assert(
+    result9.rowsUpdated === 0,
+    `value-level fixture second pass updates 0 rows (got ${result9.rowsUpdated}) — idempotent`,
+  );
+
+  // -----------------------------------------------------------------------
+  // execution_result.error string redaction — consistency with write path.
+  //
+  // A failed tool execution may write an upstream error message that echoes
+  // the rejected credential.  The sweep must scrub the `error` string leaf
+  // inside the JSONB column exactly as recordExecutionResult() now does.
+  // -----------------------------------------------------------------------
+  const errorSecret = "sk-live-HISTORICAL_ERROR_LEAKED_VALUE_ABCDE";
+  const errorJwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI3Nzc3NzcifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+
+  const errorRows: RowState[] = [
+    {
+      id: 30,
+      payload: { action: "rotate", description: "noop" },
+      payload_preview: "Rotate key (failed)",
+      execution_result: {
+        data: null,
+        error: `Upstream rejected: Bearer token ${errorJwt} for key ${errorSecret}`,
+      },
+    },
+    {
+      id: 31,
+      // Clean error — no credential-shaped content.
+      payload: { action: "rotate", description: "noop" },
+      payload_preview: "Rotate key (failed)",
+      execution_result: { data: null, error: "Network timeout after 30s" },
+    },
+  ];
+
+  const stub6 = makeStubClient(errorRows);
+  const result6 = await redactAiPendingActions(stub6.client);
+
+  assert(
+    result6.scanned === 2,
+    `error-string fixture: scanned 2 rows (got ${result6.scanned})`,
+  );
+  assert(
+    result6.executionResultChanged === 1,
+    `error-string fixture: execution_result changed on 1 row (got ${result6.executionResultChanged})`,
+  );
+  assert(
+    result6.rowsUpdated === 1,
+    `error-string fixture: 1 row updated (got ${result6.rowsUpdated})`,
+  );
+
+  const errorRow30 = stub6.rows.find(r => r.id === 30)!;
+  const errorJson30 = JSON.stringify(errorRow30.execution_result);
+  assert(
+    !errorJson30.includes(errorSecret),
+    "row 30 execution_result.error no longer contains the sk-… credential (sweep error-string redaction)",
+  );
+  assert(
+    !errorJson30.includes(errorJwt),
+    "row 30 execution_result.error no longer contains the JWT (sweep error-string redaction)",
+  );
+  assert(
+    errorJson30.includes(REDACTED_SENTINEL),
+    "row 30 execution_result.error contains the redaction sentinel",
+  );
+
+  const errorRow31 = stub6.rows.find(r => r.id === 31)!;
+  assert(
+    errorRow31.execution_result?.error === "Network timeout after 30s",
+    "row 31 (clean error) is byte-identical — no UPDATE issued",
   );
 
   console.log(`\n${passed} passed, ${failed} failed`);

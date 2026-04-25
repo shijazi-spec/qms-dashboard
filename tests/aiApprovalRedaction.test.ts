@@ -139,6 +139,12 @@ async function run(): Promise<void> {
         username: "service-account@walaplus.com",
       },
       reason: SAFE_DESCRIPTION,
+      // Innocuously-named fields that still contain credential-shaped values:
+      // the key-based deny-list is blind to these; only deepRedactSecretLikeStrings
+      // can catch them.
+      note: `rotated to ${SECRET_KEY}`,
+      message: `auth header: Bearer ${SECRET_TOKEN.slice(0, 30)}`,
+      config_diff: `old=${SECRET_BCRYPT}`,
     },
     payloadPreview:
       `${PREVIEW_PROSE_PREFIX}${SECRET_KEY}, refresh=${SECRET_TOKEN}, ` +
@@ -177,6 +183,31 @@ async function run(): Promise<void> {
     insertedPayloadJson.includes("zoho_books") &&
       insertedPayloadJson.includes(SAFE_DESCRIPTION),
     "INSERT payload column preserves non-sensitive fields",
+  );
+
+  // -----------------------------------------------------------------------
+  // Innocuously-named fields: the key-based deny-list cannot catch these
+  // because `note`, `message`, and `config_diff` are not sensitive key names.
+  // deepRedactSecretLikeStrings must scrub the credential-shaped substrings
+  // from the VALUES of these fields before the row is persisted.
+  // -----------------------------------------------------------------------
+  assert(
+    !insertedPayloadJson.includes(SECRET_KEY),
+    "INSERT payload.note does not contain the sk-… credential (value-level redaction)",
+  );
+  assert(
+    !insertedPayloadJson.includes(SECRET_BCRYPT) && !insertedPayloadJson.includes("$2b$12$"),
+    "INSERT payload.config_diff does not contain the bcrypt hash (value-level redaction)",
+  );
+
+  const returnedNote = (enqueued.payload as any).note as string;
+  assert(
+    typeof returnedNote === "string" && !returnedNote.includes(SECRET_KEY),
+    "Returned PendingAction.payload.note does not expose the raw sk-… credential",
+  );
+  assert(
+    typeof returnedNote === "string" && returnedNote.includes(REDACTED_SENTINEL),
+    "Returned PendingAction.payload.note contains the redaction sentinel",
   );
 
   // -----------------------------------------------------------------------
@@ -245,6 +276,10 @@ async function run(): Promise<void> {
       new_api_key: "sk-live-FRESHLY_ROTATED_VALUE_98765",
       access_token: "eyJhbGci_freshtoken",
       audit_note: "Rotation completed successfully",
+      // Innocuously-named field that still holds a credential value:
+      // key-based deny-list is blind to `curl_example`; only value-level
+      // regex redaction via deepRedactSecretLikeStrings catches it.
+      curl_example: "curl -H 'Authorization: Bearer sk-live-FRESHLY_ROTATED_VALUE_98765' https://api.example.com",
     },
   });
 
@@ -269,6 +304,10 @@ async function run(): Promise<void> {
   assert(
     executionResultJson.includes("Rotation completed successfully"),
     "UPDATE execution_result preserves the safe audit_note field",
+  );
+  assert(
+    !executionResultJson.includes("sk-live-FRESHLY_ROTATED_VALUE_98765"),
+    "UPDATE execution_result does not contain the sk-… key inside curl_example (value-level redaction)",
   );
 
   const parsedExecResult = recorded?.execution_result as
@@ -341,6 +380,50 @@ async function run(): Promise<void> {
     inlinePayloadJson.includes("ops@walaplus.com") &&
       inlinePayloadJson.includes('"action":"update"'),
     "[inline] payload preserves safe non-credential fields",
+  );
+
+  // -----------------------------------------------------------------------
+  // Regression: result.error is a plain string that may contain credential-
+  // shaped text (e.g. a runtime error message that echoes the rotated key).
+  // redactSecretLikeStrings must scrub it before the row is persisted
+  // (Task #102 — added after code-review identified the gap).
+  // -----------------------------------------------------------------------
+  console.log("\n[aiApprovalDatabase] credential-shaped strings inside execution_result.error");
+
+  captured.length = 0; // reset captures for clean assertion
+  const ERROR_SECRET = "sk-live-LEAKED_VIA_ERROR_STRING_12345678";
+  const ERROR_JWT =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0NDQ0NDQifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  await recordExecutionResult(enqueued.action_code, {
+    success: false,
+    error: `Upstream API rejected the key ${ERROR_SECRET}; auth header was Bearer ${ERROR_JWT}`,
+  });
+
+  const errorUpdateCall = captured.find(c =>
+    /UPDATE ai_pending_actions/i.test(c.sql),
+  );
+  assert(!!errorUpdateCall, "UPDATE ai_pending_actions issued for failed execution");
+  const errorExecJson = String(errorUpdateCall!.params[2]);
+
+  assert(
+    !errorExecJson.includes(ERROR_SECRET),
+    "execution_result.error does not contain the sk-… credential leaked via error string",
+  );
+  assert(
+    !errorExecJson.includes(ERROR_JWT),
+    "execution_result.error does not contain the JWT leaked via error string",
+  );
+  assert(
+    errorExecJson.includes(REDACTED_SENTINEL),
+    "execution_result.error contains the redaction sentinel",
+  );
+
+  const parsedErrorResult = JSON.parse(errorExecJson) as { error?: string };
+  assert(
+    typeof parsedErrorResult.error === "string" &&
+      !parsedErrorResult.error.includes(ERROR_SECRET) &&
+      parsedErrorResult.error.includes(REDACTED_SENTINEL),
+    "Parsed execution_result.error field is scrubbed",
   );
 
   console.log(`\n${passed} passed, ${failed} failed`);

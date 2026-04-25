@@ -168,7 +168,8 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   //      password, token, …) are replaced with REDACTED_SENTINEL.
   //   2. Regex deny list — every string leaf is scrubbed of credential-shaped
   //      substrings (sk-…, ghp_…, JWT, bcrypt, AWS, …) so a tool author who
-  //      embeds a secret in an innocuous field like `notes` is also covered.
+  //      embeds a secret in an innocuous field like `note`, `message`,
+  //      `config_diff`, or `curl_example` is also covered (Task #102).
   // This happens BEFORE the value reaches the JSONB column, BEFORE it is
   // checksummed, and BEFORE it is returned to any caller — so no downstream
   // consumer (audit dashboard, /approvals API, audit log backfill) can
@@ -367,12 +368,21 @@ export async function recordExecutionResult(
 ): Promise<PendingAction | null> {
   // SECURITY: the tool's return value is just as sensitive as its input —
   // a "rotate API key" tool will hand back the freshly-minted key, an
-  // OAuth-refresh tool returns access/refresh token pairs, etc.  Run
-  // result.data through the same deny-list helper used for `payload` and
-  // the audit log so the JSONB column never stores raw credentials.
+  // OAuth-refresh tool returns access/refresh token pairs, etc.  Apply
+  // the same consolidated `redactSensitiveDeep` helper used for `payload`:
+  //   1. Key-based deny list   — masks values stored under sensitively-named
+  //      keys (access_token, api_key, password, …).
+  //   2. Regex deny list       — scrubs credential-shaped substrings from
+  //      every string leaf regardless of key name (e.g. a `curl_example`
+  //      field containing a Bearer token, or an `error_detail` that echoes
+  //      the new secret).
   const safeExecutionResult = JSON.stringify({
     data: redactSensitiveDeep(result.data),
-    error: result.error,
+    // `error` is a plain string but can still contain credential-shaped text —
+    // e.g. an upstream runtime error that echoes a bearer token or new key.
+    // Apply the same regex deny-list used for payload_preview so the string
+    // leaf is scrubbed before it hits the database (Task #102).
+    error: result.error != null ? (redactSecretLikeStrings(result.error) as string) : result.error,
   });
 
   const res = await pool.query<PendingAction>(
