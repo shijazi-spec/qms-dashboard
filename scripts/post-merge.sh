@@ -60,6 +60,10 @@ echo ""
 echo "▶ CI gate: ai_pending_actions historical sweep backfill (Task #85)"
 npx tsx tests/aiApprovalSweepBackfill.test.ts
 
+echo ""
+echo "▶ CI gate: historical sweep keyset pagination (Task #289)"
+npx tsx tests/redactHistoricalPagination.test.ts
+
 # ----------------------------------------------------------------------------
 # CI gate — i18n coverage guardrail (Task #125 / #150)
 #

@@ -15,6 +15,11 @@
  *
  * The script is idempotent — rows where before === after are skipped.
  *
+ * Memory safety (Task #289): every sweep iterates the source table in
+ * keyset-paginated batches (`WHERE id > $cursor ORDER BY id ASC LIMIT N`)
+ * rather than `SELECT … FROM <table>` in one shot. On large installations
+ * this keeps Node's heap and the read lock bounded regardless of row count.
+ *
  * Run with:
  *   npx tsx src/utils/redactHistoricalLogs.ts
  */
@@ -52,6 +57,14 @@ function resolveAuditEvidenceDir(): string {
 }
 
 /**
+ * Default keyset-pagination batch size. 500 keeps each round trip under a
+ * few MB of JSONB on realistic rows while still amortising network latency.
+ * Exposed as an optional parameter on each sweep function so unit tests can
+ * exercise the cursor-advance path with tiny fixtures.
+ */
+export const DEFAULT_SWEEP_BATCH_SIZE = 500;
+
+/**
  * Result counters for the ai_pending_actions sweep. Reported in the
  * console output and the audit-log entry emitted by main().
  */
@@ -70,90 +83,129 @@ function addBreadcrumb(obj: any): any {
   return obj;
 }
 
-export async function redactEventLogs(client: any): Promise<number> {
-  const rows = await client.query(`
-    SELECT id, description, entity_name, old_value, new_value
-    FROM event_logs
-  `);
-
+export async function redactEventLogs(
+  client: any,
+  batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
+): Promise<number> {
   let updated = 0;
-  for (const row of rows.rows) {
-    let description: string | null = row.description ?? null;
-    let entityName: string | null = row.entity_name ?? null;
-    let oldVal = row.old_value;
-    let newVal = row.new_value;
-    let changed = false;
+  let cursor = 0;
 
-    if (typeof description === 'string' && description.length > 0) {
-      const redacted = redactSecretLikeStrings(description) as string;
-      if (redacted !== description) {
-        description = redacted;
-        changed = true;
+  while (true) {
+    const page = await client.query(
+      `SELECT id, description, entity_name, old_value, new_value
+         FROM event_logs
+        WHERE id > $1
+        ORDER BY id ASC
+        LIMIT $2`,
+      [cursor, batchSize],
+    );
+
+    if (!page.rows || page.rows.length === 0) break;
+
+    for (const row of page.rows) {
+      let description: string | null = row.description ?? null;
+      let entityName: string | null = row.entity_name ?? null;
+      let oldVal = row.old_value;
+      let newVal = row.new_value;
+      let changed = false;
+
+      if (typeof description === 'string' && description.length > 0) {
+        const redacted = redactSecretLikeStrings(description) as string;
+        if (redacted !== description) {
+          description = redacted;
+          changed = true;
+        }
+      }
+
+      if (typeof entityName === 'string' && entityName.length > 0) {
+        const redacted = redactSecretLikeStrings(entityName) as string;
+        if (redacted !== entityName) {
+          entityName = redacted;
+          changed = true;
+        }
+      }
+
+      if (oldVal !== null && oldVal !== undefined) {
+        const keyScrubbed = redactSensitiveFields(oldVal);
+        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+        if (JSON.stringify(fullScrubbed) !== JSON.stringify(oldVal)) {
+          oldVal = addBreadcrumb(fullScrubbed);
+          changed = true;
+        }
+      }
+
+      if (newVal !== null && newVal !== undefined) {
+        const keyScrubbed = redactSensitiveFields(newVal);
+        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+        if (JSON.stringify(fullScrubbed) !== JSON.stringify(newVal)) {
+          newVal = addBreadcrumb(fullScrubbed);
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await client.query(
+          `UPDATE event_logs SET description = $1, entity_name = $2, old_value = $3, new_value = $4 WHERE id = $5`,
+          [
+            description,
+            entityName,
+            oldVal !== null && oldVal !== undefined ? JSON.stringify(oldVal) : null,
+            newVal !== null && newVal !== undefined ? JSON.stringify(newVal) : null,
+            row.id,
+          ],
+        );
+        updated++;
       }
     }
 
-    if (typeof entityName === 'string' && entityName.length > 0) {
-      const redacted = redactSecretLikeStrings(entityName) as string;
-      if (redacted !== entityName) {
-        entityName = redacted;
-        changed = true;
-      }
-    }
-
-    if (oldVal !== null && oldVal !== undefined) {
-      const keyScrubbed = redactSensitiveFields(oldVal);
-      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-      if (JSON.stringify(fullScrubbed) !== JSON.stringify(oldVal)) {
-        oldVal = addBreadcrumb(fullScrubbed);
-        changed = true;
-      }
-    }
-
-    if (newVal !== null && newVal !== undefined) {
-      const keyScrubbed = redactSensitiveFields(newVal);
-      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-      if (JSON.stringify(fullScrubbed) !== JSON.stringify(newVal)) {
-        newVal = addBreadcrumb(fullScrubbed);
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      await client.query(
-        `UPDATE event_logs SET description = $1, entity_name = $2, old_value = $3, new_value = $4 WHERE id = $5`,
-        [
-          description,
-          entityName,
-          oldVal !== null && oldVal !== undefined ? JSON.stringify(oldVal) : null,
-          newVal !== null && newVal !== undefined ? JSON.stringify(newVal) : null,
-          row.id,
-        ]
-      );
-      updated++;
-    }
+    // Advance the keyset cursor to the largest id seen on this page so the
+    // next SELECT skips already-scanned rows. Stop early when the page
+    // returned fewer rows than the batch size — there is nothing left.
+    cursor = page.rows[page.rows.length - 1].id;
+    if (page.rows.length < batchSize) break;
   }
+
   return updated;
 }
 
-export async function redactChangeHistoryTable(client: any, tableName: string): Promise<number> {
-  const rows = await client.query(
-    `SELECT id, field_changed, old_value, new_value FROM ${tableName}`
-  );
-
+export async function redactChangeHistoryTable(
+  client: any,
+  tableName: string,
+  batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
+): Promise<number> {
   let updated = 0;
-  for (const row of rows.rows) {
-    if (!isSensitiveField(row.field_changed)) continue;
+  let cursor = 0;
 
-    const oldAlready = row.old_value === REDACTED_SENTINEL;
-    const newAlready = row.new_value === REDACTED_SENTINEL;
-    if (oldAlready && newAlready) continue;
-
-    await client.query(
-      `UPDATE ${tableName} SET old_value = $1, new_value = $2 WHERE id = $3`,
-      [REDACTED_SENTINEL, REDACTED_SENTINEL, row.id]
+  while (true) {
+    const page = await client.query(
+      `SELECT id, field_changed, old_value, new_value
+         FROM ${tableName}
+        WHERE id > $1
+        ORDER BY id ASC
+        LIMIT $2`,
+      [cursor, batchSize],
     );
-    updated++;
+
+    if (!page.rows || page.rows.length === 0) break;
+
+    for (const row of page.rows) {
+      if (!isSensitiveField(row.field_changed)) continue;
+
+      const oldAlready = row.old_value === REDACTED_SENTINEL;
+      const newAlready = row.new_value === REDACTED_SENTINEL;
+      if (oldAlready && newAlready) continue;
+
+      await client.query(
+        `UPDATE ${tableName} SET old_value = $1, new_value = $2 WHERE id = $3`,
+        [REDACTED_SENTINEL, REDACTED_SENTINEL, row.id],
+      );
+      updated++;
+    }
+
+    cursor = page.rows[page.rows.length - 1].id;
+    if (page.rows.length < batchSize) break;
   }
+
   return updated;
 }
 
@@ -176,74 +228,88 @@ export async function redactChangeHistoryTable(client: any, tableName: string): 
  */
 export async function redactAiPendingActions(
   client: any,
+  batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
 ): Promise<AiPendingActionsSweepResult> {
-  const rows = await client.query(
-    `SELECT id, payload, payload_preview, execution_result FROM ai_pending_actions`,
-  );
-
   let scanned = 0;
   let payloadChanged = 0;
   let previewChanged = 0;
   let executionResultChanged = 0;
   let rowsUpdated = 0;
+  let cursor = 0;
 
-  for (const row of rows.rows) {
-    scanned++;
+  while (true) {
+    const page = await client.query(
+      `SELECT id, payload, payload_preview, execution_result
+         FROM ai_pending_actions
+        WHERE id > $1
+        ORDER BY id ASC
+        LIMIT $2`,
+      [cursor, batchSize],
+    );
 
-    let payload = row.payload;
-    let preview: string | null = row.payload_preview;
-    let execResult = row.execution_result;
+    if (!page.rows || page.rows.length === 0) break;
 
-    let payloadDirty = false;
-    let previewDirty = false;
-    let execDirty = false;
+    for (const row of page.rows) {
+      scanned++;
 
-    if (payload !== null && payload !== undefined) {
-      const keyScrubbed = redactSensitiveFields(payload);
-      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-      if (JSON.stringify(fullScrubbed) !== JSON.stringify(payload)) {
-        payload = fullScrubbed;
-        payloadDirty = true;
+      let payload = row.payload;
+      let preview: string | null = row.payload_preview;
+      let execResult = row.execution_result;
+
+      let payloadDirty = false;
+      let previewDirty = false;
+      let execDirty = false;
+
+      if (payload !== null && payload !== undefined) {
+        const keyScrubbed = redactSensitiveFields(payload);
+        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+        if (JSON.stringify(fullScrubbed) !== JSON.stringify(payload)) {
+          payload = fullScrubbed;
+          payloadDirty = true;
+        }
+      }
+
+      if (typeof preview === 'string' && preview.length > 0) {
+        const redactedPreview = redactSecretLikeStrings(preview) as string;
+        if (redactedPreview !== preview) {
+          preview = redactedPreview;
+          previewDirty = true;
+        }
+      }
+
+      if (execResult !== null && execResult !== undefined) {
+        const keyScrubbed = redactSensitiveFields(execResult);
+        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
+        if (JSON.stringify(fullScrubbed) !== JSON.stringify(execResult)) {
+          execResult = fullScrubbed;
+          execDirty = true;
+        }
+      }
+
+      if (payloadDirty) payloadChanged++;
+      if (previewDirty) previewChanged++;
+      if (execDirty) executionResultChanged++;
+
+      if (payloadDirty || previewDirty || execDirty) {
+        await client.query(
+          `UPDATE ai_pending_actions
+              SET payload          = $1,
+                  payload_preview  = $2,
+                  execution_result = $3
+            WHERE id = $4`,
+          [
+            payload !== null && payload !== undefined ? JSON.stringify(payload) : null,
+            preview,
+            execResult !== null && execResult !== undefined ? JSON.stringify(execResult) : null,
+            row.id,
+          ],
+        );
+        rowsUpdated++;
       }
     }
 
-    if (typeof preview === 'string' && preview.length > 0) {
-      const redactedPreview = redactSecretLikeStrings(preview) as string;
-      if (redactedPreview !== preview) {
-        preview = redactedPreview;
-        previewDirty = true;
-      }
-    }
-
-    if (execResult !== null && execResult !== undefined) {
-      const keyScrubbed = redactSensitiveFields(execResult);
-      const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-      if (JSON.stringify(fullScrubbed) !== JSON.stringify(execResult)) {
-        execResult = fullScrubbed;
-        execDirty = true;
-      }
-    }
-
-    if (payloadDirty) payloadChanged++;
-    if (previewDirty) previewChanged++;
-    if (execDirty) executionResultChanged++;
-
-    if (payloadDirty || previewDirty || execDirty) {
-      await client.query(
-        `UPDATE ai_pending_actions
-            SET payload          = $1,
-                payload_preview  = $2,
-                execution_result = $3
-          WHERE id = $4`,
-        [
-          payload !== null && payload !== undefined ? JSON.stringify(payload) : null,
-          preview,
-          execResult !== null && execResult !== undefined ? JSON.stringify(execResult) : null,
-          row.id,
-        ],
-      );
-      rowsUpdated++;
-    }
+    cursor = page.rows[page.rows.length - 1].id;
+    if (page.rows.length < batchSize) break;
   }
 
   return { scanned, payloadChanged, previewChanged, executionResultChanged, rowsUpdated };
