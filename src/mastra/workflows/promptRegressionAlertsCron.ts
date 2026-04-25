@@ -119,7 +119,7 @@ export interface RegressionBreach {
   regressed_last_seen_days_ago: number | null;
 }
 
-interface RegressionRecovery {
+export interface RegressionRecovery {
   alert_id: number;
   related_record_id: string;
   /** Agent name parsed from the dedupe key (`<agent>:<version>`). */
@@ -668,13 +668,15 @@ export async function sendPromptRegressionNotifications(
 // Default impl is wired through `PromptRegressionDeps.notifyRecovery` so
 // unit tests stub it to a no-op.
 // ──────────────────────────────────────────────────────────────────────────────
-async function sendPromptRegressionRecoveryNotifications(
+export async function sendPromptRegressionRecoveryNotifications(
   recoveries: RegressionRecovery[],
+  notifyDeps: PromptRegressionNotifyDeps = {},
 ): Promise<void> {
   const cfg = PROMPT_REGRESSION_THRESHOLDS;
   const count = recoveries.length;
   if (count === 0) return;
   const plural = count === 1 ? "regression" : "regressions";
+  const fetchFn = notifyDeps.fetchFn ?? globalThis.fetch;
 
   // ── Slack ──────────────────────────────────────────────────────────────────
   if (process.env.SLACK_WEBHOOK_URL) {
@@ -689,7 +691,7 @@ async function sendPromptRegressionRecoveryNotifications(
         lines.join("\n") +
         `\n_Window: ${cfg.windowDays} days | <${cfg.link}|View in AI Ops>_`;
 
-      await fetch(process.env.SLACK_WEBHOOK_URL, {
+      await fetchFn(process.env.SLACK_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: slackMsg }),
@@ -710,7 +712,12 @@ async function sendPromptRegressionRecoveryNotifications(
     : [];
   if (emailRecipients.length > 0) {
     try {
-      const { sendResendEmail } = await import("../../utils/resendMail");
+      const sendEmail =
+        notifyDeps.sendEmail ??
+        (async (opts) => {
+          const { sendResendEmail } = await import("../../utils/resendMail");
+          return sendResendEmail(opts);
+        });
       const rows = recoveries
         .map(
           (r) =>
@@ -722,7 +729,7 @@ async function sendPromptRegressionRecoveryNotifications(
         )
         .join("\n");
 
-      await sendResendEmail({
+      await sendEmail({
         to: emailRecipients,
         subject: `✅ WalaPlus Prompt Regression Recovered — ${count} ${plural} auto-resolved`,
         html: `<h2>Prompt Regression Recovered</h2>

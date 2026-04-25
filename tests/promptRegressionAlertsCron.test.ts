@@ -13,8 +13,10 @@
 import {
   runPromptRegressionCheck,
   sendPromptRegressionNotifications,
+  sendPromptRegressionRecoveryNotifications,
   PROMPT_REGRESSION_THRESHOLDS,
   type RegressionBreach,
+  type RegressionRecovery,
 } from "../src/mastra/workflows/promptRegressionAlertsCron";
 import type { PromptVersionAggregate } from "../src/utils/aiTelemetry";
 import type { AIAlert, AlertSeverity } from "../src/utils/aiAlertsDatabase";
@@ -978,6 +980,173 @@ async function run(): Promise<void> {
     });
 
     assert(fetchCalls === 1, `Slack fetch was still attempted (got ${fetchCalls})`);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Recovery-side notification fan-out (Task #640).
+  //
+  // Mirrors cases 19, 21 and 22 above but exercises
+  // `sendPromptRegressionRecoveryNotifications` — the symmetric helper
+  // called via the `notifyRecovery` dep when the recovery sweep
+  // auto-resolves ≥1 prompt-regression alert. Until #640 the recovery
+  // helper was only checked at the dep boundary (cases 11 / 14 verify
+  // `notifyRecovery` *is invoked*), so a regression in the recovery
+  // wording, recipient parsing, or per-channel error handling would not
+  // have been caught.
+  // ────────────────────────────────────────────────────────────────────────
+
+  function makeRecovery(over: Partial<RegressionRecovery> = {}): RegressionRecovery {
+    return {
+      alert_id: 42,
+      related_record_id: "TestAgent:v2",
+      agent_name: "TestAgent",
+      prompt_version: "v2",
+      note: "auto-resolved: prompt regression for \"TestAgent:v2\" is no longer detected.",
+      ...over,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 23 (Task #640): Slack + email each fire exactly once when an
+  // open prompt-regression alert auto-resolves. Drives the recovery
+  // path end-to-end through `runPromptRegressionCheck` so the
+  // assertions live or die on the production wiring (cron → recovery
+  // sweep → `notifyRecovery` → `sendPromptRegressionRecoveryNotifications`),
+  // not on a parallel codepath in the test.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n23. Recovery — Slack and email each fire once when an alert auto-resolves");
+  await withRegressionEnv(async () => {
+    const fetchCalls: Array<{ url: string; body: string }> = [];
+    const emailCalls: Array<{
+      to: string | string[];
+      subject: string;
+      html?: string;
+    }> = [];
+    const fetchStub = (async (url: string | URL | Request, init?: RequestInit) => {
+      fetchCalls.push({
+        url: String(url),
+        body: typeof init?.body === "string" ? init.body : "",
+      });
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const sendEmailStub = async (opts: {
+      to: string | string[];
+      subject: string;
+      html?: string;
+      text?: string;
+    }) => {
+      emailCalls.push(opts);
+      return { success: true };
+    };
+
+    const openAlert: AIAlert = {
+      id: 42,
+      alert_type: "prompt_regression",
+      severity: "high",
+      title: "Prompt regression: TestAgent v2",
+      description: "...",
+      status: "open",
+      related_record_id: "TestAgent:v2",
+    };
+    // Two versions of the same agent within 5pp of each other → no new
+    // breach is opened, but the previously-open alert for v2 is below
+    // threshold now and must auto-resolve.
+    const stub = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: 90, total_feedback: 20, thumbs_up: 18, thumbs_down: 2 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: 85, total_feedback: 20, thumbs_up: 17, thumbs_down: 3 }),
+      ],
+      openAlerts: [openAlert],
+    });
+    const out = await runPromptRegressionCheck({
+      ...stub.deps,
+      notifyRecovery: (recoveries) =>
+        sendPromptRegressionRecoveryNotifications(recoveries, {
+          fetchFn: fetchStub,
+          sendEmail: sendEmailStub,
+        }),
+    });
+
+    assert(out.alertsAutoResolved === 1, "1 alert auto-resolved (precondition for fan-out)");
+    assert(fetchCalls.length === 1, `Slack fetch called once (got ${fetchCalls.length})`);
+    assert(
+      fetchCalls[0]?.url === process.env.SLACK_WEBHOOK_URL,
+      `Slack POST targets the configured webhook (got "${fetchCalls[0]?.url}")`,
+    );
+    assert(
+      fetchCalls[0]?.body.includes("Recovered") &&
+        fetchCalls[0]?.body.includes("TestAgent") &&
+        fetchCalls[0]?.body.includes("v2") &&
+        fetchCalls[0]?.body.includes("#42"),
+      "Slack body announces a recovery and names the agent, version and alert id",
+    );
+    assert(emailCalls.length === 1, `Recovery email sent once (got ${emailCalls.length})`);
+    const emailTo = emailCalls[0]?.to;
+    const recipients = Array.isArray(emailTo) ? emailTo : [emailTo];
+    assert(
+      recipients.includes("ops@example.com"),
+      `Recovery email targets the configured recipient (got ${JSON.stringify(emailTo)})`,
+    );
+    assert(
+      typeof emailCalls[0]?.subject === "string" &&
+        emailCalls[0]!.subject.includes("Recovered"),
+      `Recovery email subject mentions the recovery (got "${emailCalls[0]?.subject}")`,
+    );
+    assert(
+      (emailCalls[0]?.html ?? "").includes("TestAgent") &&
+        (emailCalls[0]?.html ?? "").includes("v2") &&
+        (emailCalls[0]?.html ?? "").includes("#42"),
+      "Recovery email HTML body includes the agent, recovered version, and alert id",
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 24 (Task #640): a Slack outage on the recovery path must not
+  // silence the recovery email. Mirrors case 21 on the breach side —
+  // each channel is wrapped in its own try/catch so ops still get the
+  // recovery email even when the Slack webhook is returning 5xx.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n24. Recovery — Slack failure does not prevent the email from being attempted");
+  await withRegressionEnv(async () => {
+    let emailCalls = 0;
+    const fetchStub = (async () => {
+      throw new Error("simulated Slack 503");
+    }) as typeof fetch;
+    const sendEmailStub = async () => {
+      emailCalls++;
+      return { success: true };
+    };
+
+    await sendPromptRegressionRecoveryNotifications([makeRecovery()], {
+      fetchFn: fetchStub,
+      sendEmail: sendEmailStub,
+    });
+
+    assert(emailCalls === 1, `Recovery email was still attempted (got ${emailCalls})`);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Case 25 (Task #640): symmetrically — if Resend (email) throws on the
+  // recovery path, the Slack post must already have happened. Mirrors
+  // case 22 on the breach side.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log("\n25. Recovery — email failure does not prevent the Slack post");
+  await withRegressionEnv(async () => {
+    let fetchCalls = 0;
+    const fetchStub = (async () => {
+      fetchCalls++;
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const sendEmailStub = async () => {
+      throw new Error("simulated Resend 500");
+    };
+
+    await sendPromptRegressionRecoveryNotifications([makeRecovery()], {
+      fetchFn: fetchStub,
+      sendEmail: sendEmailStub,
+    });
+
+    assert(fetchCalls === 1, `Recovery Slack fetch was still attempted (got ${fetchCalls})`);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
