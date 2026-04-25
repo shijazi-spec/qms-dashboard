@@ -245,15 +245,23 @@ async function run(): Promise<void> {
   console.log('\nstartTelemetrySpan() / openAiCallMetric() scrubs params.metadata:');
 
   captured.length = 0;
+  // Intentionally bypass the BuiltAiCallTelemetryMetadata brand (Task #511)
+  // to feed startTelemetrySpan() a hand-crafted dirty payload — that is the
+  // exact pattern the brand prevents at compile time, but this test must
+  // exercise the WRITE-path scrubber's defense-in-depth behaviour for the
+  // `as any` bypass case. Production callers MUST go through
+  // `buildAiCallTelemetryMetadata()`; this cast is the audit-trail marker
+  // a code reviewer would catch if it ever appeared in non-test code.
+  const dirtyMetadata = {
+    prompt_version: 'v9.9.9',
+    caller_note: `we accidentally serialised key ${SK_KEY} here`,
+    stash: { aws: AWS_KEY, hash: BCRYPT_HASH },
+  } as unknown as Parameters<typeof startTelemetrySpan>[0]['metadata'];
   const span = await startTelemetrySpan({
     agentName: 'span-agent',
     model: 'gpt-4o',
     promptText: 'hello world',
-    metadata: {
-      prompt_version: 'v9.9.9',
-      caller_note: `we accidentally serialised key ${SK_KEY} here`,
-      stash: { aws: AWS_KEY, hash: BCRYPT_HASH },
-    },
+    metadata: dirtyMetadata,
   });
 
   const openInsert = findLast(c =>

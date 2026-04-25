@@ -155,6 +155,29 @@ const TELEMETRY_METADATA_KEY_MAP: Record<keyof AiCallTelemetryMetadataInput, key
 };
 
 /**
+ * Brand applied to the value returned by `buildAiCallTelemetryMetadata()`.
+ *
+ * The three public telemetry entry points (`withAiTelemetry()`,
+ * `startTelemetrySpan()`, `recordStreamTelemetry()`) accept `metadata` only
+ * if it carries this brand — i.e. only if it was produced by the helper.
+ * An inline object literal like `{ prompt_version: ver, ...debugDump }` no
+ * longer type-checks at those sites, so the source-side allow-list cannot
+ * be silently bypassed by spreading a `catch (err)` payload into the call
+ * (which is the leak path Task #484 originally closed for non-streaming
+ * callers — Task #511 extends the same enforcement to the streaming path
+ * before any future caller wires it up).
+ *
+ * Implementation note: a `unique symbol` brand is structurally
+ * unforgeable in TypeScript without an explicit `as` cast, which
+ * preserves an audit-trail in code review whenever a test intentionally
+ * bypasses the contract to exercise the runtime scrubber.
+ */
+declare const builtAiCallTelemetryMetadataBrand: unique symbol;
+export type BuiltAiCallTelemetryMetadata = AiCallTelemetryMetadata & {
+  readonly [builtAiCallTelemetryMetadataBrand]: true;
+};
+
+/**
  * Build a typed `metadata` payload for `ai_call_metrics` rows.
  *
  * MUST be used at every `withAiTelemetry()` / `startTelemetrySpan()` /
@@ -168,10 +191,16 @@ const TELEMETRY_METADATA_KEY_MAP: Record<keyof AiCallTelemetryMetadataInput, key
  * system via `as any`, unexpected keys are dropped and a
  * `console.warn` is emitted with an actionable message so the regression
  * shows up in the operator console rather than silently persisting.
+ *
+ * The return value carries the {@link BuiltAiCallTelemetryMetadata} brand
+ * so the three public telemetry entry points only accept builder output.
+ * An inline literal at those sites stops type-checking entirely — the
+ * leak class can no longer slip in even if a future feature wires up
+ * streaming telemetry without re-reading these comments.
  */
 export function buildAiCallTelemetryMetadata(
   input: AiCallTelemetryMetadataInput,
-): AiCallTelemetryMetadata {
+): BuiltAiCallTelemetryMetadata {
   const out: AiCallTelemetryMetadata = {};
   const loose = input as Record<string, unknown>;
   for (const inputKey of Object.keys(loose)) {
@@ -188,7 +217,9 @@ export function buildAiCallTelemetryMetadata(
     if (value === undefined) continue;
     (out as Record<string, unknown>)[mapped] = value;
   }
-  return out;
+  // The brand is a phantom field — the runtime payload is a plain object
+  // with the snake_case allow-list keys and nothing else.
+  return out as BuiltAiCallTelemetryMetadata;
 }
 
 /**
@@ -578,7 +609,13 @@ export interface WithAiTelemetryParams {
   promptText?: string;
   userId?: string;
   sessionId?: string;
-  metadata?: AiCallTelemetryMetadata;
+  /**
+   * Branded so only `buildAiCallTelemetryMetadata()` output is accepted —
+   * an inline `{ ... }` literal stops type-checking entirely and the
+   * source-side allow-list cannot be silently bypassed by spreading a
+   * `catch (err)` payload into the call. See {@link BuiltAiCallTelemetryMetadata}.
+   */
+  metadata?: BuiltAiCallTelemetryMetadata;
 }
 
 export async function withAiTelemetry<T>(
@@ -744,7 +781,14 @@ export async function recordStreamTelemetry(params: {
   promptText?: string;
   userId?: string;
   sessionId?: string;
-  metadata?: AiCallTelemetryMetadata;
+  /**
+   * Branded so only `buildAiCallTelemetryMetadata()` output is accepted —
+   * mirrors the enforcement on `withAiTelemetry()` / `startTelemetrySpan()`
+   * so a future caller wiring up streaming telemetry cannot land
+   * `metadata: { prompt_version: ver, ...debugDump }` and leak the spread
+   * payload into ai_call_metrics.metadata. See {@link BuiltAiCallTelemetryMetadata}.
+   */
+  metadata?: BuiltAiCallTelemetryMetadata;
 }): Promise<number | null> {
   const latencyMs = Date.now() - params.startedAt;
   const promptPreview = params.promptText

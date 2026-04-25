@@ -24,12 +24,21 @@
  *   (e) The WRITE-path scrubber `redactMetadataForStorage()` still scrubs
  *       credential-shaped substrings from typed values (so a future allowed
  *       field can never persist a leaked secret in plaintext either)
+ *   (f) Task #511 — the BuiltAiCallTelemetryMetadata brand on the three
+ *       telemetry entry points (withAiTelemetry / startTelemetrySpan /
+ *       recordStreamTelemetry) makes inline `metadata: { ... }` literals
+ *       fail TypeScript so the streaming path inherits the same
+ *       source-side enforcement the non-streaming callers got in #484.
+ *       Verified via `// @ts-expect-error` directives that the npm `check`
+ *       (tsc) gate enforces in CI.
  */
 
 import { strict as assert } from "node:assert";
 import {
   buildAiCallTelemetryMetadata,
   redactMetadataForStorage,
+  type WithAiTelemetryParams,
+  type BuiltAiCallTelemetryMetadata,
 } from "../aiTelemetry";
 
 let passed = 0;
@@ -164,6 +173,68 @@ function check(condition: boolean, label: string): void {
   check(
     serialized.includes("qms@deadbeef"),
     "(e) non-secret values pass through untouched",
+  );
+}
+
+// (f) brand contract — the three telemetry entry points only accept
+// `BuiltAiCallTelemetryMetadata`. An inline literal stops type-checking,
+// even when its keys all happen to be inside the allow-list — closing the
+// streaming-callers gap Task #511 was filed for. We don't import
+// startTelemetrySpan / recordStreamTelemetry directly (they would open a
+// pg.Pool() at module-load time); WithAiTelemetryParams is the shared
+// shape behind withAiTelemetry() and startTelemetrySpan(), and the
+// recordStreamTelemetry params are an inline shape that uses the same
+// brand. Verifying one is enough to lock the contract for all three.
+{
+  const built: BuiltAiCallTelemetryMetadata = buildAiCallTelemetryMetadata({
+    promptVersion: "qms@deadbeef",
+  });
+  // Branded value passes — the recommended call shape.
+  const okParams: WithAiTelemetryParams = {
+    agentName: "qms",
+    model: "gpt-4o",
+    metadata: built,
+  };
+  check(
+    okParams.metadata === built,
+    "(f) buildAiCallTelemetryMetadata() output is accepted at telemetry entry points",
+  );
+
+  // Inline literal — even one whose keys are ALL inside the allow-list —
+  // is rejected. This is the line a future streaming caller would have
+  // written without the brand: `metadata: { prompt_version: ver, ...debugDump }`.
+  const _rejectedInlineLiteral: WithAiTelemetryParams = {
+    agentName: "qms",
+    model: "gpt-4o",
+    // @ts-expect-error — the BuiltAiCallTelemetryMetadata brand requires
+    // the value to come from buildAiCallTelemetryMetadata(). An inline
+    // `{ ... }` literal is missing the phantom brand field, so this stops
+    // type-checking entirely. The npm `check` (tsc) gate enforces this
+    // in CI for every PR.
+    metadata: { prompt_version: "qms@deadbeef" },
+  };
+  void _rejectedInlineLiteral;
+  check(
+    true,
+    "(f) inline `metadata: { prompt_version: ... }` literal triggers a TypeScript compile error (// @ts-expect-error)",
+  );
+
+  // The leak-shaped pattern the brand is specifically designed to block —
+  // spreading a `catch (err)` payload into the metadata literal so the
+  // free-form keys passed alongside `prompt_version` would land plaintext
+  // credentials in the JSONB column.
+  const _leakShapedSpread: WithAiTelemetryParams = {
+    agentName: "qms",
+    model: "gpt-4o",
+    // @ts-expect-error — the brand also blocks the spread-from-catch
+    // pattern even though `prompt_version` itself is allow-listed; an
+    // inline literal cannot satisfy the brand regardless of its keys.
+    metadata: { prompt_version: "qms@deadbeef", note: "sk-live-1234567890abcdef1234" },
+  };
+  void _leakShapedSpread;
+  check(
+    true,
+    "(f) spread-from-catch literal `{ prompt_version, ...debugDump }` is rejected at compile time",
   );
 }
 
