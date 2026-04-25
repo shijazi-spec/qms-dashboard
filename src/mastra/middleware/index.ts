@@ -131,7 +131,7 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
 //     for auth on a per-route basis (the diagnostic SSE route in particular
 //     opens DMs and posts messages to Slack — never make it public).
 //   - `/api/telemetry/pageview` — no such route exists in the codebase.
-const PUBLIC_PATHS = [
+export const PUBLIC_PATHS = [
   // ---- Auth flow (login, OIDC callback, logout) ----
   '/login',                         // login page (rendered before sign-in)
   '/api/login',                     // POST: legacy email/password login
@@ -193,7 +193,7 @@ function getAllowedOrigins(): string[] {
     .filter(Boolean);
 }
 
-function isPublicPath(urlPath: string): boolean {
+export function isPublicPath(urlPath: string): boolean {
   // See PUBLIC_PATHS comment for matching rules. Entries ending in `/` are
   // subtree (prefix) matches; everything else must match exactly. This
   // intentionally rejects substring matches like
