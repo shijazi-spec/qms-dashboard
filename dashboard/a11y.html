@@ -65,12 +65,11 @@
           <li>Decorative SVG icons are hidden from assistive technology using <code>aria-hidden="true"</code>.</li>
           <li>All KPI and analytics charts include <code>role="img"</code> with an <code>aria-label</code> describing the chart, and a visually-hidden data summary table so screen reader users can access the underlying data.</li>
           <li>Navigation tooltips now use a proper ARIA tooltip pattern — each tooltip carries <code>role="tooltip"</code> and is linked to its trigger via <code>aria-describedby</code>. Tooltips appear on both pointer hover and keyboard focus, replacing the previous <code>title</code>-attribute-only approach.</li>
+          <li>All data-heavy tables (audit findings, risk register, nonconformances/CAPA, compliance obligations and gap analysis) now include <code>scope="col"</code> on every column header, and select-all checkbox headers carry descriptive <code>aria-label</code> attributes.</li>
         </ul>
 
         <h2>Known Limitations</h2>
-        <ul>
-          <li>Some data-heavy tables may lack full <code>scope</code> and <code>headers</code> associations — we are reviewing these.</li>
-        </ul>
+        <p>All previously identified limitations have been resolved. We continue to monitor the platform for any new accessibility gaps and will update this statement accordingly.</p>
 
         <h2>Technical Specification</h2>
         <p>WalaPlus QMS is built with standard HTML5, Tailwind CSS, and vanilla JavaScript. It is compatible with the following assistive technologies:</p>
