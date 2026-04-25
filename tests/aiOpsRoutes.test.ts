@@ -39,6 +39,7 @@ await suite.test("every route exposes path, method and createHandler", async () 
   // Sanity: confirm the new tool-health endpoints are wired in.
   const paths = aiOpsRoutes.map((r) => `${r.method} ${r.path}`);
   suite.expect(paths.includes("GET /api/ai-ops/tool-health-alerts"), "tool-health-alerts route registered");
+  suite.expect(paths.includes("GET /api/ai-ops/tool-health-alerts/trend"), "tool-health-alerts trend route registered");
   suite.expect(paths.includes("POST /api/ai-ops/alerts/:id/acknowledge"), "acknowledge route registered");
   suite.expect(paths.includes("POST /api/ai-ops/alerts/:id/resolve"), "resolve route registered");
   suite.expect(aiOpsRoutes.length >= 1, "at least 1 route registered");
@@ -196,6 +197,58 @@ if (!HAS_DB) {
       const listed = await getAIAlerts({ alert_type: "tool_health", status: "open" });
       const stillThere = listed.alerts.find((a) => a.id === createdId);
       suite.expect(!stillThere, "acknowledged alert no longer in open list");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  });
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/trend returns padded buckets and overall stats", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/trend",
+        "GET",
+      );
+      const res = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "14" },
+        }),
+      );
+      suite.expectEqual(res.status, 200, "status");
+      const trend = res.body?.data;
+      suite.expect(trend && typeof trend === "object", "data is an object");
+      suite.expectEqual(trend.days, 14, "echoes days param");
+      suite.expect(Array.isArray(trend.buckets), "buckets is an array");
+      // generate_series(today-13, today, 1 day) → exactly 14 rows.
+      suite.expectEqual(trend.buckets.length, 14, "buckets are fully padded");
+      // Every bucket must expose all severity counters + total + ttr field.
+      for (const b of trend.buckets) {
+        suite.expect(typeof b.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.day), "bucket day is YYYY-MM-DD");
+        for (const k of ["critical", "high", "medium", "low", "info", "total"]) {
+          suite.expect(typeof b[k] === "number" && b[k] >= 0, `bucket.${k} is a non-negative number`);
+        }
+        suite.expect(
+          b.median_ttr_seconds === null || (typeof b.median_ttr_seconds === "number" && b.median_ttr_seconds >= 0),
+          "median_ttr_seconds is null or non-negative number",
+        );
+      }
+      // Buckets must be in ascending date order so the chart x-axis renders correctly.
+      for (let i = 1; i < trend.buckets.length; i++) {
+        suite.expect(trend.buckets[i - 1].day <= trend.buckets[i].day, "buckets in ascending date order");
+      }
+      const overall = trend.overall;
+      suite.expect(overall && typeof overall === "object", "overall is an object");
+      for (const k of ["total_fired", "total_resolved"]) {
+        suite.expect(typeof overall[k] === "number" && overall[k] >= 0, `overall.${k} non-negative number`);
+      }
+      // The seeded alert from the previous tests should be inside the
+      // 14-day window, so total_fired must reflect at least one row.
+      suite.expect(overall.total_fired >= 1, "overall.total_fired counts the seeded alert");
     } finally {
       if (original === undefined) delete process.env.ADMIN_API_KEY;
       else process.env.ADMIN_API_KEY = original;

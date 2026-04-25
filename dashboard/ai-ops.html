@@ -188,6 +188,47 @@
                     class="text-xs font-medium text-gray-600 hover:text-gray-900 underline self-center mb-1"
                     data-testid="button-tool-health-history-reset">Reset</button>
           </div>
+          <!-- Trend chart (Task #320): alerts-fired-per-day stacked by severity,
+               with a median-time-to-resolve line overlay. Lives inside the
+               history panel so it loads only when ops expands the toggle. -->
+          <div id="tool-health-trend-section" class="mb-4 bg-white border border-gray-200 rounded-lg p-4" data-testid="section-tool-health-trend">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-700" data-testid="text-tool-health-trend-heading">Alert volume &amp; time-to-resolve trend</h3>
+                <p class="text-xs text-gray-500">Daily fire counts by severity (bars) and median resolution time (line).</p>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <label for="tool-health-trend-days" class="text-gray-500">Range</label>
+                <select id="tool-health-trend-days" class="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500" data-testid="select-tool-health-trend-days">
+                  <option value="7">Last 7 days</option>
+                  <option value="14" selected>Last 14 days</option>
+                  <option value="30">Last 30 days</option>
+                </select>
+              </div>
+            </div>
+            <div id="tool-health-trend-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs" data-testid="summary-tool-health-trend">
+              <div class="bg-gray-50 rounded px-3 py-2">
+                <p class="uppercase tracking-wide text-gray-400">Fired</p>
+                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-total-fired" data-testid="text-trend-total-fired">—</p>
+              </div>
+              <div class="bg-gray-50 rounded px-3 py-2">
+                <p class="uppercase tracking-wide text-gray-400">Resolved</p>
+                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-total-resolved" data-testid="text-trend-total-resolved">—</p>
+              </div>
+              <div class="bg-gray-50 rounded px-3 py-2">
+                <p class="uppercase tracking-wide text-gray-400">Median TTR</p>
+                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-median-ttr" data-testid="text-trend-median-ttr">—</p>
+              </div>
+              <div class="bg-gray-50 rounded px-3 py-2">
+                <p class="uppercase tracking-wide text-gray-400">Avg TTR</p>
+                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-avg-ttr" data-testid="text-trend-avg-ttr">—</p>
+              </div>
+            </div>
+            <div class="relative">
+              <canvas id="tool-health-trend-chart" height="110" data-testid="chart-tool-health-trend"></canvas>
+              <p id="tool-health-trend-empty" class="hidden text-xs text-gray-500 italic text-center py-6" data-testid="text-tool-health-trend-empty">No tool-health alert activity in this window.</p>
+            </div>
+          </div>
           <div id="tool-health-history-list" class="space-y-2" data-testid="list-tool-health-history"></div>
         </div>
       </div>
@@ -444,6 +485,7 @@
   <script>
     let costChart = null;
     let feedbackTrendChart = null;
+    let toolHealthTrendChart = null;
     const TABS = ['cost', 'latency', 'prompts', 'tools', 'issues', 'feedback', 'negative', 'thresholds'];
 
     function switchTab(tab) {
@@ -927,6 +969,11 @@
         const open = body.classList.toggle('hidden');
         toggle.setAttribute('aria-expanded', String(!open));
         chevron.style.transform = open ? '' : 'rotate(180deg)';
+        // Lazy-load the trend chart the first time the panel is opened so
+        // the request doesn't fire for ops who never expand the section.
+        if (!open) {
+          loadToolHealthAlertsTrend();
+        }
       });
 
       // Wire the filter bar (Task #319). Date range and severity hit the
@@ -952,6 +999,141 @@
           if (toolInp) toolInp.value = '';
           loadToolHealthAlertsHistory();
         });
+      }
+    }
+
+    /**
+     * Format a duration in seconds as a compact "Xm Ys" / "Xh Ym" string,
+     * suitable for the summary tiles and the time-to-resolve y-axis ticks.
+     * Returns "—" for null/undefined so empty cells stay visually neutral.
+     */
+    function fmtDurationSeconds(sec) {
+      if (sec == null || !Number.isFinite(Number(sec))) return '—';
+      const total = Math.max(0, Math.round(Number(sec)));
+      if (total < 60) return `${total}s`;
+      const mins = Math.floor(total / 60);
+      if (mins < 60) {
+        const s = total - mins * 60;
+        return s === 0 ? `${mins}m` : `${mins}m ${s}s`;
+      }
+      const hrs = Math.floor(mins / 60);
+      const m = mins - hrs * 60;
+      if (hrs < 24) return m === 0 ? `${hrs}h` : `${hrs}h ${m}m`;
+      const days = Math.floor(hrs / 24);
+      const h = hrs - days * 24;
+      return h === 0 ? `${days}d` : `${days}d ${h}h`;
+    }
+
+    /**
+     * Render the alert-volume + median-time-to-resolve trend chart inside
+     * the history panel. Stacked bars per severity for daily counts and a
+     * line overlay for median TTR (in minutes for readability).
+     *
+     * Quietly skips when Chart.js isn't loaded yet — the page wires this
+     * lazily on history-panel open and on DOM ready, so a transient race
+     * shouldn't surface as an error.
+     */
+    async function loadToolHealthAlertsTrend() {
+      const canvas = document.getElementById('tool-health-trend-chart');
+      const emptyEl = document.getElementById('tool-health-trend-empty');
+      const totalFiredEl = document.getElementById('tool-health-trend-total-fired');
+      const totalResolvedEl = document.getElementById('tool-health-trend-total-resolved');
+      const medianTtrEl = document.getElementById('tool-health-trend-median-ttr');
+      const avgTtrEl = document.getElementById('tool-health-trend-avg-ttr');
+      const daysSel = document.getElementById('tool-health-trend-days');
+      if (!canvas || typeof Chart === 'undefined') return;
+      const days = daysSel ? Number(daysSel.value) || 14 : 14;
+      try {
+        const { data } = await apiFetch(`/api/ai-ops/tool-health-alerts/trend?days=${days}`);
+        const buckets = (data && Array.isArray(data.buckets)) ? data.buckets : [];
+        const overall = (data && data.overall) || { total_fired: 0, total_resolved: 0, median_ttr_seconds: null, avg_ttr_seconds: null };
+
+        if (totalFiredEl) totalFiredEl.textContent = String(overall.total_fired ?? 0);
+        if (totalResolvedEl) totalResolvedEl.textContent = String(overall.total_resolved ?? 0);
+        if (medianTtrEl) medianTtrEl.textContent = fmtDurationSeconds(overall.median_ttr_seconds);
+        if (avgTtrEl) avgTtrEl.textContent = fmtDurationSeconds(overall.avg_ttr_seconds);
+
+        const totalFires = buckets.reduce((sum, b) => sum + (b.total || 0), 0);
+        const anyTtr = buckets.some(b => b.median_ttr_seconds != null);
+        if (totalFires === 0 && !anyTtr) {
+          if (toolHealthTrendChart) { toolHealthTrendChart.destroy(); toolHealthTrendChart = null; }
+          canvas.style.display = 'none';
+          if (emptyEl) emptyEl.classList.remove('hidden');
+          return;
+        }
+        canvas.style.display = '';
+        if (emptyEl) emptyEl.classList.add('hidden');
+
+        const labels = buckets.map(b => b.day);
+        const ttrMinutes = buckets.map(b => b.median_ttr_seconds == null ? null : Math.round(b.median_ttr_seconds / 60));
+
+        const datasets = [
+          { label: 'Critical', data: buckets.map(b => b.critical || 0), backgroundColor: 'rgba(220, 38, 38, 0.85)', stack: 'sev', yAxisID: 'y' },
+          { label: 'High',     data: buckets.map(b => b.high     || 0), backgroundColor: 'rgba(249, 115, 22, 0.85)', stack: 'sev', yAxisID: 'y' },
+          { label: 'Medium',   data: buckets.map(b => b.medium   || 0), backgroundColor: 'rgba(234, 179, 8, 0.85)',  stack: 'sev', yAxisID: 'y' },
+          { label: 'Low',      data: buckets.map(b => b.low      || 0), backgroundColor: 'rgba(59, 130, 246, 0.75)', stack: 'sev', yAxisID: 'y' },
+          { label: 'Info',     data: buckets.map(b => b.info     || 0), backgroundColor: 'rgba(148, 163, 184, 0.7)', stack: 'sev', yAxisID: 'y' },
+          {
+            label: 'Median TTR (min)',
+            data: ttrMinutes,
+            type: 'line',
+            borderColor: '#0f766e',
+            backgroundColor: 'rgba(15, 118, 110, 0.15)',
+            pointBackgroundColor: '#0f766e',
+            tension: 0.3,
+            spanGaps: true,
+            yAxisID: 'y1',
+          },
+        ];
+
+        if (toolHealthTrendChart) toolHealthTrendChart.destroy();
+        const ctx = canvas.getContext('2d');
+        toolHealthTrendChart = new Chart(ctx, {
+          type: 'bar',
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => {
+                    if (ctx.dataset.yAxisID === 'y1') {
+                      const v = ctx.parsed.y;
+                      if (v == null) return `${ctx.dataset.label}: —`;
+                      return `${ctx.dataset.label}: ${fmtDurationSeconds(v * 60)}`;
+                    }
+                    return `${ctx.dataset.label}: ${ctx.parsed.y}`;
+                  },
+                },
+              },
+            },
+            scales: {
+              x: { stacked: true, ticks: { font: { size: 10 } } },
+              y: {
+                stacked: true,
+                beginAtZero: true,
+                position: 'left',
+                title: { display: true, text: 'Alerts fired', font: { size: 11 } },
+                ticks: { precision: 0 },
+              },
+              y1: {
+                position: 'right',
+                beginAtZero: true,
+                title: { display: true, text: 'Median TTR (min)', font: { size: 11 } },
+                grid: { drawOnChartArea: false },
+              },
+            },
+          },
+        });
+      } catch (e) {
+        console.error('Tool-health trend load error', e);
+        if (emptyEl) {
+          emptyEl.textContent = 'Failed to load tool-health trend.';
+          emptyEl.classList.remove('hidden');
+        }
+        if (canvas) canvas.style.display = 'none';
       }
     }
 
@@ -2543,6 +2725,7 @@
       loadSummary();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
+      loadToolHealthAlertsTrend();
       loadToolHealthOverrideBanner();
       loadCostTrend();
       const active = TABS.find(t => !document.getElementById(`content-${t}`).classList.contains('hidden'));
@@ -2618,6 +2801,11 @@
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
       initToolHealthHistoryToggle();
+      loadToolHealthAlertsTrend();
+      const trendDaysSel = document.getElementById('tool-health-trend-days');
+      if (trendDaysSel) {
+        trendDaysSel.addEventListener('change', loadToolHealthAlertsTrend);
+      }
       loadToolHealthOverrideBanner();
       loadCostTrend();
       // Honor a deep-link like /ai-ops?tab=prompts so notifications can

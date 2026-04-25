@@ -1,12 +1,15 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 
 ## Overview
-WalaPlus is an AI-powered enterprise Quality Management System integrating governance, risk, and compliance (GRC) with quality management. It provides HTML dashboards, supports autoscale deployment, and offers comprehensive solutions for quality, risk, and compliance. Key capabilities include AI-powered quality audits, robust duplicate detection, and page-view telemetry for user engagement. The platform aims to be a holistic solution for modern enterprise quality and compliance needs, enhancing operational efficiency and regulatory adherence through a unified GRC and quality management approach.
+WalaPlus is an AI-powered enterprise Quality Management System integrating governance, risk, and compliance (GRC) with quality management. It provides HTML dashboards, supports autoscale deployment, and offers comprehensive solutions for quality, risk, and compliance. Key capabilities include AI-powered quality audits, robust duplicate detection, page-view telemetry, and resumable streaming exports. The platform aims to be a holistic solution for modern enterprise quality and compliance needs, enhancing operational efficiency and regulatory adherence through a unified GRC and quality management approach.
 
 ## User Preferences
 I prefer clear and concise communication. For development, I favor iterative progress with regular updates. Before implementing major architectural changes or introducing new external dependencies, please ask for my approval. I expect the agent to prioritize security best practices and ensure all changes are thoroughly tested.
 
 ## Recent Changes
+
+### April 25, 2026 — Tool-health alert volume & time-to-resolve trend chart on AI Ops (Task #320)
+Added a 14/30-day trend chart to the existing "Recently triaged tool-health alerts" panel on `/ai-ops`. Backend: new `getToolHealthAlertTrend(days)` aggregation in `src/utils/aiAlertsDatabase.ts` uses `generate_series` for fully-padded daily buckets, severity counts (`critical/high/medium/low/info`) via `SUM(CASE)`, per-day median TTR bucketed by `resolved_at::date`, and overall `total_fired/total_resolved/median_ttr_seconds/avg_ttr_seconds`. Days are clamped to `[1, 90]` via `safeInt`. New route `GET /api/ai-ops/tool-health-alerts/trend?days=N` in `src/mastra/routes/aiOpsRoutes.ts`, gated by `AI_OPS_ROLES`. Frontend: `dashboard/ai-ops.html` renders a stacked-bar (severity) + median-TTR-line Chart.js chart inside the history panel (lazy-loaded on toggle expand) plus four KPI tiles and a 7/14/30-day range selector. New test-ids: `section-tool-health-trend`, `chart-tool-health-trend`, `text-tool-health-trend-empty`, `text-trend-{total-fired,total-resolved,median-ttr,avg-ttr}`, `select-tool-health-trend-days`. Verified with new integration tests in `tests/aiOpsRoutes.test.ts` (route registration + happy-path bucket/overall shape) and an e2e Playwright run via the testing skill.
 
 ### April 25, 2026 — Cross-build trend tracking for streaming-download latency (Task #366)
 The streaming-download smoke test already records per-browser wall-clock durations to `test-results/streaming-download-timing/<browser>.json` and uploads them as a CI artifact, but each run lived in isolation — a slow creep (e.g. +200 ms/week) would not trip the static `LATENCY_FAIL_MS` budget for months. Added `scripts/streaming-download-trend.cjs`: a dependency-free Node script that uses the preinstalled `gh` CLI to fetch the `streaming-download-timing` artifact from the last 20 successful runs of the same workflow on the default branch (artifacts have 90-day retention, so this gives us a free, already-authenticated time-series store with no new external service or secret), combines that history with the current run's per-browser timing files, and renders a per-browser Markdown trend table with the rolling median, Δ-vs-median for every run, and a simple linear-regression slope (ms/run). It flags 🐢 "creeping regression suspected" when the current run is > 1.25× the median of the last 10 runs on that browser, even when still inside the hard fail budget. Wired into `.github/workflows/streaming-download-smoke.yml` (Task #366) as three new `if: always()` steps after the timing-artifact upload: (1) `Render latency trend (history + this run)` runs the script with `GH_TOKEN`, `STREAMING_TREND_HISTORY_LIMIT=20`, and `STREAMING_TREND_DEFAULT_BRANCH` derived from the repo default; (2) `Append trend report to job summary` cats the report into `$GITHUB_STEP_SUMMARY` so it shows up directly on the Actions run page; (3) `Post / update sticky PR comment with trend` calls `gh pr comment <pr> --body-file ... --edit-last` (falling back to a fresh comment if there is no prior one) so reviewers see the trend right next to the PR diff without per-push spam. The HTML marker `<!-- streaming-download-trend -->` at the bottom of the report identifies the comment. Workflow now declares `permissions: contents: read, actions: read, pull-requests: write` (the minimum needed for `gh run list` / `gh run download` / `gh pr comment`).
@@ -95,3 +98,38 @@ All 66 platform tests green.
 
 ### April 24, 2026 — AI Observability (token, cost, latency, error telemetry)
 Added `ai_call_metrics` PostgreSQL table (append-only, auto-bootstrapped, 90-day pruning) that records every LLM call: agent name, tool name, model, prompt/completion token counts, latency ms, estimated USD cost, success/error flag, error class, and hashed user/session IDs. A per-model price table lives in `src/utils/aiTelemetry.ts → MODEL_PRICE_TABLE` (update when OpenAI changes pricing). `withAiTelemetry()` wraps all four agent's `generateLegacy` calls (QMS Consultant chat + scan, SDR Quality, Sales Quality, Quality Specialist in the audit workflow); streaming calls use `recordStreamT`
+## System Architecture
+The platform is built on the Mastra AI agent framework and Hono HTTP server.
+
+-   **RTL Layout Convention**: Supports Arabic (RTL) via `html[dir="rtl"]` using CSS logical properties and helper classes (`text-start`, `border-s-4`, `ms-2`/`me-2`, `rounded-e-lg`, `text-end`) for automatic mirroring.
+-   **UI/UX Decisions**: Dashboards are static HTML, styled with compiled Tailwind CSS. Emphasis on WCAG 2.1 AA accessibility (skip links, modal focus traps, ARIA live regions, semantic HTML). Features a fixed, collapsible left side rail navigation and a floating bottom-right progress card for downloads.
+-   **Technical Implementations**:
+    -   **Frontend**: Static HTML dashboards with Tailwind CSS.
+    -   **Backend**: Hono HTTP server with a refactored thin composition root for modularity.
+    -   **Database**: PostgreSQL for over 103 tables across 21 module groups.
+    -   **AI Integration**: GPT-4o powers AI agent functionalities through Replit AI/OpenAI. AI Observability tracks LLM calls, costs, and latency.
+    -   **Workflows**: Inngest orchestrates event-driven processes like background scanning and KPI calculation.
+    -   **Authentication**: Replit OIDC (Google, GitHub, Apple, email) with HMAC-SHA256 signed cookies. Admin API key for alternative access.
+    -   **Authorization**: Role-Based Access Control (RBAC) with 11 roles via `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
+    -   **Security**: Nonce-based Content Security Policy (CSP), distributed Postgres-backed rate limiting, input sanitization, UUID resource ID obfuscation, strong password policies, generic error messages, and Human-In-The-Loop (HITL) AI Approval Gate. CI checks enforce CSP compliance.
+-   **Feature Specifications**:
+    -   **AI Consultant**: GPT-4o powered QMS consultant with 23 tools for data querying and QMS management, integrated with a chat interface and knowledge base. Feedback ratings link to AI observability.
+    -   **Duplicate Radar**: Multi-signal duplicate detection for CRM data with AI recommendations.
+    -   **AI Observability**: Tracks LLM call metrics (token, cost, latency, errors) in `ai_call_metrics` table, visualized in an "AI Operations" panel. Daily Inngest cron alerts on high AI spend.
+    -   **Evidence Management**: Structured document upload and retrieval.
+    -   **Compliance Checklist Engine**: Structured checklists with automated data verification.
+    -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
+    -   **Infographic Generator**: In-platform tool with Slack and email integration.
+    -   **Native XLSX Exports**: Multi-sheet Excel exports.
+    -   **True Streaming Exports**: Large exports directly to disk via File System Access API, supporting resumable downloads through temporary file staging.
+
+## External Dependencies
+-   **PostgreSQL**: Primary data store.
+-   **Replit AI Integrations / OpenAI**: For GPT-4o AI capabilities.
+-   **Inngest**: Event-driven workflow orchestration.
+-   **Resend**: Outgoing email services.
+-   **Zoho CRM**: Integrated for live CRM data.
+-   **Slack**: For notifications and infographic sharing.
+-   **exceljs**: For generating XLSX data exports.
+-   **ImageMagick**: For converting SVG infographics to PNG.
+-   **Chart.js**: For rendering charts.

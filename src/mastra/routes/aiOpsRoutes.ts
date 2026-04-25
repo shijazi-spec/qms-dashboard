@@ -19,6 +19,7 @@ import {
 import {
   getAIAlerts,
   getToolHealthAlertHistory,
+  getToolHealthAlertTrend,
   acknowledgeAlert,
   resolveAlert,
   type AIAlert,
@@ -649,6 +650,39 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] tool-health-alerts history error:", error);
           return c.json({ error: "Failed to fetch tool-health alert history" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Daily-bucketed trend of tool-health alert activity over the last
+   * `days` days (default 14, max 90). Returns:
+   *   - `buckets[]`  — one entry per day in the window with severity
+   *                    counts and a per-day median time-to-resolve. Days
+   *                    with zero activity are returned as explicit zeros
+   *                    so the chart shows continuous time, not gaps.
+   *   - `overall`    — total fired, total resolved, and median + average
+   *                    time-to-resolve across the whole window.
+   *
+   * Powers the trend chart inside the "Recently triaged tool-health
+   * alerts" panel on /ai-ops so ops can spot whether a tool is getting
+   * noisier over time and whether resolution times are improving.
+   */
+  {
+    path: "/api/ai-ops/tool-health-alerts/trend",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const days = safeInt(c.req.query("days"), 14, 1, 90);
+          const trend = await getToolHealthAlertTrend(days);
+          return c.json({ data: trend });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health-alerts trend error:", error);
+          return c.json({ error: "Failed to fetch tool-health alert trend" }, 500);
         }
       };
     },

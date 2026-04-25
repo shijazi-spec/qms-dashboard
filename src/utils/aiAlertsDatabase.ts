@@ -335,6 +335,169 @@ export async function getToolHealthAlertHistory(
 }
 
 /**
+ * One day's worth of tool-health alert activity. Returned by
+ * {@link getToolHealthAlertTrend} so the AI Ops dashboard can plot a
+ * stacked-bar trend of alerts-per-day per severity together with a
+ * per-day median time-to-resolve overlay.
+ *
+ * Counts are bucketed by `created_at` (when the alert fired); the
+ * `median_ttr_seconds` is bucketed by `resolved_at` so it lines up with
+ * the operational outcome on that day rather than the original fire date.
+ */
+export interface ToolHealthAlertTrendBucket {
+  day: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+  total: number;
+  median_ttr_seconds: number | null;
+}
+
+export interface ToolHealthAlertTrend {
+  days: number;
+  buckets: ToolHealthAlertTrendBucket[];
+  overall: {
+    total_fired: number;
+    total_resolved: number;
+    median_ttr_seconds: number | null;
+    avg_ttr_seconds: number | null;
+  };
+}
+
+/**
+ * Daily-bucketed aggregation of `tool_health` alert activity over the last
+ * `days` days. Used by GET /api/ai-ops/tool-health-alerts/trend so ops can
+ * spot whether a tool is getting noisier over time and whether resolution
+ * times are improving.
+ *
+ * Returns a fully-padded series — every day in the window appears as a row
+ * even when no alerts fired or were resolved that day — so the frontend
+ * doesn't have to fill gaps before charting.
+ *
+ * `days` is clamped to [1, 90] so callers can't accidentally trigger a
+ * full-table scan on an unbounded window.
+ */
+export async function getToolHealthAlertTrend(
+  days = 14,
+): Promise<ToolHealthAlertTrend> {
+  const safeDays = Math.max(1, Math.min(90, Math.floor(days)));
+
+  // Build one row per day in the window via generate_series, then LEFT
+  // JOIN tool-health alerts created on that day so empty days surface as
+  // explicit zeros rather than missing rows.
+  const fireRes = await pool.query(
+    `WITH day_series AS (
+       SELECT generate_series(
+         (CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day')::date,
+         CURRENT_DATE,
+         INTERVAL '1 day'
+       )::date AS day
+     )
+     SELECT
+       d.day::text                                              AS day,
+       COALESCE(SUM(CASE WHEN a.severity='critical' THEN 1 ELSE 0 END), 0)::int AS critical,
+       COALESCE(SUM(CASE WHEN a.severity='high'     THEN 1 ELSE 0 END), 0)::int AS high,
+       COALESCE(SUM(CASE WHEN a.severity='medium'   THEN 1 ELSE 0 END), 0)::int AS medium,
+       COALESCE(SUM(CASE WHEN a.severity='low'      THEN 1 ELSE 0 END), 0)::int AS low,
+       COALESCE(SUM(CASE WHEN a.severity='info'     THEN 1 ELSE 0 END), 0)::int AS info,
+       COUNT(a.id)::int                                         AS total
+     FROM day_series d
+     LEFT JOIN ai_alerts a
+       ON a.alert_type = 'tool_health'
+      AND date_trunc('day', a.created_at)::date = d.day
+     GROUP BY d.day
+     ORDER BY d.day ASC`,
+    [safeDays],
+  );
+
+  // Per-day median TTR, bucketed by resolved_at so the value aligns with
+  // the day the alert was actually closed (not the day it originally fired).
+  const ttrRes = await pool.query(
+    `SELECT
+       date_trunc('day', resolved_at)::date::text AS day,
+       PERCENTILE_CONT(0.5) WITHIN GROUP (
+         ORDER BY EXTRACT(EPOCH FROM (resolved_at - created_at))
+       ) AS median_ttr_seconds
+     FROM ai_alerts
+     WHERE alert_type = 'tool_health'
+       AND resolved_at IS NOT NULL
+       AND resolved_at >= CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day'
+     GROUP BY 1`,
+    [safeDays],
+  );
+  const ttrByDay = new Map<string, number>();
+  for (const row of ttrRes.rows) {
+    if (row.median_ttr_seconds != null) {
+      ttrByDay.set(row.day, Number(row.median_ttr_seconds));
+    }
+  }
+
+  // Aggregate roll-up: total fired in window, total resolved in window,
+  // and median/average TTR across every resolved alert in the window.
+  const overallRes = await pool.query(
+    `SELECT
+       (SELECT COUNT(*)::int
+          FROM ai_alerts
+          WHERE alert_type = 'tool_health'
+            AND created_at >= CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day'
+       ) AS total_fired,
+       (SELECT COUNT(*)::int
+          FROM ai_alerts
+          WHERE alert_type = 'tool_health'
+            AND resolved_at IS NOT NULL
+            AND resolved_at >= CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day'
+       ) AS total_resolved,
+       (SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
+                 ORDER BY EXTRACT(EPOCH FROM (resolved_at - created_at)))
+          FROM ai_alerts
+          WHERE alert_type = 'tool_health'
+            AND resolved_at IS NOT NULL
+            AND resolved_at >= CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day'
+       ) AS median_ttr_seconds,
+       (SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)))
+          FROM ai_alerts
+          WHERE alert_type = 'tool_health'
+            AND resolved_at IS NOT NULL
+            AND resolved_at >= CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day'
+       ) AS avg_ttr_seconds`,
+    [safeDays],
+  );
+  const overallRow = overallRes.rows[0] || {};
+
+  const buckets: ToolHealthAlertTrendBucket[] = fireRes.rows.map((r: any) => ({
+    day: r.day,
+    critical: r.critical,
+    high: r.high,
+    medium: r.medium,
+    low: r.low,
+    info: r.info,
+    total: r.total,
+    median_ttr_seconds: ttrByDay.has(r.day)
+      ? Math.round(ttrByDay.get(r.day) as number)
+      : null,
+  }));
+
+  return {
+    days: safeDays,
+    buckets,
+    overall: {
+      total_fired: Number(overallRow.total_fired ?? 0),
+      total_resolved: Number(overallRow.total_resolved ?? 0),
+      median_ttr_seconds:
+        overallRow.median_ttr_seconds == null
+          ? null
+          : Math.round(Number(overallRow.median_ttr_seconds)),
+      avg_ttr_seconds:
+        overallRow.avg_ttr_seconds == null
+          ? null
+          : Math.round(Number(overallRow.avg_ttr_seconds)),
+    },
+  };
+}
+
+/**
  * Fetch every open / acknowledged alert for the given
  * (alert_type, related_record_id) pair. Used by the tool-health auto-resolve
  * sweep so it can decide which alerts to close (and apply a per-alert
