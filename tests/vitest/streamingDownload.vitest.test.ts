@@ -2423,11 +2423,19 @@ describe('streamingDownload (browser helper)', () => {
 
     const notice = env.win.document.querySelector('[data-testid="notice-streaming-fallback"]');
     expect(notice).not.toBeNull();
-    expect(notice!.textContent || '').toContain('هذا المتصفح');
-    expect(notice!.textContent || '').toContain('200 ميجابايت');
+
+    // The advisory must show the EXACT Arabic translations from
+    // dashboard/i18n/ar.json — we check each of the three translated keys
+    // (headline, body, dismiss aria-label) so a partial regression in one
+    // string can't be hidden by another still translating.
+    const headline = notice!.querySelector('strong');
+    expect(headline?.textContent).toBe(ar.downloads.fallback_notice_title);
+
+    const detail = notice!.querySelector('span.block.mt-0\\.5');
+    expect(detail?.textContent).toBe(ar.downloads.fallback_notice_detail);
 
     const dismissBtn = notice!.querySelector('[data-testid="button-dismiss-streaming-fallback"]');
-    expect(dismissBtn?.getAttribute('aria-label')).toBe('إغلاق إشعار تصدير المتصفح');
+    expect(dismissBtn?.getAttribute('aria-label')).toBe(ar.downloads.fallback_notice_dismiss);
   });
 
   it('falls back to English defaults when WalaPlusI18n is not loaded', async () => {
@@ -3220,6 +3228,310 @@ describe('streamingDownload (browser helper)', () => {
         '#streaming-download-fallback-notice'
       );
       expect(notices.length).toBe(1);
+    });
+
+    // ── Arabic-on-each-dashboard suite ───────────────────────────────────
+    // The fallback advisory ships on six dashboards (vendors, risks,
+    // policies, logs, duplicates, audits). We load each real dashboard's
+    // HTML body into jsdom (no scripts run thanks to runScripts:'outside-only')
+    // so the test asserts against the same markup the browser would parse,
+    // then attach the notice with the Arabic i18n shim installed and verify
+    // the EXACT translated strings render. Pages whose export buttons are
+    // rendered dynamically by JS templates (and therefore aren't present
+    // in the static HTML) are documented as no-static-button so a future
+    // markup change is forced to update this list deliberately.
+    const ar = JSON.parse(
+      readFileSync(resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'ar.json'), 'utf8')
+    );
+
+    const dashboardCases: Array<{ page: string; staticButton: boolean }> = [
+      { page: 'vendors', staticButton: true },
+      { page: 'risks', staticButton: true },
+      { page: 'policies', staticButton: true },
+      { page: 'duplicates', staticButton: true },
+      // The logs dashboard's export button uses data-on-click="exportCSV"
+      // (not one of the four selectors findExportButton recognises) and the
+      // size hint is wired up dynamically. The audits page renders its
+      // export-PDF buttons from a JS template after fetch, so the static
+      // HTML has no matching trigger either.
+      { page: 'logs', staticButton: false },
+      { page: 'audits', staticButton: false },
+    ];
+
+    function loadDashboardEnv(page: string) {
+      const html = readFileSync(
+        resolve(__dirname, '..', '..', 'dashboard', `${page}.html`),
+        'utf8'
+      );
+      const dom = new JSDOM(html, {
+        url: 'http://localhost/',
+        runScripts: 'outside-only',
+      });
+      const win: any = dom.window;
+      win.ReadableStream = (globalThis as any).ReadableStream;
+      win.WritableStream = (globalThis as any).WritableStream;
+      win.TransformStream = (globalThis as any).TransformStream;
+      win.fetch = (globalThis as any).fetch;
+      win.Response = (globalThis as any).Response;
+      win.MessageChannel = (globalThis as any).MessageChannel;
+      win.URL.createObjectURL = vi.fn(() => 'blob:mock');
+      win.URL.revokeObjectURL = vi.fn();
+      win.alert = vi.fn();
+      // Force the buffered-fallback path: streaming APIs unavailable.
+      try {
+        delete win.showSaveFilePicker;
+      } catch (_) {
+        win.showSaveFilePicker = undefined;
+      }
+      // Install Arabic i18n shim BEFORE evaluating the script so any code
+      // that captures the locale at load time sees Arabic.
+      installI18nShim(win, ar);
+      win.eval(SCRIPT_SOURCE);
+      return { win, cleanup: () => dom.window.close() };
+    }
+
+    for (const { page, staticButton } of dashboardCases) {
+      if (staticButton) {
+        it(`renders the Arabic fallback advisory on the ${page} dashboard`, () => {
+          const dash = loadDashboardEnv(page);
+          try {
+            // Sanity: confirm the dashboard's static HTML exposes a button
+            // findExportButton actually matches — otherwise the assertion
+            // below would tell us the i18n was wrong when the real cause
+            // is a missing trigger.
+            const matched = dash.win.document.querySelector(
+              '[data-on-click="streamDownload"], ' +
+                '[data-on-click="streamingDownload"], ' +
+                '[data-on-click="streamingDownloadFromEvent"], ' +
+                '[data-estimate-url]'
+            );
+            expect(matched, `${page}.html should expose a fallback-eligible export button`).not.toBeNull();
+
+            dash.win.streamingDownload.attachStreamingFallbackNotice(dash.win.document);
+
+            const notice = dash.win.document.querySelector(
+              '[data-testid="notice-streaming-fallback"]'
+            );
+            expect(notice, `${page}.html: fallback notice missing`).not.toBeNull();
+
+            const headline = notice!.querySelector('strong');
+            expect(headline?.textContent).toBe(ar.downloads.fallback_notice_title);
+
+            const detail = notice!.querySelector('span.block.mt-0\\.5');
+            expect(detail?.textContent).toBe(ar.downloads.fallback_notice_detail);
+
+            const dismissBtn = notice!.querySelector(
+              '[data-testid="button-dismiss-streaming-fallback"]'
+            );
+            expect(dismissBtn?.getAttribute('aria-label')).toBe(
+              ar.downloads.fallback_notice_dismiss
+            );
+          } finally {
+            dash.cleanup();
+          }
+        });
+      } else {
+        it(`documents that the ${page} dashboard has no static export button (notice is JS-template-driven)`, () => {
+          const dash = loadDashboardEnv(page);
+          try {
+            const matched = dash.win.document.querySelector(
+              '[data-on-click="streamDownload"], ' +
+                '[data-on-click="streamingDownload"], ' +
+                '[data-on-click="streamingDownloadFromEvent"], ' +
+                '[data-estimate-url]'
+            );
+            expect(
+              matched,
+              `${page}.html unexpectedly gained a static export trigger — update dashboardCases above`
+            ).toBeNull();
+
+            // Calling attachStreamingFallbackNotice() must be a no-op in
+            // this state so downstream pages don't render a stray Arabic
+            // advisory above content that has no export button yet.
+            dash.win.streamingDownload.attachStreamingFallbackNotice(dash.win.document);
+            expect(
+              dash.win.document.getElementById('streaming-download-fallback-notice')
+            ).toBeNull();
+
+            // After the page's own JS would have injected an export button
+            // (simulated here), the notice must render in Arabic. This is
+            // the path the live page exercises once the dynamic template
+            // has populated the toolbar / table row.
+            const main = dash.win.document.querySelector('main') || dash.win.document.body;
+            const btn = dash.win.document.createElement('button');
+            btn.setAttribute('data-on-click', 'streamDownload');
+            btn.setAttribute('data-estimate-url', `/api/${page}/export`);
+            btn.textContent = 'Export';
+            main.appendChild(btn);
+
+            dash.win.streamingDownload.attachStreamingFallbackNotice(dash.win.document);
+
+            const notice = dash.win.document.querySelector(
+              '[data-testid="notice-streaming-fallback"]'
+            );
+            expect(notice, `${page}.html: notice did not render after dynamic button`).not.toBeNull();
+
+            const headline = notice!.querySelector('strong');
+            expect(headline?.textContent).toBe(ar.downloads.fallback_notice_title);
+          } finally {
+            dash.cleanup();
+          }
+        });
+      }
+    }
+
+    // ── Race-condition guard ─────────────────────────────────────────────
+    // scheduleStreamingFallbackNotice() (the auto-bootstrap path) must
+    // wait for WalaPlusI18n to finish loading before calling
+    // buildFallbackNotice(); otherwise the user briefly sees the English
+    // defaults even though their app language is Arabic. The script
+    // achieves this two ways:
+    //   1) WalaPlusI18n.onReady(cb)        — preferred when the module is present.
+    //   2) document 'walaPlusI18nReady' event — fallback when the script
+    //      loads before i18n.js parses.
+    // This test exercises path (2) end-to-end: load the script with no
+    // WalaPlusI18n, advance one tick so scheduleStreamingFallbackNotice
+    // registers its listener, prove no notice has rendered, then install
+    // the Arabic shim and dispatch walaPlusI18nReady — only then should
+    // the Arabic advisory appear.
+    it('defers the fallback notice until WalaPlusI18n is ready (race-condition guard)', async () => {
+      const dom = new JSDOM(
+        '<!DOCTYPE html><html><body><main><button data-on-click="streamDownload" ' +
+          'data-estimate-url="/api/vendors/export">Export</button></main></body></html>',
+        { url: 'http://localhost/', runScripts: 'outside-only' }
+      );
+      const win: any = dom.window;
+      win.ReadableStream = (globalThis as any).ReadableStream;
+      win.WritableStream = (globalThis as any).WritableStream;
+      win.TransformStream = (globalThis as any).TransformStream;
+      win.fetch = (globalThis as any).fetch;
+      win.Response = (globalThis as any).Response;
+      win.MessageChannel = (globalThis as any).MessageChannel;
+      win.URL.createObjectURL = vi.fn(() => 'blob:mock');
+      win.URL.revokeObjectURL = vi.fn();
+      win.alert = vi.fn();
+      try {
+        delete win.showSaveFilePicker;
+      } catch (_) {
+        win.showSaveFilePicker = undefined;
+      }
+
+      try {
+        // Crucially: WalaPlusI18n is NOT defined yet when the script runs.
+        win.eval(SCRIPT_SOURCE);
+
+        // Let the script's setTimeout(0) tick fire so
+        // scheduleStreamingFallbackNotice runs and (with no
+        // WalaPlusI18n in scope) registers the walaPlusI18nReady listener.
+        await new Promise((r) => setTimeout(r, 0));
+
+        // The listener has been registered but never fired — so the
+        // notice must NOT have rendered yet. If this assertion fails the
+        // user would see the English advisory before the Arabic bundle
+        // resolves, which is exactly the race the deferral exists to
+        // prevent.
+        expect(
+          win.document.getElementById('streaming-download-fallback-notice'),
+          'notice rendered before WalaPlusI18n was ready'
+        ).toBeNull();
+
+        // Now install the Arabic shim and dispatch the ready event the
+        // i18n module would dispatch once translations have loaded.
+        installI18nShim(win, ar);
+        win.document.dispatchEvent(new win.Event('walaPlusI18nReady'));
+
+        // The deferred attach should have fired synchronously inside the
+        // event handler, so the notice is present and Arabic.
+        const notice = win.document.querySelector(
+          '[data-testid="notice-streaming-fallback"]'
+        );
+        expect(notice).not.toBeNull();
+        const headline = notice!.querySelector('strong');
+        expect(headline?.textContent).toBe(ar.downloads.fallback_notice_title);
+        const detail = notice!.querySelector('span.block.mt-0\\.5');
+        expect(detail?.textContent).toBe(ar.downloads.fallback_notice_detail);
+        const dismissBtn = notice!.querySelector(
+          '[data-testid="button-dismiss-streaming-fallback"]'
+        );
+        expect(dismissBtn?.getAttribute('aria-label')).toBe(
+          ar.downloads.fallback_notice_dismiss
+        );
+      } finally {
+        dom.window.close();
+      }
+    });
+
+    // The other deferral path: WalaPlusI18n is already on the page when
+    // the script evaluates. In that case scheduleStreamingFallbackNotice
+    // calls WalaPlusI18n.onReady(cb) directly. We give the shim an
+    // onReady that holds its callback so the test can prove the script
+    // really does wait for it — no early English flash.
+    it('uses WalaPlusI18n.onReady() and waits for it to fire before attaching', async () => {
+      const dom = new JSDOM(
+        '<!DOCTYPE html><html><body><main><button data-on-click="streamDownload" ' +
+          'data-estimate-url="/api/risks/export">Export</button></main></body></html>',
+        { url: 'http://localhost/', runScripts: 'outside-only' }
+      );
+      const win: any = dom.window;
+      win.ReadableStream = (globalThis as any).ReadableStream;
+      win.WritableStream = (globalThis as any).WritableStream;
+      win.TransformStream = (globalThis as any).TransformStream;
+      win.fetch = (globalThis as any).fetch;
+      win.Response = (globalThis as any).Response;
+      win.URL.createObjectURL = vi.fn(() => 'blob:mock');
+      win.URL.revokeObjectURL = vi.fn();
+      win.alert = vi.fn();
+      try {
+        delete win.showSaveFilePicker;
+      } catch (_) {
+        win.showSaveFilePicker = undefined;
+      }
+
+      // Stand up a deferred WalaPlusI18n shim where onReady holds the
+      // callback until release() is called.
+      let release: (() => void) | null = null;
+      const pending = new Promise<void>((r) => {
+        release = () => r();
+      });
+      function get(obj: any, path: string) {
+        return path.split('.').reduce((acc: any, k: string) => (acc == null ? acc : acc[k]), obj);
+      }
+      win.WalaPlusI18n = {
+        t: (key: string) => {
+          const v = get(ar, key);
+          return v == null ? key.split('.').pop() : String(v);
+        },
+        onReady: (cb: () => void) => {
+          pending.then(cb);
+        },
+      };
+
+      try {
+        win.eval(SCRIPT_SOURCE);
+        // setTimeout(0) tick: scheduleStreamingFallbackNotice runs and
+        // registers via WalaPlusI18n.onReady — but the shim hasn't
+        // fired the callback yet.
+        await new Promise((r) => setTimeout(r, 0));
+        expect(
+          win.document.getElementById('streaming-download-fallback-notice'),
+          'notice attached before WalaPlusI18n.onReady fired its callback'
+        ).toBeNull();
+
+        // Release the onReady callback. It runs on the microtask queue,
+        // so flush microtasks before asserting.
+        release!();
+        await pending;
+        await new Promise((r) => setTimeout(r, 0));
+
+        const notice = win.document.querySelector(
+          '[data-testid="notice-streaming-fallback"]'
+        );
+        expect(notice).not.toBeNull();
+        const headline = notice!.querySelector('strong');
+        expect(headline?.textContent).toBe(ar.downloads.fallback_notice_title);
+      } finally {
+        dom.window.close();
+      }
     });
   });
 
