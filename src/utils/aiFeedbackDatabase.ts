@@ -191,6 +191,36 @@ export async function getRecentThumbsDown(limit = 20): Promise<RecentThumbsDown[
   return res.rows;
 }
 
+export interface FeedbackTrendPoint {
+  day: string;
+  thumbs_up: number;
+  thumbs_down: number;
+}
+
+export async function getFeedbackTrend(days = 30): Promise<FeedbackTrendPoint[]> {
+  await initAIFeedbackTable();
+
+  const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
+
+  const res = await pool.query(
+    `SELECT
+       TO_CHAR(DATE(created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+       COUNT(*) FILTER (WHERE rating = 'up')   AS thumbs_up,
+       COUNT(*) FILTER (WHERE rating = 'down') AS thumbs_down
+     FROM ai_response_feedback
+     WHERE created_at >= NOW() - make_interval(days => $1)
+     GROUP BY DATE(created_at AT TIME ZONE 'UTC')
+     ORDER BY day ASC`,
+    [safeDays]
+  );
+
+  return res.rows.map(r => ({
+    day: r.day,
+    thumbs_up: parseInt(r.thumbs_up) || 0,
+    thumbs_down: parseInt(r.thumbs_down) || 0,
+  }));
+}
+
 export async function getWeeklyFeedbackDigest(): Promise<{
   period: string;
   total: number;

@@ -18,6 +18,7 @@ import {
   saveFeedback,
   getFeedbackStats,
   getRecentThumbsDown,
+  getFeedbackTrend,
 } from "../../utils/aiFeedbackDatabase";
 import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
@@ -489,6 +490,27 @@ export const consultantRoutes = [
         } catch (error) {
           console.error("[Consultant] Feedback stats error:", error);
           return c.json({ error: "Failed to fetch feedback stats" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/consultant/feedback/trend",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, ['admin', 'ai_specialist'] as UserRole[]);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const days = parseInt(c.req.query("days") || "30");
+          const trend = await getFeedbackTrend(days);
+
+          return c.json({ trend });
+        } catch (error) {
+          console.error("[Consultant] Feedback trend error:", error);
+          return c.json({ error: "Failed to fetch feedback trend" }, 500);
         }
       };
     },

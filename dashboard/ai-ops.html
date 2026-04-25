@@ -312,6 +312,13 @@
         <div id="ai-ops-feedback-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div class="text-center py-6 text-gray-400 col-span-4">Loading feedback stats…</div>
         </div>
+        <div class="mb-6">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">Daily Thumbs-Up / Thumbs-Down Trend</h3>
+          <div id="ai-ops-feedback-trend-wrap" class="relative h-56">
+            <canvas id="ai-ops-feedback-trend-chart" data-testid="chart-feedback-trend"></canvas>
+          </div>
+          <div id="ai-ops-feedback-trend-empty" class="hidden text-sm text-gray-400 py-4 text-center">No trend data for this period.</div>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 class="text-sm font-semibold text-gray-700 mb-3">Top Thumbs-Down Categories</h3>
@@ -393,6 +400,7 @@
 
   <script>
     let costChart = null;
+    let feedbackTrendChart = null;
     const TABS = ['cost', 'latency', 'prompts', 'tools', 'issues', 'feedback', 'negative', 'thresholds'];
 
     function switchTab(tab) {
@@ -499,6 +507,84 @@
         }
       } catch (err) {
         kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">Failed to load feedback stats</div>';
+      }
+      loadFeedbackTrend();
+    }
+
+    async function loadFeedbackTrend() {
+      const wrapEl  = document.getElementById('ai-ops-feedback-trend-wrap');
+      const emptyEl = document.getElementById('ai-ops-feedback-trend-empty');
+      try {
+        const days = document.getElementById('feedback-days')?.value || '30';
+        const payload = await apiFetch(`/api/consultant/feedback/trend?days=${days}`);
+        const trend = payload.trend || [];
+
+        if (trend.length === 0) {
+          if (wrapEl)  wrapEl.style.display  = 'none';
+          if (emptyEl) emptyEl.classList.remove('hidden');
+          return;
+        }
+
+        if (wrapEl)  wrapEl.style.display  = '';
+        if (emptyEl) emptyEl.classList.add('hidden');
+
+        const labels   = trend.map(p => p.day);
+        const upData   = trend.map(p => p.thumbs_up);
+        const downData = trend.map(p => p.thumbs_down);
+
+        const canvas = document.getElementById('ai-ops-feedback-trend-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (feedbackTrendChart) feedbackTrendChart.destroy();
+        feedbackTrendChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Thumbs Up',
+                data: upData,
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderColor: 'rgba(16, 185, 129, 1)',
+                borderWidth: 1,
+                borderRadius: 3,
+              },
+              {
+                label: 'Thumbs Down',
+                data: downData,
+                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                borderColor: 'rgba(239, 68, 68, 1)',
+                borderWidth: 1,
+                borderRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
+              tooltip: { mode: 'index', intersect: false },
+            },
+            scales: {
+              x: {
+                stacked: false,
+                ticks: { font: { size: 10 }, maxRotation: 45 },
+                grid: { display: false },
+              },
+              y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1, font: { size: 10 } },
+                grid: { color: 'rgba(0,0,0,0.05)' },
+              },
+            },
+          },
+        });
+      } catch (err) {
+        console.warn('Feedback trend load error', err);
+        if (wrapEl)  wrapEl.style.display  = 'none';
+        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = 'Failed to load trend data.'; }
       }
     }
 
