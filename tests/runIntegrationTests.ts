@@ -69,6 +69,26 @@
  * those env vars set, so a regression in the route-lockdown middleware
  * fails CI in the same run as the unit tests.
  *
+ * AI approval-queue HTTP secret-leak integration test: if the env var
+ * `RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/aiApprovalRoutesRedaction.integration.ts` against a running dev
+ * server (Task #348). It seeds rows through the live `enqueuePendingAction`,
+ * signs a quality-manager session cookie with the same `SESSION_SECRET`
+ * the server uses, and exercises the full HTTP / middleware stack for
+ * GET /api/ai/approvals*, POST /api/ai/approvals/:code/approve (success
+ * path) and POST /api/ai/approvals/:code/approve (throw path), asserting
+ * that no plaintext secret leaks into any response body. The two synthetic
+ * canary tools required by the POST /approve assertions
+ * (`integration-test-redaction-canary__ok` and
+ * `integration-test-redaction-canary__throws`) are registered in the
+ * server at startup whenever NODE_ENV !== 'production'
+ * (src/utils/integrationTestFixtureTools.ts), so no extra runtime setup
+ * is needed beyond `npm run dev`. The dedicated CI workflow
+ * `.github/workflows/ai-approval-redaction-integration.yml` boots the
+ * dev server with those env vars set, and the main `.github/workflows/test.yml`
+ * also sets the flag so a redaction regression fails CI in the same run
+ * as the unit tests.
+ *
  * Usage:    npm test
  *           npx tsx tests/runIntegrationTests.ts
  *           TEST_CONCURRENCY=1 npx tsx tests/runIntegrationTests.ts
@@ -119,10 +139,12 @@ async function discoverTestFiles(): Promise<string[]> {
 
   // src/**/*.test.ts (recursive — picks up e.g. redactSensitiveFields.test.ts)
   const srcDir = path.join(ROOT_DIR, "src");
-  const srcFiles = await collectTestFiles(srcDir).catch((err: unknown) => {
-    console.error(`Failed to discover src/**/*.test.ts: ${(err as Error).message}`);
+  const srcFiles = (await collectTestFiles(srcDir).catch((err: unknown) => {
+    console.error(
+      `Failed to discover src/**/*.test.ts: ${(err as Error).message}`,
+    );
     process.exit(1);
-  }) as string[];
+  })) as string[];
 
   return [...testsFiles, ...srcFiles].sort();
 }
@@ -156,14 +178,18 @@ function runOne(file: string): Promise<RunResult> {
       // Print as one coherent block so parallel runs stay readable.
       process.stdout.write(
         `\n──── ${rel}  (${(durationMs / 1000).toFixed(1)}s, exit ${code}) ────\n` +
-          (output.endsWith("\n") || output.length === 0 ? output : output + "\n"),
+          (output.endsWith("\n") || output.length === 0
+            ? output
+            : output + "\n"),
       );
       resolve({ file, ok: code === 0, code, durationMs });
     };
 
     child.on("exit", (code) => finish(code ?? -1));
     child.on("error", (err) => {
-      chunks.push(Buffer.from(`Failed to spawn ${rel}: ${(err as Error).message}\n`));
+      chunks.push(
+        Buffer.from(`Failed to spawn ${rel}: ${(err as Error).message}\n`),
+      );
       finish(-1);
     });
   });
@@ -190,14 +216,18 @@ function runVitest(): Promise<RunResult> {
       const output = Buffer.concat(chunks).toString("utf8");
       process.stdout.write(
         `\n──── ${label}  (${(durationMs / 1000).toFixed(1)}s, exit ${code}) ────\n` +
-          (output.endsWith("\n") || output.length === 0 ? output : output + "\n"),
+          (output.endsWith("\n") || output.length === 0
+            ? output
+            : output + "\n"),
       );
       resolve({ file: label, ok: code === 0, code, durationMs });
     };
 
     child.on("exit", (code) => finish(code ?? -1));
     child.on("error", (err) => {
-      chunks.push(Buffer.from(`Failed to spawn vitest: ${(err as Error).message}\n`));
+      chunks.push(
+        Buffer.from(`Failed to spawn vitest: ${(err as Error).message}\n`),
+      );
       finish(-1);
     });
   });
@@ -236,6 +266,37 @@ function runRbacIntegrationSuite(): Promise<RunResult> {
     child.on("error", (err) => {
       console.error(
         `Failed to spawn rbac integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runApprovalRedactionIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/aiApprovalRoutesRedaction.integration.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-ai-approval-redaction-integration.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn AI approval redaction integration suite: ${(err as Error).message}`,
       );
       resolve({
         file: label,
@@ -315,7 +376,12 @@ function runStreamingDownloadSmoke(): Promise<RunResult> {
     const label = "tests/streamingDownload.spec.ts (chromium+firefox+webkit)";
     const child = spawn(
       "npx",
-      ["playwright", "test", "tests/streamingDownload.spec.ts", "--reporter=list"],
+      [
+        "playwright",
+        "test",
+        "tests/streamingDownload.spec.ts",
+        "--reporter=list",
+      ],
       { stdio: "inherit", env: process.env },
     );
     child.on("exit", (code) => {
@@ -366,7 +432,9 @@ async function main(): Promise<void> {
   const results: RunResult[] = [...tsxResults, vitestResult];
 
   if (process.env.RUN_STREAMING_DOWNLOAD_E2E === "1") {
-    console.log(`\n──── tests/streamingDownload.spec.ts (playwright, all engines) ────`);
+    console.log(
+      `\n──── tests/streamingDownload.spec.ts (playwright, all engines) ────`,
+    );
     results.push(await runStreamingDownloadSmoke());
   } else {
     console.log(
@@ -375,9 +443,7 @@ async function main(): Promise<void> {
   }
 
   if (process.env.RUN_STREAMING_EXPORT_LATENCY_E2E === "1") {
-    console.log(
-      `\n──── Streaming-export latency HTTP integration tests ────`,
-    );
+    console.log(`\n──── Streaming-export latency HTTP integration tests ────`);
     results.push(await runStreamingExportLatency());
   } else {
     console.log(
@@ -404,6 +470,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] RBAC HTTP integration tests — set RUN_RBAC_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  if (process.env.RUN_APPROVAL_REDACTION_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── AI approval-queue HTTP secret-leak integration test (Task #348) ────`,
+    );
+    results.push(await runApprovalRedactionIntegration());
+  } else {
+    console.log(
+      `\n[skip] AI approval-queue HTTP secret-leak integration test — set RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include it.`,
     );
   }
 
