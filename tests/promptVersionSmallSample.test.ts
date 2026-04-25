@@ -26,6 +26,7 @@
 import {
   getFeedbackRateByPromptVersion,
   getFeedbackRateByAgent,
+  getRecentNegativeFeedback,
   DEFAULT_PROMPT_VERSION_MIN_FEEDBACK,
   type PromptVersionAggregate,
 } from "../src/utils/aiTelemetry";
@@ -761,6 +762,263 @@ if (HAS_DB) {
   }
 } else {
   console.log("  (skipped) DB-gated getFeedbackRateByAgent verification — DATABASE_URL not set");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. DB-gated integration — sibling reader getRecentNegativeFeedback (Task #567)
+//
+// `getRecentNegativeFeedback` lives just above `getFeedbackRateByAgent` and
+// uses the same JOIN-and-FILTER pattern (joins ai_call_feedback to
+// ai_call_metrics, filters by `rating = 'thumbs_down'` and a 30-day window,
+// orders by created_at DESC, applies a LIMIT). It powers the dashboard's
+// recent-negative-feedback panel. There is no JS stub mirror for this query,
+// so without a live-DB block a swapped JOIN key, a typo'd WHERE clause, or
+// an off-by-one in the LIMIT/ORDER BY would silently break the panel.
+//
+// This block seeds five synthetic feedback rows under a unique agent name
+// (so they cannot collide with live data):
+//   • 3 thumbs_down rows inside the 30-day window, with backdated created_at
+//     spaced apart so the DESC ordering is unambiguous
+//   • 1 thumbs_up row inside the window — must be excluded by the rating
+//     filter
+//   • 1 thumbs_down row 31 days old — must be excluded by the 30-day window
+//
+// Asserts that filtering to our prefix returns exactly the 3 in-window
+// thumbs_down rows, in DESC order by created_at, with every column the
+// dashboard reads round-tripped correctly. Also calls with a small `limit`
+// (2) and asserts the result length equals 2 to lock the LIMIT clause —
+// since we just inserted ≥3 in-window thumbs_down rows ourselves, any
+// LIMIT 2 query against the global table is guaranteed to return 2.
+// Cleanup deletes every seeded row in a `finally` so a crashed assertion
+// still leaves the database clean.
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (HAS_DB) {
+  const pg = await import("pg");
+  const { Pool } = pg.default;
+  const { ensureAiMetricsTable } = await import("../src/utils/aiTelemetry");
+
+  const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const AGENT_NAME = `db_recentneg_test_${RUN_ID}`;
+
+  const seedPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  // Make sure both tables exist before INSERTing directly. The production
+  // pool inside aiTelemetry does this lazily on the first read, but our
+  // seed pool is a separate Pool instance and would race with that.
+  await ensureAiMetricsTable();
+  // ensureFeedbackTable() is private; the easiest way to force it is to
+  // call the production reader once — also a no-op if the table exists.
+  await getRecentNegativeFeedback(1);
+
+  // Track every call_id we insert so cleanup is targeted even if something
+  // else in the same DB happens to share our agent name (defence in depth —
+  // the unique RUN_ID suffix already prevents that).
+  const seededCallIds: number[] = [];
+
+  // Cohort plan, designed to walk every clause in the SQL:
+  //   TD1   → thumbs_down, NOW()                      (in window, newest)
+  //   TD2   → thumbs_down, NOW() - INTERVAL '5 days'  (in window, middle)
+  //   TD3   → thumbs_down, NOW() - INTERVAL '15 days' (in window, oldest)
+  //   TU    → thumbs_up,   NOW() - INTERVAL '2 days'  (excluded by rating)
+  //   TDold → thumbs_down, NOW() - INTERVAL '31 days' (excluded by window)
+  //
+  // Each metrics row carries distinct latency_ms / prompt_preview /
+  // success / error_class values so a swapped JOIN key would surface as
+  // mismatched columns instead of silently passing.
+  type Cohort = {
+    label: string;
+    rating: "thumbs_up" | "thumbs_down";
+    createdAtSql: string;
+    latencyMs: number;
+    promptPreview: string;
+    success: boolean;
+    errorClass: string | null;
+    comment: string | null;
+  };
+
+  const cohorts: Cohort[] = [
+    {
+      label: "TD1",
+      rating: "thumbs_down",
+      createdAtSql: "NOW()",
+      latencyMs: 111,
+      promptPreview: "preview-TD1",
+      success: true,
+      errorClass: null,
+      comment: "Bad answer",
+    },
+    {
+      label: "TD2",
+      rating: "thumbs_down",
+      createdAtSql: "NOW() - INTERVAL '5 days'",
+      latencyMs: 222,
+      promptPreview: "preview-TD2",
+      success: false,
+      errorClass: "TimeoutError",
+      comment: null,
+    },
+    {
+      label: "TD3",
+      rating: "thumbs_down",
+      createdAtSql: "NOW() - INTERVAL '15 days'",
+      latencyMs: 333,
+      promptPreview: "preview-TD3",
+      success: true,
+      errorClass: null,
+      comment: "Hallucinated",
+    },
+    {
+      label: "TU",
+      rating: "thumbs_up",
+      createdAtSql: "NOW() - INTERVAL '2 days'",
+      latencyMs: 444,
+      promptPreview: "preview-TU",
+      success: true,
+      errorClass: null,
+      comment: null,
+    },
+    {
+      label: "TDold",
+      rating: "thumbs_down",
+      createdAtSql: "NOW() - INTERVAL '31 days'",
+      latencyMs: 555,
+      promptPreview: "preview-TDold",
+      success: true,
+      errorClass: null,
+      comment: "Too old to surface",
+    },
+  ];
+
+  // Map label → call_id so assertions can locate rows precisely.
+  const callIdByLabel = new Map<string, string>();
+
+  async function seed(): Promise<void> {
+    let userCounter = 0;
+    for (const c of cohorts) {
+      const metricRes = await seedPool.query(
+        `INSERT INTO ai_call_metrics
+           (agent_name, tool_name, model, latency_ms, success, error_class,
+            prompt_preview, started_at)
+         VALUES ($1, NULL, 'gpt-4o', $2, $3, $4, $5, NOW())
+         RETURNING id`,
+        [AGENT_NAME, c.latencyMs, c.success, c.errorClass, c.promptPreview],
+      );
+      const callId = Number(metricRes.rows[0].id);
+      seededCallIds.push(callId);
+      callIdByLabel.set(c.label, String(callId));
+
+      // Backdate created_at via the cohort's SQL fragment. The fragment is
+      // a hard-coded literal from the cohort table above (NOT user input),
+      // so direct interpolation is safe and side-steps parameter typing
+      // for INTERVAL expressions.
+      await seedPool.query(
+        `INSERT INTO ai_call_feedback (call_id, rating, user_hash, comment, created_at)
+         VALUES ($1, $2, $3, $4, ${c.createdAtSql})`,
+        [callId, c.rating, `db-recentneg-${RUN_ID}-${userCounter++}`, c.comment],
+      );
+    }
+  }
+
+  async function cleanup(): Promise<void> {
+    try {
+      if (seededCallIds.length > 0) {
+        // ai_call_feedback CASCADEs on call_id, so deleting metrics is enough.
+        await seedPool.query(
+          `DELETE FROM ai_call_metrics WHERE id = ANY($1::bigint[])`,
+          [seededCallIds],
+        );
+        seededCallIds.length = 0;
+      }
+      // Belt-and-braces — sweep anything that might have leaked under our
+      // unique agent name (e.g. a partial seed from a crashed prior run).
+      await seedPool.query(
+        `DELETE FROM ai_call_metrics WHERE agent_name = $1`,
+        [AGENT_NAME],
+      );
+    } finally {
+      await seedPool.end().catch(() => {});
+    }
+  }
+
+  try {
+    await seed();
+
+    // ─── 7a. Returns only in-window thumbs_down rows, in DESC order ─────────
+    await suite.test("DB: getRecentNegativeFeedback — only in-window thumbs_down rows from our prefix appear, DESC by created_at", async () => {
+      // Use a generous limit so all of our seeded rows are guaranteed to
+      // come back even on a busy shared DB. The LIMIT clause is exercised
+      // separately in 7b below.
+      const rows = await getRecentNegativeFeedback(1000);
+      const ours = rows.filter((r) => r.agent_name === AGENT_NAME);
+
+      // Exactly the three in-window thumbs_down cohorts — TU (thumbs_up)
+      // and TDold (older than 30 days) must be excluded.
+      suite.expectEqual(ours.length, 3, "exactly 3 in-window thumbs_down rows from our prefix");
+
+      // No thumbs_up row (TU) should leak through the rating filter.
+      const tuCallId = callIdByLabel.get("TU");
+      suite.expect(
+        !ours.some((r) => r.call_id === tuCallId),
+        "TU (thumbs_up) excluded by rating filter",
+      );
+
+      // No >30-day-old row (TDold) should leak through the window filter.
+      const tdOldCallId = callIdByLabel.get("TDold");
+      suite.expect(
+        !ours.some((r) => r.call_id === tdOldCallId),
+        "TDold (thumbs_down older than 30 days) excluded by window filter",
+      );
+
+      // ORDER BY f.created_at DESC — TD1 (NOW) > TD2 (5d ago) > TD3 (15d ago).
+      // Comparing call_id rather than feedback_id keeps the assertion
+      // independent of insertion order at the feedback-table level.
+      suite.expectEqual(ours[0]?.call_id, callIdByLabel.get("TD1"), "row 0 = TD1 (newest)");
+      suite.expectEqual(ours[1]?.call_id, callIdByLabel.get("TD2"), "row 1 = TD2 (middle)");
+      suite.expectEqual(ours[2]?.call_id, callIdByLabel.get("TD3"), "row 2 = TD3 (oldest in window)");
+
+      // Verify created_at is strictly decreasing — catches a regression
+      // from DESC to ASC even if the cohort positions happen to align.
+      const t0 = new Date(ours[0]!.created_at).getTime();
+      const t1 = new Date(ours[1]!.created_at).getTime();
+      const t2 = new Date(ours[2]!.created_at).getTime();
+      suite.expect(t0 > t1, "created_at strictly DESC between row 0 and row 1");
+      suite.expect(t1 > t2, "created_at strictly DESC between row 1 and row 2");
+
+      // Column round-trip — verifies the JOIN actually pulls fields from
+      // the metrics row matching f.call_id (not, say, f.id). Each cohort
+      // has distinct values so a swapped JOIN key would surface here as
+      // mismatched columns.
+      const td1 = ours[0]!;
+      suite.expectEqual(td1.model, "gpt-4o", "TD1 model");
+      suite.expectEqual(Number(td1.latency_ms), 111, "TD1 latency_ms");
+      suite.expectEqual(td1.success, true, "TD1 success");
+      suite.expectEqual(td1.error_class, null, "TD1 error_class");
+      suite.expectEqual(td1.prompt_preview, "preview-TD1", "TD1 prompt_preview");
+      suite.expectEqual(td1.comment, "Bad answer", "TD1 comment round-trip");
+
+      const td2 = ours[1]!;
+      suite.expectEqual(Number(td2.latency_ms), 222, "TD2 latency_ms");
+      suite.expectEqual(td2.success, false, "TD2 success (failure case)");
+      suite.expectEqual(td2.error_class, "TimeoutError", "TD2 error_class");
+      suite.expectEqual(td2.prompt_preview, "preview-TD2", "TD2 prompt_preview");
+      suite.expectEqual(td2.comment, null, "TD2 comment is null when not set");
+    });
+
+    // ─── 7b. LIMIT clause is honoured ───────────────────────────────────────
+    await suite.test("DB: getRecentNegativeFeedback — LIMIT is honoured (limit=2 returns 2 rows)", async () => {
+      // We just seeded 3 in-window thumbs_down rows ourselves, so the
+      // global table is guaranteed to contain ≥3 such rows. A LIMIT 2
+      // query must therefore return exactly 2 rows. If the LIMIT clause
+      // were dropped or off-by-one the assertion catches it immediately.
+      const rows = await getRecentNegativeFeedback(2);
+      suite.expectEqual(rows.length, 2, "limit=2 returns exactly 2 rows");
+    });
+  } finally {
+    await cleanup();
+  }
+} else {
+  console.log("  (skipped) DB-gated getRecentNegativeFeedback verification — DATABASE_URL not set");
 }
 
 suite.finishOrExit();
