@@ -250,13 +250,83 @@
     }
   }
 
+  function makeChartAccessible(canvasId, chartInstance, title) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    canvas.setAttribute('role', 'img');
+    if (title && !canvas.getAttribute('aria-label')) {
+      canvas.setAttribute('aria-label', title);
+    }
+
+    var summaryId = canvasId + '-summary';
+    var summary = document.getElementById(summaryId);
+    if (!summary || !chartInstance) return;
+
+    var datasets = chartInstance.data && chartInstance.data.datasets;
+    var labels = (chartInstance.data && chartInstance.data.labels) || [];
+    if (!datasets || !datasets.length || !labels.length) return;
+
+    var multiDataset = datasets.length > 1;
+
+    while (summary.firstChild) summary.removeChild(summary.firstChild);
+
+    var caption = document.createElement('caption');
+    caption.textContent = title || 'Chart data';
+    summary.appendChild(caption);
+
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    var thCat = document.createElement('th');
+    thCat.setAttribute('scope', 'col');
+    thCat.textContent = 'Category';
+    headerRow.appendChild(thCat);
+    if (multiDataset) {
+      datasets.forEach(function (ds) {
+        var th = document.createElement('th');
+        th.setAttribute('scope', 'col');
+        th.textContent = ds.label || 'Value';
+        headerRow.appendChild(th);
+      });
+    } else {
+      var thVal = document.createElement('th');
+      thVal.setAttribute('scope', 'col');
+      thVal.textContent = 'Value';
+      headerRow.appendChild(thVal);
+    }
+    thead.appendChild(headerRow);
+    summary.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    labels.forEach(function (label, i) {
+      var tr = document.createElement('tr');
+      var tdLabel = document.createElement('td');
+      tdLabel.textContent = label != null ? String(label) : '';
+      tr.appendChild(tdLabel);
+      if (multiDataset) {
+        datasets.forEach(function (ds) {
+          var td = document.createElement('td');
+          td.textContent = ds.data[i] != null ? String(ds.data[i]) : '';
+          tr.appendChild(td);
+        });
+      } else {
+        var td = document.createElement('td');
+        td.textContent = datasets[0].data[i] != null ? String(datasets[0].data[i]) : '';
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    summary.appendChild(tbody);
+  }
+
   window.WalaPlusA11y = {
     init: init,
     openModal: openModal,
     closeModal: closeModal,
     activateFocusTrap: activateFocusTrap,
     deactivateFocusTrap: deactivateFocusTrap,
-    announce: announce
+    announce: announce,
+    makeChartAccessible: makeChartAccessible
   };
 
   init();

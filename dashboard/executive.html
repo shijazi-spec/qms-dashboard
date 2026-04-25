@@ -137,11 +137,17 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-xl shadow p-4">
                     <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.kpi_by_owner">KPI Status by Owner</h3>
-                    <canvas id="kpiOwnerChart" height="200"></canvas>
+                    <figure>
+                        <canvas id="kpiOwnerChart" height="200" role="img" aria-label="KPI Status by Owner: bar chart showing KPI count per owner group" aria-describedby="kpiOwnerChart-summary"></canvas>
+                        <table id="kpiOwnerChart-summary" class="sr-only"><caption>KPI Status by Owner</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                    </figure>
                 </div>
                 <div class="bg-white rounded-xl shadow p-4">
                     <h3 class="font-semibold text-gray-900 mb-3" data-i18n="executive.risk_distribution">Risk Distribution</h3>
-                    <canvas id="riskChart" height="200"></canvas>
+                    <figure>
+                        <canvas id="riskChart" height="200" role="img" aria-label="Risk Distribution: doughnut chart showing risks by severity level" aria-describedby="riskChart-summary"></canvas>
+                        <table id="riskChart-summary" class="sr-only"><caption>Risk Distribution</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                    </figure>
                 </div>
             </div>
 
@@ -189,7 +195,10 @@
                     </div>
                     <div>
                         <h4 class="text-sm font-medium text-gray-700 mb-2" data-i18n="executive.risk_by_category">Risk by Category</h4>
-                        <canvas id="riskCategoryChart" height="200"></canvas>
+                        <figure>
+                            <canvas id="riskCategoryChart" height="200" role="img" aria-label="Risk by Category: bar chart showing risk count per category" aria-describedby="riskCategoryChart-summary"></canvas>
+                            <table id="riskCategoryChart-summary" class="sr-only"><caption>Risk by Category</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                        </figure>
                     </div>
                 </div>
             </div>
@@ -337,6 +346,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { display: false } } }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('kpiOwnerChart', charts.kpiOwner, 'KPI Status by Owner');
 
             charts.risk = new Chart(document.getElementById('riskChart'), {
                 type: 'doughnut',
@@ -350,6 +360,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('riskChart', charts.risk, 'Risk Distribution');
         }
 
         function renderAIInsights(healthScore, kpiData, risks) {
@@ -549,6 +560,7 @@
                     },
                     options: { responsive: true, plugins: { legend: { display: false } } }
                 });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('riskCategoryChart', charts.riskCategory, 'Risk by Category');
             } catch (error) {
                 console.error('Error loading risk details:', error);
             }

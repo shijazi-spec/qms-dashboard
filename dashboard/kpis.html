@@ -90,15 +90,24 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="bg-white rounded-xl shadow p-4">
                 <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.kpis_by_owner">KPIs by Owner</h3>
-                <canvas id="ownerChart" height="200"></canvas>
+                <figure>
+                    <canvas id="ownerChart" height="200" role="img" aria-label="KPIs by Owner: doughnut chart showing KPI distribution across owners" aria-describedby="ownerChart-summary"></canvas>
+                    <table id="ownerChart-summary" class="sr-only"><caption>KPIs by Owner</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </figure>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.status_distribution">Status Distribution</h3>
-                <canvas id="statusChart" height="200"></canvas>
+                <figure>
+                    <canvas id="statusChart" height="200" role="img" aria-label="KPI Status Distribution: doughnut chart showing on-target, at-risk, off-target, and no-data counts" aria-describedby="statusChart-summary"></canvas>
+                    <table id="statusChart-summary" class="sr-only"><caption>KPI Status Distribution</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </figure>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <h3 class="font-semibold text-gray-900 mb-3" data-i18n="kpis.kpis_by_category">KPIs by Category</h3>
-                <canvas id="categoryChart" height="200"></canvas>
+                <figure>
+                    <canvas id="categoryChart" height="200" role="img" aria-label="KPIs by Category: bar chart showing KPI count per governance category" aria-describedby="categoryChart-summary"></canvas>
+                    <table id="categoryChart-summary" class="sr-only"><caption>KPIs by Category</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                </figure>
             </div>
         </div>
 
@@ -297,6 +306,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('ownerChart', charts.owner, 'KPIs by Owner');
 
             charts.status = new Chart(document.getElementById('statusChart'), {
                 type: 'doughnut',
@@ -314,6 +324,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('statusChart', charts.status, 'KPI Status Distribution');
 
             const cats = Object.entries(data.byCategory || {});
             charts.category = new Chart(document.getElementById('categoryChart'), {
@@ -328,6 +339,7 @@
                 },
                 options: { responsive: true, plugins: { legend: { display: false } } }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('categoryChart', charts.category, 'KPIs by Category');
         }
 
         function renderKPIList(kpis) {
@@ -475,7 +487,10 @@
                     <div class="mt-6">
                         <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.history_title')}</h4>
                         ${kpi.history && kpi.history.length ? `
-                            <canvas id="historyChart" height="120"></canvas>
+                            <figure>
+                                <canvas id="historyChart" height="120" role="img" aria-label="KPI value history: line chart comparing actual values to target over time" aria-describedby="historyChart-summary"></canvas>
+                                <table id="historyChart-summary" class="sr-only"><caption>KPI Value History</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
+                            </figure>
                         ` : '<p class="text-gray-500 text-sm">' + _t('dyn.kpis.no_history') + '</p>'}
                     </div>
                     <div class="mt-6 flex justify-end gap-2">
@@ -490,7 +505,7 @@
                     setTimeout(() => {
                         const ctx = document.getElementById('historyChart');
                         if (ctx) {
-                            new Chart(ctx, {
+                            const histChart = new Chart(ctx, {
                                 type: 'line',
                                 data: {
                                     labels: kpi.history.reverse().map(h => _fd(h.period_end)),
@@ -508,6 +523,7 @@
                                 },
                                 options: { responsive: true }
                             });
+                            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('historyChart', histChart, 'KPI Value History');
                         }
                     }, 100);
                 }

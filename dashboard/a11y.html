@@ -63,12 +63,12 @@
           <li>The AI Consultant chat panel includes an <code>aria-live</code> region so assistive technologies announce new messages.</li>
           <li>Navigation landmarks (<code>&lt;nav&gt;</code>, <code>&lt;main&gt;</code>, <code>&lt;aside&gt;</code>) are used throughout the dashboard.</li>
           <li>Decorative SVG icons are hidden from assistive technology using <code>aria-hidden="true"</code>.</li>
+          <li>All KPI and analytics charts include <code>role="img"</code> with an <code>aria-label</code> describing the chart, and a visually-hidden data summary table so screen reader users can access the underlying data.</li>
         </ul>
 
         <h2>Known Limitations</h2>
         <ul>
           <li>Some data-heavy tables may lack full <code>scope</code> and <code>headers</code> associations — we are reviewing these.</li>
-          <li>A small number of dynamically generated charts (KPI trend charts) do not yet have text alternatives. This is on our roadmap.</li>
           <li>Some legacy pop-up tooltips rely on <code>title</code> attributes only — we plan to replace these with accessible tooltip components.</li>
         </ul>
 
