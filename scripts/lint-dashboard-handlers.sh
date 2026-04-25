@@ -16,10 +16,10 @@
 #   scripts/lint-dashboard-handlers.sh
 #   scripts/lint-dashboard-handlers.sh --check-inline-scripts
 #
-# CI hook: invoke from `scripts/post-merge.sh` once the two outstanding
-# dashboards (ai-ops.html, consultant.html) have been migrated to the
-# `data-on-{event}` pattern. Until then, run it manually before committing
-# changes to any `dashboard/*.html`.
+# CI hook: already wired into `scripts/post-merge.sh`. All dashboard HTML
+# files — including the previously outstanding ai-ops.html and consultant.html
+# — have been fully migrated to the `data-on-{event}` pattern (Task #209).
+# Run manually before committing changes to any `dashboard/*.html`.
 
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
