@@ -439,3 +439,29 @@ recipient-list trimming, the unconfigured-helper silent-skip path
 and degraded-channel behaviour (notification-hub throws, Slack network
 error, Slack HTTP 5xx, email helper throws, email helper returns
 `success:false` from a real Resend delivery error).
+
+### End-to-end staging verification of the email channel (Task #574)
+
+The unit-test coverage above stubs `sendResendEmail`, so it cannot
+prove that the real Resend API accepts the dispatcher's payload or
+that the rendered HTML survives Gmail / Outlook / Apple Mail. A
+formatting regression in any of those layers would only surface
+during an actual incident.
+
+A documented staging dry-run procedure now lives at
+`audit-evidence/STAGING_EMAIL_VERIFICATION.md`. It uses the helper
+script `scripts/verifyPostRestoreSweepEmail.ts`, which constructs an
+in-memory `SweepResult` with non-zero per-table counts and calls
+`dispatchPostRestoreSweepAlert(result, deps)` directly — with the
+platform-notification and Slack channels stubbed out by default so a
+verification run does not pollute staging notifications or page
+on-call. The email channel always runs end-to-end against the real
+`sendResendEmail` helper, so the operator gets a real message in a
+real test inbox per mail client and can tick off the visual checklist
+in the procedure document.
+
+Re-run the procedure after any change to the dispatcher's HTML / text
+body, the From-domain, the recipient-list contract, a major Resend
+SDK upgrade, or at least once per quarter as a baseline freshness
+check. The run-log table at the bottom of the procedure file is the
+audit artefact.
