@@ -35,6 +35,10 @@ vi.mock("../../src/utils/governanceRules", () => ({
   },
 }));
 
+vi.mock("../../src/utils/rateLimiter", () => ({
+  getRateLimitStats: vi.fn(),
+}));
+
 vi.mock("../../src/utils/database", () => ({
   getAllGovernanceDocuments: vi.fn(),
   saveGovernanceDocument: vi.fn(),
@@ -67,10 +71,12 @@ const ADMIN_KEY = "vitest-admin-key-2026";
 const AUTH_HEADERS = { "X-Admin-Key": ADMIN_KEY };
 
 let db: typeof import("../../src/utils/database");
+let rateLimiter: typeof import("../../src/utils/rateLimiter");
 
 beforeEach(async () => {
   process.env.ADMIN_API_KEY = ADMIN_KEY;
   db = await import("../../src/utils/database");
+  rateLimiter = await import("../../src/utils/rateLimiter");
   vi.clearAllMocks();
 });
 
@@ -1085,4 +1091,41 @@ describe("error-path coverage — every db-backed admin route returns determinis
       errSpy.mockRestore();
     },
   );
+});
+
+describe("GET /api/admin/rate-limit-stats — real data path", () => {
+  test("200 returns getRateLimitStats() result forwarded as JSON", async () => {
+    const stats: Awaited<ReturnType<typeof rateLimiter.getRateLimitStats>> = {
+      windowMs: 60_000,
+      windowStart: "2026-04-25T00:00:00.000Z",
+      topKeys: [],
+      totalRows: 0,
+      failOpenCount: 0,
+      recent429Count: 3,
+      dbReachable: true,
+      spike24h: { total429: 7, totalSuppressed: 2, topIps: [] },
+    };
+    vi.mocked(rateLimiter.getRateLimitStats).mockResolvedValueOnce(stats);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/rate-limit-stats", "GET");
+    const res = await handler(makeContext({ method: "GET", headers: AUTH_HEADERS }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBe(stats);
+    expect(rateLimiter.getRateLimitStats).toHaveBeenCalledTimes(1);
+  });
+
+  test("500 with deterministic body when getRateLimitStats throws", async () => {
+    vi.mocked(rateLimiter.getRateLimitStats).mockRejectedValueOnce(
+      new Error("rate limiter exploded"),
+    );
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/rate-limit-stats", "GET");
+    const res = await handler(makeContext({ method: "GET", headers: AUTH_HEADERS }));
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: "Failed to fetch rate limit stats" });
+    errSpy.mockRestore();
+  });
 });
