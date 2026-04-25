@@ -1345,9 +1345,10 @@
         card.className = 'bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden text-sm text-gray-800';
         container.appendChild(card);
 
-        // Header row: toggle button (flex-1) + "Clear all" button side-by-side.
+        // Header row: toggle button (flex-1) + optional "Mark all as read" +
+        // "Clear all" — all siblings so no interactive elements are nested.
         var headerRow = document.createElement('div');
-        headerRow.className = 'flex items-stretch';
+        headerRow.className = 'flex items-stretch w-full';
         card.appendChild(headerRow);
 
         var headerBtn = document.createElement('button');
@@ -1409,6 +1410,21 @@
         });
         headerRow.appendChild(headerBtn);
 
+        // "Mark all as read" sits beside the toggle button as a sibling —
+        // shown only when unread items exist and the tray is collapsed.
+        if (!open && unreadCount > 0) {
+            var muteBtn = document.createElement('button');
+            muteBtn.type = 'button';
+            muteBtn.className = 'text-xs text-gray-500 hover:text-gray-800 hover:underline focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1 border-l border-gray-100 flex-shrink-0';
+            muteBtn.textContent = tr('downloads.mark_all_read', 'Mark all as read');
+            muteBtn.setAttribute('aria-label', tr('downloads.mark_all_read_aria', 'Mark all downloads as read'));
+            muteBtn.setAttribute('data-testid', 'button-mark-downloads-read-collapsed');
+            muteBtn.addEventListener('click', function () {
+                saveLastSeen(snapshotSeenStatuses(loadHistory()));
+                renderHistoryTray();
+            });
+            headerRow.appendChild(muteBtn);
+        }
         // "Clear all" button sits to the right of the toggle in the header.
         var clearAllBtn = document.createElement('button');
         clearAllBtn.type = 'button';
@@ -1500,6 +1516,19 @@
             body.appendChild(row);
         });
 
+        var footer = document.createElement('div');
+        footer.className = 'flex items-center px-3 py-2 bg-gray-50 border-t border-gray-100';
+        var markReadBtn = document.createElement('button');
+        markReadBtn.type = 'button';
+        markReadBtn.className = 'text-xs text-gray-500 hover:text-gray-800 hover:underline focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1';
+        markReadBtn.textContent = tr('downloads.mark_all_read', 'Mark all as read');
+        markReadBtn.setAttribute('data-testid', 'button-mark-downloads-read');
+        markReadBtn.addEventListener('click', function () {
+            saveLastSeen(snapshotSeenStatuses(loadHistory()));
+            renderHistoryTray();
+        });
+        footer.appendChild(markReadBtn);
+        card.appendChild(footer);
     }
 
     function retryHistoryEntry(id) {

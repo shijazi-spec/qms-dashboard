@@ -2042,6 +2042,68 @@ describe('streamingDownload (browser helper)', () => {
     ).toBeNull();
   });
 
+  it('"Mark all as read" clears the unread badge without opening the tray, and the badge reappears on the next status change', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([new Uint8Array([1, 2, 3])]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="export-a.csv"',
+        },
+      })
+    );
+
+    // A download completes while the tray is collapsed — badge should appear.
+    await env.win.streamingDownload('/api/exports/export-a.csv');
+
+    const tray = env.win.document.getElementById('streaming-download-history-tray');
+    expect(tray).not.toBeNull();
+
+    let badge = tray.querySelector('[data-testid="badge-recent-downloads-unread"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toBe('1');
+
+    // The "Mark all as read" button must be visible in the collapsed header.
+    const muteBtn = tray.querySelector(
+      '[data-testid="button-mark-downloads-read-collapsed"]'
+    ) as HTMLButtonElement | null;
+    expect(muteBtn).not.toBeNull();
+
+    // Clicking it clears the badge immediately — tray must stay collapsed.
+    muteBtn!.click();
+
+    badge = tray.querySelector('[data-testid="badge-recent-downloads-unread"]');
+    expect(badge).toBeNull();
+
+    // The tray body must NOT have been expanded (still collapsed).
+    const body = tray.querySelector('#streaming-download-history-tray-body');
+    expect(body).toBeNull();
+
+    // The "Mark all as read" button must disappear now that unread count = 0.
+    expect(
+      tray.querySelector('[data-testid="button-mark-downloads-read-collapsed"]')
+    ).toBeNull();
+
+    // A subsequent download completing must re-surface the badge so the user
+    // is still notified of genuinely new changes.
+    env.win.fetch = vi.fn(async () =>
+      new (globalThis as any).Response(streamFromChunks([new Uint8Array([4, 5])]), {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="export-b.csv"',
+        },
+      })
+    );
+    await env.win.streamingDownload('/api/exports/export-b.csv');
+
+    badge = tray.querySelector('[data-testid="badge-recent-downloads-unread"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toBe('1');
+  });
+
   it('honours useServiceWorker=false to skip the SW path entirely', async () => {
     env = setupBrowserEnv({
       enableShowSaveFilePicker: false,
