@@ -109,10 +109,26 @@
             <label class="text-xs text-gray-600 ml-2" data-i18n="ai_approvals.filter_risk">Risk</label>
             <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
                 <option value="" data-i18n="ai_approvals.risk_any">Any</option>
-                <option value="critical" data-i18n="ai_approvals.risk_critical">Critical</option>
-                <option value="high" data-i18n="ai_approvals.risk_high">High</option>
-                <option value="medium" data-i18n="ai_approvals.risk_medium">Medium</option>
-                <option value="low" data-i18n="ai_approvals.risk_low">Low</option>
+                <!-- Task #536: these four options own their textContent in JS so
+                     the inline " (N)" count is not clobbered by i18n.applyToDOM().
+                     `data-base-i18n` lets the JS re-translate the label without
+                     the suffix; `data-base-label` is the untranslated fallback. -->
+                <option value="critical"
+                        data-testid="option-risk-critical"
+                        data-base-i18n="ai_approvals.risk_critical"
+                        data-base-label="Critical">Critical</option>
+                <option value="high"
+                        data-testid="option-risk-high"
+                        data-base-i18n="ai_approvals.risk_high"
+                        data-base-label="High">High</option>
+                <option value="medium"
+                        data-testid="option-risk-medium"
+                        data-base-i18n="ai_approvals.risk_medium"
+                        data-base-label="Medium">Medium</option>
+                <option value="low"
+                        data-testid="option-risk-low"
+                        data-base-i18n="ai_approvals.risk_low"
+                        data-base-label="Low">Low</option>
             </select>
 
             <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
@@ -209,6 +225,11 @@
     var badgeCredWarn = document.getElementById('badgeCredWarn');
     var optUnreviewedByMe = fltReview.querySelector('option[value="unreviewed_by_me"]');
     var optNoReviewers = fltReview.querySelector('option[value="no_reviewers"]');
+    // Task #536: risk-dropdown options that get inline " (N)" counts.
+    var optRiskCritical = fltRisk.querySelector('option[value="critical"]');
+    var optRiskHigh     = fltRisk.querySelector('option[value="high"]');
+    var optRiskMedium   = fltRisk.querySelector('option[value="medium"]');
+    var optRiskLow      = fltRisk.querySelector('option[value="low"]');
     var cntPending = document.getElementById('cntPending');
     var cntExecutedToday = document.getElementById('cntExecutedToday');
 
@@ -289,11 +310,55 @@
             });
     }
 
+    // Task #536: same shape as the Review-status counts above, but for the
+    // four Risk options. Counts honour the operator's current Status /
+    // "Only my proposals" / Review filter selections so they stay coherent
+    // with the visible queue. Soft-fail drops the suffix on error so we
+    // never render a stale or misleading count.
+    var lastRiskCounts = { critical: null, high: null, medium: null, low: null };
+
+    function _applyRiskLabels() {
+        _setOptionCount(optRiskCritical, lastRiskCounts.critical);
+        _setOptionCount(optRiskHigh,     lastRiskCounts.high);
+        _setOptionCount(optRiskMedium,   lastRiskCounts.medium);
+        _setOptionCount(optRiskLow,      lastRiskCounts.low);
+    }
+
+    function refreshRiskLevelCounts() {
+        var p = new URLSearchParams();
+        p.set('status', fltStatus.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        // Pass the Review filter through so the four buckets agree with
+        // the visible list when the operator narrows by review-state.
+        // We DO NOT send risk_level: the whole point of these counts is
+        // to show every bucket regardless of which one is selected.
+        if (fltReview.value) p.set('review_filter', fltReview.value);
+        fetch('/api/ai/approvals/risk-level-counts?' + p.toString(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastRiskCounts.critical = typeof data.critical === 'number' ? data.critical : 0;
+                lastRiskCounts.high     = typeof data.high     === 'number' ? data.high     : 0;
+                lastRiskCounts.medium   = typeof data.medium   === 'number' ? data.medium   : 0;
+                lastRiskCounts.low      = typeof data.low      === 'number' ? data.low      : 0;
+                _applyRiskLabels();
+            })
+            .catch(function () {
+                lastRiskCounts.critical = null;
+                lastRiskCounts.high     = null;
+                lastRiskCounts.medium   = null;
+                lastRiskCounts.low      = null;
+                _applyRiskLabels();
+            });
+    }
+
     // Re-apply our labels once i18n finishes its initial load — covers the
     // race where the count fetch resolves BEFORE applyToDOM() runs and the
     // sibling "Any" option still owns its data-i18n key. We also re-translate
     // the base label from the i18n key when this fires.
-    document.addEventListener('walaPlusI18nReady', _applyReviewLabels);
+    document.addEventListener('walaPlusI18nReady', function () {
+        _applyReviewLabels();
+        _applyRiskLabels();
+    });
 
     // The credential-warning badge always reflects the GLOBAL pending queue —
     // not whatever subset the operator has currently filtered to. We hit a
@@ -812,6 +877,7 @@
                 updateSummary(lastRows);
                 refreshGlobalCredentialBadge();
                 refreshReviewStatusCounts();
+                refreshRiskLevelCounts();
             })
             .catch(function (err) {
                 lastRows = [];
@@ -820,6 +886,7 @@
                 updateSummary(lastRows);
                 refreshGlobalCredentialBadge();
                 refreshReviewStatusCounts();
+                refreshRiskLevelCounts();
             });
     }
 

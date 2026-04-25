@@ -516,6 +516,109 @@ export async function countByReviewStatus(filters: {
   };
 }
 
+/**
+ * Task #536: bucket counts driving the inline numbers next to each option
+ * of the "Risk" filter dropdown on the approval queue UI. Returns the
+ * count for ALL FOUR risk levels in a single round-trip so the dashboard
+ * can render "Critical (N) / High (M) / Medium (X) / Low (Y)" without
+ * four extra requests on the 30s refresh.
+ *
+ * The supplied `filters` mirror the LIST endpoint so the counts stay
+ * coherent with the visible queue: the operator's current Status /
+ * "Only my proposals" / Review filter selections all apply to the
+ * COUNT base WHERE, exactly as they do to `listPendingActions`.
+ *
+ * Visibility scoping is the caller's responsibility — pass
+ * `requestedByUserId = user.userId` for non-privileged users, and
+ * `undefined` for admins/QMs (mirroring `listPendingActions`).
+ *
+ * `reviewerUserId` is only required when `reviewFilter === 'unreviewed_by_me'`
+ * — without it the "have I opened this?" predicate is undefined. We
+ * throw a clear error in that case rather than silently dropping the
+ * filter, which would mislead the operator about what the count means.
+ */
+export async function countByRiskLevel(filters: {
+  status?: ApprovalStatus | ApprovalStatus[];
+  requestedByUserId?: number;
+  reviewFilter?: ReviewFilter;
+  reviewerUserId?: number;
+}): Promise<{ critical: number; high: number; medium: number; low: number }> {
+  const where: string[] = [];
+  const params: any[] = [];
+
+  if (filters.status) {
+    const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+    params.push(statuses);
+    where.push(`status = ANY($${params.length})`);
+  }
+  if (filters.requestedByUserId != null) {
+    params.push(filters.requestedByUserId);
+    where.push(`requested_by_user_id = $${params.length}`);
+  }
+
+  // Mirror the review-filter SQL from `listPendingActions` so the
+  // four bucket counts agree with the visible list when the operator
+  // has the Review dropdown set to "Unreviewed by me" or "No reviewer
+  // yet". See `listPendingActions` for the full design rationale on
+  // NOT EXISTS vs LEFT JOIN and the ILIKE 'Viewed%' wording.
+  if (filters.reviewFilter === 'unreviewed_by_me') {
+    if (filters.reviewerUserId == null) {
+      throw new Error(
+        "countByRiskLevel: reviewFilter='unreviewed_by_me' requires reviewerUserId",
+      );
+    }
+    params.push(filters.reviewerUserId);
+    where.push(
+      `NOT EXISTS (
+         SELECT 1 FROM event_logs el
+          WHERE el.correlation_id = ai_pending_actions.action_code
+            AND el.action_type    = 'AI_ACTION'
+            AND el.description    ILIKE 'Viewed%'
+            AND el.user_id        = $${params.length}
+       )`,
+    );
+  } else if (filters.reviewFilter === 'no_reviewers') {
+    where.push(
+      `NOT EXISTS (
+         SELECT 1 FROM event_logs el
+          WHERE el.correlation_id = ai_pending_actions.action_code
+            AND el.action_type    = 'AI_ACTION'
+            AND el.description    ILIKE 'Viewed%'
+       )`,
+    );
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  // Single-round-trip aggregate: one COUNT(*) FILTER per risk bucket
+  // off the same base WHERE so all four numbers come from one scan.
+  // The risk_level literals are hard-coded (not parameterized) because
+  // they are a closed enum owned by this module — never user input.
+  const sql = `
+    SELECT
+      COUNT(*) FILTER (WHERE risk_level = 'critical')::text AS critical,
+      COUNT(*) FILTER (WHERE risk_level = 'high')::text     AS high,
+      COUNT(*) FILTER (WHERE risk_level = 'medium')::text   AS medium,
+      COUNT(*) FILTER (WHERE risk_level = 'low')::text      AS low
+    FROM ai_pending_actions
+    ${whereSql}
+  `;
+
+  const res = await pool.query<{
+    critical: string;
+    high: string;
+    medium: string;
+    low: string;
+  }>(sql, params);
+  const row = res.rows[0] ?? { critical: '0', high: '0', medium: '0', low: '0' };
+  return {
+    critical: parseInt(row.critical, 10) || 0,
+    high: parseInt(row.high, 10) || 0,
+    medium: parseInt(row.medium, 10) || 0,
+    low: parseInt(row.low, 10) || 0,
+  };
+}
+
 export async function countPendingForUser(
   userId: number,
   excludeToolIdPrefixes: string[] = []
