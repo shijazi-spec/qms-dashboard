@@ -1,0 +1,151 @@
+name: AI-approval secret-redaction tests
+
+# Sibling to .github/workflows/secret-redaction.yml — adds a fast, isolated
+# CI gate for the four AI-approval secret-redaction regression tests that
+# the local Replit `secret-redaction` workflow (`.replit`) already runs but
+# that previously only existed in CI as part of `npm test` auto-discovery
+# in the main Tests workflow. (Task #473)
+#
+# These four files prove that `deepRedactSecretLikeStrings` /
+# `redactSensitiveFields` / `redactSecretLikeStrings` are still wired
+# through the AI approval write-, read-, reject-, and historical-sweep
+# code paths, so a teammate dropping any of them fails this gate
+# even if the broader integration suite is skipped or flaky:
+#
+#   - tests/aiApprovalRedaction.test.ts
+#       Verifies enqueuePendingAction() and recordExecutionResult() in
+#       src/utils/aiApprovalDatabase.ts route their JSONB columns
+#       (`payload` and `execution_result.data`) through
+#       redactSensitiveFields() before INSERT / UPDATE so credential
+#       fields are never persisted in plaintext.
+#
+#   - tests/aiApprovalRoutesRedaction.test.ts
+#       Guards every AI approval-queue read endpoint (list / detail /
+#       count / export) against re-leaking the `payload`,
+#       `payload_preview`, and `execution_result` secrets that the data
+#       layer already masks at write time.
+#
+#   - tests/aiApprovalRejectionRedaction.test.ts
+#       Guards the rejection-note free-text TEXT column against leaking
+#       credential-shaped substrings a reviewer pastes verbatim into the
+#       reject dialog — `reason` must run through redactSecretLikeStrings
+#       BEFORE persisting so no read endpoint or audit export can re-leak.
+#
+#   - tests/aiApprovalSweepBackfill.test.ts
+#       Verifies redactAiPendingActions() in
+#       src/utils/redactHistoricalLogs.ts rewrites pre-fix
+#       `payload_preview` rows containing credential-shaped substrings,
+#       leaves clean rows untouched, is idempotent on a second pass, and
+#       reports the per-column scanned/changed counters the audit-log
+#       entry consumes. (Task #85)
+#
+# All four tests use in-memory pg.Pool stubs and do NOT require a live
+# Postgres, so this job is intentionally minimal (no services:) and fast.
+# Each test runs in its own step with `set -o pipefail` + `tee` to
+# $GITHUB_STEP_SUMMARY so the GitHub Actions UI clearly identifies which
+# file's assertion failed. The `if: ${{ always() }}` guards on later
+# steps mean engineers see all four signals in a single CI run instead
+# of having to push, fix, push again.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: ai-approval-redaction-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-approval-redaction:
+    name: AI-approval secret-redaction regression gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: "aiApprovalRedaction.test.ts (write-path payload / execution_result mask)"
+        id: ai_approval_redaction
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "## aiApprovalRedaction.test.ts" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx tsx tests/aiApprovalRedaction.test.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "❌ **aiApprovalRedaction.test.ts FAILED** — see captured output above." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ aiApprovalRedaction.test.ts passed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
+
+      - name: "aiApprovalRoutesRedaction.test.ts (read-path list/detail/count/export gate)"
+        # Run even if the previous test failed so engineers see *all*
+        # four signals in a single CI run instead of having to push,
+        # fix, push again.
+        if: ${{ always() }}
+        id: ai_approval_routes_redaction
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "## aiApprovalRoutesRedaction.test.ts" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx tsx tests/aiApprovalRoutesRedaction.test.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "❌ **aiApprovalRoutesRedaction.test.ts FAILED** — see captured output above." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ aiApprovalRoutesRedaction.test.ts passed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
+
+      - name: "aiApprovalRejectionRedaction.test.ts (rejection-note free-text TEXT gate)"
+        if: ${{ always() }}
+        id: ai_approval_rejection_redaction
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "## aiApprovalRejectionRedaction.test.ts" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx tsx tests/aiApprovalRejectionRedaction.test.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "❌ **aiApprovalRejectionRedaction.test.ts FAILED** — see captured output above." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ aiApprovalRejectionRedaction.test.ts passed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
+
+      - name: "aiApprovalSweepBackfill.test.ts (Task #85 — historical payload_preview sweep)"
+        if: ${{ always() }}
+        id: ai_approval_sweep_backfill
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "## aiApprovalSweepBackfill.test.ts" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx tsx tests/aiApprovalSweepBackfill.test.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "❌ **aiApprovalSweepBackfill.test.ts FAILED** — see captured output above." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ aiApprovalSweepBackfill.test.ts passed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
