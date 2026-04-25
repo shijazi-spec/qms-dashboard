@@ -343,6 +343,27 @@ export async function countPendingForUser(userId: number): Promise<number> {
   return parseInt(res.rows[0].n, 10);
 }
 
+/**
+ * Task #481: count pending approvals whose payload was flagged with
+ * credential-shaped values by the AI tool boundary. Drives the
+ * "credential warnings" badge on the approval queue header so the badge
+ * stays accurate regardless of which subset of rows the page is currently
+ * showing. Mirrors the visibility rules of `countPendingForUser`:
+ *   - userId === 0 → all pending rows (admin / quality_manager)
+ *   - userId  > 0 → only pending rows requested by that user
+ */
+export async function countPendingWithCredentialWarnings(userId: number): Promise<number> {
+  const res = await pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM ai_pending_actions
+      WHERE status = 'pending'
+        AND (requested_by_user_id = $1 OR $1 = 0)
+        AND expires_at > NOW()
+        AND jsonb_array_length(credential_warnings) > 0`,
+    [userId]
+  );
+  return parseInt(res.rows[0].n, 10);
+}
+
 export async function claimForApproval(
   code: string,
   reviewer: { userId: number | null; email: string | null; name: string | null }

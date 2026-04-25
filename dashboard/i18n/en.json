@@ -2545,6 +2545,7 @@
     "filter_status": "Status",
     "filter_risk": "Risk",
     "only_my": "Only my proposals",
+    "only_credential_warnings": "Credential warnings only",
     "status_all": "All",
     "status_pending": "Pending",
     "status_approved": "Approved",

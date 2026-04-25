@@ -2545,6 +2545,7 @@
     "filter_status": "الحالة",
     "filter_risk": "الخطر",
     "only_my": "مقترحاتي فقط",
+    "only_credential_warnings": "تحذيرات بيانات الاعتماد فقط",
     "status_all": "الكل",
     "status_pending": "قيد الانتظار",
     "status_approved": "تمت الموافقة",

@@ -28,6 +28,7 @@ import {
   claimForApproval,
   rejectAction,
   countPendingForUser,
+  countPendingWithCredentialWarnings,
   type ApprovalStatus,
   type RiskLevel,
 } from '../../utils/aiApprovalDatabase';
@@ -198,6 +199,34 @@ const _aiApprovalRoutesRaw = [
         } catch (error: any) {
           console.error('[AI-Approval] count error:', error);
           return c.json({ error: 'Failed to fetch count', details: error.message }, 500);
+        }
+      };
+    },
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* GET /api/ai/approvals/credential-warning-count                       */
+  /* -------------------------------------------------------------------- */
+  /* Task #481: drives the "credential warnings" badge on the approval    */
+  /* queue header. Returns the count of pending rows whose payload was    */
+  /* flagged with credential-shaped values, scoped to what the caller is  */
+  /* allowed to see (admins/QMs see all; everyone else sees their own).   */
+  {
+    path: '/api/ai/approvals/credential-warning-count',
+    method: 'GET' as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          await ensureTable();
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const targetUserId = canSeeAll(user.role) ? 0 : user.userId;
+          const n = await countPendingWithCredentialWarnings(targetUserId);
+          return c.json({ success: true, count: n });
+        } catch (error: any) {
+          console.error('[AI-Approval] credential-warning count error:', error);
+          return c.json({ error: 'Failed to fetch credential-warning count', details: error.message }, 500);
         }
       };
     },

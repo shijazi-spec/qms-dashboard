@@ -89,6 +89,15 @@
                 <input id="fltMine" type="checkbox" class="rounded"> <span data-i18n="ai_approvals.only_my">Only my proposals</span>
             </label>
 
+            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
+                <input id="fltCredWarn" type="checkbox" class="rounded" data-testid="input-credential-warnings-only">
+                <span data-i18n="ai_approvals.only_credential_warnings">Credential warnings only</span>
+                <span id="badgeCredWarn"
+                      data-testid="badge-credential-warnings"
+                      class="hidden ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      title="Pending approvals flagged for credential-shaped values">0</span>
+            </label>
+
             <div id="summaryCounts" class="ml-auto text-xs text-gray-600 flex gap-3">
                 <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
                 <span><span data-i18n="ai_approvals.executed_today">Executed today</span>: <b id="cntExecutedToday">—</b></span>
@@ -108,8 +117,42 @@
     var fltStatus = document.getElementById('fltStatus');
     var fltRisk = document.getElementById('fltRisk');
     var fltMine = document.getElementById('fltMine');
+    var fltCredWarn = document.getElementById('fltCredWarn');
+    var badgeCredWarn = document.getElementById('badgeCredWarn');
     var cntPending = document.getElementById('cntPending');
     var cntExecutedToday = document.getElementById('cntExecutedToday');
+
+    // Cache the most recent server response so the credential-warning toggle
+    // can re-filter without round-tripping the API.
+    var lastRows = [];
+
+    function hasCredentialWarning(row) {
+        return Array.isArray(row && row.credential_warnings) && row.credential_warnings.length > 0;
+    }
+
+    // The credential-warning badge always reflects the GLOBAL pending queue —
+    // not whatever subset the operator has currently filtered to. We hit a
+    // dedicated count endpoint so the count is correct even when the page is
+    // showing executed rows, paginated past the first 100, or narrowed by
+    // risk/mine. Visibility-scoped server-side: admins / quality_managers
+    // see the global count; everyone else sees their own.
+    function refreshGlobalCredentialBadge() {
+        fetch('/api/ai/approvals/credential-warning-count', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                applyBadgeCount(typeof data.count === 'number' ? data.count : 0);
+            })
+            .catch(function () {
+                // Soft-fail: hide the badge rather than show a stale count.
+                applyBadgeCount(0);
+            });
+    }
+
+    function applyBadgeCount(n) {
+        var safe = Math.max(0, n | 0);
+        badgeCredWarn.textContent = String(safe);
+        badgeCredWarn.classList.toggle('hidden', safe === 0);
+    }
 
     function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
@@ -282,19 +325,29 @@
         });
     }
 
+    function renderRows(rows) {
+        var visible = fltCredWarn.checked ? rows.filter(hasCredentialWarning) : rows;
+        if (!visible || visible.length === 0) { renderEmpty(); return; }
+        listEl.innerHTML = visible.map(renderRow).join('');
+        bindRowActions();
+    }
+
     function load() {
         listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">' + _t('dyn.ai_approvals.loading') + '</div>';
         fetch('/api/ai/approvals?' + buildQuery(), { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
-                if (!data.rows || data.rows.length === 0) { renderEmpty(); return; }
-                listEl.innerHTML = data.rows.map(renderRow).join('');
-                bindRowActions();
-                updateSummary(data.rows);
+                lastRows = (data && Array.isArray(data.rows)) ? data.rows : [];
+                renderRows(lastRows);
+                updateSummary(lastRows);
+                refreshGlobalCredentialBadge();
             })
             .catch(function (err) {
+                lastRows = [];
                 listEl.innerHTML = '<div class="text-center text-red-600 text-sm py-10">' + _t('dyn.ai_approvals.failed_load') + ' ' +
                     (err && err.statusText ? escapeHtml(err.statusText) : '') + '</div>';
+                updateSummary(lastRows);
+                refreshGlobalCredentialBadge();
             });
     }
 
@@ -307,6 +360,7 @@
     }
 
     [fltStatus, fltRisk, fltMine].forEach(function (el) { el.addEventListener('change', load); });
+    fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
     document.getElementById('btnRefresh').addEventListener('click', load);
     load();
     setInterval(load, 30000);
