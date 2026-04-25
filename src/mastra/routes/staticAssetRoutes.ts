@@ -92,6 +92,11 @@ export const staticAssetRoutes = [
     createHandler: async () => serveStaticText("css/utilities.css", "text/css"),
   },
   {
+    path: "/css/a11y.css",
+    method: "GET" as const,
+    createHandler: async () => serveStaticText("css/a11y.css", "text/css"),
+  },
+  {
     path: "/js/csp-styles.js",
     method: "GET" as const,
     createHandler: async () => serveStaticText("js/csp-styles.js", "application/javascript"),

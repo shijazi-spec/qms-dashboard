@@ -106,7 +106,7 @@
       var placeholder = document.createElement('span');
       placeholder.id = mainId;
       placeholder.setAttribute('tabindex', '-1');
-      placeholder.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+      placeholder.className = 'wp-visually-hidden';
       document.body.insertBefore(placeholder, document.body.firstChild);
     }
     var link = document.createElement('a');
@@ -119,59 +119,11 @@
 
   function injectSkipLinkStyles() {
     if (document.getElementById('wp-a11y-styles')) return;
-    var style = document.createElement('style');
-    style.id = 'wp-a11y-styles';
-    style.textContent = [
-      '.wp-skip-link {',
-      '  position: fixed; top: -100%; left: 0; z-index: 99999;',
-      '  padding: 12px 24px; background: #1e3a8a; color: #fff;',
-      '  font-size: 14px; font-weight: 600; text-decoration: none;',
-      '  border-radius: 0 0 8px 0; outline: none;',
-      '  transition: top 0.15s ease;',
-      '}',
-      '.wp-skip-link:focus { top: 0; }',
-      '',
-      '/* WCAG-AA focus-visible ring */',
-      ':focus-visible {',
-      '  outline: 3px solid #4f46e5;',
-      '  outline-offset: 2px;',
-      '}',
-      'button:focus-visible, a:focus-visible, [tabindex]:focus-visible,',
-      'input:focus-visible, select:focus-visible, textarea:focus-visible {',
-      '  outline: 3px solid #4f46e5;',
-      '  outline-offset: 2px;',
-      '  border-radius: 4px;',
-      '}',
-      '',
-      '/* Remove focus ring for mouse clicks (only show for keyboard) */',
-      ':focus:not(:focus-visible) { outline: none; }',
-      '',
-      '/* Widget quick-btn as button */',
-      'button.widget-quick-btn { font-family: inherit; background: none; }',
-      '',
-      '/* Generic ARIA tooltip (used by WalaPlusA11y.createTooltip) */',
-      '.wp-a11y-tooltip {',
-      '  position: absolute;',
-      '  z-index: 9000;',
-      '  background: #1e293b;',
-      '  color: #f8fafc;',
-      '  font-size: 0.75rem;',
-      '  font-weight: 500;',
-      '  line-height: 1.4;',
-      '  padding: 4px 10px;',
-      '  border-radius: 6px;',
-      '  white-space: nowrap;',
-      '  pointer-events: none;',
-      '  opacity: 0;',
-      '  visibility: hidden;',
-      '  transition: opacity 0.15s ease, visibility 0.15s ease;',
-      '  box-shadow: 0 2px 8px rgba(0,0,0,0.25);',
-      '}',
-      '.wp-a11y-tooltip--visible { opacity: 1; visibility: visible; }',
-      '.wp-a11y-tooltip--right { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }',
-      '.wp-a11y-tooltip--top { bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }'
-    ].join('\n');
-    document.head.appendChild(style);
+    var link = document.createElement('link');
+    link.id = 'wp-a11y-styles';
+    link.rel = 'stylesheet';
+    link.href = '/css/a11y.css';
+    document.head.appendChild(link);
   }
 
   function injectARIALiveRegion() {
@@ -181,7 +133,7 @@
     live.setAttribute('aria-live', 'polite');
     live.setAttribute('aria-atomic', 'true');
     live.setAttribute('role', 'status');
-    live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;';
+    live.className = 'wp-visually-hidden';
     document.body.appendChild(live);
   }
 
@@ -398,7 +350,6 @@
       el.removeAttribute('title');
       createTooltip(el, text, { placement: el.getAttribute('data-tooltip-placement') || 'right' });
     });
-  }
   }
 
   window.WalaPlusA11y = {

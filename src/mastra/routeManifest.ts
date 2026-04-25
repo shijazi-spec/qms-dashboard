@@ -177,6 +177,7 @@ export const ROUTE_MANIFEST = {
     '/dashboard/tailwind.css',
     '/css/navigation.css',
     '/css/utilities.css',
+    '/css/a11y.css',
     '/js/navigation.js',
     '/js/ai-consultant-widget.js',
     '/js/csp-styles.js',

@@ -729,7 +729,7 @@ Respond with JSON only:
             <html>
             <head>
               <title>Call Intelligence - Coming Soon</title>
-              <script src="https://cdn.tailwindcss.com"></script>
+              <link rel="stylesheet" href="/dashboard/tailwind.css">
             </head>
             <body class="bg-gray-50 min-h-screen flex items-center justify-center">
               <div class="text-center">

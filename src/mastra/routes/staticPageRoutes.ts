@@ -9,7 +9,7 @@ import {
 import type { UserRole } from "../../utils/rbacDatabase";
 
 function renderSetupRequiredPage(title: string, panelDescription: string): string {
-  return `<!DOCTYPE html><html><head><title>${title}</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">${title}</h1><p class="text-gray-600 mb-4">${panelDescription}</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`;
+  return `<!DOCTYPE html><html><head><title>${title}</title><link rel="stylesheet" href="/dashboard/tailwind.css"></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white p-8 rounded-xl shadow-lg max-w-md text-center"><h1 class="text-xl font-bold text-gray-900 mb-2">${title}</h1><p class="text-gray-600 mb-4">${panelDescription}</p><a href="/" class="text-blue-600 hover:underline">Return to Dashboard</a></div></body></html>`;
 }
 
 /**
