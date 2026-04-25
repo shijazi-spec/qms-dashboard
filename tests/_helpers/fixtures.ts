@@ -20,7 +20,11 @@ import type {
   QualityScorecard,
   WorkflowRun,
   SystemEvent,
+  TeamFeedback,
 } from "../../src/utils/database";
+import type { KPIDefinition, KPIValue, ExecutiveReport } from "../../src/utils/kpiDatabase";
+import type { PMPProject } from "../../src/utils/teamDatabase";
+import type { CallRecord } from "../../src/utils/callIntelligenceDb";
 
 export function makeCapa(overrides: Partial<CapaRecord> = {}): CapaRecord {
   return {
@@ -172,6 +176,82 @@ export function makeSystemEvent(
     event_category: "test",
     description: "Test event",
     severity: "info",
+    ...overrides,
+  };
+}
+
+export function makeTeamFeedback(overrides: Partial<TeamFeedback> = {}): TeamFeedback {
+  return {
+    submitter_name: "Test User",
+    dashboard: "kpi",
+    rating: 4,
+    ...overrides,
+  };
+}
+
+export function makeKPIDefinition(overrides: Partial<KPIDefinition> = {}): KPIDefinition {
+  return {
+    kpi_name: "Test KPI",
+    kpi_code: "KPI-TEST-01",
+    description: "Test KPI description",
+    owner_type: "quality_manager",
+    category: "quality",
+    unit: "%",
+    frequency: "monthly",
+    threshold_green: 90,
+    threshold_amber: 75,
+    threshold_red: 60,
+    threshold_direction: "higher_is_better",
+    is_active: true,
+    ...overrides,
+  };
+}
+
+export function makeKPIValue(overrides: Partial<KPIValue> = {}): KPIValue {
+  return {
+    kpi_id: 1,
+    period_start: new Date("2026-01-01"),
+    period_end: new Date("2026-01-31"),
+    actual_value: 85,
+    status: "green",
+    ...overrides,
+  };
+}
+
+export function makeExecutiveReport(overrides: Partial<ExecutiveReport> = {}): ExecutiveReport {
+  return {
+    report_type: "mbr",
+    period_name: "2026-Q1",
+    period_start: new Date("2026-01-01"),
+    period_end: new Date("2026-03-31"),
+    overall_health_score: 82,
+    status: "draft",
+    ...overrides,
+  };
+}
+
+export function makePMPProject(overrides: Partial<PMPProject> = {}): PMPProject {
+  return {
+    project_id: "p-1",
+    project_name: "Test Project",
+    project_code: "PROJ-01",
+    project_type: "governance",
+    department: "Quality",
+    project_manager_id: "mgr-1",
+    project_manager_name: "Test Manager",
+    status: "planning",
+    priority: "medium",
+    ...overrides,
+  };
+}
+
+export function makeCallRecord(overrides: Partial<CallRecord> = {}): CallRecord {
+  return {
+    call_id: "call-test-01",
+    source: "five9",
+    agent_email: "agent@example.com",
+    direction: "outbound",
+    status: "pending",
     ...overrides,
   };
 }
