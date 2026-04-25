@@ -162,6 +162,12 @@ export async function ensureAiMetricsTable(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_ai_call_metrics_agent_prompt_version
           ON ai_call_metrics (agent_name, (metadata ->> 'prompt_version'), started_at DESC)
           WHERE tool_name IS NULL;
+
+        -- Speeds up getChildToolCallsForParent which filters by parent_call_id.
+        -- Partial index skips the majority of rows that are top-level calls.
+        CREATE INDEX IF NOT EXISTS idx_ai_call_metrics_parent_call_id
+          ON ai_call_metrics (parent_call_id)
+          WHERE parent_call_id IS NOT NULL;
       `);
     } catch (err) {
       tableReady = null;
