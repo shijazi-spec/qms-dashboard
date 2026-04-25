@@ -1748,6 +1748,40 @@
         return '<span class="px-2 py-0.5 rounded text-xs font-medium ' + (styles[status] || 'bg-gray-100 text-gray-700') + '">' + (status || 'unknown').toUpperCase() + '</span>';
     }
 
+    /* ------------------------------------------------------------------ *
+     *  Task #544 — render the same compact "Viewed by" chip strip the
+     *  AI Approvals queue uses (renderPriorViewers in ai-approvals.html).
+     *  Quality Managers chatting with the assistant benefit from seeing
+     *  who else has already reviewed an action before they Approve/Reject.
+     *  We deliberately use the queue's truncation (first 5 + "+N more")
+     *  and chip styling so the two surfaces stay visually consistent.
+     *  The list refreshes on every fetchAndRenderApprovalCard() call —
+     *  i.e. whenever the user opens or re-opens the action and after
+     *  every approve/reject round-trip — because GET /api/ai/approvals/:code
+     *  returns a fresh prior_viewers array on each request.
+     * ------------------------------------------------------------------ */
+    function renderPriorViewers(viewers) {
+        if (!viewers || viewers.length === 0) return '';
+        var MAX = 5;
+        var shown = viewers.slice(0, MAX);
+        var extra = viewers.length > MAX ? ' +' + (viewers.length - MAX) + ' more' : '';
+        var chips = shown.map(function (v) {
+            var label = escapeHtml(v.user_name || v.user_email || 'Unknown');
+            var role  = escapeHtml(v.user_role || '');
+            var count = v.view_count > 1 ? ' ×' + v.view_count : '';
+            var title = (v.user_email ? escapeHtml(v.user_email) + ' · ' : '') + role + (v.last_viewed_at ? ' · ' + new Date(v.last_viewed_at).toLocaleString() : '');
+            return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs" title="' + title + '" data-testid="chip-prior-viewer">' +
+                '<svg class="w-2.5 h-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="7" r="4"/><path d="M2 17a8 8 0 0116 0H2z"/></svg>' +
+                label + (role ? ' <span class="opacity-60">(' + role + ')</span>' : '') + (count ? '<span class="opacity-50">' + escapeHtml(count) + '</span>' : '') +
+                '</span>';
+        }).join('');
+        return '<div class="flex flex-wrap items-center gap-1 mb-2" data-prior-viewers data-testid="section-prior-viewers">' +
+            '<span class="text-xs text-gray-400 shrink-0">Viewed by:</span>' +
+            chips +
+            (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '') +
+            '</div>';
+    }
+
     function renderApprovalCard(data, container) {
         if (!data || !data.action) {
             container.innerHTML = '<div class="text-xs text-red-600">Malformed approval response.</div>';
@@ -1811,6 +1845,7 @@
               '<div class="text-sm font-medium text-gray-800 mb-1">' + escapeHtml(a.tool_label) + '</div>' +
               '<div class="text-xs text-gray-600 mb-2 bg-gray-50 p-2 rounded border border-gray-100 prose prose-sm max-w-none">' + previewHtml + '</div>' +
               (refsHtml ? '<div class="mb-2"><div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Compliance references</div>' + refsHtml + '</div>' : '') +
+              renderPriorViewers(data.prior_viewers) +
               '<div class="flex items-center justify-between border-t border-gray-100 pt-2 mt-1">' +
                 '<div class="text-xs text-gray-500">' +
                   'Requested by ' + escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown') +
