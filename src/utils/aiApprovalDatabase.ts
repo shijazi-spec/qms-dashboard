@@ -272,12 +272,41 @@ export async function getPendingActionByCode(code: string): Promise<PendingActio
   return res.rows[0] || null;
 }
 
+/**
+ * Task #298: review-status filter for the approval queue. Lets reviewers
+ * narrow the list to either:
+ *   - 'unreviewed_by_me' — actions the current reviewer has never opened
+ *     the detail page for (NOT EXISTS view-audit row matching their user_id)
+ *   - 'no_reviewers'     — actions nobody has opened yet (NOT EXISTS any
+ *     view-audit row at all). True "blind spots" in a multi-reviewer team.
+ *
+ * Both modes look at event_logs rows written by the GET /:code handler in
+ * `aiApprovalRoutes.ts` (action_type = 'AI_ACTION', description starts with
+ * 'Viewed'). The view audit intentionally skips the requester's own
+ * self-views, so a requester filtering by 'unreviewed_by_me' will still
+ * see their own pending submissions — which matches the operator
+ * expectation that "I haven't reviewed it" includes "I never opened the
+ * detail page", regardless of who originally submitted it.
+ */
+export type ReviewFilter = 'unreviewed_by_me' | 'no_reviewers';
+
 export interface ListFilters {
   status?: ApprovalStatus | ApprovalStatus[];
   requestedByUserId?: number;
   toolId?: string;
   riskLevel?: RiskLevel;
   threadId?: string;
+  /**
+   * Task #298: filter by view-audit history. When set to
+   * 'unreviewed_by_me', `reviewerUserId` MUST also be provided so the
+   * NOT EXISTS sub-query knows whose viewer rows to exclude.
+   */
+  reviewFilter?: ReviewFilter;
+  /**
+   * The viewer's user_id, used by `reviewFilter='unreviewed_by_me'`. Only
+   * required for that mode; ignored otherwise.
+   */
+  reviewerUserId?: number;
   limit?: number;
   offset?: number;
 }
@@ -309,6 +338,46 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
   if (filters.threadId) {
     params.push(filters.threadId);
     where.push(`thread_id = $${params.length}`);
+  }
+
+  // Task #298: review-status filter. Both branches use NOT EXISTS against
+  // event_logs view-audit rows (action_type='AI_ACTION', description like
+  // 'Viewed%') correlated by event_logs.correlation_id = action_code. The
+  // view-audit row schema is owned by `getActionViewers` in
+  // `eventLogsDatabase.ts`; this filter is the inverse of that query.
+  //
+  // SQL design notes:
+  //   - We use NOT EXISTS (rather than LEFT JOIN ... WHERE viewer.id IS NULL)
+  //     because Postgres can short-circuit NOT EXISTS on the first match,
+  //     whereas LEFT JOIN materializes every viewer row before filtering.
+  //   - `description ILIKE 'Viewed%'` matches both wording variants the
+  //     route uses ("Viewed pending AI action ..." and the post-decision
+  //     "Viewed approved/executed/rejected/... AI action ...").
+  if (filters.reviewFilter === 'unreviewed_by_me') {
+    if (filters.reviewerUserId == null) {
+      throw new Error(
+        "listPendingActions: reviewFilter='unreviewed_by_me' requires reviewerUserId",
+      );
+    }
+    params.push(filters.reviewerUserId);
+    where.push(
+      `NOT EXISTS (
+         SELECT 1 FROM event_logs el
+          WHERE el.correlation_id = ai_pending_actions.action_code
+            AND el.action_type    = 'AI_ACTION'
+            AND el.description    ILIKE 'Viewed%'
+            AND el.user_id        = $${params.length}
+       )`,
+    );
+  } else if (filters.reviewFilter === 'no_reviewers') {
+    where.push(
+      `NOT EXISTS (
+         SELECT 1 FROM event_logs el
+          WHERE el.correlation_id = ai_pending_actions.action_code
+            AND el.action_type    = 'AI_ACTION'
+            AND el.description    ILIKE 'Viewed%'
+       )`,
+    );
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';

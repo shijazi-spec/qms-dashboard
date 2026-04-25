@@ -89,6 +89,16 @@
                 <input id="fltMine" type="checkbox" class="rounded"> <span data-i18n="ai_approvals.only_my">Only my proposals</span>
             </label>
 
+            <label class="text-xs text-gray-600 ml-2" data-i18n="ai_approvals.filter_review">Review</label>
+            <select id="fltReview" aria-label="Filter by review status"
+                    data-testid="select-review-filter"
+                    class="border border-gray-300 rounded px-2 py-1 text-sm"
+                    title="Show only actions you (or anyone) haven't opened the detail page for yet.">
+                <option value="" data-i18n="ai_approvals.review_any">Any</option>
+                <option value="unreviewed_by_me" data-i18n="ai_approvals.review_unreviewed_by_me">Unreviewed by me</option>
+                <option value="no_reviewers" data-i18n="ai_approvals.review_no_reviewers">No reviewer yet</option>
+            </select>
+
             <label class="text-xs text-gray-600 ml-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
                 <input id="fltCredWarn" type="checkbox" class="rounded" data-testid="input-credential-warnings-only">
                 <span data-i18n="ai_approvals.only_credential_warnings">Credential warnings only</span>
@@ -117,6 +127,7 @@
     var fltStatus = document.getElementById('fltStatus');
     var fltRisk = document.getElementById('fltRisk');
     var fltMine = document.getElementById('fltMine');
+    var fltReview = document.getElementById('fltReview');
     var fltCredWarn = document.getElementById('fltCredWarn');
     var badgeCredWarn = document.getElementById('badgeCredWarn');
     var cntPending = document.getElementById('cntPending');
@@ -171,6 +182,10 @@
         p.set('status', fltStatus.value);
         if (fltRisk.value) p.set('risk_level', fltRisk.value);
         if (fltMine.checked) p.set('mine', 'true');
+        // Task #298: review-status filter is included in every request,
+        // including the 30s auto-refresh, so the operator's selection
+        // persists across reloads without extra client-side bookkeeping.
+        if (fltReview.value) p.set('review_filter', fltReview.value);
         p.set('limit', '100');
         return p.toString();
     }
@@ -359,7 +374,7 @@
         }).length;
     }
 
-    [fltStatus, fltRisk, fltMine].forEach(function (el) { el.addEventListener('change', load); });
+    [fltStatus, fltRisk, fltMine, fltReview].forEach(function (el) { el.addEventListener('change', load); });
     fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
     document.getElementById('btnRefresh').addEventListener('click', load);
     load();

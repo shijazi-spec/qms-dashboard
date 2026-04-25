@@ -145,6 +145,17 @@ const _aiApprovalRoutesRaw = [
           const limit = parseInt(url.searchParams.get('limit') || '50', 10);
           const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
+          // Task #298: optional review-status filter. Accepted values:
+          //   'unreviewed_by_me' — actions the current user has never opened
+          //                        the detail page for
+          //   'no_reviewers'     — actions nobody has opened yet
+          // Anything else (including absent) leaves the queue unfiltered.
+          const reviewFilterParam = url.searchParams.get('review_filter');
+          const reviewFilter =
+            reviewFilterParam === 'unreviewed_by_me' || reviewFilterParam === 'no_reviewers'
+              ? reviewFilterParam
+              : undefined;
+
           const status = statusParam
             ? (statusParam.split(',').map(s => s.trim()) as ApprovalStatus[])
             : (['pending'] as ApprovalStatus[]);
@@ -157,6 +168,9 @@ const _aiApprovalRoutesRaw = [
             status,
             riskLevel: riskLevel || undefined,
             requestedByUserId,
+            reviewFilter,
+            // Only meaningful for 'unreviewed_by_me'; harmless otherwise.
+            reviewerUserId: user.userId ?? undefined,
             limit,
             offset,
           });
