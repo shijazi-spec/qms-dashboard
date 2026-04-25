@@ -634,6 +634,84 @@ const TEXT_LEAK_SECRETS = {
   }
 }
 
+// Task #302 — make the regex pass on event_logs JSONB explicit for the exact
+// payload shapes called out in the task description: a caller that puts a
+// credential into `newValue.note` or `newValue.curl_example` (innocuous
+// field names that the key-based deny-list cannot see through) must still
+// have the secret scrubbed by `deepRedactSecretLikeStrings`.
+
+{
+  captured.length = 0;
+  await logEvent({
+    actionType: "UPDATE",
+    entityType: "SYSTEM",
+    entityId: "stripe-webhook",
+    description: "webhook reconfigured",
+    severity: "INFO",
+    module: "integrations",
+    newValue: {
+      note: `key=${TEXT_LEAK_SECRETS.sk}`,
+      curl_example:
+        `curl -H 'Authorization: Bearer ${TEXT_LEAK_SECRETS.sk}' https://api.example.com/v1/webhooks`,
+      provider: "stripe",
+    },
+  });
+  const params = findInsertCallParams();
+  assert(params !== null, "task-302: pool.query was called");
+  if (params) {
+    const newJson = String(params[10] ?? "");
+    assert(
+      !newJson.includes(TEXT_LEAK_SECRETS.sk),
+      "task-302: sk_ key in newValue.note is scrubbed by deepRedactSecretLikeStrings",
+    );
+    assert(
+      newJson.includes(REDACTED_SENTINEL),
+      "task-302: REDACTED sentinel present in newValue JSONB column",
+    );
+    assert(
+      newJson.includes("stripe"),
+      "task-302: non-secret sibling field 'provider' preserved verbatim",
+    );
+    assert(
+      newJson.includes("curl -H"),
+      "task-302: surrounding curl_example prose preserved",
+    );
+  }
+}
+
+{
+  // Same shape but on the oldValue side, since both safeOldValue and
+  // safeNewValue must be scrubbed identically per the task's done-criteria.
+  captured.length = 0;
+  await logEvent({
+    actionType: "UPDATE",
+    entityType: "SYSTEM",
+    entityId: "stripe-webhook",
+    description: "webhook reconfigured",
+    severity: "INFO",
+    module: "integrations",
+    oldValue: {
+      note: `key=${TEXT_LEAK_SECRETS.sk}`,
+      curl_example:
+        `curl -H 'Authorization: Bearer ${TEXT_LEAK_SECRETS.sk}' https://api.example.com/v1/webhooks`,
+      provider: "stripe",
+    },
+  });
+  const params = findInsertCallParams();
+  assert(params !== null, "task-302 oldValue: pool.query was called");
+  if (params) {
+    const oldJson = String(params[9] ?? "");
+    assert(
+      !oldJson.includes(TEXT_LEAK_SECRETS.sk),
+      "task-302: sk_ key in oldValue.note is scrubbed by deepRedactSecretLikeStrings",
+    );
+    assert(
+      oldJson.includes(REDACTED_SENTINEL),
+      "task-302: REDACTED sentinel present in oldValue JSONB column",
+    );
+  }
+}
+
 // Section 4 — Task #99: NC and CAPA change history write-path tests.
 //
 // logNCChange / logCAPAChange must apply redactSecretLikeStrings to

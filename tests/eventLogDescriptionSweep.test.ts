@@ -133,13 +133,27 @@ async function run(): Promise<void> {
       old_value: { api_key: SK_KEY, module: 'auth' },
       new_value: null,
     },
+    {
+      // Task #302: backfill must scrub credentials buried in innocuously-named
+      // newValue keys (note, curl_example) the same way logEvent does on the
+      // write path.
+      id: 8,
+      description: 'Webhook reconfigured',
+      entity_name: 'stripe-webhook',
+      old_value: null,
+      new_value: {
+        note: `key=${SK_KEY}`,
+        curl_example: `curl -H 'Authorization: Bearer ${SK_KEY}' https://api.stripe.com/v1/webhooks`,
+        provider: 'stripe',
+      },
+    },
   ];
 
   const stub1 = makeStubClient(initial);
   const count1 = await redactEventLogs(stub1.client);
 
-  assert(count1 === 5, `5 dirty rows updated (got ${count1})`);
-  assert(stub1.updates.length === 5, `5 UPDATE statements issued (got ${stub1.updates.length})`);
+  assert(count1 === 6, `6 dirty rows updated (got ${count1})`);
+  assert(stub1.updates.length === 6, `6 UPDATE statements issued (got ${stub1.updates.length})`);
 
   const row1 = stub1.rows.find(r => r.id === 1)!;
   assert(
@@ -217,6 +231,33 @@ async function run(): Promise<void> {
   assert(
     row7.old_value && row7.old_value.module === 'auth',
     'row 7: non-sensitive key preserved in old_value',
+  );
+
+  // Task #302: backfill must scrub credentials buried in innocuously-named
+  // newValue keys (note, curl_example) the same way logEvent does on the
+  // write path.
+  const row8 = stub1.rows.find(r => r.id === 8)!;
+  assert(
+    row8.new_value && !JSON.stringify(row8.new_value).includes(SK_KEY),
+    'row 8 (task-302): sk_ key in newValue.note is removed by backfill sweep',
+  );
+  assert(
+    row8.new_value &&
+      typeof row8.new_value.note === 'string' &&
+      row8.new_value.note.includes(REDACTED_SENTINEL),
+    'row 8 (task-302): sentinel present in newValue.note',
+  );
+  assert(
+    row8.new_value &&
+      typeof row8.new_value.curl_example === 'string' &&
+      !row8.new_value.curl_example.includes(SK_KEY) &&
+      row8.new_value.curl_example.includes(REDACTED_SENTINEL) &&
+      row8.new_value.curl_example.includes('curl -H'),
+    'row 8 (task-302): newValue.curl_example scrubbed but surrounding prose preserved',
+  );
+  assert(
+    row8.new_value && row8.new_value.provider === 'stripe',
+    'row 8 (task-302): non-secret sibling field preserved verbatim',
   );
 
   console.log('\n--- Idempotency check ---\n');
