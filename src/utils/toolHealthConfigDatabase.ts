@@ -530,6 +530,70 @@ export async function reapExpiredToolHealthOverrides(): Promise<ReapExpiredToolH
 export const SYSTEM_REAPER_ATTRIBUTION = "system: override expired";
 
 /**
+ * Describes an override row that is expiring within a configurable look-ahead
+ * window but has not yet passed its `expires_at`.  Returned by
+ * {@link getToolHealthOverrideExpiringSoon} so the cron can dispatch a
+ * pre-warning Slack message (Task #219).
+ */
+export interface ToolHealthOverrideExpiringSoon {
+  /** The exact timestamp at which the override will auto-revert. */
+  expires_at: Date;
+  /** Operator who created the time-boxed override (may be null). */
+  updated_by: string | null;
+  /** The override values currently in effect (non-null fields only). */
+  overrides: ToolHealthConfigOverrides;
+  /** Approximate minutes remaining until expiry, rounded to nearest minute. */
+  minutes_remaining: number;
+}
+
+/**
+ * Returns the live override row when its `expires_at` falls within the
+ * next `windowMs` milliseconds (strictly in the future — not yet expired).
+ * Returns `null` when:
+ *   • there is no override row;
+ *   • `expires_at` is null (no scheduled revert);
+ *   • `expires_at` has already passed (let the reaper handle it);
+ *   • `expires_at` is further away than `windowMs`;
+ *   • a DB error occurs (logged, best-effort).
+ *
+ * Safe to call on every cron tick — never throws.
+ */
+export async function getToolHealthOverrideExpiringSoon(
+  windowMs: number,
+  now: Date = new Date(),
+): Promise<ToolHealthOverrideExpiringSoon | null> {
+  try {
+    await initToolHealthConfigTables();
+    const result = await pool.query(
+      `SELECT * FROM tool_health_config_overrides WHERE id = 1`,
+    );
+    const row = result.rows[0];
+    if (!row || row.expires_at == null) return null;
+
+    const expiresAt =
+      row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at);
+    if (Number.isNaN(expiresAt.getTime())) return null;
+
+    const msRemaining = expiresAt.getTime() - now.getTime();
+    // Must be strictly in the future (not expired) and within the look-ahead window.
+    if (msRemaining <= 0 || msRemaining > windowMs) return null;
+
+    const overrides = rowToOverrides(row);
+    if (Object.keys(overrides).length === 0) return null;
+
+    return {
+      expires_at: expiresAt,
+      updated_by: row.updated_by ?? null,
+      overrides,
+      minutes_remaining: Math.round(msRemaining / 60_000),
+    };
+  } catch (err) {
+    console.error("[ToolHealthConfig] Failed to check expiring-soon overrides:", err);
+    return null;
+  }
+}
+
+/**
  * Returns the most recent N audit rows, newest first. Used by the AI Ops
  * panel to surface "who changed what, when" alongside the live form.
  */

@@ -42,11 +42,13 @@ import {
 import {
   notifyToolHealthBreach,
   notifyToolHealthOverrideExpired,
+  notifyToolHealthOverrideExpiringSoon,
   notifyToolHealthRecovery,
   type NotifyToolHealthBreachResult,
 } from "../../utils/toolHealthAlertNotifier";
 import {
   getToolHealthConfigOverrides,
+  getToolHealthOverrideExpiringSoon,
   reapExpiredToolHealthOverrides,
   type ReapExpiredToolHealthOverridesResult,
   type ToolHealthConfigOverrides,
@@ -445,6 +447,13 @@ export interface ToolHealthCheckResult {
    * "automatic" cron activity.
    */
   expiredOverridesReaped: number;
+  /**
+   * 1 when a pre-warning Slack message was dispatched this pass because
+   * an override row's `expires_at` falls within the look-ahead window
+   * (Task #219). 0 when the pass produced no pre-warning (not in window,
+   * already deduped, no channel configured, or Slack failure).
+   */
+  overrideExpirySoonWarningSent: number;
   /** Counts on-call pages dispatched for newly-created breach alerts. */
   notificationsSent: number;
   /**
@@ -521,6 +530,21 @@ export interface ToolHealthDeps {
    * it to capture recovery pages without touching real Slack/email.
    */
   notifyToolHealthRecovery?: typeof notifyToolHealthRecovery;
+  /**
+   * Posts a Slack pre-warning when an override row's `expires_at` is
+   * within the look-ahead window (Task #219). Optional so existing stubs
+   * stay backwards-compatible — the production default delegates to
+   * {@link notifyToolHealthOverrideExpiringSoon}, and tests can stub it
+   * to capture the call without touching real Slack.
+   */
+  notifyOverrideExpiringSoon?: typeof notifyToolHealthOverrideExpiringSoon;
+  /**
+   * Checks whether the live override row is expiring within the look-ahead
+   * window (Task #219). Optional; the production default delegates to
+   * {@link getToolHealthOverrideExpiringSoon}. Tests can stub it to
+   * simulate an imminent expiry without touching the DB.
+   */
+  checkOverrideExpiringSoon?: (windowMs: number) => ReturnType<typeof getToolHealthOverrideExpiringSoon>;
 }
 
 const DEFAULT_DEPS: Required<ToolHealthDeps> = {
@@ -534,6 +558,8 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   reapExpiredOverrides: reapExpiredToolHealthOverrides,
   notifyOverrideExpired: notifyToolHealthOverrideExpired,
   notifyToolHealthRecovery,
+  notifyOverrideExpiringSoon: notifyToolHealthOverrideExpiringSoon,
+  checkOverrideExpiringSoon: getToolHealthOverrideExpiringSoon,
 };
 
 /**
@@ -730,7 +756,49 @@ export async function runToolHealthCheck(
       depsOverride?.notifyOverrideExpired ?? DEFAULT_DEPS.notifyOverrideExpired,
     notifyToolHealthRecovery:
       depsOverride?.notifyToolHealthRecovery ?? DEFAULT_DEPS.notifyToolHealthRecovery,
+    notifyOverrideExpiringSoon:
+      depsOverride?.notifyOverrideExpiringSoon ?? DEFAULT_DEPS.notifyOverrideExpiringSoon,
+    checkOverrideExpiringSoon:
+      depsOverride?.checkOverrideExpiringSoon ?? DEFAULT_DEPS.checkOverrideExpiringSoon,
   };
+
+  // Task #219: check for an override that is about to expire and, if found,
+  // send one Slack pre-warning so admins can extend it before the reaper
+  // fires. This runs BEFORE the reaper so the row is still present. The
+  // notifier dedupes on the expires_at ISO key — only one post per expiry
+  // per process lifetime, no matter how many ticks fall inside the window.
+  // Best-effort: failure is logged but never blocks the surrounding pass.
+  const warnWindowMs =
+    envInt("TOOL_HEALTH_OVERRIDE_WARN_MIN", 30) * 60_000;
+  let overrideExpirySoonWarningSent = 0;
+  if (warnWindowMs > 0) {
+    try {
+      const expiringSoon = await deps.checkOverrideExpiringSoon(warnWindowMs);
+      if (expiringSoon) {
+        const warnResult = await deps.notifyOverrideExpiringSoon({
+          expires_at: expiringSoon.expires_at,
+          previous_updated_by: expiringSoon.updated_by,
+          overrides: expiringSoon.overrides as Record<string, number | undefined>,
+          minutes_remaining: expiringSoon.minutes_remaining,
+        });
+        if (warnResult.slackSent) {
+          overrideExpirySoonWarningSent = 1;
+          console.log(
+            `[ToolHealth] Sent override expiry pre-warning: expires_at=` +
+              `${expiringSoon.expires_at.toISOString()}, ` +
+              `~${expiringSoon.minutes_remaining}m remaining.`,
+          );
+        } else if (!warnResult.deduped && !warnResult.skipped) {
+          console.log(
+            `[ToolHealth] Override expiry pre-warning: Slack send returned false ` +
+              `(expires_at=${expiringSoon.expires_at.toISOString()}).`,
+          );
+        }
+      }
+    } catch (warnErr) {
+      console.error("[ToolHealth] Override expiry pre-warning failed:", warnErr);
+    }
+  }
 
   // Reap any expired override rows BEFORE loading the merged config so
   // (a) the audit trail records the auto-revert at the precise moment the
@@ -791,6 +859,7 @@ export async function runToolHealthCheck(
     alertsSkippedDuplicate: 0,
     alertsAutoResolved: 0,
     expiredOverridesReaped: reaperResult?.reaped ? 1 : 0,
+    overrideExpirySoonWarningSent,
     notificationsSent: 0,
     notificationsSkipped: 0,
     notificationsThrottled: 0,

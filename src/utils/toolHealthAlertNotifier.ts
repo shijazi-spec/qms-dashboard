@@ -894,6 +894,213 @@ export async function notifyToolHealthOverrideExpired(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Override expiry pre-warning notification (Task #219)
+//
+// Before the reaper clears an expired override, post a Slack heads-up while
+// the admin still has time to extend it. The warning fires once per unique
+// `expires_at` value (in-process dedupe keyed on the ISO timestamp) so it
+// does not repeat on every cron tick during the warning window.
+//
+// Configuration:
+//   TOOL_HEALTH_OVERRIDE_WARN_MIN — look-ahead window in minutes (default 30).
+//     Set to 0 to disable pre-warnings. The cron reads this and calls
+//     `getToolHealthOverrideExpiringSoon()` with the resulting window.
+//
+// Best-effort:
+//   Never throws; a Slack outage must not block the surrounding cron pass.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface ToolHealthOverrideExpiringSoonNotification {
+  /** The `expires_at` timestamp of the override row that is about to revert. */
+  expires_at: Date;
+  /**
+   * `updated_by` recorded on the override row — the operator who scheduled
+   * the time-boxed override and therefore the person most likely to want to
+   * extend it.
+   */
+  previous_updated_by: string | null;
+  /** The override values currently in effect (non-null fields only). */
+  overrides: Record<string, number | undefined>;
+  /** Approximate minutes remaining until expiry, rounded to nearest minute. */
+  minutes_remaining: number;
+}
+
+export interface NotifyOverrideExpiringSoonResult {
+  slackSent: boolean;
+  /** True when no Slack channel is configured. */
+  skipped: boolean;
+  /**
+   * True when this exact `expires_at` timestamp was already warned during
+   * the current process lifetime. The cron uses this to avoid flooding the
+   * channel on every tick within the warning window.
+   */
+  deduped: boolean;
+}
+
+/**
+ * In-process deduplication set for expiry pre-warnings. Keyed on the
+ * `expires_at` ISO string so each impending expiry produces exactly one
+ * Slack post per process lifetime.
+ *
+ * @internal
+ */
+const _warnedExpiryAtKeys = new Set<string>();
+
+/** @internal Test-only: reset the dedupe set between cases. */
+export function _resetOverrideExpirySoonWarningsForTests(): void {
+  _warnedExpiryAtKeys.clear();
+}
+
+function buildOverrideExpiringSoonSlackBlocks(
+  n: ToolHealthOverrideExpiringSoonNotification,
+  link: string,
+  linkIsAbsolute: boolean,
+): any[] {
+  const setBy = n.previous_updated_by?.trim() || "_unknown_";
+  const expiresAtIso = n.expires_at.toISOString();
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: ":timer_clock: Tool-health override expiring soon",
+        emoji: true,
+      },
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `The tool-health override set by *${setBy}* will auto-revert in ` +
+          `approximately *${n.minutes_remaining} minute${n.minutes_remaining === 1 ? "" : "s"}* ` +
+          `(\`${expiresAtIso}\`). Alerts will return to the env baseline — ` +
+          `extend the override now if the situation still warrants it.`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Active override fields:*\n${describeClearedOverrides(n.overrides)}`,
+      },
+    },
+  ];
+
+  if (linkIsAbsolute) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Open Alert Thresholds",
+            emoji: true,
+          },
+          url: link,
+          style: "primary",
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:link: Alert Thresholds tab: \`${link}\`\n` +
+          `_Set \`TOOL_HEALTH_APP_URL\` to enable a clickable link._`,
+      },
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text:
+          `:robot_face: _WalaPlus tool-health monitor | override expiry pre-warning` +
+          ` | expires \`${expiresAtIso}\`_`,
+      },
+    ],
+  });
+  return blocks;
+}
+
+/**
+ * Post a Slack heads-up that a time-boxed tool-health override will expire
+ * within the configured warning window (Task #219).
+ *
+ * Deduplication: each unique `expires_at` value is posted at most once per
+ * process lifetime (in-process Set keyed on the ISO timestamp). This means
+ * the warning fires on the first cron tick that falls inside the window and
+ * is then silent for the remaining ticks — exactly one advance notice per
+ * scheduled revert.
+ *
+ * Best-effort by design — a Slack outage must not block the surrounding
+ * cron pass. Returns `{ skipped: true }` when no channel is configured;
+ * `{ deduped: true }` when this expiry was already warned.
+ */
+export async function notifyToolHealthOverrideExpiringSoon(
+  notification: ToolHealthOverrideExpiringSoonNotification,
+  depsOverride: ToolHealthOverrideNotifierDeps = {},
+): Promise<NotifyOverrideExpiringSoonResult> {
+  const result: NotifyOverrideExpiringSoonResult = {
+    slackSent: false,
+    skipped: false,
+    deduped: false,
+  };
+
+  const dedupeKey = notification.expires_at.toISOString();
+  if (_warnedExpiryAtKeys.has(dedupeKey)) {
+    result.deduped = true;
+    return result;
+  }
+
+  const cfg = readConfig();
+  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+
+  if (!cfg.slackChannel) {
+    result.skipped = true;
+    return result;
+  }
+
+  // Mark as warned immediately (before the send) so a throw in sendSlack
+  // doesn't trigger a double-post on the next tick.
+  _warnedExpiryAtKeys.add(dedupeKey);
+
+  const link = cfg.link.includes("?")
+    ? `${cfg.link}&tab=thresholds`
+    : `${cfg.link}?tab=thresholds`;
+
+  const setBy = notification.previous_updated_by?.trim() || "unknown";
+  const fallback =
+    `:timer_clock: Tool-health override set by ${setBy} expires in ` +
+    `~${notification.minutes_remaining} min (\`${dedupeKey}\`). ` +
+    `Extend it now if still needed.`;
+
+  try {
+    result.slackSent = await sendSlack(
+      cfg.slackChannel,
+      fallback,
+      buildOverrideExpiringSoonSlackBlocks(notification, link, cfg.linkIsAbsolute),
+    );
+  } catch (err) {
+    console.error(
+      `[ToolHealthNotifier] Slack send threw for override expiry pre-warning ` +
+        `(expires_at=${dedupeKey}):`,
+      err,
+    );
+    result.slackSent = false;
+  }
+
+  return result;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Tool-health recovery notification (Task #167)
 //
 // When the cron's auto-resolve sweep closes a `tool_health` alert because
