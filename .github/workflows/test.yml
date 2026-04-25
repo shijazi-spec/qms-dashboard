@@ -97,3 +97,45 @@ jobs:
           if [ -n "${SERVER_PID:-}" ]; then
             kill "${SERVER_PID}" 2>/dev/null || true
           fi
+
+  typecheck:
+    name: TypeScript compile check (npm run check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript compile check
+        run: npm run check
+
+  format:
+    name: Prettier formatting check (npm run check:format)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Prettier formatting check
+        run: npm run check:format
