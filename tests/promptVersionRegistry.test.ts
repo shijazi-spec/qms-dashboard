@@ -135,6 +135,55 @@ await suite.test(
 );
 
 await suite.test(
+  "every ACTIVE_AGENT_PROMPT_VERSIONS entry still corresponds to a live *_PROMPT_VERSION export",
+  async () => {
+    // Reverse direction of the first test: walk the registry and prove that
+    // every entry's prompt_version value is still backed by a constant that
+    // some agent file under src/mastra/agents/ currently exports. If an
+    // agent file is deleted or its `*_PROMPT_VERSION` constant is renamed
+    // (changing its hash), the registry will silently keep advertising the
+    // old value — the purge job would then refuse to delete archived rows
+    // for that obsolete version forever, and /api/ai-ops/active-prompt-versions
+    // would tell operators a version is "live" when no agent uses it.
+    const discovered = await discoverPromptVersionExports();
+
+    suite.expect(
+      discovered.length > 0,
+      `filesystem scan found at least one *_PROMPT_VERSION export ` +
+        `(scanned ${AGENTS_DIR}); got 0 — the regex or scan path is broken`,
+    );
+
+    // Resolve every discovered constant to its runtime value once so we can
+    // build the set of values that *some* live agent file currently exports.
+    const liveValues = new Set<string>();
+    for (const { symbol, file } of discovered) {
+      const mod = await import(
+        pathToFileURL(path.join(AGENTS_DIR, file)).href
+      );
+      const value = (mod as Record<string, unknown>)[symbol];
+      if (typeof value === "string" && value.length > 0) {
+        liveValues.add(value);
+      }
+    }
+
+    for (const entry of ACTIVE_AGENT_PROMPT_VERSIONS) {
+      suite.expect(
+        liveValues.has(entry.prompt_version),
+        `ACTIVE_AGENT_PROMPT_VERSIONS contains a stale entry ` +
+          `${JSON.stringify(entry)}: its prompt_version value is no longer ` +
+          `exported by any *_PROMPT_VERSION constant under src/mastra/agents/. ` +
+          `The matching agent file was likely deleted or its constant ` +
+          `renamed. Remove this entry from ACTIVE_AGENT_PROMPT_VERSIONS in ` +
+          `src/mastra/agents/promptVersionRegistry.ts, otherwise the purge ` +
+          `cron will refuse to delete archived ai_call_metrics rows for this ` +
+          `obsolete version and the AI Ops /active endpoint will advertise a ` +
+          `version no live agent actually uses.`,
+      );
+    }
+  },
+);
+
+await suite.test(
   "ACTIVE_AGENT_PROMPT_VERSIONS entries all resolve to non-empty unique agent names",
   async () => {
     // Defence-in-depth: the registry itself should not contain blank or
