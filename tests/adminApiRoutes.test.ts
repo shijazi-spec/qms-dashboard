@@ -7,7 +7,8 @@
  *   - 401 unauth      → POST /api/admin/auth (wrong key)
  *                       POST /api/admin/auth (no key field)
  *   - 403 forbidden   → PUT  /api/admin/scorecard/weights, GET /api/admin/activities,
- *                       POST /api/admin/seed-defaults — all without auth
+ *                       POST /api/admin/seed-defaults,
+ *                       GET  /api/admin/rate-limit-stats — all without auth
  *   - 500 bad input   → POST /api/admin/auth with empty/missing body (handler
  *                       catches the JSON parse failure and always returns 500)
  *   - structural      → every route exposes path/method/createHandler
@@ -153,6 +154,20 @@ await suite.test("POST /api/admin/seed-defaults — 403 without auth", async () 
   try {
     const handler = await buildHandler(adminApiRoutes, "/api/admin/seed-defaults", "POST");
     const res = await handler(makeContext({ method: "POST", body: {} }));
+    suite.expectEqual(res.status, 403, "status");
+    suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+  } finally {
+    if (original === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = original;
+  }
+});
+
+await suite.test("GET /api/admin/rate-limit-stats — 403 without auth", async () => {
+  const original = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = "integration-test-secret-2026";
+  try {
+    const handler = await buildHandler(adminApiRoutes, "/api/admin/rate-limit-stats", "GET");
+    const res = await handler(makeContext({ method: "GET" }));
     suite.expectEqual(res.status, 403, "status");
     suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
   } finally {
