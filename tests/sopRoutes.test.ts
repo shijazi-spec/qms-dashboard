@@ -2,9 +2,15 @@
  * Integration tests for src/mastra/routes/sopRoutes.ts
  *
  * Coverage matrix:
- *   - 200 happy path  → GET /api/sop returns parsed SOP JSON; GET /api/sop/download
- *                       returns markdown attachment with correct headers.
- *   - 404 missing     → GET /sop returns 404 when dashboard/sop.html absent.
+ *   - 401 / redirect  → unauthenticated callers cannot read or download the
+ *                       SOP, and unauthenticated visitors to /sop are
+ *                       redirected to /login. The SOP document is classified
+ *                       "Internal Use Only" (see task #447 audit).
+ *   - 200 happy path  → with a valid admin key, GET /api/sop returns parsed
+ *                       SOP JSON; GET /api/sop/download returns the markdown
+ *                       attachment with correct headers.
+ *   - 404 missing     → GET /sop returns 404 when dashboard/sop.html absent
+ *                       (auth gate must still pass first).
  *   - structural      → every route exposes path/method/createHandler.
  *
  * Run:  npx tsx tests/sopRoutes.test.ts
@@ -15,6 +21,15 @@ import { join } from "path";
 import { sopRoutes } from "../src/mastra/routes/sopRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeContext";
+
+// hasValidAdminApiKey reads process.env.ADMIN_API_KEY at call time, so
+// setting this here (before any handler invocation) is enough to satisfy the
+// defense-in-depth gate added in task #447.
+const TEST_ADMIN_KEY = "test-admin-key-soproutes-2026";
+const ORIGINAL_ADMIN_KEY = process.env.ADMIN_API_KEY;
+process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+
+const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
 
 const suite = new TestSuite("sopRoutes");
 
@@ -29,9 +44,30 @@ await suite.test("every route exposes path, method and createHandler", async () 
   suite.expect(sopRoutes.length >= 3, "at least 3 routes registered");
 });
 
-await suite.test("GET /api/sop — 200 with content/version/lastUpdated when SOP file exists, else 404", async () => {
+await suite.test("GET /api/sop — 401 when no session or admin key (defense-in-depth, task #447)", async () => {
   const handler = await buildHandler(sopRoutes, "/api/sop", "GET");
   const res = await handler(makeContext({ method: "GET" }));
+  suite.expectEqual(res.status, 401, "status");
+  suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+});
+
+await suite.test("GET /api/sop/download — 401 when no session or admin key (defense-in-depth, task #447)", async () => {
+  const handler = await buildHandler(sopRoutes, "/api/sop/download", "GET");
+  const res = await handler(makeContext({ method: "GET" }));
+  suite.expectEqual(res.status, 401, "status");
+  suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+});
+
+await suite.test("GET /sop — redirects to /login when unauthenticated (defense-in-depth, task #447)", async () => {
+  const handler = await buildHandler(sopRoutes, "/sop", "GET");
+  const res = await handler(makeContext({ method: "GET" }));
+  suite.expectEqual(res.status, 302, "status");
+  suite.expectEqual(res.headers["Location"], "/login", "Location header");
+});
+
+await suite.test("GET /api/sop — 200 with content/version/lastUpdated when SOP file exists, else 404", async () => {
+  const handler = await buildHandler(sopRoutes, "/api/sop", "GET");
+  const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
   const present = existsSync(join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"));
   if (present) {
     suite.expectEqual(res.status, 200, "status");
@@ -46,7 +82,7 @@ await suite.test("GET /api/sop — 200 with content/version/lastUpdated when SOP
 
 await suite.test("GET /api/sop/download — sets attachment headers when SOP file exists", async () => {
   const handler = await buildHandler(sopRoutes, "/api/sop/download", "GET");
-  const res = await handler(makeContext({ method: "GET" }));
+  const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
   const present = existsSync(join(process.cwd(), "docs", "WalaPlus_Platform_SOP.md"));
   if (present) {
     suite.expectEqual(res.status, 200, "status");
@@ -62,7 +98,7 @@ await suite.test("GET /api/sop/download — sets attachment headers when SOP fil
 
 await suite.test("GET /sop — 200 (html) when dashboard page exists, else 404", async () => {
   const handler = await buildHandler(sopRoutes, "/sop", "GET");
-  const ctx = makeContext({ method: "GET" }) as FakeContext & { html?: any };
+  const ctx = makeContext({ method: "GET", headers: ADMIN_HEADERS }) as FakeContext & { html?: any };
   let html: { body: string; status: number } | null = null;
   ctx.html = (body: string, status?: number) => {
     html = { body, status: status ?? 200 };
@@ -77,5 +113,8 @@ await suite.test("GET /sop — 200 (html) when dashboard page exists, else 404",
     suite.expectEqual(res.status, 404, "404 fallback when sop.html missing");
   }
 });
+
+if (ORIGINAL_ADMIN_KEY === undefined) delete process.env.ADMIN_API_KEY;
+else process.env.ADMIN_API_KEY = ORIGINAL_ADMIN_KEY;
 
 suite.finishOrExit();

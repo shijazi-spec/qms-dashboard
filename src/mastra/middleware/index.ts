@@ -101,23 +101,90 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
     .catch(() => { /* swallow — observability must never break the request path */ });
 }
 
+// PUBLIC_PATHS lists the URL paths that bypass `checkPageAuth` (HTML routes)
+// and `checkApiAuth` (API routes) entirely. EVERY entry here grants
+// UNAUTHENTICATED access to the matching route(s) — adding to this list is a
+// privilege-escalation vector and must be justified.
+//
+// MATCHING RULES (see `isPublicPath` below):
+//   * Entries WITHOUT a trailing `/` match the URL path EXACTLY.
+//   * Entries WITH a trailing `/` match the literal prefix (i.e. that path
+//     and any subpath beneath it).
+//
+// FOOT-GUN HISTORY: prior to this list's audit (task #447), matching used
+// `urlPath.startsWith(p)` for every entry. That meant `/api/health` silently
+// allowed unauthenticated access to `/api/health-index` (an unrelated
+// quality-metrics endpoint with no handler-side auth) and would have done
+// the same for any future `/api/health-foo` route. Always prefer EXACT entries
+// unless the prefix is genuinely a subtree, and in that case write the entry
+// with an explicit trailing `/` so a sibling path can never be swallowed by
+// accident.
+//
+// Audit cross-reference (task #447): every entry has a documented reason for
+// being public. Removed since previous audit:
+//   - `/sop`, `/api/sop`  — the WalaPlus SOP doc is classified "Internal Use
+//     Only / Distribution: All platform users (internal)"; it has no business
+//     being readable without a session. The handlers in sopRoutes.ts now
+//     enforce session-or-admin-key on their own as defense-in-depth.
+//   - `/test/slack`, `/webhooks/slack`, `/api/webhooks/slack` — defined in
+//     `src/triggers/slackTriggers.ts` but that module is never imported, so
+//     the routes don't exist. Stale entries were removed; if Slack triggers
+//     are ever wired up, the webhook + diagnostic routes must be re-evaluated
+//     for auth on a per-route basis (the diagnostic SSE route in particular
+//     opens DMs and posts messages to Slack — never make it public).
+//   - `/api/telemetry/pageview` — no such route exists in the codebase.
 const PUBLIC_PATHS = [
-  '/login', '/api/auth/', '/api/login', '/api/callback', '/api/logout',
-  // NOTE: `/guide` was historically public but is now gated as an internal
-  // dashboard page (see staticPageRoutes.ts and task-444). The middleware
-  // must therefore run `checkPageAuth` for it so unauthenticated visitors
-  // are redirected to /login instead of being served the page.
-  '/sop', '/api/sop', '/accept-invite', '/css/', '/js/',
-  '/dashboard/tailwind.css', '/dashboard/i18n/', '/api/invitations/validate/', '/api/invitations/accept',
-  '/api/admin/auth', '/api/health', '/api/smoke', '/webhooks/slack',
-  '/api/webhooks/slack', '/test/slack', '/api/telemetry/pageview', '/a11y',
-  // Streaming-download service worker + its iframe-trigger URL pattern.
+  // ---- Auth flow (login, OIDC callback, logout) ----
+  '/login',                         // login page (rendered before sign-in)
+  '/api/login',                     // POST: legacy email/password login
+  '/api/callback',                  // OIDC redirect target from the IDP
+  '/api/logout',                    // GET: clears cookies + IDP redirect
+  '/api/auth/',                     // /api/auth/me + /api/auth/logout — each
+                                    // handler returns 401/clears cookies on
+                                    // its own, so the bypass is harmless.
+
+  // ---- Admin-key bootstrap (cookie issuance + clear) ----
+  // Listed as two EXACT entries instead of one `/api/admin/auth` prefix
+  // because a future `/api/admin/auth-something` must NOT inherit the
+  // bypass automatically.
+  '/api/admin/auth',                // POST: exchange ADMIN_API_KEY → cookie
+  '/api/admin/auth/logout',         // POST: clears admin_key cookie
+
+  // ---- Invitation acceptance (caller has no session yet) ----
+  '/accept-invite',                 // landing page invitees see pre-session
+  '/api/invitations/validate/',     // .../validate/:token — token IS the auth
+  '/api/invitations/accept',        // POST: completes the invite, then issues
+                                    // a session cookie
+
+  // ---- Static assets (CSS / JS / locale JSON — cookies don't gate these) ----
+  '/css/',
+  '/js/',
+  '/dashboard/tailwind.css',
+  '/dashboard/i18n/',               // /dashboard/i18n/:lang locale JSON
+
+  // ---- Streaming-download service worker + its iframe-trigger URL pattern ----
   // The SW file must load without an auth redirect (browsers fetch it
   // independently of cookies). The trigger URL is intercepted by the SW
   // before reaching the network, so the public allowlist is just defensive
   // 404 plumbing for browsers without SW support.
-  '/streaming-download-sw.js', '/_stream-download/',
+  '/streaming-download-sw.js',
+  '/_stream-download/',
+
+  // ---- Operational health checks (uptime monitoring) ----
+  // EXACT entry — must NOT swallow `/api/health-index` (a quality-metrics
+  // endpoint that aggregates audit/NC/CAPA data and was previously exposed
+  // by a `startsWith` foot-gun) or `/api/health/pulse*` (which has its own
+  // admin-only `authorize()` check, but we still keep this entry exact so
+  // the bypass never applies to either route).
+  '/api/health',
+  '/api/smoke',                     // smoke test for orchestrator
+
+  // ---- Anonymous language preference (so unauthenticated visitors can
+  // still pick a UI language before signing in) ----
   '/api/user/language-preference',
+
+  // ---- Accessibility statement (WCAG / regulator-facing public page) ----
+  '/a11y',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];
@@ -129,7 +196,14 @@ function getAllowedOrigins(): string[] {
 }
 
 function isPublicPath(urlPath: string): boolean {
-  return PUBLIC_PATHS.some(p => urlPath === p || urlPath.startsWith(p));
+  // See PUBLIC_PATHS comment for matching rules. Entries ending in `/` are
+  // subtree (prefix) matches; everything else must match exactly. This
+  // intentionally rejects substring matches like
+  //   urlPath = '/api/health-index', entry = '/api/health'
+  // which previously slipped through the unguarded `startsWith`.
+  return PUBLIC_PATHS.some(p =>
+    p.endsWith('/') ? urlPath.startsWith(p) : urlPath === p,
+  );
 }
 
 function isMastraInternal(urlPath: string): boolean {
