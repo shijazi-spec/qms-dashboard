@@ -772,6 +772,13 @@
 
         <script>
             const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+
+            function _td(prefix, value) {
+                if (!value) return '';
+                return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic)
+                    ? (window.WalaPlusI18n.tDynamic(prefix, value) || value)
+                    : value;
+            }
             let adminAuthenticated = false;
             let useSessionAuth = false;
 
@@ -926,7 +933,7 @@
                             <p class="font-medium text-sm">${c.capa_number}</p>
                             <p class="text-xs text-gray-500 truncate max-w-xs">${c.title}</p>
                         </div>
-                        <span class="px-2 py-1 rounded text-xs font-medium severity-${c.severity}">${c.severity}</span>
+                        <span class="px-2 py-1 rounded text-xs font-medium severity-${c.severity}">${_td('dyn.qms.severity', c.severity)}</span>
                     </div>
                 `,
                             )
@@ -993,8 +1000,8 @@
                         <td class="py-2 px-3 font-mono text-xs" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.capa_number}</td>
                         <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.title}</td>
                         <td class="py-2 px-3 capitalize" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.capa_type}</td>
-                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]"><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${c.severity}</span></td>
-                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]"><span class="px-2 py-1 rounded text-xs status-${c.status.includes("progress") || c.status === "investigation" ? "in-progress" : c.status}">${c.status.replace("_", " ")}</span></td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]"><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${_td('dyn.qms.severity', c.severity)}</span></td>
+                        <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]"><span class="px-2 py-1 rounded text-xs status-${c.status.includes("progress") || c.status === "investigation" ? "in-progress" : c.status}">${_td('dyn.qms.capa_status', c.status)}</span></td>
                         <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.assigned_to || "-"}</td>
                         <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.target_date ? new Date(c.target_date).toLocaleDateString() : "-"}</td>
                     </tr>
@@ -1022,8 +1029,8 @@
                         <td class="py-2 px-3 font-mono text-xs" data-on-click="showNcDetail" data-args="[${n.id}]">${n.nc_number}</td>
                         <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.title}</td>
                         <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.nc_type}</td>
-                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]"><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${n.severity}</span></td>
-                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]"><span class="px-2 py-1 rounded text-xs status-${n.status === "closed" ? "closed" : "open"}">${n.status.replace("_", " ")}</span></td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]"><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${_td('dyn.qms.severity', n.severity)}</span></td>
+                        <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]"><span class="px-2 py-1 rounded text-xs status-${n.status === "closed" ? "closed" : "open"}">${_td('dyn.qms.nc_status', n.status)}</span></td>
                         <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.detected_date ? new Date(n.detected_date).toLocaleDateString() : "-"}</td>
                     </tr>
                 `,
@@ -1215,8 +1222,8 @@
                                 <div class="flex justify-between items-start">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2">
-                                            <span class="text-xs px-2 py-1 rounded ${getSeverityBadgeClass(t.severity)}">${t.severity.toUpperCase()}</span>
-                                            <span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">${t.trigger_type.replace(/_/g, ' ')}</span>
+                                            <span class="text-xs px-2 py-1 rounded ${getSeverityBadgeClass(t.severity)}">${_td('dyn.qms.trigger_severity', t.severity).toUpperCase()}</span>
+                                            <span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">${_td('dyn.qms.trigger_type', t.trigger_type)}</span>
                                         </div>
                                         <h4 class="font-semibold mt-2">${t.title}</h4>
                                         <p class="text-sm text-gray-600 mt-1">${t.description || ''}</p>
@@ -1476,8 +1483,8 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div><span class="text-xs text-gray-500">CAPA Number</span><p class="font-mono font-semibold">${c.capa_number}</p></div>
                             <div><span class="text-xs text-gray-500">Type</span><p class="capitalize">${c.capa_type}</p></div>
-                            <div><span class="text-xs text-gray-500">Severity</span><p><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${c.severity}</span></p></div>
-                            <div><span class="text-xs text-gray-500">Status</span><p><span class="px-2 py-1 rounded text-xs status-${c.status.includes('progress')||c.status==='investigation'?'in-progress':c.status}">${c.status.replace('_',' ')}</span></p></div>
+                            <div><span class="text-xs text-gray-500">Severity</span><p><span class="px-2 py-1 rounded text-xs severity-${c.severity}">${_td('dyn.qms.severity', c.severity)}</span></p></div>
+                            <div><span class="text-xs text-gray-500">Status</span><p><span class="px-2 py-1 rounded text-xs status-${c.status.includes('progress')||c.status==='investigation'?'in-progress':c.status}">${_td('dyn.qms.capa_status', c.status)}</span></p></div>
                             <div><span class="text-xs text-gray-500">Assigned To</span><p>${c.assigned_to||'-'}</p></div>
                             <div><span class="text-xs text-gray-500">Target Date</span><p>${c.target_date?new Date(c.target_date).toLocaleDateString():'-'}</p></div>
                         </div>
@@ -1567,8 +1574,8 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div><span class="text-xs text-gray-500">NC Number</span><p class="font-mono font-semibold">${n.nc_number}</p></div>
                             <div><span class="text-xs text-gray-500">Type</span><p class="capitalize">${n.nc_type}</p></div>
-                            <div><span class="text-xs text-gray-500">Severity</span><p><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${n.severity}</span></p></div>
-                            <div><span class="text-xs text-gray-500">Status</span><p><span class="px-2 py-1 rounded text-xs status-${n.status==='closed'?'closed':'open'}">${n.status.replace('_',' ')}</span></p></div>
+                            <div><span class="text-xs text-gray-500">Severity</span><p><span class="px-2 py-1 rounded text-xs severity-${n.severity}">${_td('dyn.qms.severity', n.severity)}</span></p></div>
+                            <div><span class="text-xs text-gray-500">Status</span><p><span class="px-2 py-1 rounded text-xs status-${n.status==='closed'?'closed':'open'}">${_td('dyn.qms.nc_status', n.status)}</span></p></div>
                             <div><span class="text-xs text-gray-500">Source</span><p>${n.source||'-'}</p></div>
                             <div><span class="text-xs text-gray-500">Detected</span><p>${n.detected_date?new Date(n.detected_date).toLocaleDateString():'-'}</p></div>
                         </div>

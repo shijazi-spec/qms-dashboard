@@ -65,33 +65,33 @@
 
         <!-- Filters -->
         <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap gap-3 items-center">
-            <label class="text-xs text-gray-600">Status</label>
+            <label class="text-xs text-gray-600" data-i18n="ai_approvals.filter_status">Status</label>
             <select id="fltStatus" aria-label="Filter by approval status" class="border border-gray-300 rounded px-2 py-1 text-sm">
-                <option value="pending" selected>Pending</option>
-                <option value="approved">Approved (executing)</option>
-                <option value="executed">Executed</option>
-                <option value="rejected">Rejected</option>
-                <option value="failed">Failed</option>
-                <option value="expired">Expired</option>
-                <option value="pending,executed,rejected,failed,expired">All</option>
+                <option value="pending" selected data-i18n="ai_approvals.status_pending">Pending</option>
+                <option value="approved" data-i18n="ai_approvals.status_approved">Approved (executing)</option>
+                <option value="executed" data-i18n="ai_approvals.status_executed">Executed</option>
+                <option value="rejected" data-i18n="ai_approvals.status_rejected">Rejected</option>
+                <option value="failed" data-i18n="ai_approvals.status_failed">Failed</option>
+                <option value="expired" data-i18n="ai_approvals.status_expired">Expired</option>
+                <option value="pending,executed,rejected,failed,expired" data-i18n="ai_approvals.status_all">All</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2">Risk</label>
+            <label class="text-xs text-gray-600 ml-2" data-i18n="ai_approvals.filter_risk">Risk</label>
             <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
-                <option value="">Any</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="" data-i18n="ai_approvals.risk_any">Any</option>
+                <option value="critical" data-i18n="ai_approvals.risk_critical">Critical</option>
+                <option value="high" data-i18n="ai_approvals.risk_high">High</option>
+                <option value="medium" data-i18n="ai_approvals.risk_medium">Medium</option>
+                <option value="low" data-i18n="ai_approvals.risk_low">Low</option>
             </select>
 
             <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
-                <input id="fltMine" type="checkbox" class="rounded"> Only my proposals
+                <input id="fltMine" type="checkbox" class="rounded"> <span data-i18n="ai_approvals.only_my">Only my proposals</span>
             </label>
 
             <div id="summaryCounts" class="ml-auto text-xs text-gray-600 flex gap-3">
-                <span>Pending: <b id="cntPending">—</b></span>
-                <span>Executed today: <b id="cntExecutedToday">—</b></span>
+                <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
+                <span><span data-i18n="ai_approvals.executed_today">Executed today</span>: <b id="cntExecutedToday">—</b></span>
             </div>
         </div>
 
@@ -112,6 +112,13 @@
     var cntExecutedToday = document.getElementById('cntExecutedToday');
 
     function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+    function _td(prefix, value) {
+        if (!value) return '';
+        return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic)
+            ? (window.WalaPlusI18n.tDynamic(prefix, value) || escapeHtml(value))
+            : escapeHtml(value);
+    }
 
     function riskClass(r) { return 'risk-' + (r || 'low'); }
     function statusClass(s) { return 'status-' + (s || 'pending'); }
@@ -173,7 +180,7 @@
         } else if (a.status === 'rejected') {
             actionsHtml = '<span class="text-xs text-gray-700" title="' + escapeHtml(a.rejection_reason || '') + '">✗ ' + escapeHtml((a.rejection_reason || '').slice(0, 40)) + '</span>';
         } else {
-            actionsHtml = '<span class="text-xs text-gray-500">' + escapeHtml(a.status) + '</span>';
+            actionsHtml = '<span class="text-xs text-gray-500">' + _td('dyn.ai_approvals.status', a.status) + '</span>';
         }
 
         return (
@@ -181,8 +188,8 @@
               '<div class="flex items-start justify-between gap-3">' +
                 '<div class="flex-1 min-w-0">' +
                   '<div class="flex items-center gap-2 mb-1">' +
-                    '<span class="px-2 py-0.5 rounded text-xs font-medium ' + riskClass(a.risk_level) + '">' + escapeHtml(a.risk_level) + '</span>' +
-                    '<span class="px-2 py-0.5 rounded text-xs font-medium ' + statusClass(a.status) + '">' + escapeHtml(a.status) + '</span>' +
+                    '<span class="px-2 py-0.5 rounded text-xs font-medium ' + riskClass(a.risk_level) + '">' + _td('dyn.ai_approvals.risk_level', a.risk_level) + '</span>' +
+                    '<span class="px-2 py-0.5 rounded text-xs font-medium ' + statusClass(a.status) + '">' + _td('dyn.ai_approvals.status', a.status) + '</span>' +
                     '<span class="font-mono text-xs text-gray-400">' + escapeHtml(a.action_code) + '</span>' +
                     '<span class="text-xs text-gray-400">· ' + new Date(a.created_at).toLocaleString() + '</span>' +
                   '</div>' +

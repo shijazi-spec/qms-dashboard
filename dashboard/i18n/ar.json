@@ -723,6 +723,96 @@
         "cancelled": "ملغى"
       }
     },
+    "compliance": {
+      "priority": {
+        "critical": "حرج",
+        "high": "مرتفع",
+        "medium": "متوسط",
+        "low": "منخفض"
+      },
+      "status": {
+        "compliant": "ملتزم",
+        "partially_compliant": "ملتزم جزئياً",
+        "non_compliant": "غير ملتزم",
+        "in_progress": "قيد التنفيذ",
+        "pending": "معلّق",
+        "pending_review": "في انتظار المراجعة",
+        "not_assessed": "لم يُقيَّم",
+        "exempt": "مستثنى"
+      },
+      "jurisdiction": {
+        "saudi": "سعودي",
+        "gcc": "خليجي",
+        "international": "دولي",
+        "internal": "داخلي"
+      },
+      "reg_status": {
+        "active": "نشط",
+        "inactive": "غير نشط",
+        "draft": "مسودة",
+        "archived": "مؤرشف"
+      },
+      "event_type": {
+        "assessment_due": "موعد التقييم",
+        "review_due": "موعد المراجعة",
+        "renewal_due": "موعد التجديد",
+        "reporting_due": "موعد التقرير",
+        "deadline": "الموعد النهائي"
+      }
+    },
+    "ai_approvals": {
+      "risk_level": {
+        "critical": "حرج",
+        "high": "مرتفع",
+        "medium": "متوسط",
+        "low": "منخفض"
+      },
+      "status": {
+        "pending": "معلّق",
+        "approved": "معتمد",
+        "executed": "منفّذ",
+        "rejected": "مرفوض",
+        "failed": "فشل",
+        "expired": "منتهي الصلاحية"
+      }
+    },
+    "qms": {
+      "severity": {
+        "critical": "حرج",
+        "major": "رئيسي",
+        "minor": "ثانوي",
+        "observation": "ملاحظة"
+      },
+      "capa_status": {
+        "open": "مفتوح",
+        "investigation": "قيد التحقيق",
+        "action_plan": "خطة الإجراء",
+        "implementation": "قيد التنفيذ",
+        "verification": "قيد التحقق",
+        "closed": "مغلق"
+      },
+      "nc_status": {
+        "open": "مفتوح",
+        "investigation": "قيد التحقيق",
+        "correction": "تصحيح",
+        "root_cause": "تحليل السبب الجذري",
+        "verification": "قيد التحقق",
+        "closed": "مغلق"
+      },
+      "trigger_severity": {
+        "critical": "حرج",
+        "warning": "تحذير",
+        "info": "معلومة"
+      },
+      "trigger_type": {
+        "decision_pending": "قرار معلّق",
+        "quality_score_drop": "انخفاض درجة الجودة",
+        "capa_overdue": "CAPA متأخر",
+        "nc_critical": "عدم مطابقة حرجة",
+        "training_overdue": "تدريب متأخر",
+        "compliance_breach": "خرق الامتثال"
+      }
+    },
     "kpis": {
       "no_kpis": "لا توجد مؤشرات أداء",
       "owners": {

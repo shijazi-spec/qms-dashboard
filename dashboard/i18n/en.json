@@ -723,6 +723,96 @@
         "cancelled": "Cancelled"
       }
     },
+    "compliance": {
+      "priority": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "status": {
+        "compliant": "Compliant",
+        "partially_compliant": "Partially Compliant",
+        "non_compliant": "Non-Compliant",
+        "in_progress": "In Progress",
+        "pending": "Pending",
+        "pending_review": "Pending Review",
+        "not_assessed": "Not Assessed",
+        "exempt": "Exempt"
+      },
+      "jurisdiction": {
+        "saudi": "Saudi",
+        "gcc": "GCC",
+        "international": "International",
+        "internal": "Internal"
+      },
+      "reg_status": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "draft": "Draft",
+        "archived": "Archived"
+      },
+      "event_type": {
+        "assessment_due": "Assessment Due",
+        "review_due": "Review Due",
+        "renewal_due": "Renewal Due",
+        "reporting_due": "Reporting Due",
+        "deadline": "Deadline"
+      }
+    },
+    "ai_approvals": {
+      "risk_level": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "executed": "Executed",
+        "rejected": "Rejected",
+        "failed": "Failed",
+        "expired": "Expired"
+      }
+    },
+    "qms": {
+      "severity": {
+        "critical": "Critical",
+        "major": "Major",
+        "minor": "Minor",
+        "observation": "Observation"
+      },
+      "capa_status": {
+        "open": "Open",
+        "investigation": "Investigation",
+        "action_plan": "Action Plan",
+        "implementation": "Implementation",
+        "verification": "Verification",
+        "closed": "Closed"
+      },
+      "nc_status": {
+        "open": "Open",
+        "investigation": "Investigation",
+        "correction": "Correction",
+        "root_cause": "Root Cause Analysis",
+        "verification": "Verification",
+        "closed": "Closed"
+      },
+      "trigger_severity": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "info": "Info"
+      },
+      "trigger_type": {
+        "decision_pending": "Decision Pending",
+        "quality_score_drop": "Quality Score Drop",
+        "capa_overdue": "CAPA Overdue",
+        "nc_critical": "Critical NC",
+        "training_overdue": "Training Overdue",
+        "compliance_breach": "Compliance Breach"
+      }
+    },
     "kpis": {
       "no_kpis": "No KPIs found",
       "owners": {
