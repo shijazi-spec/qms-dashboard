@@ -34,6 +34,7 @@ import {
   TOOL_HEALTH_ENV_BASELINE,
   getEffectiveToolHealthConfig,
   evaluateWindowAggregates,
+  validateToolHealthThresholds,
   type EffectiveToolHealthConfig,
   type ToolHealthBreachCandidate,
 } from "../workflows/toolHealthAlertsCron";
@@ -1332,6 +1333,25 @@ export const aiOpsRoutes = [
         } catch (error) {
           console.error("[AI-Ops] tool-health-config preview error:", error);
           return c.json({ error: "Failed to preview tool-health config" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    path: "/api/ai-ops/tool-health/config-warnings",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await requireRole(c, AI_OPS_ROLES);
+        if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+        try {
+          const cfg = await getEffectiveToolHealthConfig();
+          const warnings = validateToolHealthThresholds(cfg);
+          return c.json({ warnings });
+        } catch (error) {
+          console.error("[AI-Ops] tool-health config-warnings error:", error);
+          return c.json({ error: "Failed to retrieve config warnings" }, 500);
         }
       };
     },

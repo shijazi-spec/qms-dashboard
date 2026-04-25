@@ -1578,4 +1578,134 @@ if (HAS_DB) {
   );
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Tool-health config-warnings endpoint (Task #179)
+// ───────────────────────────────────────────────────────────────────────────
+
+await suite.test("config-warnings route is wired into aiOpsRoutes", async () => {
+  const paths = aiOpsRoutes.map((r) => `${r.method} ${r.path}`);
+  suite.expect(
+    paths.includes("GET /api/ai-ops/tool-health/config-warnings"),
+    "GET /api/ai-ops/tool-health/config-warnings registered",
+  );
+});
+
+await suite.test(
+  "GET /api/ai-ops/tool-health/config-warnings — 403 without an AI-ops role",
+  async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    try {
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health/config-warnings",
+        "GET",
+      );
+      // No X-Admin-Key header → requireRole returns null → 403
+      const res = await handler(makeContext({ method: "GET" }));
+      suite.expectEqual(res.status, 403, "status");
+      suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+    }
+  },
+);
+
+if (!HAS_DB) {
+  console.log("\n(skipping config-warnings happy-path DB test — DATABASE_URL not set)\n");
+} else {
+  await suite.test(
+    "happy: GET /api/ai-ops/tool-health/config-warnings returns warnings array with valid config",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/tool-health/config-warnings",
+          "GET",
+        );
+        const res = await handler(
+          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        );
+        suite.expectEqual(res.status, 200, "status");
+        suite.expect(Array.isArray(res.body?.warnings), "body.warnings is an array");
+        // The default env config is well-ordered, so warnings should be empty
+        // (unless a prior test left a misordered override in the DB, which the
+        // PUT endpoint's validation gate prevents).
+        suite.expect(
+          typeof res.body?.warnings !== "undefined",
+          "warnings field present",
+        );
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+}
+
+// Warning-path: validateToolHealthThresholds() with an explicitly misordered
+// config to confirm the logic that drives the endpoint surfaces warnings.
+// We call the exported function directly because the only way to inject
+// misordered values into the effective config at the HTTP layer would be to
+// bypass the PUT endpoint's validation gate, which deliberately prevents it.
+await suite.test(
+  "validateToolHealthThresholds — returns warning strings for misordered error-rate cutoffs",
+  async () => {
+    const { validateToolHealthThresholds } = await import(
+      "../src/mastra/workflows/toolHealthAlertsCron"
+    );
+    // HIGH > CRITICAL — classic misconfiguration the Task #176 validator catches
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 5,
+      errorRateHighPct: 80,
+      errorRateCriticalPct: 70,
+      p95LatencyMs: 500,
+      latencyHighMs: 2000,
+      latencyCriticalMs: 8000,
+    });
+    suite.expect(Array.isArray(warnings) && warnings.length > 0, "warnings non-empty");
+    suite.expect(
+      warnings.some((w) => w.includes("error-rate")),
+      "warning mentions error-rate",
+    );
+  },
+);
+
+await suite.test(
+  "validateToolHealthThresholds — returns warning strings for misordered latency cutoffs",
+  async () => {
+    const { validateToolHealthThresholds } = await import(
+      "../src/mastra/workflows/toolHealthAlertsCron"
+    );
+    // latencyHighMs > latencyCriticalMs — inverted latency ladder
+    const warnings = validateToolHealthThresholds({
+      errorRatePct: 5,
+      errorRateHighPct: 20,
+      errorRateCriticalPct: 80,
+      p95LatencyMs: 500,
+      latencyHighMs: 9000,
+      latencyCriticalMs: 3000,
+    });
+    suite.expect(Array.isArray(warnings) && warnings.length > 0, "warnings non-empty");
+    suite.expect(
+      warnings.some((w) => w.includes("latency")),
+      "warning mentions latency",
+    );
+  },
+);
+
+await suite.test(
+  "validateToolHealthThresholds — returns empty array for well-ordered defaults",
+  async () => {
+    const { validateToolHealthThresholds, TOOL_HEALTH_ENV_BASELINE } = await import(
+      "../src/mastra/workflows/toolHealthAlertsCron"
+    );
+    const warnings = validateToolHealthThresholds(TOOL_HEALTH_ENV_BASELINE);
+    suite.expect(Array.isArray(warnings) && warnings.length === 0, "no warnings for valid defaults");
+  },
+);
+
 suite.finishOrExit();

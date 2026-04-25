@@ -149,6 +149,36 @@
       </div>
     </section>
 
+    <!-- Tool-Health Config Warnings banner (Task #179).
+         Surfaces env-var misconfiguration (e.g. HIGH_PCT > CRITICAL_PCT) so
+         operators watching this panel don't miss what the server log surfaced
+         at boot time. Each warning is dismissible per-session; the whole
+         section is hidden when the array is empty. -->
+    <section id="tool-health-config-warnings-section" class="hidden mb-4" data-testid="section-tool-health-config-warnings" aria-live="polite">
+      <div class="bg-amber-50 border border-amber-300 rounded-xl shadow-sm p-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/>
+          </svg>
+          <div class="flex-1 min-w-0">
+            <h2 class="text-sm font-semibold text-amber-900 mb-2" data-testid="text-tool-health-config-warnings-heading">Tool-health threshold misconfiguration</h2>
+            <ul id="tool-health-config-warnings-list" class="space-y-1" data-testid="list-tool-health-config-warnings"></ul>
+          </div>
+          <button
+            type="button"
+            id="tool-health-config-warnings-dismiss"
+            aria-label="Dismiss config warnings banner"
+            data-testid="button-tool-health-config-warnings-dismiss"
+            class="shrink-0 p-1 rounded hover:bg-amber-200 text-amber-700"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- Tool Health Alerts banner: surfaces open `tool_health` alerts at the
          very top of the panel so ops doesn't have to scroll into the tools
          table to notice a degraded tool. Hidden when there are zero open
@@ -1588,6 +1618,59 @@
       } catch (_e) { /* private mode — best-effort only */ }
     }
 
+    // ── Tool-health config-warnings banner (Task #179) ───────────────────────
+    // sessionStorage key used to track per-session dismiss.
+    const TOOL_HEALTH_CONFIG_WARNINGS_DISMISS_KEY = 'ai-ops:config-warnings-dismissed';
+
+    async function loadToolHealthConfigWarnings() {
+      const section = document.getElementById('tool-health-config-warnings-section');
+      const list = document.getElementById('tool-health-config-warnings-list');
+      if (!section || !list) return;
+      try {
+        const { warnings } = await apiFetch('/api/ai-ops/tool-health/config-warnings');
+        const arr = Array.isArray(warnings) ? warnings : [];
+        if (arr.length === 0) {
+          section.classList.add('hidden');
+          list.innerHTML = '';
+          return;
+        }
+        let dismissed = false;
+        try {
+          const raw = sessionStorage.getItem(TOOL_HEALTH_CONFIG_WARNINGS_DISMISS_KEY);
+          if (raw) {
+            const saved = JSON.parse(raw);
+            dismissed = Array.isArray(saved) && saved.length === arr.length &&
+              saved.every((w, i) => w === arr[i]);
+          }
+        } catch (_e) { /* private/unsupported */ }
+        if (dismissed) {
+          section.classList.add('hidden');
+          return;
+        }
+        list.innerHTML = arr.map((w, i) =>
+          `<li class="text-xs text-amber-900 leading-snug" data-testid="item-config-warning-${i}">${esc(w)}</li>`
+        ).join('');
+        section.classList.remove('hidden');
+      } catch (_e) {
+        // On network/auth error, silently hide — the banner is best-effort.
+        const section2 = document.getElementById('tool-health-config-warnings-section');
+        if (section2) section2.classList.add('hidden');
+      }
+    }
+
+    function dismissToolHealthConfigWarnings() {
+      const section = document.getElementById('tool-health-config-warnings-section');
+      const list = document.getElementById('tool-health-config-warnings-list');
+      if (section) section.classList.add('hidden');
+      // Persist the current set of warnings so the banner stays hidden for
+      // this session even if the page is refreshed.
+      try {
+        const items = list ? Array.from(list.querySelectorAll('li')).map(li => li.textContent) : [];
+        sessionStorage.setItem(TOOL_HEALTH_CONFIG_WARNINGS_DISMISS_KEY, JSON.stringify(items));
+      } catch (_e) { /* private/unsupported */ }
+    }
+    // ── end Task #179 ────────────────────────────────────────────────────────
+
     function renderPriceTable(pt) {
       const rows = Object.entries(pt).map(([model, p]) =>
         `<tr class="border-t">
@@ -3020,6 +3103,7 @@
       loadToolHealthAlertsHistory();
       loadToolHealthAlertsTrend();
       loadToolHealthOverrideBanner();
+      loadToolHealthConfigWarnings();
       loadCostTrend();
       const active = TABS.find(t => !document.getElementById(`content-${t}`).classList.contains('hidden'));
       if (active === 'latency')    loadLatency();
@@ -3096,6 +3180,8 @@
           if (detail) detail.classList.toggle('hidden');
         });
       }
+      const configWarningsDismissBtn = document.getElementById('tool-health-config-warnings-dismiss');
+      if (configWarningsDismissBtn) configWarningsDismissBtn.addEventListener('click', dismissToolHealthConfigWarnings);
       loadSummary();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
@@ -3106,6 +3192,7 @@
         trendDaysSel.addEventListener('change', loadToolHealthAlertsTrend);
       }
       loadToolHealthOverrideBanner();
+      loadToolHealthConfigWarnings();
       loadCostTrend();
       // Honor a deep-link like /ai-ops?tab=prompts so notifications can
       // jump the admin straight to the regression view (Task #121).
