@@ -92,3 +92,25 @@ echo ""
 echo "▶ CI gate: console.log / console.error guardrail + safeLogger redaction tests (Task #61)"
 bash scripts/check-console-logs.sh
 npx tsx tests/safeLoggerRedaction.test.ts
+
+# ----------------------------------------------------------------------------
+# CI gate — dashboard RTL physical-direction class guard (Task #315)
+#
+# Blocks merges that reintroduce physical-direction Tailwind classes on the
+# three highest-impact dashboard surfaces:
+#   * `<th>` headers using `text-left` / `text-right`
+#   * stat-card borders using `border-l-4` / `border-r-4`
+#   * `<button>` icon gutters using `ml-<n>` / `mr-<n>`
+# These pin the layout to LTR and silently break the Arabic (RTL)
+# experience served via `html[dir="rtl"]` set by `dashboard/js/i18n.js`.
+# Equivalent behaviour MUST use logical-direction utilities: `text-start`,
+# `border-s-4`, `ms-<n>`, `me-<n>` (see replit.md → "RTL Layout Convention").
+#
+# All currently-violating pages are grandfathered via per-rule allowlists in
+# the script; new dashboard HTML files (or removing one from the allowlist)
+# are subject to the full rule. Also covered by
+# `tests/noPhysicalDirectionClasses.test.ts` (auto-discovered by `npm test`).
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: dashboard RTL physical-direction class guard (Task #315)"
+node scripts/check-rtl-classes.cjs
