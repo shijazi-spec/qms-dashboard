@@ -71,6 +71,12 @@ export interface ToolHealthConfigRow {
   expires_at: Date | null;
 }
 
+export interface ToolHealthAuditBreachDiff {
+  new_breaches: Array<{ tool_name: string; reason: string; severity: string }>;
+  resolved_breaches: Array<{ tool_name: string; reason: string; severity: string }>;
+  severity_changes: Array<{ tool_name: string; reason: string; from_severity: string; to_severity: string }>;
+}
+
 export interface ToolHealthConfigAuditEntry {
   id: number;
   changed_at: Date;
@@ -78,6 +84,7 @@ export interface ToolHealthConfigAuditEntry {
   before_values: ToolHealthConfigOverrides;
   after_values: ToolHealthConfigOverrides;
   note: string | null;
+  breach_diff: ToolHealthAuditBreachDiff | null;
 }
 
 /**
@@ -141,6 +148,14 @@ export async function initToolHealthConfigTables(): Promise<void> {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_tool_health_config_audit_changed_at
         ON tool_health_config_audit(changed_at DESC)
+    `);
+
+    // Idempotent migration: add breach_diff to existing installs (Task #208).
+    // Stores the new/resolved/severity-change counts from the save-time preview
+    // evaluation so the audit list can surface "Impact: +3 new, −1 resolved".
+    await pool.query(`
+      ALTER TABLE tool_health_config_audit
+        ADD COLUMN IF NOT EXISTS breach_diff JSONB
     `);
   })().catch((err) => {
     initPromise = null;
@@ -279,6 +294,7 @@ export async function setToolHealthConfigOverrides(input: {
   changedBy: string;
   note?: string | null;
   expiresAt?: Date | null;
+  breachDiff?: ToolHealthAuditBreachDiff | null;
 }): Promise<{
   before: ToolHealthConfigOverrides;
   after: ToolHealthConfigOverrides;
@@ -368,14 +384,15 @@ export async function setToolHealthConfigOverrides(input: {
 
     const auditResult = await client.query(
       `INSERT INTO tool_health_config_audit
-         (changed_by, before_values, after_values, note)
-       VALUES ($1, $2::jsonb, $3::jsonb, $4)
+         (changed_by, before_values, after_values, note, breach_diff)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5::jsonb)
        RETURNING id`,
       [
         input.changedBy,
         JSON.stringify(beforeBlob),
         JSON.stringify(afterBlob),
         input.note ?? null,
+        input.breachDiff != null ? JSON.stringify(input.breachDiff) : null,
       ],
     );
 
@@ -603,7 +620,7 @@ export async function getToolHealthConfigAudit(
   await initToolHealthConfigTables();
   const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
   const result = await pool.query(
-    `SELECT id, changed_at, changed_by, before_values, after_values, note
+    `SELECT id, changed_at, changed_by, before_values, after_values, note, breach_diff
        FROM tool_health_config_audit
        ORDER BY changed_at DESC, id DESC
        LIMIT $1`,
@@ -620,5 +637,8 @@ export async function getToolHealthConfigAudit(
       ? JSON.parse(r.after_values)
       : (r.after_values ?? {}),
     note: r.note ?? null,
+    breach_diff: r.breach_diff != null
+      ? (typeof r.breach_diff === "string" ? JSON.parse(r.breach_diff) : r.breach_diff)
+      : null,
   }));
 }

@@ -888,6 +888,71 @@ export const aiOpsRoutes = [
           }
           const { cleanOverrides } = validation;
 
+          // Compute the breach diff (same evaluation the preview endpoint runs)
+          // so the audit row captures "this change opened N new alerts / closed N".
+          // Best-effort: a transient aggregate-load failure silently stores null
+          // rather than blocking the save itself.
+          let breachDiff: import("../../utils/toolHealthConfigDatabase").ToolHealthAuditBreachDiff | null = null;
+          try {
+            const effective_current = await getEffectiveToolHealthConfig();
+            const effective_proposed = validation.mergedEffective;
+            const sameWindow =
+              effective_current.windowMinutes === effective_proposed.windowMinutes;
+            let currentAggregates: Awaited<ReturnType<typeof getToolWindowAggregates>>;
+            let proposedAggregates: Awaited<ReturnType<typeof getToolWindowAggregates>>;
+            if (sameWindow) {
+              const minCallsUsed = Math.min(
+                effective_current.minCalls,
+                effective_proposed.minCalls,
+              );
+              const aggs = await getToolWindowAggregates(
+                effective_current.windowMinutes,
+                minCallsUsed,
+              );
+              currentAggregates = aggs;
+              proposedAggregates = aggs;
+            } else {
+              [currentAggregates, proposedAggregates] = await Promise.all([
+                getToolWindowAggregates(
+                  effective_current.windowMinutes,
+                  effective_current.minCalls,
+                ),
+                getToolWindowAggregates(
+                  effective_proposed.windowMinutes,
+                  effective_proposed.minCalls,
+                ),
+              ]);
+            }
+            const currentBreaches = evaluateWindowAggregates(currentAggregates, effective_current);
+            const proposedBreaches = evaluateWindowAggregates(proposedAggregates, effective_proposed);
+            const currentByKey = new Map(currentBreaches.map((b) => [b.related_record_id, b]));
+            const proposedByKey = new Map(proposedBreaches.map((b) => [b.related_record_id, b]));
+            const newBreaches: Array<{ tool_name: string; reason: string; severity: string }> = [];
+            const severityChanges: Array<{ tool_name: string; reason: string; from_severity: string; to_severity: string }> = [];
+            for (const [key, p] of proposedByKey) {
+              const cur = currentByKey.get(key);
+              if (!cur) {
+                newBreaches.push({ tool_name: p.tool_name, reason: p.reason, severity: p.severity });
+              } else if (cur.severity !== p.severity) {
+                severityChanges.push({
+                  tool_name: p.tool_name,
+                  reason: p.reason,
+                  from_severity: cur.severity,
+                  to_severity: p.severity,
+                });
+              }
+            }
+            const resolvedBreaches: Array<{ tool_name: string; reason: string; severity: string }> = [];
+            for (const [key, c2] of currentByKey) {
+              if (!proposedByKey.has(key)) {
+                resolvedBreaches.push({ tool_name: c2.tool_name, reason: c2.reason, severity: c2.severity });
+              }
+            }
+            breachDiff = { new_breaches: newBreaches, resolved_breaches: resolvedBreaches, severity_changes: severityChanges };
+          } catch (diffErr) {
+            console.error("[AI-Ops] tool-health-config breach diff error (best-effort):", diffErr);
+          }
+
           const { setToolHealthConfigOverrides } = await import(
             "../../utils/toolHealthConfigDatabase"
           );
@@ -896,6 +961,7 @@ export const aiOpsRoutes = [
             overrides: cleanOverrides,
             changedBy,
             note,
+            breachDiff,
             // Only forward expiresAt when the caller actually included it,
             // so an "edit just the floor" PUT doesn't accidentally wipe a
             // previously-scheduled auto-revert.

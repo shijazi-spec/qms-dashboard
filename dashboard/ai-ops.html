@@ -2486,6 +2486,43 @@
                data-testid="badge-auto-revert-${i}"
              >auto-revert</span>`
           : '';
+
+        // Build the impact badge + expandable breach detail (Task #208).
+        let impactHtml = '';
+        const bd = r.breach_diff;
+        if (bd) {
+          const nNew = (bd.new_breaches || []).length;
+          const nRes = (bd.resolved_breaches || []).length;
+          const nSev = (bd.severity_changes || []).length;
+          const hasDetail = nNew > 0 || nRes > 0 || nSev > 0;
+          const badgeParts = [];
+          if (nNew > 0) badgeParts.push(`<span class="text-red-600">+${nNew} new</span>`);
+          if (nRes > 0) badgeParts.push(`<span class="text-green-600">−${nRes} resolved</span>`);
+          if (nSev > 0) badgeParts.push(`<span class="text-amber-600">${nSev} severity change${nSev !== 1 ? 's' : ''}</span>`);
+          const badgeContent = badgeParts.length > 0
+            ? badgeParts.join(', ')
+            : '<span class="text-gray-400">no alert changes</span>';
+          const detailId = `breach-detail-${i}`;
+          let detailHtml = '';
+          if (hasDetail) {
+            const detailRows = [];
+            for (const b of (bd.new_breaches || [])) {
+              detailRows.push(`<li class="text-red-700">New: ${esc(b.tool_name)} — ${esc(b.reason)} (${esc(b.severity)})</li>`);
+            }
+            for (const b of (bd.resolved_breaches || [])) {
+              detailRows.push(`<li class="text-green-700">Resolved: ${esc(b.tool_name)} — ${esc(b.reason)} (was ${esc(b.severity)})</li>`);
+            }
+            for (const b of (bd.severity_changes || [])) {
+              detailRows.push(`<li class="text-amber-700">Severity: ${esc(b.tool_name)} — ${esc(b.reason)} ${esc(b.from_severity)} → ${esc(b.to_severity)}</li>`);
+            }
+            detailHtml = `<ul id="${detailId}" class="hidden mt-1 ml-2 space-y-0.5 list-disc list-inside">${detailRows.join('')}</ul>`;
+          }
+          const expandBtn = hasDetail
+            ? ` <button data-toggle-target="${detailId}" class="underline text-blue-500 hover:text-blue-700 cursor-pointer" data-testid="button-breach-detail-toggle-${i}">details</button>`
+            : '';
+          impactHtml = `<div class="mt-1" data-testid="text-breach-impact-${i}">Impact: ${badgeContent}${expandBtn}</div>${detailHtml}`;
+        }
+
         return `
           <div${anchorId} class="px-3 py-2 border ${isAutoRevert ? 'border-amber-300 bg-amber-50' : 'border-gray-200'} rounded text-xs" data-testid="row-thresholds-audit-${i}">
             <div class="flex items-center justify-between flex-wrap gap-2">
@@ -2496,6 +2533,7 @@
               <div class="text-gray-500">${esc(fmtDate(r.changed_at))}</div>
             </div>
             <div class="mt-1 text-gray-700 font-mono break-words">${diffStr}</div>
+            ${impactHtml}
             ${r.note ? `<div class="mt-1 text-gray-500 italic">${esc(r.note)}</div>` : ''}
           </div>`;
       }).join('');
@@ -2562,6 +2600,20 @@
       // can read their values (deep-link to ?tab=prompts, refreshAll, etc.),
       // so the first data fetch already uses the saved choice. (Task #243)
       restorePromptVersionPrefs();
+
+      // Delegated listener for breach-detail toggle buttons (Task #208).
+      // Buttons are rendered dynamically via renderThresholdsAudit, so
+      // inline onclick= is blocked by CSP — we use event delegation instead.
+      const auditEl = document.getElementById('thresholds-audit');
+      if (auditEl) {
+        auditEl.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-toggle-target]');
+          if (!btn) return;
+          const targetId = btn.getAttribute('data-toggle-target');
+          const detail = document.getElementById(targetId);
+          if (detail) detail.classList.toggle('hidden');
+        });
+      }
       loadSummary();
       loadToolHealthAlerts();
       loadToolHealthAlertsHistory();
