@@ -2245,18 +2245,47 @@
         }
     }
 
+    // Defer the fallback notice until the i18n bundle is ready so the text
+    // renders in the active locale (e.g. Arabic) on first paint.  We use
+    // WalaPlusI18n.onReady() when the module is present; when it isn't (page
+    // loaded without i18n.js) we listen for the custom 'walaPlusI18nReady'
+    // event and add a 2-second timeout so the notice still appears in English
+    // if i18n never loads.  Size hints run immediately on DOMContentLoaded
+    // because they reuse whatever locale is active at that moment.
+    function scheduleStreamingFallbackNotice() {
+        var i18n = global.WalaPlusI18n;
+        if (i18n && typeof i18n.onReady === 'function') {
+            // Module already on the page — use its ready queue / immediate call.
+            i18n.onReady(function () { attachStreamingFallbackNotice(); });
+            return;
+        }
+        // Module not yet present: wait for the custom event it dispatches,
+        // with a fallback timeout in case i18n is absent on this page.
+        var attached = false;
+        function doAttach() {
+            if (attached) return;
+            attached = true;
+            attachStreamingFallbackNotice();
+        }
+        if (typeof document !== 'undefined') {
+            document.addEventListener('walaPlusI18nReady', doAttach, { once: true });
+        }
+        // Safety net: render in whatever locale is available after 2 s.
+        setTimeout(doAttach, 2000);
+    }
+
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function () {
                 attachSizeHints();
-                attachStreamingFallbackNotice();
+                scheduleStreamingFallbackNotice();
             });
         } else {
             // Defer to next tick so call sites that load this script late
             // still have a chance to populate buttons before we scan.
             setTimeout(function () {
                 attachSizeHints();
-                attachStreamingFallbackNotice();
+                scheduleStreamingFallbackNotice();
             }, 0);
         }
     }
