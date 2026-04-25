@@ -30,12 +30,14 @@
 import { inngest } from "../inngest/client";
 import {
   getToolWindowAggregates,
+  getToolsWithCallsInWindow,
   type ToolWindowAggregate,
 } from "../../utils/aiTelemetry";
 import {
   openAlertExistsByKey,
   createAIAlert,
   getOpenAlertsByKey,
+  getOpenAlertsByType,
   resolveAlert,
   type AlertSeverity,
 } from "../../utils/aiAlertsDatabase";
@@ -131,6 +133,20 @@ export const TOOL_HEALTH_THRESHOLDS = {
   /** Cron expression — every 15 min by default. */
   cron: process.env.TOOL_HEALTH_ALERT_CRON || "*/15 * * * *",
 } as const;
+
+/**
+ * Multiplier applied to `windowMinutes` to compute the silence cooldown.
+ * A tool must have had zero calls for at least
+ * `TOOL_HEALTH_SILENT_COOLDOWN_MULT × windowMinutes` minutes before its
+ * open `tool_health` alerts are auto-resolved.
+ *
+ * Default 4 (i.e. 4× the rolling window — 4 h at the 60-minute default).
+ * Override via `TOOL_HEALTH_SILENT_COOLDOWN_MULT` env var.
+ */
+export const TOOL_HEALTH_SILENT_COOLDOWN_MULT: number = envInt(
+  "TOOL_HEALTH_SILENT_COOLDOWN_MULT",
+  4,
+);
 
 /**
  * Final, merged config used by `runToolHealthCheck` on each pass. Identical
@@ -492,6 +508,18 @@ export interface ToolHealthDeps {
   openAlertExistsByKey: typeof openAlertExistsByKey;
   createAIAlert: typeof createAIAlert;
   getOpenAlertsByKey: typeof getOpenAlertsByKey;
+  /**
+   * Fetches all open / acknowledged `tool_health` alerts. Used by the
+   * "silent tool" sweep to find alerts for tools that have had zero calls
+   * in the cooldown window and can therefore be auto-resolved.
+   */
+  getOpenAlertsByType: typeof getOpenAlertsByType;
+  /**
+   * Returns the set of tool names with at least one call in the last N
+   * minutes. Used by the silent-tool sweep to distinguish active tools from
+   * deprecated / idle ones.
+   */
+  getToolsWithCallsInWindow: typeof getToolsWithCallsInWindow;
   resolveAlert: typeof resolveAlert;
   /**
    * Pages on-call about a freshly-opened `tool_health` alert. Defaults to
@@ -552,6 +580,8 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
   openAlertExistsByKey,
   createAIAlert,
   getOpenAlertsByKey,
+  getOpenAlertsByType,
+  getToolsWithCallsInWindow,
   resolveAlert,
   notifyToolHealthBreach,
   loadOverrides: getToolHealthConfigOverrides,
@@ -734,6 +764,80 @@ async function maybeResolveRecoveredAlert(
 }
 
 /**
+ * Auto-resolves open `tool_health` alerts for tools that have "gone silent"
+ * — i.e. had zero calls in the last `silentCooldownMinutes`. This handles
+ * the case where a tool is deprecated or simply stopped being called: the
+ * normal recovery sweep never fires because the tool never appears in the
+ * per-tool aggregates again, so without this sweep those alerts stay open
+ * forever.
+ *
+ * The `silentCooldownMinutes` floor prevents closing a brand-new alert
+ * immediately after a tool restarts — the alert must be old enough that the
+ * entire cooldown window is post-silence.
+ *
+ * Only alerts whose `related_record_id` contains a tool name NOT present in
+ * `activeTools` are candidates. The resolution note clearly states "tool
+ * went silent" so it is distinguishable from the "metric back below
+ * threshold" note written by `maybeResolveRecoveredAlert`.
+ */
+async function runSilentToolSweep(
+  deps: ToolHealthDeps,
+  silentCooldownMinutes: number,
+  out: ToolHealthCheckResult,
+): Promise<void> {
+  let openAlerts: Awaited<ReturnType<typeof getOpenAlertsByType>>;
+  let activeTools: Set<string>;
+  try {
+    [openAlerts, activeTools] = await Promise.all([
+      deps.getOpenAlertsByType("tool_health", {
+        olderThanMinutes: silentCooldownMinutes,
+      }),
+      deps.getToolsWithCallsInWindow(silentCooldownMinutes),
+    ]);
+  } catch (err) {
+    console.error("[ToolHealth] Silent-tool sweep: failed to load data:", err);
+    return;
+  }
+
+  for (const alert of openAlerts) {
+    if (alert.id == null || !alert.related_record_id) continue;
+
+    // related_record_id is "<tool_name>:<reason>" (e.g. "myTool:error_rate")
+    const colonIdx = alert.related_record_id.indexOf(":");
+    if (colonIdx === -1) continue;
+    const toolName = alert.related_record_id.slice(0, colonIdx);
+
+    // Skip if the tool is still active within the cooldown window.
+    if (activeTools.has(toolName)) continue;
+
+    const note =
+      `auto-resolved: tool went silent — no calls recorded in the last ` +
+      `${silentCooldownMinutes} minutes (cooldown window)`;
+    try {
+      const resolved = await deps.resolveAlert(alert.id, note);
+      if (resolved) {
+        out.alertsAutoResolved++;
+        out.recoveries.push({
+          tool_name: toolName,
+          reason: alert.related_record_id.slice(colonIdx + 1) as ToolHealthReason,
+          alert_id: alert.id,
+          detail: note,
+        });
+        console.log(
+          `[ToolHealth] Silent-tool sweep: closed alert ${alert.id} ` +
+          `for "${alert.related_record_id}" (silent for ≥${silentCooldownMinutes}m).`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[ToolHealth] Silent-tool sweep: failed to resolve alert ${alert.id}:`,
+        err,
+      );
+    }
+  }
+}
+
+/**
  * Evaluate per-tool aggregates against TOOL_HEALTH_THRESHOLDS and emit
  * `ai_alerts` rows for any breaches. Safe to call from a cron, an HTTP
  * route, or a unit test — no I/O beyond the database.
@@ -742,6 +846,11 @@ async function maybeResolveRecoveredAlert(
  * `tool_health` alert whose tool's current windowed metric has dropped
  * back below the threshold (subject to a windowMinutes cooldown to keep
  * borderline tools from flapping).
+ *
+ * Additionally runs a "silent tool" sweep that closes any open alert whose
+ * tool has had zero calls in the last `TOOL_HEALTH_SILENT_COOLDOWN_MULT ×
+ * windowMinutes` minutes, so deprecated or retired tools don't leave their
+ * alerts open forever.
  */
 export async function runToolHealthCheck(
   depsOverride?: Partial<ToolHealthDeps>,
@@ -962,6 +1071,13 @@ export async function runToolHealthCheck(
       await maybeResolveRecoveredAlert(deps, cfg, agg, "p95_latency", out);
     }
   }
+
+  // Silent-tool sweep: close any open tool_health alert whose tool has had
+  // zero calls for at least silentCooldownMinutes. This handles deprecated or
+  // retired tools that never appear in the per-tool aggregates again and
+  // would otherwise keep their alerts open forever.
+  const silentCooldownMinutes = TOOL_HEALTH_SILENT_COOLDOWN_MULT * cfg.windowMinutes;
+  await runSilentToolSweep(deps, silentCooldownMinutes, out);
 
   if (
     out.alertsCreated > 0 ||

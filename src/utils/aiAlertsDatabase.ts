@@ -498,6 +498,42 @@ export async function getToolHealthAlertTrend(
 }
 
 /**
+ * Fetch every open / acknowledged alert for a given `alert_type`. Used by
+ * the tool-health "silent tool" sweep so the cron can find alerts whose
+ * associated tool has stopped being called and resolve them.
+ *
+ * `olderThanMinutes` adds a flap-prevention cutoff: only return alerts that
+ * were created at least that many minutes ago.
+ */
+export async function getOpenAlertsByType(
+  alertType: AlertType,
+  options?: { olderThanMinutes?: number },
+): Promise<AIAlert[]> {
+  const olderThanMinutes = options?.olderThanMinutes;
+  if (olderThanMinutes != null) {
+    const result = await pool.query(
+      `SELECT *
+         FROM ai_alerts
+        WHERE alert_type = $1
+          AND status IN ('open', 'acknowledged')
+          AND created_at <= NOW() - MAKE_INTERVAL(mins => $2)
+        ORDER BY created_at ASC`,
+      [alertType, olderThanMinutes],
+    );
+    return result.rows;
+  }
+  const result = await pool.query(
+    `SELECT *
+       FROM ai_alerts
+      WHERE alert_type = $1
+        AND status IN ('open', 'acknowledged')
+      ORDER BY created_at ASC`,
+    [alertType],
+  );
+  return result.rows;
+}
+
+/**
  * Fetch every open / acknowledged alert for the given
  * (alert_type, related_record_id) pair. Used by the tool-health auto-resolve
  * sweep so it can decide which alerts to close (and apply a per-alert

@@ -851,6 +851,35 @@ export interface ToolWindowAggregate {
   max_latency_ms: number;
 }
 
+/**
+ * Returns the set of tool names that had at least one call recorded in the
+ * last `windowMinutes` minutes. Used by the tool-health cron to determine
+ * which tools have "gone silent" so their open alerts can be auto-resolved.
+ *
+ * Intentionally does NOT apply a `minCalls` filter — a tool that had just
+ * one call is still active; we only want tools with truly zero activity.
+ */
+export async function getToolsWithCallsInWindow(
+  windowMinutes: number,
+): Promise<Set<string>> {
+  await ensureAiMetricsTable();
+  // Intentionally NOT caught here. This function is used by the silent-tool
+  // auto-resolve sweep to decide which tools are still active. Returning an
+  // empty set on DB failure would be interpreted as "no tools active" and
+  // could cause the sweep to resolve every open tool_health alert
+  // incorrectly. The caller (runSilentToolSweep) has its own try/catch that
+  // aborts the sweep on any error, so failing loudly here is the safe
+  // (fail-closed) behavior.
+  const result = await pool.query(
+    `SELECT DISTINCT tool_name
+       FROM ai_call_metrics
+      WHERE tool_name IS NOT NULL
+        AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)`,
+    [windowMinutes],
+  );
+  return new Set<string>(result.rows.map((r: { tool_name: string }) => r.tool_name));
+}
+
 export async function getToolWindowAggregates(
   windowMinutes = 60,
   minCalls = 1,
