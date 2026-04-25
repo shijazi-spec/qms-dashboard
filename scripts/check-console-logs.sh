@@ -20,6 +20,14 @@
 # -----------------------
 # If you legitimately need console.* in a new infrastructure file, append it
 # to ALLOWED_FILES below and add a one-line comment explaining why.
+#
+# Allow-list ceiling (Task #357)
+# ------------------------------
+# A hard ceiling (MAX_ALLOWED_FILES) prevents the allow-list from silently
+# growing back over time. The build fails if the number of entries exceeds
+# the ceiling. As migrations remove files from the allow-list, the ceiling
+# MUST be lowered in the same commit — this turns the migration into a one-
+# way ratchet. Never raise the ceiling without an explicit, reviewed reason.
 # ----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -159,8 +167,36 @@ ALLOWED_FILES["src/utils/rateLimit429SpikeAlert.ts"]=1
 ALLOWED_FILES["src/utils/rbacMiddleware.ts"]=1
 ALLOWED_FILES["src/scripts/backfillAiCallMetricsRedaction.ts"]=1
 
+# ---------------------------------------------------------------------------
+# Allow-list ceiling — prevents the list from silently growing back (Task #357)
+# ---------------------------------------------------------------------------
+# Hard cap on how many files may sit on the allow-list. When migrations
+# remove entries, lower this number in the same commit so the ratchet only
+# moves one way. To raise it you need a documented, reviewed reason.
+MAX_ALLOWED_FILES=91
+
+ALLOWED_COUNT=${#ALLOWED_FILES[@]}
+
 echo ""
-echo "--- Part 2: no new files outside the allow-list may use console.* ---"
+echo "--- Part 2a: allow-list size ceiling (Task #357) ---"
+if [ "$ALLOWED_COUNT" -le "$MAX_ALLOWED_FILES" ]; then
+  ok "Allow-list size ${ALLOWED_COUNT} is within the ceiling of ${MAX_ALLOWED_FILES}"
+  if [ "$ALLOWED_COUNT" -lt "$MAX_ALLOWED_FILES" ]; then
+    echo "    ↳ Ceiling can be lowered to ${ALLOWED_COUNT} in scripts/check-console-logs.sh (MAX_ALLOWED_FILES)."
+  fi
+else
+  fail "Allow-list has grown to ${ALLOWED_COUNT} files, above the ceiling of ${MAX_ALLOWED_FILES}."
+  echo ""
+  echo "    The console.* allow-list is meant to shrink over time, not grow."
+  echo "    To resolve this:"
+  echo "      1. Migrate the offending file(s) to logger.ts (preferred), OR"
+  echo "      2. If a new infrastructure file legitimately needs console.*,"
+  echo "         raise MAX_ALLOWED_FILES in scripts/check-console-logs.sh by"
+  echo "         the exact number of files added and explain why in the commit."
+fi
+
+echo ""
+echo "--- Part 2b: no new files outside the allow-list may use console.* ---"
 
 NEW_VIOLATIONS=0
 while IFS= read -r file; do
