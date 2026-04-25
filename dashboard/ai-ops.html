@@ -681,6 +681,72 @@
             ></span>
           </div>
         </div>
+
+        <!-- Daily prune history (Task #559).
+             Shows the rolling history of pruned-row counts so admins can
+             spot retention spikes — sudden ingest bursts, tightened
+             windows that just started chopping rows, or a failing cron.
+             Sparkline + table; both populated from
+             /api/ai-ops/metrics-retention/history. -->
+        <div class="mt-6 border-t pt-4" data-testid="section-metrics-prune-history">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <div>
+              <h4 class="text-sm font-semibold text-gray-700">Daily prune history</h4>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Last <span id="metrics-prune-history-limit-label" data-testid="text-metrics-prune-history-limit-label">30</span>
+                <code class="bg-gray-100 px-1 rounded">pruneOldAiMetrics()</code> cron passes — sudden spikes can flag a misconfigured retention window or an ingest surge.
+              </p>
+            </div>
+            <label class="text-xs text-gray-500 flex items-center gap-1">
+              Show
+              <select
+                id="metrics-prune-history-limit"
+                data-on-change="onMetricsPruneHistoryLimitChange"
+                data-testid="select-metrics-prune-history-limit"
+                class="text-xs border border-gray-300 rounded px-1.5 py-0.5 bg-white"
+              >
+                <option value="14">14 runs</option>
+                <option value="30" selected>30 runs</option>
+                <option value="60">60 runs</option>
+                <option value="90">90 runs</option>
+              </select>
+            </label>
+          </div>
+          <div id="metrics-prune-history-load-error" class="hidden mb-3 px-3 py-2 text-sm rounded border border-red-200 bg-red-50 text-red-700" data-testid="text-metrics-prune-history-load-error"></div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3" id="metrics-prune-history-kpis" data-testid="kpis-metrics-prune-history">
+            <div class="border rounded p-3 bg-gray-50">
+              <div class="text-xs uppercase tracking-wide text-gray-500">Total rows pruned</div>
+              <div class="text-lg font-mono font-semibold text-gray-900" data-testid="text-metrics-prune-history-total">—</div>
+            </div>
+            <div class="border rounded p-3 bg-gray-50">
+              <div class="text-xs uppercase tracking-wide text-gray-500">Avg per run</div>
+              <div class="text-lg font-mono font-semibold text-gray-900" data-testid="text-metrics-prune-history-avg">—</div>
+            </div>
+            <div class="border rounded p-3 bg-gray-50">
+              <div class="text-xs uppercase tracking-wide text-gray-500">Peak run</div>
+              <div class="text-lg font-mono font-semibold text-gray-900" data-testid="text-metrics-prune-history-peak">—</div>
+            </div>
+          </div>
+          <div class="border rounded bg-white p-3 mb-3" style="height: 140px;">
+            <canvas id="metrics-prune-history-chart" data-testid="chart-metrics-prune-history" aria-label="Sparkline of rows deleted per daily prune cron pass"></canvas>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm" data-testid="table-metrics-prune-history">
+              <thead>
+                <tr class="border-b text-xs text-gray-500 uppercase tracking-wide">
+                  <th class="py-1.5 pe-3 text-start">When</th>
+                  <th class="py-1.5 pe-3 text-end">Retention</th>
+                  <th class="py-1.5 pe-3 text-end">Rows deleted</th>
+                  <th class="py-1.5 pe-3 text-end">Duration</th>
+                  <th class="py-1.5 text-start">Status</th>
+                </tr>
+              </thead>
+              <tbody id="metrics-prune-history-tbody" data-testid="tbody-metrics-prune-history">
+                <tr><td colspan="5" class="py-2 text-sm text-gray-400">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3099,6 +3165,10 @@
         const toInput = document.getElementById('metrics-retention-audit-to');
         if (fromInput) fromInput.value = metricsRetentionAuditState.from;
         if (toInput) toInput.value = metricsRetentionAuditState.to;
+        // Task #559: load the rolling prune-run history alongside the
+        // form. Independent endpoint, fired in parallel so a slow
+        // history fetch does not block the form from rendering.
+        loadMetricsPruneHistory();
         if (data.updated_at) {
           const who = data.updated_by ? ' by ' + esc(data.updated_by) : '';
           metaEl.innerHTML = 'Last edited ' + esc(fmtDate(data.updated_at)) + who;
@@ -4006,6 +4076,170 @@
       } finally {
         pruneMetricsNowInFlight = false;
       }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Daily prune history (Task #559)
+    // Rolling history of pruneOldAiMetrics() cron passes so admins can
+    // spot retention spikes (sudden ingest bursts, freshly tightened
+    // windows that just started chopping rows, or a failing cron).
+    // Sparkline + summary KPIs + table; populated from
+    // /api/ai-ops/metrics-retention/history?limit=N.
+    // ─────────────────────────────────────────────────────────────────
+    let metricsPruneHistoryChart = null;
+
+    function fmtDurationMs(ms) {
+      const n = Number(ms);
+      if (!Number.isFinite(n) || n < 0) return '—';
+      if (n < 1000) return n + 'ms';
+      const s = n / 1000;
+      if (s < 60) return s.toFixed(s < 10 ? 2 : 1) + 's';
+      const mins = Math.floor(s / 60);
+      const rem = Math.round(s - mins * 60);
+      return mins + 'm ' + rem + 's';
+    }
+
+    async function loadMetricsPruneHistory() {
+      const tbodyEl = document.getElementById('metrics-prune-history-tbody');
+      const errEl = document.getElementById('metrics-prune-history-load-error');
+      const totalEl = document.querySelector('[data-testid="text-metrics-prune-history-total"]');
+      const avgEl = document.querySelector('[data-testid="text-metrics-prune-history-avg"]');
+      const peakEl = document.querySelector('[data-testid="text-metrics-prune-history-peak"]');
+      const limitLabelEl = document.getElementById('metrics-prune-history-limit-label');
+      const limitSel = document.getElementById('metrics-prune-history-limit');
+      if (!tbodyEl || !errEl) return;
+      errEl.classList.add('hidden');
+      tbodyEl.innerHTML = '<tr><td colspan="5" class="py-2 text-sm text-gray-400">Loading…</td></tr>';
+      const limit = limitSel ? Math.max(1, Number(limitSel.value) || 30) : 30;
+      if (limitLabelEl) limitLabelEl.textContent = String(limit);
+      try {
+        const { data } = await apiFetch('/api/ai-ops/metrics-retention/history?limit=' + encodeURIComponent(limit));
+        const entries = (data && Array.isArray(data.entries)) ? data.entries : [];
+        renderMetricsPruneHistoryTable(entries);
+        renderMetricsPruneHistoryKpis(entries, totalEl, avgEl, peakEl);
+        renderMetricsPruneHistoryChart(entries);
+      } catch (e) {
+        console.error('Metrics-prune-history load error', e);
+        tbodyEl.innerHTML = '';
+        if (totalEl) totalEl.textContent = '—';
+        if (avgEl)   avgEl.textContent   = '—';
+        if (peakEl)  peakEl.textContent  = '—';
+        if (metricsPruneHistoryChart) { metricsPruneHistoryChart.destroy(); metricsPruneHistoryChart = null; }
+        errEl.textContent = 'Failed to load prune history: ' + (e?.message || 'unknown error');
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function renderMetricsPruneHistoryTable(entries) {
+      const tbodyEl = document.getElementById('metrics-prune-history-tbody');
+      if (!tbodyEl) return;
+      if (!entries || entries.length === 0) {
+        tbodyEl.innerHTML = '<tr><td colspan="5" class="py-3 text-sm text-gray-400" data-testid="text-metrics-prune-history-empty">No daily prune passes recorded yet — the cron writes a row each time it runs.</td></tr>';
+        return;
+      }
+      tbodyEl.innerHTML = entries.map(e => {
+        const idAttr = esc(e.id);
+        const when = esc(fmtDate(e.ranAt));
+        const ret = esc(e.retentionDays) + 'd';
+        const rows = Number(e.rowsDeleted || 0).toLocaleString();
+        const dur = esc(fmtDurationMs(e.durationMs));
+        const ok = !!e.success;
+        const statusBadge = ok
+          ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800" data-testid="badge-metrics-prune-status-' + idAttr + '">OK</span>'
+          : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" data-testid="badge-metrics-prune-status-' + idAttr + '" title="' + esc(e.errorMessage || 'Failed') + '">Failed</span>';
+        const errLine = (!ok && e.errorMessage)
+          ? '<div class="text-xs text-red-600 mt-0.5 italic" data-testid="text-metrics-prune-error-' + idAttr + '">' + esc(e.errorMessage) + '</div>'
+          : '';
+        return '<tr class="border-b last:border-b-0" data-testid="row-metrics-prune-history-' + idAttr + '">'
+          + '<td class="py-1.5 pe-3 text-sm text-gray-700" data-testid="text-metrics-prune-when-' + idAttr + '">' + when + '</td>'
+          + '<td class="py-1.5 pe-3 text-sm text-end font-mono text-gray-700" data-testid="text-metrics-prune-retention-' + idAttr + '">' + ret + '</td>'
+          + '<td class="py-1.5 pe-3 text-sm text-end font-mono font-semibold text-gray-900" data-testid="text-metrics-prune-rows-' + idAttr + '">' + rows + '</td>'
+          + '<td class="py-1.5 pe-3 text-sm text-end font-mono text-gray-600" data-testid="text-metrics-prune-duration-' + idAttr + '">' + dur + '</td>'
+          + '<td class="py-1.5 text-sm">' + statusBadge + errLine + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    function renderMetricsPruneHistoryKpis(entries, totalEl, avgEl, peakEl) {
+      if (!entries || entries.length === 0) {
+        if (totalEl) totalEl.textContent = '0';
+        if (avgEl)   avgEl.textContent   = '0';
+        if (peakEl)  peakEl.textContent  = '0';
+        return;
+      }
+      const okEntries = entries.filter(e => e.success);
+      const total = okEntries.reduce((s, e) => s + Number(e.rowsDeleted || 0), 0);
+      const avg = okEntries.length ? Math.round(total / okEntries.length) : 0;
+      const peak = okEntries.reduce(
+        (best, e) => (Number(e.rowsDeleted || 0) > Number(best.rowsDeleted || 0) ? e : best),
+        okEntries[0] || { rowsDeleted: 0, ranAt: null },
+      );
+      if (totalEl) totalEl.textContent = total.toLocaleString();
+      if (avgEl)   avgEl.textContent   = avg.toLocaleString();
+      if (peakEl) {
+        const peakRows = Number(peak.rowsDeleted || 0).toLocaleString();
+        const peakWhen = peak.ranAt ? ' on ' + esc(fmtDate(peak.ranAt)) : '';
+        peakEl.innerHTML = peakRows + '<span class="text-xs text-gray-500 font-normal ms-1" data-testid="text-metrics-prune-history-peak-when">' + peakWhen + '</span>';
+      }
+    }
+
+    function renderMetricsPruneHistoryChart(entries) {
+      const canvas = document.getElementById('metrics-prune-history-chart');
+      if (!canvas || typeof Chart === 'undefined') return;
+      // Display chronologically (oldest → newest) so the trend reads
+      // left-to-right. The API returns reverse-chronological so callers
+      // can table the most-recent first; reverse a shallow copy for the
+      // chart only.
+      const ordered = entries.slice().reverse();
+      const labels = ordered.map(e => fmtDate(e.ranAt));
+      const rows   = ordered.map(e => Number(e.rowsDeleted || 0));
+      // Highlight failed runs in red so a single red bar stands out
+      // against the rolling green trend.
+      const colors = ordered.map(e => e.success ? 'rgba(59, 130, 246, 0.75)' : 'rgba(220, 38, 38, 0.85)');
+      if (metricsPruneHistoryChart) metricsPruneHistoryChart.destroy();
+      const ctx = canvas.getContext('2d');
+      metricsPruneHistoryChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Rows deleted',
+            data: rows,
+            backgroundColor: colors,
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => items.length ? labels[items[0].dataIndex] : '',
+                label: (ctx) => {
+                  const e = ordered[ctx.dataIndex] || {};
+                  const okLabel = e.success ? 'OK' : ('Failed' + (e.errorMessage ? ': ' + e.errorMessage : ''));
+                  return [
+                    'Rows deleted: ' + Number(ctx.parsed.y || 0).toLocaleString(),
+                    'Retention: ' + (e.retentionDays != null ? e.retentionDays + 'd' : '—'),
+                    'Duration: ' + fmtDurationMs(e.durationMs),
+                    'Status: ' + okLabel,
+                  ];
+                },
+              },
+            },
+          },
+          scales: {
+            x: { display: false, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+          },
+        },
+      });
+    }
+
+    function onMetricsPruneHistoryLimitChange() {
+      loadMetricsPruneHistory();
     }
 
     async function loadThresholdsForm() {

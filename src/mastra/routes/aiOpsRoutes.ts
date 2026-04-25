@@ -1561,6 +1561,67 @@ export const aiOpsRoutes = [
   },
 
   /**
+   * AI usage history retention — prune-run history endpoint (Task #559).
+   *
+   * Returns the rolling history of daily prune passes (date,
+   * retention_days_used, rows_deleted, run_duration_ms, success) so the
+   * AI Ops dashboard's Retention section can render a sparkline / table
+   * of recent activity beneath the existing audit log. Admins use this
+   * to spot retention spikes — e.g. a sudden ingest burst that is
+   * silently aging out useful telemetry, or a tightened window that just
+   * started chopping rows.
+   *
+   * Read-only and gated by the same `AI_OPS_ROLES` as the rest of the
+   * retention form, so non-admin ops can see the trend even when they
+   * can't change the window themselves.
+   *
+   * Query params:
+   *   • `limit` — optional, integer 1–365, defaults to 30. Out-of-range
+   *     values clamp; non-integer values fall back to the default.
+   */
+  {
+    path: "/api/ai-ops/metrics-retention/history",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const rawLimit = c.req.query("limit");
+          let limit = 30;
+          if (rawLimit != null && String(rawLimit).trim() !== "") {
+            const parsed = Number(rawLimit);
+            if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed > 0) {
+              limit = parsed;
+            }
+          }
+          // Mirror the helper's clamp ([1, 365]) so the response echoes the
+          // limit the DB query will actually use rather than a stale request value.
+          if (limit < 1) limit = 1;
+          if (limit > 365) limit = 365;
+
+          const { getAiMetricsPruneRunHistory } = await import(
+            "../../utils/aiTelemetry"
+          );
+          const history = await getAiMetricsPruneRunHistory(limit);
+
+          return c.json({
+            data: {
+              limit,
+              count: history.length,
+              entries: history,
+            },
+          });
+        } catch (error) {
+          console.error("[AI-Ops] metrics-retention history error:", error);
+          return c.json({ error: "Failed to load prune-run history" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
    * AI usage history retention — preview endpoint (Task #550).
    *
    * Returns how many `ai_call_metrics` rows are currently older than the

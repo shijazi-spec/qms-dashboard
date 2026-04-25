@@ -65,29 +65,29 @@ The platform is built on the Mastra AI agent framework and Hono HTTP server.
     The dashboard supports Arabic (RTL) via `html[dir="rtl"]` set by `dashboard/js/i18n.js`. To ensure layout details (table-header alignment, card accent borders, icon gutters) automatically mirror in RTL, use CSS logical properties instead of physical ones. Do **not** use physical-direction Tailwind classes (`ml-`, `mr-`, `space-x-`, `text-left`, `text-right`, `border-l-`, `border-r-`, `rounded-l-`, `rounded-r-`) or physical CSS properties (`border-left`, `border-right`, `margin-left`, `margin-right`) on any element whose appearance should flip in RTL.
 
 -   **UI/UX Decisions**:
-    -   Dashboards are static HTML, styled with compiled Tailwind CSS, offering views like Executive Dashboard, GRC Control Tower, QMS Dashboard, and an AI Consultant interface. UI/UX emphasizes WCAG 2.1 AA accessibility conformance. A fixed left side rail navigation replaces the traditional top-bar navigation.
-    -   Floating bottom-right progress card per download for filename, progress bar, bytes, and Cancel button. Card auto-dismisses on success/cancel/failure.
-    -   Top-right toast container for success / "cancelled" info / failure alerts.
+    -   Dashboards are static HTML, styled with compiled Tailwind CSS, offering views like Executive Dashboard, GRC Control Tower, QMS Dashboard, and an AI Consultant interface. UI/UX emphasizes WCAG 2.1 AA accessibility conformance, including skip-to-main-content links, modal focus traps, ARIA live regions, and semantic HTML. A fixed left side rail navigation replaces the traditional top-bar navigation, improving usability and screen real estate.
+    -   Floating bottom-right progress card per download: filename, gradient progress bar, bytes downloaded / total + percentage, Cancel button. Card auto-dismisses on success/cancel/failure.
+    -   Top-right toast container for success / "cancelled" info / failure alerts — replaces every `window.alert()` failure path.
 -   **Technical Implementations**:
     -   **Frontend**: Static HTML dashboards, styled with compiled Tailwind CSS.
-    -   **Backend**: Mastra API routes are handled by Hono.
+    -   **Backend**: Mastra API routes are handled by Hono, with a refactored thin composition root for better modularity and maintainability.
     -   **Database**: PostgreSQL manages over 103 tables across 21 module groups using a shared connection pool.
     -   **AI Integration**: GPT-4o powers AI agent functionalities through Replit AI/OpenAI. AI Observability via `ai_call_metrics` tracks token usage, cost, latency, and errors for LLM calls, visualized in an "AI Operations" panel.
     -   **Workflows**: Inngest orchestrates event-driven processes like background scanning, KPI calculation, and AI approval expiry.
     -   **Authentication**: Replit OIDC (Google, GitHub, Apple, email) with HMAC-SHA256 signed cookies for session management. An Admin API key provides alternative access.
     -   **Authorization**: Role-Based Access Control (RBAC) with 11 roles ensures granular access to API endpoints and dashboards via `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
-    -   **Security**: Features include nonce-based Content Security Policy (CSP), distributed Postgres-backed rate limiting, input sanitization, UUID resource ID obfuscation, strong password policies, generic error messages, and Human-In-The-Loop (HITL) AI Approval Gate.
+    -   **Security**: Features include nonce-based Content Security Policy (CSP) with strict enforcement for inline scripts and styles, distributed Postgres-backed rate limiting, input sanitization (XSS/injection prevention), UUID resource ID obfuscation, strong password policies, generic error messages, and Human-In-The-Loop (HITL) AI Approval Gate for AI-initiated write actions. CI checks enforce CSP compliance for dashboard HTML.
 -   **Feature Specifications**:
-    -   **AI Consultant**: GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration. Feedback ratings are linked to AI observability.
+    -   **AI Consultant**: GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration. Feedback ratings are linked to AI observability for prompt-quality A/B tracking.
     -   **Duplicate Radar**: Multi-signal duplicate detection for CRM data with cross-module clustering, AI recommendations, and auto-resolution.
-    -   **Download Progress UX**: Visible progress UX for streaming-downloads, including a floating bottom-right progress card with cancel button and top-right toast alerts.
-    -   **AI Observability**: Tracks LLM call metrics in `ai_call_metrics` table, visualized in "AI Operations" panel. Daily Inngest cron alerts on high AI spend.
+    -   **Download Progress UX**: Layered a visible progress UX on top of the streaming-download helper. Includes a floating bottom-right progress card with cancel button and top-right toast alerts. Cancellation is wired through AbortController.
+    -   **AI Observability**: Tracks LLM call metrics (token usage, cost, latency, errors) in an `ai_call_metrics` table. An "AI Operations" panel (`/ai-ops`) visualizes cost trends, latency percentiles, and recent failures. A daily Inngest cron alerts on high AI spend.
     -   **Evidence Management**: Structured upload and retrieval of evidence documents.
     -   **Compliance Checklist Engine**: Create and run structured compliance checklists with automated data verification.
     -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
     -   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
     -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
-    -   **True Streaming Exports**: Large exports flow directly to disk via File System Access API where supported, bypassing memory Blobs for stability. Also supports Firefox and Safari via service worker shim.
+    -   **True Streaming Exports**: Large exports flow directly to disk via File System Access API where supported, bypassing memory Blobs for stability. Also supports Firefox and Safari via service worker shim. Cache-bust `?v=2.1.0`.
 
 ## External Dependencies
 -   **PostgreSQL**: Primary data store.

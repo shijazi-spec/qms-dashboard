@@ -34,6 +34,11 @@ interface StubFixture {
   oldestStartedAt: Date | null;
   oldestAgeDays: number | null;
   lastPruneRow: Record<string, unknown> | null;
+  // Task #559: rolling prune-run history rows the stub returns when the
+  // SUT runs `SELECT ... FROM ai_metrics_prune_runs ... ORDER BY ran_at
+  // DESC LIMIT $1`. When set, takes precedence over `lastPruneRow` for
+  // queries that include `LIMIT $1`.
+  pruneHistoryRows: Record<string, unknown>[] | null;
   failDelete?: boolean;
 }
 
@@ -42,6 +47,7 @@ const fixture: StubFixture = {
   oldestStartedAt: null,
   oldestAgeDays: null,
   lastPruneRow: null,
+  pruneHistoryRows: null,
 };
 
 const originalQuery = pg.Pool.prototype.query;
@@ -78,6 +84,17 @@ const originalQuery = pg.Pool.prototype.query;
     };
   }
   if (/FROM ai_metrics_prune_runs/i.test(sql)) {
+    // Task #559: getAiMetricsPruneRunHistory issues a `LIMIT $1` query —
+    // serve it from the dedicated `pruneHistoryRows` fixture so the
+    // history test can assert ordering / mapping independently of the
+    // single-row `lastPruneRow` used by getAiMetricsTableStats().
+    if (/LIMIT\s+\$1/i.test(sql)) {
+      return {
+        ...empty,
+        command: 'SELECT',
+        rows: fixture.pruneHistoryRows ?? [],
+      };
+    }
     return {
       ...empty,
       command: 'SELECT',
@@ -90,6 +107,7 @@ const originalQuery = pg.Pool.prototype.query;
 const {
   pruneOldAiMetrics,
   getAiMetricsTableStats,
+  getAiMetricsPruneRunHistory,
   DEFAULT_AI_METRICS_RETENTION_DAYS,
 } = await import('../src/utils/aiTelemetry');
 
@@ -226,6 +244,134 @@ await suite.test(
       DEFAULT_AI_METRICS_RETENTION_DAYS,
       'retentionDays falls back to default',
     );
+  },
+);
+
+// ───────────────────────────────────────────────────────────────────
+// Task #559: rolling prune-run history for the AI Ops dashboard
+// ───────────────────────────────────────────────────────────────────
+
+await suite.test(
+  'getAiMetricsPruneRunHistory() defaults to limit=30 when no argument is supplied',
+  async () => {
+    fixture.pruneHistoryRows = [];
+    clearCaptured();
+    await getAiMetricsPruneRunHistory();
+    const selectQ = captured.find(q =>
+      /FROM ai_metrics_prune_runs/i.test(q.sql) && /LIMIT\s+\$1/i.test(q.sql),
+    );
+    suite.expect(selectQ != null, 'history SELECT was issued');
+    if (selectQ) {
+      suite.expectEqual(selectQ.params[0], 30, 'defaults limit param to 30');
+    }
+  },
+);
+
+await suite.test(
+  'getAiMetricsPruneRunHistory() clamps non-positive / non-finite / >365 limits',
+  async () => {
+    fixture.pruneHistoryRows = [];
+    const cases: Array<[number | undefined, number]> = [
+      [0, 30],          // non-positive -> default
+      [-5, 30],         // negative -> default
+      [Number.NaN, 30], // NaN -> default
+      [Infinity, 30],   // non-finite -> default
+      [1000, 365],      // above max -> clamp to 365
+      [7, 7],           // valid -> passthrough
+      [50.7, 50],       // floored
+    ];
+    for (const [input, expected] of cases) {
+      clearCaptured();
+      await getAiMetricsPruneRunHistory(input as number);
+      const q = captured.find(c =>
+        /FROM ai_metrics_prune_runs/i.test(c.sql) && /LIMIT\s+\$1/i.test(c.sql),
+      );
+      suite.expect(q != null, `query issued for input=${String(input)}`);
+      if (q) {
+        suite.expectEqual(q.params[0], expected, `limit ${String(input)} -> ${expected}`);
+      }
+    }
+  },
+);
+
+await suite.test(
+  'getAiMetricsPruneRunHistory() maps DB rows to camelCase entries with ISO timestamps',
+  async () => {
+    fixture.pruneHistoryRows = [
+      {
+        id: 42,
+        ran_at: new Date('2026-04-25T06:00:00Z'),
+        retention_days: 90,
+        rows_deleted: 12_345,
+        duration_ms: 156,
+        success: true,
+        error_message: null,
+      },
+      {
+        id: 41,
+        ran_at: new Date('2026-04-24T06:00:00Z'),
+        retention_days: 90,
+        rows_deleted: 0,
+        duration_ms: 22,
+        success: false,
+        error_message: 'connection reset',
+      },
+    ];
+    const entries = await getAiMetricsPruneRunHistory(2);
+    suite.expectEqual(entries.length, 2, 'returns the two stub rows');
+
+    const first = entries[0];
+    suite.expectEqual(first.id, 42, 'first.id mapped');
+    suite.expectEqual(first.retentionDays, 90, 'first.retentionDays mapped');
+    suite.expectEqual(first.rowsDeleted, 12345, 'first.rowsDeleted mapped');
+    suite.expectEqual(first.durationMs, 156, 'first.durationMs mapped');
+    suite.expectEqual(first.success, true, 'first.success mapped');
+    suite.expectEqual(first.errorMessage, null, 'first.errorMessage mapped');
+    suite.expectEqual(first.ranAt, '2026-04-25T06:00:00.000Z', 'ranAt is ISO8601');
+
+    const second = entries[1];
+    suite.expectEqual(second.success, false, 'second.success=false on a failed run');
+    suite.expectEqual(
+      second.errorMessage,
+      'connection reset',
+      'second.errorMessage carries the failure reason',
+    );
+    suite.expectEqual(second.rowsDeleted, 0, 'failed run reports rowsDeleted=0');
+  },
+);
+
+await suite.test(
+  'getAiMetricsPruneRunHistory() returns an empty array when no runs are recorded',
+  async () => {
+    fixture.pruneHistoryRows = [];
+    const entries = await getAiMetricsPruneRunHistory(30);
+    suite.expectEqual(entries.length, 0, 'no rows -> empty array (not null)');
+  },
+);
+
+await suite.test(
+  'getAiMetricsPruneRunHistory() issues a SELECT against ai_metrics_prune_runs',
+  async () => {
+    // ensurePruneRunsTable() memoizes its bootstrap promise, so the
+    // CREATE TABLE only fires on the first invocation in the process.
+    // The SUT contract this test cares about is "the SELECT happens
+    // after the table is guaranteed to exist" — assert the SELECT is
+    // issued and ordered DESC; the bootstrap is covered by the
+    // pruneOldAiMetrics() suite above.
+    fixture.pruneHistoryRows = [];
+    clearCaptured();
+    await getAiMetricsPruneRunHistory(5);
+    const selectQ = captured.find(q =>
+      /FROM ai_metrics_prune_runs/i.test(q.sql) && /LIMIT\s+\$1/i.test(q.sql),
+    );
+    suite.expect(selectQ != null, 'history SELECT issued');
+    if (selectQ) {
+      suite.expect(
+        /ORDER BY ran_at DESC/i.test(selectQ.sql),
+        'history SELECT ordered by ran_at DESC',
+      );
+      suite.expectEqual(selectQ.params[0], 5, 'forwards the requested limit');
+    }
   },
 );
 

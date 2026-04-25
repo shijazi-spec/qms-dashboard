@@ -1101,6 +1101,64 @@ export async function getAiMetricsTableStats(): Promise<AiMetricsTableStats> {
 }
 
 /**
+ * Recent prune-run history for the AI Ops dashboard (Task #559).
+ *
+ * Returns the last `limit` rows from `ai_metrics_prune_runs` in
+ * reverse-chronological order so admins can see the rolling history of
+ * pruned-row counts and spot retention spikes (e.g. an ingest burst that
+ * is silently aging out useful telemetry, or a tightened window that
+ * just started chopping rows). Reuses the same table the daily cron
+ * already writes to from {@link pruneOldAiMetrics} — no separate
+ * `ai_metrics_prune_history` table is needed because the existing one
+ * already captures the (date, retention_days_used, rows_deleted,
+ * run_duration_ms) tuple the dashboard wants.
+ *
+ * `limit` is clamped to [1, 365]; non-finite / non-positive values fall
+ * back to a safe default of 30 (matches the dashboard's "last 30 daily
+ * passes" framing).
+ */
+export interface AiMetricsPruneRunHistoryEntry {
+  id: number;
+  ranAt: string;
+  retentionDays: number;
+  rowsDeleted: number;
+  durationMs: number;
+  success: boolean;
+  errorMessage: string | null;
+}
+
+export async function getAiMetricsPruneRunHistory(
+  limit?: number,
+): Promise<AiMetricsPruneRunHistoryEntry[]> {
+  const fallback = 30;
+  let n: number;
+  if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+    n = Math.floor(limit);
+  } else {
+    n = fallback;
+  }
+  if (n < 1) n = 1;
+  if (n > 365) n = 365;
+  await ensurePruneRunsTable();
+  const result = await pool.query(
+    `SELECT id, ran_at, retention_days, rows_deleted, duration_ms, success, error_message
+       FROM ai_metrics_prune_runs
+      ORDER BY ran_at DESC
+      LIMIT $1`,
+    [n],
+  );
+  return result.rows.map((r: any) => ({
+    id: Number(r.id),
+    ranAt: new Date(r.ran_at).toISOString(),
+    retentionDays: Number(r.retention_days),
+    rowsDeleted: Number(r.rows_deleted),
+    durationMs: Number(r.duration_ms),
+    success: Boolean(r.success),
+    errorMessage: r.error_message ?? null,
+  }));
+}
+
+/**
  * Dry-run counterpart of {@link pruneOldAiMetrics} (Task #550).
  *
  * Returns how many `ai_call_metrics` rows WOULD be removed by the next
