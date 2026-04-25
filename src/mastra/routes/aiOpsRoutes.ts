@@ -1639,6 +1639,33 @@ export const aiOpsRoutes = [
           );
           const effective = await resolveEffectiveAiMetricsRetentionDays();
 
+          // Best-effort Slack/email notification so the rest of the AI-ops
+          // team sees who tightened or widened the retention window — the DB
+          // write itself is silent and audit rows tend to be checked only
+          // after something has already gone wrong (Task #549). Gated by
+          // AI_METRICS_RETENTION_NOTIFY=1 inside the notifier; never blocks
+          // or fails the save. The notifier short-circuits when the value
+          // didn't actually change so a re-save with the same value (e.g.
+          // adding a follow-up note) does not generate noise.
+          try {
+            const { notifyAiMetricsRetentionChange } = await import(
+              "../../utils/aiMetricsRetentionNotifier"
+            );
+            await notifyAiMetricsRetentionChange({
+              changedBy,
+              before: result.before,
+              after: result.after,
+              effectiveAfter: effective,
+              note,
+              audit_id: result.audit_id,
+            });
+          } catch (notifyErr) {
+            console.error(
+              "[AI-Ops] metrics-retention notify error (best-effort):",
+              notifyErr,
+            );
+          }
+
           return c.json({
             success: true,
             before: result.before,
