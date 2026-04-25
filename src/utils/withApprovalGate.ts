@@ -40,6 +40,7 @@ import {
   type UserApprovalContext,
 } from "./aiToolGovernance";
 import { logEvent, redactSecretLikeStrings } from "./eventLogsDatabase";
+import { notifyCredentialFlaggedApproval } from "./securityApprovalNotifier";
 
 /* ------------------------------------------------------------------------- *
  * Per-request context storage.
@@ -209,6 +210,33 @@ export function withApprovalGate<
     }).catch(() => {
       /* non-fatal */
     });
+
+    // Task #485: when the structural credential detector flagged any
+    // payload field, page the security reviewer group (Slack channel +
+    // email distribution list) so the highest-risk approvals are
+    // triaged out-of-hours rather than waiting for someone to spot the
+    // banner on the queue page. Best-effort: a Slack/Resend outage must
+    // not abort the enqueue path the AI tool just completed, so we
+    // swallow any error here. The notifier itself dedupes on action_code
+    // and explicitly returns `{ skipped: true }` when neither channel is
+    // configured, so this call is safe in dev/test environments.
+    if (hasCredentialWarning) {
+      notifyCredentialFlaggedApproval({
+        action_code: pending.action_code,
+        tool_id: toolId,
+        tool_label: policy.label,
+        risk_level: policy.riskLevel,
+        requested_by_user_id: pending.requested_by_user_id,
+        requested_by_email: pending.requested_by_email,
+        requested_by_name: pending.requested_by_name,
+        credential_warnings: pending.credential_warnings ?? [],
+      }).catch((err) => {
+        console.error(
+          `[withApprovalGate] notifyCredentialFlaggedApproval threw for ${pending.action_code}:`,
+          err,
+        );
+      });
+    }
 
     // Shape of the return value is deliberately compatible with the original
     // tool's outputSchema: `success: false` + human-readable `message`. This

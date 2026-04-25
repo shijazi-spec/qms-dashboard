@@ -834,7 +834,51 @@
     [fltStatus, fltRisk, fltMine, fltReview].forEach(function (el) { el.addEventListener('change', load); });
     fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
     document.getElementById('btnRefresh').addEventListener('click', load);
+
+    /* ---------------------------------------------------------------- *
+     *  Deep link handling (Task #485)
+     *
+     *  The security-reviewer notifier (`securityApprovalNotifier.ts`)
+     *  pages Slack/email with a link of the form
+     *      <SECURITY_REVIEWER_APP_URL>/ai-approvals?code=APR-...
+     *  so a reviewer who clicks the page lands directly on the flagged
+     *  approval card. We honour that ?code= parameter once the queue
+     *  has loaded by auto-opening the detail modal for that ticket.
+     *
+     *  Behaviour notes:
+     *   - We do NOT mutate the queue filters so the surrounding context
+     *     (e.g. status=pending) stays meaningful — the modal fetches the
+     *     row by code regardless of whether the row is in the visible
+     *     list.
+     *   - The parameter is stripped from the URL after the modal opens
+     *     so a manual page refresh doesn't keep re-opening the modal
+     *     after the operator dismissed it.
+     *   - Validation: action codes follow APR-YYYYMMDD-XXXXXX so we
+     *     accept only the alphanumeric-and-dashes shape to keep this
+     *     handler from being abused as a generic XSS surface (the modal
+     *     already escapes its inputs, but defense-in-depth is cheap).
+     * ---------------------------------------------------------------- */
+    function handleDeepLink() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var code = params.get('code');
+            if (!code) return;
+            if (!/^[A-Z0-9-]{1,64}$/i.test(code)) return;
+            openDetailModal(code);
+            // Strip ?code= so a reload doesn't re-open the modal.
+            params.delete('code');
+            var qs = params.toString();
+            var newUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+            window.history.replaceState({}, '', newUrl);
+        } catch (_) { /* ignore — deep link is best-effort UX */ }
+    }
+
+    // Run the initial load, then attempt the deep link once it resolves.
+    // Wrapping handleDeepLink in load()'s .then chain would couple it to
+    // the API succeeding; we instead call it after kicking off load() so
+    // the modal can open even when the queue list errors out.
     load();
+    handleDeepLink();
     setInterval(load, 30000);
 })();
 </script>
