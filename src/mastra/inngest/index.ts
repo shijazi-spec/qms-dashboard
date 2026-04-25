@@ -797,12 +797,22 @@ const aiFeedbackDigestFunction = inngest.createFunction(
       const upRate = digest.total > 0 ? Math.round((digest.thumbs_up / digest.total) * 100) : 0;
       const summary = `AI Consultant received ${digest.total} ratings this week: ${digest.thumbs_up} 👍 (${upRate}%) / ${digest.thumbs_down} 👎. Top issue: ${digest.top_categories?.[0]?.category || 'none'}.`;
 
+      const trend = Array.isArray(digest.trend) ? digest.trend : [];
+      const trendPlainLines = trend.length > 0
+        ? [
+            'Day         👍   👎',
+            ...trend.map(p => `${p.day}  ${String(p.thumbs_up).padStart(3)}  ${String(p.thumbs_down).padStart(3)}`),
+          ]
+        : ['No daily activity recorded this week.'];
+      const trendPlain = trendPlainLines.join('\n');
+      const messageWithTrend = `${summary}\n\nDaily trend (last 7 days):\n${trendPlain}`;
+
       try {
         const { createNotification } = await import("../../utils/notificationHub");
         await createNotification({
           type: 'info',
           title: 'Weekly AI Feedback Digest',
-          message: summary,
+          message: messageWithTrend,
           link: '/dashboard/admin.html',
           severity: 'low'
         });
@@ -811,10 +821,11 @@ const aiFeedbackDigestFunction = inngest.createFunction(
       try {
         const { sendSlackNotification } = await import("../../utils/slackNotifications");
         const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_QMS_CHANNEL || '#general';
-        await sendSlackNotification(slackChannel, `📊 *Weekly AI Consultant Feedback*\n${summary}`);
+        const slackMessage = `📊 *Weekly AI Consultant Feedback*\n${summary}\n\n*Daily trend (last 7 days):*\n\`\`\`\n${trendPlain}\n\`\`\``;
+        await sendSlackNotification(slackChannel, slackMessage);
       } catch {}
 
-      return { total: digest.total, thumbsUp: digest.thumbs_up, thumbsDown: digest.thumbs_down, upRate };
+      return { total: digest.total, thumbsUp: digest.thumbs_up, thumbsDown: digest.thumbs_down, upRate, trendDays: trend.length };
     });
   },
 );

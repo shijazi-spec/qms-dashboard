@@ -229,6 +229,7 @@ export async function getWeeklyFeedbackDigest(): Promise<{
   thumbs_up_pct: number;
   top_categories: { category: string; count: number }[];
   sample_down: { category: string | null; comment: string | null }[];
+  trend: FeedbackTrendPoint[];
 }> {
   await initAIFeedbackTable();
 
@@ -264,6 +265,8 @@ export async function getWeeklyFeedbackDigest(): Promise<{
   const now = new Date();
   const weekStart = new Date(now.getTime() - 7 * 86400000);
 
+  const trend = await getFeedbackTrend(7);
+
   return {
     period: `${weekStart.toDateString()} – ${now.toDateString()}`,
     total,
@@ -272,5 +275,6 @@ export async function getWeeklyFeedbackDigest(): Promise<{
     thumbs_up_pct: total > 0 ? Math.round((up / total) * 100) : 0,
     top_categories: cats.rows.map(r => ({ category: r.category, count: parseInt(r.cnt) })),
     sample_down: samples.rows,
+    trend,
   };
 }
