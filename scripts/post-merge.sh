@@ -115,14 +115,18 @@ echo "▶ CI gate: i18n coverage (Task #125 / #150)"
 node scripts/check-i18n.cjs
 
 # ----------------------------------------------------------------------------
-# CI gate — dashboard inline-handler CSP guard (Task #171)
+# CI gate — dashboard inline-handler CSP guard (Task #171 / Task #131)
 #
 # Blocks merges that reintroduce inline `onclick=` / `onchange=` / etc. on any
 # `dashboard/*.html` or `public/*.html` page. These would be silently dropped
 # by the strict CSP (`script-src` has no `'unsafe-inline'`), turning the
 # affected button into a no-op in production. Equivalent behaviour MUST go
 # through `dashboard/js/safe-actions.js` using the `data-on-{event}` pattern.
+#
+# All 38 dashboard HTML files are now fully migrated (including
+# dashboard/ai-ops.html and dashboard/consultant.html — the last two
+# migrated in Task #131). The gate enforces zero-tolerance going forward.
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: dashboard inline-handler CSP guard (Task #171)"
+echo "▶ CI gate: dashboard inline-handler CSP guard (Task #171 / #131)"
 bash scripts/lint-dashboard-handlers.sh
