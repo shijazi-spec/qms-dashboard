@@ -102,6 +102,8 @@ const {
 } = await import("./eventLogsDatabase");
 type EventLogInput = Parameters<typeof logEvent>[0];
 
+const { logNCChange, logCAPAChange } = await import("./changeHistoryDatabase");
+
 // Section 1 — redactSensitiveFields unit tests
 
 console.log("\n=== redactSensitiveFields — unit tests ===\n");
@@ -641,8 +643,6 @@ const TEXT_LEAK_SECRETS = {
 
 console.log("\n=== Task #99 — NC / CAPA change history write-path tests ===\n");
 
-const { logNCChange, logCAPAChange } = await import("./changeHistoryDatabase");
-
 const CH_SECRETS = {
   sk: "sk_live_AbCdEfGhIjKlMnOpQrStUvWx9876",
   ghp: "ghp_AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH1234",
@@ -659,6 +659,7 @@ function findInsertForTable(table: string): unknown[] | null {
 }
 
 // NC — sk_ in old_value, ghp_ in new_value, bcrypt in change_reason
+
 {
   captured.length = 0;
   await logNCChange(
@@ -783,6 +784,7 @@ function findInsertForTable(table: string): unknown[] | null {
     assert(reason === "escalated by manager", "CAPA non-sensitive: change_reason preserved verbatim");
   }
 }
+
 
 console.log();
 console.log(`Results: ${passed} passed, ${failed} failed`);

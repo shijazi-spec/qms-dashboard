@@ -424,8 +424,8 @@ A central `redactSensitiveFields(payload, fieldName?)` helper was implemented in
 - Matching key values are replaced with `***REDACTED***`.
 - Non-matching sibling keys in the same object are stored unmodified.
 - Redaction is recursive — nested objects and arrays are walked fully.
-- The `description` field (human-readable event summary) is **not** affected; it must already describe the action in plain English without embedding secrets (e.g. "password updated", not the hash value).
-- The `change_history` tables store values as plain strings. When `field_changed` matches the deny list, both `old_value` and `new_value` are set to `***REDACTED***`.
+- The `event_logs.description` and `event_logs.entity_name` TEXT columns are passed through `redactSecretLikeStrings()` before INSERT so that credential-shaped substrings interpolated into human-readable summaries are masked even when the surrounding key name is not on the deny list.
+- The `change_history` tables store values as plain strings. When `field_changed` matches the deny list, both `old_value` and `new_value` are set to `***REDACTED***`. Additionally, all three string columns (`old_value`, `new_value`, and `change_reason`) are passed through `redactSecretLikeStrings()` so that credentials pasted into a free-form note or interpolated into a non-sensitive field value (e.g. a `description` or `notes` field whose content happens to contain a key) are also masked.
 
 #### Free-Form Text Sanitisation (`payload_preview`)
 
@@ -447,7 +447,7 @@ A second helper, `redactSecretLikeStrings(input)` in `src/utils/eventLogsDatabas
 | `aws-akid` | AWS Access Key ID `AKIA…` / `ASIA…` |
 | `bearer` | HTTP `Authorization: Bearer …` header value |
 
-The sanitiser is applied to the preview string (and to it alone — the JSONB `payload` and `execution_result` columns continue to use the key-based redactor described above). It is also defence-in-depth: the structured payload is already redacted, so the preview helper exists specifically to catch credentials that a tool author interpolated into the human-readable description string.
+The sanitiser is applied to all free-form TEXT columns: `payload_preview` in `ai_pending_actions`, `description` and `entity_name` in `event_logs`, and `old_value`, `new_value`, and `change_reason` in `nc_change_history` / `capa_change_history`. The JSONB `payload` and `execution_result` columns continue to use the key-based redactor described above (with `deepRedactSecretLikeStrings` applied as a second pass over their string leaves). This defence-in-depth ensures that no write path can persist a credential-shaped substring in any human-readable column, regardless of whether the surrounding JSON key is on the deny list.
 
 To extend the regex deny list, edit `SECRET_LIKE_PATTERNS` in `src/utils/eventLogsDatabase.ts` and add a corresponding assertion in `tests/aiApprovalRedaction.test.ts`.
 
