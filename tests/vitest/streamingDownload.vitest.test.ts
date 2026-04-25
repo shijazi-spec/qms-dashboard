@@ -1814,6 +1814,234 @@ describe('streamingDownload (browser helper)', () => {
       b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
       await expect(downloadPromise).rejects.toBeDefined();
     });
+
+    describe('styled modal confirmCancel (WalaPlusA11y present)', () => {
+      // Minimal WalaPlusA11y shim that mirrors what a11y.js does in the browser:
+      // openModal removes 'hidden', closeModal adds 'hidden' back.
+      function installA11yShim(win: any) {
+        win.WalaPlusA11y = {
+          openModal(el: HTMLElement) {
+            el.classList.remove('hidden');
+            el.classList.add('active');
+            el.setAttribute('aria-hidden', 'false');
+          },
+          closeModal(el: HTMLElement) {
+            el.classList.remove('active');
+            el.classList.add('hidden');
+            el.setAttribute('aria-hidden', 'true');
+          },
+        };
+      }
+
+      it('renders the styled modal instead of window.confirm when WalaPlusA11y is present', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+        installA11yShim(env.win);
+
+        const windowConfirm = vi.fn(() => true);
+        env.win.confirm = windowConfirm;
+
+        const button = env.win.document.createElement('button');
+        env.win.document.body.appendChild(button);
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/modal-cancel.bin', {
+          button,
+          skipEstimate: true,
+          useServiceWorker: false,
+          showProgressUI: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        button.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // The styled modal should be in the DOM; window.confirm should NOT have been used.
+        const modal = env.win.document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
+        expect(modal).not.toBeNull();
+        expect(windowConfirm).not.toHaveBeenCalled();
+
+        // Clean up.
+        const confirmBtn = modal!.querySelector('[data-testid="button-confirm-cancel-download"]') as HTMLElement;
+        confirmBtn.click();
+        await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+      });
+
+      it('proceeds with cancel when the user clicks "Cancel download" in the modal', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+        installA11yShim(env.win);
+
+        const button = env.win.document.createElement('button');
+        env.win.document.body.appendChild(button);
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/modal-confirm.bin', {
+          button,
+          skipEstimate: true,
+          useServiceWorker: false,
+          showProgressUI: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        button.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        const modal = env.win.document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+        // The confirm cancel title and message must be visible.
+        expect(modal.querySelector('#sd-confirm-cancel-title')).not.toBeNull();
+        expect(modal.querySelector('[data-testid="button-confirm-cancel-download"]')).not.toBeNull();
+        expect(modal.querySelector('[data-testid="button-keep-downloading"]')).not.toBeNull();
+
+        const confirmBtn = modal.querySelector('[data-testid="button-confirm-cancel-download"]') as HTMLElement;
+        confirmBtn.click();
+
+        await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+        // Modal should be gone after resolution.
+        await new Promise((r) => setTimeout(r, 10));
+        expect(env.win.document.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
+      });
+
+      it('keeps the download running when the user clicks "Keep downloading" in the modal', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+        installA11yShim(env.win);
+
+        const button = env.win.document.createElement('button');
+        env.win.document.body.appendChild(button);
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/modal-keep.bin', {
+          button,
+          skipEstimate: true,
+          useServiceWorker: false,
+          showProgressUI: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        button.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        const modal = env.win.document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+        const keepBtn = modal.querySelector('[data-testid="button-keep-downloading"]') as HTMLElement;
+        keepBtn.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Modal removed, download still active.
+        expect(env.win.document.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
+        expect(button.getAttribute('data-streaming-active')).toBe('1');
+
+        // Clean up by erroring the stream.
+        b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
+        await expect(downloadPromise).rejects.toBeDefined();
+      });
+
+      it('keeps the download running when Escape closes the modal (WalaPlusA11y closes it)', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+        installA11yShim(env.win);
+
+        const button = env.win.document.createElement('button');
+        env.win.document.body.appendChild(button);
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/modal-escape.bin', {
+          button,
+          skipEstimate: true,
+          useServiceWorker: false,
+          showProgressUI: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        button.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        const modal = env.win.document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+        // Simulate Escape: WalaPlusA11y would call closeModal() which adds 'hidden'.
+        env.win.WalaPlusA11y.closeModal(modal);
+        await new Promise((r) => setTimeout(r, 20));
+
+        // Download must still be active.
+        expect(button.getAttribute('data-streaming-active')).toBe('1');
+
+        // Clean up.
+        b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
+        await expect(downloadPromise).rejects.toBeDefined();
+      });
+
+      it('progress-card cancel button restores to "Cancel" when user backs out via the modal', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+        installA11yShim(env.win);
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/card-modal-keep.bin', {
+          skipEstimate: true,
+          useServiceWorker: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        const cancelBtn = env.win.document.querySelector(
+          '[data-testid="button-cancel-download"]'
+        ) as HTMLButtonElement;
+        expect(cancelBtn).not.toBeNull();
+
+        cancelBtn.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Modal should be visible.
+        const modal = env.win.document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
+        expect(modal).not.toBeNull();
+
+        // User backs out.
+        const keepBtn = modal.querySelector('[data-testid="button-keep-downloading"]') as HTMLElement;
+        keepBtn.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Card cancel button should be restored.
+        expect(cancelBtn.disabled).toBe(false);
+        expect(cancelBtn.textContent).toBe('Cancel');
+
+        // Clean up.
+        b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
+        await expect(downloadPromise).rejects.toBeDefined();
+      });
+    });
   });
 
   function installI18nShim(win: any, dictionary: any) {

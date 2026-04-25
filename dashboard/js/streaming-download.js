@@ -615,11 +615,33 @@
             // The owner's onCancel may pop a confirm() and return false if
             // the user backs out. In that case keep the Cancel button live
             // so they can try again instead of getting stuck on "Cancelling…".
+            // It may also return a Promise (async modal) — await the result
+            // before transitioning the button into the "Cancelling…" state.
             var triggered;
             try {
                 if (typeof onCancel === 'function') triggered = onCancel();
             } catch (_) { triggered = undefined; }
             if (triggered === false) return;
+            if (triggered && typeof triggered.then === 'function') {
+                // Async path: modal is showing — disable the button while we wait
+                // so duplicate clicks don't stack up, then restore or commit.
+                cancelBtn.disabled = true;
+                cancelBtn.textContent = tr('downloads.cancelling_wait', 'Waiting…');
+                triggered.then(function (ok) {
+                    if (!ok) {
+                        // User backed out — restore the Cancel button.
+                        cancelBtn.disabled = false;
+                        cancelBtn.textContent = tr('downloads.cancel', 'Cancel');
+                    } else {
+                        cancelBtn.disabled = true;
+                        cancelBtn.textContent = tr('downloads.cancelling', 'Cancelling…');
+                    }
+                }).catch(function () {
+                    cancelBtn.disabled = false;
+                    cancelBtn.textContent = tr('downloads.cancel', 'Cancel');
+                });
+                return;
+            }
             cancelBtn.disabled = true;
             cancelBtn.textContent = tr('downloads.cancelling', 'Cancelling…');
         });
@@ -2331,6 +2353,100 @@
             }
         }
 
+        // Build and display an accessible, styled confirm-cancel modal using the
+        // project's WalaPlusA11y modal API when it is loaded on the page.
+        // Returns a Promise<boolean> (true = proceed with cancel, false = keep going).
+        // Falls back to window.confirm synchronously when the a11y module is absent
+        // (e.g. in unit-test environments), returning a plain boolean so existing
+        // synchronous call-sites continue to work unchanged.
+        function buildDefaultConfirmCancelModal(message) {
+            var a11y = (typeof global !== 'undefined' && global.WalaPlusA11y) ||
+                       (typeof window !== 'undefined' && window.WalaPlusA11y);
+            if (a11y && typeof a11y.openModal === 'function') {
+                return new Promise(function (resolve) {
+                    var doc = (typeof document !== 'undefined') ? document : null;
+                    if (!doc) { resolve(true); return; }
+
+                    var resolved = false;
+                    function finish(result) {
+                        if (resolved) return;
+                        resolved = true;
+                        try { a11y.closeModal(modal); } catch (_) {}
+                        setTimeout(function () {
+                            try { doc.body.removeChild(modal); } catch (_) {}
+                        }, 0);
+                        resolve(result);
+                    }
+
+                    var modal = doc.createElement('div');
+                    modal.setAttribute('role', 'dialog');
+                    modal.setAttribute('aria-modal', 'true');
+                    modal.setAttribute('aria-labelledby', 'sd-confirm-cancel-title');
+                    modal.className = 'hidden fixed inset-0 z-[9999] flex items-center justify-center';
+
+                    var backdrop = doc.createElement('div');
+                    backdrop.className = 'fixed inset-0 bg-black bg-opacity-50';
+                    backdrop.setAttribute('aria-hidden', 'true');
+                    modal.appendChild(backdrop);
+
+                    var panel = doc.createElement('div');
+                    panel.className = 'relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm mx-4 w-full';
+
+                    var title = doc.createElement('h2');
+                    title.id = 'sd-confirm-cancel-title';
+                    title.className = 'text-base font-semibold text-gray-900 dark:text-gray-100 mb-2';
+                    title.textContent = tr('downloads.cancel_modal_title', 'Cancel download?');
+                    panel.appendChild(title);
+
+                    var body = doc.createElement('p');
+                    body.className = 'text-sm text-gray-600 dark:text-gray-300 mb-6';
+                    body.textContent = message;
+                    panel.appendChild(body);
+
+                    var actions = doc.createElement('div');
+                    actions.className = 'flex justify-end gap-3';
+
+                    var keepBtn = doc.createElement('button');
+                    keepBtn.type = 'button';
+                    keepBtn.setAttribute('data-testid', 'button-keep-downloading');
+                    keepBtn.className = 'px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500';
+                    keepBtn.textContent = tr('downloads.cancel_modal_keep', 'Keep downloading');
+                    keepBtn.addEventListener('click', function () { finish(false); });
+                    actions.appendChild(keepBtn);
+
+                    var confirmBtn = doc.createElement('button');
+                    confirmBtn.type = 'button';
+                    confirmBtn.setAttribute('data-testid', 'button-confirm-cancel-download');
+                    confirmBtn.className = 'px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500';
+                    confirmBtn.textContent = tr('downloads.cancel_modal_confirm', 'Cancel download');
+                    confirmBtn.addEventListener('click', function () { finish(true); });
+                    actions.appendChild(confirmBtn);
+
+                    panel.appendChild(actions);
+                    modal.appendChild(panel);
+                    doc.body.appendChild(modal);
+
+                    // When WalaPlusA11y closes the modal via Escape key the hidden
+                    // class is added back — treat that as "Keep downloading".
+                    var observer = new MutationObserver(function () {
+                        if (modal.classList.contains('hidden')) {
+                            observer.disconnect();
+                            finish(false);
+                        }
+                    });
+                    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+                    a11y.openModal(modal, (typeof document !== 'undefined' && document.activeElement) || null);
+                });
+            }
+            // Fallback: synchronous window.confirm (used in test environments and
+            // pages that have not loaded a11y.js).
+            if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                return window.confirm(message);
+            }
+            return true;
+        }
+
         // Decide whether the download is "far enough along" that a stray
         // click should not be allowed to silently throw away progress.
         // Either threshold trips the confirm prompt:
@@ -2353,23 +2469,35 @@
         }
 
         // Gate the raw cancelDownload() behind a confirm prompt for
-        // long-running downloads. Returns true if the cancellation actually
-        // proceeded (so UI can move into a "Cancelling…" state) and false if
-        // the user backed out (so the Cancel control should stay live).
+        // long-running downloads. Returns true (or a Promise<true>) if the
+        // cancellation actually proceeded so the UI can move into "Cancelling…"
+        // state, and false (or a Promise<false>) if the user backed out so the
+        // Cancel control stays live.
+        // When the default prompter shows an async modal it returns a Promise;
+        // callers should handle both synchronous and Promise return values.
         function requestCancel() {
             if (cancelled) return true;
             if (shouldConfirmCancel()) {
                 var prompter = (typeof options.confirmCancel === 'function')
                     ? options.confirmCancel
-                    : ((typeof window !== 'undefined' && typeof window.confirm === 'function')
-                        ? window.confirm.bind(window)
-                        : null);
-                if (prompter) {
-                    var ok;
-                    try { ok = prompter(tr('downloads.confirm_cancel_message', CONFIRM_CANCEL_MESSAGE)); }
-                    catch (_) { ok = true; }
-                    if (!ok) return false;
+                    : buildDefaultConfirmCancelModal;
+                var result;
+                try { result = prompter(tr('downloads.confirm_cancel_message', CONFIRM_CANCEL_MESSAGE)); }
+                catch (_) { result = true; }
+
+                // Async path — the modal returned a Promise.
+                if (result && typeof result.then === 'function') {
+                    return result.then(function (ok) {
+                        if (!ok) return false;
+                        cancelled = true;
+                        cancelState.cancelled = true;
+                        cancelDownload();
+                        return true;
+                    });
                 }
+
+                // Synchronous path — window.confirm fallback.
+                if (!result) return false;
             }
             cancelled = true;
             // Mirror the cancel flag onto cancelState so streamResponseToDisk
