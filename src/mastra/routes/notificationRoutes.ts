@@ -1,3 +1,19 @@
+import { getSessionFromCookie } from "./authRoutes";
+import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
+
+// Defense-in-depth gate for `/api/health-index`. The middleware's PUBLIC_PATHS
+// list (see src/mastra/middleware/index.ts) used to allowlist `/api/health` as
+// a *prefix*, which silently exposed `/api/health-index` (aggregated NC / CAPA
+// / audit / KPI / compliance counts) to anonymous callers. Task #447 changed
+// the matcher so `/api/health` is exact-only, but we still enforce a
+// session-or-admin-key check here so a future stale entry in PUBLIC_PATHS
+// (the same class of bug audited in #447) cannot silently re-expose this
+// quality-metrics rollup. Mirrors `isAuthorizedForSop` in sopRoutes.ts.
+function isAuthorizedForHealthIndex(c: any): boolean {
+  if (hasValidAdminApiKey(c)) return true;
+  return !!getSessionFromCookie(c.req.header('Cookie'));
+}
+
 export const notificationRoutes = [
   {
     path: "/api/notifications",
@@ -74,6 +90,9 @@ export const notificationRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
+        if (!isAuthorizedForHealthIndex(c)) {
+          return c.json({ error: "Authentication required" }, 401);
+        }
         const pg = await import("pg");
         const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
         try {
