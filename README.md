@@ -1,5 +1,26 @@
 # qms-dashboard
 
+## Pre-commit guardrails (instant local feedback)
+
+The Content Security Policy guardrails described in
+`docs/Security_Operations_SOP.md §5.5` run **locally on every commit** in
+addition to CI, so violations surface immediately in your terminal instead of
+after a failed CI build.
+
+- Hook: `.githooks/pre-commit` — runs `scripts/check-no-inline-styles.sh` and
+  `scripts/check-no-inline-handlers.sh` against the staged change set.
+- Auto-wired: the `prepare` script in `package.json` runs
+  `scripts/install-git-hooks.sh` on every `npm install`, which sets
+  `git config core.hooksPath .githooks` for your local clone. CI runs are
+  skipped automatically.
+- Smart-skip: if a commit touches no files under `dashboard/` or `src/mastra/`,
+  the hook exits instantly without running the scans.
+- Bypass (rare, use a clear commit-message reason): `git commit --no-verify`.
+  The same checks still run in CI via `npm test` and will block the merge.
+
+If you cloned the repo and have not run `npm install` yet, install the hook
+manually with `bash scripts/install-git-hooks.sh`.
+
 ## Integration tests
 
 Certain integration tests talk to real third-party APIs. They are **opt-in**: each

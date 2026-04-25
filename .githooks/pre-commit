@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# WalaPlus — pre-commit hook
+# ----------------------------------------------------------------------------
+# Runs the CSP inline-style and inline-handler guardrails locally before each
+# commit so developers get instant feedback on violations instead of waiting
+# for CI (`npm test`) to fail after a push.
+#
+# Wired automatically via `npm install` → `prepare` → scripts/install-git-hooks.sh,
+# which sets `git config core.hooksPath .githooks` for the local clone.
+#
+# Bypass (use sparingly, document the reason in the commit message):
+#   git commit --no-verify
+#
+# See docs/Security_Operations_SOP.md §5.5 for the full CSP policy.
+# ----------------------------------------------------------------------------
+
+set -u
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$ROOT" ]; then
+  echo "pre-commit: not inside a git checkout, skipping guardrails." >&2
+  exit 0
+fi
+cd "$ROOT"
+
+# Only re-scan when the staged change set actually touches files the
+# guardrails inspect (dashboard/ or src/mastra/) — keeps unrelated commits
+# instant.
+staged_paths=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)
+if [ -n "$staged_paths" ] \
+   && ! printf '%s\n' "$staged_paths" | grep -Eq '^(dashboard/|src/mastra/)'; then
+  exit 0
+fi
+
+failed=0
+
+echo "→ pre-commit: running CSP inline-style guardrail…"
+if ! bash scripts/check-no-inline-styles.sh; then
+  failed=1
+fi
+
+echo "→ pre-commit: running CSP inline-handler guardrail…"
+if ! bash scripts/check-no-inline-handlers.sh; then
+  failed=1
+fi
+
+if [ "$failed" -ne 0 ]; then
+  echo "" >&2
+  echo "✗ pre-commit: CSP guardrail(s) failed — commit aborted." >&2
+  echo "   Fix the violations above, or (rare) bypass with: git commit --no-verify" >&2
+  exit 1
+fi
+
+exit 0

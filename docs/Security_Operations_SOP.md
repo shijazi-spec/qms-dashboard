@@ -690,6 +690,18 @@ When a developer needs to add a genuinely safe inline handler (e.g. HTML deliver
 | Referrer-Policy | strict-origin-when-cross-origin |
 | Permissions-Policy | camera=(), microphone=(), geolocation=() |
 
+#### Pre-Commit Hook (instant local feedback)
+
+Both inline guardrails above also run **locally on every commit** so contributors see violations the moment they `git commit`, not after a failed CI build:
+
+| Item | Value |
+|------|-------|
+| Hook | `.githooks/pre-commit` (version-controlled, executable) |
+| Auto-install | `package.json` → `prepare` script → `scripts/install-git-hooks.sh`, which runs on every `npm install` and sets `git config core.hooksPath .githooks` for the local clone. CI (`CI=1`) and non-git checkouts are skipped, and the installer always exits 0 so it can never break `npm install`. |
+| Behaviour | Inspects the staged change set; if no staged path matches `^(dashboard/\|src/mastra/)` the hook exits 0 instantly (zero-cost on unrelated commits). Otherwise it invokes `bash scripts/check-no-inline-styles.sh` and `bash scripts/check-no-inline-handlers.sh` and aborts the commit on any violation, printing the same remediation hints that CI would. |
+| Bypass | `git commit --no-verify` (use sparingly; the same checks still run in CI via `npm test` and will block the merge). |
+| Manual install | `bash scripts/install-git-hooks.sh` — only needed if a contributor cloned without ever running `npm install`. |
+
 #### Implementation Files
 - `src/mastra/index.ts` — CSP, CORS, and security header middleware
 - `src/mastra/middleware/index.ts` — `cspMiddleware` (per-request nonce + header emission)
@@ -697,6 +709,8 @@ When a developer needs to add a genuinely safe inline handler (e.g. HTML deliver
 - `tests/noInlineStyles.test.ts` — integration-test wrapper that runs the inline-style guardrail under `npm test` / CI
 - `scripts/check-no-inline-handlers.sh` — guardrail that blocks new inline event-handler attributes (`onclick=` etc.)
 - `tests/noInlineHandlers.test.ts` — integration-test wrapper that runs the inline-handler guardrail under `npm test` / CI
+- `.githooks/pre-commit` — local pre-commit hook that runs both guardrails before every commit (instant feedback, blocks the commit on violation)
+- `scripts/install-git-hooks.sh` — auto-wires `core.hooksPath = .githooks` for the local clone; invoked by the `prepare` npm script on every `npm install`
 
 ---
 
