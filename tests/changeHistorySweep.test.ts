@@ -183,14 +183,25 @@ async function runSweepFor(tableName: 'nc_change_history' | 'capa_change_history
   ];
 
   const stub1 = makeStubClient(initial, tableName);
-  const count1 = await redactChangeHistoryTable(stub1.client as any, tableName);
+  const result1 = await redactChangeHistoryTable(stub1.client as any, tableName);
 
   // Expected dirty rows: 1 (sensitive raw), 3 (regex prose), 5 (regex reason),
-  // 6 (sensitive + reason). Rows 2, 4, 7 stay clean → 4 updates.
-  assert(count1 === 4, `${tableName}: 4 dirty rows updated (got ${count1})`);
+  // 6 (sensitive + reason). Rows 2, 4, 7 stay clean → 4 updates. Task #294
+  // changed the return shape from `number` to `ChangeHistorySweepResult` so
+  // the caller can surface the change_reason scrub count separately in the
+  // audit-log entry; we now read `rowsUpdated` for the dirty-row total.
+  assert(
+    result1.rowsUpdated === 4,
+    `${tableName}: 4 dirty rows updated (got ${result1.rowsUpdated})`,
+  );
   assert(
     stub1.updates.length === 4,
     `${tableName}: 4 UPDATE statements issued (got ${stub1.updates.length})`,
+  );
+  // Rows 5 and 6 each scrubbed change_reason → 2 reported separately.
+  assert(
+    result1.changeReasonUpdated === 2,
+    `${tableName}: 2 change_reason scrubs reported (got ${result1.changeReasonUpdated})`,
   );
 
   const row1 = stub1.rows.find(r => r.id === 1)!;
@@ -269,10 +280,14 @@ async function runSweepFor(tableName: 'nc_change_history' | 'capa_change_history
   // ------ Idempotency ------
   console.log(`\n  --- Idempotency check on ${tableName} ---\n`);
   const stub2 = makeStubClient(stub1.rows, tableName);
-  const count2 = await redactChangeHistoryTable(stub2.client as any, tableName);
+  const result2 = await redactChangeHistoryTable(stub2.client as any, tableName);
   assert(
-    count2 === 0,
-    `${tableName}: second pass updates 0 rows (got ${count2}) — idempotent`,
+    result2.rowsUpdated === 0,
+    `${tableName}: second pass updates 0 rows (got ${result2.rowsUpdated}) — idempotent`,
+  );
+  assert(
+    result2.changeReasonUpdated === 0,
+    `${tableName}: second pass reports 0 change_reason scrubs (got ${result2.changeReasonUpdated})`,
   );
   assert(
     stub2.updates.length === 0,
@@ -284,8 +299,12 @@ async function runEmptyTableCheck(): Promise<void> {
   console.log('\n[redactChangeHistoryTable] empty table (Task #249)\n');
 
   const stub = makeStubClient([], 'nc_change_history');
-  const count = await redactChangeHistoryTable(stub.client as any, 'nc_change_history');
-  assert(count === 0, 'empty nc_change_history: 0 rows updated');
+  const result = await redactChangeHistoryTable(stub.client as any, 'nc_change_history');
+  assert(result.rowsUpdated === 0, 'empty nc_change_history: 0 rows updated');
+  assert(
+    result.changeReasonUpdated === 0,
+    'empty nc_change_history: 0 change_reason scrubs',
+  );
   assert(stub.updates.length === 0, 'empty nc_change_history: no UPDATE issued');
 }
 
@@ -305,7 +324,7 @@ async function runPaginationCheck(): Promise<void> {
   }));
 
   const stub = makeStubClient(rows, 'capa_change_history');
-  const updated = await redactChangeHistoryTable(
+  const result = await redactChangeHistoryTable(
     stub.client as any,
     'capa_change_history',
     BATCH,
@@ -313,8 +332,8 @@ async function runPaginationCheck(): Promise<void> {
 
   const expectedDirty = Math.ceil(TOTAL / 5);
   assert(
-    updated === expectedDirty,
-    `paginated capa: ${expectedDirty} dirty rows updated (got ${updated})`,
+    result.rowsUpdated === expectedDirty,
+    `paginated capa: ${expectedDirty} dirty rows updated (got ${result.rowsUpdated})`,
   );
   assert(
     stub.rows.every(r => !String(r.old_value).includes(SK_KEY)),

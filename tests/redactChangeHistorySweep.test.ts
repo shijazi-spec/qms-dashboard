@@ -196,7 +196,13 @@ async function runForTable(tableName: string): Promise<void> {
   const updated = await redactChangeHistoryTable(stub.client, tableName);
 
   // Rows expected to be updated: 1 (deny list), 2, 3, 4 (regex), 7 (regex). Row 5 clean. Row 6 already redacted.
-  assert(updated === 5, `${tableName}: 5 dirty rows updated (got ${updated})`);
+  // Task #294 changed the return shape from `number` to
+  // `ChangeHistorySweepResult` (so callers can report `change_reason` scrubs
+  // separately in audit-log entries). Read `rowsUpdated` for the dirty-row total.
+  assert(
+    updated.rowsUpdated === 5,
+    `${tableName}: 5 dirty rows updated (got ${updated.rowsUpdated})`,
+  );
   assert(
     stub.updates.length === 5,
     `${tableName}: 5 UPDATE statements issued (got ${stub.updates.length})`,
@@ -287,8 +293,8 @@ async function runForTable(tableName: string): Promise<void> {
   const updated2 = await redactChangeHistoryTable(stub2.client, tableName);
 
   assert(
-    updated2 === 0,
-    `${tableName}: second pass updates 0 rows (got ${updated2}) — idempotent`,
+    updated2.rowsUpdated === 0,
+    `${tableName}: second pass updates 0 rows (got ${updated2.rowsUpdated}) — idempotent`,
   );
   assert(
     stub2.updates.length === 0,
@@ -300,7 +306,7 @@ async function runEmptyTable(): Promise<void> {
   console.log('\n--- empty table edge case ---\n');
   const stub = makeStubClient('nc_change_history', []);
   const updated = await redactChangeHistoryTable(stub.client, 'nc_change_history');
-  assert(updated === 0, 'empty nc_change_history: 0 rows updated');
+  assert(updated.rowsUpdated === 0, 'empty nc_change_history: 0 rows updated');
   assert(stub.selectCalls === 1, 'empty nc_change_history: exactly 1 SELECT issued');
   assert(stub.updates.length === 0, 'empty nc_change_history: no UPDATE issued');
 }

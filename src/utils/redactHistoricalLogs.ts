@@ -307,6 +307,20 @@ export async function redactEventLogs(
 }
 
 /**
+ * Result counters for the NC/CAPA change-history sweep.
+ *
+ * Task #294: the sweep scrubs three columns per row, so reporting just
+ * "rows updated" hides whether free-form `change_reason` notes also leaked
+ * credentials. `changeReasonUpdated` is the per-column count of rows whose
+ * `change_reason` text was rewritten (a subset of `rowsUpdated` — a single
+ * row can change both value columns AND change_reason in one UPDATE).
+ */
+export interface ChangeHistorySweepResult {
+  rowsUpdated: number;
+  changeReasonUpdated: number;
+}
+
+/**
  * Sweeps a `*_change_history` table (currently `nc_change_history` and
  * `capa_change_history`) for already-leaked secrets in the
  * `old_value`, `new_value`, and `change_reason` TEXT columns.
@@ -346,13 +360,18 @@ export async function redactEventLogs(
  * `nc_change_history` / `capa_change_history` rows that may contain
  * credentials written before Task #99 hardened the write path, and by
  * Task #250 to ensure the same coverage on every post-restore sweep.
+ *
+ * Returns a {@link ChangeHistorySweepResult} so the caller can report the
+ * count of `change_reason` scrubs separately in audit-log entries
+ * (Task #294 requirement).
  */
 export async function redactChangeHistoryTable(
   client: any,
   tableName: string,
   batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
-): Promise<number> {
-  let updated = 0;
+): Promise<ChangeHistorySweepResult> {
+  let rowsUpdated = 0;
+  let changeReasonUpdated = 0;
   let cursor = 0;
 
   while (true) {
@@ -370,57 +389,64 @@ export async function redactChangeHistoryTable(
     for (const row of page.rows) {
       let oldVal: string | null = row.old_value;
       let newVal: string | null = row.new_value;
-      let reason: string | null = row.change_reason;
-      let changed = false;
+      let reason: string | null = row.change_reason ?? null;
+      let valuesChanged = false;
+      let reasonChanged = false;
 
       if (isSensitiveField(row.field_changed)) {
         // Layer 1 — key-based deny list: blanket-redact any non-null,
-        // non-already-sentinel value.
+        // non-already-sentinel value. Preserve null (no leak risk in null)
+        // and skip already-sentinel values so re-runs are idempotent.
         if (oldVal !== null && oldVal !== undefined && oldVal !== REDACTED_SENTINEL) {
           oldVal = REDACTED_SENTINEL;
-          changed = true;
+          valuesChanged = true;
         }
         if (newVal !== null && newVal !== undefined && newVal !== REDACTED_SENTINEL) {
           newVal = REDACTED_SENTINEL;
-          changed = true;
+          valuesChanged = true;
         }
       } else {
         // Layer 2 — regex scrubber on free-form values stored under a
-        // non-sensitive field name. Non-string / null inputs short-circuit
-        // to identity inside redactSecretLikeStrings.
+        // non-sensitive field name (description, notes, …). The value
+        // columns may contain a pasted credential from before Task #99
+        // hardened the write path. Scrub each column independently and
+        // only mark dirty when the scrubbed text differs byte-for-byte.
+        // Non-string / null inputs short-circuit to identity inside
+        // redactSecretLikeStrings.
         if (typeof oldVal === 'string' && oldVal.length > 0) {
           const scrubbed = redactSecretLikeStrings(oldVal) as string;
           if (scrubbed !== oldVal) {
             oldVal = scrubbed;
-            changed = true;
+            valuesChanged = true;
           }
         }
         if (typeof newVal === 'string' && newVal.length > 0) {
           const scrubbed = redactSecretLikeStrings(newVal) as string;
           if (scrubbed !== newVal) {
             newVal = scrubbed;
-            changed = true;
+            valuesChanged = true;
           }
         }
       }
 
-      // change_reason is free-form prose on every row regardless of
-      // field_changed, so it always gets the regex pass (matches the
-      // write-time path in logNCChange / logCAPAChange).
+      // change_reason is operator-supplied free-form prose on every row
+      // regardless of field_changed, so it always gets the regex pass
+      // (matches the write-time path in logNCChange / logCAPAChange).
       if (typeof reason === 'string' && reason.length > 0) {
         const scrubbed = redactSecretLikeStrings(reason) as string;
         if (scrubbed !== reason) {
           reason = scrubbed;
-          changed = true;
+          reasonChanged = true;
         }
       }
 
-      if (changed) {
+      if (valuesChanged || reasonChanged) {
         await client.query(
           `UPDATE ${tableName} SET old_value = $1, new_value = $2, change_reason = $3 WHERE id = $4`,
           [oldVal, newVal, reason, row.id],
         );
-        updated++;
+        rowsUpdated++;
+        if (reasonChanged) changeReasonUpdated++;
       }
     }
 
@@ -428,7 +454,7 @@ export async function redactChangeHistoryTable(
     if (page.rows.length < batchSize) break;
   }
 
-  return updated;
+  return { rowsUpdated, changeReasonUpdated };
 }
 
 /**
@@ -569,8 +595,10 @@ async function main() {
         description:
           `Backfilled redactSecretLikeStrings + redactSensitiveFields across ` +
           `historical audit tables. event_logs=${result.event_logs_updated}, ` +
-          `nc_change_history=${result.nc_change_history_updated}, ` +
-          `capa_change_history=${result.capa_change_history_updated}, ` +
+          `nc_change_history=${result.nc_change_history_updated} ` +
+          `(change_reason=${result.nc_change_history_change_reason_updated}), ` +
+          `capa_change_history=${result.capa_change_history_updated} ` +
+          `(change_reason=${result.capa_change_history_change_reason_updated}), ` +
           `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
         newValue: result,
         aiInvolved: false,
@@ -609,7 +637,9 @@ export interface SweepResult {
   sweep_timestamp: string;
   event_logs_updated: number;
   nc_change_history_updated: number;
+  nc_change_history_change_reason_updated: number;
   capa_change_history_updated: number;
+  capa_change_history_change_reason_updated: number;
   ai_pending_actions: AiPendingActionsSnapshot | { skipped: string };
   total_rows_updated: number;
 }
@@ -630,14 +660,24 @@ export async function runSweepWithClient(
   console.log(`[Redaction] event_logs: ${elCount} rows updated`);
 
   let ncCount = 0;
+  let ncReasonCount = 0;
   let capaCount = 0;
+  let capaReasonCount = 0;
   let aiCount = 0;
   let aiResult: AiPendingActionsSweepResult | null = null;
   let aiSkipReason: string | null = null;
 
   try {
-    ncCount = await redactChangeHistoryTable(client, "nc_change_history");
-    console.log(`[Redaction] nc_change_history: ${ncCount} rows updated`);
+    const ncResult = await redactChangeHistoryTable(
+      client,
+      "nc_change_history",
+    );
+    ncCount = ncResult.rowsUpdated;
+    ncReasonCount = ncResult.changeReasonUpdated;
+    console.log(
+      `[Redaction] nc_change_history: ${ncCount} rows updated ` +
+        `(change_reason scrubs=${ncReasonCount})`,
+    );
   } catch (e: any) {
     if (e.code === "42P01") {
       console.log(
@@ -649,8 +689,16 @@ export async function runSweepWithClient(
   }
 
   try {
-    capaCount = await redactChangeHistoryTable(client, "capa_change_history");
-    console.log(`[Redaction] capa_change_history: ${capaCount} rows updated`);
+    const capaResult = await redactChangeHistoryTable(
+      client,
+      "capa_change_history",
+    );
+    capaCount = capaResult.rowsUpdated;
+    capaReasonCount = capaResult.changeReasonUpdated;
+    console.log(
+      `[Redaction] capa_change_history: ${capaCount} rows updated ` +
+        `(change_reason scrubs=${capaReasonCount})`,
+    );
   } catch (e: any) {
     if (e.code === "42P01") {
       console.log(
@@ -688,7 +736,9 @@ export async function runSweepWithClient(
     sweep_timestamp: sweepTimestamp,
     event_logs_updated: elCount,
     nc_change_history_updated: ncCount,
+    nc_change_history_change_reason_updated: ncReasonCount,
     capa_change_history_updated: capaCount,
+    capa_change_history_change_reason_updated: capaReasonCount,
     ai_pending_actions: aiResult
       ? {
           scanned: aiResult.scanned,
@@ -785,8 +835,10 @@ export async function onBootRedactionSweep(): Promise<void> {
         description:
           `Automatic on-boot redaction sweep completed. ` +
           `event_logs=${result.event_logs_updated}, ` +
-          `nc_change_history=${result.nc_change_history_updated}, ` +
-          `capa_change_history=${result.capa_change_history_updated}, ` +
+          `nc_change_history=${result.nc_change_history_updated} ` +
+          `(change_reason=${result.nc_change_history_change_reason_updated}), ` +
+          `capa_change_history=${result.capa_change_history_updated} ` +
+          `(change_reason=${result.capa_change_history_change_reason_updated}), ` +
           `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
         newValue: result,
         aiInvolved: false,
