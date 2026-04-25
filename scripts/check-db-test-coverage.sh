@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------------
-# CI gate — every src/utils/*Database.ts writer must ship with a companion
-# secret-leak integration test that is wired into scripts/post-merge.sh.
+# CI gate — every TypeScript file that persists user-controlled data via
+# INSERT/UPDATE against Postgres must ship with a companion secret-leak
+# integration test that is wired into scripts/post-merge.sh.
 #
 # Why this exists
 # ---------------
@@ -12,16 +13,35 @@
 # asserts the raw values never reach the INSERT/UPDATE params vector.
 #
 # Until this gate existed, that rule was enforced only by the README. A
-# developer could add `src/utils/fooDatabase.ts` without a companion test and
-# nothing would block the merge. This script discovers every *Database.ts
-# file and fails the build the moment that happens.
+# developer could add `src/utils/fooDatabase.ts` (or any other DB writer) and
+# nothing would block the merge. This script discovers every writer and fails
+# the build the moment one ships without a companion test.
+#
+# Scope (Task #460)
+# -----------------
+# The original gate (Task #268) only covered `src/utils/*Database.ts`. That
+# left several known leak surfaces uncovered:
+#   • `src/utils/callIntelligenceDb.ts` — note the `Db` (not `Database`) suffix
+#   • `src/utils/database.ts`, `src/utils/notificationHub.ts`,
+#     `src/utils/aiTelemetry.ts`, etc. — utilities that do their own writes
+#   • `src/mastra/routes/*.ts` — request handlers that issue INSERT/UPDATE
+#     directly against the pool instead of going through a *Database.ts module
+#   • `src/data/` — currently has no writers, but is included in the scan so
+#     any future writer added there is caught automatically
+#
+# The discovery now combines two strategies:
+#   1. An explicit include glob for known writer conventions
+#      (`src/utils/*Database.ts`, `src/utils/*Db.ts`).
+#   2. A repo-wide `rg` scan of every `src/**/*.ts` file (excluding
+#      `*.test.ts`) for `INSERT INTO` or `UPDATE <table> SET` patterns.
+# Both sets are merged and deduplicated, so adding a new writer in any
+# directory under `src/` is automatically picked up.
 #
 # What it checks
 # --------------
-#   1. For every src/utils/*Database.ts file, a companion test file exists.
-#      Default convention: `src/utils/<name>Database.test.ts`. Files that
-#      legitimately ship under a different test filename are listed in the
-#      COMPANION_TESTS map below.
+#   1. For every discovered writer, a companion test file exists at
+#      `<dirname>/<basename>.test.ts`. Files that ship a differently-named
+#      companion test list it explicitly in COMPANION_TESTS below.
 #   2. The companion test is wired into CI via scripts/post-merge.sh — either
 #      explicitly invoked (`npx tsx <path>`) or auto-discovered by `npm test`
 #      (which runs tests/runIntegrationTests.ts and recursively picks up every
@@ -29,12 +49,15 @@
 #
 # Grandfathered files
 # -------------------
-# When this gate was introduced, only changeHistoryDatabase.ts and
-# eventLogsDatabase.ts had matching secret-leak tests. The remaining writers
-# are temporarily exempt via the GRANDFATHERED list below so the gate could
-# be turned on without rewriting every test in a single task. Each entry is a
-# standing TODO — please write a *Database.test.ts following
-# src/utils/changeHistoryDatabase.test.ts as a reference and remove the entry.
+# When this gate was first introduced (Task #268), only changeHistoryDatabase
+# and eventLogsDatabase had matching secret-leak tests. The Task #460
+# expansion added many more pre-existing writers (routes, callIntelligenceDb,
+# aiTelemetry, etc.) that also lacked tests on day one. All of them are
+# temporarily exempt via the GRANDFATHERED list below so the broader gate
+# could be turned on without writing dozens of tests in a single task. Each
+# entry is a standing TODO — please write a `<name>.test.ts` following
+# `src/utils/changeHistoryDatabase.test.ts` as a reference and remove the
+# entry.
 #
 # **Do not add new entries to GRANDFATHERED.** The whole point of this gate
 # is to make new untested writers impossible. Add the test instead.
@@ -49,21 +72,61 @@ POST_MERGE="scripts/post-merge.sh"
 # ----------------------------------------------------------------------------
 # Non-standard companion test mappings.
 # Use this only when the historical test filename does not follow the
-# `<name>Database.test.ts` convention. Prefer renaming new tests to match.
+# `<name>.test.ts` convention. Prefer renaming new tests to match.
 # ----------------------------------------------------------------------------
 declare -A COMPANION_TESTS
 COMPANION_TESTS["src/utils/eventLogsDatabase.ts"]="src/utils/redactSensitiveFields.test.ts"
+# Pure SQL-fragment helper shared between two redaction sweeps (Task #575).
+# Doesn't issue its own queries; matched by the rg scan because of a comment
+# describing the `UPDATE ai_call_metrics SET …` clause it splices into. The
+# canonical companion test lives under tests/ and is auto-discovered by
+# `npm test`.
+COMPANION_TESTS["src/utils/aiCallMetricsPreviewBreadcrumb.ts"]="tests/aiCallMetricsPreviewBreadcrumb.test.ts"
 
 # ----------------------------------------------------------------------------
 # Grandfathered modules — must eventually receive a secret-leak test.
-# DO NOT add new entries. New *Database.ts files MUST ship with a companion
-# *.test.ts in src/utils/ following the rules in src/utils/README.md.
+# DO NOT add new entries. New writer files MUST ship with a companion
+# *.test.ts following the rules in src/utils/README.md.
 #
-# Task #459 backfilled secret-leak tests for all 27 historically grandfathered
-# `src/utils/*Database.ts` writers; the allow-list is now empty and any new
-# writer ships with its companion test on day one.
+# History:
+#   • Task #268 introduced the gate with 27 `src/utils/*Database.ts` writers
+#     in this allow-list. Task #459 backfilled companion secret-leak tests
+#     for every one of them, so those entries are no longer needed.
+#   • Task #460 then expanded the gate's discovery beyond `*Database.ts` to
+#     pick up `*Db.ts`, other `src/utils/*` writers, and `src/mastra/routes/*`.
+#     The pre-existing writers in those new categories did not have tests on
+#     day one and are listed below — please write a `<name>.test.ts` per
+#     `src/utils/changeHistoryDatabase.test.ts` and remove the entry.
 # ----------------------------------------------------------------------------
 declare -A GRANDFATHERED
+
+# Task #460 expansion — additional writers picked up by the broader scan.
+# src/utils/* writers that don't follow the *Database.ts naming convention.
+GRANDFATHERED["src/utils/aiBackgroundScanner.ts"]=1
+GRANDFATHERED["src/utils/aiMetricsRetentionConfig.ts"]=1
+GRANDFATHERED["src/utils/aiTelemetry.ts"]=1
+GRANDFATHERED["src/utils/alertEmailRecipients.ts"]=1
+GRANDFATHERED["src/utils/callIntelligenceDb.ts"]=1
+GRANDFATHERED["src/utils/controlledDocumentRegistry.ts"]=1
+GRANDFATHERED["src/utils/database.ts"]=1
+GRANDFATHERED["src/utils/notificationHub.ts"]=1
+GRANDFATHERED["src/utils/platformHealthPulse.ts"]=1
+GRANDFATHERED["src/utils/rateLimiter.ts"]=1
+GRANDFATHERED["src/utils/redactHistoricalLogs.ts"]=1
+GRANDFATHERED["src/utils/scheduledJobs.ts"]=1
+
+# Express route modules under src/mastra/routes/ that issue INSERT/UPDATE
+# directly. Long-term these should be refactored to go through a *Database.ts
+# module (which then carries the secret-leak test); for now each route file
+# needs its own companion test.
+GRANDFATHERED["src/mastra/routes/authRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/callIntelligenceRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/exportDownloadRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/i18nRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/qmsEnhancedRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/tablefApiRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/tablefRoutes.ts"]=1
+GRANDFATHERED["src/mastra/routes/triggerRoutes.ts"]=1
 
 PASS=0
 FAIL=0
@@ -79,31 +142,68 @@ if [ ! -f "$POST_MERGE" ]; then
   exit 1
 fi
 
+if ! command -v rg >/dev/null 2>&1; then
+  echo "  ✗ ripgrep ('rg') is required for the broad writer scan but is not installed."
+  exit 1
+fi
+
 # `npm test` (via tests/runIntegrationTests.ts) recursively discovers every
 # src/**/*.test.ts file. If the post-merge script invokes `npm test`, any
-# companion test placed under src/utils/ is wired in by construction.
+# companion test placed alongside its source under src/ is wired in by
+# construction.
 POST_MERGE_RUNS_NPM_TEST=0
 if grep -qE '^[[:space:]]*npm[[:space:]]+test([[:space:]]|$)' "$POST_MERGE"; then
   POST_MERGE_RUNS_NPM_TEST=1
 fi
 
 # ----------------------------------------------------------------------------
-# Discover every src/utils/*Database.ts source file (excluding *.test.ts).
+# Discover every writer under src/.
+#
+# Strategy:
+#   1. Explicit include globs for known writer conventions
+#      (src/utils/*Database.ts and src/utils/*Db.ts). These are caught even
+#      if the file happens to not match the pattern scan (e.g. an aggregator
+#      that re-exports writes from another module).
+#   2. Repo-wide rg scan of src/**/*.ts (excluding *.test.ts) for raw
+#      INSERT INTO / UPDATE <table> SET statements. Catches writers in any
+#      directory — src/utils/ outside the *Database.ts naming, src/data/,
+#      src/mastra/routes/, and any future location.
+#
+# The two sets are merged and deduplicated.
 # ----------------------------------------------------------------------------
+declare -A WRITERS
+
 shopt -s nullglob
-DB_FILES=()
-for path in src/utils/*Database.ts; do
+for path in src/utils/*Database.ts src/utils/*Db.ts; do
   case "$path" in
     *.test.ts) continue ;;
   esac
-  DB_FILES+=("$path")
+  [ -f "$path" ] && WRITERS["$path"]=1
 done
 shopt -u nullglob
 
-if [ "${#DB_FILES[@]}" -eq 0 ]; then
-  echo "  ✗ No src/utils/*Database.ts files were discovered — refusing to silently pass."
+# rg-based scan. -l prints file names, --type ts limits to *.ts, -g excludes
+# test files. The pattern matches `INSERT INTO <table>` and `UPDATE <table>
+# SET` — the two write verbs that can carry user-controlled data into a
+# parameterised query.
+SCAN_PATTERN='INSERT INTO|UPDATE [A-Za-z_][A-Za-z0-9_]* SET'
+while IFS= read -r path; do
+  [ -z "$path" ] && continue
+  WRITERS["$path"]=1
+done < <(rg -l --type ts -g '!**/*.test.ts' "$SCAN_PATTERN" src/ 2>/dev/null | sort)
+
+if [ "${#WRITERS[@]}" -eq 0 ]; then
+  echo "  ✗ No DB writer files were discovered — refusing to silently pass."
   exit 1
 fi
+
+# Stable iteration order for deterministic output.
+WRITER_PATHS=()
+for path in "${!WRITERS[@]}"; do
+  WRITER_PATHS+=("$path")
+done
+IFS=$'\n' WRITER_PATHS=($(sort <<<"${WRITER_PATHS[*]}"))
+unset IFS
 
 UNKNOWN_GRANDFATHERED=()
 for grandfathered in "${!GRANDFATHERED[@]}"; do
@@ -117,7 +217,7 @@ if [ "${#UNKNOWN_GRANDFATHERED[@]}" -gt 0 ]; then
   done
 fi
 
-for src_file in "${DB_FILES[@]}"; do
+for src_file in "${WRITER_PATHS[@]}"; do
   if [ -n "${GRANDFATHERED[$src_file]+x}" ]; then
     ok "$src_file — grandfathered (TODO: write companion *.test.ts per src/utils/README.md)"
     continue
@@ -151,9 +251,10 @@ if [ $FAIL -gt 0 ]; then
   echo ""
   echo "❌ DB writer secret-leak test coverage FAILED."
   echo ""
-  echo "   Every src/utils/*Database.ts file MUST ship with a companion"
-  echo "   *.test.ts in src/utils/ that mocks pg.Pool.prototype.query, calls"
-  echo "   every public write function with payloads containing"
+  echo "   Every TypeScript file under src/ that runs INSERT INTO or"
+  echo "   UPDATE <table> SET against Postgres MUST ship with a companion"
+  echo "   <name>.test.ts in the same directory that mocks pg.Pool.prototype"
+  echo "   .query, calls every public write function with payloads containing"
   echo "   password_hash / mfa_secret / access_token / refresh_token / api_key,"
   echo "   and asserts those values are replaced with '***REDACTED***' before"
   echo "   they reach the INSERT/UPDATE params vector."
