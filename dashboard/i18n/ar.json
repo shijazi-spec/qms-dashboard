@@ -1532,7 +1532,9 @@
       "processing": "جارٍ المعالجة…",
       "loading": "جارٍ التحميل…",
       "failed_load": "فشل تحميل الموافقات.",
-      "prompt_rejection_reason": "سبب الرفض (3 أحرف على الأقل):"
+      "prompt_rejection_reason": "سبب الرفض (3 أحرف على الأقل):",
+      "action_not_found_title": "الإجراء غير موجود",
+      "action_not_found_body": "تعذّر العثور على الإجراء {code}. قد يكون قد حُذف أو انتهت صلاحيته أو أن الرابط مكتوب بشكل خاطئ."
     },
     "health": {
       "running": "جارٍ التشغيل...",

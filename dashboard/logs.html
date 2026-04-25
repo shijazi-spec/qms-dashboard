@@ -495,7 +495,7 @@
                             </div>
                             <div>
                                 <p class="font-medium text-gray-700">Correlation ID:</p>
-                                <p class="text-gray-600 font-mono text-xs">${log.correlation_id || 'N/A'}</p>
+                                <p class="text-gray-600 font-mono text-xs">${renderCorrelationId(log.correlation_id)}</p>
                             </div>
                             <div>
                                 <p class="font-medium text-gray-700">Checksum:</p>
@@ -530,6 +530,30 @@
             } catch {
                 return String(obj);
             }
+        }
+
+        // Task #545: when an event_log row's correlation_id is an AI
+        // approval action code (APR-YYYYMMDD-XXXXXX), surface it as a
+        // clickable deep-link into the Approvals dashboard so auditors
+        // can pivot from a log entry straight to the action's detail
+        // panel. Non-matching values render unchanged.
+        function renderCorrelationId(corr) {
+            if (!corr) return 'N/A';
+            const safe = escapeAttribute(corr);
+            if (/^APR-\d{8}-[A-Z0-9]{4,12}$/i.test(corr)) {
+                const href = '/ai-approvals#action=' + encodeURIComponent(corr);
+                return '<a href="' + escapeAttribute(href) +
+                    '" class="text-indigo-700 hover:text-indigo-900 underline" ' +
+                    'data-testid="link-correlation-' + safe + '">' +
+                    safe + '</a>';
+            }
+            return safe;
+        }
+
+        function escapeAttribute(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
         }
 
         function formatDateTime(dateStr) {

@@ -418,7 +418,19 @@ const _aiApprovalRoutesRaw = [
 
           const code = c.req.param('code');
           const action = await getPendingActionByCode(code);
-          if (!action) return c.json({ error: 'Approval action not found' }, 404);
+          if (!action) {
+            // Task #545: include a stable machine-readable `code` so the
+            // dashboard's deep-link handler can show a friendly
+            // "Action not found" toast (rather than the generic
+            // "failed to load") when an operator follows a stale
+            // notification link. Echo the requested action_code back so
+            // the client can render it without re-parsing the URL.
+            return c.json({
+              error: 'Approval action not found',
+              code: 'NOT_FOUND',
+              action_code: code,
+            }, 404);
+          }
 
           // Authorization: requester OR privileged role can view.
           const isRequester = action.requested_by_user_id === user.userId;

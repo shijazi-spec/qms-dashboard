@@ -1532,7 +1532,9 @@
       "processing": "Processing…",
       "loading": "Loading…",
       "failed_load": "Failed to load approvals.",
-      "prompt_rejection_reason": "Reason for rejection (min 3 chars):"
+      "prompt_rejection_reason": "Reason for rejection (min 3 chars):",
+      "action_not_found_title": "Action not found",
+      "action_not_found_body": "We couldn't find action {code}. It may have been deleted, expired, or the link is mistyped."
     },
     "health": {
       "running": "Running...",

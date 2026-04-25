@@ -472,6 +472,191 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     dom.window.close();
   });
 
+  /* ------------------------------------------------------------------ *
+   * Task #545 — deep-link / notification-link behaviour
+   *
+   * The dashboard supports opening the detail modal directly from a
+   * URL hash (#action=APR-...) or query parameter (?action=APR-...) so
+   * notifications, audit-log rows, and email reminders can deep-link
+   * to a specific action without making the operator scroll the queue.
+   * ------------------------------------------------------------------ */
+
+  function setupDomAt(url: string, opts: {
+    listRows: SeededAction[];
+    detailStatus?: number;
+    detailBody?: any;
+  }): SetupResult {
+    const dom = new JSDOM(HTML_SOURCE, {
+      url,
+      runScripts: 'outside-only',
+      pretendToBeVisual: true,
+    });
+    const win: any = dom.window;
+    const doc: Document = win.document;
+
+    const fetchMock = vi.fn(async (rawUrl: string) => {
+      const u = String(rawUrl);
+      if (u.startsWith('/api/ai/approvals/credential-warning-count')) {
+        return makeJsonResponse(win, { count: 0 });
+      }
+      if (u.startsWith('/api/ai/approvals?') || u === '/api/ai/approvals') {
+        return makeJsonResponse(win, { rows: opts.listRows });
+      }
+      const detailMatch = u.match(/^\/api\/ai\/approvals\/([^/?]+)$/);
+      if (detailMatch) {
+        if (opts.detailStatus && opts.detailStatus >= 400) {
+          return makeJsonResponse(
+            win,
+            opts.detailBody ?? { error: 'Approval action not found', code: 'NOT_FOUND' },
+            opts.detailStatus,
+          );
+        }
+        const code = decodeURIComponent(detailMatch[1]);
+        const row = opts.listRows.find(r => r.action_code === code);
+        return makeJsonResponse(
+          win,
+          { action: row ?? buildSeededAction(), prior_viewers: row?.prior_viewers ?? [] },
+        );
+      }
+      return makeJsonResponse(win, { error: 'unhandled', url: u }, 404);
+    });
+    win.fetch = fetchMock;
+
+    win.setInterval = ((..._args: any[]) => 0) as any;
+    win.requestAnimationFrame = ((cb: FrameRequestCallback) => { cb(0); return 0; }) as any;
+    win.WalaPlusNav = { init: () => {} };
+
+    const inlineScripts = Array.from(doc.querySelectorAll('script'))
+      .filter(s => !s.getAttribute('src'))
+      .map(s => s.textContent || '');
+    for (const code of inlineScripts) if (code.trim()) win.eval(code);
+    doc.dispatchEvent(new win.Event('DOMContentLoaded'));
+
+    async function waitFor<T>(fn: () => T | null | undefined, label: string, timeoutMs = 1500): Promise<T> {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        const v = fn();
+        if (v) return v;
+        await new Promise(r => setTimeout(r, 10));
+      }
+      throw new Error(`Timeout waiting for: ${label}`);
+    }
+
+    return {
+      win,
+      doc,
+      fetchMock,
+      waitForRowRender: code =>
+        waitFor(() => doc.querySelector<HTMLElement>(`#approvalsList [data-code="${code}"]`),
+                `row[data-code=${code}]`),
+      waitForModalRender: () =>
+        waitFor(() => {
+          const modal = doc.getElementById('actionDetailModal');
+          if (!modal || modal.classList.contains('hidden')) return null;
+          return (
+            modal.querySelector<HTMLElement>('[data-testid="list-prior-viewers"]') ||
+            modal.querySelector<HTMLElement>('[data-testid="text-no-prior-viewers"]') ||
+            modal.querySelector<HTMLElement>('[data-testid="text-action-not-found"]')
+          );
+        }, 'detail modal panel'),
+      cleanup: () => { dom.window.close(); },
+    };
+  }
+
+  it('opens the detail modal automatically when the URL hash carries an action code (#action=...)', async () => {
+    const action = buildSeededAction();
+    env = setupDomAt(
+      `http://localhost/dashboard/ai-approvals.html#action=${action.action_code}`,
+      { listRows: [action] },
+    );
+
+    const panel = await env.waitForModalRender();
+    const modal = env.doc.getElementById('actionDetailModal')!;
+    expect(modal.classList.contains('hidden')).toBe(false);
+    expect(panel.getAttribute('data-testid')).toBe('list-prior-viewers');
+    // The detail endpoint must have been invoked for the deep-linked code.
+    const calls = (env.fetchMock as any).mock.calls.map((c: any[]) => String(c[0]));
+    expect(
+      calls.some((u: string) => u === `/api/ai/approvals/${action.action_code}`),
+    ).toBe(true);
+  });
+
+  it('also accepts the ?action=APR-... query-parameter form', async () => {
+    const action = buildSeededAction();
+    env = setupDomAt(
+      `http://localhost/dashboard/ai-approvals.html?action=${action.action_code}`,
+      { listRows: [action] },
+    );
+
+    await env.waitForModalRender();
+    const modal = env.doc.getElementById('actionDetailModal')!;
+    expect(modal.classList.contains('hidden')).toBe(false);
+  });
+
+  it('shows a friendly "Action not found" toast inside the modal when the deep-linked code is unknown (404)', async () => {
+    env = setupDomAt(
+      'http://localhost/dashboard/ai-approvals.html#action=APR-20260101-MISSING',
+      {
+        listRows: [],
+        detailStatus: 404,
+        detailBody: {
+          error: 'Approval action not found',
+          code: 'NOT_FOUND',
+          action_code: 'APR-20260101-MISSING',
+        },
+      },
+    );
+
+    await env.waitForModalRender();
+    const modal = env.doc.getElementById('actionDetailModal')!;
+    expect(modal.classList.contains('hidden')).toBe(false);
+    const notFound = modal.querySelector<HTMLElement>('[data-testid="text-action-not-found"]');
+    expect(notFound, 'friendly not-found block should render').toBeTruthy();
+    expect(notFound!.textContent).toContain('APR-20260101-MISSING');
+    // Generic load-error copy must NOT be shown for the 404 case.
+    expect(modal.textContent).not.toContain('Failed to load approvals');
+  });
+
+  it('ignores malformed action codes in the hash (security: only APR-... shapes trigger a fetch)', async () => {
+    env = setupDomAt(
+      'http://localhost/dashboard/ai-approvals.html#action=../../etc/passwd',
+      { listRows: [] },
+    );
+    // Give the page a beat to settle.
+    await new Promise(r => setTimeout(r, 50));
+    const modal = env.doc.getElementById('actionDetailModal')!;
+    expect(modal.classList.contains('hidden')).toBe(true);
+    const calls = (env.fetchMock as any).mock.calls.map((c: any[]) => String(c[0]));
+    // No request matching the per-action detail endpoint
+    // (/api/ai/approvals/<code>) should have been issued. The list,
+    // credential-warning-count, and review-status-counts endpoints are
+    // expected and excluded from this assertion.
+    const detailCalls = calls.filter((u: string) =>
+      /^\/api\/ai\/approvals\/(?!credential-warning-count|review-status-counts|pending-count)/.test(u),
+    );
+    expect(detailCalls).toEqual([]);
+  });
+
+  it('reacts to a hashchange event by opening the modal for the new code without a full reload', async () => {
+    const action = buildSeededAction();
+    env = setupDomAt(
+      'http://localhost/dashboard/ai-approvals.html',
+      { listRows: [action] },
+    );
+
+    // Wait for the initial list render.
+    await env.waitForRowRender(action.action_code);
+    const modal = env.doc.getElementById('actionDetailModal')!;
+    expect(modal.classList.contains('hidden')).toBe(true);
+
+    // Mutate the hash and fire hashchange (jsdom does not emit it on its own).
+    env.win.location.hash = `#action=${action.action_code}`;
+    env.win.dispatchEvent(new env.win.HashChangeEvent('hashchange'));
+
+    await env.waitForModalRender();
+    expect(modal.classList.contains('hidden')).toBe(false);
+  });
+
   it('renders the expected "1 view" / "N views" pluralisation', async () => {
     const action = buildSeededAction({
       prior_viewers: [

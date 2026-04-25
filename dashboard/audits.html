@@ -767,9 +767,18 @@
                         _t('dyn.audits.draft_ready_html') +
                         '<button data-on-click="submitProgramme" data-args="[&quot; + latest.id + &quot;]" class="text-indigo-700 underline ms-2">' + _t('dyn.audits.submit_for_signoff') + '</button>';
                 } else if (latest.status === 'pending_signoff') {
+                    // Task #545: deep-link the "Open in HITL" CTA to the
+                    // exact action when the programme has an associated
+                    // approval code, so the Head of Operations & Quality
+                    // lands on the right detail panel with one click
+                    // instead of having to scroll the queue.
+                    var hitlHref = '/ai-approvals';
+                    if (latest.approval_action_code) {
+                        hitlHref += '#action=' + encodeURIComponent(latest.approval_action_code);
+                    }
                     subtitle.innerHTML =
                         _t('dyn.audits.awaiting_signoff_html') +
-                        '<a href="/ai-approvals" class="text-indigo-700 underline">' + _t('dyn.audits.go_to_approvals') + '</a>';
+                        '<a href="' + hitlHref + '" class="text-indigo-700 underline">' + _t('dyn.audits.go_to_approvals') + '</a>';
                 } else if (latest.status === 'approved') {
                     subtitle.textContent = _t('dyn.audits.approved_in_force');
                 } else {

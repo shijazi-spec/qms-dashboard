@@ -597,16 +597,60 @@
         // dialog before we move focus inside it.
         requestAnimationFrame(function () { detailCloseBtn.focus(); });
 
+        // Wrap fetch failures so the .catch() can distinguish a 404
+        // ("action not found") from a generic network/server failure
+        // and show a friendly toast inside the modal instead of the
+        // generic "failed to load" message — Task #545.
         fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
-            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (r) {
+                if (r.ok) return r.json();
+                var err = new Error('http_' + r.status);
+                err.status = r.status;
+                return r.json().catch(function () { return null; }).then(function (body) {
+                    err.body = body;
+                    throw err;
+                });
+            })
             .then(function (data) {
                 if (myRequestId !== detailRequestId) return;        // stale: superseded
                 if (detailModal.classList.contains('hidden')) return; // stale: closed
                 renderActionDetail(data);
             })
-            .catch(function () {
+            .catch(function (err) {
                 if (myRequestId !== detailRequestId) return;
                 if (detailModal.classList.contains('hidden')) return;
+                // Friendly 404 path: the operator followed a stale or
+                // mistyped deep link (e.g. from an old email reminder).
+                // Surface a "not found" toast inside the dialog rather
+                // than the generic load-error so they understand the
+                // code itself is the problem, not the network.
+                var is404 = err && (err.status === 404 ||
+                    (err.body && err.body.code === 'NOT_FOUND'));
+                if (is404) {
+                    detailSummary.textContent = '';
+                    // Always render the action code in plain text alongside
+                    // the i18n message so the operator sees which code is
+                    // missing even if a translation is unavailable (the
+                    // i18n loader may not have resolved the key, in which
+                    // case `_t` returns the raw key without interpolating
+                    // {code}). The code is also the most useful piece of
+                    // info if the operator needs to file a bug.
+                    detailBody.innerHTML =
+                        '<div role="alert" data-testid="text-action-not-found" ' +
+                            'class="rounded-md border border-amber-200 bg-amber-50 p-4 text-center">' +
+                          '<div class="text-sm font-semibold text-amber-900">' +
+                            escapeHtml(_t('dyn.ai_approvals.action_not_found_title')) +
+                          '</div>' +
+                          '<div class="mt-1 text-xs text-amber-800">' +
+                            escapeHtml(_t('dyn.ai_approvals.action_not_found_body', { code: code })) +
+                          '</div>' +
+                          '<div class="mt-2 font-mono text-xs text-amber-900" ' +
+                              'data-testid="text-action-not-found-code">' +
+                            escapeHtml(code) +
+                          '</div>' +
+                        '</div>';
+                    return;
+                }
                 detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
                     _t('dyn.ai_approvals.failed_load') + '</div>';
                 detailSummary.textContent = '';
@@ -625,6 +669,28 @@
             try { detailLastFocus.focus(); } catch (_) { /* ignore */ }
         }
         detailLastFocus = null;
+        // Task #545: if the modal was opened via a deep link
+        // (#action=APR-... or ?action=APR-...) clear that token on
+        // close so a refresh doesn't re-open the same dialog and the
+        // back button does what the operator expects. We strip both
+        // the hash form and the query-param form for parity.
+        try {
+            var loc = window.location;
+            var hashIsAction = loc.hash && /^#(?:action=|APR-)/i.test(loc.hash);
+            var newSearch = loc.search;
+            if (loc.search) {
+                var params = new URLSearchParams(loc.search);
+                if (params.has('action')) {
+                    params.delete('action');
+                    var s = params.toString();
+                    newSearch = s ? '?' + s : '';
+                }
+            }
+            if (hashIsAction || newSearch !== loc.search) {
+                history.replaceState(null, '',
+                    loc.pathname + newSearch + (hashIsAction ? '' : loc.hash));
+            }
+        } catch (_) { /* ignore */ }
     }
 
     detailCloseBtn.addEventListener('click', closeDetailModal);
@@ -947,6 +1013,62 @@
     load();
     handleDeepLink();
     setInterval(load, 30000);
+
+    /* ---------------------------------------------------------------- *
+     *  Deep-linking (Task #545)
+     *
+     *  Notification surfaces (audit log links, in-app alerts, follow-up
+     *  emails, ...) reference a specific approval by code. Visiting
+     *      /ai-approvals#action=APR-YYYYMMDD-XXXXXX
+     *  or
+     *      /ai-approvals?action=APR-YYYYMMDD-XXXXXX
+     *  should open the detail modal for that code as soon as the page
+     *  is interactive — without making the operator scroll the queue.
+     *
+     *  Validation: action codes follow APR-YYYYMMDD-<6+ alphanum>. We
+     *  reject anything that doesn't match so a hostile or mistyped hash
+     *  can never be reflected as-is into a fetch URL.
+     * ---------------------------------------------------------------- */
+    var ACTION_CODE_RE = /^APR-\d{8}-[A-Z0-9]{4,12}$/i;
+
+    function readDeepLinkCode() {
+        var code = '';
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            code = params.get('action') || '';
+            if (!code && window.location.hash) {
+                var h = window.location.hash.replace(/^#/, '');
+                var hp = new URLSearchParams(h);
+                code = hp.get('action') || '';
+                // Bare-hash form: #APR-YYYYMMDD-XXXXXX (also accepted).
+                if (!code && /^APR-/i.test(h)) code = h;
+            }
+        } catch (_) { /* ignore malformed URLs */ }
+        code = (code || '').trim();
+        return ACTION_CODE_RE.test(code) ? code.toUpperCase() : '';
+    }
+
+    function maybeOpenFromDeepLink() {
+        var code = readDeepLinkCode();
+        if (!code) return;
+        // If the modal is already open for this code, leave it alone.
+        if (!detailModal.classList.contains('hidden') &&
+            detailTitle.textContent === code) {
+            return;
+        }
+        openDetailModal(code);
+    }
+
+    // On first load: open the deep-linked modal. Don't wait for the
+    // /api/ai/approvals list to settle — the detail endpoint is a
+    // separate fetch, so the modal can paint as soon as the page is
+    // parsed and is responsive even when the queue is slow.
+    maybeOpenFromDeepLink();
+
+    // React to client-side hash changes (e.g. an audit-log row clicked
+    // while the dashboard is already open in the same tab) so we don't
+    // force a full page reload to switch actions.
+    window.addEventListener('hashchange', maybeOpenFromDeepLink);
 })();
 </script>
     <script>
