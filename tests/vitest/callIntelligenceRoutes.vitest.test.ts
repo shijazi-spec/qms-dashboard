@@ -18,7 +18,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { callIntelligenceRoutes } from "../../src/mastra/routes/callIntelligenceRoutes";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
-import { makeCallRecord } from "../_helpers/fixtures";
+import {
+  makeCallRecord,
+  makeCallTranscript,
+  makeCallAnalysis,
+  makeCallQAScore,
+  makeCallCompliance,
+} from "../_helpers/fixtures";
 
 vi.mock("../../src/utils/callIntelligenceDb", () => ({
   initCallIntelligenceTables: vi.fn(async () => undefined),
@@ -211,10 +217,10 @@ describe("GET /api/calls/:callId — real data path", () => {
   test("200 returns full call analysis when found", async () => {
     const full: Awaited<ReturnType<typeof callDb.getCallWithFullAnalysis>> = {
       record: makeCallRecord({ id: 5, call_id: "c-5" }),
-      transcript: null,
-      analysis: null,
-      qaScore: null,
-      compliance: null,
+      transcript: makeCallTranscript({ id: 1, call_record_id: 5 }),
+      analysis: makeCallAnalysis({ id: 1, call_record_id: 5 }),
+      qaScore: makeCallQAScore({ id: 1, call_record_id: 5 }),
+      compliance: makeCallCompliance({ id: 1, call_record_id: 5 }),
     };
     vi.mocked(callDb.getCallWithFullAnalysis).mockResolvedValueOnce(full);
 

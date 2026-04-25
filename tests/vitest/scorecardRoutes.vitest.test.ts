@@ -12,6 +12,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { FakeContext, CapturedResponse } from "../_helpers/fakeContext";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
+import { makeMohammedKPI, makeScorecardSnapshot } from "../_helpers/fixtures";
+import type { MohammedKPI } from "../../src/utils/scorecardDatabase";
 
 const FAKE_USER = { userId: 0, email: "api@system", name: "API Key", role: "admin" as const };
 
@@ -54,11 +56,17 @@ async function getRoutes() {
 
 describe("GET /api/scorecard/mohammed — real data path", () => {
   test("200 returns { success: true, data: scorecard } when found", async () => {
+    const kpis: MohammedKPI[] = [makeMohammedKPI({ kpi_id: "MAM-KPI-01" })];
     const scorecard = {
-      employee: { name: "Mohammed Al Muzaini", role: "Head of Operations" },
+      employee: {
+        name: "Mohammed Al Muzaini",
+        role: "Head of Operations",
+        mission: "Operational excellence",
+      },
       overall_score: 87.5,
       weighted_score: 82.0,
-      kpis: [] as unknown[],
+      kpis,
+      generated_at: new Date("2026-01-15"),
     };
     vi.mocked(scorecardDb.getMohammedScorecard).mockResolvedValueOnce(scorecard);
 
@@ -137,13 +145,24 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
 
 describe("POST /api/scorecard/snapshot — real data path", () => {
   test("200 returns { success: true, message, data: saved } when snapshot is saved", async () => {
+    const kpis: MohammedKPI[] = [makeMohammedKPI()];
     const scorecard = {
-      employee: { name: "Mohammed Al Muzaini", role: "Head of Operations" },
+      employee: {
+        name: "Mohammed Al Muzaini",
+        role: "Head of Operations",
+        mission: "Operational excellence",
+      },
       overall_score: 91,
       weighted_score: 88,
-      kpis: [] as unknown[],
+      kpis,
+      generated_at: new Date("2026-02-01"),
     };
-    const saved = { id: 1, overall_score: 91, period_start: new Date(), period_end: new Date() };
+    const saved = makeScorecardSnapshot({
+      id: 1,
+      overall_score: 91,
+      weighted_score: 88,
+      kpi_details: kpis,
+    });
     vi.mocked(scorecardDb.getMohammedScorecard).mockResolvedValueOnce(scorecard);
     vi.mocked(scorecardDb.saveScorecard).mockResolvedValueOnce(saved);
 
@@ -164,7 +183,7 @@ describe("POST /api/scorecard/snapshot — real data path", () => {
 
 describe("GET /api/scorecard/history — real data path", () => {
   test("200 returns { success: true, data: history } with default name and limit", async () => {
-    const history = [{ id: 1, overall_score: 85, period_start: new Date() }];
+    const history = [makeScorecardSnapshot({ id: 1, overall_score: 85 })];
     vi.mocked(scorecardDb.getScorecardHistory).mockResolvedValueOnce(history);
 
     const routes = await getRoutes();

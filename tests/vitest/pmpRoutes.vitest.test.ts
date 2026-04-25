@@ -15,7 +15,11 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { FakeContext, CapturedResponse } from "../_helpers/fakeContext";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
-import { makePMPProject } from "../_helpers/fixtures";
+import {
+  makePMPProject,
+  makeProjectRisk,
+  makeProjectMilestone,
+} from "../_helpers/fixtures";
 
 const FAKE_USER = { userId: 0, email: "api@system", name: "API", role: "admin" as const };
 
@@ -183,7 +187,10 @@ describe("GET /api/pmp/projects/:projectId — real data path", () => {
 
 describe("GET /api/pmp/risks — real data path", () => {
   test("200 returns listProjectRisks() result with forwarded projectId", async () => {
-    const fixture = { risks: [{ risk_id: "r-1", title: "Budget overrun" }], total: 1 } as Awaited<ReturnType<typeof teamDb.listProjectRisks>>;
+    const fixture = {
+      risks: [makeProjectRisk({ risk_id: "r-1", title: "Budget overrun" })],
+      total: 1,
+    };
     vi.mocked(teamDb.listProjectRisks).mockResolvedValueOnce(fixture);
 
     const routes = await getRoutes();
@@ -205,7 +212,10 @@ describe("GET /api/pmp/risks — real data path", () => {
 
 describe("GET /api/pmp/milestones — real data path", () => {
   test("200 returns listProjectMilestones() result", async () => {
-    const fixture = { milestones: [{ milestone_id: "m-1", title: "Launch" }], total: 1 } as Awaited<ReturnType<typeof teamDb.listProjectMilestones>>;
+    const fixture = {
+      milestones: [makeProjectMilestone({ milestone_id: "m-1", name: "Launch" })],
+      total: 1,
+    };
     vi.mocked(teamDb.listProjectMilestones).mockResolvedValueOnce(fixture);
 
     const routes = await getRoutes();
