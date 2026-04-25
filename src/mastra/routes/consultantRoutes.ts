@@ -26,7 +26,7 @@ import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 import { withAgentUserContext } from "../../utils/withApprovalGate";
 import type { AutoApproveTier } from "../../utils/aiToolGovernance";
-import { withAiTelemetry, startTelemetrySpan } from "../../utils/aiTelemetry";
+import { withAiTelemetry, startTelemetrySpan, buildAiCallTelemetryMetadata } from "../../utils/aiTelemetry";
 import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
 
 interface AgentTextResult { text: string }
@@ -104,7 +104,7 @@ export const consultantRoutes = [
               { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
                 promptText: message,
                 userId: user.userId, sessionId: resolvedThreadId,
-                metadata: { prompt_version: QMS_CONSULTANT_PROMPT_VERSION } },
+                metadata: buildAiCallTelemetryMetadata({ promptVersion: QMS_CONSULTANT_PROMPT_VERSION }) },
               async () => {
                 const res = await withAgentUserContext(
                   {
@@ -187,7 +187,7 @@ export const consultantRoutes = [
             promptText: message,
             userId: user.userId,
             sessionId: resolvedThreadId,
-            metadata: { prompt_version: QMS_CONSULTANT_PROMPT_VERSION },
+            metadata: buildAiCallTelemetryMetadata({ promptVersion: QMS_CONSULTANT_PROMPT_VERSION }),
           });
           const messageId = randomUUID();
           let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
@@ -586,10 +586,10 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
               { agentName: 'WalaPlus QMS Consultant', model: 'gpt-4o',
                 promptText: scanPrompt.slice(0, 300),
                 userId: user.userId,
-                metadata: {
-                  type: 'platform_scan',
-                  prompt_version: QMS_CONSULTANT_PROMPT_VERSION,
-                } },
+                metadata: buildAiCallTelemetryMetadata({
+                  scanType: 'platform_scan',
+                  promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+                }) },
               async () => (await agent.generateLegacy(scanPrompt, {
                 threadId: `scan-${Date.now()}`,
                 resourceId: "system-scanner",

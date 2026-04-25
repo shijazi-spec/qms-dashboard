@@ -92,6 +92,106 @@ export function redactErrorMessageForStorage(
 }
 
 /**
+ * Closed allow-list of keys that may appear in `ai_call_metrics.metadata`.
+ *
+ * Replaces the historical `Record<string, unknown>` shape so a developer
+ * cannot accidentally pass `{ note: caughtError.message, debug: rawHeaders }`
+ * from a `catch` block — which would land plaintext credentials in the
+ * JSONB column. The WRITE-path scrubber `redactMetadataForStorage()`
+ * defends against that one layer too late: by the time it runs, the
+ * secret has already been constructed in memory and (typically) logged
+ * to stdout via `console.error` / Pino BEFORE telemetry redacts it for
+ * the DB. This typed shape is the source-side prevention; build it via
+ * `buildAiCallTelemetryMetadata()`.
+ *
+ * To add a new key:
+ *   1. Add the snake_case field here.
+ *   2. Add the camelCase field on `AiCallTelemetryMetadataInput`.
+ *   3. Map it in `buildAiCallTelemetryMetadata()`.
+ *   4. Update the test in `src/utils/__tests__/aiTelemetryMetadata.test.ts`.
+ */
+export interface AiCallTelemetryMetadata {
+  /** Stable hash of the agent's instruction prompt (e.g. `qms@deadbeef`). */
+  prompt_version?: string;
+  /** Identifier for an A/B feature flag bucket. */
+  feature_flag?: string;
+  /** Identifier for an experiment arm (e.g. `control`, `treatment-1`). */
+  experiment_arm?: string;
+  /** Sampling temperature used for the call. */
+  agent_temperature?: number;
+  /** Name of the orchestrating workflow (e.g. `qualityAuditWorkflow`). */
+  workflow?: string;
+  /** Step within a workflow (e.g. `sdr-audit`, `sales-audit`). */
+  step?: string;
+  /** Background-scan kind (e.g. `platform_scan`). */
+  scan_type?: string;
+}
+
+/**
+ * camelCase mirror of `AiCallTelemetryMetadata` used as the input shape
+ * for `buildAiCallTelemetryMetadata()`. Keeping the snake_case ↔ camelCase
+ * boundary inside the helper means call-sites read naturally in TS while
+ * the persisted JSONB stays in the snake_case shape that
+ * `metadata->>'prompt_version'` SQL expressions already query.
+ */
+export interface AiCallTelemetryMetadataInput {
+  promptVersion?: string;
+  featureFlag?: string;
+  experimentArm?: string;
+  agentTemperature?: number;
+  workflow?: string;
+  step?: string;
+  scanType?: string;
+}
+
+const TELEMETRY_METADATA_KEY_MAP: Record<keyof AiCallTelemetryMetadataInput, keyof AiCallTelemetryMetadata> = {
+  promptVersion: 'prompt_version',
+  featureFlag: 'feature_flag',
+  experimentArm: 'experiment_arm',
+  agentTemperature: 'agent_temperature',
+  workflow: 'workflow',
+  step: 'step',
+  scanType: 'scan_type',
+};
+
+/**
+ * Build a typed `metadata` payload for `ai_call_metrics` rows.
+ *
+ * MUST be used at every `withAiTelemetry()` / `startTelemetrySpan()` /
+ * `recordStreamTelemetry()` call site instead of an inline object literal.
+ * The closed allow-list (see `AiCallTelemetryMetadataInput`) prevents the
+ * pattern of stuffing dynamic strings derived from `catch (err)`, raw
+ * HTTP headers, or tool output into `metadata` — which would land
+ * plaintext credentials in the JSONB column.
+ *
+ * Defense-in-depth runtime guard: even if a caller bypasses the type
+ * system via `as any`, unexpected keys are dropped and a
+ * `console.warn` is emitted with an actionable message so the regression
+ * shows up in the operator console rather than silently persisting.
+ */
+export function buildAiCallTelemetryMetadata(
+  input: AiCallTelemetryMetadataInput,
+): AiCallTelemetryMetadata {
+  const out: AiCallTelemetryMetadata = {};
+  const loose = input as Record<string, unknown>;
+  for (const inputKey of Object.keys(loose)) {
+    const mapped = TELEMETRY_METADATA_KEY_MAP[inputKey as keyof AiCallTelemetryMetadataInput];
+    if (!mapped) {
+      console.warn(
+        `[aiTelemetry] buildAiCallTelemetryMetadata received unexpected key "${inputKey}". ` +
+        `Allowed keys: ${Object.keys(TELEMETRY_METADATA_KEY_MAP).join(', ')}. ` +
+        `The key was dropped to prevent credential-shaped substrings from reaching ai_call_metrics.metadata.`,
+      );
+      continue;
+    }
+    const value = loose[inputKey];
+    if (value === undefined) continue;
+    (out as Record<string, unknown>)[mapped] = value;
+  }
+  return out;
+}
+
+/**
  * Scrub the caller-supplied `metadata` JSONB blob destined for
  * `ai_call_metrics.metadata` before it is `JSON.stringify`-ed into the
  * INSERT/OPEN parameter slot.
@@ -105,11 +205,17 @@ export function redactErrorMessageForStorage(
  * `metadata` column to that sweep; this defends the WRITE path so the
  * plaintext never reaches the table in the first place).
  *
+ * Note: this is the second layer of defense. The first is the typed
+ * `AiCallTelemetryMetadata` allow-list enforced at the call site by
+ * `buildAiCallTelemetryMetadata()` (Task #484), which prevents free-form
+ * keys derived from `catch (err)` / raw headers / tool output from ever
+ * being constructed in memory in the first place.
+ *
  * Returns a plain object — never null — so callers can pass the result
  * straight into `JSON.stringify` without an extra `?? {}`.
  */
 export function redactMetadataForStorage(
-  metadata: Record<string, unknown> | null | undefined,
+  metadata: AiCallTelemetryMetadata | Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
   if (!metadata) return {};
   const scrubbed = deepRedactSecretLikeStrings(metadata);
@@ -265,7 +371,7 @@ export interface AiCallMetricRow {
   tool_output_preview?: string;
   user_hash?: string;
   session_hash?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AiCallTelemetryMetadata;
 }
 
 export async function insertAiCallMetric(row: AiCallMetricRow): Promise<number | null> {
@@ -338,7 +444,7 @@ async function openAiCallMetric(params: {
   promptPreview?: string;
   userId?: string;
   sessionId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AiCallTelemetryMetadata;
 }): Promise<number | null> {
   try {
     await ensureAiMetricsTable();
@@ -472,7 +578,7 @@ export interface WithAiTelemetryParams {
   promptText?: string;
   userId?: string;
   sessionId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AiCallTelemetryMetadata;
 }
 
 export async function withAiTelemetry<T>(
@@ -638,7 +744,7 @@ export async function recordStreamTelemetry(params: {
   promptText?: string;
   userId?: string;
   sessionId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: AiCallTelemetryMetadata;
 }): Promise<number | null> {
   const latencyMs = Date.now() - params.startedAt;
   const promptPreview = params.promptText
