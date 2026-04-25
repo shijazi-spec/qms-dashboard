@@ -3249,12 +3249,16 @@ describe('streamingDownload (browser helper)', () => {
       { page: 'risks', staticButton: true },
       { page: 'policies', staticButton: true },
       { page: 'duplicates', staticButton: true },
-      // The logs dashboard's export button uses data-on-click="exportCSV"
-      // (not one of the four selectors findExportButton recognises) and the
-      // size hint is wired up dynamically. The audits page renders its
-      // export-PDF buttons from a JS template after fetch, so the static
-      // HTML has no matching trigger either.
-      { page: 'logs', staticButton: false },
+      // logs.html now ships data-estimate-url="/api/logs/export" on its
+      // static "Export CSV" button so findExportButton() matches it on
+      // first paint, just like the other dashboards.
+      { page: 'logs', staticButton: true },
+      // audits.html's per-row PDF buttons are rendered dynamically by
+      // renderAudits() after the /api/audits fetch, so the static HTML
+      // still has no matching trigger. The dashboard code now calls
+      // attachStreamingFallbackNotice() at the end of renderAudits() so
+      // the advisory appears as soon as the table is populated; the
+      // assertion below simulates that injection.
       { page: 'audits', staticButton: false },
     ];
 

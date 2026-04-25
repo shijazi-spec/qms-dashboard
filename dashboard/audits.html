@@ -489,7 +489,7 @@
                     </td>
                     <td class="px-4 py-3 text-center">${formatStatus(a.status)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button data-audit-code="${escAttr(a.audit_code)}" data-on-click="exportAuditPDF" data-args="[${a.id},&quot;@this.dataset.auditCode&quot;,&quot;@this&quot;]" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Export to PDF">
+                        <button data-audit-code="${escAttr(a.audit_code)}" data-on-click="exportAuditPDF" data-args="[${a.id},&quot;@this.dataset.auditCode&quot;,&quot;@this&quot;]" data-estimate-url="/api/audits/${a.id}/export-pdf" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Export to PDF">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
@@ -498,6 +498,15 @@
                     </td>
                 </tr>
             `).join('');
+
+            // Per-row PDF export buttons are injected dynamically here, so
+            // re-run the streaming-fallback advisory hook to attach the
+            // notice on browsers without showSaveFilePicker. The helper
+            // is a no-op if the notice is already present, dismissed, or
+            // streaming APIs are available.
+            if (window.streamingDownload && typeof window.streamingDownload.attachStreamingFallbackNotice === 'function') {
+                window.streamingDownload.attachStreamingFallbackNotice();
+            }
         }
 
         function populateAuditDropdown(audits) {
