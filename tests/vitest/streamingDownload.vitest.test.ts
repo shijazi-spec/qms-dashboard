@@ -1659,6 +1659,188 @@ describe('streamingDownload (browser helper)', () => {
     expect(Array.from(merged)).toEqual([10, 11, 12, 13, 14, 15, 16, 17]);
   });
 
+  // ---- Auto-resume on recoverable interrupt (autoResume: true opt-in) -----
+  // When the caller passes `autoResume: true`, a mid-stream interrupt should
+  // silently issue the Range fetch instead of waiting for the user to click
+  // Resume. The card surfaces "Auto-resuming…" so the user knows what's
+  // happening (and the Cancel pill stays live).
+
+  it('auto-resumes the Range fetch without showing a Resume prompt when autoResume is true', async () => {
+    env = setupBrowserEnv();
+    // Make the backoff effectively zero so the test runs in ms.
+    env.win.STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS = 3;
+    env.win.STREAMING_DOWNLOAD_RESUME_BASE_DELAY_MS = 1;
+
+    const HEAD = new Uint8Array([11, 22, 33, 44]);
+    const TAIL = new Uint8Array([55, 66, 77, 88]);
+    const TOTAL = HEAD.byteLength + TAIL.byteLength;
+    const ETAG = 'W/"auto-success"';
+
+    let firstBodyController: any;
+    const firstBody = new (globalThis as any).ReadableStream({
+      start(c: any) { firstBodyController = c; },
+    });
+    // Control the resume body manually so we can hold it open while we
+    // observe the "Auto-resuming…" card status before the tail bytes
+    // arrive and overwrite it with normal progress copy.
+    let resumeBodyController: any;
+    const resumeBody = new (globalThis as any).ReadableStream({
+      start(c: any) { resumeBodyController = c; },
+    });
+
+    const fetchSpy = vi.fn(async (_url: string, init: any = {}) => {
+      const headers = (init && init.headers) || {};
+      const range =
+        (typeof headers.get === 'function' && headers.get('Range')) ||
+        headers['Range'] || headers['range'];
+
+      if (!range) {
+        return new (globalThis as any).Response(firstBody, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-disposition': 'attachment; filename="auto.bin"',
+            'content-length': String(TOTAL),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        });
+      }
+
+      // Range request — must be rooted at the byte we last wrote.
+      expect(range).toBe('bytes=' + HEAD.byteLength + '-');
+      return new (globalThis as any).Response(resumeBody, {
+        status: 206,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-range': 'bytes ' + HEAD.byteLength + '-' + (TOTAL - 1) + '/' + TOTAL,
+          'content-length': String(TAIL.byteLength),
+          'accept-ranges': 'bytes',
+          'etag': ETAG,
+        },
+      });
+    });
+    env.win.fetch = fetchSpy;
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/auto.bin', {
+      streamToDisk: true,
+      skipEstimate: true,
+      autoResume: true,
+    });
+
+    // Drive the first attempt to the boundary then drop the connection.
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.error(Object.assign(new Error('flap'), { name: 'TypeError' }));
+
+    // The card must show "Auto-resuming…" — the manual Resume button must
+    // never appear. Poll briefly so the assertion gives the pipe-error path
+    // a chance to flip the card into auto-resume mode.
+    let sawAuto = false;
+    for (let i = 0; i < 60; i++) {
+      const status = env.win.document.querySelector('[data-testid="text-download-status"]');
+      if (status && status.getAttribute('data-auto-resume') === '1') {
+        sawAuto = true;
+        expect(status.textContent).toMatch(/Auto-resuming/i);
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(sawAuto).toBe(true);
+    // Manual Resume affordance MUST NOT appear in autoResume mode.
+    expect(env.win.document.querySelector('[data-testid="button-resume-download"]')).toBeNull();
+
+    // Now that we've confirmed the auto-resume status, let the tail flow
+    // and close the resume body so the download can complete.
+    resumeBodyController.enqueue(TAIL);
+    resumeBodyController.close();
+
+    const result = await downloadPromise;
+    expect(result.streamedToDisk).toBe(true);
+    expect(result.bytes).toBe(TOTAL);
+    // Same writable handle reused — partial bytes were preserved.
+    expect(env.fileHandle.createWritable).toHaveBeenCalledTimes(1);
+    // 1 initial GET + 1 Range fetch — no extra retries needed.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    const merged = new Uint8Array(result.bytes);
+    let off = 0;
+    for (const w of env.writes) {
+      merged.set(w, off);
+      off += w.byteLength;
+    }
+    expect(Array.from(merged)).toEqual([11, 22, 33, 44, 55, 66, 77, 88]);
+  });
+
+  it('gives up (rejects, no manual prompt) when autoResume exhausts the retry budget', async () => {
+    env = setupBrowserEnv();
+    // Tight budget so we burn through it quickly: 2 attempts at 1 ms backoff.
+    env.win.STREAMING_DOWNLOAD_RESUME_MAX_ATTEMPTS = 2;
+    env.win.STREAMING_DOWNLOAD_RESUME_BASE_DELAY_MS = 1;
+
+    const HEAD = new Uint8Array([1, 2, 3, 4]);
+    const TOTAL = 8;
+    const ETAG = 'W/"auto-giveup"';
+
+    let firstBodyController: any;
+    const firstBody = new (globalThis as any).ReadableStream({
+      start(c: any) { firstBodyController = c; },
+    });
+
+    let rangeAttempts = 0;
+    const fetchSpy = vi.fn(async (_url: string, init: any = {}) => {
+      const headers = (init && init.headers) || {};
+      const range =
+        (typeof headers.get === 'function' && headers.get('Range')) ||
+        headers['Range'] || headers['range'];
+
+      if (!range) {
+        return new (globalThis as any).Response(firstBody, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-length': String(TOTAL),
+            'accept-ranges': 'bytes',
+            'etag': ETAG,
+          },
+        });
+      }
+      // Every Range fetch fails — simulating a network that never recovers
+      // within the configured retry budget.
+      rangeAttempts += 1;
+      throw new TypeError('Failed to fetch (still down)');
+    });
+    env.win.fetch = fetchSpy;
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/auto-giveup.bin', {
+      streamToDisk: true,
+      skipEstimate: true,
+      autoResume: true,
+      // Suppress the toast so the test doesn't depend on retry-toast wiring.
+      showToast: false,
+      filename: 'auto-giveup.bin',
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.enqueue(HEAD);
+    await new Promise((r) => setTimeout(r, 5));
+    firstBodyController.error(Object.assign(new Error('drop'), { name: 'TypeError' }));
+
+    // After the auto-retries are exhausted, the download should reject
+    // (the helper "gives up" instead of falling back to a manual prompt).
+    await expect(downloadPromise).rejects.toMatchObject({ name: 'AbortError' });
+
+    // Exactly the configured budget was consumed — no more, no less.
+    expect(rangeAttempts).toBe(2);
+    // No manual Resume button was ever shown — the user opted into the
+    // hands-off behaviour and we honoured that until the budget was gone.
+    expect(env.win.document.querySelector('[data-testid="button-resume-download"]')).toBeNull();
+    // Writable was aborted so we don't leave a half-written file with a
+    // dangling handle on disk.
+    expect(env.fileHandle.aborted).toBe(true);
+  });
+
   describe('confirm-before-cancel for near-complete downloads', () => {
     function makeAbortableBody() {
       let bodyController: any;

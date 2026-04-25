@@ -861,6 +861,59 @@
             }
         }
 
+        // Render the auto-resume status (used when streamingDownload was
+        // called with `autoResume: true`). Mirrors setRetryStatus but never
+        // shows a manual Resume prompt — the helper is silently re-issuing
+        // the Range fetch on the user's behalf — and uses copy that makes
+        // the auto-handover obvious so the user knows they didn't have to
+        // click anything. Cancel stays live so the user can still bail.
+        function setAutoResumeStatus(info) {
+            info = info || {};
+            var received = info.received || 0;
+            var total = info.total || 0;
+            var attempt = info.attempt || 1;
+            var maxAttempts = info.maxAttempts || attempt;
+            var reason = info.reason || '';
+            var retryingIn = info.retryingIn || 0;
+
+            // Remove any stale resume prompt left over from a prior
+            // (non-auto) interrupt — the auto-resume path owns the card now.
+            if (resumeRow && resumeRow.parentNode) {
+                resumeRow.parentNode.removeChild(resumeRow);
+                resumeRow = null;
+            }
+
+            spinner.innerHTML = '<svg class="w-4 h-4 text-amber-600 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">' +
+                '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+            bar.className = 'h-full bg-amber-500 transition-all duration-150';
+            cancelBtn.style.display = '';
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = 'Cancel';
+
+            var sizeText = formatBytes(received);
+            var text = total
+                ? 'Auto-resuming… (' + sizeText + ' / ' + formatBytes(total) + ')'
+                : 'Auto-resuming… (' + sizeText + ')';
+            if (attempt > 1) {
+                text += ' — attempt ' + attempt + ' of ' + maxAttempts;
+            }
+            if (retryingIn && retryingIn > 0) {
+                text += ' — waiting ' + Math.max(1, Math.ceil(retryingIn / 1000)) + 's';
+            }
+            if (reason) text += ' — ' + reason;
+
+            statusEl.textContent = text;
+            statusEl.setAttribute('data-auto-resume', '1');
+            statusEl.setAttribute('data-retry-attempt', String(attempt));
+            statusEl.setAttribute('data-retry-max', String(maxAttempts));
+            if (reason) {
+                statusEl.setAttribute('data-resume-reason', String(reason));
+            } else {
+                statusEl.removeAttribute('data-resume-reason');
+            }
+        }
+
         return {
             el: card,
             setLabel: setLabel,
@@ -872,6 +925,7 @@
             setResumePrompt: setResumePrompt,
             clearResumePrompt: clearResumePrompt,
             setRetryStatus: setRetryStatus,
+            setAutoResumeStatus: setAutoResumeStatus,
             remove: remove
         };
     }
@@ -1777,39 +1831,71 @@
                 try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
                 throw pendingError;
             }
-            if (!canResume || !card || typeof card.setResumePrompt !== 'function' ||
-                receivedRef.value <= 0 || receivedRef.value >= totalLength) {
+            // Auto-resume mode (opt-in via streamingDownload({ autoResume: true })):
+            // skip the manual Resume / Cancel prompt entirely and silently
+            // run the same Range-fetch-with-backoff retry budget. The card
+            // shows "Auto-resuming…" so the user can see what's happening
+            // and still has the Cancel pill live to bail out.
+            //
+            // The eligibility checks for canResume / partial bytes / known
+            // total length still apply — without them we cannot safely emit
+            // a Range request, so we fall through to the unconditional throw
+            // path below regardless of autoResume.
+            var autoResume = !!(streamCtx && streamCtx.autoResume);
+
+            if (!canResume || receivedRef.value <= 0 || receivedRef.value >= totalLength) {
+                try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
+                throw pendingError;
+            }
+            if (!autoResume && (!card || typeof card.setResumePrompt !== 'function')) {
                 try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
                 throw pendingError;
             }
 
-            // Ask the user whether to resume. The card prompt resolves
-            // true (Resume) or false (Cancel/give up). Either way we
-            // do not propagate a "Failed" state to streamingDownload.
-            // `lastFetchReason` carries the reason from a previous
-            // exhausted-retries cycle so the prompt can show *why* the
-            // last attempt(s) failed rather than the original pipe error.
-            var promptReason = pendingError ? describeFetchError(pendingError) : '';
-            var wantResume = false;
-            try {
-                wantResume = await card.setResumePrompt(
-                    receivedRef.value, totalLength, promptReason
-                );
-            } catch (_) {
-                wantResume = false;
-            }
-            if (streamCtx && streamCtx.cancelled) wantResume = false;
-            if (!wantResume) {
-                try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
-                var giveUp = new Error('Download cancelled');
-                giveUp.name = 'AbortError';
-                giveUp.cancelled = true;
-                throw giveUp;
-            }
+            if (autoResume) {
+                // Surface the auto-resume status immediately so the user
+                // sees "Auto-resuming…" rather than a stale in-progress
+                // bar between the pipe failure and the first retry firing.
+                if (card && typeof card.setAutoResumeStatus === 'function') {
+                    try {
+                        card.setAutoResumeStatus({
+                            received: receivedRef.value,
+                            total: totalLength,
+                            attempt: 1,
+                            maxAttempts: resumeMaxAttempts(),
+                            reason: pendingError ? describeFetchError(pendingError) : ''
+                        });
+                    } catch (_) { /* ignore */ }
+                }
+            } else {
+                // Ask the user whether to resume. The card prompt resolves
+                // true (Resume) or false (Cancel/give up). Either way we
+                // do not propagate a "Failed" state to streamingDownload.
+                // `lastFetchReason` carries the reason from a previous
+                // exhausted-retries cycle so the prompt can show *why* the
+                // last attempt(s) failed rather than the original pipe error.
+                var promptReason = pendingError ? describeFetchError(pendingError) : '';
+                var wantResume = false;
+                try {
+                    wantResume = await card.setResumePrompt(
+                        receivedRef.value, totalLength, promptReason
+                    );
+                } catch (_) {
+                    wantResume = false;
+                }
+                if (streamCtx && streamCtx.cancelled) wantResume = false;
+                if (!wantResume) {
+                    try { await writable.abort(pendingError); } catch (_) { /* ignore */ }
+                    var giveUp = new Error('Download cancelled');
+                    giveUp.name = 'AbortError';
+                    giveUp.cancelled = true;
+                    throw giveUp;
+                }
 
-            // Refresh the card UI back to the in-progress look.
-            if (card.clearResumePrompt) {
-                try { card.clearResumePrompt(); } catch (_) { /* ignore */ }
+                // Refresh the card UI back to the in-progress look.
+                if (card.clearResumePrompt) {
+                    try { card.clearResumePrompt(); } catch (_) { /* ignore */ }
+                }
             }
 
             // Issue a Range request from the byte we last successfully
@@ -1854,7 +1940,18 @@
                 var wokeOnline = false;
                 if (attempt > 1 && baseDelay > 0) {
                     var waitMs = baseDelay * Math.pow(2, attempt - 2);
-                    if (card && typeof card.setRetryStatus === 'function') {
+                    if (autoResume && card && typeof card.setAutoResumeStatus === 'function') {
+                        try {
+                            card.setAutoResumeStatus({
+                                received: receivedRef.value,
+                                total: totalLength,
+                                attempt: attempt,
+                                maxAttempts: maxAttempts,
+                                reason: describeFetchError(attemptErr),
+                                retryingIn: waitMs
+                            });
+                        } catch (_) { /* ignore */ }
+                    } else if (card && typeof card.setRetryStatus === 'function') {
                         try {
                             card.setRetryStatus({
                                 attempt: attempt,
@@ -1872,22 +1969,38 @@
                 // Only flip the card into the "Retrying…" look once we're
                 // past the user's first click (attempt 1 should look like a
                 // normal in-progress download — the user clicked Resume and
-                // hasn't seen any failure yet). When we woke early on an
-                // `online` event, swap the reason copy so the user can see
-                // we noticed the network came back rather than just watching
-                // the attempt counter tick up unexplained.
-                if (attempt > 1 && card && typeof card.setRetryStatus === 'function') {
+                // hasn't seen any failure yet). In autoResume mode the
+                // first attempt already shows "Auto-resuming…" (set above
+                // before the retry loop), so subsequent attempts just keep
+                // that copy fresh with the latest counter / reason.
+                // When we woke early on an `online` event, swap the reason
+                // copy so the user can see we noticed the network came back
+                // rather than just watching the attempt counter tick up
+                // unexplained.
+                if (attempt > 1) {
                     var statusReason = wokeOnline
                         ? tr('downloads.connection_restored',
                               'Connection restored — retrying…')
                         : describeFetchError(attemptErr);
-                    try {
-                        card.setRetryStatus({
-                            attempt: attempt,
-                            maxAttempts: maxAttempts,
-                            reason: statusReason
-                        });
-                    } catch (_) { /* ignore */ }
+                    if (autoResume && card && typeof card.setAutoResumeStatus === 'function') {
+                        try {
+                            card.setAutoResumeStatus({
+                                received: receivedRef.value,
+                                total: totalLength,
+                                attempt: attempt,
+                                maxAttempts: maxAttempts,
+                                reason: statusReason
+                            });
+                        } catch (_) { /* ignore */ }
+                    } else if (card && typeof card.setRetryStatus === 'function') {
+                        try {
+                            card.setRetryStatus({
+                                attempt: attempt,
+                                maxAttempts: maxAttempts,
+                                reason: statusReason
+                            });
+                        } catch (_) { /* ignore */ }
+                    }
                 }
 
                 try {
@@ -1916,10 +2029,22 @@
             }
 
             if (!resumed) {
-                // Network still down after the auto-retries. Stash the most
-                // recent error and re-loop so setResumePrompt re-opens with
-                // the reason instead of throwing a generic failure — the
-                // partial file on disk is still valid for another attempt.
+                // Network still down after the auto-retries. Behaviour
+                // depends on whether the caller opted into autoResume:
+                //   * Manual mode: stash the most recent error and re-loop
+                //     so setResumePrompt re-opens with the reason instead
+                //     of throwing a generic failure — the partial file on
+                //     disk is still valid for another attempt by the user.
+                //   * autoResume mode: the user explicitly asked us to do
+                //     this silently. Re-prompting after we've blown through
+                //     the retry budget would surprise them; instead throw
+                //     so streamingDownload's catch surfaces the standard
+                //     "Download interrupted — Retry" toast and the user
+                //     can decide whether to start over manually.
+                if (autoResume) {
+                    try { await writable.abort(attemptErr || pendingError); } catch (_) { /* ignore */ }
+                    throw attemptErr || pendingError;
+                }
                 pendingError = attemptErr || pendingError;
                 continue;
             }
@@ -2349,8 +2474,14 @@
         // does not flip cancelled, but the catch still inspects it).
         var cancelled = false;
         // Wrapped in an object so streamResponseToDisk's resume loop can see
-        // the live value (cancellation may flip while it's mid-pipe).
-        var cancelState = { cancelled: false };
+        // the live value (cancellation may flip while it's mid-pipe). The
+        // same object also carries the per-call `autoResume` opt-in so the
+        // resume loop can skip the manual prompt and silently retry the
+        // Range fetch as soon as a recoverable pipe error fires.
+        var cancelState = {
+            cancelled: false,
+            autoResume: options.autoResume === true
+        };
         var originalContent = null;
         // Hoisted so the catch block (e.g. environmental-abort path) can
         // reference the parsed filename in the user-facing toast even
