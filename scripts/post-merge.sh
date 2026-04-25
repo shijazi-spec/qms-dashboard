@@ -56,6 +56,21 @@ echo ""
 echo "▶ CI gate: admin-auth helper unit tests"
 npx tsx tests/adminAuthHelpers.test.ts
 
+# ----------------------------------------------------------------------------
+# CI gate — requireRole session-path unit tests (Task #253)
+#
+# Task #96 covered the admin-key short-circuit branches; this gate covers the
+# remaining session-path of `requireRole`, which calls `getPlatformUser` to
+# (a) confirm the platform record is `status = 'active'` and
+# (b) re-read the live role from the DB so role demotions take effect on the
+# next request. A regression here would let inactive or role-demoted users
+# silently keep access via a stale-but-valid session cookie. The test stubs
+# pg.Pool so it runs without a live DB.
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: requireRole session-path unit tests (Task #253)"
+npx tsx tests/requireRoleSessionPath.test.ts
+
 echo ""
 echo "▶ CI gate: ai_pending_actions historical sweep backfill (Task #85)"
 npx tsx tests/aiApprovalSweepBackfill.test.ts
