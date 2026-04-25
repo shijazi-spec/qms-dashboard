@@ -6,6 +6,7 @@ import { getSessionFromCookie } from "../routes/authRoutes";
 import { sanitizeRequestBody } from "../../utils/inputSanitizer";
 import { checkRateLimit, parseClientIp } from "../../utils/rateLimiter";
 import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
+import { deepRedactSecretLikeStrings, redactSecretLikeStrings } from "../../utils/eventLogsDatabase";
 
 // Per-IP in-memory sampler: caps how many `rate_limit_429` rows we write per
 // minute per source IP so a single attacker (or misconfigured client) can't
@@ -331,6 +332,84 @@ async function applyBodySanitization(c: any, urlPath: string, method: string): P
   } catch (_) { }
 }
 
+/**
+ * Redacts credential-shaped substrings out of an uncaught error's message
+ * before it reaches the default Hono error renderer (and therefore the
+ * HTTP response body / Inngest error log). Returns the original error
+ * unchanged when no redaction was needed, otherwise returns a new Error
+ * that preserves `name`, `stack`, and `cause` so debugging information
+ * is not lost.
+ *
+ * Symmetric with the storage-side scrubbing in eventLogsDatabase.ts:
+ * even if a third-party SDK echoes the secret in its exception text,
+ * the user-facing response cannot leak it.
+ */
+export function redactErrorForRethrow(error: unknown): unknown {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? '');
+  const safeMessage = redactSecretLikeStrings(rawMessage) as string;
+  if (safeMessage === rawMessage) return error;
+  if (!(error instanceof Error)) return safeMessage;
+  const wrapped = new Error(safeMessage, { cause: error });
+  wrapped.name = error.name;
+  wrapped.stack = error.stack;
+  return wrapped;
+}
+
+/**
+ * Symmetric defense for the API-response boundary.  We already scrub
+ * credential-shaped substrings before WRITING anything to the database
+ * (event_logs, change_history, ai_pending_actions) via
+ * `redactSecretLikeStrings` / `deepRedactSecretLikeStrings`.  However, when
+ * a tool or a downstream SDK fails and echoes the credential back in its
+ * exception message (e.g. "Invalid token sk-live-…"), the route's catch
+ * block typically returns `c.json({ error: 'Failed to …', details: error.message }, 500)`
+ * — so the secret can still reach the user-facing HTTP response and a
+ * client-side toast even though it would be redacted at write time.
+ *
+ * `redactSecretsInResponse(c)` runs after `next()` and walks the response
+ * body of any 4xx/5xx JSON response, replacing credential-shaped substrings
+ * in every string leaf with `REDACTED_SENTINEL`.  This is intentionally a
+ * *post-processor* rather than something each route has to remember to
+ * call, so a new route or a future contributor can't forget to sanitise
+ * the catch path and reintroduce the leak.
+ *
+ * Only error responses are scanned — successful 2xx bodies are passed
+ * through untouched (they're real entity payloads, not free-form error
+ * text, and walking a multi-MB list response on every request would be
+ * wasted work).  Non-JSON responses (HTML pages, file streams, redirects)
+ * are also skipped.
+ */
+export async function redactSecretsInResponse(c: any): Promise<void> {
+  const res = c?.res;
+  if (!res) return;
+  const status = res.status;
+  if (typeof status !== 'number' || status < 400) return;
+  const contentType = (res.headers?.get?.('Content-Type') || '').toLowerCase();
+  if (!contentType.includes('application/json')) return;
+  let text: string;
+  try {
+    text = await res.clone().text();
+  } catch (_) {
+    return;
+  }
+  if (!text) return;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_) {
+    // Body is JSON-typed but not parseable — fall back to a string-level
+    // scrub so a raw error blob can't leak credentials either.
+    const scrubbed = redactSecretLikeStrings(text) as string;
+    if (scrubbed === text) return;
+    c.res = new Response(scrubbed, { status: res.status, headers: res.headers });
+    return;
+  }
+  const redacted = deepRedactSecretLikeStrings(parsed);
+  const redactedJson = JSON.stringify(redacted);
+  if (redactedJson === text) return;
+  c.res = new Response(redactedJson, { status: res.status, headers: res.headers });
+}
+
 async function injectCspNonce(c: any, cspNonce: string): Promise<void> {
   const contentType = c.res.headers.get('Content-Type') || '';
   if (contentType.includes('text/html') && c.res.body) {
@@ -399,17 +478,31 @@ export const globalMiddleware = [
       logger?.error("[Response]", { method: c.req.method, url: c.req.url });
       if (error instanceof MastraError) {
         if (error.id === "AGENT_MEMORY_MISSING_RESOURCE_ID") {
-          throw new NonRetriableError(error.message, { cause: error });
+          // Surface a redacted version of the message so a credential echoed
+          // back by an upstream SDK can't leak through Inngest/Mastra's
+          // error-rendering path.
+          const safe = redactSecretLikeStrings(error.message) as string;
+          throw new NonRetriableError(safe, { cause: error });
         }
       } else if (error instanceof z.ZodError) {
-        throw new NonRetriableError(error.message, { cause: error });
+        const safe = redactSecretLikeStrings(error.message) as string;
+        throw new NonRetriableError(safe, { cause: error });
       }
-      throw error;
+      // For any other uncaught error escaping a route handler, rewrap the
+      // exception so the message reaching the default Hono error renderer
+      // (and therefore the HTTP response body) has credential-shaped
+      // substrings replaced with REDACTED_SENTINEL.
+      throw redactErrorForRethrow(error);
     }
 
     if (isApi && !publicPath && !mastraInternal && c.res.status === 404) {
       return c.json({ error: 'Insufficient permissions' }, 403);
     }
+
+    // Symmetric with storage-side defense: scrub credential-shaped substrings
+    // out of any 4xx/5xx JSON error body before it leaves the server. See
+    // `redactSecretsInResponse` doc-comment for rationale.
+    await redactSecretsInResponse(c);
 
     await injectCspNonce(c, cspNonce);
   },
