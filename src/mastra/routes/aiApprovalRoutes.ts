@@ -46,6 +46,8 @@ import {
   logEvent,
   redactSensitiveDeep,
   redactSecretLikeStrings,
+  getActionViewers,
+  getActionViewersBatch,
 } from '../../utils/eventLogsDatabase';
 
 // Lazily initialize the table on first request to this route set.
@@ -129,7 +131,16 @@ export const aiApprovalRoutes = [
             offset,
           });
 
-          return c.json({ success: true, total, rows });
+          // Attach prior-viewer summaries so the list cards can show
+          // "Recently viewed by" without a separate per-card request.
+          const actionCodes = rows.map((r: any) => r.action_code as string);
+          const viewersMap = await getActionViewersBatch(actionCodes);
+          const rowsWithViewers = rows.map((r: any) => ({
+            ...r,
+            prior_viewers: viewersMap[r.action_code] ?? [],
+          }));
+
+          return c.json({ success: true, total, rows: rowsWithViewers });
         } catch (error: any) {
           console.error('[AI-Approval] list error:', error);
           return c.json({ error: 'Failed to list approvals', details: error.message }, 500);
@@ -220,7 +231,10 @@ export const aiApprovalRoutes = [
 
           // Enrich compliance_refs with clickable links to the controlled documents.
           const wpCodes = extractWpCodes(action.compliance_refs || []);
-          const docLinks = await resolveControlledDocuments(wpCodes);
+          const [docLinks, priorViewers] = await Promise.all([
+            resolveControlledDocuments(wpCodes),
+            getActionViewers(code),
+          ]);
 
           // Indicate to the UI whether the current user is ALLOWED to approve
           // (role matches) AND is NOT the requester (segregation of duties).
@@ -240,6 +254,7 @@ export const aiApprovalRoutes = [
             can_approve: canApprove,
             can_approve_blocker: canApproveReason,
             approver_roles: getApproverRolesFor(action.risk_level),
+            prior_viewers: priorViewers,
           });
         } catch (error: any) {
           console.error('[AI-Approval] detail error:', error);

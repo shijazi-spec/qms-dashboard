@@ -128,6 +128,28 @@
         listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10 bg-white rounded-lg border border-gray-200">No approvals match the current filters.</div>';
     }
 
+    function renderPriorViewers(viewers) {
+        if (!viewers || viewers.length === 0) return '';
+        var MAX = 5;
+        var shown = viewers.slice(0, MAX);
+        var extra = viewers.length > MAX ? ' +' + (viewers.length - MAX) + ' more' : '';
+        var chips = shown.map(function (v) {
+            var label = escapeHtml(v.user_name || v.user_email || 'Unknown');
+            var role  = escapeHtml(v.user_role || '');
+            var count = v.view_count > 1 ? ' ×' + v.view_count : '';
+            var title = (v.user_email ? escapeHtml(v.user_email) + ' · ' : '') + role + (v.last_viewed_at ? ' · ' + new Date(v.last_viewed_at).toLocaleString() : '');
+            return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs" title="' + title + '">' +
+                '<svg class="w-2.5 h-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="7" r="4"/><path d="M2 17a8 8 0 0116 0H2z"/></svg>' +
+                label + (role ? ' <span class="opacity-60">(' + role + ')</span>' : '') + (count ? '<span class="opacity-50">' + escapeHtml(count) + '</span>' : '') +
+                '</span>';
+        }).join('');
+        return '<div class="flex flex-wrap items-center gap-1 mt-1">' +
+            '<span class="text-xs text-gray-400 shrink-0">Viewed by:</span>' +
+            chips +
+            (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '') +
+            '</div>';
+    }
+
     function renderRow(a) {
         var previewText = (a.payload_preview || '').replace(/\*\*/g, '').slice(0, 260);
         var cited = (a.compliance_refs || [])
@@ -167,6 +189,7 @@
                   '<div class="text-xs text-gray-600 mt-0.5 truncate">' + escapeHtml(previewText) + '</div>' +
                   (cited ? '<div class="text-xs text-gray-500 mt-1">Per: ' + cited + '</div>' : '') +
                   '<div class="text-xs text-gray-400 mt-0.5">Requested by ' + escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown') + '</div>' +
+                  renderPriorViewers(a.prior_viewers) +
                 '</div>' +
                 '<div class="flex flex-col items-end gap-1 shrink-0" data-actions>' + actionsHtml + '</div>' +
               '</div>' +

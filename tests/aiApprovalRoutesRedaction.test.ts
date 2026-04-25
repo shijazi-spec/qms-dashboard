@@ -229,6 +229,88 @@ const eventLogsStubQuery: StubQuery = async <R extends QueryResultRow>(
     };
   }
 
+  // getActionViewers — single action code lookup.
+  // Returns distinct viewer summaries derived from capturedEventLogs.
+  if (/SELECT.*MAX\(timestamp\).*FROM event_logs.*WHERE correlation_id = \$1/is.test(sql)) {
+    const code = String(params[0]);
+    const viewEvents = capturedEventLogs.filter(
+      e =>
+        e.correlation_id === code &&
+        e.action_type === 'AI_ACTION' &&
+        /^Viewed/i.test(e.description ?? ''),
+    );
+    // Aggregate by (user_id, user_email, user_name, user_role).
+    const byUser = new Map<string, CapturedEventLog & { view_count: number }>();
+    for (const e of viewEvents) {
+      const key = `${e.user_id}|${e.user_email}|${e.user_role}`;
+      if (!byUser.has(key)) {
+        byUser.set(key, { ...e, view_count: 1 });
+      } else {
+        byUser.get(key)!.view_count++;
+      }
+    }
+    const viewerRows = [...byUser.values()].map(v => ({
+      user_id: v.user_id,
+      user_email: v.user_email,
+      user_name: null as string | null,
+      user_role: v.user_role,
+      last_viewed_at: new Date(),
+      view_count: String(v.view_count),
+    }));
+    return {
+      ...empty,
+      rowCount: viewerRows.length,
+      rows: viewerRows as unknown as R[],
+    };
+  }
+
+  // getActionViewersBatch — multiple action codes via ANY($1).
+  if (/SELECT.*correlation_id.*MAX\(timestamp\).*FROM event_logs.*WHERE correlation_id = ANY/is.test(sql)) {
+    const codes = (params[0] as string[]) || [];
+    const viewerRows: Array<{
+      correlation_id: string;
+      user_id: number | null;
+      user_email: string | null;
+      user_name: string | null;
+      user_role: string | null;
+      last_viewed_at: Date;
+      view_count: string;
+    }> = [];
+    for (const code of codes) {
+      const viewEvents = capturedEventLogs.filter(
+        e =>
+          e.correlation_id === code &&
+          e.action_type === 'AI_ACTION' &&
+          /^Viewed/i.test(e.description ?? ''),
+      );
+      const byUser = new Map<string, CapturedEventLog & { view_count: number }>();
+      for (const e of viewEvents) {
+        const key = `${e.user_id}|${e.user_email}|${e.user_role}`;
+        if (!byUser.has(key)) {
+          byUser.set(key, { ...e, view_count: 1 });
+        } else {
+          byUser.get(key)!.view_count++;
+        }
+      }
+      for (const v of byUser.values()) {
+        viewerRows.push({
+          correlation_id: code,
+          user_id: v.user_id,
+          user_email: v.user_email,
+          user_name: null,
+          user_role: v.user_role,
+          last_viewed_at: new Date(),
+          view_count: String(v.view_count),
+        });
+      }
+    }
+    return {
+      ...empty,
+      rowCount: viewerRows.length,
+      rows: viewerRows as unknown as R[],
+    };
+  }
+
   return empty;
 };
 
@@ -769,6 +851,52 @@ async function run(): Promise<void> {
   assert(
     viewEvent?.old_value === null && viewEvent?.new_value === null,
     'view-audit event carries no old/new value blobs (description-only entry)',
+  );
+
+  /* ---- prior_viewers field (Task #86) ---- */
+  // The admin viewer already triggered the logEvent above (awaited), so the
+  // capturedEventLogs buffer already contains the view event. The stub query
+  // returns those logs as viewer summaries, so prior_viewers must be populated.
+  const detailBody = detailPendingRes.body as {
+    success: boolean;
+    action: unknown;
+    prior_viewers?: Array<{
+      user_id: number | null;
+      user_email: string | null;
+      user_role: string | null;
+      view_count: number;
+    }>;
+  };
+  assert(
+    Array.isArray(detailBody.prior_viewers),
+    'GET /api/ai/approvals/:code response includes prior_viewers array',
+  );
+  assert(
+    (detailBody.prior_viewers?.length ?? 0) >= 1,
+    `prior_viewers contains at least one entry after admin view (got ${detailBody.prior_viewers?.length ?? 0})`,
+  );
+  const adminViewer = detailBody.prior_viewers?.find(v => v.user_id === 42);
+  assert(
+    adminViewer !== undefined,
+    'prior_viewers includes the admin reviewer (user_id=42)',
+  );
+  assert(
+    adminViewer?.user_email === 'qm@walaplus.test',
+    `prior_viewers entry has correct email (got: ${adminViewer?.user_email})`,
+  );
+  assert(
+    adminViewer?.user_role === 'admin',
+    `prior_viewers entry has correct role (got: ${adminViewer?.user_role})`,
+  );
+  assert(
+    typeof adminViewer?.view_count === 'number' && adminViewer.view_count >= 1,
+    `prior_viewers entry has numeric view_count >= 1 (got: ${adminViewer?.view_count})`,
+  );
+  // Security: the prior_viewers summary must contain no payload secrets.
+  const priorViewersLeak = findLeakedSecret(detailBody.prior_viewers);
+  assert(
+    priorViewersLeak === null,
+    `prior_viewers contains no plaintext payload secret (leaked: ${priorViewersLeak ?? 'none'})`,
   );
 
   /* ---- Requester self-view must NOT trigger a view-audit (gated) ---- */

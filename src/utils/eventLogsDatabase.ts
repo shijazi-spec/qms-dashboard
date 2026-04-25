@@ -940,6 +940,102 @@ export async function exportEventLogs(filters: EventLogFilters): Promise<EventLo
   }
 }
 
+/* -------------------------------------------------------------------------
+ * getActionViewers / getActionViewersBatch
+ * -------------------------------------------------------------------------
+ * Returns distinct reviewers who opened a pending-AI-action detail page,
+ * sourced from the view-audit events written by Task #70.
+ *
+ * Each row is a distinct (user_id, user_email, user_name, user_role) tuple
+ * with the last-viewed timestamp and a total view count for that user.
+ * The caller receives a safe summary — no payload values are included.
+ * -------------------------------------------------------------------------*/
+
+export interface ActionViewer {
+  user_id: number | null;
+  user_email: string | null;
+  user_name: string | null;
+  user_role: string | null;
+  last_viewed_at: Date;
+  view_count: number;
+}
+
+/**
+ * Returns the distinct prior-viewer list for a single action code.
+ * Never throws — returns [] on DB error so callers stay non-fatal.
+ */
+export async function getActionViewers(actionCode: string): Promise<ActionViewer[]> {
+  try {
+    const result = await pool.query<ActionViewer & { view_count: string }>(
+      `SELECT user_id, user_email, user_name, user_role,
+              MAX(timestamp) AS last_viewed_at,
+              COUNT(*)::text AS view_count
+       FROM event_logs
+       WHERE correlation_id = $1
+         AND action_type = 'AI_ACTION'
+         AND description ILIKE 'Viewed%'
+       GROUP BY user_id, user_email, user_name, user_role
+       ORDER BY MAX(timestamp) DESC`,
+      [actionCode],
+    );
+    return result.rows.map(r => ({
+      user_id: r.user_id,
+      user_email: r.user_email,
+      user_name: r.user_name,
+      user_role: r.user_role,
+      last_viewed_at: r.last_viewed_at,
+      view_count: parseInt(String(r.view_count), 10),
+    }));
+  } catch (error) {
+    console.error('[EventLogs] getActionViewers error:', error);
+    return [];
+  }
+}
+
+/**
+ * Batch variant — fetches prior-viewer summaries for multiple action codes
+ * in a single DB round-trip.  Returns a map keyed by action_code.
+ * Never throws — returns {} on DB error so callers stay non-fatal.
+ */
+export async function getActionViewersBatch(
+  actionCodes: string[],
+): Promise<Record<string, ActionViewer[]>> {
+  if (actionCodes.length === 0) return {};
+  try {
+    const result = await pool.query<
+      ActionViewer & { correlation_id: string; view_count: string }
+    >(
+      `SELECT correlation_id, user_id, user_email, user_name, user_role,
+              MAX(timestamp) AS last_viewed_at,
+              COUNT(*)::text AS view_count
+       FROM event_logs
+       WHERE correlation_id = ANY($1)
+         AND action_type = 'AI_ACTION'
+         AND description ILIKE 'Viewed%'
+       GROUP BY correlation_id, user_id, user_email, user_name, user_role
+       ORDER BY correlation_id, MAX(timestamp) DESC`,
+      [actionCodes],
+    );
+    const map: Record<string, ActionViewer[]> = {};
+    for (const row of result.rows) {
+      const code = row.correlation_id;
+      if (!map[code]) map[code] = [];
+      map[code].push({
+        user_id: row.user_id,
+        user_email: row.user_email,
+        user_name: row.user_name,
+        user_role: row.user_role,
+        last_viewed_at: row.last_viewed_at,
+        view_count: parseInt(String(row.view_count), 10),
+      });
+    }
+    return map;
+  } catch (error) {
+    console.error('[EventLogs] getActionViewersBatch error:', error);
+    return {};
+  }
+}
+
 console.log('📋 [EventLogs] Module loaded, initializing table...');
 initializeEventLogsTable().catch(err => {
   console.error('📋 [EventLogs] Failed to initialize table on module load:', err);
