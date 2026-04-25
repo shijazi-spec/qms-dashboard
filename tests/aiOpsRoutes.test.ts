@@ -1335,4 +1335,194 @@ if (HAS_DB) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Task #215: verify recovery auto-resolve works end-to-end against real Postgres.
+//
+// Seeds a `tool_health` alert via `createAIAlert`, backdates `created_at`
+// so it passes the `olderThanMinutes` cooldown filter inside
+// `getOpenAlertsByKey`, then drives one `runToolHealthCheck` pass with REAL
+// `getOpenAlertsByKey` and `resolveAlert` and a stubbed aggregator that
+// reports the tool back under threshold. Asserts the alert row flips to
+// `resolved` with the expected auto-resolve note.
+//
+// Without this check, an off-by-one in the cooldown SQL (e.g. `<` vs `<=`)
+// or a `resolveAlert` that silently no-ops on acknowledged rows would slip
+// past unit tests that stub all DB calls.
+// ─────────────────────────────────────────────────────────────────────────────
+if (HAS_DB) {
+  await suite.test(
+    "happy: recovery auto-resolve flips tool_health alert to resolved against real Postgres",
+    async () => {
+      type AIAlertT = import("../src/utils/aiAlertsDatabase").AIAlert;
+      type AlertTypeT = import("../src/utils/aiAlertsDatabase").AlertType;
+      type ToolWindowAggregateT =
+        import("../src/utils/aiTelemetry").ToolWindowAggregate;
+      type NotifyToolHealthBreachResultT =
+        import("../src/utils/toolHealthAlertNotifier").NotifyToolHealthBreachResult;
+      type NotifyToolHealthRecoveryResultT =
+        import("../src/utils/toolHealthAlertNotifier").NotifyToolHealthRecoveryResult;
+      type ToolHealthConfigOverridesT =
+        import("../src/utils/toolHealthConfigDatabase").ToolHealthConfigOverrides;
+      type ReapResultT =
+        import("../src/utils/toolHealthConfigDatabase").ReapExpiredToolHealthOverridesResult;
+
+      const RECOVERY_TOOL = `test_recovery_${Date.now()}`;
+      const RECOVERY_REASON = "error_rate" as const;
+      const RECOVERY_KEY = `${RECOVERY_TOOL}:${RECOVERY_REASON}`;
+      let seededId: number | null = null;
+
+      try {
+        const {
+          createAIAlert: realCreateAlert,
+          resolveAlert: realResolveAlert,
+          getOpenAlertsByKey: realGetOpenAlertsByKey,
+        } = await import("../src/utils/aiAlertsDatabase");
+        const { sharedPool } = await import("../src/utils/sharedPool");
+        const { runToolHealthCheck, TOOL_HEALTH_ENV_BASELINE } = await import(
+          "../src/mastra/workflows/toolHealthAlertsCron"
+        );
+
+        // 1. Seed an open tool_health alert for the test tool.
+        const seeded = await realCreateAlert({
+          alert_type: "tool_health",
+          severity: "medium",
+          title: `Tool "${RECOVERY_TOOL}" error rate above threshold over last 60 min`,
+          description: "Seeded by Task #215 recovery e2e test",
+          suggestion: "N/A — test alert",
+          related_module: "ai_ops",
+          related_record_id: RECOVERY_KEY,
+        });
+        seededId = seeded.id!;
+
+        // 2. Backdate created_at to 2 hours ago so the olderThanMinutes=60
+        //    cooldown filter (NOW() - MAKE_INTERVAL(mins => windowMinutes))
+        //    is satisfied even on the default 60-minute window.
+        await sharedPool.query(
+          `UPDATE ai_alerts SET created_at = NOW() - INTERVAL '2 hours' WHERE id = $1`,
+          [seededId],
+        );
+
+        // 3. Drive one cron pass with:
+        //    • REAL getOpenAlertsByKey + resolveAlert (the SQL under test)
+        //    • Stubbed aggregator returning the tool BELOW both thresholds
+        //      so the run lands in the recovery sweep, not the breach path
+        //    • Everything else no-op'd to prevent side effects
+        const MIN_CALLS = TOOL_HEALTH_ENV_BASELINE.minCalls;
+
+        const stubAggregates = async (
+          _windowMinutes: number,
+          _minCalls: number,
+        ): Promise<ToolWindowAggregateT[]> => [
+          {
+            tool_name: RECOVERY_TOOL,
+            agent_name: null,
+            call_count: MIN_CALLS,
+            error_count: 0,
+            error_rate_pct: 0,
+            p95_latency_ms: 100,
+            avg_latency_ms: 80,
+            max_latency_ms: 120,
+          },
+        ];
+
+        const stubOpenAlertExists = async (
+          _alertType: AlertTypeT,
+          _relatedRecordId: string,
+        ): Promise<boolean> => false;
+
+        const stubCreateAlert = async (
+          _alert: Omit<AIAlertT, "id" | "created_at" | "status">,
+        ): Promise<AIAlertT> => {
+          throw new Error(
+            "stubCreateAlert should not run — tool metrics are under threshold",
+          );
+        };
+
+        const stubNotifyBreach = async (): Promise<NotifyToolHealthBreachResultT> => ({
+          slackSent: false,
+          emailSent: false,
+          throttled: false,
+          skipped: true,
+        });
+
+        let recoveryNotifyCalled = false;
+        const stubNotifyRecovery = async (
+          _payload: Parameters<typeof import("../src/utils/toolHealthAlertNotifier").notifyToolHealthRecovery>[0],
+        ): Promise<NotifyToolHealthRecoveryResultT> => {
+          recoveryNotifyCalled = true;
+          return { slackSent: false, emailSent: false, skipped: true };
+        };
+
+        const stubReapOverrides = async (): Promise<ReapResultT> => ({
+          reaped: false,
+          cleared_overrides: {} as ToolHealthConfigOverridesT,
+          previous_updated_by: null,
+          expired_at: null,
+          audit_id: null,
+        });
+
+        const stubNotifyOverrideExpired = async (): Promise<void> => {};
+
+        const checkResult = await runToolHealthCheck({
+          getToolWindowAggregates: stubAggregates,
+          openAlertExistsByKey: stubOpenAlertExists,
+          createAIAlert: stubCreateAlert,
+          getOpenAlertsByKey: realGetOpenAlertsByKey,
+          resolveAlert: realResolveAlert,
+          notifyToolHealthBreach: stubNotifyBreach,
+          notifyToolHealthRecovery: stubNotifyRecovery,
+          reapExpiredOverrides: stubReapOverrides,
+          notifyOverrideExpired: stubNotifyOverrideExpired,
+        });
+
+        // 4. Assert the cron reported at least one auto-resolved alert.
+        suite.expect(
+          checkResult.alertsAutoResolved >= 1,
+          `cron reported at least 1 auto-resolved (got ${checkResult.alertsAutoResolved})`,
+        );
+
+        // 5. Assert the recovery notifier was called.
+        suite.expect(
+          recoveryNotifyCalled,
+          "recovery notifier was called after auto-resolve",
+        );
+
+        // 6. Read the row back directly from Postgres and verify the status
+        //    and resolution_note — the primary assertions of this task.
+        const row = await sharedPool.query<{
+          id: number;
+          status: string;
+          resolution_note: string | null;
+          resolved_at: Date | null;
+        }>(
+          `SELECT id, status, resolution_note, resolved_at FROM ai_alerts WHERE id = $1`,
+          [seededId],
+        );
+        suite.expect(row.rows.length === 1, "alert row still present in DB");
+        const alertRow = row.rows[0];
+        suite.expectEqual(alertRow.status, "resolved", "status flipped to resolved");
+        suite.expect(
+          typeof alertRow.resolution_note === "string" &&
+            alertRow.resolution_note.includes("auto-resolved"),
+          `resolution_note contains 'auto-resolved' (got: ${alertRow.resolution_note})`,
+        );
+        suite.expect(
+          alertRow.resolved_at != null,
+          "resolved_at is stamped",
+        );
+      } finally {
+        // Cleanup: remove the seeded row so no orphan alert remains.
+        if (seededId != null) {
+          try {
+            const { sharedPool } = await import("../src/utils/sharedPool");
+            await sharedPool.query(`DELETE FROM ai_alerts WHERE id = $1`, [seededId]);
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+    },
+  );
+}
+
 suite.finishOrExit();
