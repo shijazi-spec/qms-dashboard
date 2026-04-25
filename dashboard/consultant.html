@@ -1724,8 +1724,79 @@
             .then(function (data) { renderApprovalCard(data, container); })
             .catch(function () {
                 container.innerHTML = '<div class="text-xs text-red-600">Could not load approval card for ' + code + '.</div>';
+                container.removeAttribute('data-approval-card-status');
             });
     }
+
+    /* ------------------------------------------------------------------ *
+     *  Task #631 — keep the inline approval card's metadata fresh while
+     *  the chat stays open. The AI Approvals queue (ai-approvals.html)
+     *  already polls GET /api/ai/approvals every 30s; we mirror that
+     *  cadence here so two reviewers in different tabs do not race to
+     *  approve the same action without seeing each other's "Viewed by"
+     *  chip first.
+     *
+     *  Design notes:
+     *  - We use a single global interval (not one per card) so chats
+     *    with many pending cards stay cheap.
+     *  - The poll is a no-op when no cards on the page are pending,
+     *    because we discriminate via [data-approval-card-status="pending"].
+     *  - Silent refresh updates ONLY the prior-viewers strip and the
+     *    status badge in place, so the Approve/Reject buttons never
+     *    flicker into a loading state mid-review.
+     *  - If the status flips out of 'pending' between polls, we fall
+     *    back to a full renderApprovalCard so the action buttons get
+     *    correctly replaced by the post-decision summary.
+     *  - Network errors during silent refresh are deliberately swallowed
+     *    — a transient failure must NOT blank out a card the reviewer
+     *    is currently looking at.
+     *  - We also refresh immediately when the tab regains focus, so a
+     *    reviewer returning to a long-idle tab sees up-to-date viewers
+     *    before they click Approve.
+     * ------------------------------------------------------------------ */
+    var APPROVAL_POLL_MS = 30000;
+
+    function silentRefreshApprovalCard(code, container) {
+        if (!document.body.contains(container)) return;
+        fetch('/api/ai/approvals/' + encodeURIComponent(code), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                if (!data || !data.action || !document.body.contains(container)) return;
+                // Status moved off 'pending' — do a full re-render so the
+                // Approve/Reject buttons get swapped for the resolved-state
+                // summary. Polling will then stop on the next tick because
+                // data-approval-card-status will no longer equal 'pending'.
+                if (data.action.status !== 'pending') {
+                    renderApprovalCard(data, container);
+                    return;
+                }
+                // Still pending — patch only the metadata strip in place.
+                var pv = container.querySelector('[data-prior-viewers]');
+                if (pv) {
+                    var tmp = document.createElement('div');
+                    tmp.innerHTML = renderPriorViewers(data.prior_viewers);
+                    var fresh = tmp.firstElementChild;
+                    if (fresh) pv.replaceWith(fresh);
+                }
+                var sb = container.querySelector('[data-status-badge]');
+                if (sb) sb.innerHTML = statusBadgeHtml(data.action.status);
+                container.setAttribute('data-approval-card-status', data.action.status);
+            })
+            .catch(function () { /* silent — keep current UI on transient failures */ });
+    }
+
+    function pollPendingApprovalCards() {
+        var pending = document.querySelectorAll('[data-approval-card-status="pending"]');
+        pending.forEach(function (container) {
+            var code = container.getAttribute('data-approval-code');
+            if (code) silentRefreshApprovalCard(code, container);
+        });
+    }
+
+    setInterval(pollPendingApprovalCards, APPROVAL_POLL_MS);
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') pollPendingApprovalCards();
+    });
 
     function riskBadgeClass(risk) {
         switch ((risk || '').toLowerCase()) {
@@ -1758,36 +1829,52 @@
      *  The list refreshes on every fetchAndRenderApprovalCard() call —
      *  i.e. whenever the user opens or re-opens the action and after
      *  every approve/reject round-trip — because GET /api/ai/approvals/:code
-     *  returns a fresh prior_viewers array on each request.
+     *  returns a fresh prior_viewers array on each request. In addition,
+     *  Task #631 silently re-fetches the action every 30 seconds (and on
+     *  tab-focus) while it remains pending, patching this strip in place
+     *  so a Quality Manager keeping the chat open sees other reviewers
+     *  appear without needing to act on the card first.
      * ------------------------------------------------------------------ */
     function renderPriorViewers(viewers) {
-        if (!viewers || viewers.length === 0) return '';
-        var MAX = 5;
-        var shown = viewers.slice(0, MAX);
-        var extra = viewers.length > MAX ? ' +' + (viewers.length - MAX) + ' more' : '';
-        var chips = shown.map(function (v) {
-            var label = escapeHtml(v.user_name || v.user_email || 'Unknown');
-            var role  = escapeHtml(v.user_role || '');
-            var count = v.view_count > 1 ? ' ×' + v.view_count : '';
-            var title = (v.user_email ? escapeHtml(v.user_email) + ' · ' : '') + role + (v.last_viewed_at ? ' · ' + new Date(v.last_viewed_at).toLocaleString() : '');
-            return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs" title="' + title + '" data-testid="chip-prior-viewer">' +
-                '<svg class="w-2.5 h-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="7" r="4"/><path d="M2 17a8 8 0 0116 0H2z"/></svg>' +
-                label + (role ? ' <span class="opacity-60">(' + role + ')</span>' : '') + (count ? '<span class="opacity-50">' + escapeHtml(count) + '</span>' : '') +
-                '</span>';
-        }).join('');
-        return '<div class="flex flex-wrap items-center gap-1 mb-2" data-prior-viewers data-testid="section-prior-viewers">' +
-            '<span class="text-xs text-gray-400 shrink-0">Viewed by:</span>' +
-            chips +
-            (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '') +
+        // Always emit the wrapper element (even when empty) so the silent
+        // poll in Task #631 can grow the chip strip from zero in place,
+        // without having to insert a brand-new node into the card body.
+        var hasViewers = viewers && viewers.length > 0;
+        var inner = '';
+        if (hasViewers) {
+            var MAX = 5;
+            var shown = viewers.slice(0, MAX);
+            var extra = viewers.length > MAX ? ' +' + (viewers.length - MAX) + ' more' : '';
+            var chips = shown.map(function (v) {
+                var label = escapeHtml(v.user_name || v.user_email || 'Unknown');
+                var role  = escapeHtml(v.user_role || '');
+                var count = v.view_count > 1 ? ' ×' + v.view_count : '';
+                var title = (v.user_email ? escapeHtml(v.user_email) + ' · ' : '') + role + (v.last_viewed_at ? ' · ' + new Date(v.last_viewed_at).toLocaleString() : '');
+                return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs" title="' + title + '" data-testid="chip-prior-viewer">' +
+                    '<svg class="w-2.5 h-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="7" r="4"/><path d="M2 17a8 8 0 0116 0H2z"/></svg>' +
+                    label + (role ? ' <span class="opacity-60">(' + role + ')</span>' : '') + (count ? '<span class="opacity-50">' + escapeHtml(count) + '</span>' : '') +
+                    '</span>';
+            }).join('');
+            inner = '<span class="text-xs text-gray-400 shrink-0">Viewed by:</span>' +
+                chips +
+                (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '');
+        }
+        return '<div class="flex flex-wrap items-center gap-1' + (hasViewers ? ' mb-2' : '') + '" data-prior-viewers data-testid="section-prior-viewers">' +
+            inner +
             '</div>';
     }
 
     function renderApprovalCard(data, container) {
         if (!data || !data.action) {
             container.innerHTML = '<div class="text-xs text-red-600">Malformed approval response.</div>';
+            container.removeAttribute('data-approval-card-status');
             return;
         }
         var a = data.action;
+        // Tag the container so the global Task #631 poller can find this
+        // card and stop polling automatically once the action is no longer
+        // 'pending' (i.e. when the selector below no longer matches).
+        container.setAttribute('data-approval-card-status', a.status || 'unknown');
         var docLinks = data.compliance_doc_links || {};
 
         var refsHtml = (a.compliance_refs || []).map(function (ref) {
@@ -1838,7 +1925,7 @@
                     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>' +
                   '<span class="font-semibold text-sm text-gray-800">HITL Approval Required</span>' +
                   '<span class="px-2 py-0.5 rounded text-xs font-medium border ' + riskBadgeClass(a.risk_level) + '">' + escapeHtml(a.risk_level) + ' risk</span>' +
-                  statusBadgeHtml(a.status) +
+                  '<span data-status-badge>' + statusBadgeHtml(a.status) + '</span>' +
                 '</div>' +
                 '<span class="text-xs text-gray-400 font-mono">' + escapeHtml(a.action_code) + '</span>' +
               '</div>' +
