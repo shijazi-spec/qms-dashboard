@@ -46,6 +46,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const DASHBOARD_DIR = path.join(ROOT, 'dashboard');
+const PUBLIC_DIR = path.join(ROOT, 'public');
 const EN_PATH = path.join(DASHBOARD_DIR, 'i18n', 'en.json');
 const AR_PATH = path.join(DASHBOARD_DIR, 'i18n', 'ar.json');
 
@@ -121,6 +122,20 @@ function readJson(p) {
 function listHtmlPages() {
   return fs
     .readdirSync(DASHBOARD_DIR, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.html'))
+    .map((e) => e.name)
+    .sort();
+}
+
+/**
+ * List `*.html` files directly under `public/`. Returns an empty array if
+ * the directory does not exist — `public/` is optional in this project, so
+ * its absence must NOT make the guardrail fail.
+ */
+function listPublicHtmlPages() {
+  if (!fs.existsSync(PUBLIC_DIR)) return [];
+  return fs
+    .readdirSync(PUBLIC_DIR, { withFileTypes: true })
     .filter((e) => e.isFile() && e.name.endsWith('.html'))
     .map((e) => e.name)
     .sort();
@@ -455,13 +470,17 @@ function checkSwDictionaryParity(en, ar) {
 
 /* ---------------------------------------------------------------------------
  * Check 5 — WalaPlusI18n.t() key coverage in JS files and inline scripts
- * (Task #150)
+ * (Task #150, expanded in Task #296)
  *
  * Static string-literal calls like `WalaPlusI18n.t('ns.key')` are extracted
- * from `dashboard/js/*.js` AND from inline <script> blocks in every
- * `dashboard/*.html` page. Each key is then asserted to resolve to a string
- * in BOTH en.json and ar.json — the same guarantee the HTML attribute check
- * (Check 2) provides for `data-i18n` attributes.
+ * from:
+ *   - `dashboard/js/**\/*.js`  (recursive — subdirectories included)
+ *   - inline <script> blocks in every `dashboard/*.html` page
+ *   - inline <script> blocks in every `public/*.html` page (if present)
+ *
+ * Each key is then asserted to resolve to a string in BOTH en.json and
+ * ar.json — the same guarantee the HTML attribute check (Check 2) provides
+ * for `data-i18n` attributes.
  *
  * Dynamic key construction (e.g. `t('foo.' + bar)` or `t(variable)`) cannot
  * be statically verified and is surfaced as a non-blocking ⚠ warning so
@@ -550,11 +569,12 @@ function collectJsFiles(dir, base) {
   return results.sort();
 }
 
-function checkJsKeyCoverage(pages, en, ar) {
+function checkJsKeyCoverage(pages, publicPages, en, ar) {
   const allStatic = []; // [{key, source}]
   const allDynamic = []; // [{snippet, source}]
 
-  // 1. Scan dashboard/js/**/*.js (recursively)
+  // 1. Scan dashboard/js/**/*.js (recursively — `collectJsFiles` walks every
+  //    subdirectory so a future `dashboard/js/qms/foo.js` is covered too).
   const jsDir = path.join(DASHBOARD_DIR, 'js');
   for (const relPath of collectJsFiles(jsDir, '')) {
     const src = fs.readFileSync(path.join(jsDir, relPath), 'utf8');
@@ -573,7 +593,19 @@ function checkJsKeyCoverage(pages, en, ar) {
     allDynamic.push(...dynamicRefs);
   }
 
-  // 3. Validate static keys against both JSON trees.
+  // 3. Scan inline <script> blocks in public/*.html (Task #296). The public/
+  //    directory is optional — `listPublicHtmlPages()` returns [] when it is
+  //    absent, so this loop is a no-op in that case.
+  for (const page of publicPages) {
+    const html = fs.readFileSync(path.join(PUBLIC_DIR, page), 'utf8');
+    const inlineJs = extractInlineScripts(html);
+    if (!inlineJs.trim()) continue;
+    const { staticKeys, dynamicRefs } = extractTCalls(inlineJs, `public/${page} (inline <script>)`);
+    allStatic.push(...staticKeys);
+    allDynamic.push(...dynamicRefs);
+  }
+
+  // 4. Validate static keys against both JSON trees.
   const missingEn = [];
   const missingAr = [];
   const seen = new Set();
@@ -618,7 +650,7 @@ function checkJsKeyCoverage(pages, en, ar) {
     }
   }
 
-  // 4. Surface dynamic key warnings.
+  // 5. Surface dynamic key warnings.
   //
   //    Pre-existing dynamic call sites are tracked in
   //    `scripts/i18n-dynamic-baseline.json`; those remain non-blocking ⚠
@@ -768,6 +800,7 @@ function main() {
     console.error('ERROR: no HTML pages found under dashboard/');
     process.exit(2);
   }
+  const publicPages = listPublicHtmlPages();
   const en = readJson(EN_PATH);
   const ar = readJson(AR_PATH);
 
@@ -775,7 +808,7 @@ function main() {
   const ok2 = checkReferenceCoverage(pages, en, ar);
   const ok3 = checkTreeParity(en, ar);
   const ok4 = checkSwDictionaryParity(en, ar);
-  const ok5 = checkJsKeyCoverage(pages, en, ar);
+  const ok5 = checkJsKeyCoverage(pages, publicPages, en, ar);
 
   if (ok1 && ok2 && ok3 && ok4 && ok5) {
     console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, SW dictionary, and JS t() calls are all in sync.');
