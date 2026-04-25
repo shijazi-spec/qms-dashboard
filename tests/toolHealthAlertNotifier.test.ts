@@ -27,11 +27,13 @@ import {
   type ToolHealthBreachNotification,
   type ToolHealthNotifierDeps,
   type ToolHealthConfigChangeNotification,
+  type ToolHealthConfigChangeNotifierDeps,
   type ToolHealthOverrideExpiredNotification,
   type ToolHealthOverrideNotifierDeps,
   type ToolHealthRecoveryNotification,
   type ToolHealthRecoveryNotifierDeps,
 } from "../src/utils/toolHealthAlertNotifier";
+import type { ToolHealthConfigAuditEntry } from "../src/utils/toolHealthConfigDatabase";
 import { TestSuite } from "./_helpers/runner";
 
 interface SlackCall {
@@ -622,10 +624,25 @@ await suite.test(
 // ──────────────────────────────────────────────────────────────────────────────
 // Tool-health threshold-tuning notifier (Task #190)
 // ──────────────────────────────────────────────────────────────────────────────
+
+function makeSampleAuditEntries(count: number = 2): ToolHealthConfigAuditEntry[] {
+  const base = new Date("2026-04-25T14:00:00Z");
+  return Array.from({ length: count }, (_, i) => ({
+    id: 100 + i,
+    changed_at: new Date(base.getTime() - i * 30 * 60 * 1000),
+    changed_by: i === 0 ? "Alice Admin" : "Bob Ops",
+    before_values: { errorRateHighPct: 25 + i },
+    after_values: { errorRateHighPct: 20 + i, latencyHighMs: 2000 },
+    note: i === 0 ? "Sev-2 incident #4321" : null,
+  }));
+}
+
 function makeConfigChangeStubs(opts: {
   slackResult?: boolean | Error;
+  auditEntries?: ToolHealthConfigAuditEntry[];
+  auditError?: Error;
 } = {}): {
-  deps: { sendSlack: ToolHealthNotifierDeps["sendSlack"] };
+  deps: ToolHealthConfigChangeNotifierDeps;
   slackCalls: SlackCall[];
 } {
   const slackCalls: SlackCall[] = [];
@@ -636,6 +653,10 @@ function makeConfigChangeStubs(opts: {
         slackCalls.push({ channel, text, blocks });
         if (opts.slackResult instanceof Error) throw opts.slackResult;
         return opts.slackResult ?? true;
+      },
+      getAudit: async (_limit) => {
+        if (opts.auditError) throw opts.auditError;
+        return opts.auditEntries ?? [];
       },
     },
   };
@@ -826,6 +847,77 @@ await suite.test(
       !blocks.includes("Note:"),
       "no Note section when note is null",
     );
+  },
+);
+
+await suite.test(
+  "config change: recent audit entries surface in 'Recent changes' block (Task #205)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const auditEntries = makeSampleAuditEntries(2);
+    const { deps, slackCalls } = makeConfigChangeStubs({ auditEntries });
+    await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("Recent changes"),
+      `blocks include 'Recent changes' heading (got: ${blocks.slice(0, 300)}...)`,
+    );
+    suite.expect(
+      blocks.includes("Alice Admin"),
+      "most recent audit author (Alice Admin) appears in recent-changes block",
+    );
+    suite.expect(
+      blocks.includes("Bob Ops"),
+      "second audit author (Bob Ops) appears in recent-changes block",
+    );
+    suite.expect(
+      blocks.includes("2026-04-25"),
+      "ISO date string appears in recent-changes block",
+    );
+  },
+);
+
+await suite.test(
+  "config change: no audit entries → no 'Recent changes' block posted",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, slackCalls } = makeConfigChangeStubs({ auditEntries: [] });
+    await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      !blocks.includes("Recent changes"),
+      "no 'Recent changes' block when audit is empty",
+    );
+  },
+);
+
+await suite.test(
+  "config change: audit fetch error is swallowed, Slack still sends (Task #205)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+    const { deps, slackCalls } = makeConfigChangeStubs({
+      auditError: new Error("DB unavailable"),
+    });
+    const origErr = console.error;
+    const errorLogs: string[] = [];
+    console.error = (...args: any[]) => { errorLogs.push(String(args[0])); };
+    try {
+      const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
+      suite.expectEqual(result.slackSent, true, "Slack still sent despite audit error");
+      suite.expect(slackCalls.length === 1, "exactly one Slack call was made");
+      suite.expect(
+        errorLogs.some((l) => l.includes("Failed to load recent audit")),
+        "audit fetch error was logged",
+      );
+    } finally {
+      console.error = origErr;
+    }
   },
 );
 

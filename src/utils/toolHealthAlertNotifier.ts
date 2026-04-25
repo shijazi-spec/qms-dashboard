@@ -51,7 +51,7 @@ import {
   type AlertSeverity,
   claimToolHealthNotifySlot,
 } from "./aiAlertsDatabase";
-import type { ToolHealthConfigOverrides } from "./toolHealthConfigDatabase";
+import type { ToolHealthConfigOverrides, ToolHealthConfigAuditEntry } from "./toolHealthConfigDatabase";
 
 export type ToolHealthReason = "error_rate" | "p95_latency";
 
@@ -486,6 +486,12 @@ export interface NotifyToolHealthConfigChangeResult {
 
 export interface ToolHealthConfigChangeNotifierDeps {
   sendSlack?: typeof sendSlackNotification;
+  /**
+   * Fetches the most recent N audit entries, newest first. Defaults to
+   * `getToolHealthConfigAudit` from `toolHealthConfigDatabase`. Tests can
+   * inject a stub so no real DB connection is required.
+   */
+  getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
 }
 
 /**
@@ -517,11 +523,33 @@ function formatOverrideValue(v: number | null): string {
   return v == null ? "_default (env baseline)_" : `\`${v}\``;
 }
 
+/**
+ * Formats a single audit entry into a one-line summary for the "Recent
+ * changes" block: `• 2026-04-25 14:30 UTC — Alice Admin (2 fields changed)`
+ */
+function formatAuditEntrySummary(entry: ToolHealthConfigAuditEntry): string {
+  const ts = entry.changed_at instanceof Date
+    ? entry.changed_at
+    : new Date(entry.changed_at);
+  const dateStr = Number.isNaN(ts.getTime())
+    ? "—"
+    : ts.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  const fieldCount = CONFIG_FIELD_ORDER.filter((f) => {
+    const b = (entry.before_values as ToolHealthConfigOverrides)[f] ?? null;
+    const a = (entry.after_values as ToolHealthConfigOverrides)[f] ?? null;
+    return b !== a;
+  }).length;
+  const fieldLabel = fieldCount === 1 ? "1 field changed" : `${fieldCount} fields changed`;
+  const who = entry.changed_by || "—";
+  return `• \`${dateStr}\` — ${who} (${fieldLabel})`;
+}
+
 function buildConfigChangeBlocks(
   n: ToolHealthConfigChangeNotification,
   changes: ReturnType<typeof _diffToolHealthConfigOverridesForTests>,
   link: string,
   linkIsAbsolute: boolean,
+  recentAudit: ToolHealthConfigAuditEntry[] = [],
 ): any[] {
   const blocks: any[] = [
     {
@@ -561,6 +589,21 @@ function buildConfigChangeBlocks(
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: `*Note:*\n${n.note}` },
+    });
+  }
+
+  // "Recent changes" section — lists up to the last 3 audit entries so
+  // on-call can see "what's changed today?" in a single thread without
+  // scrolling the channel history. Data comes from the DB audit table so
+  // the block is consistent after a server restart (Task #205).
+  if (recentAudit.length > 0) {
+    const lines = recentAudit.map(formatAuditEntrySummary);
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Recent changes (last ${recentAudit.length}):*\n${lines.join("\n")}`,
+      },
     });
   }
 
@@ -650,6 +693,24 @@ export async function notifyToolHealthConfigChange(
   // `?tab=…` switch in dashboard/ai-ops.html (DOMContentLoaded handler).
   const link = `${cfg.link}?tab=thresholds`;
   const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+
+  // Fetch the last 3 audit entries from the DB (including the one just
+  // written) so on-call can see "what's changed recently?" in a single
+  // glance. Best-effort: a DB failure must never block the Slack send.
+  // The default loader is imported lazily to avoid a circular-module risk;
+  // tests inject a stub via depsOverride.getAudit.
+  let recentAudit: ToolHealthConfigAuditEntry[] = [];
+  try {
+    const getAuditFn = depsOverride.getAudit
+      ?? (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
+    recentAudit = await getAuditFn(3);
+  } catch (auditErr) {
+    console.error(
+      "[ToolHealthNotifier] Failed to load recent audit entries for Slack block (best-effort):",
+      auditErr,
+    );
+  }
+
   const fallback =
     `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
     `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
@@ -657,7 +718,7 @@ export async function notifyToolHealthConfigChange(
     result.slackSent = await sendSlack(
       cfg.slackChannel,
       fallback,
-      buildConfigChangeBlocks(notification, changes, link, cfg.linkIsAbsolute),
+      buildConfigChangeBlocks(notification, changes, link, cfg.linkIsAbsolute, recentAudit),
     );
   } catch (err) {
     console.error(
