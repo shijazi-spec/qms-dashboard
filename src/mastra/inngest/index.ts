@@ -400,6 +400,41 @@ const aiCostSummaryFunction = inngest.createFunction(
         console.log(`[AI-Cost] Pruned ${pruned} stale ai_call_metrics rows (>90 days)`);
       }
 
+      // Task #469: scrub credential-shaped substrings from any pre-Task-#452
+      // rows that may have leaked secrets into ai_call_metrics free-form
+      // TEXT columns (error_message, prompt_preview, tool_input_preview,
+      // tool_output_preview). Idempotent — once the historical rows are
+      // clean, every subsequent daily run reports 0 rows updated and is a
+      // cheap full-table scan.
+      try {
+        const pg = await import("pg");
+        const { runAiCallMetricsBackfill } = await import(
+          "../../scripts/backfillAiCallMetricsRedaction"
+        );
+        const backfillPool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const backfillResult = await runAiCallMetricsBackfill(backfillPool);
+          if (backfillResult.rows_updated > 0) {
+            console.log(
+              `[AI-Cost] Redaction backfill rewrote ${backfillResult.rows_updated} ` +
+                `ai_call_metrics rows (error_message=${backfillResult.error_message_changed}, ` +
+                `prompt_preview=${backfillResult.prompt_preview_changed}, ` +
+                `tool_input_preview=${backfillResult.tool_input_preview_changed}, ` +
+                `tool_output_preview=${backfillResult.tool_output_preview_changed})`,
+            );
+          }
+        } finally {
+          await backfillPool.end();
+        }
+      } catch (backfillErr) {
+        console.warn(
+          "[AI-Cost] ai_call_metrics redaction backfill failed (non-fatal):",
+          backfillErr,
+        );
+      }
+
       const thresholdUsd = parseFloat(process.env.AI_DAILY_COST_ALERT_USD || "10");
       console.log("[AI-Cost] Daily summary:", summary, `| threshold: $${thresholdUsd}`);
 
