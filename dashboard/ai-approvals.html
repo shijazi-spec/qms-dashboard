@@ -282,14 +282,33 @@
         // Prefer the live i18n key (re-translates after applyToDOM); fall
         // back to the static data-base-label so the dropdown still reads
         // sensibly if i18n is unavailable.
-        var key = opt.getAttribute('data-base-i18n') || opt.getAttribute('data-i18n');
+        //
+        // Task #668: this used to read the key from the option's
+        // `data-base-i18n` attribute and pass that variable into the
+        // translator helper. The dynamic-key guardrail (Task #295) cannot
+        // statically verify variable keys, so we now map the option's
+        // `value` to a STATIC literal key below. The `data-base-i18n`
+        // attributes on the markup remain — they are still picked up by
+        // `applyToDOM` for the initial render; this helper only handles
+        // the post-count re-render.
         var fallback = opt.getAttribute('data-base-label') || opt.textContent;
-        if (key && window.WalaPlusI18n) {
-            var translated = WalaPlusI18n.t(key);
-            // The `t()` helper returns the key itself when no translation
-            // exists; treat that as "no translation" and use the fallback.
-            if (translated && translated !== key) return translated;
+        if (!opt || !window.WalaPlusI18n) return fallback;
+        // The translator helper returns the key itself when no translation
+        // exists; treat that as "no translation" and use the fallback.
+        var key, translated;
+        switch (opt.value) {
+            case 'unreviewed_by_me':
+                key = 'ai_approvals.review_unreviewed_by_me';
+                translated = WalaPlusI18n.t('ai_approvals.review_unreviewed_by_me');
+                break;
+            case 'no_reviewers':
+                key = 'ai_approvals.review_no_reviewers';
+                translated = WalaPlusI18n.t('ai_approvals.review_no_reviewers');
+                break;
+            default:
+                return fallback;
         }
+        if (translated && translated !== key) return translated;
         return fallback;
     }
     function _formatNumber(n) {
