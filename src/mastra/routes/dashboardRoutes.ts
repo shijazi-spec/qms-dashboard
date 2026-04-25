@@ -4,12 +4,28 @@ import { serveStatic } from 'hono/bun';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-export function createDashboardRoutes() {
+export interface DashboardDeps {
+  getDashboardData: () => Promise<unknown>;
+  getLatestAuditResult: () => Promise<unknown>;
+  getAuditHistory: (limit: number) => Promise<unknown>;
+  getActiveGovernanceDocument: () => Promise<unknown>;
+  getActiveScorecard: () => Promise<unknown>;
+}
+
+const defaultDeps: DashboardDeps = {
+  getDashboardData,
+  getLatestAuditResult,
+  getAuditHistory,
+  getActiveGovernanceDocument,
+  getActiveScorecard,
+};
+
+export function createDashboardRoutes(deps: DashboardDeps = defaultDeps) {
   const app = new Hono();
 
   app.get('/dashboard', async (c) => {
     try {
-      const data = await getDashboardData();
+      const data = await deps.getDashboardData();
       return c.json(data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -19,7 +35,7 @@ export function createDashboardRoutes() {
 
   app.get('/audit/latest', async (c) => {
     try {
-      const result = await getLatestAuditResult();
+      const result = await deps.getLatestAuditResult();
       if (!result) {
         return c.json({ message: 'No audit results found' }, 404);
       }
@@ -33,7 +49,7 @@ export function createDashboardRoutes() {
   app.get('/audit/history', async (c) => {
     try {
       const limit = parseInt(c.req.query('limit') || '20');
-      const history = await getAuditHistory(limit);
+      const history = await deps.getAuditHistory(limit);
       return c.json(history);
     } catch (error) {
       console.error('Error fetching audit history:', error);
@@ -43,7 +59,7 @@ export function createDashboardRoutes() {
 
   app.get('/governance', async (c) => {
     try {
-      const doc = await getActiveGovernanceDocument();
+      const doc = await deps.getActiveGovernanceDocument();
       if (!doc) {
         return c.json({ message: 'No governance document found' }, 404);
       }
@@ -56,7 +72,7 @@ export function createDashboardRoutes() {
 
   app.get('/scorecard', async (c) => {
     try {
-      const scorecard = await getActiveScorecard();
+      const scorecard = await deps.getActiveScorecard();
       if (!scorecard) {
         return c.json({ message: 'No scorecard found' }, 404);
       }

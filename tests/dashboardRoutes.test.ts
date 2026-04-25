@@ -12,6 +12,9 @@
  *   - GET /scorecard      → 200 with scorecard OR 404 message body.
  *   - POST /audit/trigger → exercises handler end-to-end with fetch stubbed,
  *                           covering both ok (200) and not-ok (500) branches.
+ *   - DB failure paths    → every handler that wraps a DB call returns 500
+ *                           with the documented JSON error shape when the
+ *                           underlying helper throws.
  *
  * Note: This module exports a Hono app (not the path/method/createHandler
  * triples used by other routes), so we drive it through Hono's `request()`
@@ -116,6 +119,7 @@ if (HAS_DB) {
   console.log("  (skipped) DB-backed GET tests — DATABASE_URL not set");
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
 // ──────────────────────────────────────────────────────────────────────────────
 // POST /audit/trigger — uses MASTRA_WORKFLOW_BASE_URL (fetch-stubbed)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -233,6 +237,60 @@ await suite.test("POST /audit/trigger — 500 when fetch throws", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DB-failure paths — no real database required; deps are replaced with
+// throwing stubs so every try/catch branch returns 500 + JSON error body.
+// ──────────────────────────────────────────────────────────────────────────────
+
+const dbError = new Error("simulated DB failure");
+const brokenDeps = {
+  getDashboardData: async () => { throw dbError; },
+  getLatestAuditResult: async () => { throw dbError; },
+  getAuditHistory: async (_limit: number) => { throw dbError; },
+  getActiveGovernanceDocument: async () => { throw dbError; },
+  getActiveScorecard: async () => { throw dbError; },
+};
+
+await suite.test("GET /dashboard — 500 on DB failure", async () => {
+  const app = createDashboardRoutes(brokenDeps) as any;
+  const res: Response = await app.request(new Request("http://localhost/dashboard"));
+  suite.expectEqual(res.status, 500, "status");
+  const body = await res.json();
+  suite.expectEqual(body.error, "Failed to fetch dashboard data", "error message");
+});
+
+await suite.test("GET /audit/latest — 500 on DB failure", async () => {
+  const app = createDashboardRoutes(brokenDeps) as any;
+  const res: Response = await app.request(new Request("http://localhost/audit/latest"));
+  suite.expectEqual(res.status, 500, "status");
+  const body = await res.json();
+  suite.expectEqual(body.error, "Failed to fetch latest audit", "error message");
+});
+
+await suite.test("GET /audit/history — 500 on DB failure", async () => {
+  const app = createDashboardRoutes(brokenDeps) as any;
+  const res: Response = await app.request(new Request("http://localhost/audit/history"));
+  suite.expectEqual(res.status, 500, "status");
+  const body = await res.json();
+  suite.expectEqual(body.error, "Failed to fetch audit history", "error message");
+});
+
+await suite.test("GET /governance — 500 on DB failure", async () => {
+  const app = createDashboardRoutes(brokenDeps) as any;
+  const res: Response = await app.request(new Request("http://localhost/governance"));
+  suite.expectEqual(res.status, 500, "status");
+  const body = await res.json();
+  suite.expectEqual(body.error, "Failed to fetch governance document", "error message");
+});
+
+await suite.test("GET /scorecard — 500 on DB failure", async () => {
+  const app = createDashboardRoutes(brokenDeps) as any;
+  const res: Response = await app.request(new Request("http://localhost/scorecard"));
+  suite.expectEqual(res.status, 500, "status");
+  const body = await res.json();
+  suite.expectEqual(body.error, "Failed to fetch scorecard", "error message");
 });
 
 suite.finishOrExit();
