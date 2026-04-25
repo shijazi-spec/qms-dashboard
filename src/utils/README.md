@@ -25,7 +25,9 @@ Any module in this directory that executes INSERT or UPDATE statements containin
 
 ### Wiring into CI
 
-After creating the test file, add it to `scripts/post-merge.sh` immediately after the existing redaction gate block, following the same pattern:
+Companion tests placed under `src/utils/` are picked up automatically by `npm test` (which runs `tests/runIntegrationTests.ts` and recursively discovers every `src/**/*.test.ts` file), and `npm test` is invoked from `scripts/post-merge.sh`. No further wiring is required for that path.
+
+If you want a test to run *before* the full `npm test` suite (for example because it should fail the build instantly on regression), also add an explicit invocation to `scripts/post-merge.sh` following the same pattern as the existing gates:
 
 ```bash
 echo ""
@@ -34,6 +36,22 @@ npx tsx src/utils/yourNewDatabase.test.ts
 ```
 
 All tests are plain TypeScript files runnable with `npx tsx` — no test framework needed.  They exit with code `1` on failure so the shell's `set -e` will abort the build.
+
+### Automated enforcement
+
+`scripts/check-db-test-coverage.sh` is the CI gate that enforces this rule. It runs from `scripts/post-merge.sh` *before* `npm test` and:
+
+1. Discovers every `src/utils/*Database.ts` file.
+2. Verifies that a companion `*.test.ts` exists (default convention: `<name>Database.test.ts`; non-standard names like `eventLogsDatabase.ts` → `redactSensitiveFields.test.ts` are mapped explicitly inside the script).
+3. Verifies the companion test is wired into `scripts/post-merge.sh` — either by an explicit `npx tsx <path>` line or by being auto-discovered through `npm test`.
+
+Adding a new `*Database.ts` file without a companion test fails the gate immediately, with a diagnostic pointing back to this README. A baseline `GRANDFATHERED` allow-list inside the script captures the writers that already existed when the gate was introduced and still need a test backfilled — **do not add new entries to that list**; write the test instead.
+
+Run it locally before opening a PR:
+
+```bash
+bash scripts/check-db-test-coverage.sh
+```
 
 ### Redaction helper
 

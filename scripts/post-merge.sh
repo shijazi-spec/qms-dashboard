@@ -4,6 +4,19 @@ set -e
 npm install
 
 # ----------------------------------------------------------------------------
+# CI gate — DB writer secret-leak test coverage (Task #268)
+#
+# Runs FIRST so a missing companion test fails the build immediately with a
+# clear diagnostic, before the slower full test suite. Discovers every
+# src/utils/*Database.ts file and verifies it has a matching *.test.ts that
+# is wired into this script (either explicitly or via `npm test` auto-
+# discovery). See src/utils/README.md and the script header for details.
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: DB writer secret-leak test coverage (Task #268)"
+bash scripts/check-db-test-coverage.sh
+
+# ----------------------------------------------------------------------------
 # CI gate — full test suite
 #
 # Runs every test file discovered by tests/runIntegrationTests.ts (60+ files),
