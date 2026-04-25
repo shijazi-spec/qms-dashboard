@@ -71,7 +71,11 @@ function assert(condition: boolean, label: string): void {
 
 console.log("\n▶ i18n guardrail (scripts/check-i18n.cjs)\n");
 
-const result = spawnSync("node", [SCRIPT], {
+// Pass --report-unused so Check 6 (Task #345 — orphan-key budget) is
+// exercised on every `npm test` run. Pre-existing orphans are tracked in
+// `scripts/i18n-unused-baseline.json`; any NEW orphan introduced by the
+// current diff fails the assertion below.
+const result = spawnSync("node", [SCRIPT, "--report-unused"], {
   stdio: "pipe",
   encoding: "utf8",
 });
@@ -89,7 +93,7 @@ if (result.error) {
   }
   assert(
     result.status === 0,
-    "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, the two trees are identical, the SW dictionary is in sync, every static WalaPlusI18n.t() key resolves in both JSON files, and no new dynamic t(variable) call sites have been added without updating the baseline",
+    "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, the two trees are identical, the SW dictionary is in sync, every static WalaPlusI18n.t() key resolves in both JSON files, no new dynamic t(variable) call sites have been added without updating the baseline, and no NEW orphan keys have been added to en.json / ar.json (Task #345)",
   );
 
   // The baselined long-standing dynamic call sites must continue to be reported
@@ -98,6 +102,13 @@ if (result.error) {
   assert(
     /JS t\(\) dynamic keys \(baselined\) — \d+ long-standing/.test(stdout + stderr),
     "baselined dynamic WalaPlusI18n.t(variable) call sites are still surfaced as ⚠ warnings",
+  );
+
+  // Task #345 — the unused-key scan must be invoked when --report-unused is
+  // passed, regardless of whether any orphans are found.
+  assert(
+    /Unused-key scan \(Task #345/.test(stdout + stderr),
+    "unused-key scan (Task #345) is exercised on every `npm test` run",
   );
 }
 
@@ -270,6 +281,202 @@ try {
   );
 } finally {
   fs.rmSync(tmpRoot, { recursive: true, force: true });
+}
+
+/* ---------------------------------------------------------------------------
+ * Task #345 — new orphan keys in en.json / ar.json are flagged as ✗ errors
+ *
+ * Same isolated-tmp-tree pattern as the Task #295 block above. We synthesise
+ * a minimal dashboard with two leaf keys: one that IS referenced by a
+ * data-i18n attribute (so it must NOT show up as an orphan) and one that is
+ * NOT referenced anywhere (so it MUST be flagged as a brand-new orphan when
+ * the unused-key baseline is empty). The script must:
+ *   - exit non-zero under --report-unused
+ *   - print the "NEW orphan key(s)" diagnostic
+ *   - name the offending key
+ *   - point the operator at the --update-unused-baseline escape hatch
+ *   - also describe the dynamic-prefix allowlist as an alternative
+ *
+ * After running with --update-unused-baseline the same scenario must pass.
+ * ------------------------------------------------------------------------ */
+
+console.log("\n▶ Task #345 — new orphan i18n key is flagged as an error\n");
+
+const orphanRoot = fs.mkdtempSync(path.join(os.tmpdir(), "i18n-orphan-baseline-"));
+try {
+  const tmpScripts = path.join(orphanRoot, "scripts");
+  const tmpDashboard = path.join(orphanRoot, "dashboard");
+  const tmpI18n = path.join(tmpDashboard, "i18n");
+  fs.mkdirSync(tmpScripts, { recursive: true });
+  fs.mkdirSync(tmpI18n, { recursive: true });
+
+  fs.copyFileSync(SCRIPT, path.join(tmpScripts, "check-i18n.cjs"));
+
+  // Tree includes a referenced leaf AND a brand-new orphan leaf.
+  const tree = {
+    ns: { used_key: "Used", brand_new_orphan: "Orphan" },
+    downloads: {
+      sw_expired_title: "Expired",
+      sw_expired_heading: "Expired",
+      sw_expired_body: "Body",
+      sw_expired_retry_hint: "Hint",
+    },
+  };
+  const treeAr = {
+    ns: { used_key: "مستخدم", brand_new_orphan: "يتيم" },
+    downloads: {
+      sw_expired_title: "منتهي",
+      sw_expired_heading: "منتهي",
+      sw_expired_body: "نص",
+      sw_expired_retry_hint: "تلميح",
+    },
+  };
+  fs.writeFileSync(path.join(tmpI18n, "en.json"), JSON.stringify(tree));
+  fs.writeFileSync(path.join(tmpI18n, "ar.json"), JSON.stringify(treeAr));
+
+  // Allowlist the downloads.sw_* prefix so the SW dictionary keys are NOT
+  // counted as orphans (they're consumed by the service worker, not the DOM).
+  // Leaves ns.brand_new_orphan as the single, deterministic orphan.
+  fs.writeFileSync(
+    path.join(tmpI18n, ".referenced-dynamically.json"),
+    JSON.stringify({ prefixes: ["downloads.sw_"] }),
+  );
+  fs.writeFileSync(
+    path.join(tmpScripts, "i18n-dynamic-baseline.json"),
+    JSON.stringify({ entries: [] }),
+  );
+
+  // SW dictionary mirroring the JSON tree so Check 4 passes.
+  const swDict = {
+    en: { title: "Expired", heading: "Expired", body: "Body", retry_hint: "Hint" },
+    ar: { title: "منتهي", heading: "منتهي", body: "نص", retry_hint: "تلميح" },
+  } as const;
+  const renderLang = (lang: "en" | "ar") => {
+    const fields = Object.entries(swDict[lang])
+      .map(([k, v]) => `    ${k}: '${v}'`)
+      .join(",\n");
+    return `  ${lang}: {\n${fields}\n  }`;
+  };
+  fs.writeFileSync(
+    path.join(tmpDashboard, "streaming-download-sw.js"),
+    `var SW_STRINGS = {\n${renderLang("en")},\n${renderLang("ar")}\n};\n`,
+  );
+
+  // Dashboard page references ns.used_key but not ns.brand_new_orphan.
+  const fakePage = `<!DOCTYPE html>
+<html><head>
+  <script src="/js/i18n.js?v=1"></script>
+</head><body>
+  <span data-i18n="ns.used_key">Used</span>
+  <script>
+    window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+  </script>
+</body></html>
+`;
+  fs.writeFileSync(path.join(tmpDashboard, "fake-page.html"), fakePage);
+
+  // 1. Without --report-unused, orphan check is silent (legacy behaviour).
+  const silentRun = spawnSync("node", [path.join(tmpScripts, "check-i18n.cjs")], {
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+  const silentOut = (silentRun.stdout ?? "") + (silentRun.stderr ?? "");
+  assert(
+    silentRun.status === 0,
+    "without --report-unused, an unreferenced orphan key does NOT block the gate (legacy behaviour preserved)",
+  );
+  assert(
+    !/NEW orphan key\(s\)/.test(silentOut),
+    "without --report-unused, the orphan diagnostic is NOT printed",
+  );
+
+  // 2. With --report-unused (and an empty baseline), the orphan blocks.
+  const reportRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs"), "--report-unused"],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  const reportOut = (reportRun.stdout ?? "") + (reportRun.stderr ?? "");
+  assert(
+    reportRun.status !== 0,
+    "with --report-unused, a NEW orphan key in en.json blocks the gate",
+  );
+  assert(
+    /NEW orphan key\(s\) in dashboard\/i18n\/en\.json \+ ar\.json/.test(reportOut),
+    "diagnostic explicitly labels the new orphan key(s) as NEW",
+  );
+  assert(
+    /ns\.brand_new_orphan/.test(reportOut),
+    "diagnostic names the offending orphan key",
+  );
+  assert(
+    /--update-unused-baseline/.test(reportOut),
+    "diagnostic points the operator at the --update-unused-baseline escape hatch",
+  );
+  assert(
+    /\.referenced-dynamically\.json/.test(reportOut),
+    "diagnostic also describes the dynamic-prefix allowlist as an alternative",
+  );
+
+  // 3. After --update-unused-baseline, the same orphan is now an attested
+  //    pre-existing key and the gate passes (with a ⚠ warning).
+  const updateRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs"), "--update-unused-baseline"],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  assert(
+    updateRun.status === 0,
+    "--update-unused-baseline writes the new orphan(s) and exits zero",
+  );
+  const orphanBaseline = JSON.parse(
+    fs.readFileSync(path.join(tmpScripts, "i18n-unused-baseline.json"), "utf8"),
+  );
+  assert(
+    Array.isArray(orphanBaseline.keys) &&
+      orphanBaseline.keys.includes("ns.brand_new_orphan") &&
+      !orphanBaseline.keys.includes("ns.used_key"),
+    "--update-unused-baseline records exactly the orphan key (and not the referenced one)",
+  );
+
+  const reRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs"), "--report-unused"],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  const reRunOut = (reRun.stdout ?? "") + (reRun.stderr ?? "");
+  assert(
+    reRun.status === 0,
+    "guardrail passes again once the new orphan is committed to the baseline",
+  );
+  assert(
+    /Unused-key report \(baselined\) — 1 pre-existing orphan key/.test(reRunOut),
+    "baselined orphan key continues to be surfaced as a ⚠ warning",
+  );
+
+  // 4. Removing the orphan from the JSON trees AND running the script under
+  //    a baseline that still lists it must pass and surface the cleanup hint.
+  const cleanedTree = { ns: { used_key: "Used" }, downloads: tree.downloads };
+  const cleanedTreeAr = { ns: { used_key: "مستخدم" }, downloads: treeAr.downloads };
+  fs.writeFileSync(path.join(tmpI18n, "en.json"), JSON.stringify(cleanedTree));
+  fs.writeFileSync(path.join(tmpI18n, "ar.json"), JSON.stringify(cleanedTreeAr));
+
+  const cleanedRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs"), "--report-unused"],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  const cleanedOut = (cleanedRun.stdout ?? "") + (cleanedRun.stderr ?? "");
+  assert(
+    cleanedRun.status === 0,
+    "guardrail passes when a baselined orphan has been removed from en.json + ar.json",
+  );
+  assert(
+    /no longer unused — re-run with --update-unused-baseline to prune/.test(cleanedOut),
+    "operator is told to prune the baseline file once an orphan is cleaned up",
+  );
+} finally {
+  fs.rmSync(orphanRoot, { recursive: true, force: true });
 }
 
 console.log(`\n  Result: ${passed} passed, ${failed} failed`);

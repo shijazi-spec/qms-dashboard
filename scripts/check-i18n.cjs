@@ -61,6 +61,9 @@ const DYNAMIC_BASELINE_PATH = path.join(__dirname, 'i18n-dynamic-baseline.json')
 // CLI flags
 const CLI_ARGS = new Set(process.argv.slice(2));
 const UPDATE_BASELINE = CLI_ARGS.has('--update-baseline');
+// `--update-unused-baseline` regenerates `scripts/i18n-unused-baseline.json`
+// (the orphan-key allow-list used by Check 6). Implies `--report-unused`.
+const UPDATE_UNUSED_BASELINE = CLI_ARGS.has('--update-unused-baseline');
 
 // HTML files in dashboard/ that are NOT user-facing dashboard pages and so
 // do not need the i18n wiring. Keep this list tiny and explicit; every entry
@@ -789,7 +792,7 @@ function writeDynamicBaseline(uniqueCurrent) {
 }
 
 /* ---------------------------------------------------------------------------
- * Check 6 — unused keys (advisory, opt-in via --report-unused)
+ * Check 6 — unused keys (BLOCKING when --report-unused is passed; Task #345)
  *
  * Finds keys that exist in en.json / ar.json but are never referenced from:
  *   a. any `data-i18n*` attribute in a dashboard/*.html page, or
@@ -801,12 +804,31 @@ function writeDynamicBaseline(uniqueCurrent) {
  * because they are intentionally looked up at runtime via computed keys (e.g.
  * `t('dyn.risks.status.' + row.status)`).
  *
- * This check is ADVISORY: it always exits 0 so it cannot block the build.
- * Run it explicitly with:
+ * Pre-existing orphans (the long backlog the cleanup task is working through)
+ * are tracked in `scripts/i18n-unused-baseline.json`. Each run buckets the
+ * current orphans into:
+ *   - known   : in baseline AND still unused           — ⚠ warning only
+ *   - added   : NOT in baseline (i.e. brand new)       — ✗ blocks the gate
+ *   - removed : in baseline but no longer unused/exist — informational note
+ *               (re-run with --update-unused-baseline to prune the file)
+ *
+ * The check runs only when explicitly requested:
  *   node scripts/check-i18n.cjs --report-unused
+ *   node scripts/check-i18n.cjs --update-unused-baseline
+ *
+ * `npm test` and `scripts/post-merge.sh` both pass `--report-unused`, so any
+ * NEW orphan key fails the build. To intentionally accept a new orphan (e.g.
+ * a key being staged for an in-flight feature), run --update-unused-baseline
+ * and commit the diff.
+ *
+ * To register a new dynamic-lookup prefix instead, edit
+ * `dashboard/i18n/.referenced-dynamically.json` (see the file header for the
+ * dot-prefix convention). Keys covered by a dynamic prefix never appear in
+ * the orphan report, so the baseline does not need to track them.
  * ------------------------------------------------------------------------ */
 
 const DYNAMIC_ALLOWLIST_PATH = path.join(DASHBOARD_DIR, 'i18n', '.referenced-dynamically.json');
+const UNUSED_BASELINE_PATH = path.join(__dirname, 'i18n-unused-baseline.json');
 const JS_DIR = path.join(DASHBOARD_DIR, 'js');
 
 // Captures every quoted string in source that looks like an i18n key: two or
@@ -894,6 +916,46 @@ function isDynamicPrefix(key, prefixes) {
   return prefixes.some((p) => key === p || key.startsWith(p));
 }
 
+/**
+ * Load the orphan-key baseline. Returns a Set of dotted keys (possibly empty
+ * if the file does not yet exist). Throws on malformed JSON so a corrupted
+ * baseline can't silently weaken the gate.
+ */
+function loadUnusedBaseline() {
+  if (!fs.existsSync(UNUSED_BASELINE_PATH)) return new Set();
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(UNUSED_BASELINE_PATH, 'utf8'));
+  } catch (err) {
+    console.error(
+      `ERROR: failed to parse ${path.relative(ROOT, UNUSED_BASELINE_PATH)}: ${err.message}`,
+    );
+    process.exit(2);
+  }
+  const keys = Array.isArray(raw && raw.keys) ? raw.keys : [];
+  return new Set(keys.filter((k) => typeof k === 'string'));
+}
+
+/**
+ * Write the orphan-key baseline file, sorted for stable diffs.
+ */
+function writeUnusedBaseline(unusedKeys) {
+  const sorted = [...unusedKeys].sort();
+  const payload = {
+    _comment:
+      'Pre-existing orphan i18n keys tracked by Task #345 — keys present in ' +
+      'dashboard/i18n/{en,ar}.json that are NOT referenced by any data-i18n ' +
+      'attribute or static WalaPlusI18n.t("...") call. Adding a key here is an ' +
+      'explicit attestation that the orphan is intentional (e.g. staged for an ' +
+      'in-flight feature). Prefer deleting the orphan from en.json + ar.json, or ' +
+      'registering a new dynamic-lookup prefix in ' +
+      'dashboard/i18n/.referenced-dynamically.json. Regenerate this file with: ' +
+      'node scripts/check-i18n.cjs --update-unused-baseline',
+    keys: sorted,
+  };
+  fs.writeFileSync(UNUSED_BASELINE_PATH, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+}
+
 function checkUnusedKeys(pages, en) {
   const referencedKeys = collectReferencedKeys(pages);
   const dynamicPrefixes = loadDynamicPrefixes();
@@ -907,28 +969,93 @@ function checkUnusedKeys(pages, en) {
     unused.push(key);
   }
 
+  if (UPDATE_UNUSED_BASELINE) {
+    writeUnusedBaseline(unused);
+    console.log(
+      `\n↻  Wrote ${path.relative(ROOT, UNUSED_BASELINE_PATH)} with ${unused.length} orphan key(s).`,
+    );
+    return true;
+  }
+
+  const baseline = loadUnusedBaseline();
+  const added = unused.filter((k) => !baseline.has(k));
+  const known = unused.filter((k) => baseline.has(k));
+  const removed = [...baseline].filter((k) => !unused.includes(k)).sort();
+
   if (unused.length === 0) {
     console.log(
       `✓ Unused-key scan — every leaf in en.json is referenced by a data-i18n attribute or a static t('...') call`,
     );
-    return;
+    if (removed.length) {
+      console.log(
+        `\nℹ  ${removed.length} baselined orphan key(s) are no longer unused — re-run with --update-unused-baseline to prune ${path.relative(ROOT, UNUSED_BASELINE_PATH)}.`,
+      );
+    }
+    return true;
   }
 
-  console.log(`\n⚠  Unused-key report (${unused.length} key(s) in en.json with no detected reference)`);
-  console.log(
-    '   Keys marked ⚠ are candidates for removal. Before deleting, verify they are',
-  );
-  console.log(
-    '   not used dynamically at runtime. If they are, add their prefix to:',
-  );
-  console.log(`   ${path.relative(ROOT, DYNAMIC_ALLOWLIST_PATH)}`);
-  console.log('');
-  for (const k of unused.slice(0, 100)) {
-    console.log(`   ⚠  ${k}`);
+  if (known.length) {
+    console.log(
+      `\n⚠  Unused-key report (baselined) — ${known.length} pre-existing orphan key(s) in en.json with no detected reference:`,
+    );
+    console.log(
+      '   These are tracked in scripts/i18n-unused-baseline.json and do NOT block CI.',
+    );
+    console.log(
+      '   Cleanup task: delete the orphan from en.json + ar.json (or register a',
+    );
+    console.log(
+      `   new dynamic-lookup prefix in ${path.relative(ROOT, DYNAMIC_ALLOWLIST_PATH)}),`,
+    );
+    console.log('   then run `node scripts/check-i18n.cjs --update-unused-baseline`.');
+    console.log('');
+    for (const k of known.slice(0, 100)) {
+      console.log(`   ⚠  ${k}`);
+    }
+    if (known.length > 100) {
+      console.log(`   … and ${known.length - 100} more`);
+    }
   }
-  if (unused.length > 100) {
-    console.log(`   … and ${unused.length - 100} more (run script to see the full list)`);
+
+  if (removed.length) {
+    console.log(
+      `\nℹ  ${removed.length} baselined orphan key(s) are no longer unused — re-run with --update-unused-baseline to prune ${path.relative(ROOT, UNUSED_BASELINE_PATH)}:`,
+    );
+    for (const k of removed.slice(0, 20)) {
+      console.log(`   ${k}`);
+    }
+    if (removed.length > 20) {
+      console.log(`   … and ${removed.length - 20} more`);
+    }
   }
+
+  if (added.length === 0) {
+    return true;
+  }
+
+  fail(
+    `Unused-key scan: ${added.length} NEW orphan key(s) in dashboard/i18n/en.json + ar.json (Task #345)`,
+    [
+      ...added.slice(0, 50),
+      ...(added.length > 50 ? [`... and ${added.length - 50} more`] : []),
+      '',
+      'These keys exist in en.json / ar.json but are NOT referenced by any',
+      'data-i18n attribute or static WalaPlusI18n.t("...") call.',
+      '',
+      'Fix one of:',
+      '  1. Delete the unused key(s) from dashboard/i18n/en.json AND',
+      '     dashboard/i18n/ar.json (preferred — keeps the dictionary lean).',
+      '  2. If the key is looked up at runtime via a computed key like',
+      `     t('foo.' + bar), register the prefix in`,
+      `     ${path.relative(ROOT, DYNAMIC_ALLOWLIST_PATH)}`,
+      '     so future orphan scans skip it.',
+      '  3. If the key is genuinely staged for an in-flight feature and must',
+      '     ship before the wiring lands, attest to it explicitly by running:',
+      '         node scripts/check-i18n.cjs --update-unused-baseline',
+      `     and committing the updated ${path.relative(ROOT, UNUSED_BASELINE_PATH)}.`,
+    ],
+  );
+  return false;
 }
 
 /* ---------------------------------------------------------------------------
@@ -938,7 +1065,9 @@ function checkUnusedKeys(pages, en) {
 function main() {
   console.log('▶ WalaPlus i18n guardrail (scripts/check-i18n.cjs)\n');
 
-  const reportUnused = process.argv.includes('--report-unused');
+  // --update-unused-baseline implies --report-unused (we can't write a fresh
+  // baseline without first computing the orphan set).
+  const reportUnused = CLI_ARGS.has('--report-unused') || UPDATE_UNUSED_BASELINE;
 
   const pages = listHtmlPages();
   if (pages.length === 0) {
@@ -955,16 +1084,18 @@ function main() {
   const ok4 = checkSwDictionaryParity(en, ar);
   const ok5 = checkJsKeyCoverage(pages, publicPages, en, ar);
 
+  let ok6 = true;
   if (reportUnused) {
-    console.log('\n--- Unused-key scan (advisory) ---');
-    checkUnusedKeys(pages, en);
+    console.log('\n--- Unused-key scan (Task #345 — blocks on NEW orphans) ---');
+    ok6 = checkUnusedKeys(pages, en);
   }
 
-  if (ok1 && ok2 && ok3 && ok4 && ok5) {
-    console.log('\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, SW dictionary, and JS t() calls are all in sync.');
-    if (reportUnused) {
-      console.log('  (Unused-key scan is advisory and does not affect exit code.)');
-    }
+  if (ok1 && ok2 && ok3 && ok4 && ok5 && ok6) {
+    console.log(
+      '\n✓ i18n guardrail PASS — dashboard pages, data-i18n references, en/ar key trees, SW dictionary, JS t() calls' +
+        (reportUnused ? ', and orphan-key budget' : '') +
+        ' are all in sync.',
+    );
     process.exit(0);
   }
   console.error('\n✗ i18n guardrail FAILED — see diagnostics above. Re-run with `node scripts/check-i18n.cjs` after fixing.');

@@ -29,7 +29,7 @@ echo "▶ CI gate: full test suite (npm test)"
 npm test
 
 # ----------------------------------------------------------------------------
-# CI gate — i18n coverage guardrail (Task #125 / #150)
+# CI gate — i18n coverage guardrail (Task #125 / #150 / #345)
 #
 # Blocks merges that:
 #   * Add a `dashboard/*.html` page without `/js/i18n.js` + the
@@ -41,13 +41,18 @@ npm test
 #   * Use a static `WalaPlusI18n.t('ns.key')` call in `dashboard/js/*.js` or
 #     an inline <script> block whose key is missing from en.json / ar.json.
 #     Dynamic t(variable) calls are surfaced as non-blocking ⚠ warnings.
+#   * Add a NEW orphan key to en.json / ar.json that is not referenced by any
+#     data-i18n attribute or static t('...') call, AND is not listed in
+#     `scripts/i18n-unused-baseline.json` (Task #345). Pre-existing orphans
+#     stay as ⚠ warnings until the cleanup task drains them.
 #
-# All five checks live in `scripts/check-i18n.cjs` and are also covered by
-# `tests/i18nCoverage.test.ts` (auto-discovered by `npm test`).
+# All six checks live in `scripts/check-i18n.cjs` and are also covered by
+# `tests/i18nCoverage.test.ts` (auto-discovered by `npm test`). To register
+# a new dynamic-lookup prefix, edit `dashboard/i18n/.referenced-dynamically.json`.
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: i18n coverage (Task #125 / #150)"
-node scripts/check-i18n.cjs
+echo "▶ CI gate: i18n coverage (Task #125 / #150 / #345)"
+node scripts/check-i18n.cjs --report-unused
 
 # ----------------------------------------------------------------------------
 # CI gate — dashboard inline-handler + inline-<script> CSP guard
