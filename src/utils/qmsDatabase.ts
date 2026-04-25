@@ -6,6 +6,188 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Self-initialising schema
+//
+// Every other DB utility in the project (aiAlertsDatabase, aiTelemetry,
+// database, complianceDatabase, …) creates its own tables on first import
+// using CREATE TABLE IF NOT EXISTS. QMS used to be the lone exception, which
+// meant CI had to apply tests/fixtures/ci-schema.sql before running tests
+// and developers with a fresh database hit "relation does not exist" errors.
+//
+// The schema below mirrors what tests/fixtures/ci-schema.sql provided so that
+// integration suites (qmsApiRoutes.test.ts, dashboardApiRoutes.test.ts …)
+// and a fresh dev DB both Just Work after a single import. Column types are
+// intentionally permissive (TEXT / JSONB / TIMESTAMPTZ) — production schemas
+// may add stricter constraints or extra columns via migrations, but CREATE
+// TABLE IF NOT EXISTS leaves any existing definition untouched.
+//
+// The init runs at module load via top-level await so any caller awaiting
+// `import('../utils/qmsDatabase')` gets a fully-initialised schema before
+// the first pool.query() fires. If DATABASE_URL is unset (typical for
+// happy-path-skipped tests on a clean checkout) we no-op so the import
+// itself doesn't crash.
+// ──────────────────────────────────────────────────────────────────────────────
+async function initQmsSchema(): Promise<void> {
+  if (!process.env.DATABASE_URL) return;
+  await pool.query(`
+    CREATE SEQUENCE IF NOT EXISTS capa_number_seq;
+    CREATE SEQUENCE IF NOT EXISTS nc_number_seq;
+
+    CREATE TABLE IF NOT EXISTS evaluation_frameworks (
+      framework_id   TEXT PRIMARY KEY,
+      name           TEXT,
+      version        TEXT,
+      description    TEXT,
+      standards      JSONB,
+      dimensions     JSONB,
+      is_active      BOOLEAN DEFAULT FALSE,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS deal_evaluations (
+      id                 SERIAL PRIMARY KEY,
+      deal_id            TEXT,
+      deal_name          TEXT,
+      framework_id       TEXT,
+      overall_score      NUMERIC,
+      dimension_scores   JSONB,
+      criteria_scores    JSONB,
+      findings_count     INTEGER DEFAULT 0,
+      critical_findings  INTEGER DEFAULT 0,
+      recommendations    JSONB,
+      deal_data          JSONB,
+      source             TEXT,
+      evaluation_date    TIMESTAMPTZ DEFAULT NOW(),
+      created_at         TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS capa_records (
+      id                     SERIAL PRIMARY KEY,
+      capa_number            TEXT UNIQUE,
+      title                  TEXT NOT NULL,
+      description            TEXT,
+      capa_type              TEXT,
+      source_type            TEXT,
+      source_id              TEXT,
+      source_reference       TEXT,
+      severity               TEXT,
+      status                 TEXT DEFAULT 'open',
+      priority               TEXT DEFAULT 'medium',
+      assigned_to            TEXT,
+      root_cause             TEXT,
+      root_cause_method      TEXT,
+      immediate_action       TEXT,
+      corrective_action      TEXT,
+      preventive_action      TEXT,
+      verification_method    TEXT,
+      effectiveness_criteria TEXT,
+      target_date            TIMESTAMPTZ,
+      completion_date        TIMESTAMPTZ,
+      verification_date      TIMESTAMPTZ,
+      related_criteria       JSONB,
+      attachments            JSONB,
+      metadata               JSONB,
+      created_by             TEXT,
+      created_at             TIMESTAMPTZ DEFAULT NOW(),
+      updated_at             TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS capa_action_items (
+      id              SERIAL PRIMARY KEY,
+      capa_id         INTEGER REFERENCES capa_records(id) ON DELETE CASCADE,
+      action_number   INTEGER,
+      description     TEXT,
+      action_type     TEXT,
+      assigned_to     TEXT,
+      due_date        TIMESTAMPTZ,
+      completion_date TIMESTAMPTZ,
+      status          TEXT DEFAULT 'pending',
+      notes           TEXT,
+      evidence        JSONB,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS nonconformance_records (
+      id                  SERIAL PRIMARY KEY,
+      nc_number           TEXT UNIQUE,
+      title               TEXT,
+      description         TEXT,
+      nc_type             TEXT,
+      category            TEXT,
+      source_type         TEXT,
+      source_id           TEXT,
+      source_reference    TEXT,
+      severity            TEXT,
+      status              TEXT DEFAULT 'open',
+      disposition         TEXT,
+      disposition_notes   TEXT,
+      related_capa_id     INTEGER,
+      detected_by         TEXT,
+      detected_date       TIMESTAMPTZ,
+      review_notes        TEXT,
+      reviewed_by         TEXT,
+      review_date         TIMESTAMPTZ,
+      closed_by           TEXT,
+      closed_date         TIMESTAMPTZ,
+      criteria_violations JSONB,
+      attachments         JSONB,
+      metadata            JSONB,
+      created_by          TEXT,
+      created_at          TIMESTAMPTZ DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS training_records (
+      id                  SERIAL PRIMARY KEY,
+      training_id         TEXT UNIQUE,
+      title               TEXT,
+      description         TEXT,
+      training_type       TEXT,
+      category            TEXT,
+      duration_hours      NUMERIC,
+      provider            TEXT,
+      materials           JSONB,
+      assessment_required BOOLEAN DEFAULT FALSE,
+      passing_score       NUMERIC,
+      validity_months     INTEGER,
+      is_mandatory        BOOLEAN DEFAULT FALSE,
+      target_roles        TEXT[],
+      metadata            JSONB,
+      is_active           BOOLEAN DEFAULT TRUE,
+      created_at          TIMESTAMPTZ DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS training_assignments (
+      id              SERIAL PRIMARY KEY,
+      training_id     TEXT,
+      employee_id     TEXT,
+      employee_name   TEXT,
+      employee_email  TEXT,
+      employee_role   TEXT,
+      due_date        TIMESTAMPTZ,
+      status          TEXT DEFAULT 'assigned',
+      assigned_by     TEXT,
+      completed_date  TIMESTAMPTZ,
+      score           NUMERIC,
+      notes           TEXT,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+}
+
+// Top-level await ensures any caller `await import('../utils/qmsDatabase')`
+// receives a module whose schema has already been created. We swallow errors
+// (logging them) so a bad DATABASE_URL on a dev box doesn't blow up unrelated
+// imports — the subsequent pool.query() call will surface the real error.
+await initQmsSchema().catch((err) => {
+  console.error('[QMS] schema init failed:', err);
+});
+
 export interface CapaRecord {
   id?: number;
   capa_number: string;
