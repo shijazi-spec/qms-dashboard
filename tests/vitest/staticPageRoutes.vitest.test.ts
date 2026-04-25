@@ -187,6 +187,22 @@ describe("GET /admin — non-admin session (no X-Admin-Key header)", () => {
   });
 });
 
+describe("GET /admin — no credentials at all (no session cookie, no X-Admin-Key header)", () => {
+  test("returns the 'Admin Setup Required' page (not admin.html) when the request is fully unauthenticated", async () => {
+    const handler = await buildStaticHandler("/admin");
+    const ctx = makeCtxWithHtml({
+      method: "GET",
+      headers: {},
+    });
+
+    const res = await handler(ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toContain("Admin Setup Required");
+    expect(res.body).not.toContain("ADMIN_DASHBOARD");
+  });
+});
+
 // ===========================================================================
 // GET /users
 // ===========================================================================
@@ -227,6 +243,22 @@ describe("GET /users — non-admin session (no X-Admin-Key header)", () => {
     const ctx = makeCtxWithHtml({
       method: "GET",
       headers: { Cookie: sessionCookie("quality_manager") },
+    });
+
+    const res = await handler(ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toContain("Admin Setup Required");
+    expect(res.body).not.toContain("USERS_DASHBOARD");
+  });
+});
+
+describe("GET /users — no credentials at all (no session cookie, no X-Admin-Key header)", () => {
+  test("returns the 'Admin Setup Required' page (not users.html) when the request is fully unauthenticated", async () => {
+    const handler = await buildStaticHandler("/users");
+    const ctx = makeCtxWithHtml({
+      method: "GET",
+      headers: {},
     });
 
     const res = await handler(ctx);
