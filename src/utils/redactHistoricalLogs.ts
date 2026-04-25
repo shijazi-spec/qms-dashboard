@@ -1427,12 +1427,49 @@ export async function dispatchPostRestoreSweepAlert(
     `nc_change_history=${triggers.nc_change_history}, ` +
     `capa_change_history=${triggers.capa_change_history}, ` +
     `ai_pending_actions=${triggers.ai_pending_actions}`;
+
+  // Task #626 — surface the (capped) list of action_codes the
+  // credential-warnings backfill flagged so on-call engineers paged
+  // about a non-zero ai_pending_actions credential-warnings count can
+  // see the affected approval IDs inline, without having to open the
+  // audit-evidence file or run a separate DB query. The list is bounded
+  // by the backfill helper to FLAGGED_ACTION_CODES_LIMIT, with any
+  // overflow summarised by `flagged_action_codes_truncated`. When the
+  // backfill flagged zero rows (or the table was missing and the
+  // counters are `{ skipped: ... }`), all three sections below stay
+  // empty so a clean credential-warnings backfill does NOT add an
+  // empty section to the body.
+  const credWarn = result.ai_pending_actions_credential_warnings;
+  const flaggedCodes =
+    "flagged_action_codes" in credWarn ? credWarn.flagged_action_codes : [];
+  const flaggedTruncated =
+    "flagged_action_codes_truncated" in credWarn
+      ? credWarn.flagged_action_codes_truncated
+      : 0;
+  const truncationHint =
+    flaggedTruncated > 0 ? ` (+${flaggedTruncated} more)` : "";
+  const flaggedTextLine =
+    flaggedCodes.length > 0
+      ? ` Flagged approval IDs: ${flaggedCodes.join(", ")}${truncationHint}.`
+      : "";
+  const flaggedSlackLine =
+    flaggedCodes.length > 0
+      ? `\nFlagged approval IDs: \`${flaggedCodes.join(", ")}\`${truncationHint}`
+      : "";
+  const flaggedHtmlBlock =
+    flaggedCodes.length > 0
+      ? `<p>Flagged approval IDs: ` +
+        flaggedCodes.map((c) => `<code>${c}</code>`).join(", ") +
+        `${truncationHint}</p>`
+      : "";
+
   const message =
     `Boot-time redaction sweep at ${result.sweep_timestamp} rewrote one or ` +
     `more historical rows. A non-zero count on nc_change_history or ` +
     `capa_change_history usually means a database restore from a pre-fix ` +
     `backup reintroduced leaked credentials — investigate the source ` +
-    `backup immediately. Per-table counts: ${detailLine}.`;
+    `backup immediately. Per-table counts: ${detailLine}.` +
+    flaggedTextLine;
 
   const channelsAttempted: PostRestoreSweepAlertOutcome["channelsAttempted"] =
     [];
@@ -1473,7 +1510,7 @@ export async function dispatchPostRestoreSweepAlert(
         text:
           `:rotating_light: *${headline}*\n` +
           `Sweep timestamp: \`${result.sweep_timestamp}\`\n` +
-          `Per-table counts: \`${detailLine}\`\n` +
+          `Per-table counts: \`${detailLine}\`${flaggedSlackLine}\n` +
           `A non-zero \`nc_change_history\` or \`capa_change_history\` ` +
           `count usually means a database restore from a pre-fix backup ` +
           `reintroduced leaked credentials — investigate the source ` +
@@ -1581,12 +1618,16 @@ export async function dispatchPostRestoreSweepAlert(
         `<li><code>ai_pending_actions</code>: ` +
         `${triggers.ai_pending_actions}</li>` +
         `</ul>` +
+        flaggedHtmlBlock +
         `<p><a href="/audit-logs">Open the audit log</a></p>`;
       const text =
         `${headline}\n\n` +
         `Sweep timestamp: ${result.sweep_timestamp}\n` +
-        `Per-table counts: ${detailLine}\n\n` +
-        `A non-zero nc_change_history or capa_change_history count ` +
+        `Per-table counts: ${detailLine}\n` +
+        (flaggedCodes.length > 0
+          ? `Flagged approval IDs: ${flaggedCodes.join(", ")}${truncationHint}\n`
+          : "") +
+        `\nA non-zero nc_change_history or capa_change_history count ` +
         `usually means a database restore from a pre-fix backup ` +
         `reintroduced leaked credentials — investigate the source ` +
         `backup immediately.`;

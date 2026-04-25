@@ -925,6 +925,228 @@ async function run(): Promise<void> {
     );
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Task #626 — surface the (capped) flagged_action_codes list from the
+  // ai_pending_actions credential-warnings backfill in every alert
+  // channel. On-call engineers paged about a non-zero credential-warnings
+  // backfill row count must see WHICH legacy approval rows the sweep
+  // flagged inline, instead of having to open the audit-evidence file.
+  // The list is bounded to ≤ 50 codes by the backfill helper, with any
+  // overflow summarised by `flagged_action_codes_truncated` ("+N more").
+  // ──────────────────────────────────────────────────────────────────────
+
+  console.log(
+    "\n[Task #626] Flagged action codes inlined in notification, Slack, and email",
+  );
+  {
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/abc",
+      emailRecipientsEnv: "oncall@walaplus.com",
+    });
+    const flagged = ["APR-001", "APR-002", "APR-003"];
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({
+        event_logs_updated: 1,
+        ai_pending_actions_credential_warnings: {
+          scanned: 100,
+          rows_updated: 3,
+          warnings_added: 5,
+          flagged_action_codes: flagged,
+          flagged_action_codes_truncated: 0,
+        },
+      }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "alert dispatched");
+
+    const notif = stub.notifications[0].args;
+    const notifMsg = String(notif.message ?? "");
+    assert(
+      notifMsg.includes("Flagged approval IDs:") &&
+        flagged.every((c) => notifMsg.includes(c)),
+      "notification body lists the flagged approval IDs",
+    );
+    assert(
+      !notifMsg.includes("+0 more") && !notifMsg.includes("more)"),
+      "notification body has no truncation hint when nothing was truncated",
+    );
+
+    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    assert(
+      typeof slackBody.text === "string" &&
+        slackBody.text.includes("Flagged approval IDs:") &&
+        flagged.every((c) => slackBody.text.includes(c)),
+      "Slack body lists the flagged approval IDs",
+    );
+    assert(
+      !String(slackBody.text).includes("+0 more"),
+      "Slack body has no truncation hint when nothing was truncated",
+    );
+
+    const email = stub.emails[0];
+    const html = String(email.html ?? "");
+    const text = String(email.text ?? "");
+    assert(
+      html.includes("Flagged approval IDs:") &&
+        flagged.every((c) => html.includes(c)),
+      "email HTML lists the flagged approval IDs",
+    );
+    assert(
+      text.includes("Flagged approval IDs:") &&
+        flagged.every((c) => text.includes(c)),
+      "email text lists the flagged approval IDs",
+    );
+    assert(
+      !html.includes("+0 more") && !text.includes("+0 more"),
+      "email body has no truncation hint when nothing was truncated",
+    );
+  }
+
+  console.log(
+    '\n[Task #626] "+N more" truncation hint appears when codes are capped',
+  );
+  {
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/abc",
+      emailRecipientsEnv: "oncall@walaplus.com",
+    });
+    // Synthesise the boundary case: helper hit FLAGGED_ACTION_CODES_LIMIT
+    // and recorded 7 additional codes via the truncation counter.
+    const fifty = Array.from({ length: 50 }, (_, i) =>
+      `APR-${String(i + 1).padStart(3, "0")}`,
+    );
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({
+        nc_change_history_updated: 1,
+        ai_pending_actions_credential_warnings: {
+          scanned: 200,
+          rows_updated: 57,
+          warnings_added: 70,
+          flagged_action_codes: fifty,
+          flagged_action_codes_truncated: 7,
+        },
+      }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "alert dispatched");
+
+    const notifMsg = String(stub.notifications[0].args.message ?? "");
+    assert(
+      notifMsg.includes("APR-001") && notifMsg.includes("APR-050"),
+      "notification body includes first and last code in the capped list",
+    );
+    assert(
+      notifMsg.includes("(+7 more)"),
+      "notification body includes the +7 more truncation hint",
+    );
+
+    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    assert(
+      String(slackBody.text).includes("(+7 more)"),
+      "Slack body includes the +7 more truncation hint",
+    );
+
+    const email = stub.emails[0];
+    assert(
+      String(email.html ?? "").includes("(+7 more)"),
+      "email HTML includes the +7 more truncation hint",
+    );
+    assert(
+      String(email.text ?? "").includes("(+7 more)"),
+      "email text includes the +7 more truncation hint",
+    );
+  }
+
+  console.log(
+    "\n[Task #626] Empty flagged_action_codes list adds NO new section",
+  );
+  {
+    // A clean credential-warnings backfill (zero flagged codes) must
+    // not bloat the alert body with an empty "Flagged approval IDs:"
+    // section — bodies stay as concise as they were pre-Task-#626.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/abc",
+      emailRecipientsEnv: "oncall@walaplus.com",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({
+        event_logs_updated: 4,
+        // Default builder already supplies an empty flagged codes list,
+        // but be explicit so this test documents the contract.
+        ai_pending_actions_credential_warnings: {
+          scanned: 50,
+          rows_updated: 0,
+          warnings_added: 0,
+          flagged_action_codes: [],
+          flagged_action_codes_truncated: 0,
+        },
+      }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "alert dispatched");
+
+    const notifMsg = String(stub.notifications[0].args.message ?? "");
+    assert(
+      !notifMsg.includes("Flagged approval IDs"),
+      "notification body has NO 'Flagged approval IDs' section when list is empty",
+    );
+
+    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    assert(
+      !String(slackBody.text).includes("Flagged approval IDs"),
+      "Slack body has NO 'Flagged approval IDs' section when list is empty",
+    );
+
+    const email = stub.emails[0];
+    assert(
+      !String(email.html ?? "").includes("Flagged approval IDs"),
+      "email HTML has NO 'Flagged approval IDs' section when list is empty",
+    );
+    assert(
+      !String(email.text ?? "").includes("Flagged approval IDs"),
+      "email text has NO 'Flagged approval IDs' section when list is empty",
+    );
+  }
+
+  console.log(
+    "\n[Task #626] Skipped credential-warnings backfill adds NO new section",
+  );
+  {
+    // Cold-start race / direct-CLI invocation can leave the
+    // credential-warnings counters as `{ skipped: 'table_missing' }`.
+    // The dispatcher must treat this exactly like an empty list — no
+    // section, no warning, no crash from missing fields.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/abc",
+      emailRecipientsEnv: "oncall@walaplus.com",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({
+        capa_change_history_updated: 2,
+        ai_pending_actions_credential_warnings: { skipped: "table_missing" },
+      }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "alert dispatched");
+
+    const notifMsg = String(stub.notifications[0].args.message ?? "");
+    assert(
+      !notifMsg.includes("Flagged approval IDs"),
+      "skipped backfill → no flagged section in notification",
+    );
+    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    assert(
+      !String(slackBody.text).includes("Flagged approval IDs"),
+      "skipped backfill → no flagged section in Slack body",
+    );
+    const email = stub.emails[0];
+    assert(
+      !String(email.html ?? "").includes("Flagged approval IDs") &&
+        !String(email.text ?? "").includes("Flagged approval IDs"),
+      "skipped backfill → no flagged section in email",
+    );
+  }
+
   console.log(
     "\n[Task #573] DB-backed recipient list takes precedence over env var",
   );
