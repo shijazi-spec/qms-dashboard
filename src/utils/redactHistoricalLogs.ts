@@ -45,6 +45,7 @@ import {
   REDACTED_SENTINEL,
   logEvent,
 } from "./eventLogsDatabase";
+import { redactPromptPreview, redactToolPayloadPreview } from "./aiTelemetry";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const REDACT_DATE = new Date().toISOString();
@@ -207,6 +208,19 @@ export interface AiPendingActionsSweepResult {
   payloadChanged: number;
   previewChanged: number;
   executionResultChanged: number;
+  rowsUpdated: number;
+}
+
+/**
+ * Result counters for the ai_call_metrics preview-column sweep
+ * (Task #453). Reported in the console output and the audit-log
+ * entry emitted by main() / onBootRedactionSweep().
+ */
+export interface AiCallMetricsSweepResult {
+  scanned: number;
+  promptPreviewChanged: number;
+  toolInputPreviewChanged: number;
+  toolOutputPreviewChanged: number;
   rowsUpdated: number;
 }
 
@@ -573,6 +587,111 @@ export async function redactAiPendingActions(
   };
 }
 
+/**
+ * Backfill the ai_call_metrics preview columns (Task #453).
+ *
+ *   - `prompt_preview`        (TEXT) -> redactPromptPreview
+ *   - `tool_input_preview`    (TEXT) -> redactToolPayloadPreview
+ *   - `tool_output_preview`   (TEXT) -> redactToolPayloadPreview
+ *
+ * Tasks #109 and #276 added redaction to the WRITE path of these columns,
+ * but rows persisted before those fixes shipped may still contain raw
+ * sk-…, ghp_…, JWT, bcrypt, or AKIA/ASIA tokens. This sweep re-runs the
+ * exact same redactor functions used by the write path over every
+ * existing row in keyset-paginated batches, writes the cleaned values
+ * back, and reports per-column counters.
+ *
+ * Idempotent: rows whose redacted form is byte-identical to the stored
+ * value are skipped, so re-running produces 0 updates.
+ */
+export async function redactAiCallMetrics(
+  client: any,
+  batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
+): Promise<AiCallMetricsSweepResult> {
+  let scanned = 0;
+  let promptPreviewChanged = 0;
+  let toolInputPreviewChanged = 0;
+  let toolOutputPreviewChanged = 0;
+  let rowsUpdated = 0;
+  let cursor = 0;
+
+  while (true) {
+    const page = await client.query(
+      `SELECT id, prompt_preview, tool_input_preview, tool_output_preview
+         FROM ai_call_metrics
+        WHERE id > $1
+        ORDER BY id ASC
+        LIMIT $2`,
+      [cursor, batchSize],
+    );
+
+    if (!page.rows || page.rows.length === 0) break;
+
+    for (const row of page.rows) {
+      scanned++;
+
+      let promptPreview: string | null = row.prompt_preview ?? null;
+      let toolInputPreview: string | null = row.tool_input_preview ?? null;
+      let toolOutputPreview: string | null = row.tool_output_preview ?? null;
+
+      let promptDirty = false;
+      let inputDirty = false;
+      let outputDirty = false;
+
+      if (typeof promptPreview === 'string' && promptPreview.length > 0) {
+        const cleaned = redactPromptPreview(promptPreview);
+        if (cleaned !== promptPreview) {
+          promptPreview = cleaned;
+          promptDirty = true;
+        }
+      }
+
+      if (typeof toolInputPreview === 'string' && toolInputPreview.length > 0) {
+        const cleaned = redactToolPayloadPreview(toolInputPreview) ?? null;
+        if (cleaned !== toolInputPreview) {
+          toolInputPreview = cleaned;
+          inputDirty = true;
+        }
+      }
+
+      if (typeof toolOutputPreview === 'string' && toolOutputPreview.length > 0) {
+        const cleaned = redactToolPayloadPreview(toolOutputPreview) ?? null;
+        if (cleaned !== toolOutputPreview) {
+          toolOutputPreview = cleaned;
+          outputDirty = true;
+        }
+      }
+
+      if (promptDirty) promptPreviewChanged++;
+      if (inputDirty) toolInputPreviewChanged++;
+      if (outputDirty) toolOutputPreviewChanged++;
+
+      if (promptDirty || inputDirty || outputDirty) {
+        await client.query(
+          `UPDATE ai_call_metrics
+              SET prompt_preview      = $1,
+                  tool_input_preview  = $2,
+                  tool_output_preview = $3
+            WHERE id = $4`,
+          [promptPreview, toolInputPreview, toolOutputPreview, row.id],
+        );
+        rowsUpdated++;
+      }
+    }
+
+    cursor = page.rows[page.rows.length - 1].id;
+    if (page.rows.length < batchSize) break;
+  }
+
+  return {
+    scanned,
+    promptPreviewChanged,
+    toolInputPreviewChanged,
+    toolOutputPreviewChanged,
+    rowsUpdated,
+  };
+}
+
 async function main() {
   const client = await pool.connect();
   try {
@@ -599,7 +718,8 @@ async function main() {
           `(change_reason=${result.nc_change_history_change_reason_updated}), ` +
           `capa_change_history=${result.capa_change_history_updated} ` +
           `(change_reason=${result.capa_change_history_change_reason_updated}), ` +
-          `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
+          `ai_pending_actions=${"rows_updated" in result.ai_pending_actions ? result.ai_pending_actions.rows_updated : 0}, ` +
+          `ai_call_metrics=${"rows_updated" in result.ai_call_metrics ? result.ai_call_metrics.rows_updated : 0} (rows updated).`,
         newValue: result,
         aiInvolved: false,
         severity: "INFO",
@@ -630,6 +750,18 @@ export interface AiPendingActionsSnapshot {
 }
 
 /**
+ * Snake-case JSON snapshot of the ai_call_metrics sweep counters as
+ * stored in SweepResult and last-sweep.json. (Task #453.)
+ */
+export interface AiCallMetricsSnapshot {
+  scanned: number;
+  prompt_preview_changed: number;
+  tool_input_preview_changed: number;
+  tool_output_preview_changed: number;
+  rows_updated: number;
+}
+
+/**
  * Full-sweep result returned by runSweepWithClient() and written to
  * audit-evidence/last-sweep.json by onBootRedactionSweep().
  */
@@ -641,6 +773,7 @@ export interface SweepResult {
   capa_change_history_updated: number;
   capa_change_history_change_reason_updated: number;
   ai_pending_actions: AiPendingActionsSnapshot | { skipped: string };
+  ai_call_metrics: AiCallMetricsSnapshot | { skipped: string };
   total_rows_updated: number;
 }
 
@@ -666,6 +799,9 @@ export async function runSweepWithClient(
   let aiCount = 0;
   let aiResult: AiPendingActionsSweepResult | null = null;
   let aiSkipReason: string | null = null;
+  let metricsCount = 0;
+  let metricsResult: AiCallMetricsSweepResult | null = null;
+  let metricsSkipReason: string | null = null;
 
   try {
     const ncResult = await redactChangeHistoryTable(
@@ -729,7 +865,24 @@ export async function runSweepWithClient(
     }
   }
 
-  const total = elCount + ncCount + capaCount + aiCount;
+  try {
+    metricsResult = await redactAiCallMetrics(client);
+    metricsCount = metricsResult.rowsUpdated;
+    console.log(
+      `[Redaction] ai_call_metrics: ${metricsResult.rowsUpdated} rows updated ` +
+        `(scanned=${metricsResult.scanned}, ` +
+        `prompt_preview=${metricsResult.promptPreviewChanged}, ` +
+        `tool_input_preview=${metricsResult.toolInputPreviewChanged}, ` +
+        `tool_output_preview=${metricsResult.toolOutputPreviewChanged})`,
+    );
+  } catch (e: any) {
+    if (e.code === '42P01') {
+      metricsSkipReason = 'table_missing';
+      console.log('[Redaction] ai_call_metrics table does not exist — skipped');
+    } else { throw e; }
+  }
+
+  const total = elCount + ncCount + capaCount + aiCount + metricsCount;
   console.log(`[Redaction] Sweep complete. Total rows updated: ${total}`);
 
   return {
@@ -748,6 +901,15 @@ export async function runSweepWithClient(
           rows_updated: aiResult.rowsUpdated,
         }
       : { skipped: aiSkipReason ?? "unknown" },
+    ai_call_metrics: metricsResult
+      ? {
+          scanned: metricsResult.scanned,
+          prompt_preview_changed: metricsResult.promptPreviewChanged,
+          tool_input_preview_changed: metricsResult.toolInputPreviewChanged,
+          tool_output_preview_changed: metricsResult.toolOutputPreviewChanged,
+          rows_updated: metricsResult.rowsUpdated,
+        }
+      : { skipped: metricsSkipReason ?? "unknown" },
     total_rows_updated: total,
   };
 }
@@ -839,7 +1001,8 @@ export async function onBootRedactionSweep(): Promise<void> {
           `(change_reason=${result.nc_change_history_change_reason_updated}), ` +
           `capa_change_history=${result.capa_change_history_updated} ` +
           `(change_reason=${result.capa_change_history_change_reason_updated}), ` +
-          `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
+          `ai_pending_actions=${"rows_updated" in result.ai_pending_actions ? result.ai_pending_actions.rows_updated : 0}, ` +
+          `ai_call_metrics=${"rows_updated" in result.ai_call_metrics ? result.ai_call_metrics.rows_updated : 0} (rows updated).`,
         newValue: result,
         aiInvolved: false,
         severity: "INFO",
