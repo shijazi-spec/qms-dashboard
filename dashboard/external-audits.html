@@ -191,16 +191,16 @@
   <div id="newExternalModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
       <div class="flex justify-between items-start mb-4">
-        <h3 class="text-lg font-bold text-gray-900">New External Audit</h3>
+        <h3 class="text-lg font-bold text-gray-900" data-i18n="external_audits.new_external_modal">New External Audit</h3>
         <button data-on-click="closeModal" data-args="[&quot;newExternalModal&quot;]" class="text-gray-400 hover:text-gray-600">&times;</button>
       </div>
       <form data-on-submit="submitNewExternal" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div class="md:col-span-2">
-          <label class="block font-medium text-gray-700">Title *</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_title">Title *</label>
           <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Kind *</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_kind">Kind *</label>
           <select name="kind" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
             <option value="certification">Certification</option>
             <option value="surveillance">Surveillance</option>
@@ -211,33 +211,33 @@
           </select>
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Standard</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_standard">Standard</label>
           <input name="standard" placeholder="ISO/IEC 27001:2022" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Certification Body</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_cert_body">Certification Body</label>
           <input name="certification_body" placeholder="BSI, DNV, SGS, TÜV..." class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Auditor</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_auditor">Auditor</label>
           <input name="auditor_name" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Planned Start</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_planned_start">Planned Start</label>
           <input name="planned_start" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Planned End</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_planned_end">Planned End</label>
           <input name="planned_end" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div class="md:col-span-2">
-          <label class="block font-medium text-gray-700">Scope</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_scope">Scope</label>
           <textarea name="scope_summary" rows="2" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 pt-2">
           <button type="button" data-on-click="closeModal" data-args="[&quot;newExternalModal&quot;]"
                   class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800">Create</button>
+          <button type="submit" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800" data-i18n="external_audits.btn_create">Create</button>
         </div>
       </form>
     </div>
@@ -247,38 +247,38 @@
   <div id="newCertModal" class="modal hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
     <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 m-4">
       <div class="flex justify-between items-start mb-4">
-        <h3 class="text-lg font-bold text-gray-900">Register Certificate</h3>
+        <h3 class="text-lg font-bold text-gray-900" data-i18n="external_audits.register_cert_modal">Register Certificate</h3>
         <button data-on-click="closeModal" data-args="[&quot;newCertModal&quot;]" class="text-gray-400 hover:text-gray-600">&times;</button>
       </div>
       <form data-on-submit="submitNewCert" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div>
-          <label class="block font-medium text-gray-700">Audit *</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_audit">Audit *</label>
           <select name="external_audit_id" id="certAuditSelector" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></select>
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Cert # *</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_cert_no">Cert # *</label>
           <input name="certificate_number" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Standard *</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_standard_req">Standard *</label>
           <input name="standard" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Certification Body *</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_cert_body_req">Certification Body *</label>
           <input name="certification_body" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Issued</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_issued">Issued</label>
           <input name="issue_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block font-medium text-gray-700">Expires</label>
+          <label class="block font-medium text-gray-700" data-i18n="external_audits.f_expires">Expires</label>
           <input name="expiry_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 pt-2">
           <button type="button" data-on-click="closeModal" data-args="[&quot;newCertModal&quot;]"
                   class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800">Register</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800" data-i18n="external_audits.register_btn">Register</button>
         </div>
       </form>
     </div>

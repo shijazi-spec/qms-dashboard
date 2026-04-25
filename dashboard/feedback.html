@@ -120,7 +120,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100">
             <div class="p-6 border-b border-gray-100">
                 <div class="flex flex-wrap items-center justify-between gap-4">
-                    <h2 class="text-lg font-semibold text-gray-900">All Feedback</h2>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="feedback.sec_all">All Feedback</h2>
                     <div class="flex items-center space-x-4">
                         <select id="dashboardFilter" data-on-change="loadFeedback" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Dashboards</option>
@@ -161,7 +161,7 @@
         <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
             <div class="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-4">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-semibold text-white">Share Your Feedback</h3>
+                    <h3 class="text-xl font-semibold text-white" data-i18n="feedback.f_share_heading">Share Your Feedback</h3>
                     <button data-on-click="closeFeedbackModal" class="text-teal-200 hover:text-white">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -172,11 +172,11 @@
             <form id="feedbackForm" data-on-submit="submitFeedback" data-pass-event="true" class="p-6 space-y-5">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Your Name *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="feedback.f_name">Your Name *</label>
                         <input type="text" id="submitterName" required placeholder="e.g., Sara" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Your Role</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="feedback.f_role">Your Role</label>
                         <select id="submitterRole" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                             <option value="">Select role...</option>
                             <option value="Quality Manager">Quality Manager</option>
@@ -191,7 +191,7 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Dashboard *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="feedback.f_dashboard">Dashboard *</label>
                     <select id="feedbackDashboard" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                         <option value="">Select dashboard...</option>
                         <option value="Quality Dashboard">Quality Dashboard (/)</option>
@@ -238,11 +238,11 @@
                     <input type="hidden" id="easeValue">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="feedback.f_comments">Comments</label>
                     <textarea id="comments" rows="3" placeholder="What did you like? What could be improved?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Suggestions</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="feedback.f_suggestions">Suggestions</label>
                     <textarea id="suggestions" rows="2" placeholder="Any features you'd like to see?" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"></textarea>
                 </div>
                 <div class="flex justify-end space-x-3 pt-2">

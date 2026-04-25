@@ -139,19 +139,19 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Team by Department</h3>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_by_dept">Team by Department</h3>
                     <div class="chart-container">
                         <canvas id="departmentChart"></canvas>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Project Status</h3>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_project_status">Project Status</h3>
                     <div class="chart-container">
                         <canvas id="projectStatusChart"></canvas>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Team Status</h3>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_team_status">Team Status</h3>
                     <div class="chart-container">
                         <canvas id="statusChart"></canvas>
                     </div>
@@ -159,7 +159,7 @@
             </div>
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Top Performers</h3>
+                <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_top_performers">Top Performers</h3>
                 <div id="topPerformers" class="space-y-4">
                     <p class="text-gray-500 text-center py-8">No performance data available</p>
                 </div>
@@ -169,7 +169,7 @@
         <div id="content-members" class="hidden fade-in">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Team Members</h3>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_members">Team Members</h3>
                     <div class="flex items-center space-x-4">
                         <select id="filterDepartment" data-on-change="loadMembers" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Departments</option>
@@ -215,7 +215,7 @@
         <div id="content-courses" class="hidden fade-in">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Training Courses Catalog</h3>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_courses">Training Courses Catalog</h3>
                     <div class="flex items-center space-x-4">
                         <select id="filterCourseType" data-on-change="loadCourses" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Types</option>
@@ -249,7 +249,7 @@
 
         <div id="content-training" class="hidden fade-in">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Training Compliance Matrix</h3>
+                <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_compliance_matrix">Training Compliance Matrix</h3>
                 <div id="trainingMatrix" class="overflow-x-auto">
                     <p class="text-gray-500 text-center py-8">Loading training matrix...</p>
                 </div>
@@ -259,7 +259,7 @@
         <div id="content-projects" class="hidden fade-in">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Project Assignments</h3>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_assignments">Project Assignments</h3>
                     <div class="flex items-center space-x-4">
                         <div class="flex bg-gray-100 rounded-lg p-1">
                             <button data-on-click="setProjectView" data-args="[&quot;table&quot;]" id="viewTable" class="px-3 py-1 rounded text-sm font-medium bg-white shadow">

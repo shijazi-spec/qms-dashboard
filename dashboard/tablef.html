@@ -94,27 +94,27 @@
         <div id="content-overview" class="tab-content hidden fade-in">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-                    <div class="text-sm text-gray-500 mb-1">Total KPIs</div>
+                    <div class="text-sm text-gray-500 mb-1" data-i18n="tablef.total_kpis">Total KPIs</div>
                     <div class="text-3xl font-bold text-gray-900" id="totalKpis">--</div>
                     <div class="text-xs text-gray-400 mt-1">Across all departments</div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-                    <div class="text-sm text-gray-500 mb-1">KPIs Met</div>
+                    <div class="text-sm text-gray-500 mb-1" data-i18n="tablef.kpis_met">KPIs Met</div>
                     <div class="text-3xl font-bold text-green-600" id="kpisMet">--</div>
                     <div class="text-xs text-gray-400 mt-1" id="kpisMetPct">--% of total</div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-                    <div class="text-sm text-gray-500 mb-1">Met + Improving</div>
+                    <div class="text-sm text-gray-500 mb-1" data-i18n="tablef.met_improving">Met + Improving</div>
                     <div class="text-3xl font-bold text-blue-600" id="kpisMetImproving">--</div>
                     <div class="text-xs text-gray-400 mt-1" id="kpisMetImprovingPct">--% of total</div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-                    <div class="text-sm text-gray-500 mb-1">COPC 50/75 Status</div>
+                    <div class="text-sm text-gray-500 mb-1" data-i18n="tablef.copc_status">COPC 50/75 Status</div>
                     <div class="text-2xl font-bold" id="copcStatus">--</div>
                     <div class="text-xs text-gray-400 mt-1">Company-wide</div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-                    <div class="text-sm text-gray-500 mb-1">At Risk Depts</div>
+                    <div class="text-sm text-gray-500 mb-1" data-i18n="tablef.at_risk_depts">At Risk Depts</div>
                     <div class="text-3xl font-bold text-amber-600" id="atRiskDepts">--</div>
                     <div class="text-xs text-gray-400 mt-1">Need attention</div>
                 </div>
@@ -122,13 +122,13 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <h3 class="text-lg font-semibold mb-4">COPC Compliance by Department</h3>
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="tablef.sec_compliance">COPC Compliance by Department</h3>
                     <div class="chart-container">
                         <canvas id="deptComplianceChart"></canvas>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <h3 class="text-lg font-semibold mb-4">KPI Status Distribution</h3>
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="tablef.sec_status_dist">KPI Status Distribution</h3>
                     <div class="chart-container">
                         <canvas id="kpiStatusChart"></canvas>
                     </div>
@@ -137,7 +137,7 @@
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 class="text-lg font-semibold">Department Summary</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="tablef.sec_dept_summary">Department Summary</h3>
                     <button data-on-click="exportTableF" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
                 </div>
                 <div class="overflow-x-auto">
@@ -175,7 +175,7 @@
 
             <div id="deptKpiGrid" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 class="text-lg font-semibold">KPI Performance Matrix</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="tablef.sec_perf_matrix">KPI Performance Matrix</h3>
                     <div class="flex items-center space-x-2">
                         <button data-on-click="exportDeptKpis" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export</button>
                     </div>
@@ -255,7 +255,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                 <div class="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="font-semibold">Critical Risks</h3>
+                        <h3 class="font-semibold" data-i18n="tablef.sec_critical_risks">Critical Risks</h3>
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                         </svg>
@@ -296,7 +296,7 @@
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                        <h3 class="font-semibold">AI Recommendations</h3>
+                        <h3 class="font-semibold" data-i18n="tablef.sec_ai_recs">AI Recommendations</h3>
                     </div>
                     <div class="p-6 space-y-4" id="aiRecommendations">
                         <div class="text-center text-gray-500 py-8">Loading recommendations...</div>

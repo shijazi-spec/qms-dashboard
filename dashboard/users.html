@@ -111,7 +111,7 @@
         <div id="content-pending" class="tab-content">
             <div class="bg-white rounded-xl shadow">
                 <div class="p-4 border-b">
-                    <h3 class="font-semibold">Pending Access Requests</h3>
+                    <h3 class="font-semibold" data-i18n="users.sec_pending">Pending Access Requests</h3>
                     <p class="text-sm text-gray-500">Review and approve or deny user access requests</p>
                 </div>
                 <div id="pending-list" class="divide-y">
@@ -123,18 +123,18 @@
         <div id="content-active" class="tab-content hidden">
             <div class="bg-white rounded-xl shadow overflow-hidden">
                 <div class="p-4 border-b">
-                    <h3 class="font-semibold">Active Users</h3>
+                    <h3 class="font-semibold" data-i18n="users.sec_active">Active Users</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.last_login">Last Login</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="active-list" class="divide-y">
@@ -148,18 +148,18 @@
         <div id="content-all" class="tab-content hidden">
             <div class="bg-white rounded-xl shadow overflow-hidden">
                 <div class="p-4 border-b">
-                    <h3 class="font-semibold">All Users</h3>
+                    <h3 class="font-semibold" data-i18n="users.sec_all">All Users</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="all-list" class="divide-y">
@@ -173,18 +173,18 @@
         <div id="content-invitations" class="tab-content hidden">
             <div class="bg-white rounded-xl shadow overflow-hidden">
                 <div class="p-4 border-b">
-                    <h3 class="font-semibold">Sent Invitations</h3>
+                    <h3 class="font-semibold" data-i18n="users.sec_invitations">Sent Invitations</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_invited_by">Invited By</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.expires">Expires</th>
                             </tr>
                         </thead>
                         <tbody id="invitations-list" class="divide-y">
@@ -197,7 +197,7 @@
 
         <div id="content-roles" class="tab-content hidden">
             <div class="bg-white rounded-xl shadow p-6">
-                <h3 class="font-semibold mb-4">Default Role Permissions</h3>
+                <h3 class="font-semibold mb-4" data-i18n="users.sec_roles">Default Role Permissions</h3>
                 <p class="text-sm text-gray-500 mb-6">These are the default permissions assigned to each role. Custom roles can have individual permissions.</p>
                 <div id="roles-grid" class="space-y-4">
                     <p class="text-gray-500">Loading...</p>
@@ -209,7 +209,7 @@
             <div class="bg-white rounded-xl shadow overflow-hidden">
                 <div class="p-4 border-b flex justify-between items-center">
                     <div>
-                        <h3 class="font-semibold">Access Audit Log</h3>
+                        <h3 class="font-semibold" data-i18n="users.sec_audit">Access Audit Log</h3>
                         <p class="text-sm text-gray-500">All access-related events for PDPL accountability</p>
                     </div>
                     <select id="audit-filter" data-on-change="loadAuditLog" class="border rounded px-3 py-1 text-sm">
@@ -228,11 +228,11 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Performed By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_event">Event</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_target">Target</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_action">Action</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_performed_by">Performed By</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_timestamp">Timestamp</th>
                             </tr>
                         </thead>
                         <tbody id="audit-list" class="divide-y">
@@ -247,7 +247,7 @@
     <div id="invite-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
         <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold">Invite New User</h3>
+                <h3 class="text-lg font-semibold" data-i18n="users.invite_modal">Invite New User</h3>
                 <button data-on-click="hideInviteModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <form id="invite-form" data-on-submit="sendInvitation" data-pass-event="true">
@@ -257,7 +257,7 @@
                         <input type="email" name="email" required class="w-full border rounded px-3 py-2" placeholder="user@company.com" />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">Full Name</label>
+                        <label class="block text-sm font-medium mb-1" data-i18n="users.f_full_name">Full Name</label>
                         <input type="text" name="full_name" class="w-full border rounded px-3 py-2" placeholder="John Smith" />
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -290,7 +290,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium mb-1">Invitation Expires In</label>
+                            <label class="block text-sm font-medium mb-1" data-i18n="users.invite_expires">Invitation Expires In</label>
                             <select name="expiry_days" class="w-full border rounded px-3 py-2">
                                 <option value="7">7 days</option>
                                 <option value="14">14 days</option>
@@ -305,7 +305,7 @@
                 </div>
                 <div class="flex justify-end gap-3 mt-6">
                     <button type="button" data-on-click="hideInviteModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Send Invitation</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="users.send_invitation">Send Invitation</button>
                 </div>
             </form>
         </div>
@@ -314,7 +314,7 @@
     <div id="user-detail-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
         <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold">User Details & Permissions</h3>
+                <h3 class="text-lg font-semibold" data-i18n="users.details_modal">User Details & Permissions</h3>
                 <button data-on-click="hideUserDetailModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <div id="user-detail-content">Loading...</div>

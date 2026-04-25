@@ -199,7 +199,7 @@
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">CRM Module</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.crm_module">CRM Module</label>
                             <select id="scorecard-crm-module" data-on-change="onModuleChange" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="Leads">Leads (SDR Team)</option>
                                 <option value="Deals">Deals (Sales Team)</option>
@@ -208,7 +208,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Team</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="common.team">Team</label>
                             <select id="scorecard-team" data-on-change="loadScorecardsList" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="SDR">SDR Team</option>
                                 <option value="Sales">Sales Team</option>
@@ -217,13 +217,13 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Scorecard Name</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.scorecard_name">Scorecard Name</label>
                             <select id="scorecard-name-select" data-on-change="onScorecardSelect" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="">Select scorecard...</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Linked Governance Doc</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.linked_doc">Linked Governance Doc</label>
                             <select id="scorecard-gov-doc" data-on-change="linkGovernanceDoc" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="">Select document...</option>
                             </select>
@@ -1005,12 +1005,12 @@
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Target (%)</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.f_target">Target (%)</label>
                                 <input type="number" id="attr-target" required min="0" max="100" value="100" step="1"
                                     class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.severity">Severity</label>
                                 <select id="attr-severity" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                     <option value="Minor">Minor</option>
                                     <option value="Major">Major</option>
@@ -1019,12 +1019,12 @@
                             </div>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Logic (how AI checks it)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.f_eval_logic">Evaluation Logic (how AI checks it)</label>
                             <textarea id="attr-evaluation-logic" rows="2" placeholder="e.g., Check if Last_Activity_Date is within 48 hours of Lead creation"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"></textarea>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Evidence Fields (CRM fields to check)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.f_evidence_fields">Evidence Fields (CRM fields to check)</label>
                             <input type="text" id="attr-evidence-fields" placeholder="e.g., Last_Activity_Date, Status, Owner"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                         </div>
@@ -1035,7 +1035,7 @@
                     </div>
                     <div class="flex justify-end space-x-3 mt-6">
                         <button type="button" data-on-click="closeAttributeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Attribute</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="admin.save_attribute">Save Attribute</button>
                     </div>
                 </form>
             </div>
@@ -1052,18 +1052,18 @@
                 <form id="create-scorecard-form" data-on-submit="createNewScorecard" data-pass-event="true">
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Scorecard Name</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.scorecard_name">Scorecard Name</label>
                             <input type="text" id="new-scorecard-name" required placeholder="e.g., SDR Lead Hygiene Scorecard"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.description">Description</label>
                             <textarea id="new-scorecard-description" rows="2" placeholder="Brief description of this scorecard's purpose"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">CRM Module</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.crm_module">CRM Module</label>
                                 <select id="new-scorecard-crm-module" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                                     <option value="Leads">Leads</option>
                                     <option value="Deals">Deals</option>
@@ -1072,7 +1072,7 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Team</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.team">Team</label>
                                 <select id="new-scorecard-team" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                                     <option value="SDR">SDR Team</option>
                                     <option value="Sales">Sales Team</option>
@@ -1082,14 +1082,14 @@
                             </div>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Version</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.f_version">Version</label>
                             <input type="text" id="new-scorecard-version" placeholder="v1.0" value="v1.0"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                         </div>
                     </div>
                     <div class="flex justify-end space-x-3 mt-6">
                         <button type="button" data-on-click="closeCreateScorecardModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Create Scorecard</button>
+                        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700" data-i18n="admin.create_scorecard">Create Scorecard</button>
                     </div>
                 </form>
             </div>

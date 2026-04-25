@@ -155,22 +155,22 @@
     <!-- Summary KPI cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="summary-cards">
       <div class="stat-card" data-testid="card-24h-cost">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">24h Cost (USD)</p>
+        <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.kpi_cost">24h Cost (USD)</p>
         <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-cost">—</p>
         <p class="text-xs text-gray-400 mt-1">Trailing 24 hours</p>
       </div>
       <div class="stat-card" data-testid="card-24h-calls">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">24h Calls</p>
+        <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.kpi_calls">24h Calls</p>
         <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-calls">—</p>
         <p class="text-xs text-gray-400 mt-1">Total LLM calls</p>
       </div>
       <div class="stat-card" data-testid="card-24h-errors">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">24h Errors</p>
+        <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.kpi_errors">24h Errors</p>
         <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-errors">—</p>
         <p class="text-xs text-gray-400 mt-1">Failed calls</p>
       </div>
       <div class="stat-card" data-testid="card-24h-latency">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Avg Latency</p>
+        <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.kpi_latency">Avg Latency</p>
         <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-latency">—</p>
         <p class="text-xs text-gray-400 mt-1">Past 24 hours (ms)</p>
       </div>
@@ -194,7 +194,7 @@
     <div id="content-cost" class="fade-in">
       <div class="bg-white rounded-xl shadow-sm border p-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900">Weekly Cost Trend</h2>
+          <h2 class="text-lg font-semibold text-gray-900" data-i18n="ai_ops.sec_weekly_cost">Weekly Cost Trend</h2>
           <select id="cost-days" data-on-change="loadCostTrend" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-cost-days">
             <option value="7">Last 7 days</option>
             <option value="14" selected>Last 14 days</option>
@@ -223,7 +223,7 @@
     <div id="content-prompts" class="hidden fade-in">
       <div class="bg-white rounded-xl shadow-sm border p-6">
         <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
-          <h2 class="text-lg font-semibold text-gray-900">Prompt Version Comparison</h2>
+          <h2 class="text-lg font-semibold text-gray-900" data-i18n="ai_ops.sec_prompt_comparison">Prompt Version Comparison</h2>
           <div class="flex items-center gap-3 flex-wrap">
             <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none" data-testid="label-prompt-archived-toggle">
               <input type="checkbox" id="prompt-show-archived" data-on-change="loadPromptVersions"
@@ -265,7 +265,7 @@
     <div id="content-tools" class="hidden fade-in">
       <div class="bg-white rounded-xl shadow-sm border p-6">
         <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 class="text-lg font-semibold text-gray-900">Top Tool Calls by Cost — last 7 days</h2>
+          <h2 class="text-lg font-semibold text-gray-900" data-i18n="ai_ops.sec_top_tools">Top Tool Calls by Cost — last 7 days</h2>
           <div class="flex items-center gap-2">
             <label for="tools-agent-filter" class="text-xs text-gray-500 uppercase tracking-wide">Agent</label>
             <select id="tools-agent-filter" data-on-change="loadTools"
@@ -297,7 +297,7 @@
       <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
         <div class="flex items-center justify-between mb-6">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">AI Consultant Feedback</h2>
+            <h2 class="text-lg font-semibold text-gray-900" data-i18n="ai_ops.sec_feedback">AI Consultant Feedback</h2>
             <p class="text-sm text-gray-500">Thumbs up/down ratings on AI Consultant responses</p>
           </div>
           <div class="flex items-center gap-3">
@@ -350,7 +350,7 @@
       <div class="bg-white rounded-xl shadow-sm border p-6 mb-6" data-testid="section-thresholds-form">
         <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">Tool-health alert thresholds</h2>
+            <h2 class="text-lg font-semibold text-gray-900" data-i18n="ai_ops.sec_thresholds">Tool-health alert thresholds</h2>
             <p class="text-sm text-gray-500 mt-1">
               Tune the breach floors and severity cutoffs that drive the per-tool
               error/latency monitor. Changes apply on the next cron pass — no
@@ -1015,7 +1015,7 @@
       document.getElementById('price-table-content').innerHTML = `
         <table class="min-w-full text-left text-sm">
           <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-            <th class="px-3 py-2">Model</th>
+            <th class="px-3 py-2" data-i18n="ai_ops.col_model">Model</th>
             <th class="px-3 py-2 text-right">Input / 1k tokens</th>
             <th class="px-3 py-2 text-right">Output / 1k tokens</th>
           </tr></thead>
@@ -1078,7 +1078,7 @@
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-agent-latency">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2">Agent</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th class="px-3 py-2 text-right">Calls</th>
               <th class="px-3 py-2 text-right">p50 (ms)</th>
               <th class="px-3 py-2 text-right">p95 (ms)</th>
@@ -1302,8 +1302,8 @@
         el.innerHTML = `
           <table class="min-w-full text-left text-sm" data-testid="table-top-tools">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2">Tool</th>
-              <th class="px-3 py-2">Agent</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th class="px-3 py-2 text-right">Calls</th>
               <th class="px-3 py-2 text-right">Avg Latency</th>
               <th class="px-3 py-2 text-right">Error %</th>
@@ -1334,10 +1334,10 @@
           <table class="min-w-full text-left text-sm" data-testid="table-recent-issues">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2 w-6"></th>
-              <th class="px-3 py-2">Time</th>
-              <th class="px-3 py-2">Agent</th>
-              <th class="px-3 py-2">Tool</th>
-              <th class="px-3 py-2 text-right">Latency</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_time">Time</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
+              <th class="px-3 py-2 text-right" data-i18n="ai_ops.col_latency">Latency</th>
               <th class="px-3 py-2">Status</th>
               <th class="px-3 py-2">Error / Prompt / Tool I/O preview</th>
             </tr></thead>
@@ -1473,11 +1473,11 @@
           <table class="min-w-full text-left text-sm" data-testid="table-negative-feedback">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2">When</th>
-              <th class="px-3 py-2">Agent</th>
+              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th class="px-3 py-2">Call</th>
               <th class="px-3 py-2">Comment</th>
               <th class="px-3 py-2">Original Prompt</th>
-              <th class="px-3 py-2 text-right">Latency</th>
+              <th class="px-3 py-2 text-right" data-i18n="ai_ops.col_latency">Latency</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-negative-${r.feedback_id}">

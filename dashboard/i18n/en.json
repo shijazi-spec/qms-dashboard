@@ -507,7 +507,13 @@
     "recommended": "Recommended",
     "optional": "Optional",
     "vendor": "Vendor",
-    "update": "Update"
+    "update": "Update",
+    "performance": "Performance",
+    "training": "Training",
+    "course_name": "Course Name",
+    "duration": "Duration",
+    "passing_score": "Passing Score",
+    "assigned_to": "Assigned To"
   },
   "dyn": {
     "common": {
@@ -1408,7 +1414,12 @@
     "in_dup_clusters": "In Dup. Clusters",
     "search_records": "Search records...",
     "highlight_issues": "Highlight Issues",
-    "hide_junk": "Hide Junk"
+    "hide_junk": "Hide Junk",
+    "sec_how_to_read": "How to Read This View",
+    "sec_quality_scores": "Quality Scores",
+    "sec_duplicate_indicators": "Duplicate Indicators",
+    "sec_row_highlights": "Row Highlights",
+    "sec_record_details": "Record Details"
   },
   "duplicates": {
     "title": "Duplicate Radar",
@@ -1446,7 +1457,23 @@
     "domain": "Domain",
     "date_range": "Date Range",
     "layout": "Layout",
-    "clear_all": "Clear All"
+    "clear_all": "Clear All",
+    "sec_by_source": "Duplicates by Source",
+    "sec_similarity": "Similarity Score Distribution",
+    "sec_top_signals": "Top Match Signal Sources",
+    "sec_top_clusters": "Top Clusters by Pipeline Inflation",
+    "sec_hygiene": "Data Hygiene KPIs",
+    "kpi_dup_lead_rate": "Duplicate Lead Rate",
+    "kpi_dup_deal_rate": "Duplicate Deal Rate",
+    "kpi_multi_deals": "Domains with Multiple Deals",
+    "kpi_active_clusters": "Active Clusters",
+    "f_domain": "Domain",
+    "f_phone": "Mobile / Phone",
+    "f_company": "Company Name",
+    "f_contract": "Contract / Record #",
+    "f_email": "Email Address",
+    "f_lead_name": "Lead/Deal Name",
+    "f_owner": "Owner Email"
   },
   "vendors": {
     "title": "Vendor Risk Management",
@@ -1558,7 +1585,17 @@
     "col_review_no": "Review #",
     "col_chair": "Chair",
     "col_actions_count": "Actions",
-    "col_next_review": "Next Review"
+    "col_next_review": "Next Review",
+    "f_title": "Title *",
+    "f_review_date": "Review Date *",
+    "f_chair": "Chair *",
+    "f_status": "Status",
+    "f_attendees": "Attendees (comma-separated)",
+    "f_next_review": "Next Review Date",
+    "f_minutes": "Minutes / Notes",
+    "f_output": "Output Summary / Decisions",
+    "s_planned": "Planned",
+    "s_cancelled": "Cancelled"
   },
   "external_audits": {
     "title": "External Audits",
@@ -1587,7 +1624,22 @@
     "col_standard": "Standard",
     "col_cert_body": "Certification Body",
     "col_issued": "Issued",
-    "col_expires": "Expires"
+    "col_expires": "Expires",
+    "f_title": "Title *",
+    "f_kind": "Kind *",
+    "f_standard": "Standard",
+    "f_cert_body": "Certification Body",
+    "f_auditor": "Auditor",
+    "f_planned_start": "Planned Start",
+    "f_planned_end": "Planned End",
+    "f_scope": "Scope",
+    "f_audit": "Audit *",
+    "f_cert_no": "Cert # *",
+    "f_standard_req": "Standard *",
+    "f_cert_body_req": "Certification Body *",
+    "f_issued": "Issued",
+    "f_expires": "Expires",
+    "btn_create": "Create"
   },
   "policies": {
     "title": "Integrated QMS",
@@ -1611,7 +1663,39 @@
     "all_categories": "All Categories",
     "col_doc_no": "Doc #",
     "col_ver": "Ver",
-    "col_confid": "Confid."
+    "col_confid": "Confid.",
+    "col_title": "Title",
+    "select_category": "Select category",
+    "f_doc_type": "Document Type *",
+    "f_doc_number": "Document Number *",
+    "f_policy_number": "Policy Number *",
+    "f_category": "Category *",
+    "f_title": "Title *",
+    "f_description": "Description",
+    "f_owner_name": "Owner Name",
+    "f_owner_dept": "Owner Department",
+    "f_confidentiality": "Confidentiality",
+    "f_retention": "Retention Period",
+    "f_tags": "Tags",
+    "f_content": "Document Content",
+    "f_ack_frequency": "Ack. Frequency",
+    "t_policy": "Policy",
+    "t_procedure": "Procedure",
+    "t_work_instruction": "Work Instruction",
+    "t_sop": "SOP",
+    "t_form": "Form",
+    "t_template": "Template",
+    "t_manual": "Manual",
+    "t_guideline": "Guideline",
+    "s_archived": "Archived",
+    "cat_governance": "Governance",
+    "cat_operational": "Operational",
+    "cat_hr": "HR",
+    "cat_it": "IT",
+    "cat_compliance": "Compliance",
+    "cat_security": "Security",
+    "cat_quality": "Quality",
+    "cat_finance": "Finance"
   },
   "qms": {
     "title": "Quality Management System",
@@ -1644,7 +1728,18 @@
     "kpi_capa_eff": "CAPA Effectiveness",
     "all_severity": "All Severity",
     "col_deal": "Deal",
-    "col_capa_no": "CAPA #"
+    "col_capa_no": "CAPA #",
+    "kpi_pending_triggers": "Pending Triggers",
+    "kpi_decisions_pending": "Decisions Pending",
+    "kpi_acknowledged": "Acknowledged",
+    "kpi_actioned": "Actioned",
+    "create_nc": "Create NC",
+    "f_nc_title": "Title *",
+    "f_nc_description": "Description",
+    "f_nc_type": "Type *",
+    "f_nc_severity": "Severity *",
+    "f_nc_source": "Source",
+    "f_nc_assigned": "Assigned To"
   },
   "team": {
     "title": "Team Performance",
@@ -1683,7 +1778,8 @@
     "col_course_name": "Course Name",
     "col_duration": "Duration",
     "col_passing_score": "Passing Score",
-    "col_project": "Project"
+    "col_project": "Project",
+    "sec_compliance_matrix": "Training Compliance Matrix"
   },
   "scorecard": {
     "title": "Mohammed Al Muzaini",
@@ -1700,7 +1796,13 @@
     "at_risk": "At Risk",
     "critical": "Critical",
     "save_snapshot": "Save Snapshot",
-    "view_steps": "View Steps"
+    "view_steps": "View Steps",
+    "sec_weighted": "Weighted Score",
+    "kpi_weighted_pct": "Weighted %",
+    "sec_overall": "Overall Score",
+    "kpi_avg_pct": "Average %",
+    "sec_kpi_summary": "KPI Status Summary",
+    "sec_label": "Scorecard"
   },
   "tablef": {
     "title": "Table F - COPC Governance Engine",
@@ -1777,7 +1879,15 @@
     "col_actual": "Actual",
     "col_variance": "Variance",
     "col_vendor": "Vendor",
-    "col_value": "Value"
+    "col_value": "Value",
+    "col_spi": "SPI",
+    "col_cpi": "CPI",
+    "col_risk": "Risk",
+    "col_score": "Score",
+    "col_influence": "Influence",
+    "col_interest": "Interest",
+    "col_engagement": "Engagement",
+    "sec_milestones_chart": "Milestone Metrics"
   },
   "calls": {
     "title": "Call Intelligence",
@@ -1811,7 +1921,36 @@
     "col_agent": "Agent",
     "col_contact": "Contact",
     "col_direction": "Direction",
-    "col_duration": "Duration"
+    "col_duration": "Duration",
+    "kpi_total_calls": "Total Calls",
+    "kpi_analyzed": "Analyzed",
+    "kpi_avg_sentiment": "Avg Sentiment",
+    "kpi_avg_qa": "Avg QA Score",
+    "kpi_compliance_rate": "Compliance Rate",
+    "sec_calls_by_source": "Calls by Source",
+    "sec_calls_by_agent": "Calls by Agent",
+    "sec_crm_compliance": "CRM Compliance Breakdown",
+    "sec_recent_uploads": "Recent Uploads",
+    "sec_select_call": "Select Call to Evaluate",
+    "col_date": "Date",
+    "f_agent_name": "Agent Name *",
+    "f_agent_email": "Agent Email *",
+    "f_contact_name": "Contact Name",
+    "f_call_direction": "Call Direction",
+    "f_lead_id": "Lead ID (Optional)",
+    "f_call_date": "Call Date",
+    "f_default_agent": "Default Agent Email *",
+    "f_five9_domain": "Five9 Domain",
+    "f_api_username": "API Username",
+    "f_api_password": "API Password",
+    "f_selected_files": "Selected Files",
+    "sec_manual_upload": "Manual Call Upload",
+    "sec_bulk_upload": "Bulk Call Recordings Upload",
+    "col_notes_updated": "Notes Updated",
+    "col_call_logged": "Call Logged",
+    "col_task_created": "Task Created",
+    "col_stage_updated": "Stage Updated",
+    "col_fully_compliant": "Fully Compliant"
   },
   "users": {
     "title": "Users & Access Control",
@@ -1846,7 +1985,8 @@
     "col_target": "Target",
     "col_action": "Action",
     "col_performed_by": "Performed By",
-    "col_timestamp": "Timestamp"
+    "col_timestamp": "Timestamp",
+    "f_full_name": "Full Name"
   },
   "admin": {
     "title": "WalaPlus Quality Admin Panel",
@@ -1875,7 +2015,13 @@
     "scorecard_name": "Scorecard Name",
     "linked_doc": "Linked Governance Doc",
     "cron_expr": "Cron Expression",
-    "email_recipients": "Email Recipients"
+    "email_recipients": "Email Recipients",
+    "f_target": "Target (%)",
+    "f_eval_logic": "Evaluation Logic (how AI checks it)",
+    "f_evidence_fields": "Evidence Fields (CRM fields to check)",
+    "f_version": "Version",
+    "save_attribute": "Save Attribute",
+    "create_scorecard": "Create Scorecard"
   },
   "ai_approvals": {
     "title": "AI Approvals Queue",
@@ -1933,7 +2079,10 @@
     "col_error": "Error / Prompt preview",
     "col_model": "Model",
     "col_input_tokens": "Input / 1k tokens",
-    "col_output_tokens": "Output / 1k tokens"
+    "col_output_tokens": "Output / 1k tokens",
+    "sec_prompt_comparison": "Prompt Version Comparison",
+    "sec_feedback": "AI Consultant Feedback",
+    "sec_thresholds": "Tool-health alert thresholds"
   },
   "health": {
     "title": "Platform Health Pulse",
@@ -1989,7 +2138,10 @@
     "target_module": "Target Module",
     "source_type": "Source Type",
     "col_job_code": "Job Code",
-    "col_records": "Records"
+    "col_records": "Records",
+    "f_job_name": "Job Name *",
+    "f_upload_file": "Upload File",
+    "f_description": "Description"
   },
   "onboarding": {
     "title": "Welcome to WalaPlus Quality & Investment System",
@@ -1998,7 +2150,7 @@
     "sec_what_learn": "What you'll learn:",
     "sec_quick": "Quick Actions",
     "sec_ai": "AI Assistance",
-    "sec_stats": "Onboarding Statistics",
+    "sec_stats": "Onboarding Statistics (Admin View)",
     "play_video": "Play Video",
     "skip_now": "Skip for now",
     "start_tour": "Start Guided Tour",
@@ -2025,7 +2177,16 @@
     "dashboards_rated": "Dashboards Rated",
     "dashboard_filter": "Dashboard Filter",
     "your_role": "Your Role",
-    "dashboard_label": "Dashboard"
+    "dashboard_label": "Dashboard",
+    "sec_all": "All Feedback",
+    "f_name": "Your Name *",
+    "f_role": "Your Role",
+    "f_dashboard": "Dashboard *",
+    "f_rating": "Overall Rating *",
+    "f_ease_of_use": "Ease of Use",
+    "f_comments": "Comments",
+    "f_suggestions": "Suggestions",
+    "f_share_heading": "Share Your Feedback"
   },
   "sop": {
     "title": "Standard Operating Procedure",
@@ -2105,7 +2266,15 @@
     "col_roi_pct": "ROI %",
     "col_npv": "NPV (SAR)",
     "col_payback": "Payback",
-    "col_ai_rec": "AI Recommendation"
+    "col_ai_rec": "AI Recommendation",
+    "sec_ai_recs": "AI Recommendations",
+    "sec_npv_by_dept": "NPV by Department",
+    "col_project": "Project",
+    "col_roi": "ROI %",
+    "f_initiative_name": "Initiative Name *",
+    "f_problem": "Problem Statement",
+    "f_priority": "Priority",
+    "modal_new": "New ROI Initiative - Hybrid Model"
   },
   "intake": {
     "title": "Manual Audit Intake Workspace",
@@ -2116,7 +2285,9 @@
     "review": "Review →",
     "run_extraction": "Run AI Extraction",
     "promote_findings": "Promote Accepted to Findings",
-    "col_uploaded": "Uploaded"
+    "col_uploaded": "Uploaded",
+    "col_code": "Code",
+    "col_findings": "Findings"
   },
   "infographic": {
     "title": "Infographic Generator",
@@ -2129,7 +2300,12 @@
     "download_png": "Download PNG",
     "send_slack": "Send to Slack",
     "send_email": "Send via Email",
-    "send": "Send"
+    "send": "Send",
+    "sec_choose": "1 · Choose a section",
+    "sec_generate": "2 · Generate & share",
+    "sec_preview": "3 · Preview",
+    "h3_slack": "Send to Slack",
+    "h3_email": "Send via Email"
   },
   "guide": {
     "title": "Welcome to WalaPlus",

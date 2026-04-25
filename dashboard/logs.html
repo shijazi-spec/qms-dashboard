@@ -114,25 +114,25 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Log Activity (Last 7 Days)</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="logs.sec_activity">Log Activity (Last 7 Days)</h3>
             <div class="chart-container">
                 <canvas id="activityChart"></canvas>
             </div>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="logs.sec_filters">Filters</h3>
             <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.from_date">From Date</label>
                     <input type="date" id="filterFromDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.to_date">To Date</label>
                     <input type="date" id="filterToDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Action Type</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.action_type">Action Type</label>
                     <select id="filterActionType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="">All Actions</option>
                         <option value="CREATE">CREATE</option>
@@ -148,7 +148,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Entity Type</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.entity_type">Entity Type</label>
                     <select id="filterEntityType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="">All Entities</option>
                         <option value="PROJECT">PROJECT</option>
@@ -163,7 +163,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Module</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.module">Module</label>
                     <select id="filterModule" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="">All Modules</option>
                         <option value="ROI">ROI</option>
@@ -177,7 +177,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.severity">Severity</label>
                     <select id="filterSeverity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="">All Severities</option>
                         <option value="INFO">INFO</option>
@@ -186,7 +186,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">AI Involved</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="logs.ai_involved">AI Involved</label>
                     <select id="filterAI" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="">All</option>
                         <option value="true">Yes</option>
@@ -194,7 +194,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.search">Search</label>
                     <input type="text" id="filterSearch" placeholder="User or description..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
             </div>
@@ -213,7 +213,7 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 class="text-lg font-semibold text-gray-900">Event Logs</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="logs.sec_logs">Event Logs</h3>
                 <div class="text-sm text-gray-500">
                     Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
                 </div>

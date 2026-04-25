@@ -113,7 +113,7 @@
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-500 mb-1">Total Calls</div>
+                            <div class="text-sm text-gray-500 mb-1" data-i18n="calls.kpi_total_calls">Total Calls</div>
                             <div class="text-3xl font-bold text-gray-900" id="totalCalls">--</div>
                         </div>
                         <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
@@ -127,7 +127,7 @@
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-500 mb-1">Analyzed</div>
+                            <div class="text-sm text-gray-500 mb-1" data-i18n="calls.kpi_analyzed">Analyzed</div>
                             <div class="text-3xl font-bold text-green-600" id="analyzedCalls">--</div>
                         </div>
                         <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -141,7 +141,7 @@
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-500 mb-1">Avg Sentiment</div>
+                            <div class="text-sm text-gray-500 mb-1" data-i18n="calls.kpi_avg_sentiment">Avg Sentiment</div>
                             <div class="text-3xl font-bold text-blue-600" id="avgSentiment">--</div>
                         </div>
                         <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -155,7 +155,7 @@
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-500 mb-1">Avg QA Score</div>
+                            <div class="text-sm text-gray-500 mb-1" data-i18n="calls.kpi_avg_qa">Avg QA Score</div>
                             <div class="text-3xl font-bold text-purple-600" id="avgQAScore">--</div>
                         </div>
                         <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
@@ -169,7 +169,7 @@
                 <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-500 mb-1">Compliance Rate</div>
+                            <div class="text-sm text-gray-500 mb-1" data-i18n="calls.kpi_compliance_rate">Compliance Rate</div>
                             <div class="text-3xl font-bold text-amber-600" id="complianceRate">--</div>
                         </div>
                         <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
@@ -184,13 +184,13 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <h3 class="text-lg font-semibold mb-4">Calls by Source</h3>
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="calls.sec_calls_by_source">Calls by Source</h3>
                     <div class="chart-container">
                         <canvas id="callsBySourceChart"></canvas>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <h3 class="text-lg font-semibold mb-4">Calls by Agent</h3>
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="calls.sec_calls_by_agent">Calls by Agent</h3>
                     <div class="chart-container">
                         <canvas id="callsByAgentChart"></canvas>
                     </div>
@@ -199,28 +199,28 @@
 
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold">CRM Compliance Breakdown</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="calls.sec_crm_compliance">CRM Compliance Breakdown</h3>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4" id="complianceBreakdown">
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-notes">--</div>
-                        <div class="text-sm text-gray-500">Notes Updated</div>
+                        <div class="text-sm text-gray-500" data-i18n="calls.col_notes_updated">Notes Updated</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-logged">--</div>
-                        <div class="text-sm text-gray-500">Call Logged</div>
+                        <div class="text-sm text-gray-500" data-i18n="calls.col_call_logged">Call Logged</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-task">--</div>
-                        <div class="text-sm text-gray-500">Task Created</div>
+                        <div class="text-sm text-gray-500" data-i18n="calls.col_task_created">Task Created</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-stage">--</div>
-                        <div class="text-sm text-gray-500">Stage Updated</div>
+                        <div class="text-sm text-gray-500" data-i18n="calls.col_stage_updated">Stage Updated</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-green-600" id="comp-full">--</div>
-                        <div class="text-sm text-gray-500">Fully Compliant</div>
+                        <div class="text-sm text-gray-500" data-i18n="calls.col_fully_compliant">Fully Compliant</div>
                     </div>
                 </div>
             </div>
@@ -229,7 +229,7 @@
         <div id="content-calls" class="tab-content hidden fade-in">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
-                    <h3 class="text-lg font-semibold">Call Records</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="calls.sec_records">Call Records</h3>
                     <div class="flex items-center space-x-3">
                         <select id="sourceFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Sources</option>
@@ -250,13 +250,13 @@
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Call ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_call_id">Call ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_source">Source</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agent</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Direction</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Duration</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_contact">Contact</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_direction">Direction</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_duration">Duration</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_date">Date</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
@@ -287,7 +287,7 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-white">Five9 Integration</h3>
+                                <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_five9">Five9 Integration</h3>
                                 <p class="text-sm text-white/80">Connect to Five9 cloud contact center</p>
                             </div>
                         </div>
@@ -302,17 +302,17 @@
                         </div>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Five9 Domain</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_five9_domain">Five9 Domain</label>
                                 <input type="text" id="five9-domain" placeholder="yourcompany.five9.com" 
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">API Username</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_api_username">API Username</label>
                                 <input type="text" id="five9-username" placeholder="api_user@company.com" 
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">API Password</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_api_password">API Password</label>
                                 <input type="password" id="five9-password" placeholder="••••••••" 
                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
@@ -347,7 +347,7 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-white">Manual Call Upload</h3>
+                                <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_manual_upload">Manual Call Upload</h3>
                                 <p class="text-sm text-white/80">Upload recordings for SDR evaluation</p>
                             </div>
                         </div>
@@ -379,24 +379,24 @@
                         <div class="mt-4 space-y-4">
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Agent Name *</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_agent_name">Agent Name *</label>
                                     <input type="text" id="upload-agent-name" placeholder="e.g., John Smith" 
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Agent Email *</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_agent_email">Agent Email *</label>
                                     <input type="email" id="upload-agent-email" placeholder="agent@walaplus.com" 
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_contact_name">Contact Name</label>
                                     <input type="text" id="upload-contact-name" placeholder="e.g., Customer Name" 
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Call Direction</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_call_direction">Call Direction</label>
                                     <select id="upload-direction" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                         <option value="outbound">Outbound</option>
                                         <option value="inbound">Inbound</option>
@@ -405,12 +405,12 @@
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Lead ID (Optional)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_lead_id">Lead ID (Optional)</label>
                                     <input type="text" id="upload-lead-id" placeholder="Zoho Lead ID" 
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Call Date</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_call_date">Call Date</label>
                                     <input type="datetime-local" id="upload-call-date" 
                                            class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 </div>
@@ -438,7 +438,7 @@
                             </svg>
                         </div>
                         <div>
-                            <h3 class="text-lg font-semibold text-white">Bulk Call Recordings Upload</h3>
+                            <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_bulk_upload">Bulk Call Recordings Upload</h3>
                             <p class="text-sm text-white/80">Upload multiple audio/video files for transcription & analysis (up to 10 files)</p>
                         </div>
                     </div>
@@ -454,14 +454,14 @@
                     </div>
                     <div id="bulk-audio-list" class="hidden mt-4 space-y-2">
                         <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-sm font-medium text-gray-700">Selected Files</h4>
+                            <h4 class="text-sm font-medium text-gray-700" data-i18n="calls.f_selected_files">Selected Files</h4>
                             <button data-on-click="clearBulkAudio" class="text-xs text-red-600 hover:text-red-800">Clear All</button>
                         </div>
                         <div id="bulk-audio-files" class="space-y-2 max-h-48 overflow-y-auto"></div>
                     </div>
                     <div class="mt-4 grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Default Agent Email *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_default_agent">Default Agent Email *</label>
                             <input type="email" id="bulk-agent-email" placeholder="agent@walaplus.com" 
                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
@@ -500,7 +500,7 @@
             </div>
 
             <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h3 class="text-lg font-semibold mb-4">Recent Uploads</h3>
+                <h3 class="text-lg font-semibold mb-4" data-i18n="calls.sec_recent_uploads">Recent Uploads</h3>
                 <div id="recent-uploads-list" class="space-y-2">
                     <p class="text-gray-500 text-sm">No recent uploads</p>
                 </div>
@@ -512,7 +512,7 @@
                 <div class="lg:col-span-1">
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                         <div class="px-6 py-4 border-b border-gray-100">
-                            <h3 class="text-lg font-semibold">Select Call to Evaluate</h3>
+                            <h3 class="text-lg font-semibold" data-i18n="calls.sec_select_call">Select Call to Evaluate</h3>
                         </div>
                         <div class="p-4">
                             <div class="mb-4">
@@ -622,7 +622,7 @@
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Call ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_call_id">Call ID</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agent</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead/Deal ID</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Notes</th>

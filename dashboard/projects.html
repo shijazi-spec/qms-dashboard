@@ -177,12 +177,12 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_project">Project</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Progress</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SPI</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPI</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.priority">Priority</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_progress">Progress</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_spi">SPI</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_cpi">CPI</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
@@ -195,15 +195,15 @@
             <div id="analyticsTab" class="p-6 hidden">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-gray-50 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold mb-4">Projects by Status</h3>
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.sec_by_status">Projects by Status</h3>
                         <canvas id="statusChart" height="200"></canvas>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold mb-4">Projects by Priority</h3>
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.sec_by_priority">Projects by Priority</h3>
                         <canvas id="priorityChart" height="200"></canvas>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold mb-4">Budget Overview</h3>
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.sec_budget">Budget Overview</h3>
                         <canvas id="budgetChart" height="200"></canvas>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -215,7 +215,7 @@
 
             <div id="risksTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Risk Register</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_risk_register">Risk Register</h3>
                     <button data-on-click="openRiskModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                         <i class="fas fa-plus mr-2"></i>Add Risk
                     </button>
@@ -226,11 +226,11 @@
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_risk">Risk</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.category">Category</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_score">Score</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.owner">Owner</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
                                 </thead>
@@ -249,7 +249,7 @@
 
             <div id="milestonesTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Project Milestones Timeline</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_milestones">Project Milestones Timeline</h3>
                     <button data-on-click="openMilestoneModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                         <i class="fas fa-plus mr-2"></i>Add Milestone
                     </button>
@@ -261,12 +261,12 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Milestone</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Planned</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actual</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Variance</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_milestone">Milestone</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_project">Project</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_planned">Planned</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_actual">Actual</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_variance">Variance</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             </tr>
                         </thead>
@@ -277,7 +277,7 @@
 
             <div id="stakeholdersTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Stakeholder Register</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_stakeholders">Stakeholder Register</h3>
                     <button data-on-click="openStakeholderModal" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                         <i class="fas fa-plus mr-2"></i>Add Stakeholder
                     </button>
@@ -288,12 +288,12 @@
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Influence</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Interest</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Engagement</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_influence">Influence</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_interest">Interest</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_engagement">Engagement</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                     </tr>
                                 </thead>
@@ -330,7 +330,7 @@
             <!-- Procurement Management Tab -->
             <div id="procurementTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Procurement Management</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="projects.sec_procurement">Procurement Management</h3>
                     <button data-on-click="openProcurementModal" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
                         <i class="fas fa-plus mr-2"></i>Add Procurement
                     </button>
@@ -357,10 +357,10 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_vendor">Vendor</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_value">Value</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -406,9 +406,9 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.priority">Priority</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Impact</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Schedule Impact</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -1110,10 +1110,10 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_risk">Risk</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Probability</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_score">Score</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 </tr>
                             </thead>
@@ -1128,10 +1128,10 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role/Type</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Influence</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Interest</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_influence">Influence</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_interest">Interest</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
                                 </tr>
                             </thead>
@@ -1147,8 +1147,8 @@
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contract</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_vendor">Vendor</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_value">Value</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
                                 </tr>
@@ -1165,7 +1165,7 @@
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Change Request</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Impact</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CCB Decision</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>

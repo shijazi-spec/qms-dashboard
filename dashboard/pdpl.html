@@ -54,34 +54,34 @@
                 </button>
                 <div id="complianceScore" class="text-center">
                     <div class="text-3xl font-bold text-indigo-600">--</div>
-                    <div class="text-sm text-gray-500">Compliance Score</div>
+                    <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_score">Compliance Score</div>
                 </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm text-gray-500">Data Inventory</div>
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_inventory">Data Inventory</div>
                 <div id="inventoryCount" class="text-2xl font-bold text-blue-600">--</div>
                 <div class="text-xs text-gray-400">Fields tracked</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm text-gray-500">DSAR Requests</div>
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_dsar">DSAR Requests</div>
                 <div id="dsarPending" class="text-2xl font-bold text-amber-600">--</div>
                 <div class="text-xs text-gray-400">Pending</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm text-gray-500">Retention Policies</div>
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_retention">Retention Policies</div>
                 <div id="retentionCount" class="text-2xl font-bold text-green-600">--</div>
                 <div class="text-xs text-gray-400">Active</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm text-gray-500">Open Incidents</div>
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_incidents">Open Incidents</div>
                 <div id="incidentsOpen" class="text-2xl font-bold text-red-600">--</div>
                 <div class="text-xs text-gray-400">Unresolved</div>
             </div>
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm text-gray-500">AI Guardrails</div>
+                <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_guardrails">AI Guardrails</div>
                 <div id="guardrailsActive" class="text-2xl font-bold text-purple-600">--</div>
                 <div class="text-xs text-gray-400">Active</div>
             </div>
@@ -100,7 +100,7 @@
 
             <div id="panel-inventory" class="p-6">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Personal Data Inventory</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_inventory">Personal Data Inventory</h3>
                     <button data-on-click="openAddInventoryModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add Field</button>
                 </div>
                 <div class="overflow-x-auto">
@@ -124,7 +124,7 @@
 
             <div id="panel-dsar" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Data Subject Access Requests</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_dsar">Data Subject Access Requests</h3>
                     <button data-on-click="openAddDSARModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">New Request</button>
                 </div>
                 <div class="overflow-x-auto">
@@ -148,7 +148,7 @@
 
             <div id="panel-retention" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Data Retention Policies</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_retention">Data Retention Policies</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -171,7 +171,7 @@
 
             <div id="panel-incidents" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Data Incidents</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_incidents">Data Incidents</h3>
                     <button data-on-click="openAddIncidentModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Report Incident</button>
                 </div>
                 <div class="overflow-x-auto">
@@ -195,7 +195,7 @@
 
             <div id="panel-guardrails" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">AI PII Guardrails</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="pdpl.sec_guardrails">AI PII Guardrails</h3>
                     <button data-on-click="openAddGuardrailModal" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">Add Guardrail</button>
                 </div>
                 <div class="mb-6 p-4 bg-purple-50 rounded-lg">
@@ -316,7 +316,7 @@
                 if (data.success) {
                     document.getElementById('complianceScore').innerHTML = `
                         <div class="text-3xl font-bold ${data.complianceScore >= 80 ? 'text-green-600' : data.complianceScore >= 60 ? 'text-amber-600' : 'text-red-600'}">${data.complianceScore}%</div>
-                        <div class="text-sm text-gray-500">Compliance Score</div>
+                        <div class="text-sm text-gray-500" data-i18n="pdpl.kpi_score">Compliance Score</div>
                     `;
                     document.getElementById('inventoryCount').textContent = data.dataInventory.total;
                     document.getElementById('dsarPending').textContent = data.dsar.pending;

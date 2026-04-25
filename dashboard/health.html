@@ -97,17 +97,17 @@
                     <div class="text-sm opacity-80 mt-2" id="overall-time">Last run --</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-6">
-                    <div class="text-sm text-gray-500 uppercase tracking-wider">Passing</div>
+                    <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_passing">Passing</div>
                     <div class="text-3xl font-bold text-emerald-600 mt-2" id="count-pass" data-testid="text-pass-count">0</div>
                     <div class="text-sm text-gray-500 mt-2">checks healthy</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-6">
-                    <div class="text-sm text-gray-500 uppercase tracking-wider">Warnings</div>
+                    <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_warnings">Warnings</div>
                     <div class="text-3xl font-bold text-amber-600 mt-2" id="count-warn" data-testid="text-warn-count">0</div>
                     <div class="text-sm text-gray-500 mt-2">need attention</div>
                 </div>
                 <div class="bg-white rounded-xl shadow p-6">
-                    <div class="text-sm text-gray-500 uppercase tracking-wider">Failures</div>
+                    <div class="text-sm text-gray-500 uppercase tracking-wider" data-i18n="health.kpi_failures">Failures</div>
                     <div class="text-3xl font-bold text-red-600 mt-2" id="count-fail" data-testid="text-fail-count">0</div>
                     <div class="text-sm text-gray-500 mt-2" id="count-skipped">0 skipped</div>
                 </div>
@@ -117,7 +117,7 @@
             <div class="bg-white rounded-xl shadow p-6 mb-6">
                 <div class="flex items-center justify-between mb-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-900">Run history</h2>
+                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_history">Run history</h2>
                         <p class="text-sm text-gray-500">Last 50 runs · pass / warn / fail counts over time</p>
                     </div>
                     <div class="text-sm text-gray-500" id="history-meta"></div>
@@ -130,7 +130,7 @@
             <!-- Per-check breakdown -->
             <div class="bg-white rounded-xl shadow">
                 <div class="px-6 py-4 border-b">
-                    <h2 class="text-lg font-semibold text-gray-900">Latest run · per-check breakdown</h2>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="health.sec_breakdown">Latest run · per-check breakdown</h2>
                     <p class="text-sm text-gray-500">Click a row to inspect details</p>
                 </div>
                 <div id="checks-list" data-testid="list-checks">

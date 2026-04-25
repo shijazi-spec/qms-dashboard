@@ -80,7 +80,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="lg:col-span-2 bg-white rounded-lg shadow">
                 <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-900">Migration Jobs</h2>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="migration.sec_jobs">Migration Jobs</h2>
                     <div class="flex gap-3">
                         <select id="filterModule" data-on-change="loadJobs" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Modules</option>
@@ -102,12 +102,12 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job Code</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Module</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Records</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="migration.col_job_code">Job Code</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.module">Module</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="migration.col_records">Records</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.date">Date</th>
                             </tr>
                         </thead>
                         <tbody id="jobsTableBody" class="bg-white divide-y divide-gray-200">
@@ -119,21 +119,21 @@
 
             <div class="space-y-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Import by Module</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="migration.sec_by_module">Import by Module</h2>
                     <div id="byModuleChart" class="space-y-2">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Available Templates</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="migration.sec_templates">Available Templates</h2>
                     <div id="templatesSection" class="space-y-2">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Deduplication Rules</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="migration.sec_dedup">Deduplication Rules</h2>
                     <div id="dedupRulesSection" class="space-y-2">
                         <div class="text-gray-400 text-center py-4">Loading...</div>
                     </div>
@@ -143,7 +143,7 @@
 
         <div class="bg-white rounded-lg shadow">
             <div class="p-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-900">Quick Import Guide</h2>
+                <h2 class="text-lg font-semibold text-gray-900" data-i18n="migration.sec_quick_guide">Quick Import Guide</h2>
             </div>
             <div class="p-6">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -151,28 +151,28 @@
                         <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
                             <span class="text-xl font-bold text-indigo-600">1</span>
                         </div>
-                        <h3 class="font-medium text-gray-900 mb-1">Select Module</h3>
+                        <h3 class="font-medium text-gray-900 mb-1" data-i18n="migration.step_select">Select Module</h3>
                         <p class="text-sm text-gray-500">Choose the target module (Risks, Policies, Compliance, Vendors)</p>
                     </div>
                     <div class="text-center">
                         <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
                             <span class="text-xl font-bold text-indigo-600">2</span>
                         </div>
-                        <h3 class="font-medium text-gray-900 mb-1">Upload File</h3>
+                        <h3 class="font-medium text-gray-900 mb-1" data-i18n="migration.step_upload">Upload File</h3>
                         <p class="text-sm text-gray-500">Upload your CSV or Excel file with structured data</p>
                     </div>
                     <div class="text-center">
                         <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
                             <span class="text-xl font-bold text-indigo-600">3</span>
                         </div>
-                        <h3 class="font-medium text-gray-900 mb-1">Map Fields</h3>
+                        <h3 class="font-medium text-gray-900 mb-1" data-i18n="migration.step_map">Map Fields</h3>
                         <p class="text-sm text-gray-500">AI-powered field mapping with manual override option</p>
                     </div>
                     <div class="text-center">
                         <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
                             <span class="text-xl font-bold text-indigo-600">4</span>
                         </div>
-                        <h3 class="font-medium text-gray-900 mb-1">Import & Validate</h3>
+                        <h3 class="font-medium text-gray-900 mb-1" data-i18n="migration.step_validate">Import &amp; Validate</h3>
                         <p class="text-sm text-gray-500">Deduplicate, validate, and import records to the system</p>
                     </div>
                 </div>
@@ -183,16 +183,16 @@
     <div id="importModal" class="modal">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
             <div class="p-6 border-b border-gray-200">
-                <h3 class="text-xl font-semibold text-gray-900">Import Data</h3>
+                <h3 class="text-xl font-semibold text-gray-900" data-i18n="migration.import_data">Import Data</h3>
             </div>
             <form id="importForm" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Job Name *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="migration.f_job_name">Job Name *</label>
                         <input type="text" name="name" required placeholder="e.g., Q4 Risk Import" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Target Module *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="migration.target_module">Target Module *</label>
                         <select name="target_module" required id="targetModuleSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                             <option value="">Select module...</option>
                             <option value="risks">Risks</option>
@@ -204,11 +204,11 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.description">Description</label>
                     <textarea name="description" rows="2" placeholder="Optional notes about this import" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Source Type *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="migration.source_type">Source Type *</label>
                     <select name="source_type" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
                         <option value="csv">CSV File</option>
                         <option value="excel">Excel File (.xlsx)</option>
@@ -243,7 +243,7 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-4">
                     <button type="button" data-on-click="closeModal" data-args="[&quot;importModal&quot;]" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Import Job</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-i18n="migration.create_job">Create Import Job</button>
                 </div>
             </form>
         </div>
