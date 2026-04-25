@@ -276,6 +276,85 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   g.__walaplus_cacheWarmer = { startTimer, refreshTimer };
 })();
 
+/*  Scheduled-job in-process fallback
+    Inngest crons (defined in src/mastra/inngest/index.ts) are the primary
+    drivers for the rate_limit_429 pruner, the duplicate-radar scanner, the
+    AI consultant background scanner, the weekly quality audit, and the
+    daily KPI auto-calc. In practice the Inngest dev server isn't always
+    attached to the local dev process and production runners have
+    occasionally missed cron fires — leaving stale data for days at a time.
+
+    Each `*IfStale` helper guards itself with a freshness check, so calling
+    them on a fixed interval is cheap when the Inngest cron is healthy
+    (one freshness query per helper) and self-healing when it isn't.
+
+    Concurrency: a single `inflight` flag prevents overlapping cycles in
+    the rare case where one of the helpers actually has work to do and
+    runs longer than the interval. Mirrors the CacheWarmer pattern above.
+*/
+(function startScheduledJobFallback() {
+  const g = globalThis as any;
+  if (g.__walaplus_scheduledJobFallback) {
+    clearTimeout(g.__walaplus_scheduledJobFallback.startTimer);
+    clearInterval(g.__walaplus_scheduledJobFallback.refreshTimer);
+  }
+  if (!process.env.DATABASE_URL) {
+    console.log("⏭️  [ScheduledJobFallback] DATABASE_URL not set — skipping in-process fallback");
+    return;
+  }
+  let inflight = false;
+  const tick = async () => {
+    if (inflight) {
+      console.log("⏭️  [ScheduledJobFallback] Previous cycle still running — skipping this tick");
+      return;
+    }
+    inflight = true;
+    try {
+      const {
+        runPruneRateLimit429IfStale,
+        runDuplicateScanIfStale,
+        runConsultantScannerIfStale,
+        runQualityAuditIfStale,
+        runKPIAutoCalcIfStale,
+      } = await import("../utils/scheduledJobs");
+      const helpers: Array<{ name: string; fn: () => Promise<{ ran: boolean; ageHours: number }> }> = [
+        { name: "RateLimit429Pruner", fn: () => runPruneRateLimit429IfStale() },
+        { name: "DuplicateRadar", fn: () => runDuplicateScanIfStale() },
+        { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },
+        { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
+        { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
+      ];
+      for (const h of helpers) {
+        try {
+          const out = await h.fn();
+          if (out.ran) {
+            console.log(`⏰ [ScheduledJobFallback] ${h.name} ran (ageHours=${out.ageHours === Infinity ? '∞' : out.ageHours.toFixed(1)})`);
+          }
+        } catch (err) {
+          console.error(`[ScheduledJobFallback] ${h.name} threw:`, err);
+        }
+      }
+    } finally {
+      inflight = false;
+    }
+  };
+  // Wrap each timer fire so a thrown helper / failed dynamic import never
+  // becomes an unhandled rejection (timer callbacks don't await the promise).
+  const safeTick = () => {
+    tick().catch((err) => {
+      console.error("[ScheduledJobFallback] Unhandled tick error:", err);
+    });
+  };
+  // Initial tick ~60s after boot so DB pools and routes are fully ready.
+  const startTimer = setTimeout(() => {
+    console.log("⏰ [ScheduledJobFallback] Starting initial pass...");
+    safeTick();
+  }, 60 * 1000);
+  // Re-check every 45 minutes (between the suggested 30–60 min cadence).
+  const refreshTimer = setInterval(safeTick, 45 * 60 * 1000);
+  g.__walaplus_scheduledJobFallback = { startTimer, refreshTimer };
+})();
+
 /*  On-boot redaction sweep
     Automatically redacts any sensitive data that may have re-appeared in
     event_logs, nc_change_history, capa_change_history, or ai_pending_actions
