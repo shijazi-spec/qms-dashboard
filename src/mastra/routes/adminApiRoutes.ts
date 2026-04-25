@@ -678,6 +678,63 @@ export const adminApiRoutes = [
     },
   },
   {
+    // Task #556: dedicated admin endpoint for the post-restore sweep
+    // notification history. We can't reuse `/api/notifications` because
+    // that path is shadowed by `triggerRoutes` (audit-trigger
+    // notifications, role-gated, different schema). This endpoint
+    // returns the rows from the notificationHub `notifications` table
+    // that the boot redaction sweep emits via
+    // `dispatchPostRestoreSweepAlert` — i.e. module='security/redaction-sweep'
+    // AND related_entity_id='boot_redaction_sweep'. Both filters are
+    // applied so an unrelated future use of the same module can't leak
+    // into the dashboard panel.
+    path: "/api/admin/redaction-sweep/alerts",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c)) return c.json({ error: 'Insufficient permissions' }, 403);
+          const limitRaw = parseInt(c.req.query("limit") || "20", 10);
+          const limit = Number.isFinite(limitRaw) && limitRaw > 0 && limitRaw <= 100 ? limitRaw : 20;
+          const offsetRaw = parseInt(c.req.query("offset") || "0", 10);
+          const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+          const { initNotificationTables } = await import("../../utils/notificationHub");
+          await initNotificationTables();
+          const pg = await import("pg");
+          const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const where = `WHERE module = $1 AND related_entity_id = $2`;
+            const params = ['security/redaction-sweep', 'boot_redaction_sweep'];
+            const countResult = await pool.query(
+              `SELECT COUNT(*)::int AS total FROM notifications ${where}`,
+              params,
+            );
+            const rowsResult = await pool.query(
+              `SELECT id, title, message, module, priority, channel, status,
+                      recipient, related_entity_type, related_entity_id,
+                      action_url, sent_at, read_at, created_at
+                 FROM notifications ${where}
+                 ORDER BY created_at DESC
+                 LIMIT $3 OFFSET $4`,
+              [...params, limit, offset],
+            );
+            return c.json({
+              notifications: rowsResult.rows,
+              total: countResult.rows[0]?.total ?? 0,
+              module: 'security/redaction-sweep',
+              related_entity_id: 'boot_redaction_sweep',
+            });
+          } finally {
+            await pool.end();
+          }
+        } catch (error) {
+          console.error("Error fetching post-restore sweep alerts:", error);
+          return c.json({ error: "Failed to fetch post-restore sweep alerts" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/admin/redaction-sweep/status",
     method: "GET",
     createHandler: async () => {

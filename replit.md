@@ -58,3 +58,43 @@ Added a 14/30-day trend chart to the existing "Recently triaged tool-health aler
 
 ### April 25, 2026 — Cross-build trend tracking for streaming-download latency (Task #366)
  ...[Truncated]
+## System Architecture
+The platform is built on the Mastra AI agent framework and Hono HTTP server.
+
+-   **RTL Layout Convention**:
+    The dashboard supports Arabic (RTL) via `html[dir="rtl"]` set by `dashboard/js/i18n.js`. To ensure layout details (table-header alignment, card accent borders, icon gutters) automatically mirror in RTL, use CSS logical properties instead of physical ones. Do **not** use physical-direction Tailwind classes (`ml-`, `mr-`, `space-x-`, `text-left`, `text-right`, `border-l-`, `border-r-`, `rounded-l-`, `rounded-r-`) or physical CSS properties (`border-left`, `border-right`, `margin-left`, `margin-right`) on any element whose appearance should flip in RTL.
+
+-   **UI/UX Decisions**:
+    -   Dashboards are static HTML, styled with compiled Tailwind CSS, offering views like Executive Dashboard, GRC Control Tower, QMS Dashboard, and an AI Consultant interface. UI/UX emphasizes WCAG 2.1 AA accessibility conformance. A fixed left side rail navigation replaces the traditional top-bar navigation.
+    -   Floating bottom-right progress card per download for filename, progress bar, bytes, and Cancel button. Card auto-dismisses on success/cancel/failure.
+    -   Top-right toast container for success / "cancelled" info / failure alerts.
+-   **Technical Implementations**:
+    -   **Frontend**: Static HTML dashboards, styled with compiled Tailwind CSS.
+    -   **Backend**: Mastra API routes are handled by Hono.
+    -   **Database**: PostgreSQL manages over 103 tables across 21 module groups using a shared connection pool.
+    -   **AI Integration**: GPT-4o powers AI agent functionalities through Replit AI/OpenAI. AI Observability is implemented via an `ai_call_metrics` table, tracking token usage, cost, latency, and errors for every LLM call, visualized in an "AI Operations" panel.
+    -   **Workflows**: Inngest orchestrates event-driven processes like background scanning, KPI calculation, and AI approval expiry.
+    -   **Authentication**: Replit OIDC (Google, GitHub, Apple, email) with HMAC-SHA256 signed cookies for session management. An Admin API key provides alternative access.
+    -   **Authorization**: Role-Based Access Control (RBAC) with 11 roles ensures granular access to API endpoints and dashboards via `rbacMiddleware.ts` and `ROUTE_PERMISSION_MAP`.
+    -   **Security**: Features include nonce-based Content Security Policy (CSP), distributed Postgres-backed rate limiting, input sanitization, UUID resource ID obfuscation, strong password policies, generic error messages, and Human-In-The-Loop (HITL) AI Approval Gate.
+-   **Feature Specifications**:
+    -   **AI Consultant**: GPT-4o powered QMS consultant with 23 tools for data querying, nonconformity analysis, and QMS management, featuring a chat interface and knowledge base integration. Feedback ratings are linked to AI observability.
+    -   **Duplicate Radar**: Multi-signal duplicate detection for CRM data with cross-module clustering, AI recommendations, and auto-resolution.
+    -   **Download Progress UX**: Visible progress UX for streaming-downloads, including a floating bottom-right progress card with cancel button and top-right toast alerts.
+    -   **AI Observability**: Tracks LLM call metrics in `ai_call_metrics` table, visualized in "AI Operations" panel. Daily Inngest cron alerts on high AI spend.
+    -   **Evidence Management**: Structured upload and retrieval of evidence documents.
+    -   **Compliance Checklist Engine**: Create and run structured compliance checklists with automated data verification.
+    -   **Executive Digest**: Weekly quality digest emails summarizing QMS metrics.
+    -   **Infographic Generator**: In-platform tool for generating and sharing visual snapshots with Slack and email integration.
+    -   **Native XLSX Exports**: Multi-sheet Excel exports for various modules.
+    -   **True Streaming Exports**: Large exports flow directly to disk via File System Access API where supported, bypassing memory Blobs for stability. Also supports Firefox and Safari via service worker shim.
+
+## External Dependencies
+-   **PostgreSQL**: Primary data store.
+-   **Replit AI Integrations / OpenAI**: For GPT-4o AI capabilities.
+-   **Inngest**: Event-driven workflow orchestration.
+-   **Resend**: For outgoing email services.
+-   **Zoho CRM**: Integrated for live CRM data.
+-   **Slack**: For notifications and infographic sharing.
+-   **exceljs**: Library for generating XLSX data exports.
+-   **ImageMagick**: Used for converting SVG infographics to PNG.
