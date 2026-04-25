@@ -351,6 +351,46 @@ console.log("Case: admin_key with '=' surrounded by sibling cookies");
 }
 console.log();
 
+// ─── Case 8c: percent-encoded admin_key cookie from strict HTTP clients ───
+console.log("Case: admin_key cookie value is percent-encoded (strict HTTP client)");
+{
+  const KEY_WITH_EQUALS = "abc=def";
+  process.env.ADMIN_API_KEY = KEY_WITH_EQUALS;
+  // Some clients/browsers percent-encode reserved chars in cookie values.
+  // 'abc%3Ddef' must round-trip to 'abc=def' so the key still matches.
+  const c = makeContext({ cookies: { admin_key: "abc%3Ddef" } });
+  assertEquals(
+    getAdminKey(c),
+    KEY_WITH_EQUALS,
+    "getAdminKey decodes percent-encoded cookie values"
+  );
+  assertEquals(
+    hasValidAdminApiKey(c),
+    true,
+    "hasValidAdminApiKey is true for a percent-encoded cookie that matches the stored key"
+  );
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+}
+console.log();
+
+// ─── Case 8d: malformed percent sequence falls back to raw value ───
+console.log("Case: admin_key cookie with malformed percent escape falls back to raw value");
+{
+  // '%E0%A4%A' is an incomplete UTF-8 sequence and will throw inside
+  // decodeURIComponent. The helper should swallow the error and return
+  // the raw cookie text rather than crashing the auth check.
+  const RAW = "broken-%E0%A4%A";
+  process.env.ADMIN_API_KEY = RAW;
+  const c = makeContext({ cookies: { admin_key: RAW } });
+  assertEquals(
+    getAdminKey(c),
+    RAW,
+    "getAdminKey returns the raw value when decoding throws"
+  );
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+}
+console.log();
+
 // ─── Case 9: header takes precedence over cookie when both present ───
 console.log("Case: header wins over cookie when both supply an admin key");
 {

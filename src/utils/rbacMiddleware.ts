@@ -153,7 +153,19 @@ export function getAdminKey(c: any): string | null {
   if (headerKey) return headerKey;
   const cookies = (c.req.header('Cookie') || '').split(';').map((s: string) => s.trim());
   const adminCookie = cookies.find((s: string) => s.startsWith('admin_key='));
-  if (adminCookie) return adminCookie.slice(adminCookie.indexOf('=') + 1) || null;
+  if (adminCookie) {
+    const rawValue = adminCookie.slice(adminCookie.indexOf('=') + 1);
+    if (!rawValue) return null;
+    // Some HTTP clients percent-encode cookie values that contain reserved
+    // characters like '=', '+', or '/'. Decode so the comparison against
+    // ADMIN_API_KEY succeeds regardless of how the client serialized it.
+    // Fall back to the raw value if the sequence is malformed.
+    try {
+      return decodeURIComponent(rawValue);
+    } catch {
+      return rawValue;
+    }
+  }
   return null;
 }
 
