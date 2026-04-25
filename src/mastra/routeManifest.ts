@@ -118,6 +118,12 @@ export const ROUTE_MANIFEST = {
     { path: '/api/sop/download', method: 'GET', file: 'routes/sopRoutes.ts' },
   ],
 
+  exportDownloads: [
+    { path: '/api/exports/recent-downloads', method: 'GET', file: 'routes/exportDownloadRoutes.ts' },
+    { path: '/api/exports/recent-downloads', method: 'POST', file: 'routes/exportDownloadRoutes.ts' },
+    { path: '/api/exports/recent-downloads', method: 'DELETE', file: 'routes/exportDownloadRoutes.ts' },
+  ],
+
   moduleRoutes: [
     'routes/callIntelligenceRoutes.ts',
     'routes/roiRoutes.ts',
@@ -153,6 +159,7 @@ export const ROUTE_MANIFEST = {
     'routes/managementReviewRoutes.ts',
     'routes/analyticsRoutes.ts',
     'routes/healthPulseRoutes.ts',
+    'routes/exportDownloadRoutes.ts',
   ],
 
   pages: [

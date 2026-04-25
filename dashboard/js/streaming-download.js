@@ -464,6 +464,83 @@
     var currentHistoryUserKey = null;
     var crossTabListenerInstalled = false;
 
+    // --- Server-sync for recent-downloads (cross-device) -------------------
+    // When a user is signed in (setHistoryUser was called with a non-empty id),
+    // history changes are mirrored to /api/exports/recent-downloads so the tray
+    // stays consistent across every device where the user is logged in.
+    // All calls are fire-and-forget; network errors are silently ignored so
+    // they never block or disrupt the in-browser download experience.
+    var RECENT_DOWNLOADS_API = '/api/exports/recent-downloads';
+
+    function isServerSyncEnabled() {
+        if (typeof global.STREAMING_DOWNLOAD_SERVER_SYNC === 'boolean') {
+            return global.STREAMING_DOWNLOAD_SERVER_SYNC;
+        }
+        return true;
+    }
+
+    function pushToServer(entries) {
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
+        try {
+            fetch(RECENT_DOWNLOADS_API, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ entries: entries }),
+            }).catch(function () { /* ignore network errors */ });
+        } catch (_) { /* ignore */ }
+    }
+
+    function clearOnServer() {
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
+        try {
+            fetch(RECENT_DOWNLOADS_API, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+            }).catch(function () { /* ignore network errors */ });
+        } catch (_) { /* ignore */ }
+    }
+
+    // Fetch server-side entries and merge them into local storage, then push
+    // the merged result back so both sides stay in sync. Called once per
+    // setHistoryUser() invocation, i.e. on login / page load with a known user.
+    function fetchAndMergeFromServer() {
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
+        try {
+            fetch(RECENT_DOWNLOADS_API, {
+                method: 'GET',
+                credentials: 'same-origin',
+            }).then(function (res) {
+                if (!res.ok) return null;
+                return res.json();
+            }).then(function (data) {
+                if (!data || !Array.isArray(data.entries) || !data.entries.length) return;
+                var serverEntries = data.entries;
+                var local = loadHistory();
+                var seen = Object.create(null);
+                local.forEach(function (e) { if (e && e.id) seen[e.id] = true; });
+                var merged = local.slice();
+                serverEntries.forEach(function (e) {
+                    if (e && e.id && !seen[e.id]) {
+                        merged.push(e);
+                        seen[e.id] = true;
+                    }
+                });
+                merged.sort(function (a, b) {
+                    var aT = Date.parse((a && (a.startedAt || a.finishedAt)) || '') || 0;
+                    var bT = Date.parse((b && (b.startedAt || b.finishedAt)) || '') || 0;
+                    return bT - aT;
+                });
+                var pruned = pruneEntries(merged).slice(0, HISTORY_LIMIT);
+                if (pruned.length > local.length) {
+                    saveHistory(pruned);
+                    pushToServer(pruned);
+                    try { renderHistoryTray(); } catch (_) { /* ignore */ }
+                }
+            }).catch(function () { /* ignore network errors */ });
+        } catch (_) { /* ignore */ }
+    }
+
     function ensureProgressContainer() {
         if (typeof document === 'undefined' || !document.body) return null;
         var c = document.getElementById(PROGRESS_CONTAINER_ID);
@@ -1022,6 +1099,7 @@
         if (key) {
             try { migrateAnonymousHistoryToUser(); } catch (_) { /* ignore */ }
             try { ensureCrossTabListener(); } catch (_) { /* ignore */ }
+            try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
         }
         try { reconcileHistoryOnLoad(); } catch (_) { /* ignore */ }
         try { renderHistoryTray(); } catch (_) { /* ignore */ }
@@ -1134,6 +1212,7 @@
         arr.unshift(entry);
         if (arr.length > HISTORY_LIMIT) arr = arr.slice(0, HISTORY_LIMIT);
         saveHistory(arr);
+        pushToServer(arr);
         renderHistoryTray();
         return entry;
     }
@@ -1145,6 +1224,7 @@
             if (arr[i] && arr[i].id === id) {
                 arr[i] = Object.assign({}, arr[i], patch);
                 saveHistory(arr);
+                pushToServer(arr);
                 renderHistoryTray();
                 return;
             }
@@ -1153,6 +1233,7 @@
 
     function clearHistory() {
         saveHistory([]);
+        clearOnServer();
         // Drop the unread snapshot too so a fresh download after clearing
         // doesn't reference stale ids and can light up the badge correctly.
         saveLastSeen({});

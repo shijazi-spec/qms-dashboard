@@ -60,6 +60,7 @@ import { healthPulseRoutes } from "./routes/healthPulseRoutes";
 import { a11yRoutes } from "./routes/a11yRoutes";
 import { i18nRoutes } from "./routes/i18nRoutes";
 import { onBootRedactionSweep } from "../utils/redactHistoricalLogs";
+import { exportDownloadRoutes } from "./routes/exportDownloadRoutes";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
@@ -167,6 +168,9 @@ export const mastra = new Mastra({
       ...managementReviewRoutes,
       ...analyticsRoutes,
       ...healthPulseRoutes,
+
+      // ── Export / Recent-downloads sync ───────────────────────────────────
+      ...exportDownloadRoutes,
 
       // ── Accessibility ─────────────────────────────────────────────────────
       ...a11yRoutes,
