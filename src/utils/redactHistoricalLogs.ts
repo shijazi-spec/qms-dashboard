@@ -2,13 +2,23 @@
  * One-off migration: scan existing event_logs and change_history rows for
  * sensitive field values and rewrite them to ***REDACTED***.
  *
- * Uses the SAME deny-list logic as redactSensitiveFields() — imported from
- * eventLogsDatabase.ts — so there is no duplication or drift risk.
+ * Uses the SAME deny-list + regex-scrubber logic as redactSensitiveFields() and
+ * redactSecretLikeStrings() — imported from eventLogsDatabase.ts — so there is
+ * no duplication or drift risk between the write-time path and this sweep.
  *
- * Detection strategy: apply redactSensitiveFields() to the parsed payload and
- * compare the stringified result against the original. If they differ, the row
- * needs updating. This correctly handles partially-redacted rows that may still
- * contain additional unmasked sensitive keys.
+ * Tables covered (Task #250 ensures all three change-history tables are
+ * processed in the same scheduled run, so a database restore from a
+ * pre-Task-#99 backup cannot reintroduce leaked credentials):
+ *
+ *   - event_logs              (description, entity_name, old_value, new_value)
+ *   - nc_change_history       (old_value, new_value, change_reason)
+ *   - capa_change_history     (old_value, new_value, change_reason)
+ *   - ai_pending_actions      (payload, payload_preview, execution_result)
+ *
+ * Detection strategy: apply redactSensitiveFields() / redactSecretLikeStrings()
+ * to each column and compare against the original. If they differ, the row
+ * needs updating. This correctly handles partially-redacted rows that may
+ * still contain additional unmasked sensitive material.
  *
  * Each updated event_logs JSON object gains a `_redacted_at` breadcrumb key
  * (ISO-8601 timestamp) so auditors can see when the sweep ran.
@@ -173,7 +183,9 @@ export async function redactEventLogs(
  * `capa_change_history`) for already-leaked secrets in the
  * `old_value`, `new_value`, and `change_reason` TEXT columns.
  *
- * Two complementary defenses are applied per row:
+ * Mirrors the two-layer protection that `logNCChange()` /
+ * `logCAPAChange()` apply on every write (Task #99) so a database restore
+ * from a pre-fix backup cannot reintroduce leaked credentials (Task #250):
  *
  *   1. KEY-BASED: when `field_changed` matches the sensitive-field deny
  *      list (`isSensitiveField`), the row's `old_value` and `new_value`
@@ -191,6 +203,11 @@ export async function redactEventLogs(
  *      innocuous like `description`/`note`/`summary` but happens to
  *      embed a leaked credential.
  *
+ * Without layer #2 the post-restore sweep would silently leave any
+ * pre-Task #99 row whose secret leaked through a non-sensitive field name
+ * in place, defeating the purpose of running the sweep automatically after
+ * every database restore.
+ *
  * Idempotent: a row is only UPDATEd when at least one of its three
  * columns actually changes value, so re-running the sweep produces 0
  * updates on a clean table.
@@ -199,7 +216,8 @@ export async function redactEventLogs(
  *
  * Used by Task #249 to retroactively sanitise existing
  * `nc_change_history` / `capa_change_history` rows that may contain
- * credentials written before Task #99 hardened the write path.
+ * credentials written before Task #99 hardened the write path, and by
+ * Task #250 to ensure the same coverage on every post-restore sweep.
  */
 export async function redactChangeHistoryTable(
   client: any,
@@ -228,7 +246,8 @@ export async function redactChangeHistoryTable(
       let changed = false;
 
       if (isSensitiveField(row.field_changed)) {
-        // Key-based: blanket-redact any non-null, non-already-sentinel value.
+        // Layer 1 — key-based deny list: blanket-redact any non-null,
+        // non-already-sentinel value.
         if (oldVal !== null && oldVal !== undefined && oldVal !== REDACTED_SENTINEL) {
           oldVal = REDACTED_SENTINEL;
           changed = true;
@@ -238,9 +257,9 @@ export async function redactChangeHistoryTable(
           changed = true;
         }
       } else {
-        // Regex-based: scrub credential-shaped substrings out of the prose
-        // value. Non-string / null inputs short-circuit to identity inside
-        // redactSecretLikeStrings.
+        // Layer 2 — regex scrubber on free-form values stored under a
+        // non-sensitive field name. Non-string / null inputs short-circuit
+        // to identity inside redactSecretLikeStrings.
         if (typeof oldVal === 'string' && oldVal.length > 0) {
           const scrubbed = redactSecretLikeStrings(oldVal) as string;
           if (scrubbed !== oldVal) {
@@ -258,7 +277,8 @@ export async function redactChangeHistoryTable(
       }
 
       // change_reason is free-form prose on every row regardless of
-      // field_changed, so it always gets the regex pass.
+      // field_changed, so it always gets the regex pass (matches the
+      // write-time path in logNCChange / logCAPAChange).
       if (typeof reason === 'string' && reason.length > 0) {
         const scrubbed = redactSecretLikeStrings(reason) as string;
         if (scrubbed !== reason) {

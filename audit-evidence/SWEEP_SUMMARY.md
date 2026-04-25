@@ -305,3 +305,68 @@ Given the current production state (all four tables empty), step 2 is
 expected to report `Total rows updated: 0`, identical to the dev validation
 run. The procedure should be re-executed any time legacy data is restored
 from a backup that predates the deny-list fix.
+
+## 13. Post-restore sweep parity for nc/capa_change_history (Task #250)
+
+Task #99 added a regex-based "secret-shape" scrubber
+(`redactSecretLikeStrings`) to the `logNCChange()` / `logCAPAChange()`
+write paths so credential-shaped substrings (sk-…, ghp_…, JWTs, bcrypt
+hashes, AWS access keys, "Bearer …" headers) embedded in
+**non-sensitive** field diffs (e.g. `field_changed = 'description'`) are
+wiped before the row reaches `nc_change_history` / `capa_change_history`.
+
+Until Task #250 the post-restore sweep (`redactChangeHistoryTable()` in
+`src/utils/redactHistoricalLogs.ts`, invoked by `runSweepWithClient()` /
+`onBootRedactionSweep()`) only enforced **Layer 1** (the key-based deny
+list): when `field_changed` was a sensitive column name (`password_hash`,
+`api_key`, `mfa_secret`, …) it replaced both `old_value` and `new_value`
+with `***REDACTED***`. Any leaked credential sitting under a non-sensitive
+field name in a pre-Task #99 backup would survive a database restore.
+
+Task #250 extends the sweep so it now mirrors the write-time path's full
+two-layer protection, on **both** `nc_change_history` and
+`capa_change_history`, and additionally scrubs the operator-supplied
+`change_reason` TEXT column via the regex scrubber (independent of
+`field_changed`).
+
+### Behaviour matrix
+
+| Scenario                                              | Before Task #250 | After Task #250 |
+|-------------------------------------------------------|:----------------:|:---------------:|
+| `field_changed='password_hash'`, raw value in old/new | Wiped            | Wiped           |
+| `field_changed='description'`, sk-… token in old      | **Leaked**       | Wiped           |
+| `field_changed='audit_note'`, ghp_… token in new      | **Leaked**       | Wiped           |
+| `field_changed='status'`, sk-… token in change_reason | **Leaked**       | Wiped           |
+| Clean row (no sensitive content anywhere)             | Untouched        | Untouched       |
+| Already-redacted row (sentinels in old/new)           | Skipped          | Skipped         |
+
+### Test evidence
+
+Regression test: `tests/redactChangeHistorySweep.test.ts` (auto-discovered
+by `tests/runIntegrationTests.ts` → `npm test`, which is the first CI gate
+in `scripts/post-merge.sh`, so a regression blocks merge).
+
+Coverage (41 assertions, run for **both** `nc_change_history` and
+`capa_change_history`):
+
+- Layer 1 (deny-list field name) — values replaced with sentinel.
+- Layer 2 (regex scrubber) — sk-…, ghp_…, bcrypt hashes embedded in
+  non-sensitive field diffs are removed; surrounding prose preserved.
+- `change_reason` regex scrubbing parity with `logNCChange`/`logCAPAChange`.
+- Clean rows are not UPDATEd (no spurious writes).
+- Already-redacted rows are byte-identical → skipped.
+- Second-pass sweep over the now-clean dataset performs 0 UPDATEs
+  (idempotent).
+- Empty table edge case — exactly one paginated SELECT, zero UPDATEs.
+
+The keyset-pagination contract (Task #289) is preserved: the sweep
+SELECTs only `WHERE id > $cursor ORDER BY id ASC LIMIT $batch`. The new
+test stub explicitly throws if a non-paginated SELECT is issued.
+
+### Audit trail
+
+Each sweep run continues to emit a single `event_logs` entry via
+`logEvent()` with the per-table row counts in `description` and the full
+`SweepResult` in `new_value`, including `nc_change_history_updated` and
+`capa_change_history_updated`. Operators can therefore confirm in the
+event log that all three tables were processed in the same scheduled run.
