@@ -996,6 +996,32 @@ export async function pruneOldAiMetrics(retentionDays?: number): Promise<number>
   }
 }
 
+/**
+ * Composed prune step used by the daily `ai-cost-summary` Inngest cron
+ * (Task #565). Resolves the EFFECTIVE retention window via
+ * {@link resolveEffectiveAiMetricsRetentionDays} (so the dashboard
+ * override written through the AI Operations UI is honoured on the very
+ * next pass — no redeploy needed) and then runs
+ * {@link pruneOldAiMetrics} with that value.
+ *
+ * Extracted from the cron handler so an integration test can invoke
+ * exactly the same composition as the cron — preventing a future
+ * refactor that drops the `await` on the effective resolver, or starts
+ * caching the env value across runs, from slipping through unnoticed.
+ *
+ * Returns `{ retentionDays, rowsDeleted }` so callers (test or
+ * production cron) can log/assert what window was actually applied and
+ * how many rows it removed.
+ */
+export async function runAiMetricsPruneCronStep(): Promise<{
+  retentionDays: number;
+  rowsDeleted: number;
+}> {
+  const retentionDays = await resolveEffectiveAiMetricsRetentionDays();
+  const rowsDeleted = await pruneOldAiMetrics(retentionDays);
+  return { retentionDays, rowsDeleted };
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Table-size telemetry — backs the "Storage Health" KPI tiles on /ai-ops
 // (Task #505). Surfaces total row count, oldest-row age in days, and the
