@@ -18,6 +18,10 @@ echo "▶ CI gate: redactSensitiveFields + logEvent write-path tests"
 npx tsx src/utils/redactSensitiveFields.test.ts
 
 echo ""
+echo "▶ CI gate: changeHistoryDatabase write-path secret-leak tests"
+npx tsx src/utils/changeHistoryDatabase.test.ts
+
+echo ""
 echo "▶ CI gate: ai_pending_actions store-side redaction tests"
 npx tsx tests/aiApprovalRedaction.test.ts
 
