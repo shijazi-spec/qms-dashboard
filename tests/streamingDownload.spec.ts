@@ -18,6 +18,8 @@
  *   3. `result.streamedToDisk === true`, proving a true streaming path
  *      (service worker / FSA) was selected and we did not silently fall
  *      back to the in-memory Blob path.
+ *   4. The download completed within the latency budget (see § Latency
+ *      budget below).
  *
  * To force the SW path on every engine (including Chromium, which would
  * normally pick the File System Access API and prompt a save dialog that
@@ -30,10 +32,40 @@
  * via Playwright's `context.route` and replied with a fixed CSV — the test
  * exercises the *frontend* streaming path, not any specific export
  * endpoint, so it remains stable as backend exports evolve.
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ * § Latency budget
+ * ──────────────────────────────────────────────────────────────────────────
+ * The test CSV is ~80 bytes. A streaming response should complete in well
+ * under a second on any modern machine; the budgets below are intentionally
+ * generous to remain stable across slow CI runners without letting
+ * pathological regressions (e.g. accidental full-body buffering that turns
+ * a 200 ms response into a 30 s one) slip through.
+ *
+ *   LATENCY_WARN_MS  (p50 proxy) = 2 000 ms
+ *     Exceeding this emits a console.warn and attaches a test annotation,
+ *     but the test still passes. This signals a performance regression that
+ *     should be investigated before it reaches users.
+ *
+ *   LATENCY_FAIL_MS  (p95 proxy) = 5 000 ms
+ *     Exceeding this fails the test hard. A download that slow on an ~80-
+ *     byte payload almost certainly means something is wrong with the
+ *     streaming pipeline (buffering, missed chunked-transfer-encoding,
+ *     stalled promise chain, etc.).
+ *
+ * To re-baseline the budget after a legitimate, intentional change (e.g.
+ * adding authentication middleware to the export endpoint), update the two
+ * constants below and leave a comment explaining the new expected range.
+ *
+ * Timing results are written to `test-results/streaming-download-timing.json`
+ * and uploaded as a CI artifact by the streaming-download-smoke workflow so
+ * regressions can be spotted across builds even when the test still passes
+ * the hard limit.
  */
 
 import { test, expect, BrowserContext } from '@playwright/test';
 import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
@@ -52,6 +84,17 @@ const EXPECTED_CSV =
 
 const EXPECTED_BYTES = Buffer.from(EXPECTED_CSV, 'utf-8');
 
+// ── Latency budget ────────────────────────────────────────────────────────
+// See § Latency budget in the file-header comment for the rationale and
+// instructions on how to re-baseline these values.
+const LATENCY_WARN_MS = 2_000; // p50 proxy — warn, do not fail
+const LATENCY_FAIL_MS = 5_000; // p95 proxy — fail hard
+
+// Directory where per-run timing JSON is written (picked up by the CI
+// workflow as an artifact). Each browser writes its own file so parallel
+// Playwright workers never race on a shared read-modify-write.
+const TIMING_RESULTS_DIR = 'test-results/streaming-download-timing';
+
 async function authenticate(context: BrowserContext): Promise<boolean> {
   const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
@@ -60,6 +103,30 @@ async function authenticate(context: BrowserContext): Promise<boolean> {
     headers: { 'Content-Type': 'application/json' },
   });
   return res.status() === 200;
+}
+
+/** Write a timing record to a per-browser file.
+ *
+ * Each browser gets its own file (e.g. streaming-download-timing/chromium.json)
+ * so parallel Playwright workers never race on a shared read-modify-write.
+ * The CI workflow's "Summarise latency results" step reads all files and
+ * aggregates them into one table.
+ */
+async function recordTiming(record: {
+  browser: string;
+  durationMs: number;
+  budget: { warnMs: number; failMs: number };
+  status: 'ok' | 'warn' | 'fail';
+  timestamp: string;
+}): Promise<void> {
+  try {
+    await fs.mkdir(TIMING_RESULTS_DIR, { recursive: true });
+    const filePath = path.join(TIMING_RESULTS_DIR, `${record.browser}.json`);
+    await fs.writeFile(filePath, JSON.stringify(record, null, 2), 'utf-8');
+  } catch (err) {
+    // Never let a timing write failure shadow a real test failure.
+    console.warn(`[streaming-smoke] Failed to write timing record: ${err}`);
+  }
 }
 
 test.describe('streamingDownload — cross-browser smoke', () => {
@@ -128,11 +195,17 @@ test.describe('streamingDownload — cross-browser smoke', () => {
       { timeout: 15_000 },
     );
 
+    // ── Download + latency measurement ────────────────────────────────────
     // Drive the download and capture the resulting browser download in
     // parallel. The download event fires either when the SW iframe
     // navigation is intercepted (streaming path) or when the in-memory
     // Blob anchor click fires (fallback path).
     const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+
+    // Wall-clock start — measured from just before the JS call so we
+    // include any postMessage / SW round-trip overhead that a real user
+    // would experience.
+    const downloadStart = Date.now();
 
     const result = await page.evaluate(async (url: string) => {
       // Force the service-worker streaming path on every engine:
@@ -155,13 +228,68 @@ test.describe('streamingDownload — cross-browser smoke', () => {
     }, TEST_EXPORT_PATH);
 
     const download = await downloadPromise;
-    const path = await download.path();
+
+    // Wall-clock end — captured after both the evaluate() promise and the
+    // download event have resolved (i.e. the file is fully on disk).
+    const durationMs = Date.now() - downloadStart;
+
+    console.log(
+      `[streaming-smoke] ${browserName}: download completed in ${durationMs} ms ` +
+        `(warn=${LATENCY_WARN_MS} ms, fail=${LATENCY_FAIL_MS} ms)`,
+    );
+
+    // ── Latency budget enforcement ─────────────────────────────────────────
+    let timingStatus: 'ok' | 'warn' | 'fail' = 'ok';
+
+    if (durationMs > LATENCY_WARN_MS) {
+      timingStatus = 'warn';
+      const warnMsg =
+        `[streaming-smoke] LATENCY REGRESSION on ${browserName}: ` +
+        `download took ${durationMs} ms, exceeding the p50 budget of ` +
+        `${LATENCY_WARN_MS} ms. The test CSV is only ` +
+        `${EXPECTED_BYTES.byteLength} bytes — this may indicate accidental ` +
+        `buffering or a stalled promise chain. Investigate before this ` +
+        `reaches users. (To re-baseline, update LATENCY_WARN_MS / ` +
+        `LATENCY_FAIL_MS in tests/streamingDownload.spec.ts.)`;
+      console.warn(warnMsg);
+      // Attach the warning to the test report so it is visible in the
+      // Playwright HTML report and in CI annotations even when the test
+      // ultimately passes.
+      test.info().annotations.push({ type: 'latency-warn', description: warnMsg });
+    }
+
+    if (durationMs > LATENCY_FAIL_MS) {
+      timingStatus = 'fail';
+    }
+
+    // Persist timing for the CI artifact regardless of status.
+    await recordTiming({
+      browser: browserName,
+      durationMs,
+      budget: { warnMs: LATENCY_WARN_MS, failMs: LATENCY_FAIL_MS },
+      status: timingStatus,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Hard-fail after persisting so the artifact is always uploaded.
     expect(
-      path,
+      durationMs,
+      `[streaming-smoke] LATENCY HARD FAILURE on ${browserName}: ` +
+        `download took ${durationMs} ms, exceeding the p95 budget of ` +
+        `${LATENCY_FAIL_MS} ms for an ${EXPECTED_BYTES.byteLength}-byte CSV. ` +
+        `A regression this severe (e.g. accidental full-body buffering) ` +
+        `would be clearly felt by users. To re-baseline this limit update ` +
+        `LATENCY_FAIL_MS in tests/streamingDownload.spec.ts.`,
+    ).toBeLessThanOrEqual(LATENCY_FAIL_MS);
+
+    // ── Correctness assertions (unchanged) ────────────────────────────────
+    const filePath = await download.path();
+    expect(
+      filePath,
       `download.path() returned no path on ${browserName}`,
     ).toBeTruthy();
 
-    const bytes = await fs.readFile(path!);
+    const bytes = await fs.readFile(filePath!);
 
     expect(
       bytes.byteLength,
