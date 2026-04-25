@@ -35,6 +35,7 @@ import {
 import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
 
 import { logger as safeLogger } from "../../utils/logger";
+import { logger } from "../../utils/logger";
 interface AgentTextResult {
   text: string;
 }
@@ -605,10 +606,31 @@ export const consultantRoutes = [
 
           const days = parseInt(c.req.query("days") || "30");
 
+          // Optional metadata filters so admins triaging a regression can
+          // narrow the recent thumbs-down list down to a specific prompt
+          // revision (`metadata->>'prompt_version'`) or feature-flag bucket
+          // (`metadata->>'feature_flag'`). Mirrors the snake_case shape the
+          // sibling `ai_call_metrics.metadata` endpoints already speak so the
+          // dashboard can wire the same filter values across both panels.
+          // The downstream `getRecentThumbsDown()` helper trims, length-caps,
+          // and binds these via parameterised SQL so no validation needs to
+          // happen here.
+          const promptVersion =
+            c.req.query("prompt_version") ?? c.req.query("promptVersion");
+          const featureFlag =
+            c.req.query("feature_flag") ?? c.req.query("featureFlag");
+
           const isAdmin = user.role === "admin";
           const [stats, recent] = await Promise.all([
             getFeedbackStats(days),
-            isAdmin ? getRecentThumbsDown(20) : Promise.resolve([]),
+            isAdmin
+              ? getRecentThumbsDown(20, {
+                  promptVersion:
+                    typeof promptVersion === "string" ? promptVersion : null,
+                  featureFlag:
+                    typeof featureFlag === "string" ? featureFlag : null,
+                })
+              : Promise.resolve([]),
           ]);
 
           return c.json({ stats, recent, isAdmin });

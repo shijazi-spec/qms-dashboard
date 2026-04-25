@@ -400,12 +400,23 @@ export interface RecentThumbsDown {
   id: number;
   message_id: string;
   conversation_id: string | null;
+  agent: string | null;
   category: string | null;
   comment: string | null;
   user_email: string | null;
   prompt_preview: string | null;
   response_preview: string | null;
   tools_called: string | null;
+  /**
+   * Typed `metadata` JSONB blob written through `buildAiCallFeedbackMetadata()`
+   * (Task #512). Surfacing it here lets the AI Operations dashboard correlate
+   * thumbs-down ratings to the prompt revision / experiment arm / rating
+   * surface they were captured against — the same insight the sibling
+   * `ai_call_metrics.metadata` already powers in the Prompt Version
+   * comparison view. Always an object (never `null`) so callers can render
+   * `metadata.prompt_version` without a defensive nullish check.
+   */
+  metadata: AiCallFeedbackMetadata;
   created_at: string;
   /**
    * Triage badges projected out of `metadata` (Task #661).
@@ -419,6 +430,21 @@ export interface RecentThumbsDown {
   prompt_version: string | null;
   rating_source: string | null;
   client_surface: string | null;
+}
+
+/**
+ * Optional filters for the recent thumbs-down report. Each filter narrows the
+ * report down to feedback whose `metadata->>'prompt_version'` (resp.
+ * `metadata->>'feature_flag'`) matches the provided value exactly. Used by the
+ * AI Operations dashboard so an operator triaging a regression can pivot from
+ * the "all recent thumbs-down" list to the rows tied to a specific prompt
+ * revision or feature-flag bucket. Empty / whitespace-only strings are treated
+ * as "no filter" so the dashboard can blindly forward the input box value
+ * without trimming.
+ */
+export interface RecentThumbsDownFilters {
+  promptVersion?: string | null;
+  featureFlag?: string | null;
 }
 
 export async function getFeedbackByMessageId(
@@ -448,30 +474,82 @@ export async function getFeedbackByMessageId(
   };
 }
 
+/**
+ * Trim and length-cap a metadata filter value before it is sent through the
+ * `metadata->>'…'` SQL expression. Returns `null` for empty / whitespace-only
+ * strings so the caller can branch on "no filter applied" cleanly. The
+ * 200-char cap mirrors the cap used elsewhere in this file (`agent`, etc.) so
+ * a paste of a multi-MB string into the dashboard input cannot send a
+ * pathological parameter to PG.
+ */
+function normalizeMetadataFilter(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.substring(0, 200);
+}
+
 export async function getRecentThumbsDown(
   limit = 20,
+  filters: RecentThumbsDownFilters = {},
 ): Promise<RecentThumbsDown[]> {
   await initAIFeedbackTable();
+
+  const promptVersion = normalizeMetadataFilter(filters.promptVersion);
+  const featureFlag = normalizeMetadataFilter(filters.featureFlag);
+
+  // Build the dynamic WHERE clauses with bind parameters so the
+  // operator-supplied filter values can never be interpolated into SQL.
+  // Mirrors how `getFeedbackTrend()` adds the optional `agent` filter above.
+  const params: (number | string)[] = [Math.min(100, limit)];
+  const extraClauses: string[] = [];
+  if (promptVersion !== null) {
+    params.push(promptVersion);
+    extraClauses.push(`metadata->>'prompt_version' = $${params.length}`);
+  }
+  if (featureFlag !== null) {
+    params.push(featureFlag);
+    extraClauses.push(`metadata->>'feature_flag' = $${params.length}`);
+  }
+  const extraSql = extraClauses.length
+    ? ` AND ${extraClauses.join(" AND ")}`
+    : "";
 
   // Project prompt_version / rating_source / client_surface out of the
   // metadata JSONB so the dashboard can render triage badges without
   // having to know the underlying column shape (Task #661). NULLIF on the
   // trimmed value collapses blanks to NULL so the rendering layer's
   // "fallback to em-dash" logic kicks in for legacy rows where
-  // `metadata` is still `{}`.
+  // `metadata` is still `{}`. We also return the raw `metadata` column so
+  // callers (Task #580 — AI Ops dashboard call-detail view) can render the
+  // full set of feedback metadata chips beside the comment.
   const res = await pool.query(
-    `SELECT id, message_id, conversation_id, category, comment,
-            user_email, prompt_preview, response_preview, tools_called, created_at,
+    `SELECT id, message_id, conversation_id, agent, category, comment,
+            user_email, prompt_preview, response_preview, tools_called,
+            metadata, created_at,
             NULLIF(TRIM(metadata->>'prompt_version'), '') AS prompt_version,
             NULLIF(TRIM(metadata->>'rating_source'),  '') AS rating_source,
             NULLIF(TRIM(metadata->>'client_surface'), '') AS client_surface
      FROM ai_response_feedback
-     WHERE rating = 'down'
+     WHERE rating = 'down'${extraSql}
      ORDER BY created_at DESC
      LIMIT $1`,
-    [Math.min(100, limit)],
+    params,
   );
-  return res.rows;
+  return res.rows.map((row) => ({
+    ...row,
+    // Normalize the JSONB column to a plain object so the dashboard never has
+    // to defensively check for `null` before reading
+    // `metadata.prompt_version`. Driver returns `null` when the column is
+    // SQL NULL; older rows written before the column existed land as `{}`
+    // through the `DEFAULT '{}'::jsonb` clause in initAIFeedbackTable().
+    metadata:
+      row.metadata && typeof row.metadata === "object"
+        ? (row.metadata as AiCallFeedbackMetadata)
+        : {},
+  }));
 }
 
 export interface FeedbackTrendPoint {
