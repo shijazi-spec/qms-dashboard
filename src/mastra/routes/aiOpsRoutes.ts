@@ -25,10 +25,7 @@ import {
   resolveAlert,
   type AIAlert,
 } from "../../utils/aiAlertsDatabase";
-import { QMS_CONSULTANT_PROMPT_VERSION } from "../agents/qmsConsultantAgent";
-import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../agents/qualitySpecialistAgent";
-import { SDR_QUALITY_PROMPT_VERSION } from "../agents/sdrQualityAgent";
-import { SALES_QUALITY_PROMPT_VERSION } from "../agents/salesQualityAgent";
+import { ACTIVE_AGENT_PROMPT_VERSIONS } from "../agents/promptVersionRegistry";
 import {
   TOOL_HEALTH_DEFAULTS,
   TOOL_HEALTH_ENV_BASELINE,
@@ -42,12 +39,15 @@ import { getToolWindowAggregates } from "../../utils/aiTelemetry";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 
-const ACTIVE_PROMPT_VERSIONS: { agent_name: string; prompt_version: string }[] = [
-  { agent_name: "WalaPlus QMS Consultant",           prompt_version: QMS_CONSULTANT_PROMPT_VERSION },
-  { agent_name: "WalaPlus Quality Specialist",       prompt_version: QUALITY_SPECIALIST_PROMPT_VERSION },
-  { agent_name: "WalaPlus SDR Quality Specialist",   prompt_version: SDR_QUALITY_PROMPT_VERSION },
-  { agent_name: "WalaPlus Sales Quality Specialist", prompt_version: SALES_QUALITY_PROMPT_VERSION },
-];
+// Sourced from the central registry so adding a new agent only requires a
+// single edit in src/mastra/agents/promptVersionRegistry.ts. See that file
+// for the maintenance contract this endpoint shares with the prompt-version
+// purge cron in src/mastra/inngest/index.ts.
+const ACTIVE_PROMPT_VERSIONS: { agent_name: string; prompt_version: string }[] =
+  ACTIVE_AGENT_PROMPT_VERSIONS.map(({ agent_name, prompt_version }) => ({
+    agent_name,
+    prompt_version,
+  }));
 
 const AI_OPS_ROLES: UserRole[] = ['admin', 'ai_specialist', 'grc_manager', 'head_of_operations_quality'];
 

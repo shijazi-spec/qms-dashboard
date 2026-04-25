@@ -526,8 +526,13 @@ inngestFunctions.push(aiCostSummaryFunction);
 //
 // This job deletes those stale rows so the table stays small. It ONLY removes
 // rows for versions that are both:
-//   (a) not one of the four currently-deployed PROMPT_VERSION constants, AND
+//   (a) not one of the currently-deployed agent PROMPT_VERSION constants
+//       (sourced from src/mastra/agents/promptVersionRegistry.ts), AND
 //   (b) older than PROMPT_VERSION_RETENTION_DAYS (default 30).
+//
+// The live-versions list comes from the central registry so adding a new
+// agent only requires a single line change in promptVersionRegistry.ts —
+// this cron picks up the new constant automatically.
 //
 // The safety guard in purgeArchivedPromptVersionMetrics() rejects an empty
 // live-versions list so a bad import cannot wipe all versioned rows.
@@ -542,28 +547,14 @@ const promptVersionPurgeFunction = inngest.createFunction(
         parseInt(process.env.PROMPT_VERSION_RETENTION_DAYS || "30", 10) || 30,
       );
 
-      const [
-        { QMS_CONSULTANT_PROMPT_VERSION },
-        { QUALITY_SPECIALIST_PROMPT_VERSION },
-        { SDR_QUALITY_PROMPT_VERSION },
-        { SALES_QUALITY_PROMPT_VERSION },
-      ] = await Promise.all([
-        import("../agents/qmsConsultantAgent"),
-        import("../agents/qualitySpecialistAgent"),
-        import("../agents/sdrQualityAgent"),
-        import("../agents/salesQualityAgent"),
-      ]);
-
-      const liveVersions = [
-        QMS_CONSULTANT_PROMPT_VERSION,
-        QUALITY_SPECIALIST_PROMPT_VERSION,
-        SDR_QUALITY_PROMPT_VERSION,
-        SALES_QUALITY_PROMPT_VERSION,
-      ];
+      const { getActivePromptVersionStrings } = await import(
+        "../agents/promptVersionRegistry"
+      );
+      const liveVersions = getActivePromptVersionStrings();
 
       console.log(
         `[PromptVersionPurge] Retention window: ${retentionDays} days. ` +
-        `Live versions: ${liveVersions.join(", ")}`,
+        `Live versions (${liveVersions.length}): ${liveVersions.join(", ")}`,
       );
 
       const { purgeArchivedPromptVersionMetrics } = await import("../../utils/aiTelemetry");
