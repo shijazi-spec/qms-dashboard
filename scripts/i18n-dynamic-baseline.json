@@ -1,0 +1,81 @@
+{
+  "_comment": "Pre-existing dynamic WalaPlusI18n.t(variable) call sites tracked by Task #295. Adding a new call site here is an explicit attestation that the dynamic key cannot be made static. Regenerate with: node scripts/check-i18n.cjs --update-baseline",
+  "entries": [
+    {
+      "snippet": "t(k) || fb) : fb;",
+      "source": "dashboard/audits.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/audits.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/calls.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) || fb)",
+      "source": "dashboard/compliance.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k); } : function(k) { return k.split('.').pop(); };",
+      "source": "dashboard/consultant.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/crm.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/duplicates.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) : k.split('.').pop();",
+      "source": "dashboard/executive.html (inline <script>)"
+    },
+    {
+      "snippet": "t(key) : key.split('.').pop();",
+      "source": "dashboard/executive.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) : k.split('.').pop();",
+      "source": "dashboard/grc.html (inline <script>)"
+    },
+    {
+      "snippet": "t(key);",
+      "source": "dashboard/js/ai-consultant-widget.js"
+    },
+    {
+      "snippet": "t(k) : k.split('.').pop());",
+      "source": "dashboard/js/navigation.js"
+    },
+    {
+      "snippet": "t(key);",
+      "source": "dashboard/js/navigation.js"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/kpis.html (inline <script>)"
+    },
+    {
+      "snippet": "t(key);",
+      "source": "dashboard/login.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) || fb) : fb;",
+      "source": "dashboard/risks.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/risks.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k) || fb)",
+      "source": "dashboard/vendors.html (inline <script>)"
+    },
+    {
+      "snippet": "t(k, v) : k;",
+      "source": "dashboard/vendors.html (inline <script>)"
+    }
+  ]
+}

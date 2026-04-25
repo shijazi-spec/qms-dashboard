@@ -49,6 +49,18 @@ const DASHBOARD_DIR = path.join(ROOT, 'dashboard');
 const EN_PATH = path.join(DASHBOARD_DIR, 'i18n', 'en.json');
 const AR_PATH = path.join(DASHBOARD_DIR, 'i18n', 'ar.json');
 
+// Baseline file capturing the dynamic `WalaPlusI18n.t(variable)` call sites
+// that already existed when Task #295 introduced this gate. New dynamic call
+// sites that are NOT listed in this baseline are flagged as a hard error so
+// they can't slip in unnoticed amongst the long-standing wrappers (which
+// remain ⚠ warnings). To intentionally accept a new dynamic call site, run
+// `node scripts/check-i18n.cjs --update-baseline` and commit the diff.
+const DYNAMIC_BASELINE_PATH = path.join(__dirname, 'i18n-dynamic-baseline.json');
+
+// CLI flags
+const CLI_ARGS = new Set(process.argv.slice(2));
+const UPDATE_BASELINE = CLI_ARGS.has('--update-baseline');
+
 // HTML files in dashboard/ that are NOT user-facing dashboard pages and so
 // do not need the i18n wiring. Keep this list tiny and explicit; every entry
 // must be a basename, not a full path.
@@ -606,24 +618,142 @@ function checkJsKeyCoverage(pages, en, ar) {
     }
   }
 
-  // 4. Surface dynamic key warnings (non-blocking — just informational).
-  if (allDynamic.length) {
-    const shown = new Set();
-    const unique = [];
-    for (const ref of allDynamic) {
-      const id = `${ref.source}::${ref.snippet}`;
-      if (!shown.has(id)) { shown.add(id); unique.push(ref); }
-    }
-    console.warn(
-      `\n⚠  JS t() dynamic keys — ${unique.length} WalaPlusI18n.t() call(s) use non-literal keys and cannot be statically verified:`,
+  // 4. Surface dynamic key warnings.
+  //
+  //    Pre-existing dynamic call sites are tracked in
+  //    `scripts/i18n-dynamic-baseline.json`; those remain non-blocking ⚠
+  //    warnings so the long-standing `_t(k, v)` wrapper patterns don't drown
+  //    out genuinely new entries. Dynamic call sites NOT in the baseline are
+  //    treated as a hard error (✗) so a developer adding a new dynamic
+  //    `t(variable)` call to a page must either:
+  //       - rewrite it as a static `t('ns.key')` call (preferred), or
+  //       - run `node scripts/check-i18n.cjs --update-baseline` to attest
+  //         that the new dynamic call site is intentional and commit the
+  //         updated baseline file.
+  const dynamicResult = evaluateDynamicAgainstBaseline(allDynamic);
+
+  if (UPDATE_BASELINE) {
+    writeDynamicBaseline(dynamicResult.uniqueCurrent);
+    console.log(
+      `\n↻  Wrote ${path.relative(ROOT, DYNAMIC_BASELINE_PATH)} with ${dynamicResult.uniqueCurrent.length} dynamic call site(s).`,
     );
-    for (const { snippet, source } of unique) {
+    return passed;
+  }
+
+  if (dynamicResult.known.length) {
+    console.warn(
+      `\n⚠  JS t() dynamic keys (baselined) — ${dynamicResult.known.length} long-standing WalaPlusI18n.t() call(s) use non-literal keys and cannot be statically verified:`,
+    );
+    for (const { snippet, source } of dynamicResult.known) {
       console.warn(`    ${source}  →  ${snippet}`);
     }
-    console.warn('    Review these manually when the surrounding key set changes.\n');
+    console.warn('    Review these manually when the surrounding key set changes.');
+  }
+
+  if (dynamicResult.added.length) {
+    fail(
+      `JS t() dynamic keys: ${dynamicResult.added.length} NEW WalaPlusI18n.t(variable) call site(s) not in scripts/i18n-dynamic-baseline.json`,
+      [
+        ...dynamicResult.added.map(({ source, snippet }) => `${source}  →  ${snippet}`),
+        '',
+        'These dynamic keys cannot be statically verified, so they cannot be checked',
+        'against en.json / ar.json. Prefer rewriting them as a static',
+        '    WalaPlusI18n.t("ns.exact_key")',
+        'call so the guardrail can confirm the key resolves in both translation files.',
+        '',
+        'If the dynamic call is genuinely required (e.g. it bridges existing data-i18n',
+        'attributes), accept it explicitly by running:',
+        '    node scripts/check-i18n.cjs --update-baseline',
+        'and committing the updated scripts/i18n-dynamic-baseline.json.',
+      ],
+    );
+    return false;
+  }
+
+  if (dynamicResult.removed.length) {
+    console.log(
+      `\nℹ  ${dynamicResult.removed.length} baselined dynamic call site(s) no longer present — re-run with --update-baseline to prune scripts/i18n-dynamic-baseline.json:`,
+    );
+    for (const { source, snippet } of dynamicResult.removed) {
+      console.log(`    ${source}  →  ${snippet}`);
+    }
   }
 
   return passed;
+}
+
+/**
+ * Load the dynamic-call baseline file. Returns an array of {source, snippet}
+ * entries (possibly empty if the baseline doesn't exist yet). Throws on
+ * malformed JSON so a corrupted baseline can't silently weaken the gate.
+ */
+function loadDynamicBaseline() {
+  if (!fs.existsSync(DYNAMIC_BASELINE_PATH)) return [];
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(DYNAMIC_BASELINE_PATH, 'utf8'));
+  } catch (err) {
+    console.error(
+      `ERROR: failed to parse ${path.relative(ROOT, DYNAMIC_BASELINE_PATH)}: ${err.message}`,
+    );
+    process.exit(2);
+  }
+  const entries = Array.isArray(raw && raw.entries) ? raw.entries : [];
+  return entries
+    .filter((e) => e && typeof e.source === 'string' && typeof e.snippet === 'string')
+    .map((e) => ({ source: e.source, snippet: e.snippet }));
+}
+
+/**
+ * Compare the dynamic call sites discovered in this run against the baseline
+ * and bucket them into:
+ *   - known   : present in both baseline and current scan (still ⚠ warnings)
+ *   - added   : in current scan but NOT in baseline (✗ — block CI)
+ *   - removed : in baseline but NOT in current scan (informational only)
+ *
+ * Also returns `uniqueCurrent` (deduped current scan) so --update-baseline
+ * can write it back to disk.
+ */
+function evaluateDynamicAgainstBaseline(allDynamic) {
+  const baseline = loadDynamicBaseline();
+  const baselineIds = new Set(baseline.map((e) => `${e.source}::${e.snippet}`));
+
+  const currentIds = new Set();
+  const uniqueCurrent = [];
+  for (const ref of allDynamic) {
+    const id = `${ref.source}::${ref.snippet}`;
+    if (currentIds.has(id)) continue;
+    currentIds.add(id);
+    uniqueCurrent.push(ref);
+  }
+
+  const known = uniqueCurrent.filter((ref) =>
+    baselineIds.has(`${ref.source}::${ref.snippet}`),
+  );
+  const added = uniqueCurrent.filter(
+    (ref) => !baselineIds.has(`${ref.source}::${ref.snippet}`),
+  );
+  const removed = baseline.filter((b) => !currentIds.has(`${b.source}::${b.snippet}`));
+
+  return { known, added, removed, uniqueCurrent };
+}
+
+/**
+ * Write the dynamic-call baseline file, sorted for stable diffs.
+ */
+function writeDynamicBaseline(uniqueCurrent) {
+  const sorted = [...uniqueCurrent].sort((a, b) => {
+    if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+    return a.snippet < b.snippet ? -1 : a.snippet > b.snippet ? 1 : 0;
+  });
+  const payload = {
+    _comment:
+      'Pre-existing dynamic WalaPlusI18n.t(variable) call sites tracked by Task #295. ' +
+      'Adding a new call site here is an explicit attestation that the dynamic key cannot ' +
+      'be made static. Regenerate with: node scripts/check-i18n.cjs --update-baseline',
+    entries: sorted,
+  };
+  fs.writeFileSync(DYNAMIC_BASELINE_PATH, JSON.stringify(payload, null, 2) + '\n', 'utf8');
 }
 
 /* ---------------------------------------------------------------------------
