@@ -342,6 +342,9 @@
             <p class="text-sm text-gray-500">Thumbs up/down ratings on AI Consultant responses</p>
           </div>
           <div class="flex items-center gap-3">
+            <select id="feedback-agent" data-on-change="loadFeedbackTrend" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-agent">
+              <option value="all">All agents</option>
+            </select>
             <select id="feedback-days" data-on-change="loadAIFeedback" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-days">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
@@ -551,13 +554,40 @@
       loadFeedbackTrend();
     }
 
+    function syncFeedbackAgentOptions(agents) {
+      const sel = document.getElementById('feedback-agent');
+      if (!sel || !Array.isArray(agents)) return;
+      const current = sel.value || 'all';
+      const existing = new Set(Array.from(sel.options).map(o => o.value));
+      const desired = new Set(['all', ...agents]);
+      // Remove options no longer present (except "all").
+      Array.from(sel.options).forEach(opt => {
+        if (opt.value !== 'all' && !desired.has(opt.value)) sel.removeChild(opt);
+      });
+      // Add any new agents.
+      agents.forEach(name => {
+        if (!existing.has(name)) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          sel.appendChild(opt);
+        }
+      });
+      // Preserve current selection if still valid; otherwise fall back to "all".
+      sel.value = desired.has(current) ? current : 'all';
+    }
+
     async function loadFeedbackTrend() {
       const wrapEl  = document.getElementById('ai-ops-feedback-trend-wrap');
       const emptyEl = document.getElementById('ai-ops-feedback-trend-empty');
       try {
         const days = document.getElementById('feedback-days')?.value || '30';
-        const payload = await apiFetch(`/api/consultant/feedback/trend?days=${days}`);
+        const agent = document.getElementById('feedback-agent')?.value || 'all';
+        const params = new URLSearchParams({ days });
+        if (agent && agent !== 'all') params.set('agent', agent);
+        const payload = await apiFetch(`/api/consultant/feedback/trend?${params.toString()}`);
         const trend = payload.trend || [];
+        syncFeedbackAgentOptions(payload.agents || []);
 
         if (trend.length === 0) {
           if (wrapEl)  wrapEl.style.display  = 'none';

@@ -19,6 +19,7 @@ import {
   getFeedbackStats,
   getRecentThumbsDown,
   getFeedbackTrend,
+  getDistinctFeedbackAgents,
 } from "../../utils/aiFeedbackDatabase";
 import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
@@ -505,9 +506,16 @@ export const consultantRoutes = [
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const days = parseInt(c.req.query("days") || "30");
-          const trend = await getFeedbackTrend(days);
+          const agentParam = c.req.query("agent");
+          const normalized = typeof agentParam === "string" ? agentParam.trim() : "";
+          const agent = normalized && normalized !== "all" ? normalized : null;
 
-          return c.json({ trend });
+          const [trend, agents] = await Promise.all([
+            getFeedbackTrend(days, agent),
+            getDistinctFeedbackAgents(),
+          ]);
+
+          return c.json({ trend, agents, agent: agent || "all" });
         } catch (error) {
           console.error("[Consultant] Feedback trend error:", error);
           return c.json({ error: "Failed to fetch feedback trend" }, 500);

@@ -197,10 +197,23 @@ export interface FeedbackTrendPoint {
   thumbs_down: number;
 }
 
-export async function getFeedbackTrend(days = 30): Promise<FeedbackTrendPoint[]> {
+export async function getFeedbackTrend(
+  days = 30,
+  agent?: string | null,
+): Promise<FeedbackTrendPoint[]> {
   await initAIFeedbackTable();
 
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
+  const agentFilter = agent && typeof agent === 'string' && agent.trim()
+    ? agent.trim().substring(0, 100)
+    : null;
+
+  const params: (number | string)[] = [safeDays];
+  let agentClause = '';
+  if (agentFilter) {
+    params.push(agentFilter);
+    agentClause = ' AND agent = $2';
+  }
 
   const res = await pool.query(
     `SELECT
@@ -208,10 +221,10 @@ export async function getFeedbackTrend(days = 30): Promise<FeedbackTrendPoint[]>
        COUNT(*) FILTER (WHERE rating = 'up')   AS thumbs_up,
        COUNT(*) FILTER (WHERE rating = 'down') AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY DATE(created_at AT TIME ZONE 'UTC')
      ORDER BY day ASC`,
-    [safeDays]
+    params
   );
 
   return res.rows.map(r => ({
@@ -298,6 +311,17 @@ export function summarizeFeedbackTrend(trend: FeedbackTrendPoint[]): FeedbackTre
     second_half_down_rate: Math.round(secondRate * 100) / 100,
     days_observed: points.length,
   };
+}
+
+export async function getDistinctFeedbackAgents(): Promise<string[]> {
+  await initAIFeedbackTable();
+  const res = await pool.query(
+    `SELECT DISTINCT agent
+     FROM ai_response_feedback
+     WHERE agent IS NOT NULL AND agent <> ''
+     ORDER BY agent ASC`
+  );
+  return res.rows.map(r => String(r.agent));
 }
 
 export async function getWeeklyFeedbackDigest(): Promise<{
