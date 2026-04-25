@@ -1157,21 +1157,43 @@ export interface PostRestoreSweepAlertOutcome {
   /** Per-table counts that triggered the alert (empty when not dispatched). */
   triggers: PostRestoreSweepAlertTriggerCounts;
   /** Channels the dispatcher attempted to deliver on this run. */
-  channelsAttempted: Array<"platform_notification" | "slack_webhook">;
+  channelsAttempted: Array<
+    "platform_notification" | "slack_webhook" | "email_recipients"
+  >;
   /** Subset of `channelsAttempted` that completed without throwing. */
-  channelsSucceeded: Array<"platform_notification" | "slack_webhook">;
+  channelsSucceeded: Array<
+    "platform_notification" | "slack_webhook" | "email_recipients"
+  >;
+}
+
+/**
+ * Shape of the email-helper override accepted by
+ * {@link PostRestoreSweepAlertDeps.sendEmail}. Mirrors the public surface
+ * of `sendResendEmail()` in `src/utils/resendMail.ts` so the dispatcher
+ * can dynamically import the real helper in production while unit tests
+ * inject a recording stub.
+ */
+export interface PostRestoreSweepAlertEmailFn {
+  (options: {
+    to: string | string[];
+    subject: string;
+    html?: string;
+    text?: string;
+  }): Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
 /**
  * Optional dependency overrides for {@link dispatchPostRestoreSweepAlert}.
  * Production callers leave these undefined — the defaults dynamically
- * import `notificationHub.createNotification` and use the global `fetch`
- * + `process.env`. Unit tests pass stubs to assert the dispatcher's
- * behaviour without touching real notification or webhook destinations.
+ * import `notificationHub.createNotification` + `resendMail.sendResendEmail`
+ * and use the global `fetch` + `process.env`. Unit tests pass stubs to
+ * assert the dispatcher's behaviour without touching real notification,
+ * webhook, or email destinations.
  */
 export interface PostRestoreSweepAlertDeps {
   createNotification?: (notif: Record<string, unknown>) => Promise<unknown>;
   fetch?: typeof fetch;
+  sendEmail?: PostRestoreSweepAlertEmailFn;
   env?: Record<string, string | undefined>;
   logger?: Pick<Console, "log" | "warn" | "error">;
 }
@@ -1222,11 +1244,26 @@ export function extractPostRestoreSweepAlertCounts(
  *          `ai-cost-summary` cron pattern in
  *          `src/mastra/inngest/index.ts`. Skipped silently when the env
  *          var is unset (parity with that cron).
+ *       3. An opt-in recipient list at `POST_RESTORE_SWEEP_ALERT_EMAIL`
+ *          (comma-separated), delivered via `sendResendEmail()` in
+ *          `src/utils/resendMail.ts`. Mirrors the third channel the
+ *          `ai-cost-summary` cron exposes via `AI_COST_ALERT_EMAIL`, so
+ *          on-call engineers who don't happen to be in Slack at boot
+ *          time still see the page in their inbox — important because a
+ *          credential reintroduction via backup restore needs to be
+ *          acknowledged within minutes, not hours. Skipped silently
+ *          (channel not even marked as attempted) when the env var is
+ *          unset OR when the email helper itself is unconfigured
+ *          (`RESEND_API_KEY` missing or shorter than the helper's
+ *          internal length>=20 gate). Genuine delivery failures
+ *          (Resend rate-limit, network throw) are logged as warnings
+ *          but do not suppress the other two channels.
  *
  * Each channel is attempted independently — a Slack outage must not
- * suppress the in-app notification and vice-versa. Failures are logged
- * but never re-thrown: the boot path must not crash because the alert
- * pipeline is degraded.
+ * suppress the in-app notification or the email page, and an email
+ * delivery failure must not suppress the other two channels. Failures
+ * are logged but never re-thrown: the boot path must not crash because
+ * the alert pipeline is degraded.
  *
  * The alert payload always includes the per-table counts and the sweep
  * timestamp so on-call can immediately tell which surface area was
@@ -1339,6 +1376,96 @@ export async function dispatchPostRestoreSweepAlert(
       logger.warn?.(
         "[Redaction] Post-restore sweep alert: Slack webhook failed:",
         slackErr,
+      );
+    }
+  }
+
+  // Channel 3 — opt-in email recipient list (mirrors the
+  // ai-cost-summary cron's AI_COST_ALERT_EMAIL pattern). Skipped
+  // silently — channel not even marked attempted — when:
+  //   - POST_RESTORE_SWEEP_ALERT_EMAIL is unset / whitespace-only, OR
+  //   - the email helper itself is unconfigured (no RESEND_API_KEY, or
+  //     a stub-length value < 20 chars — the same configured-check
+  //     `sendResendEmail` performs internally).
+  // Both branches achieve true parity with the Slack-webhook channel
+  // above, which is also a no-op when its URL is unset.
+  //
+  // Once those gates pass, the channel IS counted as attempted and a
+  // genuine send failure (helper throws or returns success:false from
+  // a real Resend API error) is logged as a warning so a degraded
+  // upstream is not silently swallowed.
+  const emailRecipientsRaw = env.POST_RESTORE_SWEEP_ALERT_EMAIL;
+  const emailRecipients = emailRecipientsRaw
+    ? emailRecipientsRaw
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean)
+    : [];
+  // Reuse the centralised helper-configured check from `resendMail.ts`
+  // (Task #555 review feedback) so this dispatcher cannot drift from
+  // the helper's own internal length>=20 sentinel-key gate. Imported
+  // dynamically to keep the module usable in CLI contexts that never
+  // touch the email path.
+  const { isResendConfigured } = await import("./resendMail");
+  const helperConfigured = isResendConfigured(
+    env as NodeJS.ProcessEnv,
+  );
+  if (emailRecipients.length > 0 && helperConfigured) {
+    channelsAttempted.push("email_recipients");
+    try {
+      const sendEmail =
+        deps.sendEmail ??
+        ((await import("./resendMail"))
+          .sendResendEmail as PostRestoreSweepAlertEmailFn);
+      const subject =
+        `🚨 WalaPlus post-restore redaction sweep rewrote ` +
+        `${totalTriggered} historical row(s)`;
+      const html =
+        `<h2>${headline}</h2>` +
+        `<p>Boot-time redaction sweep at ` +
+        `<code>${result.sweep_timestamp}</code> rewrote one or more ` +
+        `historical rows. A non-zero count on ` +
+        `<code>nc_change_history</code> or ` +
+        `<code>capa_change_history</code> usually means a database ` +
+        `restore from a pre-fix backup reintroduced leaked credentials ` +
+        `— investigate the source backup immediately.</p>` +
+        `<h3>Per-table counts</h3>` +
+        `<ul>` +
+        `<li><code>event_logs</code>: ${triggers.event_logs}</li>` +
+        `<li><code>nc_change_history</code>: ` +
+        `${triggers.nc_change_history}</li>` +
+        `<li><code>capa_change_history</code>: ` +
+        `${triggers.capa_change_history}</li>` +
+        `<li><code>ai_pending_actions</code>: ` +
+        `${triggers.ai_pending_actions}</li>` +
+        `</ul>` +
+        `<p><a href="/audit-logs">Open the audit log</a></p>`;
+      const text =
+        `${headline}\n\n` +
+        `Sweep timestamp: ${result.sweep_timestamp}\n` +
+        `Per-table counts: ${detailLine}\n\n` +
+        `A non-zero nc_change_history or capa_change_history count ` +
+        `usually means a database restore from a pre-fix backup ` +
+        `reintroduced leaked credentials — investigate the source ` +
+        `backup immediately.`;
+      const sendResult = await sendEmail({
+        to: emailRecipients,
+        subject,
+        html,
+        text,
+      });
+      if (sendResult && sendResult.success) {
+        channelsSucceeded.push("email_recipients");
+      } else {
+        logger.warn?.(
+          `[Redaction] Post-restore sweep alert: email helper ` +
+            `reported failure: ${sendResult?.error ?? "unknown"}`,
+        );
+      }
+    } catch (emailErr) {
+      logger.warn?.(
+        "[Redaction] Post-restore sweep alert: email send failed:",
+        emailErr,
       );
     }
   }

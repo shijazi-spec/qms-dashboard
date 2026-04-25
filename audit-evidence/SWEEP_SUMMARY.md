@@ -400,18 +400,42 @@ after writing `last-sweep.json`. The dispatcher:
   `src/mastra/inngest/index.ts` by additionally POSTing to
   `SLACK_WEBHOOK_URL` (when set). Skipped silently when the env var is
   unset, exactly like the cost-summary cron.
+- (Task #555) Mirrors the third channel that the same `ai-cost-summary`
+  cron exposes via `AI_COST_ALERT_EMAIL` by additionally emailing an
+  opt-in recipient list at `POST_RESTORE_SWEEP_ALERT_EMAIL`
+  (comma-separated) via `sendResendEmail()` in
+  `src/utils/resendMail.ts`. Skipped silently — the channel is not
+  even marked as attempted — when the env var is unset / contains only
+  whitespace and commas, OR when the email helper itself is
+  unconfigured (`RESEND_API_KEY` missing or below the helper's
+  internal length>=20 gate). This is true parity with the
+  Slack-webhook channel, which is also a no-op when its URL is unset.
+  Genuine delivery failures (Resend rate-limit, network error, helper
+  throws) are logged as warnings but do not suppress the other two
+  channels. This ensures on-call engineers who do not happen to be in
+  Slack at boot time still see the page in their inbox, important
+  because a credential reintroduction via backup restore needs to be
+  acknowledged within minutes, not hours.
 - Includes the sweep timestamp and the per-table counts
   (`event_logs=…, nc_change_history=…, capa_change_history=…,
-  ai_pending_actions=…`) in **both** payloads so on-call can immediately
-  tell which surface area was affected without opening the dashboard.
+  ai_pending_actions=…`) in **all three** payloads so on-call can
+  immediately tell which surface area was affected without opening the
+  dashboard.
 - Attempts each channel independently and never re-throws — a Slack
-  outage cannot suppress the in-app notification, and a notifications-DB
-  outage cannot suppress the Slack page.
+  outage cannot suppress the in-app notification or the email page, an
+  email helper failure cannot suppress the platform notification or the
+  Slack page, and a notifications-DB outage cannot suppress either of
+  the other two channels.
 
 Regression test: `tests/redactPostRestoreSweepAlert.test.ts`
 (auto-discovered by `tests/runIntegrationTests.ts` → `npm test`).
-55 assertions cover the silent-on-clean contract, the both-channels-fire
-path, each individual surface area triggering the alert in isolation,
-the `ai_pending_actions: { skipped: 'table_missing' }` → 0 narrowing,
-the `SLACK_WEBHOOK_URL`-unset path, and degraded-channel behaviour
-(notification-hub throws, Slack network error, Slack HTTP 5xx).
+102 assertions cover the silent-on-clean contract, the
+all-three-channels-fire path, each individual surface area triggering
+the alert in isolation, the `ai_pending_actions: { skipped:
+'table_missing' }` → 0 narrowing, the `SLACK_WEBHOOK_URL`-unset path,
+the `POST_RESTORE_SWEEP_ALERT_EMAIL` unset / whitespace-only path,
+recipient-list trimming, the unconfigured-helper silent-skip path
+(no `RESEND_API_KEY`, and stub-length `RESEND_API_KEY` < 20 chars),
+and degraded-channel behaviour (notification-hub throws, Slack network
+error, Slack HTTP 5xx, email helper throws, email helper returns
+`success:false` from a real Resend delivery error).

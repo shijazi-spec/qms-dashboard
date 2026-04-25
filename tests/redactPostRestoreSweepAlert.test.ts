@@ -1,6 +1,8 @@
 /**
  * Unit tests for Task #462 — alert operators when a post-restore sweep
- * actually rewrites change-history rows.
+ * actually rewrites change-history rows. Extended in Task #555 to cover
+ * the third (email) channel that mirrors the `AI_COST_ALERT_EMAIL`
+ * pattern from the `ai-cost-summary` cron.
  *
  * Verifies `dispatchPostRestoreSweepAlert()` in
  * `src/utils/redactHistoricalLogs.ts`:
@@ -28,6 +30,16 @@
  *   8. Never throws when the notification hub or Slack webhook fails —
  *      the boot path must not crash because the alert pipeline is
  *      degraded.
+ *   9. (Task #555) Skips the email channel when
+ *      `POST_RESTORE_SWEEP_ALERT_EMAIL` is unset — silent parity with
+ *      the Slack-webhook channel.
+ *  10. (Task #555) When the env var lists recipients, sends a
+ *      formatted email via the resend helper that includes the sweep
+ *      timestamp and per-table counts. Trims whitespace and skips
+ *      empty entries in the comma-separated recipient list.
+ *  11. (Task #555) Email send failure (helper throws or returns
+ *      `success:false`) does NOT suppress the platform notification
+ *      or the Slack webhook, and is logged as a warning.
  *
  * Run:  npx tsx tests/redactPostRestoreSweepAlert.test.ts
  */
@@ -96,34 +108,75 @@ interface CapturedFetch {
   init: RequestInit | undefined;
 }
 
+interface CapturedEmail {
+  to: string | string[];
+  subject: string;
+  html?: string;
+  text?: string;
+}
+
 interface DispatcherStub {
   notifications: CapturedNotification[];
   fetches: CapturedFetch[];
+  emails: CapturedEmail[];
   fetchResponses: Array<Response | Error>;
   notificationError?: Error;
+  emailError?: Error;
+  emailFailureReason?: string;
   warnings: unknown[][];
   errors: unknown[][];
   logs: unknown[][];
   deps: {
     createNotification: (notif: Record<string, unknown>) => Promise<unknown>;
     fetch: typeof fetch;
+    sendEmail: (opts: CapturedEmail) => Promise<{
+      success: boolean;
+      id?: string;
+      error?: string;
+    }>;
     env: Record<string, string | undefined>;
     logger: Pick<Console, "log" | "warn" | "error">;
   };
 }
 
+/**
+ * Stub-length API key (>=20 chars) the dispatcher accepts as
+ * "configured" without ever calling Resend (the dependency-injected
+ * `sendEmail` short-circuits the real client). Real keys look nothing
+ * like this — kept obviously fake so a leaked test fixture is never
+ * mistaken for a credential by the redaction sweep itself.
+ */
+const STUB_RESEND_KEY = "re_test_aaaaaaaaaaaaaaaaaaaaaa";
+
 function buildStub(
   options: {
     slackUrl?: string;
+    emailRecipientsEnv?: string;
+    /**
+     * Override the stubbed `RESEND_API_KEY` env var.
+     *   - `undefined` (default): inject a stub-length key so the
+     *     dispatcher considers the email helper configured.
+     *   - `null`: omit `RESEND_API_KEY` entirely (helper unconfigured —
+     *     dispatcher must skip the email channel silently).
+     *   - any string: pass through verbatim (e.g. a 5-char value to
+     *     simulate a clearly-too-short stub the dispatcher should also
+     *     treat as unconfigured).
+     */
+    resendApiKey?: string | null;
     notificationError?: Error;
+    emailError?: Error;
+    emailFailureReason?: string;
     fetchResponses?: Array<Response | Error>;
   } = {},
 ): DispatcherStub {
   const stub: DispatcherStub = {
     notifications: [],
     fetches: [],
+    emails: [],
     fetchResponses: options.fetchResponses ?? [],
     notificationError: options.notificationError,
+    emailError: options.emailError,
+    emailFailureReason: options.emailFailureReason,
     warnings: [],
     errors: [],
     logs: [],
@@ -140,10 +193,30 @@ function buildStub(
         if (next) return next;
         return new Response("ok", { status: 200 });
       }) as typeof fetch,
+      async sendEmail(opts: CapturedEmail) {
+        if (stub.emailError) throw stub.emailError;
+        stub.emails.push(opts);
+        if (stub.emailFailureReason) {
+          return { success: false, error: stub.emailFailureReason };
+        }
+        return { success: true, id: "email-stub-id" };
+      },
       env: {
         ...(options.slackUrl
           ? { SLACK_WEBHOOK_URL: options.slackUrl }
           : {}),
+        ...(options.emailRecipientsEnv !== undefined
+          ? { POST_RESTORE_SWEEP_ALERT_EMAIL: options.emailRecipientsEnv }
+          : {}),
+        // null → leave RESEND_API_KEY unset; undefined → use stub key;
+        // any explicit string → passthrough (lets tests probe the
+        // length<20 unconfigured branch).
+        ...(options.resendApiKey === null
+          ? {}
+          : {
+              RESEND_API_KEY:
+                options.resendApiKey ?? STUB_RESEND_KEY,
+            }),
       },
       logger: {
         log: (...a: unknown[]) => {
@@ -314,6 +387,15 @@ async function run(): Promise<void> {
         slackBody.text.includes("capa_change_history=11"),
       "Slack body includes nc/capa change-history counts",
     );
+
+    assert(
+      stub.emails.length === 0,
+      "no email sent when POST_RESTORE_SWEEP_ALERT_EMAIL is unset",
+    );
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted when env var missing",
+    );
   }
 
   console.log("\nIndividual surface area triggers");
@@ -465,6 +547,347 @@ async function run(): Promise<void> {
         String(w[0] ?? "").includes("Slack webhook returned"),
       ),
       "HTTP failure logged as warning",
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Task #555 — third channel: opt-in email recipient list
+  //
+  // Mirrors the AI_COST_ALERT_EMAIL pattern in src/mastra/inngest/index.ts
+  // (the ai-cost-summary cron). On-call engineers who don't happen to be
+  // in Slack at boot time must still see the page in their inbox because a
+  // credential reintroduction via backup restore needs to be acknowledged
+  // within minutes, not hours.
+  // ──────────────────────────────────────────────────────────────────────
+
+  console.log(
+    "\n[Task #555] Email recipients unset — silent on the email channel",
+  );
+  {
+    // Slack URL set so the alert still has another delivery channel and
+    // we can confirm email is the only one missing — i.e. the unset env
+    // var really did cause the email channel to be skipped, not that the
+    // dispatch itself short-circuited.
+    const stub = buildStub({ slackUrl: "https://hooks.example/x" });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 1 }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "alert still dispatched");
+    assert(
+      stub.emails.length === 0,
+      "email helper NOT invoked without POST_RESTORE_SWEEP_ALERT_EMAIL",
+    );
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted",
+    );
+    assert(
+      !outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients NOT succeeded",
+    );
+  }
+
+  console.log(
+    "\n[Task #555] Empty/whitespace POST_RESTORE_SWEEP_ALERT_EMAIL is a no-op",
+  );
+  {
+    // A stray "POST_RESTORE_SWEEP_ALERT_EMAIL=" or comma-only value must
+    // not cause the dispatcher to call sendEmail with an empty list (the
+    // helper would just no-op, but the channel would be falsely reported
+    // as attempted).
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: " , , ",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 1 }),
+      stub.deps,
+    );
+    assert(
+      stub.emails.length === 0,
+      "no email sent when env var contains only commas/whitespace",
+    );
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted on empty list",
+    );
+  }
+
+  console.log(
+    "\n[Task #555] Recipients configured — email fires with timestamp + counts",
+  );
+  {
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv:
+        "oncall@walaplus.com, secops@walaplus.com ,, ops-leads@walaplus.com",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({
+        event_logs_updated: 5,
+        nc_change_history_updated: 7,
+        capa_change_history_updated: 11,
+        ai_pending_actions: {
+          scanned: 30,
+          payload_changed: 2,
+          payload_preview_changed: 1,
+          execution_result_changed: 0,
+          rows_updated: 2,
+        },
+      }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "outcome dispatched");
+    assert(stub.emails.length === 1, "exactly one email sent");
+    assert(
+      outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients attempted",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients succeeded",
+    );
+
+    const email = stub.emails[0];
+    const recipients = Array.isArray(email.to) ? email.to : [email.to];
+    assert(
+      recipients.length === 3 &&
+        recipients.includes("oncall@walaplus.com") &&
+        recipients.includes("secops@walaplus.com") &&
+        recipients.includes("ops-leads@walaplus.com"),
+      "recipients are split, trimmed, and empty entries discarded",
+    );
+    assert(
+      recipients.every((r) => r === r.trim() && r.length > 0),
+      "no whitespace or empty recipients leaked through",
+    );
+    assert(
+      typeof email.subject === "string" && email.subject.length > 0,
+      "email has a subject",
+    );
+
+    const html = String(email.html ?? "");
+    const text = String(email.text ?? "");
+    assert(
+      html.includes(SWEEP_TS) || text.includes(SWEEP_TS),
+      "email body includes sweep timestamp",
+    );
+    const hasAllCounts = (body: string) =>
+      body.includes("event_logs") &&
+      body.includes("5") &&
+      body.includes("nc_change_history") &&
+      body.includes("7") &&
+      body.includes("capa_change_history") &&
+      body.includes("11") &&
+      body.includes("ai_pending_actions") &&
+      body.includes("2");
+    assert(
+      hasAllCounts(html) || hasAllCounts(text),
+      "email body embeds per-table counts (event_logs/nc/capa/ai)",
+    );
+
+    // The other two channels must still have fired alongside email.
+    assert(
+      stub.notifications.length === 1,
+      "platform notification still dispatched alongside email",
+    );
+    assert(stub.fetches.length === 1, "Slack POST still issued alongside email");
+  }
+
+  console.log(
+    "\n[Task #555] Email helper throws — other channels still succeed",
+  );
+  {
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "oncall@walaplus.com",
+      emailError: new Error("resend api down"),
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ nc_change_history_updated: 3 }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "outcome still reports dispatched");
+    assert(
+      outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients attempted even though it threw",
+    );
+    assert(
+      !outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients absent from succeeded list on throw",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("platform_notification"),
+      "platform_notification still succeeded despite email throw",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("slack_webhook"),
+      "slack_webhook still succeeded despite email throw",
+    );
+    assert(
+      stub.notifications.length === 1,
+      "platform notification fired despite email throw",
+    );
+    assert(
+      stub.fetches.length === 1,
+      "Slack POST issued despite email throw",
+    );
+    assert(
+      stub.warnings.some((w) =>
+        String(w[0] ?? "").includes("email send failed"),
+      ),
+      "email failure logged as warning",
+    );
+  }
+
+  console.log(
+    "\n[Task #555] Email helper returns success:false from a real " +
+      "delivery error — counted as failure & warned",
+  );
+  {
+    // success:false here represents an upstream Resend delivery error
+    // (rate-limit, blocked recipient, etc.) — the dispatcher already
+    // confirmed the helper was configured (RESEND_API_KEY present), so
+    // the channel was attempted and a real failure deserves a warning.
+    // This is the "degraded upstream" branch, distinct from the
+    // unconfigured-helper silent-skip branch covered below.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "oncall@walaplus.com",
+      emailFailureReason: "Resend API rate limited",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ capa_change_history_updated: 1 }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "outcome dispatched");
+    assert(stub.emails.length === 1, "email helper invoked once");
+    assert(
+      outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients still attempted on success:false",
+    );
+    assert(
+      !outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients NOT in succeeded list on success:false",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("platform_notification"),
+      "platform_notification still succeeded",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("slack_webhook"),
+      "slack_webhook still succeeded",
+    );
+    assert(
+      stub.warnings.some((w) =>
+        String(w[0] ?? "").includes("email helper") &&
+        String(w[0] ?? "").includes("Resend API rate limited"),
+      ),
+      "email helper failure reason surfaced in warning",
+    );
+  }
+
+  console.log(
+    "\n[Task #555] Email helper unconfigured (no RESEND_API_KEY) — " +
+      "silent skip, channel NOT attempted",
+  );
+  {
+    // Parity with the SLACK_WEBHOOK_URL-unset branch: when the helper
+    // itself is unconfigured the channel should be skipped silently —
+    // no warning, no `attempted` entry, no `sendEmail` call. This
+    // mirrors how the ai-cost-summary cron behaves: an unconfigured
+    // Resend key is a deployment posture, not an alertable failure.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "oncall@walaplus.com",
+      resendApiKey: null, // omit RESEND_API_KEY entirely
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 2 }),
+      stub.deps,
+    );
+    assert(outcome.dispatched === true, "outcome dispatched");
+    assert(
+      stub.emails.length === 0,
+      "email helper NOT invoked when RESEND_API_KEY missing",
+    );
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted when helper unconfigured",
+    );
+    assert(
+      !outcome.channelsSucceeded.includes("email_recipients"),
+      "email_recipients NOT succeeded when helper unconfigured",
+    );
+    assert(
+      !stub.warnings.some((w) =>
+        String(w[0] ?? "").toLowerCase().includes("email"),
+      ),
+      "no email-related warning emitted on silent skip",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("platform_notification"),
+      "platform_notification still fires when email channel silenced",
+    );
+    assert(
+      outcome.channelsSucceeded.includes("slack_webhook"),
+      "slack_webhook still fires when email channel silenced",
+    );
+  }
+
+  console.log(
+    "\n[Task #555] RESEND_API_KEY too short (<20 chars) — also silent skip",
+  );
+  {
+    // The configured-check matches `sendResendEmail`'s own internal
+    // length>=20 gate, so a placeholder/stub key ("changeme", "todo")
+    // is treated the same as no key at all.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "oncall@walaplus.com",
+      resendApiKey: "short",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult({ event_logs_updated: 1 }),
+      stub.deps,
+    );
+    assert(stub.emails.length === 0, "no email sent on too-short key");
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted on too-short key",
+    );
+    assert(
+      !stub.warnings.some((w) =>
+        String(w[0] ?? "").toLowerCase().includes("email"),
+      ),
+      "no email warning on too-short key",
+    );
+  }
+
+  console.log(
+    "\n[Task #555] Clean sweep — email channel stays silent even with recipients",
+  );
+  {
+    // A clean sweep must short-circuit before any channel — including
+    // email — is touched, so opt-in operators are not paged on every
+    // boot.
+    const stub = buildStub({
+      slackUrl: "https://hooks.example/x",
+      emailRecipientsEnv: "oncall@walaplus.com",
+    });
+    const outcome = await dispatchPostRestoreSweepAlert(
+      buildSweepResult(),
+      stub.deps,
+    );
+    assert(
+      outcome.dispatched === false,
+      "clean sweep stays silent even with email recipients configured",
+    );
+    assert(stub.emails.length === 0, "no email sent on clean sweep");
+    assert(
+      !outcome.channelsAttempted.includes("email_recipients"),
+      "email_recipients NOT attempted on clean sweep",
     );
   }
 

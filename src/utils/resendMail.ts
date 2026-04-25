@@ -5,13 +5,26 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 // This allows emails to work immediately without domain verification
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'WalaPlus QMS <onboarding@resend.dev>';
 
+/**
+ * Returns true when the Resend email helper is fully configured and
+ * ready to send. Centralised so callers (e.g. the post-restore sweep
+ * alert dispatcher in `redactHistoricalLogs.ts`) can silently skip
+ * their email channel when this returns false — exactly the same
+ * unconfigured-helper gate `getResendClient()` applies internally —
+ * without each caller having to re-implement the `length >= 20`
+ * sentinel-key check.
+ */
+export function isResendConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const apiKey = env.RESEND_API_KEY;
+  return typeof apiKey === "string" && apiKey.length >= 20;
+}
+
 // Create new Resend instance each time to pick up env changes
 function getResendClient() {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || apiKey.length < 20) {
-    return null;
-  }
-  return new Resend(apiKey);
+  if (!isResendConfigured()) return null;
+  return new Resend(process.env.RESEND_API_KEY!);
 }
 
 export interface ResendEmailOptions {
