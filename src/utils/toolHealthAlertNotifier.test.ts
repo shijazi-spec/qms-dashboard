@@ -29,11 +29,19 @@
 import {
   notifyToolHealthBreach,
   notifyToolHealthOverrideExpired,
+  notifyToolHealthConfigChange,
+  notifyToolHealthOverrideExpiringSoon,
+  notifyToolHealthRecovery,
   _resetToolHealthNotifierThrottleForTests,
+  _resetOverrideExpirySoonWarningsForTests,
   _diffToolHealthConfigOverridesForTests,
   type ToolHealthBreachNotification,
   type ToolHealthOverrideExpiredNotification,
+  type ToolHealthConfigChangeNotification,
+  type ToolHealthOverrideExpiringSoonNotification,
+  type ToolHealthRecoveryNotification,
 } from "./toolHealthAlertNotifier";
+import type { ToolHealthConfigAuditEntry } from "./toolHealthConfigDatabase";
 
 let passed = 0;
 let failed = 0;
@@ -84,6 +92,7 @@ const ENV_KEYS = [
   "TOOL_HEALTH_ALERT_EMAIL",
   "TOOL_HEALTH_NOTIFY_THROTTLE_MIN",
   "TOOL_HEALTH_APP_URL",
+  "TOOL_HEALTH_CONFIG_NOTIFY",
   "SLACK_CHANNEL_ID",
 ] as const;
 
@@ -533,6 +542,752 @@ function testDiffOrderIsCanonical(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Section 4 — notifyToolHealthConfigChange (Task #497)
+//
+// Sister of the breach notifier — fires when an admin tunes the per-tool
+// alert thresholds. Same env-var resolution rules as the breach path, plus
+// an additional `TOOL_HEALTH_CONFIG_NOTIFY=1` opt-in gate so dev/test
+// environments don't post on every save. The Slack body also embeds a
+// "Recent changes" block sourced from the audit DB; we inject `getAudit`
+// so no real DB call is made.
+// ---------------------------------------------------------------------------
+
+function makeConfigChange(
+  overrides: Partial<ToolHealthConfigChangeNotification> = {},
+): ToolHealthConfigChangeNotification {
+  return {
+    changedBy: "alice@example.com",
+    before: { errorRatePct: 10, p95LatencyMs: 1000 },
+    after: { errorRatePct: 15, p95LatencyMs: 1000 },
+    note: null,
+    audit_id: 7,
+    ...overrides,
+  };
+}
+
+async function testConfigChangeDisabledWhenEnvNotSet(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — disabled when TOOL_HEALTH_CONFIG_NOTIFY != 1",
+  );
+  clearEnv();
+  // Even with a Slack channel configured, the opt-in gate must dominate so
+  // existing breach-channel wiring doesn't accidentally start posting on
+  // every threshold save.
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  let auditCalls = 0;
+
+  const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+    sendSlack: async () => {
+      slackCalls++;
+      return true;
+    },
+    sendEmail: async () => {
+      emailCalls++;
+      return { success: true };
+    },
+    getAudit: async () => {
+      auditCalls++;
+      return [];
+    },
+  });
+
+  assertEqual(result.disabled, true, "result.disabled is true");
+  assertEqual(result.skipped, false, "skipped stays false (gated before transport check)");
+  assertEqual(result.noChanges, false, "noChanges stays false");
+  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.emailSent, false, "no email send recorded");
+  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(emailCalls, 0, "sendEmail was not invoked");
+  assertEqual(auditCalls, 0, "getAudit was not invoked (gated before audit fetch)");
+}
+
+async function testConfigChangeSkippedWithoutTransport(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — skipped when no Slack channel and no email recipients",
+  );
+  clearEnv();
+  // Opt in but configure NO transport — must fall through to skipped.
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  let auditCalls = 0;
+
+  const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+    sendSlack: async () => {
+      slackCalls++;
+      return true;
+    },
+    sendEmail: async () => {
+      emailCalls++;
+      return { success: true };
+    },
+    getAudit: async () => {
+      auditCalls++;
+      return [];
+    },
+  });
+
+  assertEqual(result.skipped, true, "result.skipped is true");
+  assertEqual(result.disabled, false, "disabled stays false (opt-in WAS set)");
+  assertEqual(result.noChanges, false, "noChanges stays false");
+  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.emailSent, false, "no email send recorded");
+  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(emailCalls, 0, "sendEmail was not invoked");
+  assertEqual(auditCalls, 0, "getAudit was not invoked (skipped before audit fetch)");
+}
+
+async function testConfigChangeNoChanges(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — noChanges when before/after are identical",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  let slackCalls = 0;
+  let auditCalls = 0;
+  const identical = { errorRatePct: 10, p95LatencyMs: 1000 };
+  const result = await notifyToolHealthConfigChange(
+    makeConfigChange({ before: identical, after: identical }),
+    {
+      sendSlack: async () => {
+        slackCalls++;
+        return true;
+      },
+      getAudit: async () => {
+        auditCalls++;
+        return [];
+      },
+    },
+  );
+
+  assertEqual(result.noChanges, true, "result.noChanges is true");
+  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.emailSent, false, "no email send recorded");
+  assertEqual(result.disabled, false, "disabled stays false");
+  assertEqual(result.skipped, false, "skipped stays false");
+  assertEqual(slackCalls, 0, "sendSlack was not invoked (early return on no-op diff)");
+  assertEqual(auditCalls, 0, "getAudit was not invoked (early return on no-op diff)");
+}
+
+async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — slackSent + emailSent on success, with injected audit",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "ops@example.com";
+  process.env.TOOL_HEALTH_APP_URL = "https://wala.example.com";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+  type EmailArgs = { to: string | string[]; subject: string; html?: string; text?: string };
+  const emailCalls: EmailArgs[] = [];
+
+  // Inject 2 audit entries so the "Recent changes" Slack block has data
+  // without touching the real DB.
+  const auditStub: ToolHealthConfigAuditEntry[] = [
+    {
+      id: 7,
+      changed_at: new Date("2026-04-25T12:34:00.000Z"),
+      changed_by: "alice@example.com",
+      before_values: { errorRatePct: 10, p95LatencyMs: 1000 },
+      after_values: { errorRatePct: 15, p95LatencyMs: 1000 },
+      note: null,
+      breach_diff: null,
+    },
+    {
+      id: 6,
+      changed_at: new Date("2026-04-24T09:00:00.000Z"),
+      changed_by: "bob@example.com",
+      before_values: { minCalls: 10 },
+      after_values: { minCalls: 20 },
+      note: null,
+      breach_diff: null,
+    },
+  ];
+  let auditLimitSeen: number | null = null;
+
+  const result = await notifyToolHealthConfigChange(
+    makeConfigChange({
+      before: { errorRatePct: 10, p95LatencyMs: 1000 },
+      after: { errorRatePct: 15, p95LatencyMs: 1000 },
+      note: "tightening after Friday's incident",
+    }),
+    {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks: blocks as any[] });
+        return true;
+      },
+      sendEmail: async (opts) => {
+        emailCalls.push(opts as EmailArgs);
+        return { success: true, id: "msg-cfg-1" };
+      },
+      getAudit: async (limit) => {
+        auditLimitSeen = limit;
+        return auditStub;
+      },
+    },
+  );
+
+  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.emailSent, true, "result.emailSent is true");
+  assertEqual(result.disabled, false, "not disabled");
+  assertEqual(result.skipped, false, "not skipped");
+  assertEqual(result.noChanges, false, "not noChanges");
+
+  // Slack assertions.
+  assertEqual(slackCalls.length, 1, "sendSlack called exactly once");
+  assertEqual(slackCalls[0].channel, "C-ONCALL", "Slack posted to configured channel");
+  assert(
+    slackCalls[0].text.includes("alice@example.com"),
+    "Slack fallback text attributes the operator",
+  );
+  assert(
+    slackCalls[0].text.includes("1 change"),
+    "Slack fallback text states the change count",
+  );
+  const blocks = slackCalls[0].blocks;
+  assertEqual(blocks[0]?.type, "header", "first block is the header");
+  assert(
+    typeof blocks[0]?.text?.text === "string" &&
+      blocks[0].text.text.includes("Tool-health alert thresholds updated"),
+    "header announces the threshold update",
+  );
+  // The link must be the absolute thresholds-tab deep link, since APP_URL is set.
+  const hasButton = blocks.some(
+    (b: any) =>
+      b?.type === "actions" &&
+      Array.isArray(b.elements) &&
+      b.elements.some(
+        (e: any) =>
+          e?.url === "https://wala.example.com/dashboard/ai-ops.html?tab=thresholds",
+      ),
+  );
+  assert(hasButton, "absolute APP_URL renders an Open Alert Thresholds button");
+  // Audit-derived "Recent changes" block must mention the injected operators.
+  const allSectionText = blocks
+    .filter((b: any) => b?.type === "section")
+    .map((b: any) => b?.text?.text ?? "")
+    .join("\n");
+  assert(
+    allSectionText.includes("Recent changes (last 2)"),
+    "Recent changes block reflects the injected audit count",
+  );
+  assert(
+    allSectionText.includes("alice@example.com") &&
+      allSectionText.includes("bob@example.com"),
+    "Recent changes block lists both injected audit operators",
+  );
+  // Note from the operator should also be rendered.
+  assert(
+    allSectionText.includes("tightening after Friday's incident"),
+    "operator note is rendered in a section block",
+  );
+  // The notifier asks for the last 3 audit entries.
+  assertEqual(auditLimitSeen, 3, "getAudit called with limit=3");
+
+  // Email assertions.
+  assertEqual(emailCalls.length, 1, "sendEmail called exactly once");
+  assertDeepEqual(
+    emailCalls[0].to,
+    ["ops@example.com"],
+    "TOOL_HEALTH_ALERT_EMAIL is split into a recipient array",
+  );
+  assert(
+    emailCalls[0].subject.startsWith("[Tool Health · Thresholds Updated]"),
+    "subject prefixes [Tool Health · Thresholds Updated]",
+  );
+  assert(
+    typeof emailCalls[0].html === "string" &&
+      emailCalls[0].html.includes("alice@example.com") &&
+      emailCalls[0].html.includes(
+        "https://wala.example.com/dashboard/ai-ops.html?tab=thresholds",
+      ),
+    "HTML body attributes the operator and links to the thresholds tab",
+  );
+  assert(
+    typeof emailCalls[0].text === "string" &&
+      emailCalls[0].text.includes("Error rate floor (%): 10 → 15"),
+    "plain-text body renders the field-level diff",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section 5 — notifyToolHealthOverrideExpiringSoon (Task #497)
+// ---------------------------------------------------------------------------
+
+function makeExpiringSoon(
+  overrides: Partial<ToolHealthOverrideExpiringSoonNotification> = {},
+): ToolHealthOverrideExpiringSoonNotification {
+  return {
+    expires_at: new Date("2026-04-25T18:00:00.000Z"),
+    previous_updated_by: "alice@example.com",
+    overrides: { errorRatePct: 25, p95LatencyMs: 5000 },
+    minutes_remaining: 25,
+    ...overrides,
+  };
+}
+
+async function testExpiringSoonSkippedWithoutChannel(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthOverrideExpiringSoon — skipped when no Slack channel",
+  );
+  clearEnv();
+  _resetOverrideExpirySoonWarningsForTests();
+
+  let slackCalls = 0;
+  const result = await notifyToolHealthOverrideExpiringSoon(
+    makeExpiringSoon({ expires_at: new Date("2026-04-25T19:00:00.000Z") }),
+    {
+      sendSlack: async () => {
+        slackCalls++;
+        return true;
+      },
+    },
+  );
+
+  assertEqual(result.skipped, true, "result.skipped is true");
+  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.deduped, false, "deduped stays false");
+  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+}
+
+async function testExpiringSoonSlackOnSuccess(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthOverrideExpiringSoon — slackSent on success",
+  );
+  clearEnv();
+  _resetOverrideExpirySoonWarningsForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_APP_URL = "https://wala.example.com";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+
+  const result = await notifyToolHealthOverrideExpiringSoon(makeExpiringSoon(), {
+    sendSlack: async (channel, text, blocks) => {
+      slackCalls.push({ channel, text, blocks: blocks as any[] });
+      return true;
+    },
+  });
+
+  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.skipped, false, "not skipped — channel was configured");
+  assertEqual(result.deduped, false, "not deduped on first call");
+  assertEqual(slackCalls.length, 1, "Slack invoked exactly once");
+  assertEqual(slackCalls[0].channel, "C-ONCALL", "posted to configured channel");
+  assert(
+    slackCalls[0].text.includes("alice@example.com") &&
+      slackCalls[0].text.includes("~25 min"),
+    "fallback text mentions operator and minutes-remaining",
+  );
+
+  const blocks = slackCalls[0].blocks;
+  assertEqual(blocks[0]?.type, "header", "first block is the header");
+  assert(
+    typeof blocks[0]?.text?.text === "string" &&
+      blocks[0].text.text.includes("expiring soon"),
+    "header announces the impending expiry",
+  );
+  // Active override fields appear in a section block, with their prior values.
+  const allSectionText = blocks
+    .filter((b: any) => b?.type === "section")
+    .map((b: any) => b?.text?.text ?? "")
+    .join("\n");
+  assert(
+    allSectionText.includes("error-rate breach floor (%)") &&
+      allSectionText.includes("(was 25)"),
+    "section lists the active error-rate override and its value",
+  );
+  // Absolute APP_URL ⇒ Open Alert Thresholds button (deep-linked).
+  const hasButton = blocks.some(
+    (b: any) =>
+      b?.type === "actions" &&
+      Array.isArray(b.elements) &&
+      b.elements.some(
+        (e: any) =>
+          e?.url === "https://wala.example.com/dashboard/ai-ops.html?tab=thresholds",
+      ),
+  );
+  assert(hasButton, "absolute APP_URL renders an Open Alert Thresholds button");
+  // Context block embeds the expires_at ISO for traceability.
+  const contextText = blocks
+    .filter((b: any) => b?.type === "context")
+    .flatMap((b: any) => b.elements ?? [])
+    .map((e: any) => e?.text ?? "")
+    .join(" ");
+  assert(
+    contextText.includes("2026-04-25T18:00:00.000Z"),
+    "context block carries the expires_at ISO",
+  );
+}
+
+async function testExpiringSoonDedupedOnSecondCall(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthOverrideExpiringSoon — deduped on a second call with the same expires_at",
+  );
+  clearEnv();
+  _resetOverrideExpirySoonWarningsForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  const sameExpiry = new Date("2026-04-26T08:00:00.000Z");
+  let slackCalls = 0;
+  const sendSlack = async () => {
+    slackCalls++;
+    return true;
+  };
+
+  const first = await notifyToolHealthOverrideExpiringSoon(
+    makeExpiringSoon({ expires_at: sameExpiry }),
+    { sendSlack },
+  );
+  assertEqual(first.slackSent, true, "first call: Slack send recorded");
+  assertEqual(first.deduped, false, "first call: not deduped");
+  assertEqual(slackCalls, 1, "Slack invoked exactly once after first call");
+
+  // Second call with the SAME expires_at must short-circuit before sendSlack.
+  const second = await notifyToolHealthOverrideExpiringSoon(
+    makeExpiringSoon({ expires_at: sameExpiry, minutes_remaining: 5 }),
+    { sendSlack },
+  );
+  assertEqual(second.deduped, true, "second call (same expires_at): deduped=true");
+  assertEqual(second.slackSent, false, "second call: no Slack send");
+  assertEqual(second.skipped, false, "second call: skipped stays false");
+  assertEqual(slackCalls, 1, "Slack still invoked exactly once total");
+
+  // Sanity check: a DIFFERENT expires_at gets through.
+  const otherExpiry = new Date("2026-04-26T09:00:00.000Z");
+  const third = await notifyToolHealthOverrideExpiringSoon(
+    makeExpiringSoon({ expires_at: otherExpiry }),
+    { sendSlack },
+  );
+  assertEqual(third.slackSent, true, "different expires_at: Slack send recorded");
+  assertEqual(third.deduped, false, "different expires_at: not deduped");
+  assertEqual(slackCalls, 2, "Slack invoked twice total after distinct expiry");
+}
+
+async function testExpiringSoonDedupePersistsWhenSlackThrows(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthOverrideExpiringSoon — dedupe persists even if Slack throws",
+  );
+  clearEnv();
+  _resetOverrideExpirySoonWarningsForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  const sameExpiry = new Date("2026-04-27T10:00:00.000Z");
+  let slackCalls = 0;
+  // Suppress the expected "Slack send threw" error log so the test output
+  // stays readable; any other error path will still surface.
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    // First call: Slack throws — but the dedupe key is added BEFORE the send,
+    // so a subsequent call must still short-circuit.
+    const first = await notifyToolHealthOverrideExpiringSoon(
+      makeExpiringSoon({ expires_at: sameExpiry }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          throw new Error("simulated Slack 5xx");
+        },
+      },
+    );
+    assertEqual(
+      first.slackSent,
+      false,
+      "first call: slackSent=false (send threw)",
+    );
+    assertEqual(first.deduped, false, "first call: not deduped");
+    assertEqual(first.skipped, false, "first call: not skipped");
+    assertEqual(slackCalls, 1, "Slack invoked exactly once before throwing");
+
+    // Second call with the SAME expires_at: dedupe must short-circuit even
+    // though the previous send failed. This is the contract the comment in
+    // the implementation calls out — failing to record dedupe on throw would
+    // turn a transient Slack outage into a flood on every cron tick.
+    const second = await notifyToolHealthOverrideExpiringSoon(
+      makeExpiringSoon({ expires_at: sameExpiry }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          return true;
+        },
+      },
+    );
+    assertEqual(
+      second.deduped,
+      true,
+      "second call after throw: deduped=true (no retry flood)",
+    );
+    assertEqual(second.slackSent, false, "second call: no Slack send");
+    assertEqual(slackCalls, 1, "Slack still invoked exactly once total");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section 6 — notifyToolHealthRecovery (Task #497)
+// ---------------------------------------------------------------------------
+
+function makeRecovery(
+  overrides: Partial<ToolHealthRecoveryNotification> = {},
+): ToolHealthRecoveryNotification {
+  return {
+    tool_name: "search_web",
+    agent_name: "research-agent",
+    reason: "error_rate",
+    alert_id: 99,
+    detail: "error_rate fell to 2.0% (threshold 10%); auto-resolved",
+    ...overrides,
+  };
+}
+
+async function testRecoverySkippedWithoutTransport(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthRecovery — skipped when no Slack channel and no email recipients",
+  );
+  clearEnv();
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  const result = await notifyToolHealthRecovery(makeRecovery(), {
+    sendSlack: async () => {
+      slackCalls++;
+      return true;
+    },
+    sendEmail: async () => {
+      emailCalls++;
+      return { success: true };
+    },
+  });
+
+  assertEqual(result.skipped, true, "result.skipped is true");
+  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.emailSent, false, "no email send recorded");
+  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(emailCalls, 0, "sendEmail was not invoked");
+}
+
+async function testRecoverySlackAndEmailOnSuccess(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthRecovery — slackSent + emailSent on success",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+  process.env.TOOL_HEALTH_APP_URL = "https://wala.example.com";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+  type EmailArgs = { to: string | string[]; subject: string; html?: string; text?: string };
+  const emailCalls: EmailArgs[] = [];
+
+  const result = await notifyToolHealthRecovery(makeRecovery(), {
+    sendSlack: async (channel, text, blocks) => {
+      slackCalls.push({ channel, text, blocks: blocks as any[] });
+      return true;
+    },
+    sendEmail: async (opts) => {
+      emailCalls.push(opts as EmailArgs);
+      return { success: true, id: "msg-rec-1" };
+    },
+  });
+
+  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.emailSent, true, "result.emailSent is true");
+  assertEqual(result.skipped, false, "not skipped");
+
+  // Slack body sanity.
+  assertEqual(slackCalls.length, 1, "sendSlack called exactly once");
+  assertEqual(slackCalls[0].channel, "C-ONCALL", "Slack posted to configured channel");
+  assert(
+    slackCalls[0].text.includes("recovered") &&
+      slackCalls[0].text.includes("search_web") &&
+      slackCalls[0].text.includes("alert #99"),
+    "fallback text announces recovery, tool, and alert id",
+  );
+  const blocks = slackCalls[0].blocks;
+  assertEqual(blocks[0]?.type, "header", "first block is the header");
+  assert(
+    typeof blocks[0]?.text?.text === "string" &&
+      blocks[0].text.text.includes("Tool health recovered: search_web"),
+    "header announces the recovery and tool",
+  );
+  const hasButton = blocks.some(
+    (b: any) =>
+      b?.type === "actions" &&
+      Array.isArray(b.elements) &&
+      b.elements.some(
+        (e: any) => e?.url === "https://wala.example.com/dashboard/ai-ops.html",
+      ),
+  );
+  assert(hasButton, "absolute APP_URL renders an Open AI Operations panel button");
+  const contextText = blocks
+    .filter((b: any) => b?.type === "context")
+    .flatMap((b: any) => b.elements ?? [])
+    .map((e: any) => e?.text ?? "")
+    .join(" ");
+  assert(
+    contextText.includes("alert #99"),
+    "context block carries the resolved alert id",
+  );
+
+  // Email body sanity.
+  assertEqual(emailCalls.length, 1, "sendEmail called exactly once");
+  assertDeepEqual(
+    emailCalls[0].to,
+    ["oncall@example.com"],
+    "TOOL_HEALTH_ALERT_EMAIL is split into a recipient array",
+  );
+  assert(
+    emailCalls[0].subject.startsWith("[Tool Health · RECOVERED] "),
+    "subject prefixes [Tool Health · RECOVERED]",
+  );
+  assert(
+    emailCalls[0].subject.includes("search_web") &&
+      emailCalls[0].subject.includes("alert #99"),
+    "subject mentions tool name and alert id",
+  );
+  assert(
+    typeof emailCalls[0].html === "string" &&
+      emailCalls[0].html.includes("search_web") &&
+      emailCalls[0].html.includes(
+        "https://wala.example.com/dashboard/ai-ops.html",
+      ),
+    "HTML body includes tool name and absolute panel link",
+  );
+  assert(
+    typeof emailCalls[0].text === "string" &&
+      emailCalls[0].text.includes("search_web") &&
+      emailCalls[0].text.includes("Alert closed: #99"),
+    "plain-text body includes tool name and alert id",
+  );
+}
+
+async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthRecovery — recovery is NOT throttled by the breach map",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+
+  // Step 1: send a breach for `search_web:error_rate` so the in-process
+  // throttle map records that key. Recovery for the SAME key must still
+  // fire — recovery and breach are independent events.
+  const fixedNow = 1_700_000_500_000;
+  let breachSlackCalls = 0;
+  const breachResult = await notifyToolHealthBreach(
+    makeBreach({
+      tool_name: "search_web",
+      reason: "error_rate",
+      related_record_id: "search_web:error_rate",
+    }),
+    {
+      sendSlack: async () => {
+        breachSlackCalls++;
+        return true;
+      },
+      sendEmail: async () => ({ success: true }),
+      claimDb: async () => true,
+      now: () => fixedNow,
+    },
+  );
+  assertEqual(breachResult.slackSent, true, "setup: breach Slack send recorded");
+  assertEqual(breachSlackCalls, 1, "setup: breach Slack invoked exactly once");
+
+  // Step 2: a second BREACH for the same key would be throttled — verify
+  // that the breach map is in fact populated for the key we care about.
+  const sanity = await notifyToolHealthBreach(
+    makeBreach({
+      tool_name: "search_web",
+      reason: "error_rate",
+      related_record_id: "search_web:error_rate",
+    }),
+    {
+      sendSlack: async () => true,
+      sendEmail: async () => ({ success: true }),
+      claimDb: async () => true,
+      now: () => fixedNow + 60_000, // +1 min, well within window
+    },
+  );
+  assertEqual(
+    sanity.throttled,
+    true,
+    "sanity: a sibling breach for the same key IS throttled (map is populated)",
+  );
+
+  // Step 3: recovery for the SAME tool/reason must NOT be throttled.
+  let recoverySlackCalls = 0;
+  let recoveryEmailCalls = 0;
+  const recovery = await notifyToolHealthRecovery(
+    makeRecovery({
+      tool_name: "search_web",
+      reason: "error_rate",
+      alert_id: 1234,
+    }),
+    {
+      sendSlack: async () => {
+        recoverySlackCalls++;
+        return true;
+      },
+      sendEmail: async () => {
+        recoveryEmailCalls++;
+        return { success: true };
+      },
+    },
+  );
+
+  assertEqual(
+    recovery.slackSent,
+    true,
+    "recovery sends despite breach throttle map holding the same key",
+  );
+  assertEqual(recovery.skipped, false, "recovery is not skipped");
+  assertEqual(
+    recoverySlackCalls,
+    1,
+    "recovery invoked sendSlack exactly once (no throttle short-circuit)",
+  );
+  assertEqual(
+    recoveryEmailCalls,
+    0,
+    "no email send (TOOL_HEALTH_ALERT_EMAIL not set)",
+  );
+
+  // And a second back-to-back recovery is also not throttled — recovery has
+  // no per-key throttle of its own.
+  const recovery2 = await notifyToolHealthRecovery(
+    makeRecovery({
+      tool_name: "search_web",
+      reason: "error_rate",
+      alert_id: 1235,
+    }),
+    {
+      sendSlack: async () => {
+        recoverySlackCalls++;
+        return true;
+      },
+    },
+  );
+  assertEqual(recovery2.slackSent, true, "second recovery also sends");
+  assertEqual(
+    recoverySlackCalls,
+    2,
+    "recovery sendSlack invoked exactly twice across the two calls",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
 
@@ -549,9 +1304,21 @@ async function main(): Promise<void> {
     testDiffValueChange();
     testDiffSetAndClear();
     testDiffOrderIsCanonical();
+    await testConfigChangeDisabledWhenEnvNotSet();
+    await testConfigChangeSkippedWithoutTransport();
+    await testConfigChangeNoChanges();
+    await testConfigChangeSlackAndEmailOnSuccess();
+    await testExpiringSoonSkippedWithoutChannel();
+    await testExpiringSoonSlackOnSuccess();
+    await testExpiringSoonDedupedOnSecondCall();
+    await testExpiringSoonDedupePersistsWhenSlackThrows();
+    await testRecoverySkippedWithoutTransport();
+    await testRecoverySlackAndEmailOnSuccess();
+    await testRecoveryNotThrottledByBreachMap();
   } finally {
     restoreEnv();
     _resetToolHealthNotifierThrottleForTests();
+    _resetOverrideExpirySoonWarningsForTests();
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);
