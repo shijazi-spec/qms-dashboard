@@ -86,6 +86,8 @@
  * Exit code: 0 on success, 1 on any failed assertion or fatal error.
  */
 
+import { uniqueXff } from './_helpers/testIpRanges';
+
 const PORT = process.env.PORT || '5000';
 const BASE_URL = process.env.RATE_LIMIT_TEST_URL || `http://localhost:${PORT}`;
 const ADMIN_KEY = process.env.ADMIN_API_KEY;
@@ -105,18 +107,6 @@ type ReqOutcome = {
   rateLimited: boolean;   // true iff 429 with Retry-After header (middleware)
   passedLimiter: boolean; // !rateLimited
 };
-
-function uniqueXff(scenario: string): string {
-  // Use TEST-NET-3 (203.0.113.0/24, RFC 5737) so we never collide with real
-  // production traffic that might be hitting the limiter at the same time.
-  // Embed Date.now() so re-runs of this script never reuse the same bucket.
-  // With TRUST_PROXY_HOPS=0, parseClientIp uses the RIGHTMOST entry — that is
-  // the one we must keep unique and syntactically valid (octets 0-255).
-  const seed = (Date.now() ^ (scenario.length * 7919)) >>> 0;
-  const left = (seed % 254) + 1;        // 1..254
-  const right = ((seed >>> 8) % 254) + 1; // 1..254
-  return `198.51.100.${left},203.0.113.${right}`;
-}
 
 async function waitForWindowHeadroom(): Promise<void> {
   const now = Date.now();

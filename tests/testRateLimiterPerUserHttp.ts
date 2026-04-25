@@ -80,6 +80,7 @@
 
 import crypto from 'crypto';
 import pg from 'pg';
+import { uniqueXff } from './_helpers/testIpRanges';
 
 const { Pool } = pg;
 
@@ -104,18 +105,6 @@ type ReqOutcome = {
   rateLimited: boolean;   // true iff 429 with Retry-After header (middleware)
   passedLimiter: boolean; // !rateLimited
 };
-
-function uniqueXff(scenario: string): string {
-  // Use TEST-NET-3 (203.0.113.0/24, RFC 5737) so we never collide with real
-  // production traffic. With TRUST_PROXY_HOPS=0 (default), parseClientIp uses
-  // the RIGHTMOST entry — that is the one we must keep unique and syntactically
-  // valid (octets 0-255). Both users in this test deliberately share the SAME
-  // XFF so that any IP-keyed regression would collapse their buckets.
-  const seed = (Date.now() ^ (scenario.length * 7919)) >>> 0;
-  const left = (seed % 254) + 1;
-  const right = ((seed >>> 8) % 254) + 1;
-  return `198.51.100.${left},203.0.113.${right}`;
-}
 
 async function waitForWindowHeadroom(): Promise<void> {
   const now = Date.now();
