@@ -30,6 +30,10 @@ import {
   getAdminKey,
   hasValidAdminApiKey,
   isAdminAuthorized,
+  requireAdminOrKey,
+  requireRoleOrKey,
+  requireAuthOrKey,
+  getSessionUser,
 } from "../src/utils/rbacMiddleware";
 
 const SESSION_COOKIE_NAME = "walaplus_session";
@@ -317,6 +321,137 @@ console.log("Case: header wins over cookie when both supply an admin key");
   assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
 }
 console.log();
+
+// ─── getSessionUser: admin-key fallback ───────────────────────────────────────
+
+console.log("Case: getSessionUser — X-Admin-Key present, no session → synthetic admin");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  const user = getSessionUser(c);
+  assert(user !== null, "getSessionUser returns a non-null user");
+  assertEquals(user?.userId, 0, "synthetic user has userId 0");
+  assertEquals(user?.role, "admin", "synthetic user has role admin");
+  assertEquals(user?.email, "admin-key@system", "synthetic user has admin-key email");
+}
+console.log();
+
+console.log("Case: getSessionUser — valid session cookie, no key → session user");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({
+    cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("quality_manager") },
+  });
+  const user = getSessionUser(c);
+  assert(user !== null, "getSessionUser returns a non-null user");
+  assertEquals(user?.role, "quality_manager", "role matches the session payload");
+  assertEquals(user?.email, "admin@example.com", "email matches the session payload");
+}
+console.log();
+
+console.log("Case: getSessionUser — no key, no session → null");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext();
+  assertEquals(getSessionUser(c), null, "getSessionUser returns null");
+}
+console.log();
+
+console.log("Case: getSessionUser — wrong key, no session → null");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ adminKeyHeader: "not-the-right-key" });
+  assertEquals(getSessionUser(c), null, "getSessionUser returns null on key mismatch");
+}
+console.log();
+
+// ─── requireAuthOrKey ─────────────────────────────────────────────────────────
+
+console.log("Case: requireAuthOrKey — valid key → synthetic admin");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  const user = requireAuthOrKey(c);
+  assert(user !== null, "requireAuthOrKey returns a non-null user");
+  assertEquals(user?.userId, 0, "synthetic user has userId 0");
+  assertEquals(user?.role, "admin", "synthetic user has role admin");
+}
+console.log();
+
+console.log("Case: requireAuthOrKey — no key, valid session → session user");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext({
+    cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("grc_manager") },
+  });
+  const user = requireAuthOrKey(c);
+  assert(user !== null, "requireAuthOrKey returns a non-null user");
+  assertEquals(user?.role, "grc_manager", "role matches session payload");
+}
+console.log();
+
+console.log("Case: requireAuthOrKey — no key, no session → null");
+{
+  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+  const c = makeContext();
+  assertEquals(requireAuthOrKey(c), null, "requireAuthOrKey returns null");
+}
+console.log();
+
+// ─── requireAdminOrKey and requireRoleOrKey (async, key-only short-circuit) ───
+
+await (async () => {
+  console.log("Case: requireAdminOrKey — valid key → synthetic admin");
+  {
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+    const user = await requireAdminOrKey(c);
+    assert(user !== null, "requireAdminOrKey returns a non-null user");
+    assertEquals(user?.userId, 0, "synthetic user has userId 0");
+    assertEquals(user?.role, "admin", "synthetic user has role admin");
+    assertEquals(user?.email, "api-key@system", "synthetic user has api-key email");
+  }
+  console.log();
+
+  console.log("Case: requireAdminOrKey — no key, no session → null (no DB hit)");
+  {
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    const c = makeContext();
+    const user = await requireAdminOrKey(c);
+    assertEquals(user, null, "requireAdminOrKey returns null");
+  }
+  console.log();
+
+  console.log("Case: requireRoleOrKey — valid key → synthetic admin, ignores allowedRoles");
+  {
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+    const user = await requireRoleOrKey(c, ["quality_manager"]);
+    assert(user !== null, "requireRoleOrKey returns a non-null user");
+    assertEquals(user?.role, "admin", "synthetic user has role admin");
+    assertEquals(user?.userId, 0, "synthetic user has userId 0");
+  }
+  console.log();
+
+  console.log("Case: requireRoleOrKey — valid key wins even when role not in allowedRoles list");
+  {
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+    const user = await requireRoleOrKey(c, ["department_viewer"]);
+    assert(user !== null, "requireRoleOrKey returns a non-null user with empty-ish roles list");
+    assertEquals(user?.role, "admin", "synthetic user still has admin role");
+  }
+  console.log();
+
+  console.log("Case: requireRoleOrKey — no key, no session → null (no DB hit)");
+  {
+    process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
+    const c = makeContext();
+    const user = await requireRoleOrKey(c, ["admin"]);
+    assertEquals(user, null, "requireRoleOrKey returns null");
+  }
+  console.log();
+})();
 
 console.log(`Results: ${passed} passed, ${failed} failed`);
 

@@ -36,11 +36,13 @@ npx tsx tests/aiApprovalRejectionRedaction.test.ts
 # configured (KPIs, executive, analytics, scorecard, health-pulse,
 # infographic).
 #
-# `adminAuthHelpers.test.ts` (Task #82) covers the shared helpers
-# `hasValidAdminApiKey` / `getAdminKey` / `isAdminAuthorized` that back every
-# admin-key authorization site (admin/qms/dashboard/static/health-pulse routes
-# and the global middleware). Regressing these would silently weaken every
-# admin endpoint at once.
+# `adminAuthHelpers.test.ts` (Tasks #82 / #96) covers the shared helpers
+# `hasValidAdminApiKey` / `getAdminKey` / `isAdminAuthorized` and also the
+# role-gate helpers `requireAdminOrKey` / `requireRoleOrKey` / `requireAuthOrKey`
+# plus the `getSessionUser` admin-key fallback that back every admin-key
+# authorization site (admin/qms/dashboard/static/health-pulse routes and the
+# global middleware). Regressing these would silently weaken every admin
+# endpoint at once.
 # ----------------------------------------------------------------------------
 echo ""
 echo "▶ CI gate: RBAC route-lockdown permission-map tests"
