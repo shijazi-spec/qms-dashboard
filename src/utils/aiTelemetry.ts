@@ -770,7 +770,21 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(tool: T, agentNam
 //   // ... process stream ...
 //   await recordStreamTelemetry({ agentName, model, startedAt, stream, ... });
 // ──────────────────────────────────────────────────────────────────────────────
-export async function recordStreamTelemetry(params: {
+/**
+ * Params for `recordStreamTelemetry()`.
+ *
+ * Exported as a named interface (rather than left as an inline object-type
+ * literal on the function signature) so the brand-contract test in
+ * `src/utils/__tests__/aiTelemetryMetadata.test.ts` can hold this shape
+ * to the same `// @ts-expect-error` directive that already locks the
+ * non-streaming entry points (`withAiTelemetry()` / `startTelemetrySpan()`
+ * share `WithAiTelemetryParams`). Without a named interface, a future
+ * refactor that accidentally widened `metadata` back to
+ * `AiCallTelemetryMetadata` (or replaced the brand with the bare
+ * allow-list) would still pass the existing tests — only the runtime
+ * guardrail script would catch the regression. See Task #582.
+ */
+export interface RecordStreamTelemetryParams {
   agentName: string;
   model: string;
   startedAt: number;
@@ -789,7 +803,9 @@ export async function recordStreamTelemetry(params: {
    * payload into ai_call_metrics.metadata. See {@link BuiltAiCallTelemetryMetadata}.
    */
   metadata?: BuiltAiCallTelemetryMetadata;
-}): Promise<number | null> {
+}
+
+export async function recordStreamTelemetry(params: RecordStreamTelemetryParams): Promise<number | null> {
   const latencyMs = Date.now() - params.startedAt;
   const promptPreview = params.promptText
     ? redactPromptPreview(params.promptText)

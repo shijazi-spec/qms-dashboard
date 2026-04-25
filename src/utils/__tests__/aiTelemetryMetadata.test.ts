@@ -38,6 +38,7 @@ import {
   buildAiCallTelemetryMetadata,
   redactMetadataForStorage,
   type WithAiTelemetryParams,
+  type RecordStreamTelemetryParams,
   type BuiltAiCallTelemetryMetadata,
 } from "../aiTelemetry";
 
@@ -182,9 +183,10 @@ function check(condition: boolean, label: string): void {
 // streaming-callers gap Task #511 was filed for. We don't import
 // startTelemetrySpan / recordStreamTelemetry directly (they would open a
 // pg.Pool() at module-load time); WithAiTelemetryParams is the shared
-// shape behind withAiTelemetry() and startTelemetrySpan(), and the
-// recordStreamTelemetry params are an inline shape that uses the same
-// brand. Verifying one is enough to lock the contract for all three.
+// shape behind withAiTelemetry() and startTelemetrySpan(), and
+// RecordStreamTelemetryParams is the named export for the streaming
+// caller — Task #582 added it specifically so this test could lock the
+// streaming brand contract DIRECTLY rather than only by inheritance.
 {
   const built: BuiltAiCallTelemetryMetadata = buildAiCallTelemetryMetadata({
     promptVersion: "qms@deadbeef",
@@ -235,6 +237,68 @@ function check(condition: boolean, label: string): void {
   check(
     true,
     "(f) spread-from-catch literal `{ prompt_version, ...debugDump }` is rejected at compile time",
+  );
+
+  // Streaming entry point — Task #582 closes the last verification gap.
+  // Before this block, the brand on `recordStreamTelemetry` was only
+  // proven INDIRECTLY (its inline params shape used the same brand, so
+  // the WithAiTelemetryParams test "covered" it by inheritance). If a
+  // future refactor accidentally widened the streaming `metadata` field
+  // back to `AiCallTelemetryMetadata` — or replaced the brand with the
+  // bare allow-list — the WithAiTelemetryParams checks above would still
+  // pass. Holding the named `RecordStreamTelemetryParams` shape to its
+  // own `// @ts-expect-error` directive locks the streaming contract
+  // directly so tsc fails the npm `check` gate on any such regression.
+  const okStreamingParams: RecordStreamTelemetryParams = {
+    agentName: "qms",
+    model: "gpt-4o",
+    startedAt: Date.now(),
+    stream: null,
+    success: true,
+    metadata: built,
+  };
+  check(
+    okStreamingParams.metadata === built,
+    "(f) buildAiCallTelemetryMetadata() output is accepted at the streaming entry point",
+  );
+
+  const _rejectedStreamingInlineLiteral: RecordStreamTelemetryParams = {
+    agentName: "qms",
+    model: "gpt-4o",
+    startedAt: Date.now(),
+    stream: null,
+    success: true,
+    // @ts-expect-error — the BuiltAiCallTelemetryMetadata brand requires
+    // the value to come from buildAiCallTelemetryMetadata(). An inline
+    // `{ ... }` literal at the streaming entry point is missing the
+    // phantom brand field, so this stops type-checking entirely. The
+    // npm `check` (tsc) gate enforces this in CI for every PR.
+    metadata: { prompt_version: "qms@deadbeef" },
+  };
+  void _rejectedStreamingInlineLiteral;
+  check(
+    true,
+    "(f) inline `metadata` literal at the streaming entry point triggers a TypeScript compile error (// @ts-expect-error)",
+  );
+
+  const _streamingLeakShapedSpread: RecordStreamTelemetryParams = {
+    agentName: "qms",
+    model: "gpt-4o",
+    startedAt: Date.now(),
+    stream: null,
+    success: true,
+    // @ts-expect-error — the brand also blocks the spread-from-catch
+    // pattern at the streaming entry point even though `prompt_version`
+    // itself is allow-listed; an inline literal cannot satisfy the
+    // brand regardless of its keys. This is the line a future streaming
+    // caller would have written without the brand:
+    // `metadata: { prompt_version: ver, ...debugDump }`.
+    metadata: { prompt_version: "qms@deadbeef", note: "sk-live-1234567890abcdef1234" },
+  };
+  void _streamingLeakShapedSpread;
+  check(
+    true,
+    "(f) streaming spread-from-catch literal `{ prompt_version, ...debugDump }` is rejected at compile time",
   );
 }
 
