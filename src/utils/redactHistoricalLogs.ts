@@ -19,6 +19,8 @@
  *   npx tsx src/utils/redactHistoricalLogs.ts
  */
 
+import fs from 'fs';
+import path from 'path';
 import { Pool } from 'pg';
 import {
   redactSensitiveFields,
@@ -32,6 +34,22 @@ import {
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const REDACT_DATE = new Date().toISOString();
 const BREADCRUMB_KEY = '_redacted_at';
+
+/**
+ * Resolve the project-root `audit-evidence/` directory.
+ *
+ * In both execution contexts __dirname is exactly two levels below the
+ * project root:
+ *   - Direct CLI invocation via tsx: `<root>/src/utils/`  → `../../`
+ *   - Mastra bundled dev server:     `<root>/.mastra/output/` → `../../`
+ *
+ * Using path.resolve(__dirname, '../..') therefore reliably reaches the
+ * workspace root in either case without relying on package.json detection
+ * (Mastra places its own package.json inside .mastra/output/).
+ */
+function resolveAuditEvidenceDir(): string {
+  return path.resolve(__dirname, '../../audit-evidence');
+}
 
 /**
  * Result counters for the ai_pending_actions sweep. Reported in the
@@ -117,7 +135,7 @@ export async function redactEventLogs(client: any): Promise<number> {
   return updated;
 }
 
-async function redactChangeHistoryTable(client: any, tableName: string): Promise<number> {
+export async function redactChangeHistoryTable(client: any, tableName: string): Promise<number> {
   const rows = await client.query(
     `SELECT id, field_changed, old_value, new_value FROM ${tableName}`
   );
@@ -237,52 +255,7 @@ async function main() {
     console.log('[Redaction] Starting historical log redaction sweep...');
     console.log(`[Redaction] Sweep timestamp: ${REDACT_DATE}`);
 
-    const elCount = await redactEventLogs(client);
-    console.log(`[Redaction] event_logs: ${elCount} rows updated`);
-
-    let ncCount = 0;
-    let capaCount = 0;
-    let aiCount = 0;
-
-    try {
-      ncCount = await redactChangeHistoryTable(client, 'nc_change_history');
-      console.log(`[Redaction] nc_change_history: ${ncCount} rows updated`);
-    } catch (e: any) {
-      if (e.code === '42P01') {
-        console.log('[Redaction] nc_change_history table does not exist — skipped');
-      } else { throw e; }
-    }
-
-    try {
-      capaCount = await redactChangeHistoryTable(client, 'capa_change_history');
-      console.log(`[Redaction] capa_change_history: ${capaCount} rows updated`);
-    } catch (e: any) {
-      if (e.code === '42P01') {
-        console.log('[Redaction] capa_change_history table does not exist — skipped');
-      } else { throw e; }
-    }
-
-    let aiResult: AiPendingActionsSweepResult | null = null;
-    let aiSkipReason: string | null = null;
-
-    try {
-      aiResult = await redactAiPendingActions(client);
-      aiCount = aiResult.rowsUpdated;
-      console.log(
-        `[Redaction] ai_pending_actions: ${aiResult.rowsUpdated} rows updated ` +
-          `(scanned=${aiResult.scanned}, payload=${aiResult.payloadChanged}, ` +
-          `payload_preview=${aiResult.previewChanged}, ` +
-          `execution_result=${aiResult.executionResultChanged})`,
-      );
-    } catch (e: any) {
-      if (e.code === '42P01') {
-        aiSkipReason = 'table_missing';
-        console.log('[Redaction] ai_pending_actions table does not exist — skipped');
-      } else { throw e; }
-    }
-
-    const total = elCount + ncCount + capaCount + aiCount;
-    console.log(`[Redaction] Sweep complete. Total rows updated: ${total}`);
+    const result = await runSweepWithClient(client, REDACT_DATE);
 
     // Emit an immutable audit-log entry recording that the sweep ran. This
     // is the cross-table receipt auditors look for after the historical
@@ -297,25 +270,11 @@ async function main() {
         entityName: 'Historical secret-redaction sweep',
         description:
           `Backfilled redactSecretLikeStrings + redactSensitiveFields across ` +
-          `historical audit tables. event_logs=${elCount}, ` +
-          `nc_change_history=${ncCount}, capa_change_history=${capaCount}, ` +
-          `ai_pending_actions=${aiCount} (rows updated).`,
-        newValue: {
-          sweep_timestamp: REDACT_DATE,
-          event_logs_updated: elCount,
-          nc_change_history_updated: ncCount,
-          capa_change_history_updated: capaCount,
-          ai_pending_actions: aiResult
-            ? {
-                scanned: aiResult.scanned,
-                payload_changed: aiResult.payloadChanged,
-                payload_preview_changed: aiResult.previewChanged,
-                execution_result_changed: aiResult.executionResultChanged,
-                rows_updated: aiResult.rowsUpdated,
-              }
-            : { skipped: aiSkipReason ?? 'unknown' },
-          total_rows_updated: total,
-        },
+          `historical audit tables. event_logs=${result.event_logs_updated}, ` +
+          `nc_change_history=${result.nc_change_history_updated}, ` +
+          `capa_change_history=${result.capa_change_history_updated}, ` +
+          `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
+        newValue: result,
         aiInvolved: false,
         severity: 'INFO',
         module: 'security/redaction-sweep',
@@ -327,6 +286,197 @@ async function main() {
   } finally {
     client.release();
     await pool.end();
+  }
+}
+
+/**
+ * Snake-case JSON snapshot of the ai_pending_actions sweep counters as
+ * stored in SweepResult and last-sweep.json. Uses snake_case to match the
+ * surrounding JSON structure (AiPendingActionsSweepResult uses camelCase
+ * internally for TypeScript ergonomics).
+ */
+export interface AiPendingActionsSnapshot {
+  scanned: number;
+  payload_changed: number;
+  payload_preview_changed: number;
+  execution_result_changed: number;
+  rows_updated: number;
+}
+
+/**
+ * Full-sweep result returned by runSweepWithClient() and written to
+ * audit-evidence/last-sweep.json by onBootRedactionSweep().
+ */
+export interface SweepResult {
+  sweep_timestamp: string;
+  event_logs_updated: number;
+  nc_change_history_updated: number;
+  capa_change_history_updated: number;
+  ai_pending_actions: AiPendingActionsSnapshot | { skipped: string };
+  total_rows_updated: number;
+}
+
+/**
+ * Run the full redaction sweep against an already-open database client and
+ * return structured counters. Does NOT commit its own transaction or close
+ * the client — the caller controls the connection lifecycle.
+ *
+ * This is the function called both by main() (direct CLI invocation) and by
+ * onBootRedactionSweep() (application-boot hook).
+ */
+export async function runSweepWithClient(
+  client: any,
+  sweepTimestamp: string,
+): Promise<SweepResult> {
+  const elCount = await redactEventLogs(client);
+  console.log(`[Redaction] event_logs: ${elCount} rows updated`);
+
+  let ncCount = 0;
+  let capaCount = 0;
+  let aiCount = 0;
+  let aiResult: AiPendingActionsSweepResult | null = null;
+  let aiSkipReason: string | null = null;
+
+  try {
+    ncCount = await redactChangeHistoryTable(client, 'nc_change_history');
+    console.log(`[Redaction] nc_change_history: ${ncCount} rows updated`);
+  } catch (e: any) {
+    if (e.code === '42P01') {
+      console.log('[Redaction] nc_change_history table does not exist — skipped');
+    } else { throw e; }
+  }
+
+  try {
+    capaCount = await redactChangeHistoryTable(client, 'capa_change_history');
+    console.log(`[Redaction] capa_change_history: ${capaCount} rows updated`);
+  } catch (e: any) {
+    if (e.code === '42P01') {
+      console.log('[Redaction] capa_change_history table does not exist — skipped');
+    } else { throw e; }
+  }
+
+  try {
+    aiResult = await redactAiPendingActions(client);
+    aiCount = aiResult.rowsUpdated;
+    console.log(
+      `[Redaction] ai_pending_actions: ${aiResult.rowsUpdated} rows updated ` +
+        `(scanned=${aiResult.scanned}, payload=${aiResult.payloadChanged}, ` +
+        `payload_preview=${aiResult.previewChanged}, ` +
+        `execution_result=${aiResult.executionResultChanged})`,
+    );
+  } catch (e: any) {
+    if (e.code === '42P01') {
+      aiSkipReason = 'table_missing';
+      console.log('[Redaction] ai_pending_actions table does not exist — skipped');
+    } else { throw e; }
+  }
+
+  const total = elCount + ncCount + capaCount + aiCount;
+  console.log(`[Redaction] Sweep complete. Total rows updated: ${total}`);
+
+  return {
+    sweep_timestamp: sweepTimestamp,
+    event_logs_updated: elCount,
+    nc_change_history_updated: ncCount,
+    capa_change_history_updated: capaCount,
+    ai_pending_actions: aiResult
+      ? {
+          scanned: aiResult.scanned,
+          payload_changed: aiResult.payloadChanged,
+          payload_preview_changed: aiResult.previewChanged,
+          execution_result_changed: aiResult.executionResultChanged,
+          rows_updated: aiResult.rowsUpdated,
+        }
+      : { skipped: aiSkipReason ?? 'unknown' },
+    total_rows_updated: total,
+  };
+}
+
+/**
+ * On-boot redaction sweep hook.
+ *
+ * Called once during application startup (see src/mastra/index.ts). It runs
+ * the full redaction sweep and:
+ *
+ *   1. Emits a system-level audit-log entry via logEvent() (same as the CLI
+ *      path) so the run is visible in the event_logs table.
+ *   2. Writes a machine-readable JSON summary to
+ *      audit-evidence/last-sweep.json so operators can see the most recent
+ *      run's row counts at a glance without querying the database.
+ *
+ * The function NEVER throws — any error is caught and logged to stderr so
+ * that a sweep failure cannot prevent the application from starting.
+ *
+ * The sweep is idempotent (rows already redacted are skipped), so running it
+ * on every boot is safe. A fresh database restore that predates the deny-list
+ * fix will therefore be automatically cleaned up on the very next startup.
+ */
+export async function onBootRedactionSweep(): Promise<void> {
+  const g = globalThis as any;
+  if (g.__walaplus_bootSweepDone) {
+    console.log('[Redaction] Boot sweep already ran this process — skipping duplicate call');
+    return;
+  }
+
+  const sweepTimestamp = new Date().toISOString();
+  const bootPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  try {
+    console.log('[Redaction] Boot sweep starting...');
+    console.log(`[Redaction] Sweep timestamp: ${sweepTimestamp}`);
+
+    const client = await bootPool.connect();
+    let result: SweepResult;
+    try {
+      result = await runSweepWithClient(client, sweepTimestamp);
+    } finally {
+      client.release();
+    }
+
+    // Mark as done only after the sweep data is in hand so that a transient
+    // DB connection failure on the first attempt does not permanently
+    // suppress future retries within the same process.
+    g.__walaplus_bootSweepDone = true;
+
+    try {
+      await logEvent({
+        actionType: 'UPDATE',
+        entityType: 'SYSTEM',
+        entityId: 'boot_redaction_sweep',
+        entityName: 'Boot-time secret-redaction sweep',
+        description:
+          `Automatic on-boot redaction sweep completed. ` +
+          `event_logs=${result.event_logs_updated}, ` +
+          `nc_change_history=${result.nc_change_history_updated}, ` +
+          `capa_change_history=${result.capa_change_history_updated}, ` +
+          `ai_pending_actions=${result.total_rows_updated - result.event_logs_updated - result.nc_change_history_updated - result.capa_change_history_updated} (rows updated).`,
+        newValue: result,
+        aiInvolved: false,
+        severity: 'INFO',
+        module: 'security/redaction-sweep',
+      });
+      console.log('[Redaction] Boot sweep audit-log entry emitted');
+    } catch (auditErr) {
+      console.error('[Redaction] Failed to emit boot sweep audit-log entry:', auditErr);
+    }
+
+    try {
+      const evidenceDir = resolveAuditEvidenceDir();
+      if (!fs.existsSync(evidenceDir)) {
+        fs.mkdirSync(evidenceDir, { recursive: true });
+      }
+      const summaryPath = path.join(evidenceDir, 'last-sweep.json');
+      fs.writeFileSync(summaryPath, JSON.stringify(result, null, 2) + '\n', 'utf8');
+      console.log(`[Redaction] Boot sweep summary written to ${summaryPath}`);
+    } catch (fileErr) {
+      console.error('[Redaction] Failed to write boot sweep summary file:', fileErr);
+    }
+  } catch (err) {
+    console.error('[Redaction] Boot sweep failed — application startup continues:', err);
+  } finally {
+    try {
+      await bootPool.end();
+    } catch { /* ignore */ }
   }
 }
 

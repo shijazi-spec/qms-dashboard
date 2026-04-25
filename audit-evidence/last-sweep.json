@@ -1,0 +1,14 @@
+{
+  "sweep_timestamp": "2026-04-24T23:40:03.637Z",
+  "event_logs_updated": 0,
+  "nc_change_history_updated": 0,
+  "capa_change_history_updated": 0,
+  "ai_pending_actions": {
+    "scanned": 0,
+    "payload_changed": 0,
+    "payload_preview_changed": 0,
+    "execution_result_changed": 0,
+    "rows_updated": 0
+  },
+  "total_rows_updated": 0
+}

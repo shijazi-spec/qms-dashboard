@@ -59,6 +59,7 @@ import { analyticsRoutes } from "./routes/analyticsRoutes";
 import { healthPulseRoutes } from "./routes/healthPulseRoutes";
 import { a11yRoutes } from "./routes/a11yRoutes";
 import { i18nRoutes } from "./routes/i18nRoutes";
+import { onBootRedactionSweep } from "../utils/redactHistoricalLogs";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
@@ -258,4 +259,25 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
   }, 30 * 1000);
   const refreshTimer = setInterval(warm, 13 * 60 * 1000);
   g.__walaplus_cacheWarmer = { startTimer, refreshTimer };
+})();
+
+/*  On-boot redaction sweep
+    Automatically redacts any sensitive data that may have re-appeared in
+    event_logs, nc_change_history, capa_change_history, or ai_pending_actions
+    as a result of a database restore from a pre-fix backup.
+
+    The sweep is idempotent (rows already clean are skipped), runs in the
+    background (never delays the server from accepting requests), and writes
+    its results to audit-evidence/last-sweep.json for operator visibility.
+*/
+(function startBootRedactionSweep() {
+  if (process.env.DATABASE_URL) {
+    setTimeout(() => {
+      onBootRedactionSweep().catch(err => {
+        console.error("[Redaction] Unexpected error in boot sweep wrapper:", err);
+      });
+    }, 5 * 1000);
+  } else {
+    console.log("[Redaction] DATABASE_URL not set — boot redaction sweep skipped");
+  }
 })();
