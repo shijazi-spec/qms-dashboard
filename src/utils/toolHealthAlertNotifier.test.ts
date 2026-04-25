@@ -370,6 +370,163 @@ async function testThrottleResetsAfterWindow(): Promise<void> {
   assertEqual(dbCalls, 2, "DB claim invoked exactly twice total");
 }
 
+async function testBreachSlackThrowsDoesNotPropagate(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — sendSlack throws ⇒ slackSent=false, no throw escapes",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  // Suppress the expected "Slack send threw" log so test output stays
+  // readable. Any unexpected error path still surfaces because we only
+  // swallow during the call under test and restore in `finally`.
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "slack-throw:error_rate" }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          throw new Error("simulated Slack 5xx");
+        },
+        sendEmail: async () => {
+          emailCalls++;
+          return { success: true };
+        },
+        claimDb: async () => true,
+        recordResult: async () => {},
+        now: () => 1_700_000_002_000,
+      },
+    );
+    // Critical contract: a Slack outage must NOT propagate up to the cron;
+    // the cron tick would otherwise crash and stop subsequent breach checks.
+    assertEqual(result.slackSent, false, "result.slackSent is false on throw");
+    assertEqual(result.emailSent, false, "result.emailSent stays false (no email config)");
+    assertEqual(result.throttled, false, "not throttled — claim succeeded before send");
+    assertEqual(result.skipped, false, "not skipped — Slack channel was configured");
+    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
+    assertEqual(emailCalls, 0, "sendEmail was not invoked (no email recipients)");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testBreachEmailRejectedKeepsEmailSentFalse(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — sendEmail returns { success:false } ⇒ emailSent=false",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+
+  let emailCalls = 0;
+  const result = await notifyToolHealthBreach(
+    makeBreach({ related_record_id: "email-reject:error_rate" }),
+    {
+      sendSlack: async () => false,
+      sendEmail: async () => {
+        emailCalls++;
+        return { success: false, error: "Resend rejected: invalid recipient" };
+      },
+      claimDb: async () => true,
+      recordResult: async () => {},
+      now: () => 1_700_000_003_000,
+    },
+  );
+  // Critical contract: a failed Resend response must surface on the result
+  // object as `emailSent: false` so the dashboard's notified column shows
+  // "failed" rather than misleading operators with a green check.
+  assertEqual(result.emailSent, false, "result.emailSent is false on { success: false }");
+  assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+  assertEqual(result.skipped, false, "not skipped — email recipients are configured");
+  assertEqual(result.throttled, false, "not throttled");
+  assertEqual(emailCalls, 1, "sendEmail was invoked exactly once");
+}
+
+async function testBreachEmailThrowsDoesNotPropagate(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — sendEmail throws ⇒ emailSent=false, no throw escapes",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+
+  let emailCalls = 0;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "email-throw:error_rate" }),
+      {
+        sendSlack: async () => false,
+        sendEmail: async () => {
+          emailCalls++;
+          throw new Error("simulated Resend network failure");
+        },
+        claimDb: async () => true,
+        recordResult: async () => {},
+        now: () => 1_700_000_004_000,
+      },
+    );
+    assertEqual(result.emailSent, false, "result.emailSent is false on throw");
+    assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+    assertEqual(result.skipped, false, "not skipped — email recipients are configured");
+    assertEqual(result.throttled, false, "not throttled");
+    assertEqual(emailCalls, 1, "sendEmail was invoked exactly once before throwing");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testBreachClaimDbThrowsFallsThroughToSend(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthBreach — claimDb throws ⇒ notifier still sends (DB-unavailable fall-through)",
+  );
+  clearEnv();
+  _resetToolHealthNotifierThrottleForTests();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
+
+  let claimCalls = 0;
+  let slackCalls = 0;
+  // Suppress the expected "DB claimDb threw" log.
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthBreach(
+      makeBreach({ related_record_id: "claimdb-throw:error_rate" }),
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          return true;
+        },
+        sendEmail: async () => ({ success: true }),
+        claimDb: async () => {
+          claimCalls++;
+          throw new Error("simulated DB unavailable");
+        },
+        recordResult: async () => {},
+        now: () => 1_700_000_005_000,
+      },
+    );
+    // Documented fall-through path: when the DB claim cannot be executed we
+    // err on the side of paging on-call rather than swallowing the breach.
+    // The in-process map then prevents this instance from re-paging the same
+    // key for the rest of the throttle window.
+    assertEqual(result.slackSent, true, "Slack send proceeds despite claimDb throw");
+    assertEqual(result.throttled, false, "not throttled — fall-through treats claim as success");
+    assertEqual(result.skipped, false, "not skipped");
+    assertEqual(claimCalls, 1, "claimDb was invoked exactly once");
+    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once after fall-through");
+  } finally {
+    console.error = originalError;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Section 2 — notifyToolHealthOverrideExpired
 // ---------------------------------------------------------------------------
@@ -448,6 +605,43 @@ async function testOverrideExpiredSlackPost(): Promise<void> {
     .map((e: any) => e?.text ?? "")
     .join(" ");
   assert(contextText.includes("audit row #99"), "context block carries the audit row id");
+}
+
+async function testOverrideExpiredSlackThrowsDoesNotPropagate(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthOverrideExpired — sendSlack throws ⇒ slackSent=false, no throw escapes",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  let slackCalls = 0;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthOverrideExpired(
+      {
+        cleared_overrides: { errorRatePct: 25 },
+        previous_updated_by: "alice@example.com",
+        expired_at: new Date("2026-04-25T16:00:00.000Z"),
+        audit_id: 101,
+      },
+      {
+        sendSlack: async () => {
+          slackCalls++;
+          throw new Error("simulated Slack 5xx");
+        },
+      },
+    );
+    // Critical contract: a Slack outage must NOT propagate up to the
+    // override reaper; the override row has already been cleared and the
+    // audit entry written, so a thrown send would leave the cron in a
+    // confused half-revert state on the next tick.
+    assertEqual(result.slackSent, false, "result.slackSent is false on throw");
+    assertEqual(result.skipped, false, "not skipped — channel was configured");
+    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
+  } finally {
+    console.error = originalError;
+  }
 }
 
 async function testOverrideExpiredSkippedWithoutChannel(): Promise<void> {
@@ -817,6 +1011,104 @@ async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
       emailCalls[0].text.includes("Error rate floor (%): 10 → 15"),
     "plain-text body renders the field-level diff",
   );
+}
+
+async function testConfigChangeSlackAndEmailFailIndependently(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — sendSlack throws and sendEmail rejects independently",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "ops@example.com";
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  let auditCalls = 0;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+      sendSlack: async () => {
+        slackCalls++;
+        throw new Error("simulated Slack 5xx");
+      },
+      // sendEmail rejected — surfaced as { success: false } rather than
+      // a throw to mirror the Resend SDK's rejected-message branch.
+      sendEmail: async () => {
+        emailCalls++;
+        return { success: false, error: "Resend rejected: invalid recipient" };
+      },
+      getAudit: async () => {
+        auditCalls++;
+        return [];
+      },
+    });
+
+    // Critical contract: the two channels are independent. A Slack outage
+    // must not block the email attempt, and a rejected email must not
+    // block the result from reflecting the Slack outcome.
+    assertEqual(result.slackSent, false, "result.slackSent is false on Slack throw");
+    assertEqual(result.emailSent, false, "result.emailSent is false on Resend rejection");
+    assertEqual(result.disabled, false, "not disabled — opt-in WAS set");
+    assertEqual(result.skipped, false, "not skipped — both transports configured");
+    assertEqual(result.noChanges, false, "not noChanges — diff was non-empty");
+    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
+    assertEqual(emailCalls, 1, "sendEmail was still invoked despite Slack throw");
+    assertEqual(auditCalls, 1, "getAudit was invoked once for the Slack block");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testConfigChangeAuditThrowsStillSendsSlack(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — getAudit throws ⇒ Slack still sends (best-effort)",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+  let auditCalls = 0;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks: blocks as any[] });
+        return true;
+      },
+      getAudit: async () => {
+        auditCalls++;
+        throw new Error("simulated audit DB unavailable");
+      },
+    });
+
+    // Critical contract: a DB hiccup loading the "Recent changes" block
+    // must NOT block the primary Slack post. The block is a nice-to-have
+    // — losing it should never make on-call miss the threshold change.
+    assertEqual(result.slackSent, true, "Slack send proceeds despite audit fetch throw");
+    assertEqual(result.disabled, false, "not disabled");
+    assertEqual(result.skipped, false, "not skipped");
+    assertEqual(result.noChanges, false, "not noChanges");
+    assertEqual(auditCalls, 1, "getAudit was invoked exactly once before throwing");
+    assertEqual(slackCalls.length, 1, "sendSlack was invoked exactly once after audit throw");
+
+    // The "Recent changes" block must be absent when the audit fetch
+    // failed — the renderer skips the section when the array is empty.
+    const allSectionText = slackCalls[0].blocks
+      .filter((b: any) => b?.type === "section")
+      .map((b: any) => b?.text?.text ?? "")
+      .join("\n");
+    assert(
+      !allSectionText.includes("Recent changes"),
+      "Recent changes section is omitted when audit fetch throws",
+    );
+  } finally {
+    console.error = originalError;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1287,6 +1579,75 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
   );
 }
 
+async function testRecoverySlackAndEmailFailIndependently(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthRecovery — sendSlack throws and sendEmail rejects independently",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+
+  let slackCalls = 0;
+  let emailCalls = 0;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthRecovery(makeRecovery(), {
+      sendSlack: async () => {
+        slackCalls++;
+        throw new Error("simulated Slack 5xx");
+      },
+      // sendEmail rejected — surfaced as { success: false } rather than
+      // a throw to mirror the Resend SDK's rejected-message branch.
+      sendEmail: async () => {
+        emailCalls++;
+        return { success: false, error: "Resend rejected: domain not verified" };
+      },
+    });
+
+    // Critical contract: the two channels are independent. A Slack outage
+    // must not block the email attempt, and a rejected email must not
+    // mask the Slack outcome on the result object.
+    assertEqual(result.slackSent, false, "result.slackSent is false on Slack throw");
+    assertEqual(result.emailSent, false, "result.emailSent is false on Resend rejection");
+    assertEqual(result.skipped, false, "not skipped — both transports configured");
+    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
+    assertEqual(emailCalls, 1, "sendEmail was still invoked despite Slack throw");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testRecoveryEmailThrowsDoesNotPropagate(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthRecovery — sendEmail throws ⇒ emailSent=false, no throw escapes",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+
+  let emailCalls = 0;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthRecovery(makeRecovery(), {
+      sendSlack: async () => false,
+      sendEmail: async () => {
+        emailCalls++;
+        throw new Error("simulated Resend network failure");
+      },
+    });
+    // Symmetric to the breach-side path: a thrown sendEmail must surface
+    // on the result rather than escape to the caller (the auto-resolve
+    // sweep would otherwise crash mid-pass).
+    assertEqual(result.emailSent, false, "result.emailSent is false on throw");
+    assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+    assertEqual(result.skipped, false, "not skipped — email recipients configured");
+    assertEqual(emailCalls, 1, "sendEmail was invoked exactly once before throwing");
+  } finally {
+    console.error = originalError;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
@@ -1298,7 +1659,12 @@ async function main(): Promise<void> {
     await testEmailSentOnSuccess();
     await testThrottledWithinWindow();
     await testThrottleResetsAfterWindow();
+    await testBreachSlackThrowsDoesNotPropagate();
+    await testBreachEmailRejectedKeepsEmailSentFalse();
+    await testBreachEmailThrowsDoesNotPropagate();
+    await testBreachClaimDbThrowsFallsThroughToSend();
     await testOverrideExpiredSlackPost();
+    await testOverrideExpiredSlackThrowsDoesNotPropagate();
     await testOverrideExpiredSkippedWithoutChannel();
     testDiffNoChanges();
     testDiffValueChange();
@@ -1308,6 +1674,8 @@ async function main(): Promise<void> {
     await testConfigChangeSkippedWithoutTransport();
     await testConfigChangeNoChanges();
     await testConfigChangeSlackAndEmailOnSuccess();
+    await testConfigChangeSlackAndEmailFailIndependently();
+    await testConfigChangeAuditThrowsStillSendsSlack();
     await testExpiringSoonSkippedWithoutChannel();
     await testExpiringSoonSlackOnSuccess();
     await testExpiringSoonDedupedOnSecondCall();
@@ -1315,6 +1683,8 @@ async function main(): Promise<void> {
     await testRecoverySkippedWithoutTransport();
     await testRecoverySlackAndEmailOnSuccess();
     await testRecoveryNotThrottledByBreachMap();
+    await testRecoverySlackAndEmailFailIndependently();
+    await testRecoveryEmailThrowsDoesNotPropagate();
   } finally {
     restoreEnv();
     _resetToolHealthNotifierThrottleForTests();
