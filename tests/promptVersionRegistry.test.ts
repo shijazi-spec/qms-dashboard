@@ -183,6 +183,264 @@ await suite.test(
   },
 );
 
+interface DiscoveredAgentName {
+  /** Agent file basename, e.g. "qmsConsultantAgent.ts". */
+  file: string;
+  /** Value passed to `new Agent({ name: ... })` in that file. */
+  name: string;
+}
+
+/**
+ * Statically scan every `.ts` file under src/mastra/agents/ for `new Agent({
+ * name: "..." })` declarations and return the (file, name) pairs.
+ *
+ * Why this is a static text scan rather than a dynamic import: the goal is to
+ * catch a contributor renaming the `name:` literal in an agent file while
+ * leaving the registry's `agent_name` string stale. Reading the source text
+ * directly is the most faithful representation of "what does the agent file
+ * literally say its name is right now".
+ *
+ * The walker tracks balanced braces inside the `new Agent({ ... })` call so
+ * that nested object literals (e.g. tool definitions with their own `name`
+ * field) cannot fool the top-level `name:` lookup. Quoted strings are skipped
+ * over so a `}` inside a string literal does not close the block early.
+ */
+async function discoverAgentNames(): Promise<DiscoveredAgentName[]> {
+  const entries = await readdir(AGENTS_DIR, { withFileTypes: true });
+  const found: DiscoveredAgentName[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
+    if (SKIP_FILES.has(entry.name)) continue;
+
+    const full = path.join(AGENTS_DIR, entry.name);
+    const src = await readFile(full, "utf8");
+
+    const ctorRe = /new\s+Agent\s*\(\s*\{/g;
+    let m: RegExpExecArray | null;
+    while ((m = ctorRe.exec(src)) !== null) {
+      const blockStart = m.index + m[0].length;
+      let depth = 1;
+      let i = blockStart;
+      while (i < src.length && depth > 0) {
+        const c = src[i];
+        if (c === "{") {
+          depth++;
+          i++;
+        } else if (c === "}") {
+          depth--;
+          i++;
+        } else if (c === '"' || c === "'" || c === "`") {
+          const quote = c;
+          i++;
+          while (i < src.length && src[i] !== quote) {
+            if (src[i] === "\\") i++;
+            i++;
+          }
+          if (i < src.length) i++; // consume closing quote
+        } else if (c === "/" && src[i + 1] === "/") {
+          // Line comment — skip to end of line so a `//` containing a `}`
+          // doesn't perturb the depth count.
+          while (i < src.length && src[i] !== "\n") i++;
+        } else if (c === "/" && src[i + 1] === "*") {
+          i += 2;
+          while (i < src.length - 1 && !(src[i] === "*" && src[i + 1] === "/")) i++;
+          i += 2;
+        } else {
+          i++;
+        }
+      }
+      // Block is src[blockStart .. i-1] (exclusive of the matching `}`).
+      // Find the first top-level `name: "..."` field in that slice. Because
+      // we only scan the outermost block (nested object literals are stepped
+      // over via the depth counter at `i`-walking time), but the regex below
+      // still needs to ignore nested levels: do a second balanced-brace pass
+      // that records only depth-0 occurrences of `name:`.
+      const block = src.slice(blockStart, i - 1);
+      const name = findTopLevelNameField(block);
+      if (name !== null) {
+        found.push({ file: entry.name, name });
+      }
+    }
+  }
+
+  return found;
+}
+
+/**
+ * Find the first `name: "..."` (or `'...'`) field at depth 0 inside the
+ * already-extracted `new Agent({ ... })` block. Returns null if absent.
+ *
+ * Walks the block character-by-character, tracking brace, bracket, and
+ * paren depth, and skipping over string/template/comment runs so that a
+ * `name:` inside a nested config object (e.g. a tool definition) is not
+ * mistaken for the agent's own name.
+ */
+function findTopLevelNameField(block: string): string | null {
+  let depth = 0;
+  let i = 0;
+  while (i < block.length) {
+    const c = block[i];
+    if (c === "{" || c === "[" || c === "(") {
+      depth++;
+      i++;
+      continue;
+    }
+    if (c === "}" || c === "]" || c === ")") {
+      depth--;
+      i++;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c;
+      i++;
+      while (i < block.length && block[i] !== quote) {
+        if (block[i] === "\\") i++;
+        i++;
+      }
+      if (i < block.length) i++;
+      continue;
+    }
+    if (c === "/" && block[i + 1] === "/") {
+      while (i < block.length && block[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && block[i + 1] === "*") {
+      i += 2;
+      while (i < block.length - 1 && !(block[i] === "*" && block[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
+    if (depth === 0 && (c === "n" || c === "N")) {
+      // Try to match `name` at this position followed by optional ws + `:`.
+      const slice = block.slice(i, i + 5);
+      if (/^name\b/.test(slice)) {
+        let j = i + 4;
+        while (j < block.length && /\s/.test(block[j])) j++;
+        if (block[j] === ":") {
+          j++;
+          while (j < block.length && /\s/.test(block[j])) j++;
+          const q = block[j];
+          if (q === '"' || q === "'") {
+            let k = j + 1;
+            let value = "";
+            while (k < block.length && block[k] !== q) {
+              if (block[k] === "\\" && k + 1 < block.length) {
+                value += block[k + 1];
+                k += 2;
+              } else {
+                value += block[k];
+                k++;
+              }
+            }
+            return value;
+          }
+        }
+      }
+    }
+    i++;
+  }
+  return null;
+}
+
+await suite.test(
+  "every ACTIVE_AGENT_PROMPT_VERSIONS agent_name matches a `new Agent({ name })` literal in some agent file",
+  async () => {
+    // If a contributor renames an agent at its source — e.g. changes
+    // `new Agent({ name: "WalaPlus QMS Consultant" })` to a new wording —
+    // without updating the registry, the AI Ops dashboard's /active endpoint
+    // would silently keep advertising the obsolete display name forever.
+    // This test scans every agent file for its `name:` argument and asserts
+    // each registry entry's `agent_name` matches one of them exactly.
+    const discovered = await discoverAgentNames();
+
+    suite.expect(
+      discovered.length > 0,
+      `filesystem scan found at least one new Agent({ name }) declaration ` +
+        `(scanned ${AGENTS_DIR}); got 0 — the regex or scan path is broken`,
+    );
+
+    const liveNames = new Set(discovered.map((d) => d.name));
+
+    for (const entry of ACTIVE_AGENT_PROMPT_VERSIONS) {
+      suite.expect(
+        liveNames.has(entry.agent_name),
+        `ACTIVE_AGENT_PROMPT_VERSIONS entry ${JSON.stringify(entry)} has ` +
+          `agent_name ${JSON.stringify(entry.agent_name)} that does NOT match ` +
+          `any \`new Agent({ name: ... })\` literal under src/mastra/agents/. ` +
+          `Either update the registry's agent_name to match the agent file's ` +
+          `current \`name:\` field, or update the agent file's \`name:\` to ` +
+          `match the registry. Discovered live names: ` +
+          `${JSON.stringify(Array.from(liveNames).sort())}.`,
+      );
+    }
+  },
+);
+
+await suite.test(
+  "each ACTIVE_AGENT_PROMPT_VERSIONS entry's agent_name matches the agent file that exports its prompt_version",
+  async () => {
+    // Stronger pairing check: the previous test only proves that an agent
+    // file *somewhere* uses the registered name. If two registry entries got
+    // their agent_name fields swapped, the previous test would still pass.
+    // Here we link each registry entry to the specific agent file that
+    // exports its `prompt_version` constant and assert that file's `name:`
+    // literal equals the registry's `agent_name`. This catches both swaps
+    // and the original "renamed in source but not in registry" bug per
+    // entry, with a precise error message naming the offending file.
+    const discoveredVersions = await discoverPromptVersionExports();
+    const discoveredNames = await discoverAgentNames();
+
+    // file -> name (every agent file should declare exactly one Agent ctor)
+    const fileToName = new Map<string, string>();
+    for (const { file, name } of discoveredNames) {
+      fileToName.set(file, name);
+    }
+
+    // promptVersionValue -> file (resolved by importing each constant)
+    const versionToFile = new Map<string, string>();
+    for (const { symbol, file } of discoveredVersions) {
+      const mod = await import(
+        pathToFileURL(path.join(AGENTS_DIR, file)).href
+      );
+      const value = (mod as Record<string, unknown>)[symbol];
+      if (typeof value === "string" && value.length > 0) {
+        versionToFile.set(value, file);
+      }
+    }
+
+    for (const entry of ACTIVE_AGENT_PROMPT_VERSIONS) {
+      const file = versionToFile.get(entry.prompt_version);
+      // The "stale registry entry" case is already covered by the earlier
+      // test that walks the registry; skip here when we cannot link an
+      // entry back to a file so this test reports only the name-mismatch
+      // class of failure with a clean message.
+      if (!file) continue;
+
+      const expectedName = fileToName.get(file);
+      suite.expect(
+        expectedName !== undefined,
+        `${file} exports a *_PROMPT_VERSION constant (registered as ` +
+          `${JSON.stringify(entry.prompt_version)}) but no ` +
+          `\`new Agent({ name: ... })\` declaration was found in that file. ` +
+          `Either add the Agent constructor or remove the registry entry.`,
+      );
+      if (expectedName === undefined) continue;
+
+      suite.expect(
+        expectedName === entry.agent_name,
+        `ACTIVE_AGENT_PROMPT_VERSIONS entry ${JSON.stringify(entry)} has ` +
+          `agent_name ${JSON.stringify(entry.agent_name)}, but the agent ` +
+          `file ${file} that exports its prompt_version declares ` +
+          `\`name: ${JSON.stringify(expectedName)}\`. Either update the ` +
+          `registry's agent_name to ${JSON.stringify(expectedName)} or ` +
+          `change ${file}'s \`new Agent({ name })\` back to ` +
+          `${JSON.stringify(entry.agent_name)}.`,
+      );
+    }
+  },
+);
+
 await suite.test(
   "ACTIVE_AGENT_PROMPT_VERSIONS entries all resolve to non-empty unique agent names",
   async () => {
