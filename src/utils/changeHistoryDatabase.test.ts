@@ -224,7 +224,13 @@ for (const key of REQUIRED_DENY_KEYS) {
 //
 // A caller may pass an object (e.g. a JSON snapshot) as oldValue/newValue.
 // redactSensitiveFields() recurses into objects, so sensitive sub-keys inside
-// the value should also be scrubbed before String() serialisation occurs.
+// the value should also be scrubbed before serialisation occurs.
+//
+// Task #451: in addition to scrubbing, the stored value MUST be the JSON
+// representation of the (redacted) object — i.e. parseable with JSON.parse —
+// rather than the literal string `[object Object]` produced by `String({})`.
+// The previous Section-3 assertions ("secret is gone") were also satisfied by
+// `[object Object]`, hiding the audit-data-loss bug.
 // ---------------------------------------------------------------------------
 
 console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
@@ -241,10 +247,53 @@ console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
   const params = lastInsertParams();
   assert(params !== null, "NC/object: pool.query was called");
   if (params) {
-    const combined = `${String(params[2] ?? "")}${String(params[3] ?? "")}`;
+    const oldParam = String(params[2] ?? "");
+    const newParam = String(params[3] ?? "");
+    const combined = `${oldParam}${newParam}`;
     assert(
       !combined.includes(SECRETS.password_hash),
       "NC/object: password_hash nested in object value is NOT present in INSERT params",
+    );
+
+    // Task #451: stored value must NOT collapse to `[object Object]`.
+    assert(
+      oldParam !== "[object Object]" && newParam !== "[object Object]",
+      "NC/object: stored value is NOT the literal string `[object Object]`",
+    );
+
+    // Task #451: stored value must round-trip as parseable JSON, and the
+    // structure (non-secret keys) must survive the scrub.
+    let oldParsed: unknown = null;
+    let newParsed: unknown = null;
+    let parseError: unknown = null;
+    try {
+      oldParsed = JSON.parse(oldParam);
+      newParsed = JSON.parse(newParam);
+    } catch (err) {
+      parseError = err;
+    }
+    assert(
+      parseError === null,
+      "NC/object: old_value and new_value round-trip via JSON.parse without throwing",
+    );
+    assert(
+      typeof oldParsed === "object" && oldParsed !== null &&
+        (oldParsed as Record<string, unknown>).username === "alice" &&
+        (oldParsed as Record<string, unknown>).role === "admin",
+      "NC/object: parsed old_value preserves non-secret fields (username, role)",
+    );
+    assert(
+      typeof newParsed === "object" && newParsed !== null &&
+        (newParsed as Record<string, unknown>).role === "viewer",
+      "NC/object: parsed new_value preserves the actual change (role: viewer)",
+    );
+
+    // Task #451 anti-tautology: secret key must still exist as a property,
+    // but its value must be the redaction sentinel — not the raw secret.
+    const oldObj = oldParsed as Record<string, unknown>;
+    assert(
+      "password_hash" in oldObj && oldObj.password_hash !== SECRETS.password_hash,
+      "NC/object: parsed password_hash field is scrubbed (not raw secret)",
     );
   }
 }
@@ -261,10 +310,144 @@ console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
   const params = lastInsertParams();
   assert(params !== null, "CAPA/object: pool.query was called");
   if (params) {
-    const combined = `${String(params[2] ?? "")}${String(params[3] ?? "")}`;
+    const oldParam = String(params[2] ?? "");
+    const newParam = String(params[3] ?? "");
+    const combined = `${oldParam}${newParam}`;
     assert(
       !combined.includes(SECRETS.api_key),
       "CAPA/object: api_key nested in object value is NOT present in INSERT params",
+    );
+
+    // Task #451: stored value must NOT collapse to `[object Object]`.
+    assert(
+      oldParam !== "[object Object]" && newParam !== "[object Object]",
+      "CAPA/object: stored value is NOT the literal string `[object Object]`",
+    );
+
+    // Task #451: stored value must round-trip as parseable JSON, and the
+    // distinguishing fields must survive the scrub so the audit row is useful.
+    let oldParsed: unknown = null;
+    let newParsed: unknown = null;
+    let parseError: unknown = null;
+    try {
+      oldParsed = JSON.parse(oldParam);
+      newParsed = JSON.parse(newParam);
+    } catch (err) {
+      parseError = err;
+    }
+    assert(
+      parseError === null,
+      "CAPA/object: old_value and new_value round-trip via JSON.parse without throwing",
+    );
+    assert(
+      typeof oldParsed === "object" && oldParsed !== null &&
+        (oldParsed as Record<string, unknown>).provider === "zoho" &&
+        (oldParsed as Record<string, unknown>).account_id === "acct-public-123",
+      "CAPA/object: parsed old_value preserves non-secret fields (provider, account_id)",
+    );
+    assert(
+      typeof newParsed === "object" && newParsed !== null &&
+        (newParsed as Record<string, unknown>).account_id === "acct-public-456",
+      "CAPA/object: parsed new_value preserves the actual change (account_id flip)",
+    );
+
+    const newObj = newParsed as Record<string, unknown>;
+    assert(
+      "api_key" in newObj && newObj.api_key !== SECRETS.api_key,
+      "CAPA/object: parsed api_key field is scrubbed (not raw secret)",
+    );
+  }
+}
+
+// Task #451: array-valued payloads must also serialise to parseable JSON
+// (not `[object Object]`-style coercion), since arrays are objects too and a
+// caller may pass e.g. a list of attachments or affected records as the value.
+{
+  captured.length = 0;
+  await logNCChange(
+    1,
+    "affected_records",
+    [{ id: 1, name: "alpha" }, { id: 2, name: "beta" }],
+    [{ id: 1, name: "alpha" }, { id: 2, name: "beta-renamed" }, { id: 3, name: "gamma" }],
+    "test-runner",
+  );
+  const params = lastInsertParams();
+  assert(params !== null, "NC/array: pool.query was called");
+  if (params) {
+    const oldParam = String(params[2] ?? "");
+    const newParam = String(params[3] ?? "");
+    assert(
+      oldParam !== "[object Object]" && newParam !== "[object Object]",
+      "NC/array: array value is NOT collapsed to `[object Object]`",
+    );
+    let oldParsed: unknown = null;
+    let newParsed: unknown = null;
+    let parseError: unknown = null;
+    try {
+      oldParsed = JSON.parse(oldParam);
+      newParsed = JSON.parse(newParam);
+    } catch (err) {
+      parseError = err;
+    }
+    assert(
+      parseError === null,
+      "NC/array: old_value and new_value round-trip via JSON.parse without throwing",
+    );
+    assert(
+      Array.isArray(oldParsed) && oldParsed.length === 2,
+      "NC/array: parsed old_value is an Array of length 2",
+    );
+    assert(
+      Array.isArray(newParsed) && newParsed.length === 3 &&
+        (newParsed[1] as Record<string, unknown>).name === "beta-renamed",
+      "NC/array: parsed new_value preserves the actual diff (length 3, beta-renamed)",
+    );
+  }
+}
+
+// Task #451 anti-regression: primitives (string, number, boolean) and
+// null/undefined must continue to behave as today — strings pass through
+// verbatim, numbers/booleans via String(), nullish → SQL NULL — i.e. the
+// JSON-stringification path must be gated to `typeof value === 'object'`.
+{
+  captured.length = 0;
+  await logNCChange(1, "count", 5, 7, "test-runner");
+  const params = lastInsertParams();
+  assert(params !== null, "NC/number: pool.query was called");
+  if (params) {
+    assert(
+      String(params[2] ?? "") === "5" && String(params[3] ?? "") === "7",
+      "NC/number: numeric values are stored as `5` / `7` (not JSON-quoted)",
+    );
+  }
+}
+
+{
+  captured.length = 0;
+  await logNCChange(1, "is_active", true, false, "test-runner");
+  const params = lastInsertParams();
+  assert(params !== null, "NC/boolean: pool.query was called");
+  if (params) {
+    assert(
+      String(params[2] ?? "") === "true" && String(params[3] ?? "") === "false",
+      "NC/boolean: boolean values are stored as `true` / `false`",
+    );
+  }
+}
+
+{
+  captured.length = 0;
+  await logNCChange(1, "assignee", null, "alice", "test-runner");
+  const params = lastInsertParams();
+  assert(params !== null, "NC/null: pool.query was called");
+  if (params) {
+    assert(
+      params[2] === null,
+      "NC/null: null oldValue is stored as SQL NULL (not the string `null`)",
+    );
+    assert(
+      params[3] === "alice",
+      "NC/null: string newValue still passes through verbatim",
     );
   }
 }
