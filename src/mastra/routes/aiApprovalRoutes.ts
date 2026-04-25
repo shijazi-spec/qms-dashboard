@@ -31,6 +31,7 @@ import {
   countPendingWithCredentialWarnings,
   countByReviewStatus,
   countByRiskLevel,
+  countByStatus,
   type ApprovalStatus,
   type RiskLevel,
 } from '../../utils/aiApprovalDatabase';
@@ -396,6 +397,72 @@ const _aiApprovalRoutesRaw = [
           console.error('[AI-Approval] risk-level-counts error:', error);
           return c.json(
             { error: 'Failed to fetch risk-level counts', details: error.message },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* GET /api/ai/approvals/status-counts                                  */
+  /* -------------------------------------------------------------------- */
+  /* Task #618: drives the inline counts next to each option of the      */
+  /* "Status" filter on the approval queue UI. Returns                    */
+  /*   { pending, executed, rejected, failed, expired }                   */
+  /* scoped to the same Risk / "Only my proposals" / Review filters       */
+  /* the operator currently has selected on the list, so the numbers      */
+  /* stay coherent with the visible rows. We deliberately ignore the      */
+  /* incoming `status` query param: the whole point of these counts is    */
+  /* to surface every status bucket regardless of which one is selected,  */
+  /* otherwise four of the five labels would always read "(0)" and the    */
+  /* operator could never see a backlog or failure spike at a glance.     */
+  /* Visibility scoping mirrors the LIST endpoint: admins / quality_      */
+  /* managers see the global counts (unless mine=true); everyone else     */
+  /* sees only their own pending rows.                                    */
+  {
+    path: '/api/ai/approvals/status-counts',
+    method: 'GET' as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          await ensureTable();
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const riskLevel = url.searchParams.get('risk_level') as RiskLevel | null;
+          const mine = url.searchParams.get('mine') === 'true';
+
+          // Mirror the LIST endpoint's review-filter parsing exactly so
+          // that an unknown / absent value silently degrades to "no
+          // review filter" rather than throwing.
+          const reviewFilterParam = url.searchParams.get('review_filter');
+          const reviewFilter =
+            reviewFilterParam === 'unreviewed_by_me' || reviewFilterParam === 'no_reviewers'
+              ? reviewFilterParam
+              : undefined;
+
+          const requestedByUserId =
+            (canSeeAll(user.role) && !mine) ? undefined : (user.userId ?? undefined);
+
+          // Only meaningful when reviewFilter='unreviewed_by_me'; we
+          // still pass it for 'no_reviewers' so the helper signature
+          // is symmetric with countByRiskLevel / listPendingActions.
+          const reviewerUserId = user.userId ?? 0;
+
+          const counts = await countByStatus({
+            riskLevel: riskLevel || undefined,
+            requestedByUserId,
+            reviewFilter,
+            reviewerUserId,
+          });
+
+          return c.json({ success: true, ...counts });
+        } catch (error: any) {
+          console.error('[AI-Approval] status-counts error:', error);
+          return c.json(
+            { error: 'Failed to fetch status counts', details: error.message },
             500,
           );
         }

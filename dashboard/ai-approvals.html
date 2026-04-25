@@ -97,12 +97,35 @@
         <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap gap-3 items-center">
             <label class="text-xs text-gray-600" data-i18n="ai_approvals.filter_status">Status</label>
             <select id="fltStatus" aria-label="Filter by approval status" class="border border-gray-300 rounded px-2 py-1 text-sm">
-                <option value="pending" selected data-i18n="ai_approvals.status_pending">Pending</option>
+                <!-- Task #618: the five operator-facing status options own
+                     their textContent in JS so the inline " (N)" count is
+                     not clobbered by i18n.applyToDOM(). `data-base-i18n`
+                     lets the JS re-translate the label without the suffix;
+                     `data-base-label` is the untranslated fallback.
+                     `approved` (transient executing state) and `all` (meta)
+                     keep their plain `data-i18n` because they don't carry
+                     a count. -->
+                <option value="pending" selected
+                        data-testid="option-status-pending"
+                        data-base-i18n="ai_approvals.status_pending"
+                        data-base-label="Pending">Pending</option>
                 <option value="approved" data-i18n="ai_approvals.status_approved">Approved (executing)</option>
-                <option value="executed" data-i18n="ai_approvals.status_executed">Executed</option>
-                <option value="rejected" data-i18n="ai_approvals.status_rejected">Rejected</option>
-                <option value="failed" data-i18n="ai_approvals.status_failed">Failed</option>
-                <option value="expired" data-i18n="ai_approvals.status_expired">Expired</option>
+                <option value="executed"
+                        data-testid="option-status-executed"
+                        data-base-i18n="ai_approvals.status_executed"
+                        data-base-label="Executed">Executed</option>
+                <option value="rejected"
+                        data-testid="option-status-rejected"
+                        data-base-i18n="ai_approvals.status_rejected"
+                        data-base-label="Rejected">Rejected</option>
+                <option value="failed"
+                        data-testid="option-status-failed"
+                        data-base-i18n="ai_approvals.status_failed"
+                        data-base-label="Failed">Failed</option>
+                <option value="expired"
+                        data-testid="option-status-expired"
+                        data-base-i18n="ai_approvals.status_expired"
+                        data-base-label="Expired">Expired</option>
                 <option value="pending,executed,rejected,failed,expired" data-i18n="ai_approvals.status_all">All</option>
             </select>
 
@@ -230,6 +253,15 @@
     var optRiskHigh     = fltRisk.querySelector('option[value="high"]');
     var optRiskMedium   = fltRisk.querySelector('option[value="medium"]');
     var optRiskLow      = fltRisk.querySelector('option[value="low"]');
+    // Task #618: status-dropdown options that get inline " (N)" counts.
+    // We deliberately omit `approved` (transient executing state) and the
+    // `all` meta-option — they don't represent a triage backlog the
+    // operator can act on at a glance.
+    var optStatusPending  = fltStatus.querySelector('option[value="pending"]');
+    var optStatusExecuted = fltStatus.querySelector('option[value="executed"]');
+    var optStatusRejected = fltStatus.querySelector('option[value="rejected"]');
+    var optStatusFailed   = fltStatus.querySelector('option[value="failed"]');
+    var optStatusExpired  = fltStatus.querySelector('option[value="expired"]');
     var cntPending = document.getElementById('cntPending');
     var cntExecutedToday = document.getElementById('cntExecutedToday');
 
@@ -351,6 +383,56 @@
             });
     }
 
+    // Task #618: same shape as the Risk-level counts above, but for the
+    // five Status options. Counts honour the operator's current Risk /
+    // "Only my proposals" / Review filter selections so they stay
+    // coherent with the visible queue. We DO NOT send the Status filter
+    // itself: the whole point of these counts is to show every status
+    // bucket regardless of which one is selected, otherwise four of the
+    // five labels would always read "(0)" and the operator could never
+    // see a backlog or failure spike at a glance. Soft-fail drops the
+    // suffix on error so we never render a stale or misleading count.
+    var lastStatusCounts = {
+        pending: null,
+        executed: null,
+        rejected: null,
+        failed: null,
+        expired: null,
+    };
+
+    function _applyStatusLabels() {
+        _setOptionCount(optStatusPending,  lastStatusCounts.pending);
+        _setOptionCount(optStatusExecuted, lastStatusCounts.executed);
+        _setOptionCount(optStatusRejected, lastStatusCounts.rejected);
+        _setOptionCount(optStatusFailed,   lastStatusCounts.failed);
+        _setOptionCount(optStatusExpired,  lastStatusCounts.expired);
+    }
+
+    function refreshStatusCounts() {
+        var p = new URLSearchParams();
+        if (fltRisk.value) p.set('risk_level', fltRisk.value);
+        if (fltMine.checked) p.set('mine', 'true');
+        if (fltReview.value) p.set('review_filter', fltReview.value);
+        fetch('/api/ai/approvals/status-counts?' + p.toString(), { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function (data) {
+                lastStatusCounts.pending  = typeof data.pending  === 'number' ? data.pending  : 0;
+                lastStatusCounts.executed = typeof data.executed === 'number' ? data.executed : 0;
+                lastStatusCounts.rejected = typeof data.rejected === 'number' ? data.rejected : 0;
+                lastStatusCounts.failed   = typeof data.failed   === 'number' ? data.failed   : 0;
+                lastStatusCounts.expired  = typeof data.expired  === 'number' ? data.expired  : 0;
+                _applyStatusLabels();
+            })
+            .catch(function () {
+                lastStatusCounts.pending  = null;
+                lastStatusCounts.executed = null;
+                lastStatusCounts.rejected = null;
+                lastStatusCounts.failed   = null;
+                lastStatusCounts.expired  = null;
+                _applyStatusLabels();
+            });
+    }
+
     // Re-apply our labels once i18n finishes its initial load — covers the
     // race where the count fetch resolves BEFORE applyToDOM() runs and the
     // sibling "Any" option still owns its data-i18n key. We also re-translate
@@ -358,6 +440,7 @@
     document.addEventListener('walaPlusI18nReady', function () {
         _applyReviewLabels();
         _applyRiskLabels();
+        _applyStatusLabels();
     });
 
     // The credential-warning badge always reflects the GLOBAL pending queue —
@@ -944,6 +1027,7 @@
                 refreshGlobalCredentialBadge();
                 refreshReviewStatusCounts();
                 refreshRiskLevelCounts();
+                refreshStatusCounts();
             })
             .catch(function (err) {
                 lastRows = [];
@@ -953,6 +1037,7 @@
                 refreshGlobalCredentialBadge();
                 refreshReviewStatusCounts();
                 refreshRiskLevelCounts();
+                refreshStatusCounts();
             });
     }
 

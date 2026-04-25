@@ -619,6 +619,133 @@ export async function countByRiskLevel(filters: {
   };
 }
 
+/**
+ * Task #618: bucket counts driving the inline numbers next to each option
+ * of the "Status" filter dropdown on the approval queue UI. Returns the
+ * count for the five operator-facing status buckets in a single
+ * round-trip so the dashboard can render
+ * "Pending (N) / Executed (M) / Rejected (X) / Failed (Y) / Expired (Z)"
+ * without five extra requests on the 30s refresh.
+ *
+ * The supplied `filters` mirror the LIST endpoint EXCEPT `status` itself
+ * — the whole point of these counts is to surface every status bucket
+ * regardless of which one is currently selected, so the operator can
+ * spot a backlog or a failure spike without pivoting through each
+ * option in turn. The Risk / "Only my proposals" / Review filter
+ * selections all apply to the COUNT base WHERE, exactly as they do to
+ * `listPendingActions`.
+ *
+ * Visibility scoping is the caller's responsibility — pass
+ * `requestedByUserId = user.userId` for non-privileged users, and
+ * `undefined` for admins/QMs (mirroring `listPendingActions`).
+ *
+ * `reviewerUserId` is only required when `reviewFilter === 'unreviewed_by_me'`
+ * — without it the "have I opened this?" predicate is undefined. We
+ * throw a clear error in that case rather than silently dropping the
+ * filter, which would mislead the operator about what the count means.
+ *
+ * Note: the `approved` (executing) status bucket is intentionally NOT
+ * surfaced in the response. It's an ephemeral transitional state
+ * between `pending` and `executed`/`failed` — the dashboard's Status
+ * dropdown does not list it as a triage target either, so giving it a
+ * count would imply a queue position the operator can act on.
+ */
+export async function countByStatus(filters: {
+  riskLevel?: RiskLevel;
+  requestedByUserId?: number;
+  reviewFilter?: ReviewFilter;
+  reviewerUserId?: number;
+}): Promise<{
+  pending: number;
+  executed: number;
+  rejected: number;
+  failed: number;
+  expired: number;
+}> {
+  const where: string[] = [];
+  const params: any[] = [];
+
+  if (filters.requestedByUserId != null) {
+    params.push(filters.requestedByUserId);
+    where.push(`requested_by_user_id = $${params.length}`);
+  }
+  if (filters.riskLevel) {
+    params.push(filters.riskLevel);
+    where.push(`risk_level = $${params.length}`);
+  }
+
+  // Mirror the review-filter SQL from `listPendingActions` so the
+  // five bucket counts agree with the visible list when the operator
+  // has the Review dropdown set to "Unreviewed by me" or "No reviewer
+  // yet". See `listPendingActions` for the full design rationale on
+  // NOT EXISTS vs LEFT JOIN and the ILIKE 'Viewed%' wording.
+  if (filters.reviewFilter === 'unreviewed_by_me') {
+    if (filters.reviewerUserId == null) {
+      throw new Error(
+        "countByStatus: reviewFilter='unreviewed_by_me' requires reviewerUserId",
+      );
+    }
+    params.push(filters.reviewerUserId);
+    where.push(
+      `NOT EXISTS (
+         SELECT 1 FROM event_logs el
+          WHERE el.correlation_id = ai_pending_actions.action_code
+            AND el.action_type    = 'AI_ACTION'
+            AND el.description    ILIKE 'Viewed%'
+            AND el.user_id        = $${params.length}
+       )`,
+    );
+  } else if (filters.reviewFilter === 'no_reviewers') {
+    where.push(
+      `NOT EXISTS (
+         SELECT 1 FROM event_logs el
+          WHERE el.correlation_id = ai_pending_actions.action_code
+            AND el.action_type    = 'AI_ACTION'
+            AND el.description    ILIKE 'Viewed%'
+       )`,
+    );
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  // Single-round-trip aggregate: one COUNT(*) FILTER per status bucket
+  // off the same base WHERE so all five numbers come from one scan.
+  // The status literals are hard-coded (not parameterized) because
+  // they are a closed enum owned by this module — never user input.
+  const sql = `
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'pending')::text  AS pending,
+      COUNT(*) FILTER (WHERE status = 'executed')::text AS executed,
+      COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected,
+      COUNT(*) FILTER (WHERE status = 'failed')::text   AS failed,
+      COUNT(*) FILTER (WHERE status = 'expired')::text  AS expired
+    FROM ai_pending_actions
+    ${whereSql}
+  `;
+
+  const res = await pool.query<{
+    pending: string;
+    executed: string;
+    rejected: string;
+    failed: string;
+    expired: string;
+  }>(sql, params);
+  const row = res.rows[0] ?? {
+    pending: '0',
+    executed: '0',
+    rejected: '0',
+    failed: '0',
+    expired: '0',
+  };
+  return {
+    pending: parseInt(row.pending, 10) || 0,
+    executed: parseInt(row.executed, 10) || 0,
+    rejected: parseInt(row.rejected, 10) || 0,
+    failed: parseInt(row.failed, 10) || 0,
+    expired: parseInt(row.expired, 10) || 0,
+  };
+}
+
 export async function countPendingForUser(
   userId: number,
   excludeToolIdPrefixes: string[] = []
