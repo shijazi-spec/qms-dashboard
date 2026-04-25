@@ -244,85 +244,158 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
     await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
   });
 
-  test('Snooze hides for 60 min, persists per-expiry across reloads, expires back, and clears on reschedule', async ({ page }) => {
+  // Task #333: the legacy single "Snooze 1h" button was replaced by a small
+  // popover offering 30m / 1h / 4h. The behaviour is parameterised — each
+  // duration must hide the banner for the chosen window, persist a
+  // snoozedUntilMs ≈ that window from now, and (when rewound to the past)
+  // re-show the banner and prune the stale localStorage record. We keep
+  // the heavier reschedule/elapse follow-up on the 1h iteration so the
+  // suite total runtime stays bounded but every duration still gets the
+  // core hide + persist + reload assertions.
+  const SNOOZE_DURATIONS = [
+    {
+      label: '30 min',
+      menuItemTestid: 'button-tool-health-override-banner-snooze-30m',
+      minutes: 30,
+    },
+    {
+      label: '1 hour',
+      menuItemTestid: 'button-tool-health-override-banner-snooze-1h',
+      minutes: 60,
+    },
+    {
+      label: '4 hours',
+      menuItemTestid: 'button-tool-health-override-banner-snooze-4h',
+      minutes: 240,
+    },
+  ];
+
+  for (const { label, menuItemTestid, minutes } of SNOOZE_DURATIONS) {
+    test(`Snooze popover: "${label}" hides banner, persists ~${minutes} min, and re-shows after elapse`, async ({ page }) => {
+      if (!ADMIN_KEY) {
+        test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
+        return;
+      }
+
+      // Long-lived schedule (8h) so even the 4h cap leaves headroom for the
+      // optional reschedule follow-up below and so no duration is trimmed
+      // by the "remaining override lifetime" cap.
+      await putConfig(apiCtx, {
+        overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
+        expires_at: isoOffsetFromNow(8 * 60 * 60 * 1000),
+        note: `Task #333 e2e — snooze ${label}`,
+      });
+
+      await page.goto(`${BASE_URL}/ai-ops`);
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+
+      // The trigger button toggles the popover; the popover should start hidden.
+      const trigger = page.locator('[data-testid="button-tool-health-override-banner-snooze"]');
+      const menu = page.locator('[data-testid="menu-tool-health-override-banner-snooze"]');
+      await expect(trigger, 'snooze trigger has aria-haspopup="menu"').toHaveAttribute('aria-haspopup', 'menu');
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await expect(menu).toHaveClass(/hidden/);
+
+      await trigger.click();
+      await expect(menu, 'menu opens after trigger click').not.toHaveClass(/hidden/);
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+      // All three options should be present so a missing item fails fast
+      // rather than silently selecting the wrong duration.
+      await expect(page.locator('[data-testid="button-tool-health-override-banner-snooze-30m"]')).toBeVisible();
+      await expect(page.locator('[data-testid="button-tool-health-override-banner-snooze-1h"]')).toBeVisible();
+      await expect(page.locator('[data-testid="button-tool-health-override-banner-snooze-4h"]')).toBeVisible();
+
+      // Pick the duration under test → banner hides, popover closes, and the
+      // snooze record is written to localStorage keyed to the current expires_at.
+      await page.locator(`[data-testid="${menuItemTestid}"]`).click();
+      await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
+        .toHaveClass(/hidden/);
+      await expect(menu, 'menu closes after picking a duration').toHaveClass(/hidden/);
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+      const snoozedRaw = await page.evaluate(
+        () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
+      );
+      expect(snoozedRaw, 'snooze record should be persisted to localStorage').toBeTruthy();
+      const snoozedParsed = JSON.parse(snoozedRaw as string);
+      expect(typeof snoozedParsed.expiresAtMs, 'snooze record carries expires_at ms').toBe('number');
+      expect(typeof snoozedParsed.snoozedUntilMs, 'snooze record carries snoozed-until ms').toBe('number');
+      // Allow a small fudge on either side: the request → DOM click → eval
+      // round-trip can shave a few seconds, so we accept anything inside
+      // (minutes - 5, minutes + 1) of the requested window.
+      const remainingMs = snoozedParsed.snoozedUntilMs - Date.now();
+      expect(remainingMs, `snooze should last ~${minutes} min (lower bound)`)
+        .toBeGreaterThan((minutes - 5) * 60 * 1000);
+      expect(remainingMs, `snooze should last ~${minutes} min (upper bound)`)
+        .toBeLessThan((minutes + 1) * 60 * 1000);
+
+      // Reload — same expires_at, snooze still in window → banner stays hidden.
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForResponse(
+        r => r.url().includes('/api/ai-ops/tool-health-config') && r.request().method() === 'GET',
+        { timeout: 15000 },
+      );
+      await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
+        .toHaveClass(/hidden/);
+
+      // Simulate the chosen window elapsing by rewinding snoozedUntilMs into
+      // the past (deterministic and instant; we don't want to wait 4h in CI).
+      await page.evaluate(() => {
+        const raw = localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        parsed.snoozedUntilMs = Date.now() - 1000;
+        localStorage.setItem('wp.toolHealthOverrideBanner.snoozedUntilFor', JSON.stringify(parsed));
+      });
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForResponse(
+        r => r.url().includes('/api/ai-ops/tool-health-config') && r.request().method() === 'GET',
+        { timeout: 15000 },
+      );
+      // Snooze elapsed → banner is back so the impending revert remains visible.
+      await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
+      // The stale snooze record should also have been pruned to avoid quietly
+      // suppressing some future window if its expires_at happens to match.
+      const afterElapseRaw = await page.evaluate(
+        () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
+      );
+      expect(afterElapseRaw, 'stale snooze record should be cleared').toBeNull();
+    });
+  }
+
+  test('Snooze popover survives reschedule: rescheduling a new expires_at re-shows the banner', async ({ page }) => {
     if (!ADMIN_KEY) {
       test.skip(true, 'ADMIN_API_KEY / TEST_ADMIN_KEY not set in environment');
       return;
     }
 
-    // Long-lived schedule (8h) so the snooze cap never trims our 60 min and
-    // the rescheduled-expiry assertion at the end has plenty of headroom.
+    // Long-lived schedule first — pick a 1h snooze, then reschedule expires_at.
     await putConfig(apiCtx, {
       overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
       expires_at: isoOffsetFromNow(8 * 60 * 60 * 1000),
-      note: 'Task #223 e2e — snooze',
+      note: 'Task #333 e2e — snooze + reschedule',
     });
 
     await page.goto(`${BASE_URL}/ai-ops`);
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
 
-    // Click "Snooze 1h" → banner hides immediately and the snooze record is
-    // written to localStorage keyed to the current expires_at.
     await page.locator('[data-testid="button-tool-health-override-banner-snooze"]').click();
+    await page.locator('[data-testid="button-tool-health-override-banner-snooze-1h"]').click();
     await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
       .toHaveClass(/hidden/);
 
-    const snoozedRaw = await page.evaluate(
-      () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
-    );
-    expect(snoozedRaw, 'snooze record should be persisted to localStorage').toBeTruthy();
-    const snoozedParsed = JSON.parse(snoozedRaw as string);
-    expect(typeof snoozedParsed.expiresAtMs, 'snooze record carries expires_at ms').toBe('number');
-    expect(typeof snoozedParsed.snoozedUntilMs, 'snooze record carries snoozed-until ms').toBe('number');
-    expect(snoozedParsed.snoozedUntilMs - Date.now(), 'snooze should last ~60 min')
-      .toBeGreaterThan(55 * 60 * 1000);
-
-    // Reload — same expires_at, snooze still in window → banner stays hidden.
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForResponse(
-      r => r.url().includes('/api/ai-ops/tool-health-config') && r.request().method() === 'GET',
-      { timeout: 15000 },
-    );
-    await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
-      .toHaveClass(/hidden/);
-
-    // Simulate the 1h elapsing by rewinding snoozedUntilMs into the past
-    // (deterministic and instant; we don't want to wait 60 min in CI).
-    await page.evaluate(() => {
-      const raw = localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      parsed.snoozedUntilMs = Date.now() - 1000;
-      localStorage.setItem('wp.toolHealthOverrideBanner.snoozedUntilFor', JSON.stringify(parsed));
-    });
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForResponse(
-      r => r.url().includes('/api/ai-ops/tool-health-config') && r.request().method() === 'GET',
-      { timeout: 15000 },
-    );
-    // Snooze elapsed → banner is back so the impending revert remains visible.
-    await expect(page.locator('[data-testid="banner-tool-health-override-expiry"]')).toBeVisible();
-    // The stale snooze record should also have been pruned to avoid quietly
-    // suppressing some future window if its expires_at happens to match.
-    const afterElapseRaw = await page.evaluate(
-      () => localStorage.getItem('wp.toolHealthOverrideBanner.snoozedUntilFor'),
-    );
-    expect(afterElapseRaw, 'stale snooze record should be cleared').toBeNull();
-
-    // Snooze again, then *reschedule* expires_at — the new value mismatches
-    // the snoozed expiresAtMs key, so the banner reappears (matching dismiss
-    // semantics: a new schedule is treated as a fresh nudge).
-    await page.locator('[data-testid="button-tool-health-override-banner-snooze"]').click();
-    await expect(page.locator('[data-testid="section-tool-health-override-banner"]'))
-      .toHaveClass(/hidden/);
-
+    // Reschedule expires_at — the snooze record is keyed to the previous
+    // expires_at, so the new schedule must be treated as a fresh nudge and
+    // the banner reappears (matching dismiss semantics).
     await putConfig(apiCtx, {
       overrides: { [SEEDED_OVERRIDE_FIELD]: SEEDED_OVERRIDE_VALUE },
-      expires_at: isoOffsetFromNow(7 * 60 * 60 * 1000), // different expiry
-      note: 'Task #223 e2e — snooze + reschedule',
+      expires_at: isoOffsetFromNow(7 * 60 * 60 * 1000),
+      note: 'Task #333 e2e — snooze + reschedule (new expiry)',
     });
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
@@ -431,7 +504,12 @@ test.describe('AI Ops — tool-health override auto-revert banner (Task #212)', 
       // synthetic StorageEvent — that's exactly what the same-origin
       // browser would do natively in a single profile, and it's the
       // contract our handler is coded against.
+      // The snooze control is a split-button popover (Task #333): the
+      // trigger opens the menu, the menu items pick a duration. We use
+      // the 1h option here to preserve the original cross-tab assertion
+      // window (~60 min) while still exercising the new code path.
       await tabA.locator('[data-testid="button-tool-health-override-banner-snooze"]').click();
+      await tabA.locator('[data-testid="button-tool-health-override-banner-snooze-1h"]').click();
       await expect(tabA.locator('[data-testid="section-tool-health-override-banner"]'))
         .toHaveClass(/hidden/);
       const snoozeRecord = await tabA.evaluate(

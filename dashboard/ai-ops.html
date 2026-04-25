@@ -83,13 +83,58 @@
             <span class="ml-2 text-xs underline whitespace-nowrap">Open Alert Thresholds →</span>
           </span>
         </button>
-        <button
-          type="button"
-          class="shrink-0 px-2 py-1 text-xs font-medium rounded hover:bg-black/10"
-          id="tool-health-override-banner-snooze"
-          aria-label="Snooze override expiry banner for 1 hour"
-          data-testid="button-tool-health-override-banner-snooze"
-        >Snooze 1h</button>
+        <!-- Snooze split-button (Task #333). Operators want to pick how long
+             the banner stays quiet — some need a longer focus block (4h),
+             others just a brief pause (30m). The default trigger opens a
+             tiny popover with the three options below; each value is still
+             capped at the remaining override lifetime so the banner never
+             re-shows after the override has already reverted. -->
+        <div class="relative shrink-0" id="tool-health-override-banner-snooze-wrap">
+          <button
+            type="button"
+            class="px-2 py-1 text-xs font-medium rounded hover:bg-black/10 inline-flex items-center gap-1"
+            id="tool-health-override-banner-snooze"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="tool-health-override-banner-snooze-menu"
+            aria-label="Snooze override expiry banner"
+            data-testid="button-tool-health-override-banner-snooze"
+          >
+            <span>Snooze</span>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          <div
+            id="tool-health-override-banner-snooze-menu"
+            role="menu"
+            aria-labelledby="tool-health-override-banner-snooze"
+            class="hidden absolute right-0 top-full mt-1 z-10 min-w-[8rem] rounded-md border border-gray-200 bg-white shadow-lg py-1 text-xs text-gray-800"
+            data-testid="menu-tool-health-override-banner-snooze"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              data-snooze-minutes="30"
+              data-testid="button-tool-health-override-banner-snooze-30m"
+            >30 min</button>
+            <button
+              type="button"
+              role="menuitem"
+              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              data-snooze-minutes="60"
+              data-testid="button-tool-health-override-banner-snooze-1h"
+            >1 hour</button>
+            <button
+              type="button"
+              role="menuitem"
+              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              data-snooze-minutes="240"
+              data-testid="button-tool-health-override-banner-snooze-4h"
+            >4 hours</button>
+          </div>
+        </div>
         <button
           type="button"
           class="shrink-0 p-1 rounded hover:bg-black/10"
@@ -1226,6 +1271,9 @@
     // key after a successful PUT to nudge sibling tabs to refetch the
     // tool-health config and re-show the banner without a manual reload.
     const TOOL_HEALTH_OVERRIDE_BANNER_CONFIG_REV_KEY = 'wp.toolHealthOverrideBanner.configRevision';
+    // Default snooze (still 1h, to match the legacy single-button behavior
+    // when callers don't supply an explicit duration). The split-button
+    // popover added in Task #333 lets operators pick 30m / 1h / 4h instead.
     const TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS = 60 * 60 * 1000;
     const TOOL_HEALTH_OVERRIDE_BANNER_AMBER_MS = 30 * 60 * 1000;
     const TOOL_HEALTH_OVERRIDE_BANNER_NEUTRAL_CLASSES =
@@ -1396,15 +1444,26 @@
       hideToolHealthOverrideBanner();
     }
 
-    // Snooze for SNOOZE_MS (Task #223). Same click-target shielding as
-    // dismiss, since both buttons live inside the banner-as-a-button. We
-    // capture expires_at *before* hiding because hideToolHealthOverrideBanner
-    // nulls toolHealthOverrideBannerExpiresAtMs as part of its teardown.
-    function snoozeToolHealthOverrideBanner(e) {
+    // Snooze for `durationMs` (Task #223 / #333). Same click-target
+    // shielding as dismiss, since both controls live inside the
+    // banner-as-a-button. We capture expires_at *before* hiding because
+    // hideToolHealthOverrideBanner nulls toolHealthOverrideBannerExpiresAtMs
+    // as part of its teardown.
+    //
+    // Task #333 generalised this to take a duration arg so the split-button
+    // popover can offer 30m / 1h / 4h. When called without a duration we
+    // fall back to the legacy 1h behavior. The chosen duration is always
+    // capped at the remaining override lifetime so the banner never
+    // re-shows after the override has already reverted.
+    function snoozeToolHealthOverrideBanner(e, durationMs) {
       if (e) { e.stopPropagation(); e.preventDefault(); }
       const expiresAtMs = toolHealthOverrideBannerExpiresAtMs;
       if (expiresAtMs == null) return;
-      const snoozedUntilMs = Date.now() + TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS;
+      const requestedMs =
+        Number.isFinite(durationMs) && durationMs > 0
+          ? durationMs
+          : TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS;
+      const snoozedUntilMs = Date.now() + requestedMs;
       try {
         localStorage.setItem(
           TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_KEY,
@@ -1415,12 +1474,65 @@
       // Re-show automatically when the snooze elapses, capped at the
       // remaining override lifetime so we never re-show post-expiry.
       const reShowInMs = Math.min(
-        TOOL_HEALTH_OVERRIDE_BANNER_SNOOZE_MS,
+        requestedMs,
         Math.max(0, expiresAtMs - Date.now()),
       );
       if (reShowInMs > 0) {
         toolHealthOverrideBannerSnoozeTimer = setTimeout(loadToolHealthOverrideBanner, reShowInMs);
       }
+    }
+
+    // ── Snooze split-button popover wiring (Task #333) ───────────────────
+    // The trigger button toggles a tiny popover with 30m/1h/4h options.
+    // We open/close it imperatively (not via :focus-within) so click-
+    // outside, Escape, and pointer-down on a menu item all behave the
+    // same way as a "real" menu and so that the popover closes after a
+    // duration has been picked. Listeners are attached only while the
+    // menu is open so we don't leak handlers on every page load.
+    function isToolHealthOverrideSnoozeMenuOpen() {
+      const menu = document.getElementById('tool-health-override-banner-snooze-menu');
+      return !!menu && !menu.classList.contains('hidden');
+    }
+    function openToolHealthOverrideSnoozeMenu() {
+      const menu = document.getElementById('tool-health-override-banner-snooze-menu');
+      const btn = document.getElementById('tool-health-override-banner-snooze');
+      if (!menu || !btn) return;
+      menu.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('mousedown', onToolHealthOverrideSnoozeMenuOutsideClick, true);
+      document.addEventListener('keydown', onToolHealthOverrideSnoozeMenuKeydown, true);
+    }
+    function closeToolHealthOverrideSnoozeMenu() {
+      const menu = document.getElementById('tool-health-override-banner-snooze-menu');
+      const btn = document.getElementById('tool-health-override-banner-snooze');
+      if (!menu || !btn) return;
+      menu.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('mousedown', onToolHealthOverrideSnoozeMenuOutsideClick, true);
+      document.removeEventListener('keydown', onToolHealthOverrideSnoozeMenuKeydown, true);
+    }
+    function toggleToolHealthOverrideSnoozeMenu(e) {
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      if (isToolHealthOverrideSnoozeMenuOpen()) closeToolHealthOverrideSnoozeMenu();
+      else openToolHealthOverrideSnoozeMenu();
+    }
+    function onToolHealthOverrideSnoozeMenuOutsideClick(e) {
+      const wrap = document.getElementById('tool-health-override-banner-snooze-wrap');
+      if (wrap && !wrap.contains(e.target)) closeToolHealthOverrideSnoozeMenu();
+    }
+    function onToolHealthOverrideSnoozeMenuKeydown(e) {
+      if (e.key === 'Escape') {
+        closeToolHealthOverrideSnoozeMenu();
+        const btn = document.getElementById('tool-health-override-banner-snooze');
+        if (btn) btn.focus();
+      }
+    }
+    function onToolHealthOverrideSnoozeMenuItemClick(e) {
+      const item = e.currentTarget;
+      const minutes = Number(item && item.getAttribute('data-snooze-minutes'));
+      closeToolHealthOverrideSnoozeMenu();
+      if (!Number.isFinite(minutes) || minutes <= 0) return;
+      snoozeToolHealthOverrideBanner(e, minutes * 60 * 1000);
     }
 
     function goToThresholdsTabFromBanner() {
@@ -2774,8 +2886,14 @@
       if (overrideDeeplinkBtn) overrideDeeplinkBtn.addEventListener('click', goToThresholdsTabFromBanner);
       const overrideDismissBtn = document.getElementById('tool-health-override-banner-dismiss');
       if (overrideDismissBtn) overrideDismissBtn.addEventListener('click', dismissToolHealthOverrideBanner);
+      // Snooze split-button (Task #333): the trigger toggles the popover,
+      // each menu item picks a duration and calls the (now duration-aware)
+      // snoozeToolHealthOverrideBanner. Wired here from the nonced script
+      // because CSP forbids inline `onclick=` handlers.
       const overrideSnoozeBtn = document.getElementById('tool-health-override-banner-snooze');
-      if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', snoozeToolHealthOverrideBanner);
+      if (overrideSnoozeBtn) overrideSnoozeBtn.addEventListener('click', toggleToolHealthOverrideSnoozeMenu);
+      document.querySelectorAll('#tool-health-override-banner-snooze-menu [data-snooze-minutes]')
+        .forEach(item => item.addEventListener('click', onToolHealthOverrideSnoozeMenuItemClick));
       // Cross-tab sync (Task #332): listen for sibling-tab snooze/dismiss
       // and for fresh expires_at schedules from the Alert Thresholds tab.
       window.addEventListener('storage', handleToolHealthOverrideBannerStorageEvent);
