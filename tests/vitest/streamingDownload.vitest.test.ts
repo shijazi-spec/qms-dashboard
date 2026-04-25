@@ -835,6 +835,96 @@ describe('streamingDownload (browser helper)', () => {
     ).toBeNull();
   });
 
+  it('shows an "Interrupted — Retry" toast when a mid-stream TypeError (network drop) occurs', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    let fetchCalls = 0;
+    env.win.fetch = vi.fn(async () => {
+      fetchCalls += 1;
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv',
+          'content-disposition': 'attachment; filename="network-drop.csv"',
+        },
+      });
+    });
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/network-drop.csv', {
+      skipEstimate: true,
+      useServiceWorker: false,
+    });
+
+    // Let the download start and receive a chunk so we're mid-stream.
+    await new Promise((r) => setTimeout(r, 5));
+    bodyController.enqueue(new Uint8Array([1, 2, 3, 4]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    // Simulate a real network drop: Wi-Fi flap / ISP hiccup / mobile handoff
+    // surfaces as a generic TypeError ("Failed to fetch"), not an AbortError.
+    const networkErr: any = new Error('Failed to fetch');
+    networkErr.name = 'TypeError';
+    bodyController.error(networkErr);
+
+    await expect(downloadPromise).rejects.toMatchObject({
+      name: 'AbortError',
+      interrupted: true,
+    });
+
+    // The "Interrupted — Retry" warn toast must be in the DOM, same as for
+    // a browser-AbortError environmental abort.
+    const toast = env.win.document.querySelector('[data-testid="toast-download-interrupted"]');
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).toMatch(/interrupted/i);
+    expect(toast?.textContent).toMatch(/network-drop\.csv/);
+
+    // The Retry button must be present and labelled "Retry".
+    const retryBtn = toast?.querySelector(
+      '[data-testid="button-retry-download"]'
+    ) as HTMLButtonElement | null;
+    expect(retryBtn).not.toBeNull();
+    expect(retryBtn?.textContent).toBe('Retry');
+
+    // The progress card must show an "Interrupted" state, not "Cancelled".
+    const card = env.win.document.querySelector('[data-testid="card-download-progress"]');
+    const status = card?.querySelector('[data-testid="text-download-status"]');
+    expect(status?.textContent).toMatch(/interrupted/i);
+
+    // Only one fetch — Retry hasn't fired yet.
+    expect(fetchCalls).toBe(1);
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
+  it('does NOT show an "Interrupted — Retry" toast for a TypeError that occurs before any bytes are received (pre-stream failure)', async () => {
+    env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+    // The fetch itself rejects before any bytes stream — no progressState.received.
+    env.win.fetch = vi.fn(async () => {
+      const err: any = new Error('Failed to fetch');
+      err.name = 'TypeError';
+      throw err;
+    });
+
+    await expect(
+      env.win.streamingDownload('/api/exports/prestream-fail.csv', {
+        skipEstimate: true,
+        useServiceWorker: false,
+      })
+    ).rejects.toBeDefined();
+
+    // Pre-stream TypeError must NOT trigger the interrupted toast (it's a
+    // real server/connectivity failure, not a mid-export network drop).
+    expect(
+      env.win.document.querySelector('[data-testid="toast-download-interrupted"]')
+    ).toBeNull();
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
   // === Recent-downloads history tests (anonymous fallback) ===
   // Anonymous visitors keep the legacy per-tab sessionStorage tray. Signed-in
   // users get per-user localStorage persistence — see the

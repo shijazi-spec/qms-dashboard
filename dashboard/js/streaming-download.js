@@ -2505,8 +2505,20 @@
             var isUserCancel = cancelled
                 || userCancelled
                 || (err && err.userCancelled === true);
-            var isEnvironmentalAbort = isAbortLike && !isUserCancel
-                && err && err.name === 'AbortError';
+            // A mid-stream TypeError (Wi-Fi flap, ISP hiccup, mobile
+            // handoff) looks identical to the user as an AbortError-based
+            // environmental abort: a long export that vanished partway through.
+            // Treat it the same way — show the "Download interrupted — Retry"
+            // amber toast — but only when we've already received bytes (i.e.
+            // the stream was in flight), to avoid masking genuine pre-stream
+            // network failures as "interrupted" rather than "failed".
+            var isMidStreamNetworkError = !isUserCancel
+                && !isAbortLike
+                && progressState.received > 0
+                && err && err.name === 'TypeError';
+            var isEnvironmentalAbort = (isAbortLike && !isUserCancel
+                && err && err.name === 'AbortError')
+                || isMidStreamNetworkError;
             // Prefer the parsed filename so the interrupted toast keeps the
             // file context even after the floating card has gone away.
             var displayName = options.filename || resolvedFilename || (card ? null : tr('downloads.default_file', 'file'));
