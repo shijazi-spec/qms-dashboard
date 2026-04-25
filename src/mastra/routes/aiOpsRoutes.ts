@@ -1431,15 +1431,91 @@ export const aiOpsRoutes = [
           } = await import("../../utils/aiTelemetry");
           const {
             AI_METRICS_RETENTION_BOUNDS,
+            AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
             getAiMetricsRetentionConfig,
-            getAiMetricsRetentionAudit,
+            getAiMetricsRetentionAuditPage,
             getAiMetricsRetentionConfirmThreshold,
             isAiMetricsRetentionLocked,
           } = await import("../../utils/aiMetricsRetentionConfig");
 
-          const [row, audit, effective] = await Promise.all([
+          // Task #566: paging + optional date-range filter on the audit
+          // table so admins can browse the full history (e.g. "who
+          // tightened the window during last quarter's incident") instead
+          // of being capped at the latest 25 entries. Inputs are
+          // validated server-side; bad values return 400 so a buggy
+          // client can't silently fall back to "all rows".
+          const rawLimit = c.req.query("limit");
+          const rawOffset = c.req.query("offset");
+          const rawFrom = c.req.query("from");
+          const rawTo = c.req.query("to");
+
+          let auditLimit = 25;
+          if (rawLimit != null && String(rawLimit).trim() !== "") {
+            const n = Number(rawLimit);
+            if (
+              !Number.isFinite(n) || !Number.isInteger(n) ||
+              n < 1 || n > AI_METRICS_RETENTION_AUDIT_MAX_LIMIT
+            ) {
+              return c.json(
+                {
+                  error: `limit must be an integer between 1 and ${AI_METRICS_RETENTION_AUDIT_MAX_LIMIT}`,
+                },
+                400,
+              );
+            }
+            auditLimit = n;
+          }
+
+          let auditOffset = 0;
+          if (rawOffset != null && String(rawOffset).trim() !== "") {
+            const n = Number(rawOffset);
+            if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+              return c.json(
+                { error: "offset must be a non-negative integer" },
+                400,
+              );
+            }
+            auditOffset = n;
+          }
+
+          let auditFrom: Date | null = null;
+          if (rawFrom != null && String(rawFrom).trim() !== "") {
+            const d = new Date(String(rawFrom));
+            if (Number.isNaN(d.getTime())) {
+              return c.json(
+                { error: "from must be a valid ISO-8601 timestamp" },
+                400,
+              );
+            }
+            auditFrom = d;
+          }
+
+          let auditTo: Date | null = null;
+          if (rawTo != null && String(rawTo).trim() !== "") {
+            const d = new Date(String(rawTo));
+            if (Number.isNaN(d.getTime())) {
+              return c.json(
+                { error: "to must be a valid ISO-8601 timestamp" },
+                400,
+              );
+            }
+            auditTo = d;
+          }
+          if (auditFrom && auditTo && auditFrom.getTime() > auditTo.getTime()) {
+            return c.json(
+              { error: "from must be on or before to" },
+              400,
+            );
+          }
+
+          const [row, auditPage, effective] = await Promise.all([
             getAiMetricsRetentionConfig(),
-            getAiMetricsRetentionAudit(25),
+            getAiMetricsRetentionAuditPage({
+              limit: auditLimit,
+              offset: auditOffset,
+              from: auditFrom,
+              to: auditTo,
+            }),
             resolveEffectiveAiMetricsRetentionDays(),
           ]);
           const envBaseline = resolveAiMetricsRetentionDays();
@@ -1462,7 +1538,13 @@ export const aiOpsRoutes = [
               updated_by: row.updated_by,
               updated_at: row.updated_at,
               bounds: AI_METRICS_RETENTION_BOUNDS,
-              audit,
+              audit: auditPage.rows,
+              audit_total: auditPage.total,
+              audit_limit: auditPage.limit,
+              audit_offset: auditPage.offset,
+              audit_from: auditFrom ? auditFrom.toISOString() : null,
+              audit_to: auditTo ? auditTo.toISOString() : null,
+              audit_max_limit: AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
               confirm_threshold: confirmThreshold,
               can_edit:
                 AI_METRICS_RETENTION_WRITE_ROLES.includes(

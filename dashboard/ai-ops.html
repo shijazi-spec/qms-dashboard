@@ -605,9 +605,80 @@
           <p class="text-sm text-gray-400">Loading current retention…</p>
         </div>
         <div class="mt-6 border-t pt-4">
-          <h4 class="text-sm font-semibold text-gray-700 mb-2">Recent retention changes</h4>
+          <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+            <h4 class="text-sm font-semibold text-gray-700">Retention change history</h4>
+            <span id="metrics-retention-audit-summary" class="text-xs text-gray-500" data-testid="text-metrics-retention-audit-summary">—</span>
+          </div>
+          <!-- Task #566: optional date-range filter so an admin can narrow
+               the audit to a specific incident window. Empty filters mean
+               "no bound on this side" — applied via the explicit Apply
+               button rather than on every keystroke so an in-progress
+               typed date doesn't trigger half a dozen requests. -->
+          <div class="flex items-end gap-2 flex-wrap mb-3" data-testid="form-metrics-retention-audit-filter">
+            <div>
+              <label for="metrics-retention-audit-from" class="block text-xs text-gray-500">From</label>
+              <input
+                type="date"
+                id="metrics-retention-audit-from"
+                class="px-2 py-1 border border-gray-300 rounded text-sm"
+                data-testid="input-metrics-retention-audit-from"
+              />
+            </div>
+            <div>
+              <label for="metrics-retention-audit-to" class="block text-xs text-gray-500">To</label>
+              <input
+                type="date"
+                id="metrics-retention-audit-to"
+                class="px-2 py-1 border border-gray-300 rounded text-sm"
+                data-testid="input-metrics-retention-audit-to"
+              />
+            </div>
+            <button
+              type="button"
+              data-on-click="applyMetricsRetentionAuditFilter"
+              class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              data-testid="button-metrics-retention-audit-apply"
+            >Apply</button>
+            <button
+              type="button"
+              data-on-click="clearMetricsRetentionAuditFilter"
+              class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              data-testid="button-metrics-retention-audit-clear"
+            >Clear</button>
+            <span
+              id="metrics-retention-audit-filter-error"
+              class="text-xs text-red-600 hidden"
+              data-testid="text-metrics-retention-audit-filter-error"
+            ></span>
+          </div>
           <div id="metrics-retention-audit" class="space-y-2" data-testid="list-metrics-retention-audit">
             <p class="text-sm text-gray-400">Loading…</p>
+          </div>
+          <!-- Pager — disabled at the boundaries; hidden entirely when
+               there is only one page worth of audit rows so the empty
+               control doesn't add visual noise to small environments. -->
+          <div
+            id="metrics-retention-audit-pager"
+            class="mt-4 hidden flex items-center gap-2 flex-wrap"
+            data-testid="pager-metrics-retention-audit"
+          >
+            <button
+              type="button"
+              data-on-click="metricsRetentionAuditNewer"
+              class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="button-metrics-retention-audit-newer"
+            >&laquo; Newer</button>
+            <button
+              type="button"
+              data-on-click="metricsRetentionAuditOlder"
+              class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="button-metrics-retention-audit-older"
+            >Older &raquo;</button>
+            <span
+              id="metrics-retention-audit-pager-status"
+              class="text-xs text-gray-500 ml-2"
+              data-testid="text-metrics-retention-audit-pager-status"
+            ></span>
           </div>
         </div>
       </div>
@@ -2965,6 +3036,40 @@
     // ─────────────────────────────────────────────────────────────────
     let metricsRetentionState = null;
 
+    // Task #566: client-side paging / filter state for the audit history.
+    // Lives next to (not inside) `metricsRetentionState` so a filter or
+    // page change is preserved across the form reload that fires after
+    // a successful Save. Defaults match the server: 25-row page, newest
+    // entries first, no date bounds.
+    const METRICS_RETENTION_AUDIT_DEFAULT_PAGE_SIZE = 25;
+    let metricsRetentionAuditState = {
+      limit: METRICS_RETENTION_AUDIT_DEFAULT_PAGE_SIZE,
+      offset: 0,
+      from: '',
+      to: '',
+    };
+
+    function buildMetricsRetentionAuditQuery() {
+      const params = new URLSearchParams();
+      params.set('limit', String(metricsRetentionAuditState.limit));
+      params.set('offset', String(metricsRetentionAuditState.offset));
+      if (metricsRetentionAuditState.from) {
+        // <input type="date"> returns "YYYY-MM-DD". Anchor the lower
+        // bound to the start of that day in the operator's local timezone
+        // so "From 2026-04-01" includes audit rows written at 09:15 local
+        // time on 2026-04-01.
+        const d = new Date(metricsRetentionAuditState.from + 'T00:00:00');
+        if (!Number.isNaN(d.getTime())) params.set('from', d.toISOString());
+      }
+      if (metricsRetentionAuditState.to) {
+        // Anchor the upper bound to the END of the chosen day so a user
+        // who picks "To 2026-04-30" gets every row written on that day.
+        const d = new Date(metricsRetentionAuditState.to + 'T23:59:59.999');
+        if (!Number.isNaN(d.getTime())) params.set('to', d.toISOString());
+      }
+      return params.toString();
+    }
+
     async function loadMetricsRetentionForm() {
       const formEl = document.getElementById('metrics-retention-form');
       const errEl = document.getElementById('metrics-retention-load-error');
@@ -2975,10 +3080,17 @@
       formEl.innerHTML = '<p class="text-sm text-gray-400">Loading current retention…</p>';
       auditEl.innerHTML = '<p class="text-sm text-gray-400">Loading…</p>';
       try {
-        const { data } = await apiFetch('/api/ai-ops/metrics-retention');
+        const qs = buildMetricsRetentionAuditQuery();
+        const { data } = await apiFetch('/api/ai-ops/metrics-retention' + (qs ? '?' + qs : ''));
         metricsRetentionState = data;
         renderMetricsRetentionForm(data);
-        renderMetricsRetentionAudit(data.audit || []);
+        renderMetricsRetentionAudit(data);
+        // Keep the date inputs in sync with state (preserves user's
+        // filter selection across the post-save reload).
+        const fromInput = document.getElementById('metrics-retention-audit-from');
+        const toInput = document.getElementById('metrics-retention-audit-to');
+        if (fromInput) fromInput.value = metricsRetentionAuditState.from;
+        if (toInput) toInput.value = metricsRetentionAuditState.to;
         if (data.updated_at) {
           const who = data.updated_by ? ' by ' + esc(data.updated_by) : '';
           metaEl.innerHTML = 'Last edited ' + esc(fmtDate(data.updated_at)) + who;
@@ -3126,32 +3238,167 @@
       formEl.innerHTML = lockBanner + readonlyBanner + rows + noteRow + buttons;
     }
 
-    function renderMetricsRetentionAudit(rows) {
+    function renderMetricsRetentionAudit(data) {
       const auditEl = document.getElementById('metrics-retention-audit');
+      const pagerEl = document.getElementById('metrics-retention-audit-pager');
+      const summaryEl = document.getElementById('metrics-retention-audit-summary');
+      const pagerStatusEl = document.getElementById('metrics-retention-audit-pager-status');
+      const newerBtn = document.getElementById('metrics-retention-audit-pager')?.querySelector('[data-testid="button-metrics-retention-audit-newer"]');
+      const olderBtn = document.getElementById('metrics-retention-audit-pager')?.querySelector('[data-testid="button-metrics-retention-audit-older"]');
       if (!auditEl) return;
-      if (!Array.isArray(rows) || rows.length === 0) {
-        auditEl.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-metrics-retention-audit-empty">No retention changes recorded yet.</p>';
+
+      // Backward-compat: if a caller passes a bare array (e.g. mocked
+      // GET payloads in older specs), adapt it to the page-shaped object.
+      const isArray = Array.isArray(data);
+      const rows = isArray ? data : (data?.audit || []);
+      const limit = isArray ? rows.length : Number(data?.audit_limit ?? metricsRetentionAuditState.limit);
+      const offset = isArray ? 0 : Number(data?.audit_offset ?? metricsRetentionAuditState.offset);
+      const total = isArray
+        ? rows.length
+        : Number(data?.audit_total ?? rows.length);
+      const hasFilter = !!(metricsRetentionAuditState.from || metricsRetentionAuditState.to);
+
+      // Sync state with what the server actually returned (e.g. clamped
+      // limits) so the next pager click computes the right offset.
+      if (Number.isFinite(limit)) metricsRetentionAuditState.limit = limit;
+      if (Number.isFinite(offset)) metricsRetentionAuditState.offset = offset;
+
+      // Summary line — surfaces the total count so an operator knows
+      // there's more history to browse even before the pager appears.
+      if (summaryEl) {
+        if (total === 0) {
+          summaryEl.textContent = hasFilter
+            ? 'No matching audit entries.'
+            : 'No retention changes recorded yet.';
+        } else {
+          const start = offset + 1;
+          const end = offset + rows.length;
+          summaryEl.textContent = 'Showing ' + start + '–' + end + ' of ' +
+            total.toLocaleString() + (total === 1 ? ' entry' : ' entries') +
+            (hasFilter ? ' (filtered)' : '');
+        }
+      }
+
+      if (rows.length === 0) {
+        auditEl.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-metrics-retention-audit-empty">' +
+          (hasFilter
+            ? 'No retention changes match the selected date range.'
+            : 'No retention changes recorded yet.') +
+          '</p>';
+      } else {
+        auditEl.innerHTML = rows.map(r => {
+          const before = r.before_days == null ? '—' : esc(r.before_days) + 'd';
+          const after = r.after_days == null ? '—' : esc(r.after_days) + 'd';
+          const who = esc(r.changed_by || 'unknown');
+          const when = esc(fmtDate(r.changed_at));
+          const note = r.note ? `<div class="text-xs text-gray-500 mt-1 italic">${esc(r.note)}</div>` : '';
+          return `<div class="border rounded p-3 bg-gray-50" data-testid="row-metrics-retention-audit-${esc(r.id)}">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="text-sm text-gray-800">
+                <span class="font-mono">${before}</span>
+                <span class="text-gray-400 mx-1">→</span>
+                <span class="font-mono font-semibold">${after}</span>
+                <span class="text-xs text-gray-500 ml-2">by ${who}</span>
+              </div>
+              <div class="text-xs text-gray-500">${when}</div>
+            </div>
+            ${note}
+          </div>`;
+        }).join('');
+      }
+
+      // Pager — show only when there is more than one page worth of
+      // entries (or the operator is currently looking at a non-first
+      // page, in which case we still need the Newer button to walk
+      // back). Disable the boundary buttons rather than hiding them so
+      // the click target stays where the operator expects it.
+      if (pagerEl) {
+        const onLastPage = offset + rows.length >= total;
+        const onFirstPage = offset <= 0;
+        const showPager = total > limit || !onFirstPage;
+        if (showPager) {
+          pagerEl.classList.remove('hidden');
+          pagerEl.classList.add('flex');
+        } else {
+          pagerEl.classList.add('hidden');
+          pagerEl.classList.remove('flex');
+        }
+        if (newerBtn) newerBtn.disabled = onFirstPage;
+        if (olderBtn) olderBtn.disabled = onLastPage;
+        if (pagerStatusEl) {
+          if (total === 0) {
+            pagerStatusEl.textContent = '';
+          } else {
+            const pageNumber = Math.floor(offset / Math.max(1, limit)) + 1;
+            const pageCount = Math.max(1, Math.ceil(total / Math.max(1, limit)));
+            pagerStatusEl.textContent = 'Page ' + pageNumber + ' of ' + pageCount;
+          }
+        }
+      }
+    }
+
+    // Task #566: pager + filter handlers. Each one mutates
+    // `metricsRetentionAuditState` and asks the form to reload — the
+    // GET re-issues with the new query string and the renderer above
+    // updates the boundary-disabled state for free.
+    function metricsRetentionAuditNewer() {
+      const limit = metricsRetentionAuditState.limit || METRICS_RETENTION_AUDIT_DEFAULT_PAGE_SIZE;
+      const next = Math.max(0, (metricsRetentionAuditState.offset || 0) - limit);
+      if (next === metricsRetentionAuditState.offset) return;
+      metricsRetentionAuditState.offset = next;
+      loadMetricsRetentionForm();
+    }
+
+    function metricsRetentionAuditOlder() {
+      const limit = metricsRetentionAuditState.limit || METRICS_RETENTION_AUDIT_DEFAULT_PAGE_SIZE;
+      const total = Number(metricsRetentionState?.audit_total ?? 0);
+      const next = (metricsRetentionAuditState.offset || 0) + limit;
+      if (Number.isFinite(total) && total > 0 && next >= total) return;
+      metricsRetentionAuditState.offset = next;
+      loadMetricsRetentionForm();
+    }
+
+    function setMetricsRetentionAuditFilterError(text) {
+      const errEl = document.getElementById('metrics-retention-audit-filter-error');
+      if (!errEl) return;
+      if (text) {
+        errEl.textContent = text;
+        errEl.classList.remove('hidden');
+      } else {
+        errEl.textContent = '';
+        errEl.classList.add('hidden');
+      }
+    }
+
+    function applyMetricsRetentionAuditFilter() {
+      const fromInput = document.getElementById('metrics-retention-audit-from');
+      const toInput = document.getElementById('metrics-retention-audit-to');
+      const from = (fromInput?.value || '').trim();
+      const to = (toInput?.value || '').trim();
+      if (from && to && from > to) {
+        setMetricsRetentionAuditFilterError('"From" must be on or before "To".');
         return;
       }
-      auditEl.innerHTML = rows.map(r => {
-        const before = r.before_days == null ? '—' : esc(r.before_days) + 'd';
-        const after = r.after_days == null ? '—' : esc(r.after_days) + 'd';
-        const who = esc(r.changed_by || 'unknown');
-        const when = esc(fmtDate(r.changed_at));
-        const note = r.note ? `<div class="text-xs text-gray-500 mt-1 italic">${esc(r.note)}</div>` : '';
-        return `<div class="border rounded p-3 bg-gray-50" data-testid="row-metrics-retention-audit-${esc(r.id)}">
-          <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="text-sm text-gray-800">
-              <span class="font-mono">${before}</span>
-              <span class="text-gray-400 mx-1">→</span>
-              <span class="font-mono font-semibold">${after}</span>
-              <span class="text-xs text-gray-500 ml-2">by ${who}</span>
-            </div>
-            <div class="text-xs text-gray-500">${when}</div>
-          </div>
-          ${note}
-        </div>`;
-      }).join('');
+      setMetricsRetentionAuditFilterError('');
+      metricsRetentionAuditState.from = from;
+      metricsRetentionAuditState.to = to;
+      // A new filter resets the page back to the newest matching entry —
+      // otherwise an offset that made sense for the old query could land
+      // past the end of the filtered result set.
+      metricsRetentionAuditState.offset = 0;
+      loadMetricsRetentionForm();
+    }
+
+    function clearMetricsRetentionAuditFilter() {
+      const fromInput = document.getElementById('metrics-retention-audit-from');
+      const toInput = document.getElementById('metrics-retention-audit-to');
+      if (fromInput) fromInput.value = '';
+      if (toInput) toInput.value = '';
+      setMetricsRetentionAuditFilterError('');
+      metricsRetentionAuditState.from = '';
+      metricsRetentionAuditState.to = '';
+      metricsRetentionAuditState.offset = 0;
+      loadMetricsRetentionForm();
     }
 
     function setMetricsRetentionStatus(text, kind) {

@@ -38,6 +38,35 @@ const captured: CapturedQuery[] = [];
 let stubbedRetentionDays: number | null = null;
 let stubReadShouldThrow = false;
 
+interface StubAuditRow {
+  id: number;
+  changed_at: Date;
+  changed_by: string;
+  before_days: number | null;
+  after_days: number | null;
+  note: string | null;
+}
+let stubbedAuditRows: StubAuditRow[] = [];
+let stubAuditReadShouldThrow = false;
+
+function filterAuditRows(params: ReadonlyArray<unknown>): StubAuditRow[] {
+  // The audit query passes [from?, to?, limit, offset] in that order;
+  // the count query passes [from?, to?]. We pull bounds off the head of
+  // the params list — both Date instances if present.
+  const bounds: Date[] = [];
+  for (const p of params) {
+    if (p instanceof Date) bounds.push(p);
+    else break;
+  }
+  const from = bounds[0];
+  const to = bounds[1];
+  return stubbedAuditRows.filter((r) => {
+    if (from && r.changed_at.getTime() < from.getTime()) return false;
+    if (to && r.changed_at.getTime() > to.getTime()) return false;
+    return true;
+  });
+}
+
 const originalQuery = pg.Pool.prototype.query;
 const originalConnect = pg.Pool.prototype.connect;
 
@@ -76,7 +105,16 @@ const originalConnect = pg.Pool.prototype.connect;
     };
   }
   if (/SELECT[\s\S]+FROM ai_metrics_retention_audit/i.test(sql)) {
-    return { ...empty, rows: [] };
+    if (stubAuditReadShouldThrow) throw new Error('simulated audit read failure');
+    if (/COUNT\(\*\)/i.test(sql)) {
+      const filtered = filterAuditRows(params ?? []);
+      return { ...empty, rows: [{ n: filtered.length }] };
+    }
+    const all = filterAuditRows(params ?? []);
+    const tail = (params ?? []) as unknown[];
+    const limit = Number(tail[tail.length - 2] ?? 25);
+    const offset = Number(tail[tail.length - 1] ?? 0);
+    return { ...empty, rows: all.slice(offset, offset + limit) };
   }
   return empty;
 } as typeof pg.Pool.prototype.query;
@@ -124,8 +162,11 @@ const {
 } = await import('../src/utils/aiTelemetry');
 const {
   AI_METRICS_RETENTION_BOUNDS,
+  AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
   AI_METRICS_RETENTION_CONFIRM_THRESHOLD_DEFAULTS,
   getAiMetricsRetentionConfirmThreshold,
+  getAiMetricsRetentionAudit,
+  getAiMetricsRetentionAuditPage,
   isAiMetricsRetentionLocked,
   setAiMetricsRetentionConfig,
   __resetInitPromiseForTests,
@@ -152,6 +193,8 @@ function clearAll(): void {
   delete process.env.AI_METRICS_RETENTION_DAYS_LOCK;
   stubbedRetentionDays = null;
   stubReadShouldThrow = false;
+  stubbedAuditRows = [];
+  stubAuditReadShouldThrow = false;
   captured.length = 0;
 }
 
@@ -412,6 +455,159 @@ async function main(): Promise<void> {
   else process.env.AI_METRICS_RETENTION_CONFIRM_ROW_THRESHOLD = originalRowEnv;
   if (originalDayEnv === undefined) delete process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD;
   else process.env.AI_METRICS_RETENTION_CONFIRM_DAY_THRESHOLD = originalDayEnv;
+
+  console.log('=== getAiMetricsRetentionAuditPage() — paging + filter (Task #566) ===');
+
+  // Seed 60 audit rows spanning two months. Newer rows have larger ids
+  // and later `changed_at` so the natural "newest first" sort is well
+  // defined. We use March (31 days) + April (30 days) so all 30 dom
+  // values land inside the chosen month — otherwise Feb-29 would
+  // silently roll into March and skew the date-range counts.
+  clearAll();
+  __resetInitPromiseForTests();
+  const SEED_TOTAL = 60;
+  stubbedAuditRows = Array.from({ length: SEED_TOTAL }, (_, i) => {
+    const idx = i + 1;
+    const month = idx <= 30 ? 2 /* March */ : 3 /* April */;
+    const dom = idx <= 30 ? idx : idx - 30;
+    const changed_at = new Date(Date.UTC(2026, month, dom, 12, 0, 0));
+    return {
+      id: idx,
+      changed_at,
+      changed_by: i % 2 === 0 ? 'alice' : 'bob',
+      before_days: i === 0 ? null : i,
+      after_days: i + 1,
+      note: i % 5 === 0 ? `note-${i}` : null,
+    };
+  });
+  // Reverse so the newest row (id=60) comes first — mirrors the SQL
+  // `ORDER BY changed_at DESC, id DESC` clause the function uses.
+  stubbedAuditRows.sort((a, b) => b.changed_at.getTime() - a.changed_at.getTime());
+
+  check(
+    'AI_METRICS_RETENTION_AUDIT_MAX_LIMIT is a sensible ceiling (≤ 100)',
+    AI_METRICS_RETENTION_AUDIT_MAX_LIMIT === 100,
+    { ceiling: AI_METRICS_RETENTION_AUDIT_MAX_LIMIT },
+  );
+
+  let page = await getAiMetricsRetentionAuditPage();
+  check('default limit is 25', page.limit === 25, { page });
+  check('default offset is 0', page.offset === 0, { page });
+  check('returns 25 rows by default', page.rows.length === 25, { count: page.rows.length });
+  check('reports the full total irrespective of page size', page.total === SEED_TOTAL, {
+    total: page.total,
+  });
+  check(
+    'first page newest-first: row 0 is the newest seeded entry (id=60)',
+    page.rows[0]?.id === SEED_TOTAL,
+    { firstId: page.rows[0]?.id },
+  );
+
+  // Older page — offset by one default page.
+  page = await getAiMetricsRetentionAuditPage({ limit: 25, offset: 25 });
+  check('paged offset returns the next slice', page.rows.length === 25, {
+    count: page.rows.length,
+  });
+  check(
+    'second page starts where the first left off (id=35 since 60-25=35)',
+    page.rows[0]?.id === SEED_TOTAL - 25,
+    { firstId: page.rows[0]?.id },
+  );
+
+  // Trailing page is short — only 10 rows left after offset 50.
+  page = await getAiMetricsRetentionAuditPage({ limit: 25, offset: 50 });
+  check('trailing page returns the leftovers (10 rows)', page.rows.length === 10, {
+    count: page.rows.length,
+  });
+  check('trailing page total still reflects everything', page.total === SEED_TOTAL, {
+    total: page.total,
+  });
+
+  // Date filter — `from = April 1` keeps only the April half (id 31..60
+  // in the seed = 30 rows).
+  page = await getAiMetricsRetentionAuditPage({
+    limit: 100,
+    offset: 0,
+    from: new Date(Date.UTC(2026, 3, 1, 0, 0, 0)),
+  });
+  check(
+    'from filter narrows the matching total (April-only = 30 rows)',
+    page.total === 30,
+    { total: page.total },
+  );
+  check('from filter narrows the returned rows too', page.rows.length === 30, {
+    count: page.rows.length,
+  });
+
+  // `to = March 31` keeps only the March half (id 1..30 in the seed).
+  page = await getAiMetricsRetentionAuditPage({
+    limit: 100,
+    offset: 0,
+    to: new Date(Date.UTC(2026, 2, 31, 23, 59, 59)),
+  });
+  check(
+    'to filter narrows the matching total (March-only = 30 rows)',
+    page.total === 30,
+    { total: page.total },
+  );
+
+  // Both bounds at once: a 10-day window inside April returns 10 rows.
+  page = await getAiMetricsRetentionAuditPage({
+    limit: 100,
+    offset: 0,
+    from: new Date(Date.UTC(2026, 3, 1, 0, 0, 0)),
+    to: new Date(Date.UTC(2026, 3, 10, 23, 59, 59)),
+  });
+  check(
+    'from+to combined narrow to a 10-row mid-month slice',
+    page.total === 10,
+    { total: page.total },
+  );
+
+  // Bogus inputs are clamped, never thrown.
+  page = await getAiMetricsRetentionAuditPage({ limit: 9_999_999 });
+  check(
+    'limit above the ceiling is clamped (returns ≤ ceiling rows)',
+    page.limit === AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
+    { limit: page.limit },
+  );
+  page = await getAiMetricsRetentionAuditPage({ limit: -5 });
+  check('negative / zero limit is clamped to 1', page.limit === 1, { limit: page.limit });
+  page = await getAiMetricsRetentionAuditPage({ offset: -7 });
+  check('negative offset is clamped to 0', page.offset === 0, { offset: page.offset });
+  page = await getAiMetricsRetentionAuditPage({ from: 'not-a-date', to: '' });
+  check(
+    'malformed `from` is treated as "no bound" (still returns all rows)',
+    page.total === SEED_TOTAL,
+    { total: page.total },
+  );
+
+  // Backward-compat: the original signature still works and returns the
+  // same row shape it always has.
+  const rows = await getAiMetricsRetentionAudit();
+  check('legacy getAiMetricsRetentionAudit() still returns an array', Array.isArray(rows));
+  check('legacy default returns 25 rows when ≥25 exist', rows.length === 25, {
+    count: rows.length,
+  });
+
+  // Resilience: a DB read failure on the audit must NOT throw — the
+  // dashboard tile would otherwise blank. We swallow the expected
+  // console.error so the test output stays readable.
+  stubAuditReadShouldThrow = true;
+  const realErrorAudit = console.error;
+  console.error = () => {};
+  let resilientPage;
+  try {
+    resilientPage = await getAiMetricsRetentionAuditPage({ limit: 25 });
+  } finally {
+    console.error = realErrorAudit;
+  }
+  check(
+    'audit read failure returns an empty page rather than throwing',
+    resilientPage != null && resilientPage.rows.length === 0 && resilientPage.total === 0,
+    { resilientPage },
+  );
+  stubAuditReadShouldThrow = false;
 
   // Restore env vars.
   if (originalEnvDays === undefined) delete process.env.AI_METRICS_RETENTION_DAYS;

@@ -250,7 +250,12 @@ test.describe('AI metrics retention — admin dashboard flow (Task #551)', () =>
     // require a workflow restart mid-suite). This is a UI-only
     // simulation — the real 409 PUT path is unit-tested in
     // tests/aiMetricsRetentionConfig.test.ts and tests/aiOpsRoutes.test.ts.
-    await page.route(`**${RETENTION_PATH}`, async (route) => {
+    // Glob includes a trailing `**` so we also catch query-string variants
+    // (`/metrics-retention?limit=25&offset=0` once paging was added in
+    // Task #566). Without it, the mock would be bypassed on the GET and
+    // the real backend would respond with `env_locked: false`, sinking
+    // the lock-banner assertion below.
+    await page.route(`**${RETENTION_PATH}**`, async (route) => {
       const req = route.request();
       if (req.method() === 'GET') {
         await route.fulfill({

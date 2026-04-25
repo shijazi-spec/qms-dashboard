@@ -218,24 +218,131 @@ export async function setAiMetricsRetentionConfig(
 }
 
 /**
+ * Hard server-side ceiling on how many audit rows a single request may
+ * fetch. Picked to keep the response small enough to render in one shot
+ * (the dashboard is a static table, not a virtualised list) while still
+ * letting an operator pull a meaningful chunk per page during a deep
+ * audit. Mirrored in the route's `limit` validator.
+ */
+export const AI_METRICS_RETENTION_AUDIT_MAX_LIMIT = 100;
+
+export interface GetAiMetricsRetentionAuditOptions {
+  /**
+   * Page size (1..{@link AI_METRICS_RETENTION_AUDIT_MAX_LIMIT}). Defaults
+   * to 25 so the existing dashboard call site keeps its prior behaviour
+   * when no options are provided.
+   */
+  limit?: number;
+  /** Number of rows to skip from the newest end. Defaults to 0. */
+  offset?: number;
+  /**
+   * Optional inclusive lower bound on `changed_at` (i.e. only rows on or
+   * after this instant are returned). Accepts a `Date`, an ISO-8601
+   * string, or `null`/`undefined` for "no lower bound".
+   */
+  from?: Date | string | null;
+  /**
+   * Optional inclusive upper bound on `changed_at`. Accepts the same
+   * shapes as `from`.
+   */
+  to?: Date | string | null;
+}
+
+export interface AiMetricsRetentionAuditPage {
+  rows: AiMetricsRetentionAuditEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+function coerceBoundary(value: Date | string | null | undefined): Date | null {
+  if (value == null || value === "") return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+/**
  * Return the most recent N audit entries, newest first. Used by the AI
  * Ops dashboard to surface "who tightened the window during last week's
  * incident". Defaults to 25 to match the threshold-tuning audit panel.
+ *
+ * Kept for backward compatibility — call sites that need paging or the
+ * total count should use {@link getAiMetricsRetentionAuditPage} instead.
  */
 export async function getAiMetricsRetentionAudit(
   limit = 25,
 ): Promise<AiMetricsRetentionAuditEntry[]> {
+  const page = await getAiMetricsRetentionAuditPage({ limit });
+  return page.rows;
+}
+
+/**
+ * Paged + optional date-range read of the retention audit log
+ * (Task #566). Surfaces both the requested slice AND the matching total
+ * so the dashboard can render "Showing 26–50 of 137" and disable Newer /
+ * Older buttons at the boundaries.
+ *
+ * The function defends itself against bogus inputs (NaN, negatives,
+ * over-ceiling limits, malformed dates) by clamping rather than
+ * throwing — the route layer is responsible for surfacing 400s on
+ * unparseable user input; this layer just guarantees it never issues a
+ * runaway query if a programmatic caller passes garbage.
+ *
+ * On a DB read failure we return `{ rows: [], total: 0 }` so a transient
+ * hiccup never blanks the AI-Ops dashboard with a stack trace; the
+ * caller has already seen the failure logged here.
+ */
+export async function getAiMetricsRetentionAuditPage(
+  opts: GetAiMetricsRetentionAuditOptions = {},
+): Promise<AiMetricsRetentionAuditPage> {
+  const safeLimit = Math.max(
+    1,
+    Math.min(
+      AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
+      Math.floor(Number(opts.limit) || 25),
+    ),
+  );
+  const safeOffset = Math.max(
+    0,
+    Math.floor(Number(opts.offset) || 0),
+  );
+  const from = coerceBoundary(opts.from);
+  const to = coerceBoundary(opts.to);
+
   try {
     await initAiMetricsRetentionConfigTable();
-    const safeLimit = Math.max(1, Math.min(200, Math.floor(Number(limit) || 25)));
-    const result = await pool.query(
+
+    const whereParts: string[] = [];
+    const whereParams: unknown[] = [];
+    if (from) {
+      whereParams.push(from);
+      whereParts.push(`changed_at >= $${whereParams.length}`);
+    }
+    if (to) {
+      whereParams.push(to);
+      whereParts.push(`changed_at <= $${whereParams.length}`);
+    }
+    const whereClause = whereParts.length
+      ? `WHERE ${whereParts.join(" AND ")}`
+      : "";
+
+    const countSql = `SELECT COUNT(*)::bigint AS n FROM ai_metrics_retention_audit ${whereClause}`;
+    const pageSql =
       `SELECT id, changed_at, changed_by, before_days, after_days, note
          FROM ai_metrics_retention_audit
+         ${whereClause}
         ORDER BY changed_at DESC, id DESC
-        LIMIT $1`,
-      [safeLimit],
-    );
-    return (result.rows ?? []).map((r: any) => ({
+        LIMIT $${whereParams.length + 1} OFFSET $${whereParams.length + 2}`;
+
+    const [countRes, pageRes] = await Promise.all([
+      pool.query(countSql, whereParams),
+      pool.query(pageSql, [...whereParams, safeLimit, safeOffset]),
+    ]);
+
+    const totalRaw = countRes.rows?.[0]?.n;
+    const total = Number(totalRaw ?? 0);
+    const rows = (pageRes.rows ?? []).map((r: any) => ({
       id: Number(r.id),
       changed_at: r.changed_at,
       changed_by: r.changed_by,
@@ -243,9 +350,16 @@ export async function getAiMetricsRetentionAudit(
       after_days: r.after_days == null ? null : Number(r.after_days),
       note: r.note ?? null,
     }));
+
+    return {
+      rows,
+      total: Number.isFinite(total) ? total : 0,
+      limit: safeLimit,
+      offset: safeOffset,
+    };
   } catch (err) {
     console.error("[aiMetricsRetentionConfig] audit read failed:", err);
-    return [];
+    return { rows: [], total: 0, limit: safeLimit, offset: safeOffset };
   }
 }
 
