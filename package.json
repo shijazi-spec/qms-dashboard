@@ -36,6 +36,7 @@
     "connect-pg-simple": "^10.0.0",
     "dotenv": "^17.3.1",
     "exa-js": "^2.4.0",
+    "exceljs": "^4.4.0",
     "express-session": "^1.19.0",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",

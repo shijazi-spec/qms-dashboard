@@ -127,6 +127,12 @@ export const mastra = new Mastra({
       "inngest/hono",
       "hono",
       "hono/streaming",
+      // Older CommonJS modules that the Mastra/esbuild bundler refuses to
+      // bundle (it explicitly emits an "add to externals" hint for each).
+      // All pulled in transitively via exceljs → archiver. Loading them from
+      // node_modules at runtime works fine since they're real runtime deps.
+      "glob",
+      "fstream",
     ],
     sourcemap: true,
   },
