@@ -420,7 +420,14 @@
             }
         }
 
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        function _t(k, opts) {
+            if (window.WalaPlusI18n && window.WalaPlusI18n.t) {
+                if (opts && typeof opts === 'object') return window.WalaPlusI18n.t(k, opts) || k;
+                const r = window.WalaPlusI18n.t(k);
+                return (typeof opts === 'string') ? (r || opts) : r;
+            }
+            return (typeof opts === 'string') ? opts : k;
+        }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -546,12 +553,7 @@
             `).join('');
         }
 
-        // i18n helpers shared across vendors.html runtime renderers
-        function _t(k, fb) {
-            return (window.WalaPlusI18n && window.WalaPlusI18n.t)
-                ? (window.WalaPlusI18n.t(k) || fb)
-                : fb;
-        }
+        // i18n helpers shared across vendors.html runtime renderers (_t merged above)
         function _prettify(v) {
             return String(v || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }
