@@ -122,17 +122,22 @@ export const mastra = new Mastra({
   },
   bundler: {
     externals: [
+      "@mastra/core",
+      "@ai-sdk/openai",
+      "@openrouter/ai-sdk-provider",
       "@slack/web-api",
       "inngest",
       "inngest/hono",
       "hono",
       "hono/streaming",
-      // Older CommonJS modules that the Mastra/esbuild bundler refuses to
-      // bundle (it explicitly emits an "add to externals" hint for each).
-      // All pulled in transitively via exceljs → archiver. Loading them from
-      // node_modules at runtime works fine since they're real runtime deps.
       "glob",
       "fstream",
+      "pg",
+      "pdfkit",
+      "pino",
+      "resend",
+      "openai",
+      "exa-js",
     ],
     sourcemap: true,
   },
