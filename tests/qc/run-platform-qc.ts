@@ -56,11 +56,16 @@ function isPass(test: QCTestCase, httpStatus: number): boolean {
 async function runOne(baseUrl: string, test: QCTestCase): Promise<QCResult> {
   const url = `${baseUrl.replace(/\/$/, "")}${test.path}`;
   const start = Date.now();
+  const globalAuthHeaders: Record<string, string> = {};
+  if (process.env.ADMIN_API_KEY) {
+    globalAuthHeaders["X-Admin-Key"] = process.env.ADMIN_API_KEY;
+  }
   try {
     const res = await fetch(url, {
       method: test.method,
       headers: {
         "Content-Type": "application/json",
+        ...globalAuthHeaders,
         ...(test.headers || {}),
       },
       body:
