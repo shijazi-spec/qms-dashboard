@@ -1,7 +1,7 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Security Operations Standard Operating Procedure (SOP)
 
-**Document Version:** 4.5
+**Document Version:** 4.6
 **Effective Date:** April 26, 2026
 **Classification:** CONFIDENTIAL
 **Prepared by:** WalaPlus Platform Engineering & Security Team
@@ -1025,35 +1025,40 @@ that every flagged row's deep link resolves to a non-empty runbook anchor.
 
 ### 5.13 Vendored Dependency Patches
 
-A small number of upstream npm packages ship `.d.ts` declarations that the
-TypeScript compiler rejects (e.g. unquoted property keys with characters that
-are valid at runtime but not in a TS identifier). To keep `tsc --noEmit` clean
-without forking the package, the platform uses a deterministic post-install
-patch step:
+A small number of upstream npm packages ship code or declarations that break
+the platform when used as-is. To keep both the TypeScript build and the
+production deployment bundle clean without forking each package, the platform
+uses a single deterministic post-install patch step that applies a list of
+surgical, scoped, idempotent patches.
 
 | Step | File | Purpose |
 |------|------|---------|
-| `postinstall` script | `package.json` | Runs `node scripts/patch-mastra-core.mjs` after every `npm install`. |
-| Patch script | `scripts/patch-mastra-core.mjs` | Idempotent; rewrites the broken declaration in `node_modules/@mastra/core/**/*.d.ts` (currently: quoting the `302ai:` property key). Logs a no-op when the patch is already applied. |
+| `postinstall` script | `package.json` | Runs `node scripts/patch-mastra-core.mjs` after every `npm install` (including the deploy build's install step). |
+| Patch script | `scripts/patch-mastra-core.mjs` | Iterates the patch list below. Each patch is idempotent, scoped to a single file + single line, and exits silently if its target is missing. |
+
+#### Patches applied
+
+| # | Target file | Symptom without patch | Fix |
+|---|-------------|----------------------|-----|
+| 1 | `node_modules/@mastra/core/dist/llm/model/provider-types.generated.d.ts` | `tsc --noEmit` and `npm run check` cascade-fail with 200+ errors because the unquoted `readonly 302ai:` property key starts with a digit (not a valid TS identifier). | Quote the key as `readonly '302ai':`. (Task #641.) |
+| 2 | `node_modules/lazystream/lib/lazystream.js` | The deployed `mastra build` bundle crashes on startup with `ERR_MODULE_NOT_FOUND: Cannot find module '...readable-stream/passthrough'`. The local Repl works only because lazystream's nested `node_modules/readable-stream@2.3.8` happens to expose `passthrough.js` at the package root; the production install flattens to a single top-level `readable-stream@3.6.2`, which has no such file. | Rewrite line 2 from `require('readable-stream/passthrough')` to `require('readable-stream').PassThrough` — the public named export, identical behaviour on `readable-stream@2` and `@3`. (Discovered April 26, 2026 from a deployment crash-loop.) |
 
 Operational guarantees:
 
-- **Idempotent.** Running the patch twice in a row leaves the file
-  byte-identical the second time. CI verifies this by running
-  `npm install` twice and asserting `git diff --quiet node_modules` (in a
-  scratch checkout) on the second run.
-- **Bounded scope.** The script only touches files under
-  `node_modules/@mastra/core/**` and refuses to write outside that prefix.
-- **Versioned guard.** The script asserts the installed `@mastra/core`
-  version matches the supported range; on a mismatch it warns and exits 0
-  (so `npm install` still succeeds) and the next dependency-bump task is
-  expected to reconcile the patch.
-
-This is a stop-gap until the upstream fix lands; remove the postinstall hook
-and the script when `@mastra/core` ships a clean `.d.ts`.
+- **Idempotent.** Running the patch twice in a row leaves both files
+  byte-identical the second time. Verified by running the script twice and
+  asserting no second-run output.
+- **Bounded scope.** Each patch resolves a single, hard-coded file path
+  under `node_modules/` and uses an exact regex match. Anything outside the
+  matched pattern is left untouched.
+- **Fail-safe.** A missing target file is treated as "package not installed
+  yet" and skipped, so the script never blocks `npm install`.
+- **Self-deprecating.** When upstream ships a fix, the regex no longer
+  matches and that patch becomes a permanent no-op; the entry can then be
+  removed from the script and from this table.
 
 #### Implementation Files
-- `scripts/patch-mastra-core.mjs` — Idempotent post-install patcher
+- `scripts/patch-mastra-core.mjs` — Idempotent post-install patcher (multiple patches)
 - `package.json` — `postinstall` hook wiring
 
 ---
@@ -1151,6 +1156,7 @@ and the script when `@mastra/core` ships a clean `.d.ts`.
 | 4.2 | April 24, 2026 | WalaPlus Platform Engineering | §4.8 Historical Data Sweep extended to cover `ai_pending_actions.payload_preview` (TEXT): `redactHistoricalLogs.ts` now runs `redactSecretLikeStrings()` over each existing preview string and UPDATEs only rows whose sanitised value differs (idempotent). Added `tests/redactHistoricalPreview.test.ts` (27 assertions) verifying ghp_… tokens in historical previews are rewritten, clean rows are skipped, and NULL values are handled gracefully. |
 | 4.3 | April 25, 2026 | WalaPlus Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
 | 4.5 | April 26, 2026 | WalaPlus Platform Engineering | §5.7 Secrets Rotation Log: recorded the April 26, 2026 operator-usability rotation of `ADMIN_API_KEY` from the April 25 high-entropy 64-hex value to a memorable mnemonic passphrase (38 chars / 25 distinct — clears the startup strength gate). Workflow restarted; prior value verified rejected, new value verified accepted. |
+| 4.6 | April 26, 2026 | WalaPlus Platform Engineering | §5.13 Vendored Dependency Patches expanded with a second patch entry: `lazystream/lib/lazystream.js` (transitive via `exceljs` → `archiver` → `archiver-utils`) calls `require('readable-stream/passthrough')`, a subpath that only exists in `readable-stream@2.x`. Local Repl resolves it via lazystream's nested `readable-stream@2.3.8`; the production deploy bundle flattens to top-level `readable-stream@3.6.2` (no `passthrough.js` at root) and crash-loops with `ERR_MODULE_NOT_FOUND`. Patch rewrites the require to use the public `PassThrough` named export from `readable-stream`'s main entry — identical behaviour on v2 and v3. Applied via the existing `scripts/patch-mastra-core.mjs` postinstall hook (now multi-patch); idempotency reverified. Local app boot, admin auth, and export-route gate confirmed unaffected. |
 | 4.4 | April 26, 2026 | WalaPlus Platform Engineering | Added §5.10 Storage Health Monitoring & Quiet Hours (`STORAGE_HEALTH_QUIET_HOURS_START/END/TZ`, critical-severity override, fail-open on misconfiguration); §5.11 AI Metrics Retention Pruning & Notifier (`AI_METRICS_RETENTION_PRUNE_NOTIFY`, manual-only gating, operator-identity capture, fail-open notifier); §5.12 Post-Restore Verification Alerts (per-table row-count deltas, amber/red thresholds, runbook deep links, baseline-required policy); §5.13 Vendored Dependency Patches (`scripts/patch-mastra-core.mjs` postinstall hook, idempotency + bounded-scope guarantees). Extended §5.6 with a Testing & validation subsection covering `RUN_RATE_LIMITER_INTEGRATION_E2E` and the `RATE_LIMIT_DISABLED` operational caveat. Added the corresponding implementation files to §7 References. |
 
 **Next Review:** June 2026 (Quarterly)

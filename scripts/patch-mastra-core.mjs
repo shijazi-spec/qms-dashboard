@@ -1,58 +1,69 @@
 #!/usr/bin/env node
 /**
- * Patches @mastra/core's auto-generated provider-types.generated.d.ts so that
- * its `readonly 302ai:` property name (which begins with a digit and is therefore
- * a TypeScript *parse* error) is quoted as `readonly '302ai':`.
+ * Vendored-dependency post-install patches.
  *
- * Why this exists
+ * This script applies a small number of surgical, idempotent patches to files
+ * inside `node_modules/`. Each patch is scoped to a single file and a single
+ * line, and each one becomes a no-op if upstream ever ships a fix or the
+ * target file is missing. Documented in `docs/Security_Operations_SOP.md`
+ * §5.13 (Vendored Dependency Patches).
+ *
+ * Patches applied
  * ---------------
- * `@mastra/core@0.24.9` ships an invalid `.d.ts` file. `skipLibCheck` only
- * suppresses *type checking* of declaration files — it does NOT skip *parsing*,
- * so this single bad property cascades into 200+ TS errors and makes
- * `npm run check` (and therefore the CI typecheck job and the pre-commit hook)
- * fail on every clean install. See task #641.
+ * 1. `@mastra/core/dist/llm/model/provider-types.generated.d.ts`
+ *    Quotes the `readonly 302ai:` property name (digit-prefixed → not a valid
+ *    TypeScript identifier). Without this, `npm run check` and the pre-commit
+ *    typecheck fail on every clean install. See task #641.
  *
- * This script:
+ * 2. `lazystream/lib/lazystream.js`
+ *    Rewrites `require('readable-stream/passthrough')` (a subpath that only
+ *    existed in `readable-stream@2.x`) to `require('readable-stream').PassThrough`.
+ *    Without this, `mastra build`'s deployed bundle crashes on startup with
+ *    `ERR_MODULE_NOT_FOUND` because production de-dupes `readable-stream`
+ *    to the top-level `@3.x`, which has no `passthrough` file at the root.
+ *    The public `PassThrough` named export works identically on both v2 and v3.
+ *
+ * Each patch:
  *   - Is idempotent: running twice is a no-op.
- *   - Is safe if the file is missing (e.g. before `npm install`): it just exits 0.
- *   - Only rewrites the single offending line, so if upstream ever fixes the
- *     bug or renames the property, this script becomes a harmless no-op and
- *     can be deleted along with the postinstall entry in package.json.
+ *   - Is safe if its target file is missing: it just skips that patch.
+ *   - Touches only the exact offending pattern, so an upstream fix or rename
+ *     turns this patch into a harmless no-op and the entry can be removed.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const TARGET = resolve(
-  process.cwd(),
-  "node_modules/@mastra/core/dist/llm/model/provider-types.generated.d.ts",
-);
-
-if (!existsSync(TARGET)) {
-  // @mastra/core not installed yet (or path changed). Nothing to patch.
-  process.exit(0);
+function patch({ name, target, find, replace }) {
+  const path = resolve(process.cwd(), target);
+  if (!existsSync(path)) {
+    // Target package not installed yet (or path changed). Skip this patch.
+    return;
+  }
+  const original = readFileSync(path, "utf8");
+  if (!find.test(original)) {
+    // Already patched, or upstream fixed it. Nothing to do.
+    return;
+  }
+  const patched = original.replace(find, replace);
+  if (patched === original) {
+    // Defensive: replacement somehow produced no change. Don't touch the file.
+    return;
+  }
+  writeFileSync(path, patched, "utf8");
+  console.log(`[patch-mastra-core] ${name}`);
 }
 
-const original = readFileSync(TARGET, "utf8");
+// Patch 1: @mastra/core invalid TS identifier (`302ai:` → `'302ai':`)
+patch({
+  name: "Quoted '302ai' property in provider-types.generated.d.ts",
+  target: "node_modules/@mastra/core/dist/llm/model/provider-types.generated.d.ts",
+  find: /^(\s*)readonly\s+302ai\s*:/m,
+  replace: "$1readonly '302ai':",
+});
 
-// Match the offending unquoted-numeric-prefix property declaration. We only
-// touch the exact pattern; any already-quoted form is left alone so reruns
-// (and a future upstream fix) are no-ops.
-const BAD = /^(\s*)readonly\s+302ai\s*:/m;
-const GOOD = "$1readonly '302ai':";
-
-if (!BAD.test(original)) {
-  // Already patched, or upstream fixed it. Nothing to do.
-  process.exit(0);
-}
-
-const patched = original.replace(BAD, GOOD);
-
-if (patched === original) {
-  // Defensive: replacement somehow produced no change. Don't touch the file.
-  process.exit(0);
-}
-
-writeFileSync(TARGET, patched, "utf8");
-console.log(
-  "[patch-mastra-core] Quoted '302ai' property in provider-types.generated.d.ts",
-);
+// Patch 2: lazystream → use public PassThrough export from readable-stream
+patch({
+  name: "Rewrote lazystream's readable-stream/passthrough require to use public PassThrough export",
+  target: "node_modules/lazystream/lib/lazystream.js",
+  find: /^var\s+PassThrough\s*=\s*require\(\s*['"]readable-stream\/passthrough['"]\s*\)\s*;\s*$/m,
+  replace: "var PassThrough = require('readable-stream').PassThrough;",
+});
