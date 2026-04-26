@@ -1,8 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Security Operations Standard Operating Procedure (SOP)
 
-**Document Version:** 3.0
-**Effective Date:** March 24, 2026
+**Document Version:** 4.4
+**Effective Date:** April 26, 2026
 **Classification:** CONFIDENTIAL
 **Prepared by:** WalaPlus Platform Engineering & Security Team
 **Application:** WalaPlus QMS Platform (https://qms-dashboard.replit.app)
@@ -744,6 +744,23 @@ The same two guardrails are re-run **locally on every push** so a violation that
 #### Implementation Files
 - `src/utils/rateLimiter.ts` — Rate limiter with path-aware categorization
 
+#### Testing & validation
+
+The rate limiter is exercised by both unit and integration suites:
+
+| Suite | Purpose | How it runs |
+|-------|---------|-------------|
+| `tests/rateLimiter.test.ts` | Unit coverage of path categorization, counter expiry, `Retry-After` header. | Default `npm test` run. |
+| `tests/rateLimiterIntegration.e2e.test.ts` | End-to-end check that the limiter actually engages against a live Hono server (auth, write, read, export categories) and that 429 responses include the correct `Retry-After`. | Opt-in: requires `RUN_RATE_LIMITER_INTEGRATION_E2E=1` so it does not slow the default suite. |
+
+Operational caveat — `RATE_LIMIT_DISABLED`: the limiter honours
+`process.env.RATE_LIMIT_DISABLED=1` as a global kill-switch. This exists for
+the integration tests above and for short-lived local debugging only. It must
+**never** be set in production or staging environments. The startup banner in
+`src/mastra/index.ts` logs a `[rateLimiter] DISABLED via RATE_LIMIT_DISABLED`
+warning whenever the flag is observed; CI fails any deployment whose runtime
+env exports the flag with a truthy value.
+
 ---
 
 ### 5.7 Authentication Policy
@@ -890,6 +907,156 @@ When reviewing any PR that touches dashboard JavaScript:
 
 ---
 
+### 5.10 Storage Health Monitoring & Quiet Hours
+
+The storage-health monitor (`src/utils/storageHealthMonitor.ts`) periodically
+samples Postgres usage and emits Slack/email alerts when free-space or growth
+thresholds are crossed. To prevent alert fatigue during scheduled maintenance
+or off-hours, alert delivery (not measurement) can be muted via a configurable
+quiet-hours window:
+
+| Variable | Purpose | Format / Default |
+|----------|---------|------------------|
+| `STORAGE_HEALTH_QUIET_HOURS_START` | Inclusive start of the daily mute window. | `HH:MM` 24-hour, e.g. `22:00`. Unset = no quiet hours. |
+| `STORAGE_HEALTH_QUIET_HOURS_END`   | Exclusive end of the daily mute window.   | `HH:MM` 24-hour, e.g. `06:00`. Required when start is set. |
+| `STORAGE_HEALTH_QUIET_HOURS_TZ`    | IANA timezone the window is evaluated in. | e.g. `Africa/Cairo`. Defaults to `UTC` when unset. |
+
+Behavioural guarantees:
+
+- **Measurements are never skipped.** The monitor still polls Postgres and
+  records every sample to `storage_health_samples`; only outbound
+  Slack/email notifications are suppressed during the window.
+- **Critical alerts override the mute.** Samples flagged `severity=critical`
+  (e.g. < 5% free space) bypass quiet hours so on-call is always paged.
+- **Cross-midnight windows are supported.** A window like `22:00`–`06:00`
+  correctly covers the overnight period in the configured timezone.
+- **Misconfigured windows fail open.** If either bound is missing, malformed,
+  or the timezone is invalid, the monitor logs a warning and disables quiet
+  hours rather than silently dropping alerts.
+
+Coverage: `tests/storageHealthQuietHours.test.ts` exercises window parsing,
+timezone handling, cross-midnight windows, the critical-severity override,
+and fail-open behaviour for malformed input.
+
+#### Implementation Files
+- `src/utils/storageHealthMonitor.ts` — Sampler, threshold logic, quiet-hours gate
+- `src/utils/quietHoursWindow.ts` — Reusable HH:MM/IANA window parser
+
+---
+
+### 5.11 AI Metrics Retention Pruning & Notifier
+
+The AI telemetry tables (`ai_telemetry_events`, `ai_pending_actions`,
+`ai_metrics_*`) are pruned on a scheduled cadence by
+`src/utils/aiMetricsRetention.ts`. Manual prunes — invoked via the admin
+dashboard or the `scripts/pruneAiMetrics.ts` CLI — additionally surface a
+human-readable summary to the configured notification channels so operators
+have an audit trail outside the database.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `AI_METRICS_RETENTION_PRUNE_NOTIFY` | When `1`/`true`, manual prunes post a Slack/email summary (rows deleted per table, retention window, operator). | `0` (off) |
+| `AI_METRICS_RETENTION_DAYS` | Existing retention window used by both scheduled and manual prunes. | `90` |
+
+Notifier guarantees:
+
+- **Scheduled prunes are unaffected** — only operator-initiated runs notify,
+  to avoid drowning channels in routine cron output.
+- **Operator identity is preserved.** The notifier captures the admin user
+  email (or `cli:<hostname>` for CLI invocations) and the request ID so the
+  message can be cross-referenced with the audit log.
+- **Failure is non-fatal.** If the notifier transport (Slack webhook, SMTP)
+  fails, the prune itself still commits and the failure is logged at WARN
+  with the redacted notifier payload — pruning correctness never depends on
+  the notifier.
+
+Coverage: `tests/aiMetricsRetentionNotifier.test.ts` exercises the on/off
+flag, scheduled-vs-manual gating, operator-identity capture, and the
+fail-open behaviour when the transport throws.
+
+#### Implementation Files
+- `src/utils/aiMetricsRetention.ts` — Prune logic + notifier hook
+- `scripts/pruneAiMetrics.ts` — Operator CLI
+
+---
+
+### 5.12 Post-Restore Verification Alerts
+
+Following any database restore (point-in-time recovery, branch promotion, or
+manual `pg_restore`), the platform runs a sweep that compares per-table row
+counts against the pre-restore baseline and surfaces deltas in the
+**Post-Restore Sweep** dashboard panel (`/admin/post-restore`).
+
+The panel renders:
+
+- **Per-table row counts** — current vs. baseline with absolute delta and
+  percentage change. Tables with deltas outside ±1% are flagged amber;
+  outside ±5% are flagged red.
+- **Deep link to the runbook** — every flagged table row links directly to
+  the corresponding section of `docs/runbooks/post_restore_recovery.md` so
+  the responder lands on the exact remediation step (e.g. re-running the
+  audit-log redaction sweep, refreshing materialised views, replaying the
+  Inngest dead-letter queue) without scrolling.
+
+Operational rules:
+
+- **The sweep is read-only.** It never mutates data; remediation is always a
+  follow-up action triggered by an operator.
+- **The baseline is captured at backup time** by `scripts/captureRestoreBaseline.ts`
+  and stored in `restore_baselines`. A restore without a baseline shows the
+  panel in `unknown` state with a clear "no baseline available" banner —
+  rather than silently passing.
+- **Sensitive tables are listed first.** `event_logs`, `change_history`, and
+  `ai_pending_actions` are pinned to the top of the panel so audit-integrity
+  regressions are seen before low-severity drift.
+
+Coverage: `tests/postRestoreSweepPanel.spec.ts` (Playwright) verifies the
+panel renders the per-table table, applies the amber/red thresholds, and
+that every flagged row's deep link resolves to a non-empty runbook anchor.
+
+#### Implementation Files
+- `src/mastra/routes/postRestoreRoutes.ts` — Sweep API
+- `dashboard/post-restore.html` — Panel UI
+- `scripts/captureRestoreBaseline.ts` — Baseline capture
+- `docs/runbooks/post_restore_recovery.md` — Deep-link target runbook
+
+---
+
+### 5.13 Vendored Dependency Patches
+
+A small number of upstream npm packages ship `.d.ts` declarations that the
+TypeScript compiler rejects (e.g. unquoted property keys with characters that
+are valid at runtime but not in a TS identifier). To keep `tsc --noEmit` clean
+without forking the package, the platform uses a deterministic post-install
+patch step:
+
+| Step | File | Purpose |
+|------|------|---------|
+| `postinstall` script | `package.json` | Runs `node scripts/patch-mastra-core.mjs` after every `npm install`. |
+| Patch script | `scripts/patch-mastra-core.mjs` | Idempotent; rewrites the broken declaration in `node_modules/@mastra/core/**/*.d.ts` (currently: quoting the `302ai:` property key). Logs a no-op when the patch is already applied. |
+
+Operational guarantees:
+
+- **Idempotent.** Running the patch twice in a row leaves the file
+  byte-identical the second time. CI verifies this by running
+  `npm install` twice and asserting `git diff --quiet node_modules` (in a
+  scratch checkout) on the second run.
+- **Bounded scope.** The script only touches files under
+  `node_modules/@mastra/core/**` and refuses to write outside that prefix.
+- **Versioned guard.** The script asserts the installed `@mastra/core`
+  version matches the supported range; on a mismatch it warns and exits 0
+  (so `npm install` still succeeds) and the next dependency-bump task is
+  expected to reconcile the patch.
+
+This is a stop-gap until the upstream fix lands; remove the postinstall hook
+and the script when `@mastra/core` ships a clean `.d.ts`.
+
+#### Implementation Files
+- `scripts/patch-mastra-core.mjs` — Idempotent post-install patcher
+- `package.json` — `postinstall` hook wiring
+
+---
+
 ## 6. Cross-Reference Table — All 39 Findings
 
 | # | Finding ID | Title | Severity | CVSS | Domain | Status | Primary Files Modified |
@@ -958,6 +1125,15 @@ When reviewing any PR that touches dashboard JavaScript:
 | Change History Redaction | `src/utils/changeHistoryDatabase.ts` | Redaction wired into NC/CAPA change history |
 | Historical Redaction Sweep | `src/utils/redactHistoricalLogs.ts` | One-off migration to mask existing audit rows |
 | Redaction Tests | `src/utils/redactSensitiveFields.test.ts` | 14 unit tests for the redaction helper |
+| Storage Health Monitor | `src/utils/storageHealthMonitor.ts` | Postgres usage sampler with quiet-hours gating |
+| Quiet-Hours Window Parser | `src/utils/quietHoursWindow.ts` | HH:MM + IANA timezone window utility (cross-midnight aware) |
+| AI Metrics Retention | `src/utils/aiMetricsRetention.ts` | Scheduled + manual prune with optional notifier |
+| AI Metrics Prune CLI | `scripts/pruneAiMetrics.ts` | Operator CLI for manual prune runs |
+| Post-Restore Sweep API | `src/mastra/routes/postRestoreRoutes.ts` | Per-table row-count comparison vs. baseline |
+| Post-Restore Panel | `dashboard/post-restore.html` | Sweep UI with runbook deep links |
+| Restore Baseline Capture | `scripts/captureRestoreBaseline.ts` | Pre-backup baseline snapshot |
+| Post-Restore Runbook | `docs/runbooks/post_restore_recovery.md` | Deep-link target for flagged tables |
+| Mastra Core Patch | `scripts/patch-mastra-core.mjs` | Idempotent post-install `.d.ts` fix-up |
 
 ---
 
@@ -973,6 +1149,7 @@ When reviewing any PR that touches dashboard JavaScript:
 | 4.1 | April 24, 2026 | WalaPlus Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, Google, Slack, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
 | 4.2 | April 24, 2026 | WalaPlus Platform Engineering | §4.8 Historical Data Sweep extended to cover `ai_pending_actions.payload_preview` (TEXT): `redactHistoricalLogs.ts` now runs `redactSecretLikeStrings()` over each existing preview string and UPDATEs only rows whose sanitised value differs (idempotent). Added `tests/redactHistoricalPreview.test.ts` (27 assertions) verifying ghp_… tokens in historical previews are rewritten, clean rows are skipped, and NULL values are handled gracefully. |
 | 4.3 | April 25, 2026 | WalaPlus Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
+| 4.4 | April 26, 2026 | WalaPlus Platform Engineering | Added §5.10 Storage Health Monitoring & Quiet Hours (`STORAGE_HEALTH_QUIET_HOURS_START/END/TZ`, critical-severity override, fail-open on misconfiguration); §5.11 AI Metrics Retention Pruning & Notifier (`AI_METRICS_RETENTION_PRUNE_NOTIFY`, manual-only gating, operator-identity capture, fail-open notifier); §5.12 Post-Restore Verification Alerts (per-table row-count deltas, amber/red thresholds, runbook deep links, baseline-required policy); §5.13 Vendored Dependency Patches (`scripts/patch-mastra-core.mjs` postinstall hook, idempotency + bounded-scope guarantees). Extended §5.6 with a Testing & validation subsection covering `RUN_RATE_LIMITER_INTEGRATION_E2E` and the `RATE_LIMIT_DISABLED` operational caveat. Added the corresponding implementation files to §7 References. |
 
 **Next Review:** June 2026 (Quarterly)
 **Classification:** CONFIDENTIAL — For internal use and security assessment purposes only.
