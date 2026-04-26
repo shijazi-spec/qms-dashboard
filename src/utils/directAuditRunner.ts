@@ -62,8 +62,10 @@ function analyzeRecordBatch(
         const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
           ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
           : (typeof record.data?.Products === 'object' ? record.data?.Products?.name : record.data?.Products) || record.data?.Product_Name || record.data?.Product || '';
-        const stageRawF = record.data?.Stage ?? record.data?.Lead_Status ?? '';
+        const stageRawF = record.data?.Stage ?? '';
         const stageNameF = typeof stageRawF === 'object' ? (stageRawF?.name || '') : String(stageRawF || '');
+        const leadStatusRawF = record.data?.Lead_Status ?? '';
+        const leadStatusNameF = typeof leadStatusRawF === 'object' ? (leadStatusRawF?.name || '') : String(leadStatusRawF || '');
         const pipelineRawF = record.data?.Pipeline ?? '';
         const pipelineNameF = typeof pipelineRawF === 'object' ? (pipelineRawF?.name || '') : String(pipelineRawF || '');
         detailedIssues.push({
@@ -75,6 +77,7 @@ function analyzeRecordBatch(
           createdBy: createdByName,
           createdTime: record.data?.Created_Time || record.createdTime || '',
           stage: stageNameF,
+          leadStatus: leadStatusNameF,
           pipeline: pipelineNameF,
           fieldName: issue.fieldName || '',
           issueType: issue.issueType,
@@ -238,8 +241,10 @@ async function runAttachmentAudit(
           const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
             ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
             : (typeof rec.data?.Products === 'object' ? rec.data?.Products?.name : rec.data?.Products) || rec.data?.Product_Name || rec.data?.Product || '';
-          const stageRaw = rec.data?.Stage ?? rec.data?.Lead_Status ?? '';
+          const stageRaw = rec.data?.Stage ?? '';
           const stageName = typeof stageRaw === 'object' ? (stageRaw?.name || '') : String(stageRaw || '');
+          const leadStatusRaw = rec.data?.Lead_Status ?? '';
+          const leadStatusName = typeof leadStatusRaw === 'object' ? (leadStatusRaw?.name || '') : String(leadStatusRaw || '');
           const pipelineRaw = rec.data?.Pipeline ?? '';
           const pipelineName = typeof pipelineRaw === 'object' ? (pipelineRaw?.name || '') : String(pipelineRaw || '');
           detailedIssues.push({
@@ -251,6 +256,7 @@ async function runAttachmentAudit(
             createdBy: createdByName,
             createdTime: rec.data?.Created_Time || rec.createdTime || '',
             stage: stageName,
+            leadStatus: leadStatusName,
             pipeline: pipelineName,
             fieldName: issue.fieldName || 'Attachments',
             issueType: issue.issueType,

@@ -823,9 +823,10 @@ export const DEFAULT_GOVERNANCE_RULES: GovernanceRule[] = [
     description: 'Phone must have KSA country code (+966) per SDR SOP', severity: 'medium',
     suggestedFix: 'Update the phone number to include KSA country code +966' },
   { module: 'Leads', fieldName: 'Lead_Source', ruleType: 'required', description: 'Lead must have a source', severity: 'medium' },
-  { module: 'Leads', fieldName: 'Lead_Source', ruleType: 'enum',
-    allowedValues: ['Website', 'LinkedIn', 'Referral', 'Event', 'Partner', 'Cold Call', 'Outbound', 'Inbound', 'Social Media', 'Google Ads', 'Other'],
-    description: 'Lead Source must be a valid SOP-defined value', severity: 'medium' },
+  // Strict Lead_Source enum check REMOVED — Zoho CRM exposes a much broader
+  // picklist than the SDR SOP's short list (e.g. "Web Research", "Trade Show",
+  // "Email Campaign"), so the enum kept flagging legitimately-populated leads
+  // as "invalid SOP value". Any non-empty Lead_Source now passes.
   { module: 'Leads', fieldName: 'Lead_Status', ruleType: 'required', description: 'Lead must have a status', severity: 'high' },
   { module: 'Leads', fieldName: 'Lead_Status', ruleType: 'enum',
     allowedValues: ['New', 'Contacted', 'Contacting', 'Qualified', 'Not Qualified', 'Junk', 'On Hold', 'Converted', 'Nurturing'],
@@ -858,10 +859,15 @@ export const DEFAULT_GOVERNANCE_RULES: GovernanceRule[] = [
     stageCondition: ['Contacted', 'Contacting', 'Qualified', 'Not Qualified', 'On Hold', 'Converted', 'Nurturing'],
     stageField: 'Lead_Status',
     description: 'Lead Tag/Category required from Contacting stage (SDR SOP)', severity: 'medium' },
+  // Notes/Description: preferential (low severity), not mandatory. Surfaced as
+  // a soft hint for leads at Contacting stage or beyond — except brand-new
+  // leads ("New" status) where notes are not yet expected.
   { module: 'Leads', fieldName: 'Description', ruleType: 'required',
     stageCondition: ['Contacted', 'Contacting', 'Qualified', 'Not Qualified', 'On Hold', 'Converted', 'Nurturing'],
     stageField: 'Lead_Status',
-    description: 'Notes/Description required from Contacting stage for qualification trail (SDR SOP)', severity: 'medium' },
+    description: 'Notes/Description preferred from Contacting stage onward (SDR SOP — informational)',
+    severity: 'low',
+    suggestedFix: 'Add a note/description to track the qualification trail (preferential, not mandatory)' },
 
   // ═══════════════════════════════════════════════════════════
   //  CONTACTS
