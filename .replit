@@ -90,7 +90,7 @@ ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
 MANUAL_INTAKE_DIR = "./data/manual-intake"
-ADMIN_API_KEY = "WalaPlus-GRQ-Admin-2026"
+ADMIN_API_KEY = "WalaPlus-QMS-Admin-Rotates-April-2026!"
 
 [userenv.development]
 RATE_LIMIT_DISABLED = "true"
