@@ -1,7 +1,7 @@
 # WalaPlus Enterprise GRC & Quality Management Platform
 # Security Operations Standard Operating Procedure (SOP)
 
-**Document Version:** 4.4
+**Document Version:** 4.5
 **Effective Date:** April 26, 2026
 **Classification:** CONFIDENTIAL
 **Prepared by:** WalaPlus Platform Engineering & Security Team
@@ -801,6 +801,7 @@ every authentication request).
 | Date | Secret | Reason | Operator | Verification |
 |------|--------|--------|----------|--------------|
 | April 25, 2026 | `ADMIN_API_KEY` | Precautionary rotation following the `admin_key` cookie hardening from `SameSite=Lax` to `SameSite=Strict`. The prior `Lax` setting left a theoretical CSRF window for cross-site POST against admin endpoints during the time the previous key was active. `HttpOnly` was already in place, so XSS exfiltration was not in scope. | WalaPlus Platform Engineering | New high-entropy value (≥ 256 bits) installed via the platform secrets store; prior key confirmed rejected by `/api/admin/auth` (returns HTTP 401 with `{"error":"Authentication required"}`). |
+| April 26, 2026 | `ADMIN_API_KEY` | Operator usability rotation: the April 25 high-entropy value (64 hex / 256 bits) was difficult to recall and was tripping legitimate admin logins. Replaced with a memorable mnemonic passphrase that still clears the §5.7 startup strength gate (≥ 32 chars, ≥ 10 distinct). Prior 64-hex value retired. | WalaPlus Platform Engineering (operator-initiated) | Strength check: 38 chars, 25 distinct (both criteria pass). Workflow restarted to reload `process.env.ADMIN_API_KEY`. `POST /api/admin/auth` with the **April 25** value returns HTTP 401 `{"error":"Authentication required"}`; with the **April 26** value returns HTTP 200 `{"success":true}` and sets the `admin_key` HttpOnly/Secure/SameSite=Strict cookie. |
 
 Rotation procedure:
 1. Generate a new high-entropy value (e.g. `openssl rand -hex 32` — 64 hex chars / 256 bits of entropy).
@@ -1149,6 +1150,7 @@ and the script when `@mastra/core` ships a clean `.d.ts`.
 | 4.1 | April 24, 2026 | WalaPlus Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, Google, Slack, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
 | 4.2 | April 24, 2026 | WalaPlus Platform Engineering | §4.8 Historical Data Sweep extended to cover `ai_pending_actions.payload_preview` (TEXT): `redactHistoricalLogs.ts` now runs `redactSecretLikeStrings()` over each existing preview string and UPDATEs only rows whose sanitised value differs (idempotent). Added `tests/redactHistoricalPreview.test.ts` (27 assertions) verifying ghp_… tokens in historical previews are rewritten, clean rows are skipped, and NULL values are handled gracefully. |
 | 4.3 | April 25, 2026 | WalaPlus Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
+| 4.5 | April 26, 2026 | WalaPlus Platform Engineering | §5.7 Secrets Rotation Log: recorded the April 26, 2026 operator-usability rotation of `ADMIN_API_KEY` from the April 25 high-entropy 64-hex value to a memorable mnemonic passphrase (38 chars / 25 distinct — clears the startup strength gate). Workflow restarted; prior value verified rejected, new value verified accepted. |
 | 4.4 | April 26, 2026 | WalaPlus Platform Engineering | Added §5.10 Storage Health Monitoring & Quiet Hours (`STORAGE_HEALTH_QUIET_HOURS_START/END/TZ`, critical-severity override, fail-open on misconfiguration); §5.11 AI Metrics Retention Pruning & Notifier (`AI_METRICS_RETENTION_PRUNE_NOTIFY`, manual-only gating, operator-identity capture, fail-open notifier); §5.12 Post-Restore Verification Alerts (per-table row-count deltas, amber/red thresholds, runbook deep links, baseline-required policy); §5.13 Vendored Dependency Patches (`scripts/patch-mastra-core.mjs` postinstall hook, idempotency + bounded-scope guarantees). Extended §5.6 with a Testing & validation subsection covering `RUN_RATE_LIMITER_INTEGRATION_E2E` and the `RATE_LIMIT_DISABLED` operational caveat. Added the corresponding implementation files to §7 References. |
 
 **Next Review:** June 2026 (Quarterly)
