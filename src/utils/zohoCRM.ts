@@ -694,15 +694,72 @@ export const DEFAULT_GOVERNANCE_RULES: GovernanceRule[] = [
   // ═══════════════════════════════════════════════════════════
   { module: 'Deals', fieldName: 'Deal_Name', ruleType: 'required', description: 'Deal must have a name', severity: 'critical' },
   { module: 'Deals', fieldName: 'Stage', ruleType: 'required', description: 'Deal must have a stage', severity: 'critical' },
-  { module: 'Deals', fieldName: 'Amount', ruleType: 'required', description: 'Deal must have an amount', severity: 'high' },
-  { module: 'Deals', fieldName: 'Closing_Date', ruleType: 'required', description: 'Deal must have a closing date', severity: 'high' },
+  // Amount: not required for outbound deals still in early ("New Deal"/"Qualification") stage
+  // — those fields are gathered later in the pipeline per Sales SOP.
+  { module: 'Deals', fieldName: 'Amount', ruleType: 'custom',
+    validator: (v, rec) => {
+      const isFilled = v != null && !(typeof v === 'string' && v.trim() === '');
+      if (isFilled) return true;
+      const src = String(rec.data?.Lead_Source || '').toLowerCase();
+      const stage = String(rec.data?.Stage || '').toLowerCase().replace(/\s+/g, '_');
+      const isOutbound = src.includes('outbound') || src.includes('cold');
+      const isEarlyStage = stage === '' || stage === 'new_deal' || stage === 'qualification';
+      return isOutbound && isEarlyStage;
+    },
+    description: 'Deal must have an amount', severity: 'high',
+    suggestedFix: 'Fill in the Amount field' },
+  // Closing date: per business rule, only required once the deal reaches the
+  // Agreement Signed stage (or beyond). Earlier stages don't need a date yet.
+  { module: 'Deals', fieldName: 'Closing_Date', ruleType: 'required',
+    stageCondition: ['Agreement Signed', 'Closed Won', 'Closed Lost'],
+    description: 'Deal must have a closing date', severity: 'high' },
   { module: 'Deals', fieldName: 'Account_Name', ruleType: 'required', description: 'Deal must be linked to an Account', severity: 'high' },
   { module: 'Deals', fieldName: 'Contact_Name', ruleType: 'required', description: 'Deal must have a Contact linked', severity: 'high' },
-  { module: 'Deals', fieldName: 'Pipeline', ruleType: 'required', description: 'Deal must have a pipeline assigned', severity: 'medium' },
+  // Pipeline rule REMOVED — Zoho CRM enforces Pipeline at the schema level
+  // (a deal cannot exist without one), so flagging "missing Pipeline" was a
+  // false positive. The Pipeline value is still surfaced as a column in the
+  // All-Issues view for visibility.
   { module: 'Deals', fieldName: 'Lead_Source', ruleType: 'required', description: 'Deal must have a lead source', severity: 'medium' },
-  { module: 'Deals', fieldName: 'No_of_Employees', ruleType: 'required', description: 'Deal must have number of employees for qualification', severity: 'high' },
-  { module: 'Deals', fieldName: 'Region', ruleType: 'required', description: 'Deal must have a region per qualification criteria', severity: 'medium' },
-  { module: 'Deals', fieldName: 'Industry', ruleType: 'required', description: 'Deal must have an industry classification', severity: 'medium' },
+  // No_of_Employees: same outbound + early-stage exemption as Amount.
+  { module: 'Deals', fieldName: 'No_of_Employees', ruleType: 'custom',
+    validator: (v, rec) => {
+      const isFilled = v != null && !(typeof v === 'string' && v.trim() === '');
+      if (isFilled) return true;
+      const src = String(rec.data?.Lead_Source || '').toLowerCase();
+      const stage = String(rec.data?.Stage || '').toLowerCase().replace(/\s+/g, '_');
+      const isOutbound = src.includes('outbound') || src.includes('cold');
+      const isEarlyStage = stage === '' || stage === 'new_deal' || stage === 'qualification';
+      return isOutbound && isEarlyStage;
+    },
+    description: 'Deal must have number of employees for qualification', severity: 'high',
+    suggestedFix: 'Fill in the No_of_Employees field' },
+  // Region: only the City and KSA region fields count. Pass if either is filled
+  // (covers field labels "Region (City)" and "Region (KSA)" — Zoho API names
+  // commonly Region_City / Region_KSA, with City as a SDR fallback).
+  { module: 'Deals', fieldName: 'Region', ruleType: 'custom',
+    validator: (_v, rec) => {
+      const candidates = ['Region_City', 'Region_KSA', 'City', 'Region'];
+      return candidates.some(f => {
+        const val = rec.data?.[f];
+        return val != null && !(typeof val === 'string' && val.trim() === '');
+      });
+    },
+    description: 'Deal must have a region per qualification criteria (Region (City) or Region (KSA))',
+    severity: 'medium',
+    suggestedFix: 'Fill in the Region (City) or Region (KSA) field' },
+  // Industry: same outbound + early-stage exemption as Amount.
+  { module: 'Deals', fieldName: 'Industry', ruleType: 'custom',
+    validator: (v, rec) => {
+      const isFilled = v != null && !(typeof v === 'string' && v.trim() === '');
+      if (isFilled) return true;
+      const src = String(rec.data?.Lead_Source || '').toLowerCase();
+      const stage = String(rec.data?.Stage || '').toLowerCase().replace(/\s+/g, '_');
+      const isOutbound = src.includes('outbound') || src.includes('cold');
+      const isEarlyStage = stage === '' || stage === 'new_deal' || stage === 'qualification';
+      return isOutbound && isEarlyStage;
+    },
+    description: 'Deal must have an industry classification', severity: 'medium',
+    suggestedFix: 'Fill in the Industry field' },
   { module: 'Deals', fieldName: 'Stage', ruleType: 'enum',
     allowedValues: ['Qualification', 'Meeting', 'Proposal', 'Agreement Signed', 'On Hold', 'Closed Won', 'Closed Lost'],
     description: 'Deal stage must be a valid SOP-defined value', severity: 'critical' },

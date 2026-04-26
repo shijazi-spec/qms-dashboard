@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-02-19T12:08:38.491Z",
-  "baseUrl": "https://qms-dashboard.replit.app",
+  "generatedAt": "2026-04-26T20:44:53.784Z",
+  "baseUrl": "http://localhost:5000",
   "total": 52,
-  "passed": 0,
-  "failed": 52,
+  "passed": 52,
+  "failed": 0,
   "results": [
     {
       "id": "quality-dashboard-data",
@@ -12,9 +12,9 @@
       "functionalityName": "Load dashboard data",
       "method": "GET",
       "path": "/api/dashboard",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 234
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 840
     },
     {
       "id": "quality-audit-latest",
@@ -23,9 +23,9 @@
       "functionalityName": "Load latest audit result",
       "method": "GET",
       "path": "/api/audit/latest",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 175
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 17
     },
     {
       "id": "quality-audit-history",
@@ -34,9 +34,9 @@
       "functionalityName": "Load audit history",
       "method": "GET",
       "path": "/api/audit/history",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 185
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 278
     },
     {
       "id": "quality-agents-performance",
@@ -45,9 +45,9 @@
       "functionalityName": "Agent Performance widget",
       "method": "GET",
       "path": "/api/agents/performance",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 195
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 127
     },
     {
       "id": "admin-documents",
@@ -56,9 +56,9 @@
       "functionalityName": "Governance Document Manager",
       "method": "GET",
       "path": "/api/admin/documents",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 171
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 9
     },
     {
       "id": "admin-scorecards",
@@ -67,9 +67,9 @@
       "functionalityName": "Scorecard list",
       "method": "GET",
       "path": "/api/admin/scorecards",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 177
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 6
     },
     {
       "id": "admin-activities",
@@ -78,9 +78,9 @@
       "functionalityName": "Activity logging",
       "method": "GET",
       "path": "/api/admin/activities",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 168
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 7
     },
     {
       "id": "qms-dashboard",
@@ -89,9 +89,9 @@
       "functionalityName": "QMS dashboard data",
       "method": "GET",
       "path": "/api/qms/dashboard",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 171
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 73
     },
     {
       "id": "qms-capa-list",
@@ -100,9 +100,9 @@
       "functionalityName": "CAPA list",
       "method": "GET",
       "path": "/api/qms/capa",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 200
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 6
     },
     {
       "id": "qms-nc-list",
@@ -111,9 +111,9 @@
       "functionalityName": "Nonconformance list",
       "method": "GET",
       "path": "/api/qms/nc",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 169
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 5
     },
     {
       "id": "qms-evaluations",
@@ -122,9 +122,9 @@
       "functionalityName": "Deal evaluations",
       "method": "GET",
       "path": "/api/qms/evaluations",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 164
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 6
     },
     {
       "id": "grc-risks-summary",
@@ -133,9 +133,9 @@
       "functionalityName": "Risk summary",
       "method": "GET",
       "path": "/api/risks/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 165
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 112
     },
     {
       "id": "grc-compliance-summary",
@@ -144,9 +144,9 @@
       "functionalityName": "Compliance overview",
       "method": "GET",
       "path": "/api/compliance/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 171
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 60
     },
     {
       "id": "grc-policies-summary",
@@ -155,9 +155,9 @@
       "functionalityName": "Policy summary",
       "method": "GET",
       "path": "/api/policies/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 199
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 77
     },
     {
       "id": "grc-audits-summary",
@@ -166,9 +166,9 @@
       "functionalityName": "Audit summary",
       "method": "GET",
       "path": "/api/audits/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 159
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 98
     },
     {
       "id": "grc-vendors-summary",
@@ -177,9 +177,9 @@
       "functionalityName": "Vendor summary",
       "method": "GET",
       "path": "/api/vendors/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 212
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 33
     },
     {
       "id": "risks-list",
@@ -188,9 +188,9 @@
       "functionalityName": "List risks",
       "method": "GET",
       "path": "/api/risks",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 181
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 22
     },
     {
       "id": "risks-heatmap",
@@ -199,9 +199,9 @@
       "functionalityName": "Risk heat map",
       "method": "GET",
       "path": "/api/risks/heatmap",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 166
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 298
     },
     {
       "id": "risks-categories",
@@ -210,9 +210,9 @@
       "functionalityName": "Risk categories",
       "method": "GET",
       "path": "/api/risks/categories",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 208
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 25
     },
     {
       "id": "policies-list",
@@ -221,9 +221,9 @@
       "functionalityName": "List policies",
       "method": "GET",
       "path": "/api/policies",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 212
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 54
     },
     {
       "id": "policies-summary",
@@ -232,9 +232,9 @@
       "functionalityName": "Policy summary",
       "method": "GET",
       "path": "/api/policies/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 172
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 67
     },
     {
       "id": "compliance-regulations",
@@ -243,9 +243,9 @@
       "functionalityName": "List regulations",
       "method": "GET",
       "path": "/api/compliance/regulations",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 171
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 35
     },
     {
       "id": "compliance-obligations",
@@ -254,9 +254,9 @@
       "functionalityName": "List obligations",
       "method": "GET",
       "path": "/api/compliance/obligations",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 207
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 40
     },
     {
       "id": "compliance-summary",
@@ -265,9 +265,9 @@
       "functionalityName": "Compliance summary",
       "method": "GET",
       "path": "/api/compliance/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 179
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 34
     },
     {
       "id": "audits-list",
@@ -276,9 +276,9 @@
       "functionalityName": "List audits",
       "method": "GET",
       "path": "/api/audits",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 186
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 161
     },
     {
       "id": "audits-findings",
@@ -287,9 +287,9 @@
       "functionalityName": "Audit findings",
       "method": "GET",
       "path": "/api/audits/findings",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 165
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 69
     },
     {
       "id": "vendors-list",
@@ -298,9 +298,9 @@
       "functionalityName": "List vendors",
       "method": "GET",
       "path": "/api/vendors",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 172
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 18
     },
     {
       "id": "vendors-summary",
@@ -309,9 +309,9 @@
       "functionalityName": "Vendor summary",
       "method": "GET",
       "path": "/api/vendors/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 196
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 16
     },
     {
       "id": "migration-templates",
@@ -320,9 +320,9 @@
       "functionalityName": "Migration templates",
       "method": "GET",
       "path": "/api/migration/templates",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 220
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 24
     },
     {
       "id": "migration-jobs",
@@ -331,9 +331,9 @@
       "functionalityName": "Migration jobs list",
       "method": "GET",
       "path": "/api/migration/jobs",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 165
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 9
     },
     {
       "id": "migration-dedup-rules",
@@ -342,9 +342,9 @@
       "functionalityName": "Deduplication rules",
       "method": "GET",
       "path": "/api/migration/dedup-rules",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 173
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 9
     },
     {
       "id": "calls-list",
@@ -353,9 +353,9 @@
       "functionalityName": "Call records list",
       "method": "GET",
       "path": "/api/calls",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 164
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 27
     },
     {
       "id": "calls-analytics",
@@ -364,9 +364,9 @@
       "functionalityName": "Call analytics",
       "method": "GET",
       "path": "/api/calls/analytics",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 178
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 12
     },
     {
       "id": "roi-list",
@@ -375,9 +375,9 @@
       "functionalityName": "ROI initiatives",
       "method": "GET",
       "path": "/api/roi",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 166
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 52
     },
     {
       "id": "roi-analytics",
@@ -386,9 +386,9 @@
       "functionalityName": "ROI analytics",
       "method": "GET",
       "path": "/api/roi/analytics",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 202
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 49
     },
     {
       "id": "team-members",
@@ -397,9 +397,9 @@
       "functionalityName": "Team members list",
       "method": "GET",
       "path": "/api/team/members",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 182
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 50
     },
     {
       "id": "team-performance",
@@ -408,9 +408,9 @@
       "functionalityName": "Team performance data",
       "method": "GET",
       "path": "/api/team/performance",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 166
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 33
     },
     {
       "id": "pmp-projects",
@@ -419,9 +419,9 @@
       "functionalityName": "Projects list",
       "method": "GET",
       "path": "/api/pmp/projects",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 177
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 32
     },
     {
       "id": "logs-list",
@@ -430,9 +430,9 @@
       "functionalityName": "Event logs list",
       "method": "GET",
       "path": "/api/logs",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 170
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 36
     },
     {
       "id": "logs-stats",
@@ -441,9 +441,9 @@
       "functionalityName": "Logs stats",
       "method": "GET",
       "path": "/api/logs/stats",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 160
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 27
     },
     {
       "id": "pdpl-status",
@@ -452,9 +452,9 @@
       "functionalityName": "PDPL status",
       "method": "GET",
       "path": "/api/pdpl/status",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 181
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 36
     },
     {
       "id": "pdpl-inventory",
@@ -463,9 +463,9 @@
       "functionalityName": "Data inventory",
       "method": "GET",
       "path": "/api/pdpl/inventory",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 179
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 10
     },
     {
       "id": "users-stats",
@@ -474,9 +474,9 @@
       "functionalityName": "User stats",
       "method": "GET",
       "path": "/api/users/stats",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 179
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 85
     },
     {
       "id": "scorecard-snapshot",
@@ -485,9 +485,9 @@
       "functionalityName": "Scorecard snapshot",
       "method": "GET",
       "path": "/api/scorecard/snapshot",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 195
+      "status": "pass",
+      "httpStatus": 404,
+      "durationMs": 4
     },
     {
       "id": "duplicates-summary",
@@ -496,9 +496,9 @@
       "functionalityName": "Duplicates summary",
       "method": "GET",
       "path": "/api/duplicates/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 204
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 291
     },
     {
       "id": "handoff-rules",
@@ -507,9 +507,9 @@
       "functionalityName": "Handoff rules list",
       "method": "GET",
       "path": "/api/handoff/rules",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 198
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 39
     },
     {
       "id": "handoff-summary",
@@ -518,9 +518,9 @@
       "functionalityName": "Handoff summary",
       "method": "GET",
       "path": "/api/handoff/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 209
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 30
     },
     {
       "id": "integrations-status",
@@ -529,9 +529,9 @@
       "functionalityName": "Integrations status",
       "method": "GET",
       "path": "/api/integrations/status",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 179
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 2
     },
     {
       "id": "workflow-runs",
@@ -540,9 +540,9 @@
       "functionalityName": "Workflow runs",
       "method": "GET",
       "path": "/api/workflow/runs",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 165
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 4
     },
     {
       "id": "kpis-list",
@@ -551,9 +551,9 @@
       "functionalityName": "KPI list",
       "method": "GET",
       "path": "/api/kpis",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 166
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 14
     },
     {
       "id": "kpis-summary",
@@ -562,9 +562,9 @@
       "functionalityName": "KPI summary",
       "method": "GET",
       "path": "/api/kpis/summary",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 194
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 25
     },
     {
       "id": "triggers-list",
@@ -573,9 +573,9 @@
       "functionalityName": "Triggers list",
       "method": "GET",
       "path": "/api/triggers",
-      "status": "fail",
-      "errorDetail": "fetch failed (self-signed certificate in certificate chain)",
-      "durationMs": 170
+      "status": "pass",
+      "httpStatus": 200,
+      "durationMs": 28
     }
   ]
 }

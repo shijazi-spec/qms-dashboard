@@ -62,6 +62,10 @@ function analyzeRecordBatch(
         const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
           ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
           : (typeof record.data?.Products === 'object' ? record.data?.Products?.name : record.data?.Products) || record.data?.Product_Name || record.data?.Product || '';
+        const stageRawF = record.data?.Stage ?? record.data?.Lead_Status ?? '';
+        const stageNameF = typeof stageRawF === 'object' ? (stageRawF?.name || '') : String(stageRawF || '');
+        const pipelineRawF = record.data?.Pipeline ?? '';
+        const pipelineNameF = typeof pipelineRawF === 'object' ? (pipelineRawF?.name || '') : String(pipelineRawF || '');
         detailedIssues.push({
           recordId: issue.recordId,
           module: issue.module,
@@ -70,6 +74,8 @@ function analyzeRecordBatch(
           products: productsName,
           createdBy: createdByName,
           createdTime: record.data?.Created_Time || record.createdTime || '',
+          stage: stageNameF,
+          pipeline: pipelineNameF,
           fieldName: issue.fieldName || '',
           issueType: issue.issueType,
           description: issue.description,
@@ -232,6 +238,10 @@ async function runAttachmentAudit(
           const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
             ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
             : (typeof rec.data?.Products === 'object' ? rec.data?.Products?.name : rec.data?.Products) || rec.data?.Product_Name || rec.data?.Product || '';
+          const stageRaw = rec.data?.Stage ?? rec.data?.Lead_Status ?? '';
+          const stageName = typeof stageRaw === 'object' ? (stageRaw?.name || '') : String(stageRaw || '');
+          const pipelineRaw = rec.data?.Pipeline ?? '';
+          const pipelineName = typeof pipelineRaw === 'object' ? (pipelineRaw?.name || '') : String(pipelineRaw || '');
           detailedIssues.push({
             recordId: issue.recordId,
             module: issue.module,
@@ -240,6 +250,8 @@ async function runAttachmentAudit(
             products: productsName,
             createdBy: createdByName,
             createdTime: rec.data?.Created_Time || rec.createdTime || '',
+            stage: stageName,
+            pipeline: pipelineName,
             fieldName: issue.fieldName || 'Attachments',
             issueType: issue.issueType,
             description: issue.description,
@@ -290,7 +302,7 @@ export async function runDirectAudit(logger?: any) {
   const topIssues: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
-  const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
+  const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage: string; pipeline: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
   // Per-module tally so each module gets its own quota of detailed (per-record)
   // issues — prevents the first modules in the iteration order from starving
   // later ones (e.g. Tasks, Accounts) of `all_issues` entries.
