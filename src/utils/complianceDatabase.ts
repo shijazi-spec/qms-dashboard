@@ -233,10 +233,14 @@ export async function initComplianceTables(): Promise<void> {
 }
 
 async function seedDefaultRegulations(): Promise<void> {
-  const existing = await pool.query("SELECT COUNT(*) FROM regulations");
-  if (parseInt(existing.rows[0].count) > 0) return;
-
-  logger.info("🌱 [ComplianceDB] Seeding default Saudi regulations...");
+  // Idempotent seed: walk the canonical list every boot and rely on
+  // `ON CONFLICT (regulation_code) DO NOTHING` to skip rows that already
+  // exist. The previous early-return guard meant new entries (e.g. PCI DSS)
+  // would never reach a database that had been seeded before, so any
+  // additions had to be applied by hand. Walking the list is cheap (single
+  // INSERT per row, all conflicts are no-ops) and keeps the canonical set
+  // in sync with what's defined here.
+  logger.info("🌱 [ComplianceDB] Reconciling default regulations (idempotent upsert)...");
 
   const saudiRegulations = [
     {
@@ -309,6 +313,18 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2020-01-01",
       status: "active",
       version: "7.0",
+    },
+    {
+      regulation_code: "PCI-DSS",
+      name: "PCI DSS v4.0 Payment Card Industry Data Security Standard",
+      description:
+        "Mandatory security baseline for any organisation that stores, processes, or transmits cardholder data — covers network segmentation, encryption-in-transit, access control, vulnerability management, and continuous monitoring.",
+      jurisdiction: "international",
+      category: "cybersecurity",
+      issuing_body: "PCI Security Standards Council",
+      effective_date: "2024-04-01",
+      status: "active",
+      version: "4.0",
     },
   ];
 

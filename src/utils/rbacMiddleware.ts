@@ -1973,6 +1973,33 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
+  // QMS document library (uploaded governance artefacts). Order matters:
+  // the DELETE rule for `/api/qms-docs/:id` must precede the broader GET
+  // rule below so its narrower role set wins for delete traffic.
+  {
+    pattern: /^\/api\/qms-docs\/\d+$/,
+    methods: ["DELETE"],
+    roles: ["admin", "grc_manager"],
+  },
+  {
+    pattern: /^\/api\/qms-docs\/upload$/,
+    methods: ["POST"],
+    roles: ["admin", "grc_manager", "quality_manager"],
+  },
+  // List, counts, single-doc fetch, and binary download all share the same
+  // governance + executive read set as the page shell at /qms-docs.
+  {
+    pattern: /^\/api\/qms-docs(\/.*)?$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "executive",
+    ],
+  },
+
   // Trigger reads (list / stats / by-audit) — TRIGGER_REVIEWER_ROLES.
   {
     pattern: /^\/api\/triggers/,

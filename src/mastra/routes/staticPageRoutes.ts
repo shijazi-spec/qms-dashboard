@@ -485,6 +485,34 @@ export const staticPageRoutes = [
         `To access the GRC dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /qms-docs → GRC document library (Documents/Policies/Forms/Security
+  // Controls/SOPs upload boxes). Backed by /api/qms-docs which has its own
+  // per-method RBAC; the page shell mirrors the broader GRC read set so
+  // operator roles can browse the library even if they cannot upload.
+  {
+    path: "/qms-docs",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "qms-docs.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "QMS Library Setup Required",
+        `To access the QMS document library, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /triggers → standalone trigger queue page (was a tab inside /qms).
+  // Backed by /api/triggers which is governance + executive read.
+  {
+    path: "/triggers",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "triggers.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Trigger Alerts Setup Required",
+        `To access the trigger alerts feed, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /pdpl → /api/pdpl/* — admin only (privacy inventory, incident history).
   {
     path: "/pdpl",

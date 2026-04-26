@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WalaPlus - QMS Document Library</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .cat-card { transition: box-shadow .15s ease, transform .15s ease; }
+        .cat-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.06); transform: translateY(-1px); }
+        .modal { display: none; position: fixed; inset: 0; z-index: 60; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/navigation.js?v=4.5.2"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            WalaPlusNav.init('qms-docs');
+            loadCounts();
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">QMS Document Library</h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    Upload and organise governance artefacts. Files staged here can be mapped to the
+                    regulations tracked in <a href="/compliance" class="text-blue-600 hover:underline">Regulatory Compliance</a>
+                    (PDPL, ISO 9001, ISO 27001, PCI DSS, …) in a future release.
+                </p>
+            </div>
+        </div>
+
+        <!-- Five category tiles -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8" id="category-tiles" data-testid="grid-categories">
+            <!-- populated by render below -->
+        </div>
+
+        <!-- Selected category panel -->
+        <section class="bg-white rounded-xl border border-gray-200 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-900" id="cat-title">All Documents</h2>
+                <div class="flex gap-2">
+                    <button data-on-click="openUploadModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium" data-testid="button-open-upload">
+                        Upload Document
+                    </button>
+                    <button data-on-click="loadDocuments" class="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm" data-testid="button-refresh-docs">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div id="docs-table-wrap">
+                <p class="text-gray-500 text-center py-8">Select a category above to view its documents.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Upload modal -->
+    <div id="upload-modal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Upload Document</h3>
+                <button data-on-click="closeUploadModal" class="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="Close" data-testid="button-close-upload">&times;</button>
+            </div>
+            <form id="upload-form" data-testid="form-upload">
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <select id="up-category" class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="select-category">
+                        <option value="documents">Documents</option>
+                        <option value="policies">Policies</option>
+                        <option value="forms">Forms</option>
+                        <option value="security_controls">Security Controls</option>
+                        <option value="sops">SOPs</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                    <input id="up-title" type="text" required maxlength="500" placeholder="e.g. PDPL Data Subject Request Procedure"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="input-title" />
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">File <span class="text-xs text-gray-500">(PDF, DOCX, XLSX, PPTX, PNG, JPG · max 25MB)</span></label>
+                    <input id="up-file" type="file" required
+                           accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/png,image/jpeg"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="input-file" />
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Map to regulations <span class="text-xs text-gray-500">(optional, comma-separated codes)</span></label>
+                    <input id="up-regs" type="text" placeholder="PDPL, ISO-27001, PCI-DSS"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="input-regulations" />
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes <span class="text-xs text-gray-500">(optional)</span></label>
+                    <textarea id="up-notes" rows="3" maxlength="2000"
+                              class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="textarea-notes"></textarea>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" data-on-click="closeUploadModal" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" id="btn-do-upload" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-testid="button-submit-upload">Upload</button>
+                </div>
+                <p id="upload-msg" class="mt-3 text-sm"></p>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const CATEGORIES = [
+            { id: 'documents',         label: 'Documents',         color: 'blue',   description: 'General governance artefacts' },
+            { id: 'policies',          label: 'Policies',          color: 'indigo', description: 'Approved corporate policies' },
+            { id: 'forms',             label: 'Forms',             color: 'green',  description: 'Operational forms & templates' },
+            { id: 'security_controls', label: 'Security Controls', color: 'red',    description: 'NCA/ISO control evidence' },
+            { id: 'sops',              label: 'SOPs',              color: 'amber',  description: 'Standard operating procedures' }
+        ];
+
+        const COLOR_CLASSES = {
+            blue:   { ring: 'ring-blue-200',   bg: 'bg-blue-50',   text: 'text-blue-700' },
+            indigo: { ring: 'ring-indigo-200', bg: 'bg-indigo-50', text: 'text-indigo-700' },
+            green:  { ring: 'ring-green-200',  bg: 'bg-green-50',  text: 'text-green-700' },
+            red:    { ring: 'ring-red-200',    bg: 'bg-red-50',    text: 'text-red-700' },
+            amber:  { ring: 'ring-amber-200',  bg: 'bg-amber-50',  text: 'text-amber-700' }
+        };
+
+        let selectedCategory = null;
+        let cachedCounts = {};
+
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function fmtBytes(n) {
+            if (!Number.isFinite(n)) return '';
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            return (n / 1024 / 1024).toFixed(1) + ' MB';
+        }
+
+        function renderTiles() {
+            const wrap = document.getElementById('category-tiles');
+            wrap.innerHTML = CATEGORIES.map(function (c) {
+                const cc = COLOR_CLASSES[c.color] || COLOR_CLASSES.blue;
+                const count = cachedCounts[c.id] || 0;
+                const active = selectedCategory === c.id ? ' ring-2 ' + cc.ring : ' ring-1 ring-gray-200';
+                return '<button type="button" data-on-click="selectCategory" data-args=\'["' + c.id + '"]\' ' +
+                    'class="cat-card text-left bg-white rounded-xl p-5 ' + active + ' hover:bg-gray-50" ' +
+                    'data-testid="card-category-' + c.id + '">' +
+                        '<div class="flex items-center justify-between">' +
+                            '<span class="' + cc.bg + ' ' + cc.text + ' text-xs font-semibold px-2 py-1 rounded">' + c.label + '</span>' +
+                            '<span class="text-2xl font-bold text-gray-900" data-testid="text-count-' + c.id + '">' + count + '</span>' +
+                        '</div>' +
+                        '<p class="text-xs text-gray-500 mt-3">' + escapeHtml(c.description) + '</p>' +
+                    '</button>';
+            }).join('');
+        }
+
+        async function loadCounts() {
+            try {
+                const r = await fetch('/api/qms-docs', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('counts failed');
+                const data = await r.json();
+                cachedCounts = data.counts || {};
+                renderTiles();
+            } catch (e) {
+                cachedCounts = {};
+                renderTiles();
+            }
+        }
+
+        async function selectCategory(id) {
+            selectedCategory = id;
+            const cat = CATEGORIES.find(function (c) { return c.id === id; });
+            document.getElementById('cat-title').textContent = cat ? (cat.label + ' — uploaded files') : 'Documents';
+            renderTiles();
+            await loadDocuments();
+        }
+
+        async function loadDocuments() {
+            const wrap = document.getElementById('docs-table-wrap');
+            if (!selectedCategory) {
+                wrap.innerHTML = '<p class="text-gray-500 text-center py-8">Select a category above to view its documents.</p>';
+                return;
+            }
+            wrap.innerHTML = '<p class="text-gray-500 text-center py-6">Loading…</p>';
+            try {
+                const r = await fetch('/api/qms-docs?category=' + encodeURIComponent(selectedCategory), { credentials: 'same-origin' });
+                if (!r.ok) {
+                    wrap.innerHTML = '<p class="text-red-500 text-center py-6">Failed to load documents (HTTP ' + r.status + ').</p>';
+                    return;
+                }
+                const data = await r.json();
+                const docs = data.documents || [];
+                cachedCounts = data.counts || cachedCounts;
+                renderTiles();
+                if (docs.length === 0) {
+                    wrap.innerHTML = '<p class="text-gray-500 text-center py-8">No files in this category yet. Click <strong>Upload Document</strong> to add one.</p>';
+                    return;
+                }
+                wrap.innerHTML =
+                    '<div class="overflow-x-auto">' +
+                    '<table class="min-w-full text-sm">' +
+                        '<thead class="bg-gray-50">' +
+                            '<tr>' +
+                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Title</th>' +
+                                '<th class="text-left px-3 py-2 font-medium text-gray-600">File</th>' +
+                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Size</th>' +
+                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Mapped to</th>' +
+                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Uploaded by</th>' +
+                                '<th class="text-left px-3 py-2 font-medium text-gray-600">When</th>' +
+                                '<th class="text-right px-3 py-2 font-medium text-gray-600">Actions</th>' +
+                            '</tr>' +
+                        '</thead>' +
+                        '<tbody class="divide-y divide-gray-100">' +
+                            docs.map(function (d) {
+                                const mapped = (d.regulation_codes && d.regulation_codes.length)
+                                    ? d.regulation_codes.map(escapeHtml).join(', ')
+                                    : '<span class="text-gray-400">—</span>';
+                                return '<tr data-testid="row-doc-' + Number(d.id) + '">' +
+                                    '<td class="px-3 py-2 font-medium text-gray-900">' + escapeHtml(d.title) +
+                                        (d.notes ? '<div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(d.notes) + '</div>' : '') +
+                                    '</td>' +
+                                    '<td class="px-3 py-2 text-gray-600">' + escapeHtml(d.file_name) + '</td>' +
+                                    '<td class="px-3 py-2 text-gray-600">' + fmtBytes(d.file_size) + '</td>' +
+                                    '<td class="px-3 py-2 text-gray-600">' + mapped + '</td>' +
+                                    '<td class="px-3 py-2 text-gray-600">' + escapeHtml(d.uploaded_by || '') + '</td>' +
+                                    '<td class="px-3 py-2 text-gray-600">' + escapeHtml(new Date(d.uploaded_at).toLocaleString()) + '</td>' +
+                                    '<td class="px-3 py-2 text-right">' +
+                                        '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm mr-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
+                                        '<button data-on-click="deleteDoc" data-args="[' + Number(d.id) + ']" class="text-red-600 hover:underline text-sm" data-testid="button-delete-' + Number(d.id) + '">Delete</button>' +
+                                    '</td>' +
+                                '</tr>';
+                            }).join('') +
+                        '</tbody>' +
+                    '</table>' +
+                    '</div>';
+            } catch (e) {
+                wrap.innerHTML = '<p class="text-red-500 text-center py-6">Network error loading documents.</p>';
+            }
+        }
+
+        function openUploadModal() {
+            const sel = document.getElementById('up-category');
+            if (selectedCategory) sel.value = selectedCategory;
+            document.getElementById('up-title').value = '';
+            document.getElementById('up-file').value = '';
+            document.getElementById('up-regs').value = '';
+            document.getElementById('up-notes').value = '';
+            document.getElementById('upload-msg').textContent = '';
+            document.getElementById('upload-modal').classList.add('active');
+        }
+        function closeUploadModal() {
+            document.getElementById('upload-modal').classList.remove('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('upload-form');
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const msg = document.getElementById('upload-msg');
+                const btn = document.getElementById('btn-do-upload');
+                msg.className = 'mt-3 text-sm text-gray-600';
+                msg.textContent = 'Uploading…';
+                btn.disabled = true;
+
+                const fileEl = document.getElementById('up-file');
+                if (!fileEl.files || !fileEl.files[0]) {
+                    msg.className = 'mt-3 text-sm text-red-600';
+                    msg.textContent = 'Please choose a file.';
+                    btn.disabled = false;
+                    return;
+                }
+                const fd = new FormData();
+                fd.append('file', fileEl.files[0]);
+                fd.append('category', document.getElementById('up-category').value);
+                fd.append('title', document.getElementById('up-title').value.trim());
+                fd.append('regulation_codes', document.getElementById('up-regs').value.trim());
+                fd.append('notes', document.getElementById('up-notes').value.trim());
+
+                try {
+                    const r = await fetch('/api/qms-docs/upload', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        body: fd
+                    });
+                    const data = await r.json().catch(() => ({}));
+                    if (!r.ok) {
+                        msg.className = 'mt-3 text-sm text-red-600';
+                        msg.textContent = 'Upload failed: ' + (data.error || ('HTTP ' + r.status));
+                    } else {
+                        msg.className = 'mt-3 text-sm text-green-700';
+                        msg.textContent = 'Uploaded.';
+                        const cat = document.getElementById('up-category').value;
+                        if (selectedCategory !== cat) selectedCategory = cat;
+                        await loadDocuments();
+                        setTimeout(closeUploadModal, 600);
+                    }
+                } catch (err) {
+                    msg.className = 'mt-3 text-sm text-red-600';
+                    msg.textContent = 'Network error during upload.';
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        });
+
+        async function deleteDoc(id) {
+            if (!confirm('Delete this document? This cannot be undone.')) return;
+            try {
+                const r = await fetch('/api/qms-docs/' + id, { method: 'DELETE', credentials: 'same-origin' });
+                if (r.ok) {
+                    await loadDocuments();
+                } else {
+                    const err = await r.json().catch(() => ({}));
+                    alert('Delete failed: ' + (err.error || ('HTTP ' + r.status)));
+                }
+            } catch (e) { alert('Network error during delete.'); }
+        }
+    </script>
+</body>
+</html>

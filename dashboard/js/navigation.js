@@ -51,7 +51,12 @@ const WalaPlusNav = {
         { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
-        { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' }
+        { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
+        // CAPA & Coaching: this is the existing Integrated QMS dashboard
+        // (URL kept as /qms for backward compatibility) — the page houses
+        // CAPA / Nonconformance / coaching workflows so it lives under
+        // Quality alongside the operator's day-to-day audit tools.
+        { label: 'CAPA & Coaching', href: '/qms', icon: 'shield-check', id: 'qms' }
       ]
     },
     {
@@ -63,7 +68,11 @@ const WalaPlusNav = {
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
-        { label: 'Integrated QMS', href: '/qms', icon: 'shield-check', id: 'qms' },
+        // QMS document library — categorised upload boxes for Documents,
+        // Policies, Forms, Security Controls and SOPs. Files uploaded here
+        // are staged for future mapping to the regulations tracked in the
+        // Compliance module (PDPL, ISO 9001, ISO 27001, PCI DSS, …).
+        { label: 'QMS', href: '/qms-docs', icon: 'folder', id: 'qms-docs' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
@@ -123,6 +132,20 @@ const WalaPlusNav = {
         { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
         { label: 'System Logs', href: '/logs', icon: 'document-report', id: 'logs' },
         { label: 'Health Pulse', href: '/dashboard/health', icon: 'shield-check', id: 'health' }
+      ]
+    },
+    {
+      // Trigger Alerts: surfaces the standalone trigger queue (was a tab on
+      // the old Integrated QMS page). Pinned to the bottom of the sidebar so
+      // operators have a one-click jump to the live alert feed regardless of
+      // which module they're inside. Backed by /api/triggers (governance +
+      // executive read role).
+      id: 'triggers',
+      label: 'Trigger Alerts',
+      icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>`,
+      color: 'amber',
+      items: [
+        { label: 'Trigger Alerts', href: '/triggers', icon: 'exclamation-triangle', id: 'triggers' }
       ]
     }
   ],

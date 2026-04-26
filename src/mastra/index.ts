@@ -52,6 +52,7 @@ import { aiApprovalRoutes } from "./routes/aiApprovalRoutes";
 import "../utils/integrationTestFixtureTools";
 import { aiOpsRoutes } from "./routes/aiOpsRoutes";
 import { qmsEnhancedRoutes } from "./routes/qmsEnhancedRoutes";
+import { qmsDocsRoutes } from "./routes/qmsDocsRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { knowledgeRoutes } from "./routes/knowledgeRoutes";
 import { reportRoutes } from "./routes/reportRoutes";
@@ -201,6 +202,7 @@ export const mastra = new Mastra({
       ...aiApprovalRoutes,
       ...aiOpsRoutes,
       ...qmsEnhancedRoutes,
+      ...qmsDocsRoutes,
       ...notificationRoutes,
       ...knowledgeRoutes,
       ...reportRoutes,
