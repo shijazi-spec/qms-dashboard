@@ -59,6 +59,7 @@ const AI_OPS_ROLES: UserRole[] = [
   "ai_specialist",
   "grc_manager",
   "head_of_operations_quality",
+  "quality_manager",
 ];
 
 /**

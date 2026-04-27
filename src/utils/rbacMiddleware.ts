@@ -1538,6 +1538,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
       "ai_specialist",
       "grc_manager",
       "head_of_operations_quality",
+      "quality_manager",
     ],
   },
 
