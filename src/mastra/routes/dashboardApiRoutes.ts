@@ -73,9 +73,15 @@ const _dashboardApiRoutesRaw = [
     method: "GET",
     createHandler: async () => {
       const { getDashboardData } = await import("../../utils/database");
+      // Allow only YYYY-MM-DD; anything else is treated as "no filter".
+      const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+      const sanitize = (v: string | null) =>
+        v && isoDateRe.test(v) ? v : null;
       return async (c: any) => {
         try {
-          const data = await getDashboardData();
+          const startDate = sanitize(c.req.query("createdStart") || null);
+          const endDate = sanitize(c.req.query("createdEnd") || null);
+          const data = await getDashboardData({ startDate, endDate });
           return c.json(data);
         } catch (error) {
           safeLogger.error("Error fetching dashboard data:", error);
@@ -132,9 +138,14 @@ const _dashboardApiRoutesRaw = [
     method: "GET",
     createHandler: async () => {
       const { getLatestAuditResult } = await import("../../utils/database");
+      const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+      const sanitize = (v: string | null) =>
+        v && isoDateRe.test(v) ? v : null;
       return async (c: any) => {
         try {
-          const result = await getLatestAuditResult();
+          const startDate = sanitize(c.req.query("createdStart") || null);
+          const endDate = sanitize(c.req.query("createdEnd") || null);
+          const result = await getLatestAuditResult({ startDate, endDate });
           if (!result)
             return c.json({ message: "No audit results found" }, 404);
           return c.json(result);
@@ -150,10 +161,15 @@ const _dashboardApiRoutesRaw = [
     method: "GET",
     createHandler: async () => {
       const { getAuditHistory } = await import("../../utils/database");
+      const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+      const sanitize = (v: string | null) =>
+        v && isoDateRe.test(v) ? v : null;
       return async (c: any) => {
         try {
           const limit = parseInt(c.req.query("limit") || "20");
-          const history = await getAuditHistory(limit);
+          const startDate = sanitize(c.req.query("createdStart") || null);
+          const endDate = sanitize(c.req.query("createdEnd") || null);
+          const history = await getAuditHistory(limit, { startDate, endDate });
           return c.json(history);
         } catch (error) {
           safeLogger.error("Error fetching audit history:", error);

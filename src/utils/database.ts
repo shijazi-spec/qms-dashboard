@@ -366,19 +366,59 @@ async function saveTrendMetrics(auditId: number, audit: QualityAuditResult) {
   );
 }
 
-export async function getLatestAuditResult(): Promise<QualityAuditResult | null> {
+/**
+ * Build the WHERE clause + params for the dashboard date filter.
+ * The UI sends ISO date strings (YYYY-MM-DD). End date is treated as
+ * inclusive end-of-day so a range like "04/27 → 04/27" still matches
+ * audits run that same day. Returns an empty clause when no filter is
+ * supplied so the caller can append it unconditionally.
+ */
+function buildAuditDateRangeClause(
+  opts: { startDate?: string | null; endDate?: string | null } | undefined,
+  startingParamIndex: number,
+): { clause: string; params: any[] } {
+  if (!opts) return { clause: "", params: [] };
+  const params: any[] = [];
+  const conds: string[] = [];
+  if (opts.startDate) {
+    params.push(opts.startDate);
+    conds.push(`audit_date >= $${startingParamIndex + params.length - 1}`);
+  }
+  if (opts.endDate) {
+    // Inclusive end-of-day, expressed as an exclusive upper bound on the
+    // NEXT day. Avoids the `23:59:59.999` truncation bug — Postgres
+    // timestamps support microseconds, so anything in the .999001-.999999
+    // window would otherwise be silently dropped from the same-day range.
+    params.push(opts.endDate);
+    conds.push(
+      `audit_date < ($${startingParamIndex + params.length - 1}::date + interval '1 day')`,
+    );
+  }
+  const clause = conds.length > 0 ? ` WHERE ${conds.join(" AND ")}` : "";
+  return { clause, params };
+}
+
+export async function getLatestAuditResult(opts?: {
+  startDate?: string | null;
+  endDate?: string | null;
+}): Promise<QualityAuditResult | null> {
+  const { clause, params } = buildAuditDateRangeClause(opts, 1);
   const result = await pool.query(
-    "SELECT * FROM quality_audit_results ORDER BY audit_date DESC LIMIT 1",
+    `SELECT * FROM quality_audit_results${clause} ORDER BY audit_date DESC LIMIT 1`,
+    params,
   );
   return result.rows[0] || null;
 }
 
 export async function getAuditHistory(
   limit: number = 10,
+  opts?: { startDate?: string | null; endDate?: string | null },
 ): Promise<QualityAuditResult[]> {
+  const { clause, params } = buildAuditDateRangeClause(opts, 1);
+  params.push(limit);
   const result = await pool.query(
-    "SELECT * FROM quality_audit_results ORDER BY audit_date DESC LIMIT $1",
-    [limit],
+    `SELECT * FROM quality_audit_results${clause} ORDER BY audit_date DESC LIMIT $${params.length}`,
+    params,
   );
   return result.rows;
 }
@@ -400,12 +440,16 @@ export async function getTrendData(
   return result.rows;
 }
 
-export async function getDashboardData(): Promise<{
+export async function getDashboardData(opts?: {
+  startDate?: string | null;
+  endDate?: string | null;
+}): Promise<{
   latestAudit: QualityAuditResult | null;
   auditHistory: QualityAuditResult[];
   governance: GovernanceDocument | null;
   governanceDocs: GovernanceDocument[];
   scorecard: QualityScorecard | null;
+  appliedDateRange: { startDate: string | null; endDate: string | null };
   trends: {
     overall: any[];
     people: any[];
@@ -413,10 +457,19 @@ export async function getDashboardData(): Promise<{
     governance: any[];
   };
 }> {
+  // When a date range is supplied, every headline KPI on the dashboard
+  // (Overall / People / Process / Governance scores, Records Audited,
+  // Issues Found, Compliance Rate) and the Audit History list are scoped
+  // to audits whose `audit_date` falls within that window. The trend
+  // sparklines below remain a 90-day rolling view by design.
+  const range = {
+    startDate: opts?.startDate || null,
+    endDate: opts?.endDate || null,
+  };
   const [latestAudit, auditHistory, governance, governanceDocs, scorecard] =
     await Promise.all([
-      getLatestAuditResult(),
-      getAuditHistory(20),
+      getLatestAuditResult(range),
+      getAuditHistory(20, range),
       getActiveGovernanceDocument(),
       getActiveGovernanceDocumentsByModule(),
       getActiveScorecard(),
@@ -436,6 +489,7 @@ export async function getDashboardData(): Promise<{
     governance,
     governanceDocs,
     scorecard,
+    appliedDateRange: range,
     trends: {
       overall: overallTrend,
       people: peopleTrend,
