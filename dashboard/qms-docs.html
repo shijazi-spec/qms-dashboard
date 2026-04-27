@@ -56,6 +56,9 @@
                     <button data-on-click="openUploadModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium" data-testid="button-open-upload">
                         Upload Document
                     </button>
+                    <button data-on-click="openBulkUploadModal" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium" data-testid="button-open-bulk-upload">
+                        Bulk Upload
+                    </button>
                     <button data-on-click="loadDocuments" class="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm" data-testid="button-refresh-docs">
                         Refresh
                     </button>
@@ -66,6 +69,50 @@
             </div>
         </section>
     </main>
+
+    <!-- Bulk Upload modal -->
+    <div id="bulk-upload-modal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Bulk Upload Documents</h3>
+                <button data-on-click="closeBulkUploadModal" class="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="Close" data-testid="button-close-bulk-upload">&times;</button>
+            </div>
+            <form id="bulk-upload-form" data-testid="form-bulk-upload">
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Category (applied to all files)</label>
+                    <select id="bulk-category" class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="select-bulk-category">
+                        <option value="documents">Documents</option>
+                        <option value="policies">Policies</option>
+                        <option value="forms">Forms</option>
+                        <option value="security_controls">Security Controls</option>
+                        <option value="sops">SOPs</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Files <span class="text-xs text-gray-500">(select multiple — title taken from filename)</span></label>
+                    <input id="bulk-files" type="file" multiple required
+                           accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="input-bulk-files" />
+                    <p id="bulk-file-count" class="text-xs text-gray-500 mt-1"></p>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Map all to regulations <span class="text-xs text-gray-500">(optional, comma-separated)</span></label>
+                    <input id="bulk-regs" type="text" placeholder="PDPL, ISO-27001"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="input-bulk-regulations" />
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Shared notes <span class="text-xs text-gray-500">(optional)</span></label>
+                    <textarea id="bulk-notes" rows="2" maxlength="2000"
+                              class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="textarea-bulk-notes"></textarea>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" data-on-click="closeBulkUploadModal" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" id="btn-do-bulk-upload" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-testid="button-submit-bulk-upload">Upload All</button>
+                </div>
+                <p id="bulk-upload-msg" class="mt-3 text-sm"></p>
+            </form>
+        </div>
+    </div>
 
     <!-- Upload modal -->
     <div id="upload-modal" class="modal" role="dialog" aria-modal="true">
@@ -312,6 +359,82 @@
                     btn.disabled = false;
                 }
             });
+        });
+
+        function openBulkUploadModal() {
+            const sel = document.getElementById('bulk-category');
+            if (selectedCategory) sel.value = selectedCategory;
+            document.getElementById('bulk-files').value = '';
+            document.getElementById('bulk-regs').value = '';
+            document.getElementById('bulk-notes').value = '';
+            document.getElementById('bulk-file-count').textContent = '';
+            document.getElementById('bulk-upload-msg').textContent = '';
+            document.getElementById('bulk-upload-modal').classList.add('active');
+        }
+        function closeBulkUploadModal() {
+            document.getElementById('bulk-upload-modal').classList.remove('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const fileInput = document.getElementById('bulk-files');
+            if (fileInput) {
+                fileInput.addEventListener('change', function () {
+                    const n = fileInput.files ? fileInput.files.length : 0;
+                    document.getElementById('bulk-file-count').textContent =
+                        n ? n + ' file' + (n === 1 ? '' : 's') + ' selected' : '';
+                });
+            }
+            const bForm = document.getElementById('bulk-upload-form');
+            if (bForm) {
+                bForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    const msg = document.getElementById('bulk-upload-msg');
+                    const btn = document.getElementById('btn-do-bulk-upload');
+                    msg.className = 'mt-3 text-sm text-gray-600';
+                    msg.textContent = 'Uploading…';
+                    btn.disabled = true;
+
+                    const filesEl = document.getElementById('bulk-files');
+                    if (!filesEl.files || filesEl.files.length === 0) {
+                        msg.className = 'mt-3 text-sm text-red-600';
+                        msg.textContent = 'Please choose at least one file.';
+                        btn.disabled = false;
+                        return;
+                    }
+                    const fd = new FormData();
+                    for (const f of filesEl.files) fd.append('file', f);
+                    fd.append('category', document.getElementById('bulk-category').value);
+                    fd.append('regulation_codes', document.getElementById('bulk-regs').value.trim());
+                    fd.append('notes', document.getElementById('bulk-notes').value.trim());
+
+                    try {
+                        const r = await fetch('/api/qms-docs/bulk-upload', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: fd
+                        });
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok) {
+                            msg.className = 'mt-3 text-sm text-red-600';
+                            msg.textContent = 'Bulk upload failed: ' + (data.error || ('HTTP ' + r.status));
+                        } else {
+                            const ok = data.uploaded_count || 0;
+                            const fail = data.failed_count || 0;
+                            msg.className = 'mt-3 text-sm ' + (fail ? 'text-amber-700' : 'text-green-700');
+                            msg.textContent = ok + ' uploaded' + (fail ? ', ' + fail + ' failed' : '') + '.';
+                            const cat = document.getElementById('bulk-category').value;
+                            if (selectedCategory !== cat) selectedCategory = cat;
+                            await loadDocuments();
+                            if (!fail) setTimeout(closeBulkUploadModal, 800);
+                        }
+                    } catch (err) {
+                        msg.className = 'mt-3 text-sm text-red-600';
+                        msg.textContent = 'Network error during bulk upload.';
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            }
         });
 
         async function deleteDoc(id) {

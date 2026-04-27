@@ -70,6 +70,29 @@
             </div>
         </div>
 
+        <!-- Per-regulation tab strip (added) -->
+        <div class="bg-white rounded-lg shadow mb-6 overflow-hidden">
+            <div class="border-b border-gray-200 px-2 overflow-x-auto">
+                <nav id="reg-tabs" class="flex gap-1 min-w-max" aria-label="Regulation tabs" data-testid="nav-regulation-tabs">
+                    <button type="button" data-on-click="selectRegulationTab" data-args="[&quot;all&quot;]"
+                            class="reg-tab px-4 py-3 text-sm font-medium text-gray-700 border-b-2 border-green-700"
+                            data-tab-id="all" data-testid="tab-regulation-all">All Regulations</button>
+                </nav>
+            </div>
+            <div id="reg-tab-summary" class="px-4 py-3 bg-gray-50 border-b border-gray-200 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-900" id="reg-tab-name">—</div>
+                        <div class="text-xs text-gray-500" id="reg-tab-meta">—</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <span id="reg-tab-clauses-count" class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">0 clauses</span>
+                        <span id="reg-tab-docs-count" class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">0 documents linked</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow p-6 flex items-center gap-4">
                 <div class="score-gauge" id="scoreGauge">
@@ -185,6 +208,19 @@
                 </div>
             </div>
         </div>
+
+        <!-- Clause → document mapping panel (shown when a regulation tab is selected) -->
+        <section id="clause-mapping-section" class="bg-white rounded-lg shadow mt-6 hidden" data-testid="section-clause-mapping">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Clauses & Document Mapping</h2>
+                    <p class="text-xs text-gray-500 mt-1">Each clause below can be linked to one or more uploaded documents from the QMS library.</p>
+                </div>
+            </div>
+            <div id="clause-cards" class="divide-y divide-gray-200">
+                <div class="p-6 text-center text-gray-400">Select a regulation tab above to view its clauses.</div>
+            </div>
+        </section>
 
         <div class="bg-white rounded-lg shadow mt-6">
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
@@ -345,8 +381,66 @@
         </div>
     </div>
 
+    <!-- Clause-documents modal (added) -->
+    <div id="clauseDocsModal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Clause Documents</h3>
+                    <div class="text-xs text-gray-500 mt-1" id="clauseDocsTitle">—</div>
+                </div>
+                <button data-on-click="closeModal" data-args="[&quot;clauseDocsModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <div class="text-sm font-semibold text-gray-700 mb-2">Linked documents</div>
+                    <div id="clauseDocsList" class="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        <div class="p-3 text-center text-gray-400 text-sm">Loading…</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold text-gray-700 mb-2">Bulk upload to this clause</div>
+                    <form id="clauseBulkForm" data-testid="form-clause-bulk-upload">
+                        <input type="hidden" id="clauseBulkObligationId">
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                                <select id="clauseBulkCategory" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                    <option value="documents">Documents</option>
+                                    <option value="policies">Policies</option>
+                                    <option value="forms">Forms</option>
+                                    <option value="security_controls">Security Controls</option>
+                                    <option value="sops">SOPs</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Notes (optional)</label>
+                                <input id="clauseBulkNotes" type="text" maxlength="500" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            </div>
+                        </div>
+                        <input id="clauseBulkFiles" type="file" multiple required
+                               accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="input-clause-bulk-files">
+                        <p id="clauseBulkCount" class="text-xs text-gray-500 mt-1"></p>
+                        <div class="flex justify-end mt-3">
+                            <button type="submit" id="btnClauseBulkUpload" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm" data-testid="button-submit-clause-bulk">Upload & Link</button>
+                        </div>
+                        <p id="clauseBulkMsg" class="mt-2 text-sm"></p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let regulations = [];
+        let activeRegulationTab = 'all';
+        let activeRegulationCode = null;
+        const obligationTitles = {};
 
         async function loadSummary() {
             try {
@@ -723,15 +817,234 @@
             });
         }
 
+        // ── Per-regulation tab strip ───────────────────────────────────
+        function renderRegulationTabs() {
+            const nav = document.getElementById('reg-tabs');
+            if (!nav) return;
+            const allBtn = '<button type="button" data-on-click="selectRegulationTab" data-args="[&quot;all&quot;]"' +
+                ' class="reg-tab px-4 py-3 text-sm font-medium ' +
+                (activeRegulationTab === 'all' ? 'text-green-700 border-b-2 border-green-700' : 'text-gray-600 border-b-2 border-transparent hover:text-gray-900') +
+                '" data-tab-id="all" data-testid="tab-regulation-all">All Regulations</button>';
+            const regBtns = (regulations || []).map(function (r) {
+                const active = String(activeRegulationTab) === String(r.id);
+                return '<button type="button" data-on-click="selectRegulationTab" data-args=\'["' + r.id + '"]\'' +
+                    ' class="reg-tab px-4 py-3 text-sm font-medium ' +
+                    (active ? 'text-green-700 border-b-2 border-green-700' : 'text-gray-600 border-b-2 border-transparent hover:text-gray-900') +
+                    '" data-tab-id="' + r.id + '" data-testid="tab-regulation-' + r.regulation_code + '">' +
+                    escAttr(r.regulation_code) + '</button>';
+            }).join('');
+            nav.innerHTML = allBtn + regBtns;
+        }
+
+        async function selectRegulationTab(tabId) {
+            activeRegulationTab = tabId;
+            renderRegulationTabs();
+            const summary = document.getElementById('reg-tab-summary');
+            const mappingSec = document.getElementById('clause-mapping-section');
+            const filterSel = document.getElementById('filterRegulation');
+            const gapSel = document.getElementById('gapRegulationFilter');
+
+            if (tabId === 'all') {
+                activeRegulationCode = null;
+                summary.classList.add('hidden');
+                mappingSec.classList.add('hidden');
+                if (filterSel) filterSel.value = '';
+                if (gapSel) gapSel.value = '';
+                loadObligations();
+                loadGapAnalysis();
+            } else {
+                const reg = regulations.find(function (r) { return String(r.id) === String(tabId); });
+                if (reg) {
+                    activeRegulationCode = reg.regulation_code;
+                    document.getElementById('reg-tab-name').textContent = reg.name + ' (' + reg.regulation_code + ')';
+                    document.getElementById('reg-tab-meta').textContent =
+                        (reg.issuing_body || '—') + ' · ' + (reg.jurisdiction || '—') + ' · v' + (reg.version || '—');
+                    summary.classList.remove('hidden');
+                    mappingSec.classList.remove('hidden');
+                    await loadClauseCards(reg.regulation_code);
+                }
+            }
+        }
+
+        async function loadClauseCards(regulationCode) {
+            const wrap = document.getElementById('clause-cards');
+            wrap.innerHTML = '<div class="p-6 text-center text-gray-400">Loading clauses…</div>';
+            try {
+                const res = await fetch('/api/compliance/obligations');
+                const data = await res.json();
+                const all = data.obligations || [];
+                const obligations = all.filter(function (o) {
+                    return String(o.regulation_code || '') === String(regulationCode);
+                });
+
+                const counts = {};
+                await Promise.all(obligations.map(async function (o) {
+                    try {
+                        const r = await fetch('/api/compliance/obligations/' + o.id + '/documents');
+                        if (r.ok) {
+                            const dd = await r.json();
+                            counts[o.id] = (dd.documents || []).length;
+                        } else { counts[o.id] = 0; }
+                    } catch (e) { counts[o.id] = 0; }
+                }));
+
+                const totalDocs = Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
+                document.getElementById('reg-tab-clauses-count').textContent = obligations.length + ' clause' + (obligations.length === 1 ? '' : 's');
+                document.getElementById('reg-tab-docs-count').textContent = totalDocs + ' document' + (totalDocs === 1 ? '' : 's') + ' linked';
+
+                if (obligations.length === 0) {
+                    wrap.innerHTML = '<div class="p-6 text-center text-gray-400">No clauses defined for this regulation yet. Use <strong>+ Add Obligation</strong> above to create one.</div>';
+                    return;
+                }
+                wrap.innerHTML = obligations.map(function (o) {
+                    obligationTitles[o.id] = o.obligation_code + ' — ' + (o.title || '');
+                    const docCount = counts[o.id] || 0;
+                    return '<div class="p-4 hover:bg-gray-50 flex justify-between items-start gap-4" data-testid="clause-card-' + o.id + '">' +
+                        '<div class="flex-1 min-w-0">' +
+                            '<div class="flex items-center gap-2 flex-wrap">' +
+                                '<span class="text-sm font-mono text-blue-600">' + escAttr(o.obligation_code) + '</span>' +
+                                (o.article_reference ? '<span class="text-xs text-gray-400">' + escAttr(o.article_reference) + '</span>' : '') +
+                                '<span class="text-xs px-2 py-0.5 rounded-full priority-' + o.priority + '">' + escAttr(o.priority) + '</span>' +
+                            '</div>' +
+                            '<div class="text-sm font-medium text-gray-900 mt-1">' + escAttr(o.title) + '</div>' +
+                            '<div class="text-xs text-gray-500 mt-1 line-clamp-2">' + escAttr(o.description || '') + '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2 flex-shrink-0">' +
+                            '<span class="text-xs px-2 py-1 rounded-full ' + (docCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '" data-testid="badge-doc-count-' + o.id + '">' + docCount + ' doc' + (docCount === 1 ? '' : 's') + '</span>' +
+                            '<button type="button" data-on-click="openClauseDocsModal" data-args="[' + o.id + ']" class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-testid="button-manage-docs-' + o.id + '">Manage Docs</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                wrap.innerHTML = '<div class="p-6 text-center text-red-500">Failed to load clauses.</div>';
+            }
+        }
+
+        async function openClauseDocsModal(obligationId, title) {
+            document.getElementById('clauseDocsTitle').textContent = title || obligationTitles[obligationId] || '';
+            document.getElementById('clauseBulkObligationId').value = obligationId;
+            document.getElementById('clauseBulkFiles').value = '';
+            document.getElementById('clauseBulkNotes').value = '';
+            document.getElementById('clauseBulkCount').textContent = '';
+            document.getElementById('clauseBulkMsg').textContent = '';
+            document.getElementById('clauseDocsModal').classList.add('active');
+            await loadClauseDocs(obligationId);
+        }
+
+        async function loadClauseDocs(obligationId) {
+            const list = document.getElementById('clauseDocsList');
+            list.innerHTML = '<div class="p-3 text-center text-gray-400 text-sm">Loading…</div>';
+            try {
+                const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents');
+                if (!r.ok) {
+                    list.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">Failed to load documents.</div>';
+                    return;
+                }
+                const data = await r.json();
+                const docs = data.documents || [];
+                if (docs.length === 0) {
+                    list.innerHTML = '<div class="p-3 text-center text-gray-400 text-sm">No documents linked yet. Use bulk upload below.</div>';
+                    return;
+                }
+                list.innerHTML = docs.map(function (d) {
+                    return '<div class="p-3 flex items-center justify-between gap-2" data-testid="linked-doc-' + d.document_id + '">' +
+                        '<div class="min-w-0">' +
+                            '<div class="text-sm font-medium text-gray-900 truncate">' + escAttr(d.title) + '</div>' +
+                            '<div class="text-xs text-gray-500 truncate">' + escAttr(d.file_name) + ' · ' + escAttr(d.category) + '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2 flex-shrink-0">' +
+                            '<a href="/api/qms-docs/' + d.document_id + '/download" class="text-blue-600 hover:underline text-xs" data-testid="link-download-clause-' + d.document_id + '">Download</a>' +
+                            '<button data-on-click="unlinkClauseDoc" data-args="[' + obligationId + ',' + d.document_id + ']" class="text-red-600 hover:underline text-xs" data-testid="button-unlink-' + d.document_id + '">Unlink</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                list.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">Network error.</div>';
+            }
+        }
+
+        async function unlinkClauseDoc(obligationId, docId) {
+            if (!confirm('Remove this document from this clause? The file remains in the QMS library.')) return;
+            try {
+                const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents/' + docId, {
+                    method: 'DELETE', credentials: 'same-origin'
+                });
+                if (r.ok) {
+                    await loadClauseDocs(obligationId);
+                    if (activeRegulationTab !== 'all') await loadClauseCards(activeRegulationCode);
+                } else {
+                    alert('Failed to unlink.');
+                }
+            } catch (e) { alert('Network error.'); }
+        }
+
         function loadAll() {
             loadSummary();
-            loadRegulations();
+            loadRegulations().then(renderRegulationTabs);
             loadObligations();
             loadDeadlines();
             loadGapAnalysis();
         }
 
-        document.addEventListener('DOMContentLoaded', loadAll);
+        document.addEventListener('DOMContentLoaded', function () {
+            loadAll();
+
+            const filesEl = document.getElementById('clauseBulkFiles');
+            if (filesEl) {
+                filesEl.addEventListener('change', function () {
+                    const n = filesEl.files ? filesEl.files.length : 0;
+                    document.getElementById('clauseBulkCount').textContent =
+                        n ? n + ' file' + (n === 1 ? '' : 's') + ' selected' : '';
+                });
+            }
+            const cForm = document.getElementById('clauseBulkForm');
+            if (cForm) {
+                cForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    const oblId = document.getElementById('clauseBulkObligationId').value;
+                    const msg = document.getElementById('clauseBulkMsg');
+                    const btn = document.getElementById('btnClauseBulkUpload');
+                    msg.className = 'mt-2 text-sm text-gray-600';
+                    msg.textContent = 'Uploading…';
+                    btn.disabled = true;
+
+                    const fEl = document.getElementById('clauseBulkFiles');
+                    if (!fEl.files || fEl.files.length === 0) {
+                        msg.className = 'mt-2 text-sm text-red-600';
+                        msg.textContent = 'Please choose at least one file.';
+                        btn.disabled = false;
+                        return;
+                    }
+                    const fd = new FormData();
+                    for (const f of fEl.files) fd.append('file', f);
+                    fd.append('category', document.getElementById('clauseBulkCategory').value);
+                    fd.append('notes', document.getElementById('clauseBulkNotes').value.trim());
+
+                    try {
+                        const r = await fetch('/api/compliance/obligations/' + oblId + '/bulk-upload', {
+                            method: 'POST', credentials: 'same-origin', body: fd
+                        });
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok) {
+                            msg.className = 'mt-2 text-sm text-red-600';
+                            msg.textContent = 'Upload failed: ' + (data.error || ('HTTP ' + r.status));
+                        } else {
+                            const ok = data.uploaded_count || 0;
+                            const fail = data.failed_count || 0;
+                            msg.className = 'mt-2 text-sm ' + (fail ? 'text-amber-700' : 'text-green-700');
+                            msg.textContent = ok + ' uploaded & linked' + (fail ? ', ' + fail + ' failed' : '') + '.';
+                            await loadClauseDocs(oblId);
+                            if (activeRegulationTab !== 'all') await loadClauseCards(activeRegulationCode);
+                        }
+                    } catch (err) {
+                        msg.className = 'mt-2 text-sm text-red-600';
+                        msg.textContent = 'Network error during upload.';
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            }
+        });
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>

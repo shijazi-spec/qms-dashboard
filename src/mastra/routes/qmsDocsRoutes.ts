@@ -145,6 +145,123 @@ export const qmsDocsRoutes = [
     },
   },
   {
+    path: "/api/qms-docs/bulk-upload",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const g = await gate(c, WRITE_ROLES);
+          if (g.error) return g.error;
+
+          const { initQmsDocsTable, createDocument, isValidCategory } =
+            await import("../../utils/qmsDocsDatabase");
+          const { validateFile, saveUploadedFile } =
+            await import("../../utils/fileUpload");
+          await initQmsDocsTable();
+
+          const MAX_FILES = 50;
+          const MAX_TOTAL_BYTES = 250 * 1024 * 1024;
+          const MAX_NOTES = 2000;
+          const MAX_REG_CSV = 1000;
+
+          const formData = await c.req.formData();
+          const category = String(formData.get("category") || "").trim();
+          const rawNotes = String(formData.get("notes") || "").trim();
+          if (rawNotes.length > MAX_NOTES)
+            return c.json(
+              { error: "notes exceeds " + MAX_NOTES + " characters" },
+              400,
+            );
+          const notes = rawNotes || null;
+          const regCsv = String(formData.get("regulation_codes") || "").trim();
+          if (regCsv.length > MAX_REG_CSV)
+            return c.json(
+              { error: "regulation_codes exceeds " + MAX_REG_CSV + " characters" },
+              400,
+            );
+          const regulation_codes = regCsv
+            ? regCsv.split(",").map((s) => s.trim()).filter(Boolean)
+            : null;
+
+          if (!isValidCategory(category))
+            return c.json(
+              {
+                error:
+                  "Invalid category. Allowed: documents, policies, forms, security_controls, sops",
+              },
+              400,
+            );
+
+          const files = formData.getAll("file").filter(
+            (f) => f instanceof File && (f as File).size > 0,
+          ) as File[];
+          if (files.length === 0)
+            return c.json({ error: "No files provided" }, 400);
+          if (files.length > MAX_FILES)
+            return c.json(
+              { error: "Too many files in one request (max " + MAX_FILES + ")" },
+              400,
+            );
+          const totalBytes = files.reduce((s, f) => s + f.size, 0);
+          if (totalBytes > MAX_TOTAL_BYTES)
+            return c.json(
+              {
+                error:
+                  "Aggregate upload exceeds " +
+                  Math.round(MAX_TOTAL_BYTES / 1024 / 1024) +
+                  " MB",
+              },
+              413,
+            );
+
+          const uploaded: any[] = [];
+          const failed: any[] = [];
+
+          for (const file of files) {
+            const validation = validateFile(file.name, file.size, file.type);
+            if (!validation.valid) {
+              failed.push({ name: file.name, error: validation.error });
+              continue;
+            }
+            try {
+              const buffer = Buffer.from(await file.arrayBuffer());
+              const fileInfo = await saveUploadedFile(
+                buffer,
+                file.name,
+                file.type,
+              );
+              const row = await createDocument({
+                category: category as any,
+                title: file.name.replace(/\.[^.]+$/, ""),
+                file_path: fileInfo.filePath,
+                file_name: fileInfo.fileName,
+                file_size: fileInfo.fileSize,
+                mime_type: fileInfo.mimeType,
+                notes,
+                regulation_codes,
+                uploaded_by: g.user!.email || g.user!.id || "unknown",
+              });
+              uploaded.push(row);
+            } catch (err: any) {
+              failed.push({ name: file.name, error: err?.message || "upload failed" });
+            }
+          }
+
+          return c.json({
+            success: true,
+            uploaded_count: uploaded.length,
+            failed_count: failed.length,
+            uploaded,
+            failed,
+          });
+        } catch (error) {
+          safeLogger.error("❌ [QmsDocs] bulk-upload error:", error);
+          return c.json({ error: "Failed bulk upload" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/qms-docs/:id/download",
     method: "GET" as const,
     createHandler: async () => {
