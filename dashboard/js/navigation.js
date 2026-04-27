@@ -52,11 +52,11 @@ const WalaPlusNav = {
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
-        // CAPA & Coaching: this is the existing Integrated QMS dashboard
+        // Audit Reports: this is the existing Integrated QMS dashboard
         // (URL kept as /qms for backward compatibility) — the page houses
         // CAPA / Nonconformance / coaching workflows so it lives under
         // Quality alongside the operator's day-to-day audit tools.
-        { label: 'CAPA & Coaching', href: '/qms', icon: 'shield-check', id: 'qms' }
+        { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' }
       ]
     },
     {
@@ -634,7 +634,7 @@ const WalaPlusNav = {
          data-label="${this.escapeHtml(label.toLowerCase())}"
          data-i18n-nav-item="${this.escapeHtml(item.id)}"
          data-testid="link-nav-${this.escapeHtml(item.id)}">
-        <span class="flex-shrink-0" aria-hidden="true">${this.getItemIcon(item.icon)}</span>
+        <span class="flex-shrink-0 ${colors.text}" aria-hidden="true">${this.getItemIcon(item.icon)}</span>
         <span class="wp-label truncate">${this.escapeHtml(label)}</span>
         ${item.external ? '<svg class="wp-label w-3 h-3 text-gray-400 ml-auto flex-shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' : ''}
         <span id="${tooltipId}" role="tooltip" class="wp-nav-tooltip">${this.escapeHtml(label)}</span>

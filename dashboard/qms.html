@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>WalaPlus Quality Management System</title>
+        <title>Audit Reports - WalaPlus Quality</title>
         <link rel="stylesheet" href="/dashboard/tailwind.css">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <style>
@@ -95,6 +95,7 @@
         </script>
 
         <div class="max-w-7xl mx-auto px-4 py-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title">Audit Reports</h1>
             <div class="flex space-x-2 mb-6 border-b border-gray-200">
                 <button
                     data-on-click="showTab" data-args="[&quot;overview&quot;]"
@@ -137,14 +138,6 @@
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
                     Framework
-                </button>
-                <button
-                    data-on-click="showTab" data-args="[&quot;triggers&quot;]"
-                    id="tab-triggers"
-                    class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100 relative"
-                >
-                    Triggers
-                    <span id="triggers-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
                 </button>
             </div>
 
@@ -870,9 +863,6 @@
                     case "framework":
                         loadFramework();
                         break;
-                    case "triggers":
-                        loadTriggers();
-                        break;
                 }
             }
 
@@ -1207,11 +1197,13 @@
                         document.getElementById('trigger-actioned-count').textContent = stats.actionedCount || 0;
 
                         const badge = document.getElementById('triggers-badge');
-                        if (stats.pendingCount > 0) {
-                            badge.textContent = stats.pendingCount > 9 ? '9+' : stats.pendingCount;
-                            badge.classList.remove('hidden');
-                        } else {
-                            badge.classList.add('hidden');
+                        if (badge) {
+                            if (stats.pendingCount > 0) {
+                                badge.textContent = stats.pendingCount > 9 ? '9+' : stats.pendingCount;
+                                badge.classList.remove('hidden');
+                            } else {
+                                badge.classList.add('hidden');
+                            }
                         }
                     }
 
@@ -1415,8 +1407,10 @@
                     const stats = await res.json();
                     if (stats.success && stats.pendingCount > 0) {
                         const badge = document.getElementById('triggers-badge');
-                        badge.textContent = stats.pendingCount > 9 ? '9+' : stats.pendingCount;
-                        badge.classList.remove('hidden');
+                        if (badge) {
+                            badge.textContent = stats.pendingCount > 9 ? '9+' : stats.pendingCount;
+                            badge.classList.remove('hidden');
+                        }
                     }
                 } catch (error) {
                     console.error('Error loading trigger badge:', error);
