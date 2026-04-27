@@ -63,7 +63,7 @@ const WalaPlusNav = {
       id: 'grc',
       label: 'GRC',
       icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>`,
-      color: 'slate',
+      color: 'teal',
       items: [
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
@@ -72,7 +72,7 @@ const WalaPlusNav = {
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the
         // Compliance module (PDPL, ISO 9001, ISO 27001, PCI DSS, …).
-        { label: 'QMS', href: '/qms-docs', icon: 'folder', id: 'qms-docs' },
+        { label: 'Documentations', href: '/qms-docs', icon: 'document-text', id: 'qms-docs' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
@@ -156,7 +156,8 @@ const WalaPlusNav = {
       slate: { bg: 'bg-slate-700', hover: 'hover:bg-slate-800', text: 'text-slate-700', lightBg: 'bg-slate-50' },
       amber: { bg: 'bg-amber-700', hover: 'hover:bg-amber-800', text: 'text-amber-800', lightBg: 'bg-amber-50' },
       green: { bg: 'bg-green-600', hover: 'hover:bg-green-700', text: 'text-green-600', lightBg: 'bg-green-50' },
-      purple: { bg: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', lightBg: 'bg-purple-50' }
+      purple: { bg: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', lightBg: 'bg-purple-50' },
+      teal: { bg: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', lightBg: 'bg-teal-50' }
     };
     return colors[color] || colors.blue;
   },
