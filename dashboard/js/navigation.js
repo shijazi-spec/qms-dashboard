@@ -50,7 +50,7 @@ const WalaPlusNav = {
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
         { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
-        { label: 'Calls', href: '/calls', icon: 'phone', id: 'calls' },
+        { label: 'Call Evaluation', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
         // Audit Reports: this is the existing Integrated QMS dashboard
         // (URL kept as /qms for backward compatibility) — the page houses
