@@ -1,13 +1,37 @@
+# Dependencies
 node_modules
+
+# Build artifacts
 dist
 .mastra
-.env.development
+
+# Environment & secrets — NEVER commit these
 .env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Database files
 *.db
 *.db-*
-.DS_Store
+
+# Test outputs
+test-results/
 a11y-report.json
 a11y-playwright-report.json
-test-results/
-audit-evidence/last-sweep.json
-audit-evidence/last-sweep.json
+
+# Operational scan / audit outputs (regenerated, not source code)
+reports/
+audit-evidence/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo

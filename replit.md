@@ -73,7 +73,7 @@ The `ai_call_metrics` telemetry table was being pruned by the daily `ai-cost-sum
 
 ### April 25, 2026 — Block credentials from leaking into safe-error responses (Task #454)
 The `toSafeError(err)` helper (used by every Mastra route to sanitize error payloads before they hit the client) was correctly stripping stack traces but would occasionally leak sensitive tokens if they appeared in the error `message` (e.g. "Invalid API key: sk-proj-123..."). Added a text-level redaction pass to `src/utils/safeErrors.ts` that pipes the message through the Task #463/465 credential-heuristic layer before returning. Now, both known-prefix secrets (regex) and high-entropy / password-shaped tokens (heuristic) are replaced by `[REDACTED]` in the public error object. Verified by 9 new assertions in `tests/safeErrorsRedaction.test.ts` (15/15 pass) covering message-level, stack-level (belt and braces), and `cause`-level redaction.
-=======
+
 ## External Dependencies
 - **Inngest**: Used for scheduling and executing cron jobs and workflows.
 - **Postgres**: Primary database for storing application data, configurations, and audit logs.
@@ -82,4 +82,3 @@ The `toSafeError(err)` helper (used by every Mastra route to sanitize error payl
 - **Playwright**: Utilized for end-to-end testing of UI flows.
 - **Hono**: Web framework used for defining routes and middleware.
 - **Zod**: Used for schema validation.
->>>>>>> 7b02810 (Task #722: Tailored empty-state for filtered Issues table)
