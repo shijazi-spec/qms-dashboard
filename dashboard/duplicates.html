@@ -994,7 +994,9 @@
 
             const res = await fetch(`/api/duplicates/clusters/${id}`);
             const data = await res.json();
-            const { cluster, records, recommendations, primary_type, is_cross_module, record_types } = data;
+            const { cluster, records, recommendations, primary_type, is_cross_module, record_types, mixed_signal } = data;
+            window.__currentClusterId = id;
+            window.__currentMixedSignal = mixed_signal || { domains: [], phones: [], domain_groups: {} };
 
             document.getElementById('modalTitle').textContent = cluster.company_name || cluster.domain;
             document.getElementById('modalDomain').textContent = `${_t('dyn.duplicates.domain_kw')} ${cluster.domain} | ${_t('dyn.duplicates.score_kw')} ${_fn(cluster.confidence_score)}% | ${_t('dyn.duplicates.status_kw')} ${cluster.status}`;
@@ -1018,6 +1020,33 @@
                     <code class="bg-amber-100 px-1 rounded">Account_Name</code> /
                     <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${_t('dyn.duplicates.cross_module_field_in_zoho')}
                     ${_t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${_t('dyn.duplicates.cross_module_or_converted')}
+                </div>`;
+            }
+
+            // Mixed-cluster warning — fires when 2+ distinct corporate
+            // email domains are present inside a single cluster (almost
+            // always two unrelated companies sharing a name fragment).
+            if (mixed_signal && Array.isArray(mixed_signal.domains) && mixed_signal.domains.length > 1) {
+                const domainBadges = mixed_signal.domains
+                    .map(d => `<code class="bg-red-100 text-red-800 px-1.5 py-0.5 rounded text-xs">${escapeHtml(d)}</code>`)
+                    .join(' · ');
+                html += `<div data-testid="banner-mixed-cluster" class="mb-4 p-3 rounded-lg border border-red-300 bg-red-50 text-sm text-red-900">
+                    <div class="flex items-start justify-between gap-3 flex-wrap">
+                        <div class="flex-1 min-w-0">
+                            <strong>⚠ Mixed cluster — ${mixed_signal.domains.length} distinct domains detected.</strong>
+                            <div class="mt-1">${domainBadges}</div>
+                            <p class="mt-2 text-xs text-red-800">
+                                These records were grouped by name similarity but appear to belong to different companies.
+                                Review each row before any merge / link in Zoho. The largest domain group will stay in this
+                                cluster; the others will move to fresh clusters.
+                            </p>
+                        </div>
+                        <button type="button" data-on-click="splitClusterByDomain" data-args="[${id}]"
+                                class="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs font-medium"
+                                data-testid="button-split-by-domain">
+                            Split by domain
+                        </button>
+                    </div>
                 </div>`;
             }
 
@@ -1100,6 +1129,51 @@
             }
 
             document.getElementById('modalContent').innerHTML = html;
+        }
+
+        async function splitClusterByDomain(clusterId) {
+            const mixed = window.__currentMixedSignal || { domains: [] };
+            if (!mixed.domains || mixed.domains.length < 2) {
+                alert('This cluster has only one corporate domain — nothing to split.');
+                return;
+            }
+            const sorted = [...mixed.domains].sort((a, b) => {
+                const la = (mixed.domain_groups[a] || []).length;
+                const lb = (mixed.domain_groups[b] || []).length;
+                return lb - la;
+            });
+            const keep = sorted[0];
+            const moveOut = sorted.slice(1);
+            const summary =
+                `Split this cluster by email domain?\n\n` +
+                `KEEP in this cluster:\n  • ${keep} (${(mixed.domain_groups[keep] || []).length} record(s))\n\n` +
+                `MOVE to new cluster(s):\n` +
+                moveOut
+                    .map(d => `  • ${d} (${(mixed.domain_groups[d] || []).length} record(s))`)
+                    .join('\n') +
+                `\n\nThis cannot be undone automatically (you'd have to re-scan or merge them back manually).`;
+            if (!confirm(summary)) return;
+
+            const adminKey = prompt(_t('dyn.duplicates.prompt_admin_key'));
+            if (!adminKey) return;
+
+            try {
+                const res = await fetch(`/api/duplicates/clusters/${clusterId}/split`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ mode: 'by_domain' })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert(data.error || 'Split failed.');
+                    return;
+                }
+                alert(`Split complete: ${data.split_count} new cluster(s) created.`);
+                closeModal();
+                refreshData();
+            } catch (e) {
+                alert('Network error during split.');
+            }
         }
 
         async function resolveClusterAction(clusterId, action) {

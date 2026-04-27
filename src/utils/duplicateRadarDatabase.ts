@@ -964,6 +964,180 @@ export async function getRecordsByClusterId(
   return result.rows;
 }
 
+/**
+ * Inspect a cluster's records and report any "mixed signal" — distinct
+ * corporate domains or distinct normalized phone numbers found inside.
+ * Two unrelated companies that share a generic name fragment can end up
+ * in the same cluster (e.g. "Al Suwaidi Industrial Services" + "APEX
+ * Industrial Services"). Surfacing this lets the operator review &
+ * split before any merge/link is performed in Zoho.
+ *
+ * `domain_groups` maps each domain to the record IDs holding that
+ * domain so the UI can offer a one-click "Split by domain" action.
+ */
+export async function getClusterMixedSignal(clusterId: number): Promise<{
+  domains: string[];
+  phones: string[];
+  domain_groups: Record<string, number[]>;
+}> {
+  const records = await getRecordsByClusterId(clusterId);
+  const domainGroups: Record<string, number[]> = {};
+  const phoneSet = new Set<string>();
+  for (const r of records) {
+    const d = (r.domain || "").toLowerCase().trim();
+    if (d && isCorporateDomain(d)) {
+      if (!domainGroups[d]) domainGroups[d] = [];
+      if (typeof r.id === "number") domainGroups[d].push(r.id);
+    }
+    const p = normalizePhone(r.phone || "");
+    if (p && p.length >= 7) phoneSet.add(p);
+  }
+  return {
+    domains: Object.keys(domainGroups).sort(),
+    phones: Array.from(phoneSet).sort(),
+    domain_groups: domainGroups,
+  };
+}
+
+/**
+ * Move a set of records out of `sourceClusterId` and into a freshly
+ * created cluster. Returns both cluster IDs so the caller can recompute
+ * stats and refresh the UI. The source cluster is left in place even if
+ * it ends up empty — `updateClusterStats` will drive its counters to
+ * zero and the existing orphan-cleanup pass will collect it later.
+ */
+/**
+ * Transactional core of the cluster-split flow. Performs ONLY the
+ * destructive writes (insert new cluster row + move records across) using
+ * the supplied client, so callers can wrap multiple plans in a single
+ * BEGIN/COMMIT and roll back on any failure.
+ *
+ * Stats refresh (confidence_score etc.) is intentionally NOT performed
+ * here — it is idempotent and is run by the caller AFTER commit. This
+ * keeps the transaction window small and avoids the heavy multi-query
+ * stats recompute participating in the locking scope.
+ *
+ * Exported so the split route can compose plans atomically.
+ */
+export async function splitRecordsIntoNewClusterInTx(
+  client: { query: (sql: string, params?: any[]) => Promise<any> },
+  sourceClusterId: number,
+  recordIds: number[],
+  newClusterSeed: {
+    company_name: string;
+    domain?: string | null;
+  },
+): Promise<{ source_cluster_id: number; new_cluster_id: number }> {
+  if (!Array.isArray(recordIds) || recordIds.length === 0) {
+    throw new Error("recordIds must be a non-empty array");
+  }
+
+  // Pre-flight: every record must currently belong to the source cluster.
+  // This catches concurrent splits/moves and prevents creating a fresh
+  // cluster pointing at records that already drifted away.
+  const ownership = await client.query(
+    `SELECT id FROM duplicate_records
+      WHERE cluster_id = $1 AND id = ANY($2::int[])`,
+    [sourceClusterId, recordIds],
+  );
+  if (ownership.rows.length !== recordIds.length) {
+    throw new Error(
+      `Split aborted — ${recordIds.length - ownership.rows.length} record(s) no longer belong to cluster ${sourceClusterId} (concurrent move?)`,
+    );
+  }
+
+  const companyNormalized = normalizeCompanyName(newClusterSeed.company_name);
+  const seedDomain =
+    newClusterSeed.domain ||
+    companyNormalized.replace(/\s+/g, "-") + ".cluster";
+
+  const inserted = await client.query(
+    `INSERT INTO duplicate_clusters
+       (domain, company_name, company_name_arabic, company_name_normalized,
+        total_leads, total_deals, total_records, confidence_level,
+        confidence_score, owners_involved, estimated_pipeline_value, status)
+     VALUES ($1, $2, NULL, $3, 0, 0, 0, 'low', 0, '[]'::jsonb, 0, 'active')
+     RETURNING id`,
+    [seedDomain, newClusterSeed.company_name, companyNormalized],
+  );
+  const newClusterId = inserted.rows[0].id as number;
+
+  await client.query(
+    `UPDATE duplicate_records
+        SET cluster_id = $1,
+            is_primary = false
+      WHERE cluster_id = $2
+        AND id = ANY($3::int[])`,
+    [newClusterId, sourceClusterId, recordIds],
+  );
+
+  // Clear stale "primary" flag on the source if its old primary just
+  // moved out — leaves the source consistent until updateClusterStats
+  // (post-commit) re-derives a new primary.
+  await client.query(
+    `UPDATE duplicate_records
+        SET is_primary = false
+      WHERE cluster_id = $1
+        AND is_primary = true
+        AND NOT EXISTS (
+          SELECT 1 FROM duplicate_records dr2
+           WHERE dr2.cluster_id = $1 AND dr2.is_primary = true
+        )`,
+    [sourceClusterId],
+  );
+
+  return {
+    source_cluster_id: sourceClusterId,
+    new_cluster_id: newClusterId,
+  };
+}
+
+/**
+ * Convenience single-plan wrapper that opens its own short-lived
+ * transaction. Kept for ad-hoc / scripted use; the duplicates route
+ * uses the lower-level `splitRecordsIntoNewClusterInTx` to batch
+ * multiple plans atomically.
+ */
+export async function splitRecordsIntoNewCluster(
+  sourceClusterId: number,
+  recordIds: number[],
+  newClusterSeed: {
+    company_name: string;
+    domain?: string | null;
+  },
+): Promise<{ source_cluster_id: number; new_cluster_id: number }> {
+  const client = await (pool as any).connect();
+  let result: { source_cluster_id: number; new_cluster_id: number };
+  try {
+    await client.query("BEGIN");
+    result = await splitRecordsIntoNewClusterInTx(
+      client,
+      sourceClusterId,
+      recordIds,
+      newClusterSeed,
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* ignore rollback failure */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+  // Stats refresh runs OUTSIDE the transaction — idempotent and
+  // best-effort; failures here do not invalidate the split itself.
+  try {
+    await updateClusterStats(sourceClusterId);
+    await updateClusterStats(result.new_cluster_id);
+  } catch (e) {
+    logger.warn("Post-split stats refresh failed (non-fatal)", e as any);
+  }
+  return result;
+}
+
 export async function getClusterSummary(): Promise<{
   totalClusters: number;
   totalDuplicateLeads: number;
@@ -1624,6 +1798,63 @@ export function normalizeCompanyName(name: string): string {
   return n.replace(/\s+/g, " ").trim();
 }
 
+// Free-mail providers we never treat as a "corporate domain" for the
+// purpose of the conflict guard below. Mirrors the list already used in
+// `src/utils/zohoCRM.ts`. Keep extending this if more providers appear.
+const PUBLIC_EMAIL_DOMAINS = new Set<string>([
+  "gmail.com",
+  "yahoo.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "aol.com",
+  "icloud.com",
+  "mail.com",
+  "protonmail.com",
+  "yandex.com",
+  "zoho.com",
+]);
+
+function isCorporateDomain(d: string | null | undefined): boolean {
+  if (!d) return false;
+  const norm = d.toLowerCase().trim();
+  if (!norm) return false;
+  return !PUBLIC_EMAIL_DOMAINS.has(norm);
+}
+
+/**
+ * Returns true if `clusterId` already has at least one record whose
+ * corporate domain differs from `candidateDomain`. Used as a guard so
+ * that fuzzy / normalized-name matches do not fuse two unrelated
+ * companies that happen to share a generic word ("Industrial Services",
+ * "Trading", "Group" etc.).
+ *
+ * Public free-mail domains (gmail/yahoo/…) are ignored on both sides —
+ * those cannot prove identity OR difference.
+ */
+async function clusterHasConflictingDomain(
+  clusterId: number,
+  candidateDomain: string,
+): Promise<boolean> {
+  if (!isCorporateDomain(candidateDomain)) return false;
+  const candidate = candidateDomain.toLowerCase().trim();
+  const res = await pool.query(
+    `SELECT DISTINCT LOWER(domain) AS d
+       FROM duplicate_records
+      WHERE cluster_id = $1
+        AND domain IS NOT NULL
+        AND domain <> ''`,
+    [clusterId],
+  );
+  for (const row of res.rows) {
+    const d = (row.d || "").trim();
+    if (!d) continue;
+    if (!isCorporateDomain(d)) continue;
+    if (d !== candidate) return true;
+  }
+  return false;
+}
+
 // B4: Fuzzy match using pg_trgm similarity() with fallback
 export async function findOrCreateClusterByCompany(
   companyName: string,
@@ -1640,6 +1871,8 @@ export async function findOrCreateClusterByCompany(
       [domain],
     );
     if (existingByDomain.rows[0]) {
+      // Same domain on the cluster row itself → identity is proven, no
+      // need to run the conflict guard.
       return existingByDomain.rows[0];
     }
   }
@@ -1678,7 +1911,21 @@ export async function findOrCreateClusterByCompany(
       [normalizedName],
     );
     if (existingByCompany.rows[0]) {
-      return existingByCompany.rows[0];
+      const candidate = existingByCompany.rows[0];
+      // Domain conflict guard — if this incoming record carries a corporate
+      // domain and the candidate cluster already holds records with a
+      // *different* corporate domain, do NOT fuse them. Two unrelated
+      // companies that share an identical normalized name (e.g. "industrial
+      // services") are a real-world scenario in this dataset.
+      if (
+        domain &&
+        isCorporateDomain(domain) &&
+        (await clusterHasConflictingDomain(candidate.id, domain))
+      ) {
+        // fall through to fuzzy step / new-cluster creation below
+      } else {
+        return candidate;
+      }
     }
   }
 
@@ -1687,16 +1934,27 @@ export async function findOrCreateClusterByCompany(
   // boilerplate "شركة ... المحدودة" were being clustered together.
   if (normalizedName && normalizedName.length > 2) {
     try {
+      // Pull the top few candidates so the domain guard can skip a bad
+      // top hit (e.g. "alsuwaidi industrial services") and still pick a
+      // legitimate sibling further down the list.
       const trgmResult = await pool.query(
         `SELECT *, similarity(company_name_normalized, $1) as sim
          FROM duplicate_clusters
          WHERE company_name_normalized IS NOT NULL AND company_name_normalized != ''
            AND similarity(company_name_normalized, $1) >= 0.6
-         ORDER BY sim DESC LIMIT 1`,
+         ORDER BY sim DESC LIMIT 5`,
         [normalizedName],
       );
-      if (trgmResult.rows[0] && trgmResult.rows[0].sim >= 0.6) {
-        return trgmResult.rows[0];
+      for (const candidate of trgmResult.rows) {
+        if (!(candidate.sim >= 0.6)) continue;
+        if (
+          domain &&
+          isCorporateDomain(domain) &&
+          (await clusterHasConflictingDomain(candidate.id, domain))
+        ) {
+          continue; // try next-best candidate
+        }
+        return candidate;
       }
     } catch {
       const recentClusters = await pool.query(
@@ -1717,6 +1975,14 @@ export async function findOrCreateClusterByCompany(
             normalizedName,
           );
           if (similarity >= 85) {
+            // Same domain conflict guard for the Levenshtein fallback path.
+            if (
+              domain &&
+              isCorporateDomain(domain) &&
+              (await clusterHasConflictingDomain(cluster.id, domain))
+            ) {
+              continue;
+            }
             return cluster;
           }
         }

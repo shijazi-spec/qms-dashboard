@@ -24,7 +24,11 @@ import {
   getAllClusters,
   getClusterCount,
   getClusterById,
+  getClusterMixedSignal,
   getRecordsByClusterId,
+  splitRecordsIntoNewCluster,
+  splitRecordsIntoNewClusterInTx,
+  updateClusterStats,
   getClusterSummary,
   getDuplicatesByOwner,
   getDuplicatesBySource,
@@ -843,6 +847,12 @@ export const duplicateRadarRoutes = [
           const records = await getRecordsByClusterId(id);
           const recommendations = generateSmartRecommendations(records);
           const meta = getClusterRecordTypeMeta(records);
+          // Surface "mixed signal" — a cluster containing 2+ distinct
+          // corporate domains (or distinct phones) is almost always two
+          // unrelated companies that happened to share a name fragment.
+          // The frontend uses this to render a red banner and a
+          // "Split by domain" button.
+          const mixed = await getClusterMixedSignal(id);
           return c.json({
             cluster,
             records,
@@ -850,10 +860,173 @@ export const duplicateRadarRoutes = [
             primary_type: meta.primary_type,
             is_cross_module: meta.is_cross_module,
             record_types: meta.record_types,
+            mixed_signal: mixed,
           });
         } catch (error: any) {
           logger.error("Error fetching cluster:", error);
           return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/clusters/:id/split",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          // Splitting a cluster is a state-mutating, hard-to-undo write.
+          // Gate it on the same write-level role used by /resolve, /primary
+          // and /bulk-resolve — NOT the read-only duplicate-radar viewer
+          // role, which would otherwise let analysts mutate cluster shape.
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const body = await c.req.json().catch(() => ({}));
+          const mode: string = body.mode || "manual";
+
+          // Confirm the source cluster exists before doing anything.
+          const source = await getClusterById(id);
+          if (!source) return c.json({ error: "Cluster not found" }, 404);
+
+          // Build one-or-more split plans.
+          // Each plan = { recordIds, seed: { company_name, domain } }.
+          const plans: Array<{
+            recordIds: number[];
+            seed: { company_name: string; domain?: string | null };
+          }> = [];
+
+          if (mode === "by_domain") {
+            const mixed = await getClusterMixedSignal(id);
+            if (mixed.domains.length < 2) {
+              return c.json(
+                { error: "Cluster does not have multiple domains to split" },
+                400,
+              );
+            }
+            // Keep the largest group on the source cluster (matches the
+            // user's mental model: "the original cluster shrinks, the
+            // outlier becomes its own"). Split every other domain off.
+            // The scan-time conflict guard prevents re-merging on the
+            // next scan because incoming records carry their own domain.
+            const allRecords = await getRecordsByClusterId(id);
+            const sortedDomains = [...mixed.domains].sort((a, b) => {
+              const la = (mixed.domain_groups[a] || []).length;
+              const lb = (mixed.domain_groups[b] || []).length;
+              return lb - la;
+            });
+            for (const dom of sortedDomains.slice(1)) {
+              const ids = mixed.domain_groups[dom] || [];
+              if (ids.length === 0) continue;
+              // Pick the first record's company_name as the seed for the
+              // new cluster — the operator can rename later via Zoho.
+              const seedRec = allRecords.find(
+                (r) => (r.id as number | undefined) === ids[0],
+              );
+              plans.push({
+                recordIds: ids,
+                seed: {
+                  company_name: seedRec?.company_name || dom,
+                  domain: dom,
+                },
+              });
+            }
+          } else {
+            // Manual mode: caller supplies the record IDs to move out.
+            const recordIds: number[] = Array.isArray(body.record_ids)
+              ? body.record_ids
+                  .map((n: unknown) => Number(n))
+                  .filter((n: number) => Number.isFinite(n))
+              : [];
+            if (recordIds.length === 0) {
+              return c.json(
+                { error: "record_ids must be a non-empty array" },
+                400,
+              );
+            }
+            plans.push({
+              recordIds,
+              seed: {
+                company_name:
+                  typeof body.new_company_name === "string" &&
+                  body.new_company_name.trim()
+                    ? body.new_company_name.trim()
+                    : `${source.company_name || "Cluster"} (split)`,
+                domain:
+                  typeof body.new_domain === "string" && body.new_domain.trim()
+                    ? body.new_domain.trim().toLowerCase()
+                    : null,
+              },
+            });
+          }
+
+          if (plans.length === 0) {
+            return c.json({ error: "Nothing to split" }, 400);
+          }
+
+          // Wrap ALL plans in a single DB transaction so a failure on plan
+          // N rolls back plans 0..N-1 — operators never see a half-applied
+          // split. Stats refresh runs AFTER commit (idempotent, best-effort).
+          const { pool: duplicateRadarPool } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const client = await (duplicateRadarPool as any).connect();
+          const newClusterIds: number[] = [];
+          try {
+            await client.query("BEGIN");
+            for (const plan of plans) {
+              const result = await splitRecordsIntoNewClusterInTx(
+                client,
+                id,
+                plan.recordIds,
+                plan.seed,
+              );
+              newClusterIds.push(result.new_cluster_id);
+            }
+            await client.query("COMMIT");
+          } catch (txErr) {
+            try {
+              await client.query("ROLLBACK");
+            } catch {
+              /* ignore rollback failure */
+            }
+            throw txErr;
+          } finally {
+            client.release();
+          }
+
+          // Post-commit stats refresh (idempotent). A failure here doesn't
+          // invalidate the split — the next scan or manual refresh will
+          // re-derive the same numbers.
+          try {
+            await updateClusterStats(id);
+            for (const ncid of newClusterIds) {
+              await updateClusterStats(ncid);
+            }
+          } catch (statsErr) {
+            logger.warn(
+              "Post-split stats refresh failed (non-fatal)",
+              statsErr as any,
+            );
+          }
+
+          return c.json({
+            success: true,
+            source_cluster_id: id,
+            new_cluster_ids: newClusterIds,
+            split_count: newClusterIds.length,
+          });
+        } catch (error: any) {
+          logger.error("Error splitting cluster:", error);
+          return c.json(
+            { error: error?.message || "An internal error occurred" },
+            500,
+          );
         }
       };
     },
