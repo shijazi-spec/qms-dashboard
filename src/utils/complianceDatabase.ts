@@ -229,6 +229,7 @@ export async function initComplianceTables(): Promise<void> {
 
   await seedDefaultRegulations();
   await seedPDPLObligations();
+  await seedSAMAObligations();
   logger.info("✅ [ComplianceDB] Compliance tables initialized");
 }
 
@@ -254,6 +255,18 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2023-09-14",
       status: "active",
       version: "2023",
+    },
+    {
+      regulation_code: "SAMA-CSF",
+      name: "SAMA Cyber Security Framework",
+      description:
+        "Mandatory cyber security framework issued by the Saudi Central Bank (SAMA) for all member organisations — banks, insurance companies, financing companies, and payment service providers. Spans four domains: leadership & governance, risk management & compliance, operations & technology, and third-party cyber security.",
+      jurisdiction: "saudi",
+      category: "financial",
+      issuing_body: "Saudi Central Bank (SAMA)",
+      effective_date: "2017-05-01",
+      status: "active",
+      version: "1.0",
     },
     {
       regulation_code: "NCA-ECC",
@@ -1085,6 +1098,359 @@ async function seedPDPLObligations(): Promise<void> {
   logger.info(
     "✅ [ComplianceDB] PDPL obligations seeded (" +
       pdplObligations.length +
+      " items)",
+  );
+}
+
+/**
+ * SAMA Cyber Security Framework (CSF) v1.0 — Phase 1 seed.
+ *
+ * Covers 20 high-priority controls across the 4 CSF domains. The full
+ * framework has ~118 sub-controls; this seed selects the controls that
+ * (a) auditors always check first, (b) cross-map cleanly to NCA-ECC and
+ * ISO 27001, and (c) are achievable by most WalaPlus customers without
+ * specialist hardware.
+ *
+ * Source: SAMA CSF (May 2017, public release). Descriptions are
+ * paraphrased summaries — not verbatim reg text — suitable for dashboard
+ * display and review workflows. Compliance officers can edit any row via
+ * the standard obligations UI without breaking the seed (ON CONFLICT
+ * DO NOTHING keeps the seed idempotent on re-boot).
+ *
+ * Exported so that tests can validate structural invariants (unique codes,
+ * four domains covered, required fields present) without a live database.
+ */
+export interface SamaObligationDef {
+  code: string;
+  clause: string;
+  domain: string;
+  order: number;
+  title: string;
+  desc: string;
+  type: "mandatory" | "recommended" | "optional";
+  ctrl: "preventive" | "detective" | "corrective";
+  freq:
+    | "continuous"
+    | "daily"
+    | "weekly"
+    | "monthly"
+    | "quarterly"
+    | "annual"
+    | "event_driven";
+  priority: "critical" | "high" | "medium" | "low";
+  dept: string;
+}
+
+export const SAMA_OBLIGATION_DEFINITIONS: SamaObligationDef[] = [
+  {
+    code: "SAMA-01",
+    clause: "§1.1",
+    domain: "Leadership & Governance",
+    order: 1,
+    title: "Cyber Security Governance",
+    desc: "Establish a board-approved cyber security governance structure with a dedicated steering committee, clear reporting lines to the board, and documented accountability for cyber security across the organisation.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "critical",
+    dept: "Executive Management",
+  },
+  {
+    code: "SAMA-02",
+    clause: "§1.3",
+    domain: "Leadership & Governance",
+    order: 2,
+    title: "Cyber Security Policy",
+    desc: "Maintain a documented, board-approved cyber security policy that is reviewed at least annually, communicated to all staff, and aligned with SAMA directives and business objectives.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "critical",
+    dept: "CISO Office",
+  },
+  {
+    code: "SAMA-03",
+    clause: "§1.4",
+    domain: "Leadership & Governance",
+    order: 3,
+    title: "Roles and Responsibilities",
+    desc: "Formally appoint a Chief Information Security Officer (CISO) with a direct reporting line independent of IT, and document cyber security roles, responsibilities, and segregation of duties across all functions.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "critical",
+    dept: "Executive Management",
+  },
+  {
+    code: "SAMA-04",
+    clause: "§1.6",
+    domain: "Leadership & Governance",
+    order: 4,
+    title: "Cyber Security Awareness",
+    desc: "Run a continuous cyber security awareness programme for all employees, contractors, and third parties — covering phishing, social engineering, password hygiene, and incident reporting — with mandatory annual refreshers.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "continuous",
+    priority: "high",
+    dept: "HR / CISO Office",
+  },
+  {
+    code: "SAMA-05",
+    clause: "§1.9",
+    domain: "Leadership & Governance",
+    order: 5,
+    title: "Cyber Security Audit",
+    desc: "Conduct independent internal and external cyber security audits at least annually, covering policy adherence, control effectiveness, and SAMA CSF coverage. Findings must be tracked to closure and reported to the board.",
+    type: "mandatory",
+    ctrl: "detective",
+    freq: "annual",
+    priority: "high",
+    dept: "Internal Audit",
+  },
+  {
+    code: "SAMA-06",
+    clause: "§2.1",
+    domain: "Risk Management & Compliance",
+    order: 6,
+    title: "Cyber Security Risk Management",
+    desc: "Define a cyber security risk appetite approved by the board, maintain an up-to-date risk register covering all information assets, and perform risk assessments before any material change to systems or processes.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "quarterly",
+    priority: "critical",
+    dept: "Risk Management",
+  },
+  {
+    code: "SAMA-07",
+    clause: "§2.2",
+    domain: "Risk Management & Compliance",
+    order: 7,
+    title: "Regulatory Compliance",
+    desc: "Monitor, document, and demonstrate compliance with all applicable SAMA directives, circulars, and the CSF. Maintain a regulatory obligations register and report compliance status to the board at least annually.",
+    type: "mandatory",
+    ctrl: "detective",
+    freq: "quarterly",
+    priority: "critical",
+    dept: "Compliance",
+  },
+  {
+    code: "SAMA-08",
+    clause: "§3.3",
+    domain: "Operations & Technology",
+    order: 8,
+    title: "Asset Management",
+    desc: "Maintain a complete, classified, and regularly reconciled inventory of all information assets (systems, applications, data, network devices) with assigned owners, criticality ratings, and handling requirements.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "quarterly",
+    priority: "high",
+    dept: "IT Operations",
+  },
+  {
+    code: "SAMA-09",
+    clause: "§3.4",
+    domain: "Operations & Technology",
+    order: 9,
+    title: "Cyber Security Architecture",
+    desc: "Design and maintain a layered cyber security architecture covering network segmentation, defence-in-depth, secure-by-default configurations, and regular architecture reviews for all new and existing systems.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "high",
+    dept: "IT Security / Architecture",
+  },
+  {
+    code: "SAMA-10",
+    clause: "§3.5",
+    domain: "Operations & Technology",
+    order: 10,
+    title: "Identity and Access Management",
+    desc: "Enforce least-privilege access, role-based authorisation, multi-factor authentication for remote and privileged access, quarterly access reviews, and immediate revocation on role change or termination.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "quarterly",
+    priority: "critical",
+    dept: "IT Security",
+  },
+  {
+    code: "SAMA-11",
+    clause: "§3.6",
+    domain: "Operations & Technology",
+    order: 11,
+    title: "Application Security",
+    desc: "Apply a secure software development life-cycle (SSDLC) including threat modelling, secure coding standards, peer review, static and dynamic application security testing, and pre-production penetration testing.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "continuous",
+    priority: "high",
+    dept: "Development / AppSec",
+  },
+  {
+    code: "SAMA-12",
+    clause: "§3.9",
+    domain: "Operations & Technology",
+    order: 12,
+    title: "Cryptography and Key Management",
+    desc: "Use only SAMA-approved cryptographic algorithms and key lengths for data at rest, in transit, and in use. Maintain a documented key management lifecycle (generation, distribution, rotation, revocation, destruction).",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "critical",
+    dept: "IT Security",
+  },
+  {
+    code: "SAMA-13",
+    clause: "§3.15",
+    domain: "Operations & Technology",
+    order: 13,
+    title: "Cyber Security Incident Management",
+    desc: "Operate a documented incident response plan with defined roles, classification, escalation paths, and reporting to SAMA within the required timeframe for major incidents. Conduct post-incident reviews and update controls.",
+    type: "mandatory",
+    ctrl: "corrective",
+    freq: "event_driven",
+    priority: "critical",
+    dept: "CISO Office / SOC",
+  },
+  {
+    code: "SAMA-14",
+    clause: "§3.17",
+    domain: "Operations & Technology",
+    order: 14,
+    title: "Vulnerability Management",
+    desc: "Run recurring vulnerability scans across all infrastructure and applications, prioritise remediation by risk rating, track SLAs for patching (critical within 14 days), and perform annual penetration tests.",
+    type: "mandatory",
+    ctrl: "detective",
+    freq: "monthly",
+    priority: "high",
+    dept: "IT Security",
+  },
+  {
+    code: "SAMA-15",
+    clause: "§3.19",
+    domain: "Operations & Technology",
+    order: 15,
+    title: "Logging and Monitoring",
+    desc: "Centralise security logs in a SIEM with tamper-resistant storage, define retention (minimum 12 months), detect and alert on suspicious activity 24/7, and correlate events across systems to surface campaigns.",
+    type: "mandatory",
+    ctrl: "detective",
+    freq: "continuous",
+    priority: "critical",
+    dept: "SOC",
+  },
+  {
+    code: "SAMA-16",
+    clause: "§3.12",
+    domain: "Operations & Technology",
+    order: 16,
+    title: "Payment Systems Security",
+    desc: "Protect payment systems (card, SWIFT, ATM, online banking, mobile banking) with segregated networks, hardened endpoints, transaction monitoring, fraud detection, and compliance with PCI DSS where applicable.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "continuous",
+    priority: "critical",
+    dept: "Payments / IT Security",
+  },
+  {
+    code: "SAMA-17",
+    clause: "§4.1",
+    domain: "Third Party",
+    order: 17,
+    title: "Contract and Vendor Management",
+    desc: "Perform cyber security due diligence on all vendors before onboarding, include mandatory security clauses in contracts (right to audit, breach notification, data return/destruction), and review vendor security posture annually.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "high",
+    dept: "Procurement / Legal",
+  },
+  {
+    code: "SAMA-18",
+    clause: "§4.2",
+    domain: "Third Party",
+    order: 18,
+    title: "Outsourcing",
+    desc: "Assess and document cyber security risk for every outsourcing arrangement. Obtain SAMA no-objection where required, retain accountability for outsourced functions, and monitor service provider performance continuously.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "annual",
+    priority: "high",
+    dept: "Risk / Compliance",
+  },
+  {
+    code: "SAMA-19",
+    clause: "§4.3",
+    domain: "Third Party",
+    order: 19,
+    title: "Cloud Computing",
+    desc: "Before adopting any cloud service, assess data residency, encryption (at rest and in transit), shared-responsibility boundaries, exit and portability strategy, and compliance with SAMA cloud directives. Sensitive data must remain in approved jurisdictions.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "event_driven",
+    priority: "critical",
+    dept: "IT / Legal / Compliance",
+  },
+  {
+    code: "SAMA-20",
+    clause: "§1.5",
+    domain: "Leadership & Governance",
+    order: 20,
+    title: "Cyber Security in Project Management",
+    desc: "Integrate cyber security requirements, risk assessments, and security acceptance testing into every project from initiation through go-live. No project proceeds to production without documented CISO sign-off.",
+    type: "mandatory",
+    ctrl: "preventive",
+    freq: "event_driven",
+    priority: "high",
+    dept: "PMO / CISO Office",
+  },
+];
+
+async function seedSAMAObligations(): Promise<void> {
+  const existing = await pool.query(
+    "SELECT COUNT(*) FROM obligations WHERE obligation_code LIKE 'SAMA-%'",
+  );
+  if (parseInt(existing.rows[0].count) > 0) return;
+
+  const samaReg = await pool.query(
+    "SELECT id FROM regulations WHERE regulation_code = 'SAMA-CSF'",
+  );
+  if (samaReg.rows.length === 0) {
+    logger.warn(
+      "⚠️ [ComplianceDB] SAMA-CSF regulation missing — skipping SAMA obligations seed",
+    );
+    return;
+  }
+  const regId = samaReg.rows[0].id;
+
+  logger.info("🌱 [ComplianceDB] Seeding SAMA CSF obligations...");
+
+  for (const ob of SAMA_OBLIGATION_DEFINITIONS) {
+    await pool.query(
+      `
+      INSERT INTO obligations (obligation_code, regulation_id, article_reference, title, description, section_domain, section_order, clause_number, requirement_type, control_type, compliance_frequency, priority, responsible_department, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'applicable')
+      ON CONFLICT (obligation_code) DO NOTHING
+    `,
+      [
+        ob.code,
+        regId,
+        ob.clause,
+        ob.title,
+        ob.desc,
+        ob.domain,
+        ob.order,
+        ob.clause,
+        ob.type,
+        ob.ctrl,
+        ob.freq,
+        ob.priority,
+        ob.dept,
+      ],
+    );
+  }
+
+  logger.info(
+    "✅ [ComplianceDB] SAMA CSF obligations seeded (" +
+      SAMA_OBLIGATION_DEFINITIONS.length +
       " items)",
   );
 }
