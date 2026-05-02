@@ -250,5 +250,13 @@
             } catch (e) {}
         }
     </script>
+    <script>
+        // i18n bootstrap — translates every data-i18n attribute on the page
+        // (matches the pattern used by every other dashboard page; required
+        // by scripts/check-i18n.cjs "Page wiring" check).
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>

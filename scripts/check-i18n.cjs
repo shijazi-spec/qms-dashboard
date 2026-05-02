@@ -858,6 +858,15 @@ function listJsFiles() {
 function collectReferencedKeys(pages) {
   const keys = new Set();
 
+  // a0. Strings consumed by the streaming-download Service Worker. These
+  //     keys are NOT referenced via data-i18n / static t() because the SW
+  //     reads them out of its own SW_STRINGS dictionary (which Check 5
+  //     enforces is byte-identical to the matching i18n keys). Without
+  //     this seed they would be falsely flagged as orphans by Check 6.
+  for (const i18nKey of Object.values(SW_KEY_TO_I18N_KEY)) {
+    keys.add(i18nKey);
+  }
+
   // a. data-i18n* attributes from all HTML pages
   for (const page of pages) {
     const html = fs.readFileSync(path.join(DASHBOARD_DIR, page), 'utf8');
