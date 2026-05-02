@@ -243,6 +243,11 @@ async function seedDefaultRegulations(): Promise<void> {
   // in sync with what's defined here.
   logger.info("🌱 [ComplianceDB] Reconciling default regulations (idempotent upsert)...");
 
+  // Each entry carries the canonical, publicly-reachable home page or PDF
+  // URL on the issuing body's official site. Keep these stable and prefer
+  // long-lived landing pages over deep links that get re-organised. ISO
+  // standards point to iso.org catalogue pages (the standards themselves
+  // are paywalled — link-only is the best we can do).
   const saudiRegulations = [
     {
       regulation_code: "PDPL",
@@ -255,6 +260,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2023-09-14",
       status: "active",
       version: "2023",
+      source_url: "https://sdaia.gov.sa/en/SDAIA/about/Files/PersonalDataEnglishV2.pdf",
     },
     {
       regulation_code: "SAMA-CSF",
@@ -267,6 +273,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2017-05-01",
       status: "active",
       version: "1.0",
+      source_url: "https://www.sama.gov.sa/en-US/RulesInstructions/CyberSecurity/Cyber%20Security%20Framework.pdf",
     },
     {
       regulation_code: "NCA-ECC",
@@ -279,6 +286,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2018-05-01",
       status: "active",
       version: "2.0",
+      source_url: "https://nca.gov.sa/en/legislation",
     },
     {
       regulation_code: "NCA-DCC",
@@ -291,6 +299,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2022-01-01",
       status: "active",
       version: "1.0",
+      source_url: "https://nca.gov.sa/en/legislation",
     },
     {
       regulation_code: "ISO-9001",
@@ -302,6 +311,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2015-09-15",
       status: "active",
       version: "2015",
+      source_url: "https://www.iso.org/standard/62085.html",
     },
     {
       regulation_code: "ISO-27001",
@@ -314,6 +324,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2022-10-25",
       status: "active",
       version: "2022",
+      source_url: "https://www.iso.org/standard/27001",
     },
     {
       regulation_code: "COPC",
@@ -326,6 +337,7 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2020-01-01",
       status: "active",
       version: "7.0",
+      source_url: "https://www.copc.com/standards/cx-standard/",
     },
     {
       regulation_code: "PCI-DSS",
@@ -338,14 +350,15 @@ async function seedDefaultRegulations(): Promise<void> {
       effective_date: "2024-04-01",
       status: "active",
       version: "4.0",
+      source_url: "https://www.pcisecuritystandards.org/document_library/",
     },
   ];
 
   for (const reg of saudiRegulations) {
     await pool.query(
       `
-      INSERT INTO regulations (regulation_code, name, description, jurisdiction, category, issuing_body, effective_date, status, version)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO regulations (regulation_code, name, description, jurisdiction, category, issuing_body, effective_date, status, version, source_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (regulation_code) DO NOTHING
     `,
       [
@@ -358,7 +371,21 @@ async function seedDefaultRegulations(): Promise<void> {
         reg.effective_date,
         reg.status,
         reg.version,
+        reg.source_url,
       ],
+    );
+
+    // Backfill source_url for rows that already existed before this column
+    // was added to the seed payload — only when the field is currently
+    // empty/NULL so we never clobber an operator's manual override.
+    await pool.query(
+      `
+      UPDATE regulations
+         SET source_url = $2, updated_at = NOW()
+       WHERE regulation_code = $1
+         AND (source_url IS NULL OR source_url = '')
+    `,
+      [reg.regulation_code, reg.source_url],
     );
   }
 
