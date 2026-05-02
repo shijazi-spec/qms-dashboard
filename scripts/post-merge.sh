@@ -25,8 +25,8 @@ bash scripts/check-db-test-coverage.sh
 # A failure in any file blocks the merge.
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: full test suite (npm test)"
-npm test
+echo "▶ CI gate: full test suite (tests/runIntegrationTests.ts)"
+npx tsx tests/runIntegrationTests.ts
 
 # ----------------------------------------------------------------------------
 # CI gate — i18n coverage guardrail (Task #125 / #150 / #345)
