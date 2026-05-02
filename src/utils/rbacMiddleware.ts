@@ -469,6 +469,30 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fraud Management Module (PRD-FRD-001)
+  // Reads: governance roles + executive (mirrors risks).
+  // Writes: admin, head_of_operations_quality, grc_manager
+  //   (per the recommended position on PRD §15 Q1 — extend grc_manager
+  //   instead of introducing a fraud_admin role; can be tightened later).
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    pattern: /^\/api\/fraud\//,
+    methods: ["POST", "PUT", "DELETE"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager"],
+  },
+  {
+    pattern: /^\/api\/fraud\//,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "executive",
+    ],
+  },
+
   {
     pattern: /^\/api\/policies\/\d+\/transition$/,
     methods: ["POST"],

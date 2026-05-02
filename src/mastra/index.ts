@@ -32,6 +32,7 @@ import { riskRoutes } from "./routes/riskRoutes";
 import { policyRoutes } from "./routes/policyRoutes";
 import { complianceRoutes } from "./routes/complianceRoutes";
 import { obligationDocumentsRoutes } from "./routes/obligationDocumentsRoutes";
+import { fraudRoutes } from "./routes/fraudRoutes";
 import { auditRoutes } from "./routes/auditRoutes";
 import { vendorRoutes } from "./routes/vendorRoutes";
 import { migrationRoutes } from "./routes/migrationRoutes";
@@ -184,6 +185,7 @@ export const mastra = new Mastra({
       ...policyRoutes,
       ...complianceRoutes,
       ...obligationDocumentsRoutes,
+      ...fraudRoutes,
       ...auditRoutes,
       ...infographicRoutes,
       ...vendorRoutes,
@@ -258,7 +260,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
     clearInterval(g.__walaplus_cacheWarmer.refreshTimer);
   }
   const port = process.env.PORT || "5000";
-  const adminKey = process.env.ADMIN_API_KEY;
+              const adminKey = process.env.ADMIN_API_KEY;
   if (!adminKey) {
     safeLogger.info(
       "⏭️  [CacheWarmer] ADMIN_API_KEY not set — skipping cache pre-warm",
@@ -430,7 +432,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         );
       });
     }, 5 * 1000);
-  } else {
+              } else {
     safeLogger.info(
       "[Redaction] DATABASE_URL not set — boot redaction sweep skipped",
     );

@@ -68,6 +68,9 @@ const WalaPlusNav = {
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
+        // Fraud Management Module (PRD-FRD-001) — added in Feature 1.
+        // Subsequent features add: Fraud Incidents, Country Risk, Fraud Dashboard.
+        { label: 'Fraud Rules', href: '/fraud-rules', icon: 'shield-check', id: 'fraud-rules' },
         // QMS document library — categorised upload boxes for Documents,
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the

@@ -1118,6 +1118,68 @@ const aiFeedbackDigestFunction = inngest.createFunction(
 );
 inngestFunctions.push(aiFeedbackDigestFunction);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fraud Management Module — scheduled jobs (PRD-FRD-001 §9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * fraud-rule-review-reminder — daily at 08:00 UTC.
+ *
+ * Notifies the rule owner (in-app) when a fraud rule's `next_review` date is
+ * within the next 14 days, so reviews are scheduled proactively rather than
+ * being chased after they go overdue. Re-running the cron is idempotent at
+ * the data level (we use createNotification, which is allowed to enqueue
+ * duplicates; if dedup becomes important we can add a `last_reminded_at`
+ * column to fraud_rules in a follow-up).
+ */
+const fraudRuleReviewReminderFunction = inngest.createFunction(
+  { id: "fraud-rule-review-reminder" },
+  { cron: process.env.FRAUD_RULE_REVIEW_REMINDER_CRON || "0 8 * * *" },
+  async ({ step }) => {
+    return await step.run("notify-rule-owners-of-upcoming-reviews", async () => {
+      const { getFraudRulesNeedingReviewSoon, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+
+      await initFraudTables();
+      const due = await getFraudRulesNeedingReviewSoon(14);
+      if (due.length === 0) {
+        logger.info("[FraudRuleReviewReminder] No rules due for review in next 14 days");
+        return { notified: 0 };
+      }
+
+      let notified = 0;
+      for (const rule of due) {
+        try {
+          await createNotification({
+            title: `Fraud rule review due: ${rule.rule_id}`,
+            message: `Rule "${rule.rule_name}" (${rule.rule_id}) needs review by ${String(rule.next_review).slice(0, 10)}. Owner: ${rule.owner}.`,
+            module: "fraud",
+            priority: "medium",
+            channel: "in_app",
+            recipient: rule.owner,
+            related_entity_type: "fraud_rule",
+            related_entity_id: String(rule.id ?? rule.rule_id),
+            action_url: "/fraud-rules",
+          });
+          notified++;
+        } catch (err) {
+          logger.error(
+            `[FraudRuleReviewReminder] Failed to notify for rule ${rule.rule_id}:`,
+            err,
+          );
+        }
+      }
+      logger.info(
+        `[FraudRuleReviewReminder] Notified ${notified}/${due.length} rule owners`,
+      );
+      return { notified, total_due: due.length };
+    });
+  },
+);
+inngestFunctions.push(fraudRuleReviewReminderFunction);
+
 export function inngestServe({
   mastra,
   inngest,
