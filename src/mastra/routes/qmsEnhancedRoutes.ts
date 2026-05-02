@@ -1477,33 +1477,23 @@ const _qmsEnhancedRoutesRaw = [
             "../../utils/sensitiveRedaction"
           );
           const safeStatus = redact(status) as string;
-          const pg = await import("pg");
-          const pool = new pg.default.Pool({
-            connectionString: process.env.DATABASE_URL,
-          });
+          // Delegated to qmsDatabase.bulkUpdateNCStatus so the UPDATE lives
+          // alongside the rest of the QMS writes (Task #746).
+          const { bulkUpdateNCStatus } = await import(
+            "../../utils/qmsDatabase"
+          );
+          const rows = await bulkUpdateNCStatus(ids, safeStatus);
           try {
-            const placeholders = ids
-              .map((_: any, i: number) => `$${i + 2}`)
-              .join(",");
-            const result = await pool.query(
-              `UPDATE nonconformance_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
-              [safeStatus, ...ids],
-            );
-            try {
-              const { logEvent } =
-                await import("../../utils/eventLogsDatabase");
-              await logEvent({
-                actionType: "UPDATE",
-                entityType: "CAPA",
-                description: `Bulk NC status update to ${status}: ${ids.length} records`,
-                module: "qms",
-                severity: "INFO",
-              });
-            } catch {}
-            return c.json({ success: true, updated: result.rows.length });
-          } finally {
-            await pool.end();
-          }
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "CAPA",
+              description: `Bulk NC status update to ${status}: ${ids.length} records`,
+              module: "qms",
+              severity: "INFO",
+            });
+          } catch {}
+          return c.json({ success: true, updated: rows.length });
         } catch (error) {
           return c.json({ error: "Bulk update failed" }, 500);
         }
@@ -1530,33 +1520,22 @@ const _qmsEnhancedRoutesRaw = [
             "../../utils/sensitiveRedaction"
           );
           const safeStatus = redact(status) as string;
-          const pg = await import("pg");
-          const pool = new pg.default.Pool({
-            connectionString: process.env.DATABASE_URL,
-          });
+          // Delegated to qmsDatabase.bulkUpdateCAPAStatus (Task #746).
+          const { bulkUpdateCAPAStatus } = await import(
+            "../../utils/qmsDatabase"
+          );
+          const rows = await bulkUpdateCAPAStatus(ids, safeStatus);
           try {
-            const placeholders = ids
-              .map((_: any, i: number) => `$${i + 2}`)
-              .join(",");
-            const result = await pool.query(
-              `UPDATE capa_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
-              [safeStatus, ...ids],
-            );
-            try {
-              const { logEvent } =
-                await import("../../utils/eventLogsDatabase");
-              await logEvent({
-                actionType: "UPDATE",
-                entityType: "CAPA",
-                description: `Bulk CAPA status update to ${status}: ${ids.length} records`,
-                module: "qms",
-                severity: "INFO",
-              });
-            } catch {}
-            return c.json({ success: true, updated: result.rows.length });
-          } finally {
-            await pool.end();
-          }
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "CAPA",
+              description: `Bulk CAPA status update to ${status}: ${ids.length} records`,
+              module: "qms",
+              severity: "INFO",
+            });
+          } catch {}
+          return c.json({ success: true, updated: rows.length });
         } catch (error) {
           return c.json({ error: "Bulk update failed" }, 500);
         }

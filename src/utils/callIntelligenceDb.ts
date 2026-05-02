@@ -1251,4 +1251,71 @@ export async function getAITrainingStats(): Promise<{
   };
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Call-record audio path + Five9 integration_config writes (Task #746)
+//
+// Moved out of `src/mastra/routes/callIntelligenceRoutes.ts` so all writes
+// against `call_records` and the Five9 `integration_config` row live in this
+// (grandfathered) module and the secret-leak coverage gate no longer has to
+// track the route file separately.
+// ──────────────────────────────────────────────────────────────────────────────
+export async function updateCallRecordAudioPath(
+  callRecordId: number,
+  audioFilePath: string,
+): Promise<void> {
+  await pool.query(
+    "UPDATE call_records SET audio_file_path = $1 WHERE id = $2",
+    [audioFilePath, callRecordId],
+  );
+}
+
+let integrationConfigTableReady: Promise<void> | null = null;
+async function ensureIntegrationConfigTable(): Promise<void> {
+  if (integrationConfigTableReady) return integrationConfigTableReady;
+  integrationConfigTableReady = pool
+    .query(`
+      CREATE TABLE IF NOT EXISTS integration_config (
+        id SERIAL PRIMARY KEY,
+        integration_type VARCHAR(50) UNIQUE NOT NULL,
+        config JSONB NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        last_sync_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+    .then(() => undefined);
+  return integrationConfigTableReady;
+}
+
+export async function upsertFive9IntegrationConfig(
+  config: Record<string, unknown>,
+): Promise<void> {
+  await ensureIntegrationConfigTable();
+  await pool.query(
+    `INSERT INTO integration_config (integration_type, config, is_active)
+     VALUES ('five9', $1, true)
+     ON CONFLICT (integration_type)
+     DO UPDATE SET config = $1, updated_at = NOW()`,
+    [JSON.stringify(config)],
+  );
+}
+
+export async function getActiveFive9IntegrationConfig(): Promise<Record<
+  string,
+  unknown
+> | null> {
+  await ensureIntegrationConfigTable();
+  const result = await pool.query(
+    "SELECT config FROM integration_config WHERE integration_type = 'five9' AND is_active = true",
+  );
+  return result.rows[0]?.config ?? null;
+}
+
+export async function markFive9IntegrationSynced(): Promise<void> {
+  await pool.query(
+    "UPDATE integration_config SET last_sync_at = NOW() WHERE integration_type = 'five9'",
+  );
+}
+
 export { pool as callIntelligencePool };

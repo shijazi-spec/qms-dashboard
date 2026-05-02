@@ -1,10 +1,156 @@
 import crypto from "crypto";
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
+import { redactSensitiveDeep } from "./sensitiveRedaction";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// UI language preference (Task #746)
+//
+// Moved out of `src/mastra/routes/i18nRoutes.ts` so the only INSERT/UPDATE
+// against `platform_users.ui_language` lives next to the rest of the
+// platform_users writes and the secret-leak coverage gate doesn't have to
+// track that route file separately.
+// ──────────────────────────────────────────────────────────────────────────────
+export async function ensureUiLanguageColumn(): Promise<void> {
+  try {
+    await pool.query(
+      `ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS ui_language VARCHAR(10) DEFAULT 'en'`,
+    );
+  } catch (_) {}
+}
+
+export async function getUserLanguagePreference(
+  userId: number,
+): Promise<string | null> {
+  const result = await pool.query(
+    "SELECT ui_language FROM platform_users WHERE id = $1",
+    [userId],
+  );
+  return result.rows[0]?.ui_language ?? null;
+}
+
+export async function setUserLanguagePreference(
+  userId: number,
+  lang: string,
+): Promise<void> {
+  await pool.query(
+    "UPDATE platform_users SET ui_language = $1 WHERE id = $2",
+    [lang, userId],
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// OIDC upsert (Task #746)
+//
+// Moved out of `src/mastra/routes/authRoutes.ts`. authRoutes still re-exports
+// `upsertOidcUser` from this module for back-compat with existing imports
+// (e.g. its companion secret-leak test).
+// ──────────────────────────────────────────────────────────────────────────────
+let oidcAuthTablesReady: Promise<void> | null = null;
+async function ensureOidcAuthTables(): Promise<void> {
+  if (oidcAuthTablesReady) return oidcAuthTablesReady;
+  oidcAuthTablesReady = pool
+    .query(
+      `
+    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS picture TEXT;
+    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'local';
+  `,
+    )
+    .then(() => undefined)
+    .catch(async () => {
+      await pool.query(`
+      CREATE TABLE IF NOT EXISTS platform_users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        full_name VARCHAR(255) NOT NULL,
+        team VARCHAR(50) NOT NULL DEFAULT 'Other',
+        role VARCHAR(50) NOT NULL DEFAULT 'department_viewer',
+        status VARCHAR(30) DEFAULT 'active',
+        password_hash VARCHAR(255),
+        mfa_enabled BOOLEAN DEFAULT FALSE,
+        mfa_secret VARCHAR(255),
+        invitation_id INTEGER,
+        access_reason TEXT,
+        approved_by VARCHAR(255),
+        approved_at TIMESTAMP,
+        denied_by VARCHAR(255),
+        denied_at TIMESTAMP,
+        denial_reason TEXT,
+        last_login_at TIMESTAMP,
+        login_count INTEGER DEFAULT 0,
+        google_id VARCHAR(255),
+        picture TEXT,
+        auth_provider VARCHAR(50) DEFAULT 'local',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    });
+  return oidcAuthTablesReady;
+}
+
+/**
+ * Upsert a `platform_users` row from an OIDC profile callback.
+ *
+ * Free-text fields are scrubbed via `redactSensitiveDeep()` BEFORE any
+ * SELECT/INSERT/UPDATE so a hostile or misconfigured upstream IdP cannot
+ * smuggle a `password_hash`, `access_token`, JWT, GitHub PAT (`ghp_…`) or
+ * `sk-…` token into `full_name` / `picture`.
+ */
+export async function upsertOidcUser(profile: {
+  sub: string;
+  email: string;
+  name: string;
+  picture: string;
+}) {
+  await ensureOidcAuthTables();
+
+  const safeProfile = redactSensitiveDeep(profile) as typeof profile;
+
+  const existing = await pool.query(
+    "SELECT * FROM platform_users WHERE email = $1",
+    [safeProfile.email],
+  );
+
+  if (existing.rows.length > 0) {
+    const existingUser = existing.rows[0];
+    if (existingUser.status !== "active") {
+      return existingUser;
+    }
+    const result = await pool.query(
+      `UPDATE platform_users
+       SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
+           last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
+       WHERE email = $4 AND status = 'active'
+       RETURNING *`,
+      [
+        safeProfile.sub,
+        safeProfile.name,
+        safeProfile.picture,
+        safeProfile.email,
+      ],
+    );
+    return result.rows[0] || existingUser;
+  } else {
+    const result = await pool.query(
+      `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
+       VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'pending_approval', false, 0, NOW())
+       RETURNING *`,
+      [
+        safeProfile.email,
+        safeProfile.name,
+        safeProfile.sub,
+        safeProfile.picture,
+      ],
+    );
+    return result.rows[0];
+  }
+}
 
 export type UserStatus =
   | "invited"

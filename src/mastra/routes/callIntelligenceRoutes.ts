@@ -921,13 +921,14 @@ Respond with JSON only:
             },
           } as any);
 
-          // Update the audio_file_path in the database
+          // Update the audio_file_path in the database. Delegated to
+          // callIntelligenceDb.updateCallRecordAudioPath so all call_records
+          // writes live in one module (Task #746).
           if (audioFilePath && callRecord.id) {
-            const { pool } = await import("../../utils/database");
-            await pool.query(
-              "UPDATE call_records SET audio_file_path = $1 WHERE id = $2",
-              [audioFilePath, callRecord.id],
+            const { updateCallRecordAudioPath } = await import(
+              "../../utils/callIntelligenceDb"
             );
+            await updateCallRecordAudioPath(callRecord.id, audioFilePath);
           }
 
           logger?.info("✅ [API] Manual call record created", {
@@ -1359,21 +1360,6 @@ ${transcriptText}
             );
           }
 
-          const { Pool } = await import("pg");
-          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-          await pool.query(`
-            CREATE TABLE IF NOT EXISTS integration_config (
-              id SERIAL PRIMARY KEY,
-              integration_type VARCHAR(50) UNIQUE NOT NULL,
-              config JSONB NOT NULL,
-              is_active BOOLEAN DEFAULT true,
-              last_sync_at TIMESTAMP,
-              created_at TIMESTAMP DEFAULT NOW(),
-              updated_at TIMESTAMP DEFAULT NOW()
-            )
-          `);
-
           // Scrub deny-list keys / credential-shaped strings out of the
           // free-text Five9 config blob BEFORE persisting it as JSONB.
           // The endpoint deliberately drops the raw password (it is not
@@ -1384,16 +1370,13 @@ ${transcriptText}
             domain: body.domain,
             username: body.username,
             configured_at: new Date().toISOString(),
-          });
-          await pool.query(
-            `
-            INSERT INTO integration_config (integration_type, config, is_active)
-            VALUES ('five9', $1, true)
-            ON CONFLICT (integration_type) 
-            DO UPDATE SET config = $1, updated_at = NOW()
-          `,
-            [JSON.stringify(safeConfig)],
+          }) as Record<string, unknown>;
+          // Delegated to callIntelligenceDb (Task #746) so the
+          // integration_config writes live in a *Database/*Db module.
+          const { upsertFive9IntegrationConfig } = await import(
+            "../../utils/callIntelligenceDb"
           );
+          await upsertFive9IntegrationConfig(safeConfig);
 
           logger?.info("✅ [API] Five9 configuration saved");
 
@@ -1421,14 +1404,13 @@ ${transcriptText}
           const logger = mastra?.getLogger();
           logger?.info("🔄 [API] Syncing calls from Five9");
 
-          const { Pool } = await import("pg");
-          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-          const configResult = await pool.query(`
-            SELECT config FROM integration_config WHERE integration_type = 'five9' AND is_active = true
-          `);
-
-          if (configResult.rows.length === 0) {
+          // Delegated to callIntelligenceDb (Task #746).
+          const {
+            getActiveFive9IntegrationConfig,
+            markFive9IntegrationSynced,
+          } = await import("../../utils/callIntelligenceDb");
+          const cfg = await getActiveFive9IntegrationConfig();
+          if (!cfg) {
             return c.json(
               {
                 success: false,
@@ -1437,10 +1419,7 @@ ${transcriptText}
               400,
             );
           }
-
-          await pool.query(`
-            UPDATE integration_config SET last_sync_at = NOW() WHERE integration_type = 'five9'
-          `);
+          await markFive9IntegrationSynced();
 
           logger?.info(
             "✅ [API] Five9 sync completed (placeholder - actual Five9 API integration pending)",

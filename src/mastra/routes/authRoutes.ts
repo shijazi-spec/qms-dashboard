@@ -1,11 +1,11 @@
 import crypto from "crypto";
 import * as client from "openid-client";
-import pg from "pg";
 import { logger } from "../../utils/logger";
-import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
-const { Pool } = pg;
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Re-exported below for back-compat — the canonical implementation now lives
+// in `userAccessDatabase.ts` so all platform_users writes are colocated and
+// the secret-leak coverage gate doesn't have to track this route file
+// separately (Task #746).
+import { upsertOidcUser as upsertOidcUserImpl } from "../../utils/userAccessDatabase";
 
 const SESSION_COOKIE_NAME = "walaplus_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
@@ -79,98 +79,16 @@ export function getSessionFromCookie(
   return verifySession(decodeURIComponent(match[1]));
 }
 
-async function initAuthTables(): Promise<void> {
-  await pool
-    .query(
-      `
-    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
-    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS picture TEXT;
-    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'local';
-  `,
-    )
-    .catch(async () => {
-      await pool.query(`
-      CREATE TABLE IF NOT EXISTS platform_users (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        full_name VARCHAR(255) NOT NULL,
-        team VARCHAR(50) NOT NULL DEFAULT 'Other',
-        role VARCHAR(50) NOT NULL DEFAULT 'department_viewer',
-        status VARCHAR(30) DEFAULT 'active',
-        password_hash VARCHAR(255),
-        mfa_enabled BOOLEAN DEFAULT FALSE,
-        mfa_secret VARCHAR(255),
-        invitation_id INTEGER,
-        access_reason TEXT,
-        approved_by VARCHAR(255),
-        approved_at TIMESTAMP,
-        denied_by VARCHAR(255),
-        denied_at TIMESTAMP,
-        denial_reason TEXT,
-        last_login_at TIMESTAMP,
-        login_count INTEGER DEFAULT 0,
-        google_id VARCHAR(255),
-        picture TEXT,
-        auth_provider VARCHAR(50) DEFAULT 'local',
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    });
-}
-
 /**
  * Upsert a platform_users row from an OIDC profile callback.
  *
- * Exported so the secret-leak gate test (`./authRoutes.test.ts`) can drive
- * the write paths directly instead of having to spin up an OIDC server. The
- * function still passes every persisted profile field through
- * `redactSensitiveDeep()` first so a hostile or misconfigured upstream IdP
- * cannot smuggle a `password_hash`, `access_token`, JWT, GitHub PAT or
- * `sk-…` token into `platform_users.full_name` / `picture` (the two free-form
- * columns the upsert writes).
+ * Re-exported for back-compat — the canonical implementation lives in
+ * `userAccessDatabase.upsertOidcUser` so the secret-leak coverage gate only
+ * has to track the DB-module file (Task #746). The companion secret-leak test
+ * (`./authRoutes.test.ts`) imports this name and continues to drive the same
+ * write paths via the global `Pool.prototype.query` mock.
  */
-export async function upsertOidcUser(profile: {
-  sub: string;
-  email: string;
-  name: string;
-  picture: string;
-}) {
-  await initAuthTables();
-
-  // Scrub deny-list keys and credential-shaped strings out of every
-  // free-text field BEFORE it touches the SELECT/INSERT/UPDATE params.
-  const safeProfile = redactSensitiveDeep(profile) as typeof profile;
-
-  const existing = await pool.query(
-    "SELECT * FROM platform_users WHERE email = $1",
-    [safeProfile.email],
-  );
-
-  if (existing.rows.length > 0) {
-    const existingUser = existing.rows[0];
-    if (existingUser.status !== "active") {
-      return existingUser;
-    }
-    const result = await pool.query(
-      `UPDATE platform_users
-       SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
-           last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
-       WHERE email = $4 AND status = 'active'
-       RETURNING *`,
-      [safeProfile.sub, safeProfile.name, safeProfile.picture, safeProfile.email],
-    );
-    return result.rows[0] || existingUser;
-  } else {
-    const result = await pool.query(
-      `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
-       VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'pending_approval', false, 0, NOW())
-       RETURNING *`,
-      [safeProfile.email, safeProfile.name, safeProfile.sub, safeProfile.picture],
-    );
-    return result.rows[0];
-  }
-}
+export const upsertOidcUser = upsertOidcUserImpl;
 
 export const authRoutes = [
   {

@@ -273,24 +273,16 @@ export const triggerRoutes = [
           const trigger = await updateTriggerStatus(id, status, decisionData);
           if (!trigger) return c.json({ error: "Trigger not found" }, 404);
 
-          // Persist the extra columns added in the P0 schema migration
+          // Persist the extra columns added in the P0 schema migration.
+          // Delegated to auditTriggerDatabase.updateTriggerExtraColumns so the
+          // INSERT/UPDATE lives alongside the rest of the audit_triggers
+          // writes and the secret-leak coverage gate doesn't have to track
+          // this route file separately (Task #746).
           if (Object.keys(extraUpdates).length > 0) {
-            const fields: string[] = [];
-            const vals: any[] = [];
-            let i = 1;
-            for (const [k, v] of Object.entries(extraUpdates)) {
-              if (v === "NOW()") {
-                fields.push(`${k} = NOW()`);
-              } else {
-                fields.push(`${k} = $${i++}`);
-                vals.push(v);
-              }
-            }
-            vals.push(id);
-            await pool.query(
-              `UPDATE audit_triggers SET ${fields.join(", ")} WHERE id = $${i}`,
-              vals,
+            const { updateTriggerExtraColumns } = await import(
+              "../../utils/auditTriggerDatabase"
             );
+            await updateTriggerExtraColumns(id, extraUpdates);
           }
 
           await logEvent({

@@ -3,6 +3,21 @@ import { Pool } from "pg";
 
 import { logger } from "../../utils/logger";
 import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
+// All INSERT/UPDATE statements moved to src/utils/tablefDatabase.ts (Task
+// #746) so the secret-leak coverage gate doesn't have to track this route
+// file separately. The route module retains its CREATE TABLE init logic and
+// SELECT queries against the local `pool` below.
+import {
+  archiveTablefKpi,
+  insertTablefKpi,
+  insertTablefPerformance,
+  insertTablefUser,
+  seedTablefDepartment,
+  updateTablefKpi,
+  updateTablefPerformance,
+  updateTablefUser,
+  upsertTablefSnapshot,
+} from "../../utils/tablefDatabase";
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -139,10 +154,7 @@ export async function initTableFTables(): Promise<void> {
         ["BD", "Business Development", "Strategic partnerships"],
       ];
       for (const [id, name, desc] of seed) {
-        await pool.query(
-          "INSERT INTO tablef_departments (department_id, name, description, active) VALUES ($1,$2,$3,true) ON CONFLICT (department_id) DO NOTHING",
-          [id, name, desc],
-        );
+        await seedTablefDepartment(id, name, desc);
       }
       logger.info(`🌱 [TableF] Seeded ${seed.length} default departments`);
     }
@@ -214,52 +226,12 @@ export function createTableFRoutes() {
       const data = redactSensitiveDeep(await c.req.json());
 
       if (data.kpi_id) {
-        const result = await pool.query(
-          `UPDATE tablef_kpis SET 
-            department_id = $1, name = $2, description = $3, category = $4, 
-            unit = $5, target_annual = $6, target_monthly = $7, weight = $8, 
-            owner_email = $9, data_source = $10, calculation_definition = $11, 
-            updated_at = CURRENT_TIMESTAMP
-          WHERE kpi_id = $12 RETURNING *`,
-          [
-            data.department_id,
-            data.name,
-            data.description,
-            data.category,
-            data.unit,
-            data.target_annual,
-            data.target_monthly,
-            data.weight,
-            data.owner_email,
-            data.data_source,
-            data.calculation_definition,
-            data.kpi_id,
-          ],
-        );
-        return c.json({ success: true, kpi: result.rows[0] });
+        const kpi = await updateTablefKpi(data);
+        return c.json({ success: true, kpi });
       } else {
         const kpiId = `KPI-${Date.now()}`;
-        const result = await pool.query(
-          `INSERT INTO tablef_kpis 
-            (kpi_id, department_id, name, description, category, unit, target_annual, 
-             target_monthly, weight, owner_email, data_source, calculation_definition)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-          [
-            kpiId,
-            data.department_id,
-            data.name,
-            data.description,
-            data.category,
-            data.unit,
-            data.target_annual,
-            data.target_monthly,
-            data.weight,
-            data.owner_email,
-            data.data_source,
-            data.calculation_definition,
-          ],
-        );
-        return c.json({ success: true, kpi: result.rows[0] });
+        const kpi = await insertTablefKpi(kpiId, data);
+        return c.json({ success: true, kpi });
       }
     } catch (error) {
       logger.error("Error saving KPI:", error);
@@ -270,10 +242,7 @@ export function createTableFRoutes() {
   app.delete("/kpis/:kpiId", async (c) => {
     try {
       const kpiId = c.req.param("kpiId");
-      await pool.query(
-        "UPDATE tablef_kpis SET enabled = false, updated_at = CURRENT_TIMESTAMP WHERE kpi_id = $1",
-        [kpiId],
-      );
+      await archiveTablefKpi(kpiId);
       return c.json({ success: true });
     } catch (error) {
       logger.error("Error archiving KPI:", error);
@@ -357,45 +326,32 @@ export function createTableFRoutes() {
       }
 
       if (existingResult.rows.length > 0) {
-        await pool.query(
-          `UPDATE tablef_performance SET 
-            target = $1, achieved = $2, variance = $3, variance_percent = $4,
-            status = $5, trend = $6, comment = $7, evidence_link = $8,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE kpi_id = $9 AND period_month = $10`,
-          [
-            data.target,
-            data.achieved,
-            variance,
-            variancePercent,
-            status,
-            trend,
-            data.comment,
-            data.evidence_link,
-            data.kpi_id,
-            data.period_month,
-          ],
-        );
+        await updateTablefPerformance({
+          kpi_id: data.kpi_id,
+          period_month: data.period_month,
+          target: data.target,
+          achieved: data.achieved,
+          variance,
+          variance_percent: variancePercent,
+          status,
+          trend,
+          comment: data.comment,
+          evidence_link: data.evidence_link,
+        });
       } else {
-        await pool.query(
-          `INSERT INTO tablef_performance 
-            (kpi_id, department_id, period_month, target, achieved, variance, 
-             variance_percent, status, trend, comment, evidence_link)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [
-            data.kpi_id,
-            data.department_id,
-            data.period_month,
-            data.target,
-            data.achieved,
-            variance,
-            variancePercent,
-            status,
-            trend,
-            data.comment,
-            data.evidence_link,
-          ],
-        );
+        await insertTablefPerformance({
+          kpi_id: data.kpi_id,
+          department_id: data.department_id,
+          period_month: data.period_month,
+          target: data.target,
+          achieved: data.achieved,
+          variance,
+          variance_percent: variancePercent,
+          status,
+          trend,
+          comment: data.comment,
+          evidence_link: data.evidence_link,
+        });
       }
 
       return c.json({
@@ -492,29 +448,18 @@ export function createTableFRoutes() {
         if (copcStatus === "NON_COMPLIANT") aiRiskLevel = "High";
         else if (copcStatus === "AT_RISK") aiRiskLevel = "Medium";
 
-        await pool.query(
-          `INSERT INTO tablef_snapshots 
-            (department_id, period, total_kpis, kpis_met, kpis_improving, kpis_not_met,
-             percent_met, percent_met_or_improving, copc_status, ai_risk_level)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          ON CONFLICT (department_id, period) 
-          DO UPDATE SET 
-            total_kpis = $3, kpis_met = $4, kpis_improving = $5, kpis_not_met = $6,
-            percent_met = $7, percent_met_or_improving = $8, copc_status = $9, 
-            ai_risk_level = $10, calculated_at = CURRENT_TIMESTAMP`,
-          [
-            dept.department_id,
-            period,
-            totalKpis,
-            met,
-            improving,
-            notMet,
-            percentMet,
-            percentMetOrImproving,
-            copcStatus,
-            aiRiskLevel,
-          ],
-        );
+        await upsertTablefSnapshot({
+          department_id: dept.department_id,
+          period,
+          total_kpis: totalKpis,
+          kpis_met: met,
+          kpis_improving: improving,
+          kpis_not_met: notMet,
+          percent_met: percentMet,
+          percent_met_or_improving: percentMetOrImproving,
+          copc_status: copcStatus,
+          ai_risk_level: aiRiskLevel,
+        });
       }
 
       return c.json({
@@ -549,27 +494,23 @@ export function createTableFRoutes() {
       const data = redactSensitiveDeep(await c.req.json());
 
       if (data.user_id) {
-        await pool.query(
-          `UPDATE tablef_users SET 
-            name = $1, email = $2, role = $3, departments = $4, 
-            active = $5, updated_at = CURRENT_TIMESTAMP
-          WHERE user_id = $6`,
-          [
-            data.name,
-            data.email,
-            data.role,
-            data.departments,
-            data.active,
-            data.user_id,
-          ],
-        );
+        await updateTablefUser({
+          user_id: data.user_id,
+          name: data.name,
+          email: data.email,
+          role: data.role,
+          departments: data.departments,
+          active: data.active,
+        });
       } else {
         const userId = `USR-${Date.now()}`;
-        await pool.query(
-          `INSERT INTO tablef_users (user_id, name, email, role, departments)
-          VALUES ($1, $2, $3, $4, $5)`,
-          [userId, data.name, data.email, data.role, data.departments || []],
-        );
+        await insertTablefUser({
+          user_id: userId,
+          name: data.name,
+          email: data.email,
+          role: data.role,
+          departments: data.departments,
+        });
       }
 
       return c.json({ success: true });

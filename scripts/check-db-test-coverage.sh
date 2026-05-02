@@ -82,6 +82,16 @@ COMPANION_TESTS["src/utils/eventLogsDatabase.ts"]="src/utils/redactSensitiveFiel
 # canonical companion test lives under tests/ and is auto-discovered by
 # `npm test`.
 COMPANION_TESTS["src/utils/aiCallMetricsPreviewBreadcrumb.ts"]="tests/aiCallMetricsPreviewBreadcrumb.test.ts"
+# Task #746 — INSERT/UPDATE statements that previously lived inline in
+# src/mastra/routes/tablefRoutes.ts, src/mastra/routes/tablefApiRoutes.ts
+# and src/mastra/routes/exportDownloadRoutes.ts moved into dedicated
+# *Database.ts modules. The historical companion secret-leak tests still
+# live alongside the route files (they patch `pg.Pool.prototype.query`
+# globally, so the writes are captured wherever they originate). Map the
+# new DB-module writers to those existing tests rather than duplicating
+# them — Task #607 will backfill DB-module-direct tests later.
+COMPANION_TESTS["src/utils/tablefDatabase.ts"]="src/mastra/routes/tablefRoutes.test.ts"
+COMPANION_TESTS["src/utils/recentDownloadsDatabase.ts"]="src/mastra/routes/exportDownloadRoutes.test.ts"
 
 # ----------------------------------------------------------------------------
 # Grandfathered modules — must eventually receive a secret-leak test.

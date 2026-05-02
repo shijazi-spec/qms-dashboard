@@ -1,27 +1,15 @@
-import pg from "pg";
-const { Pool } = pg;
 import {
   getSessionUser,
   unauthorizedResponse,
 } from "../../utils/rbacMiddleware";
 import { logger } from "../../utils/logger";
 import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-let tableReady = false;
-
-async function ensureTable(): Promise<void> {
-  if (tableReady) return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS user_recent_downloads (
-      user_id INTEGER PRIMARY KEY,
-      entries  JSONB    NOT NULL DEFAULT '[]',
-      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `);
-  tableReady = true;
-}
+import {
+  clearRecentDownloads,
+  ensureRecentDownloadsTable,
+  getRecentDownloads,
+  upsertRecentDownloads,
+} from "../../utils/recentDownloadsDatabase";
 
 export const exportDownloadRoutes = [
   {
@@ -33,12 +21,8 @@ export const exportDownloadRoutes = [
         if (!user) return unauthorizedResponse(c);
         if (!user.userId) return c.json({ entries: [] });
         try {
-          await ensureTable();
-          const result = await pool.query(
-            "SELECT entries FROM user_recent_downloads WHERE user_id = $1",
-            [user.userId],
-          );
-          const entries = result.rows.length > 0 ? result.rows[0].entries : [];
+          await ensureRecentDownloadsTable();
+          const entries = await getRecentDownloads(user.userId);
           return c.json({ entries });
         } catch (error) {
           logger.error({ err: error }, "[ExportDownloads] GET error");
@@ -64,15 +48,9 @@ export const exportDownloadRoutes = [
           // misbehaving caller could otherwise drop a `password_hash`,
           // `access_token`, JWT or `ghp_…` PAT into a nested field where it
           // would survive verbatim into Postgres.
-          const safeEntries = redactSensitiveDeep(entries);
-          await ensureTable();
-          await pool.query(
-            `INSERT INTO user_recent_downloads (user_id, entries, updated_at)
-             VALUES ($1, $2::jsonb, NOW())
-             ON CONFLICT (user_id) DO UPDATE
-             SET entries = $2::jsonb, updated_at = NOW()`,
-            [user.userId, JSON.stringify(safeEntries)],
-          );
+          const safeEntries = redactSensitiveDeep(entries) as unknown[];
+          await ensureRecentDownloadsTable();
+          await upsertRecentDownloads(user.userId, safeEntries);
           return c.json({ success: true });
         } catch (error) {
           logger.error({ err: error }, "[ExportDownloads] POST error");
@@ -90,11 +68,8 @@ export const exportDownloadRoutes = [
         if (!user) return unauthorizedResponse(c);
         if (!user.userId) return c.json({ success: true });
         try {
-          await ensureTable();
-          await pool.query(
-            "DELETE FROM user_recent_downloads WHERE user_id = $1",
-            [user.userId],
-          );
+          await ensureRecentDownloadsTable();
+          await clearRecentDownloads(user.userId);
           return c.json({ success: true });
         } catch (error) {
           logger.error({ err: error }, "[ExportDownloads] DELETE error");

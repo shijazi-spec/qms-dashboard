@@ -982,4 +982,38 @@ export async function recordCAPAEffectiveness(
   return res.rows[0] || null;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Bulk status updates (Task #746)
+//
+// Moved out of `src/mastra/routes/qmsEnhancedRoutes.ts` so all
+// nonconformance/CAPA writes live next to the rest of the QMS persistence
+// layer and the secret-leak coverage gate doesn't have to track that route
+// file separately.
+// ──────────────────────────────────────────────────────────────────────────────
+export async function bulkUpdateNCStatus(
+  ids: number[],
+  status: string,
+): Promise<{ id: number; status: string }[]> {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(",");
+  const result = await pool.query(
+    `UPDATE nonconformance_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
+    [status, ...ids],
+  );
+  return result.rows;
+}
+
+export async function bulkUpdateCAPAStatus(
+  ids: number[],
+  status: string,
+): Promise<{ id: number; status: string }[]> {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(",");
+  const result = await pool.query(
+    `UPDATE capa_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
+    [status, ...ids],
+  );
+  return result.rows;
+}
+
 export { pool as qmsPool };
