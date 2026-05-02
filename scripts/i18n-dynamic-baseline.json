@@ -7,10 +7,6 @@
     },
     {
       "snippet": "t(k, v) : k;",
-      "source": "dashboard/ai-approvals.html (inline <script>)"
-    },
-    {
-      "snippet": "t(k, v) : k;",
       "source": "dashboard/ai-ops.html (inline <script>)"
     },
     {

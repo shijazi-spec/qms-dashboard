@@ -248,7 +248,38 @@
 
 <script>
 (function () {
-    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+    // Task #751: this helper used to forward its first argument straight
+    // to the translator (a t-of-variable shape), but the i18n guardrail
+    // in scripts/check-i18n.cjs cannot statically verify that pattern —
+    // which means a missing Arabic key could silently regress the page
+    // for ar-locale users. We now dispatch by literal key below so every
+    // translator call site is a string literal the gate can validate
+    // against en.json + ar.json. To add a new dynamic message, add the
+    // case below AND the matching entry under `dyn.ai_approvals` in
+    // dashboard/i18n/en.json + dashboard/i18n/ar.json.
+    const _t = (k, v) => {
+        if (!window.WalaPlusI18n) return k;
+        switch (k) {
+            case 'dyn.ai_approvals.no_approvals':
+                return WalaPlusI18n.t('dyn.ai_approvals.no_approvals', v);
+            case 'dyn.ai_approvals.prompt_rejection_reason':
+                return WalaPlusI18n.t('dyn.ai_approvals.prompt_rejection_reason', v);
+            case 'dyn.ai_approvals.reason_required':
+                return WalaPlusI18n.t('dyn.ai_approvals.reason_required', v);
+            case 'dyn.ai_approvals.loading':
+                return WalaPlusI18n.t('dyn.ai_approvals.loading', v);
+            case 'dyn.ai_approvals.action_not_found_title':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_title', v);
+            case 'dyn.ai_approvals.action_not_found_body':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_body', v);
+            case 'dyn.ai_approvals.failed_load':
+                return WalaPlusI18n.t('dyn.ai_approvals.failed_load', v);
+            case 'dyn.ai_approvals.processing':
+                return WalaPlusI18n.t('dyn.ai_approvals.processing', v);
+            default:
+                return k;
+        }
+    };
     var listEl = document.getElementById('approvalsList');
     var fltStatus = document.getElementById('fltStatus');
     var fltRisk = document.getElementById('fltRisk');
