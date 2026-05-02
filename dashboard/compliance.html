@@ -157,6 +157,7 @@
                     <div id="regulationsList" class="divide-y divide-gray-200">
                         <div class="p-4 text-center text-gray-400">Loading regulations...</div>
                     </div>
+                    <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
                 </div>
 
                 <div class="bg-white rounded-lg shadow">
@@ -506,8 +507,29 @@
             `).join('');
         }
 
+        // Cached current-user role used to gate the regulation document
+        // upload / replace / remove buttons. Filled by loadCurrentUser()
+        // and re-checked by canManageRegulationDocs() so the UI never
+        // shows an action the API would refuse.
+        let currentUserRole = null;
+        const REGULATION_DOC_ROLES = ['admin', 'grc_manager'];
+        function canManageRegulationDocs() {
+            return REGULATION_DOC_ROLES.includes(currentUserRole);
+        }
+        async function loadCurrentUser() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (!res.ok) { currentUserRole = null; return; }
+                const data = await res.json();
+                currentUserRole = (data && data.user && data.user.role) || null;
+            } catch (_e) {
+                currentUserRole = null;
+            }
+        }
+
         async function loadRegulations() {
             try {
+                if (currentUserRole === null) await loadCurrentUser();
                 const res = await fetch('/api/compliance/regulations');
                 const data = await res.json();
                 regulations = data.regulations || [];
@@ -526,6 +548,7 @@
                 return;
             }
 
+            const canManage = canManageRegulationDocs();
             container.innerHTML = regs.map(r => {
                 const src = r.source_url ? String(r.source_url).trim() : '';
                 const safeSrc = src && /^https?:\/\//i.test(src) ? src : '';
@@ -538,6 +561,39 @@
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                        </a>`
                     : '';
+                const hasDoc = !!r.document_path;
+                const docHref = '/api/compliance/regulations/' + encodeURIComponent(r.id) + '/document';
+                const docTitle = r.document_filename
+                    ? r.document_filename + (r.document_size ? ' (' + Math.round(r.document_size / 1024) + ' KB)' : '')
+                    : 'Uploaded document';
+                const docLink = hasDoc
+                    ? `<a href="${escAttr(docHref)}" target="_blank" rel="noopener noreferrer"
+                          class="text-xs text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-1"
+                          data-testid="link-regulation-document-${escAttr(r.regulation_code)}"
+                          title="${escAttr(docTitle)}">
+                          View document
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                       </a>`
+                    : '';
+                const uploadBtn = canManage
+                    ? `<button type="button"
+                          data-on-click="triggerRegulationDocUpload"
+                          data-args="[${r.id},&quot;${escAttr(r.regulation_code)}&quot;]"
+                          class="text-xs ${hasDoc ? 'text-amber-700 hover:text-amber-900' : 'text-blue-700 hover:text-blue-900'} hover:underline inline-flex items-center gap-1"
+                          data-testid="button-regulation-document-${hasDoc ? 'replace' : 'upload'}-${escAttr(r.regulation_code)}">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12"/></svg>
+                          ${hasDoc ? 'Replace document' : 'Upload document'}
+                       </button>`
+                    : '';
+                const removeBtn = canManage && hasDoc
+                    ? `<button type="button"
+                          data-on-click="removeRegulationDoc"
+                          data-args="[${r.id},&quot;${escAttr(r.regulation_code)}&quot;]"
+                          class="text-xs text-red-600 hover:text-red-800 hover:underline inline-flex items-center gap-1"
+                          data-testid="button-regulation-document-remove-${escAttr(r.regulation_code)}">
+                          Remove
+                       </button>`
+                    : '';
                 return `
                 <div class="p-4 hover:bg-gray-50 flex justify-between items-center" data-testid="row-regulation-${escAttr(r.regulation_code)}">
                     <div class="flex items-center gap-4">
@@ -549,6 +605,9 @@
                             <div class="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
                                 <span>${r.regulation_code} | ${r.issuing_body || 'Unknown'}</span>
                                 ${sourceLink}
+                                ${docLink}
+                                ${uploadBtn}
+                                ${removeBtn}
                             </div>
                         </div>
                     </div>
@@ -722,6 +781,95 @@
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
         }
+
+        // === Per-regulation document upload (PDF only, ≤25MB) =============
+        // The visible button has no native file input; we open the shared
+        // hidden <input> and remember which regulation it belongs to.
+        let pendingRegulationDocId = null;
+        let pendingRegulationDocCode = null;
+
+        function triggerRegulationDocUpload(regulationId, regulationCode) {
+            if (!canManageRegulationDocs()) {
+                alert('Only admins or GRC managers can upload regulation documents.');
+                return;
+            }
+            const input = document.getElementById('regulationDocFileInput');
+            if (!input) return;
+            pendingRegulationDocId = regulationId;
+            pendingRegulationDocCode = regulationCode;
+            input.value = '';
+            input.click();
+        }
+
+        async function handleRegulationDocFileChange(event) {
+            const input = event.target;
+            const file = input && input.files && input.files[0];
+            const regulationId = pendingRegulationDocId;
+            const regulationCode = pendingRegulationDocCode;
+            pendingRegulationDocId = null;
+            pendingRegulationDocCode = null;
+            if (!file || !regulationId) return;
+
+            // Client-side guards mirror the server-side rules so we can fail
+            // fast without burning a network round-trip.
+            const isPdf = (file.type === 'application/pdf')
+                || /\.pdf$/i.test(file.name);
+            if (!isPdf) {
+                alert('Only PDF files are allowed.');
+                return;
+            }
+            const MAX = 25 * 1024 * 1024;
+            if (file.size > MAX) {
+                alert('File size exceeds the 25 MB limit.');
+                return;
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const res = await fetch(
+                    '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
+                    { method: 'POST', credentials: 'same-origin', body: fd }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('Upload failed for ' + regulationCode + ': ' + (data.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                await loadRegulations();
+            } catch (err) {
+                alert('Network error while uploading document.');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+
+        async function removeRegulationDoc(regulationId, regulationCode) {
+            if (!canManageRegulationDocs()) {
+                alert('Only admins or GRC managers can remove regulation documents.');
+                return;
+            }
+            if (!confirm('Remove the uploaded document for ' + regulationCode + '?')) return;
+            try {
+                const res = await fetch(
+                    '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
+                    { method: 'DELETE', credentials: 'same-origin' }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('Remove failed: ' + (data.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                await loadRegulations();
+            } catch (err) {
+                alert('Network error while removing document.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const input = document.getElementById('regulationDocFileInput');
+            if (input) input.addEventListener('change', handleRegulationDocFileChange);
+        });
 
         async function submitObligation(event) {
             event.preventDefault();

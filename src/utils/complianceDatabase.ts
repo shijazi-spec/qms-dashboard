@@ -25,6 +25,11 @@ export interface Regulation {
   status: "active" | "pending" | "superseded" | "retired";
   version?: string;
   source_url?: string;
+  document_path?: string | null;
+  document_filename?: string | null;
+  document_size?: number | null;
+  document_uploaded_at?: Date | null;
+  document_uploaded_by?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -227,6 +232,24 @@ export async function initComplianceTables(): Promise<void> {
     `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`,
   );
 
+  // Per-regulation uploaded official document (one PDF per row, replace on
+  // re-upload). Added as nullable columns so existing rows keep working.
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_path TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_filename TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_size BIGINT`,
+  );
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_uploaded_at TIMESTAMP`,
+  );
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_uploaded_by VARCHAR(255)`,
+  );
+
   await seedDefaultRegulations();
   await seedPDPLObligations();
   await seedSAMAObligations();
@@ -416,6 +439,36 @@ export async function createRegulation(reg: Regulation): Promise<Regulation> {
     ],
   );
 
+  return result.rows[0];
+}
+
+export async function updateRegulationDocument(
+  id: number,
+  fields: {
+    document_path: string | null;
+    document_filename: string | null;
+    document_size: number | null;
+    uploaded_by: string | null;
+  },
+): Promise<Regulation | undefined> {
+  const result = await pool.query(
+    `UPDATE regulations
+        SET document_path        = $2,
+            document_filename    = $3,
+            document_size        = $4,
+            document_uploaded_at = CASE WHEN $2::text IS NULL THEN NULL ELSE NOW() END,
+            document_uploaded_by = $5,
+            updated_at           = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [
+      id,
+      fields.document_path,
+      fields.document_filename,
+      fields.document_size,
+      fields.uploaded_by,
+    ],
+  );
   return result.rows[0];
 }
 

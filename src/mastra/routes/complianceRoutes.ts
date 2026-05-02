@@ -146,6 +146,269 @@ export const complianceRoutes = [
     },
   },
   {
+    path: "/api/compliance/regulations/:id/document",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, ["admin", "grc_manager"]);
+          if (!sessionUser) {
+            // Distinguish unauth vs forbidden so the UI can react usefully.
+            const { getSessionUser } = await import("../../utils/rbacMiddleware");
+            return getSessionUser(c)
+              ? forbiddenResponse(
+                  c,
+                  "Only admins or GRC managers can upload regulation documents",
+                )
+              : unauthorizedResponse(c);
+          }
+
+          const logger = mastra?.getLogger();
+          const {
+            getRegulationById,
+            updateRegulationDocument,
+            initComplianceTables,
+          } = await import("../../utils/complianceDatabase");
+          const { resolveGenericId } = await import("../../utils/riskDatabase");
+          const { validateFile, saveUploadedFile, deleteUploadedFile } =
+            await import("../../utils/fileUpload");
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await initComplianceTables();
+
+          const id = await resolveGenericId(c.req.param("id"), "regulations");
+          if (!id) return c.json({ error: "Regulation not found" }, 404);
+          const existing = await getRegulationById(id);
+          if (!existing) return c.json({ error: "Regulation not found" }, 404);
+
+          const formData = await c.req.formData();
+          const file = formData.get("file");
+          if (!file || !(file instanceof File))
+            return c.json({ error: "No file provided" }, 400);
+
+          // PDF only, max 25 MB. validateFile already enforces 25 MB and the
+          // .pdf extension is part of its allow-list, but we also force the
+          // mime type here so DOCX/PNG/etc are rejected even though the
+          // shared util permits them for other uploaders.
+          const ext = (file.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase();
+          if (ext !== ".pdf" || file.type !== "application/pdf") {
+            return c.json(
+              { error: "Only PDF files are allowed (max 25 MB)" },
+              400,
+            );
+          }
+          const validation = validateFile(file.name, file.size, file.type);
+          if (!validation.valid)
+            return c.json({ error: validation.error }, 400);
+
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const fileInfo = await saveUploadedFile(
+            buffer,
+            file.name,
+            file.type,
+          );
+
+          const updated = await updateRegulationDocument(id, {
+            document_path: fileInfo.filePath,
+            document_filename: fileInfo.fileName,
+            document_size: fileInfo.fileSize,
+            uploaded_by: sessionUser.email,
+          });
+
+          // Best-effort: drop the previous file now that the row points at
+          // the new one. Failures are non-fatal (orphaned files only).
+          if (
+            existing.document_path &&
+            existing.document_path !== fileInfo.filePath
+          ) {
+            try {
+              deleteUploadedFile(existing.document_path);
+            } catch {
+              // ignore
+            }
+          }
+
+          logger?.info(
+            "📎 [ComplianceAPI] POST /api/compliance/regulations/:id/document",
+            { id, by: sessionUser.email, size: fileInfo.fileSize },
+          );
+
+          await logEvent({
+            entityType: "REGULATION",
+            entityId: id.toString(),
+            actionType: "UPDATE",
+            description: `Regulation document uploaded for ${existing.regulation_code}: ${fileInfo.fileName}`,
+            newValue: JSON.stringify({
+              document_filename: fileInfo.fileName,
+              document_size: fileInfo.fileSize,
+            }),
+            userName: sessionUser.email,
+            severity: "INFO",
+            module: "compliance_tracker",
+          });
+
+          return c.json({ success: true, regulation: updated });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] Error uploading regulation document:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to upload regulation document" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/compliance/regulations/:id/document",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const { getSessionUser, hasValidAdminApiKey } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c) && !hasValidAdminApiKey(c)) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+
+          const { getRegulationById, initComplianceTables } =
+            await import("../../utils/complianceDatabase");
+          const { resolveGenericId } = await import("../../utils/riskDatabase");
+          const { getUploadedFile } = await import("../../utils/fileUpload");
+          await initComplianceTables();
+
+          const id = await resolveGenericId(c.req.param("id"), "regulations");
+          if (!id) return c.json({ error: "Regulation not found" }, 404);
+          const reg = await getRegulationById(id);
+          if (!reg) return c.json({ error: "Regulation not found" }, 404);
+          if (!reg.document_path)
+            return c.json({ error: "No document uploaded" }, 404);
+
+          const file = getUploadedFile(reg.document_path);
+          if (!file)
+            return c.json(
+              { error: "Document file is missing on disk" },
+              404,
+            );
+
+          // Sanitise the user-supplied original filename before echoing it
+          // back in Content-Disposition: strip CR/LF/quote (header injection)
+          // and path separators (so a malicious upload named
+          // "../../etc/passwd" cannot suggest a file-system path to the
+          // downloading client), and force a non-empty .pdf default.
+          const rawName =
+            reg.document_filename || file.fileName || "regulation.pdf";
+          const downloadName =
+            rawName
+              .replace(/[\r\n"\\\/]/g, "")
+              .replace(/^\.+/, "")
+              .trim() || "regulation.pdf";
+          return new Response(file.buffer, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/pdf",
+              "Content-Length": String(file.buffer.length),
+              "Content-Disposition": `inline; filename="${downloadName}"`,
+              "Cache-Control": "private, max-age=0, no-cache",
+            },
+          });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] Error serving regulation document:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to fetch regulation document" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/compliance/regulations/:id/document",
+    method: "DELETE" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, ["admin", "grc_manager"]);
+          if (!sessionUser) {
+            const { getSessionUser } = await import("../../utils/rbacMiddleware");
+            return getSessionUser(c)
+              ? forbiddenResponse(
+                  c,
+                  "Only admins or GRC managers can remove regulation documents",
+                )
+              : unauthorizedResponse(c);
+          }
+
+          const logger = mastra?.getLogger();
+          const {
+            getRegulationById,
+            updateRegulationDocument,
+            initComplianceTables,
+          } = await import("../../utils/complianceDatabase");
+          const { resolveGenericId } = await import("../../utils/riskDatabase");
+          const { deleteUploadedFile } = await import("../../utils/fileUpload");
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await initComplianceTables();
+
+          const id = await resolveGenericId(c.req.param("id"), "regulations");
+          if (!id) return c.json({ error: "Regulation not found" }, 404);
+          const existing = await getRegulationById(id);
+          if (!existing) return c.json({ error: "Regulation not found" }, 404);
+          if (!existing.document_path)
+            return c.json({ success: true, regulation: existing });
+
+          const previousPath = existing.document_path;
+          const previousName = existing.document_filename;
+          const updated = await updateRegulationDocument(id, {
+            document_path: null,
+            document_filename: null,
+            document_size: null,
+            uploaded_by: null,
+          });
+          try {
+            deleteUploadedFile(previousPath);
+          } catch {
+            // ignore disk-side failure
+          }
+
+          logger?.info(
+            "🗑️  [ComplianceAPI] DELETE /api/compliance/regulations/:id/document",
+            { id, by: sessionUser.email },
+          );
+
+          await logEvent({
+            entityType: "REGULATION",
+            entityId: id.toString(),
+            actionType: "UPDATE",
+            description: `Regulation document removed for ${existing.regulation_code}: ${previousName || "(unknown)"}`,
+            userName: sessionUser.email,
+            severity: "INFO",
+            module: "compliance_tracker",
+          });
+
+          return c.json({ success: true, regulation: updated });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] Error deleting regulation document:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to remove regulation document" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/compliance/obligations",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
