@@ -560,6 +560,39 @@ const _dashboardApiRoutesRaw = [
           }
           const userEmail = session?.email || "admin-key";
           lastTriggerTime.value = now;
+
+          // Read the user-selected date filter from the request body (sent
+          // by runManualAudit() on the dashboard). Validate light-weight —
+          // only YYYY-MM-DD strings are accepted; anything else is dropped.
+          let bodyDateFilters: any = null;
+          try {
+            const body = await c.req.json().catch(() => null);
+            const raw = body?.dateFilters;
+            if (raw && typeof raw === "object") {
+              const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+              const clean = (v: any) =>
+                typeof v === "string" && dateRe.test(v) ? v : null;
+              bodyDateFilters = {
+                created: {
+                  start: clean(raw.created?.start),
+                  end: clean(raw.created?.end),
+                },
+                modified: {
+                  start: clean(raw.modified?.start),
+                  end: clean(raw.modified?.end),
+                },
+              };
+              const any =
+                bodyDateFilters.created.start ||
+                bodyDateFilters.created.end ||
+                bodyDateFilters.modified.start ||
+                bodyDateFilters.modified.end;
+              if (!any) bodyDateFilters = null;
+            }
+          } catch (_) {
+            bodyDateFilters = null;
+          }
+
           try {
             await inngest.send({
               name: "replit/cron.trigger",
@@ -568,6 +601,7 @@ const _dashboardApiRoutesRaw = [
                 manualTrigger: true,
                 triggeredBy: userEmail,
                 triggeredAt: new Date().toISOString(),
+                dateFilters: bodyDateFilters,
               },
             });
           } catch (inngestError) {
@@ -579,7 +613,7 @@ const _dashboardApiRoutesRaw = [
             try {
               const { runDirectAudit } =
                 await import("../../utils/directAuditRunner");
-              await runDirectAudit(logger);
+              await runDirectAudit(logger, bodyDateFilters || undefined);
             } catch (err) {
               safeLogger.error("Direct audit execution error:", err);
             }
