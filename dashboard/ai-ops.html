@@ -14,6 +14,11 @@
     @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
     .stat-card { @apply bg-white rounded-xl shadow-sm border p-5; }
     .tab-active { border-bottom: 2px solid #1E3A8A; color: #1E3A8A; }
+    /* Fixed-height container for the prune-cron sparkline canvas. Replaces
+       a former inline height attribute so the page complies with the CSP
+       style-src policy (no inline style attributes are allowed — see
+       scripts/check-no-inline-styles.sh / tests/noInlineStyles.test.ts). */
+    .chart-canvas-wrap { height: 140px; }
   </style>
   <link rel="stylesheet" href="/css/navigation.css">
     <script src="/js/i18n.js?v=1.0"></script>
@@ -838,7 +843,7 @@
               <div class="text-lg font-mono font-semibold text-gray-900" data-testid="text-metrics-prune-history-peak">—</div>
             </div>
           </div>
-          <div class="border rounded bg-white p-3 mb-3" style="height: 140px;">
+          <div class="border rounded bg-white p-3 mb-3 chart-canvas-wrap">
             <canvas id="metrics-prune-history-chart" data-testid="chart-metrics-prune-history" aria-label="Sparkline of rows deleted per daily prune cron pass"></canvas>
           </div>
           <div class="overflow-x-auto">
