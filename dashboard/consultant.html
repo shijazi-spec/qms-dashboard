@@ -1755,6 +1755,34 @@
      *    before they click Approve.
      * ------------------------------------------------------------------ */
     var APPROVAL_POLL_MS = 30000;
+    var APPROVAL_META_TICK_MS = 15000;
+
+    /* ------------------------------------------------------------------ *
+     *  Task #733 — small "Updated <relative time>" hint shown next to
+     *  the prior-viewers strip. Without it, a Quality Manager who keeps
+     *  the chat open has no way to tell whether the chips they're seeing
+     *  are 5 seconds old or 5 minutes old (the silent poll above is
+     *  intentionally invisible). The relative format ("just now", "30s
+     *  ago", "2m ago"…) reads naturally in a passive indicator and the
+     *  full local-time stamp is exposed via the title attribute for
+     *  reviewers who want a precise value.
+     * ------------------------------------------------------------------ */
+    function formatUpdatedRelative(ts) {
+        // Use floor-based bucketing so the label only advances after a full
+        // unit has elapsed (e.g. "1m ago" appears at 60s, not 30s). This
+        // matches typical "X units have elapsed" reading and avoids the
+        // mild surprise of seeing a minute label half-way through the
+        // first minute of polling.
+        var diff = Math.max(0, Date.now() - ts);
+        var s = Math.floor(diff / 1000);
+        if (s < 5) return 'just now';
+        if (s < 60) return s + 's ago';
+        var m = Math.floor(s / 60);
+        if (m < 60) return m + 'm ago';
+        var h = Math.floor(m / 60);
+        if (h < 24) return h + 'h ago';
+        return new Date(ts).toLocaleString();
+    }
 
     function silentRefreshApprovalCard(code, container) {
         if (!document.body.contains(container)) return;
@@ -1771,10 +1799,12 @@
                     return;
                 }
                 // Still pending — patch only the metadata strip in place.
+                // Pass Date.now() so the embedded refresh-meta hint resets
+                // to "just now" on every successful silent poll.
                 var pv = container.querySelector('[data-prior-viewers]');
                 if (pv) {
                     var tmp = document.createElement('div');
-                    tmp.innerHTML = renderPriorViewers(data.prior_viewers);
+                    tmp.innerHTML = renderPriorViewers(data.prior_viewers, Date.now());
                     var fresh = tmp.firstElementChild;
                     if (fresh) pv.replaceWith(fresh);
                 }
@@ -1793,9 +1823,29 @@
         });
     }
 
+    /* ------------------------------------------------------------------ *
+     *  Task #733 — keep the "Updated <time>" text fresh between polls so
+     *  the reviewer sees it age from "just now" → "30s ago" → "1m ago"
+     *  without having to wait for the next 30s silent refresh. We only
+     *  rewrite the textContent (not innerHTML) so the title attribute
+     *  with the precise timestamp stays intact, and the change is a pure
+     *  in-place text swap so it cannot trigger layout shift.
+     * ------------------------------------------------------------------ */
+    function tickApprovalRefreshMetas() {
+        document.querySelectorAll('[data-refresh-meta][data-refreshed-at]').forEach(function (el) {
+            var ts = parseInt(el.getAttribute('data-refreshed-at'), 10);
+            if (!ts) return;
+            el.textContent = 'Updated ' + formatUpdatedRelative(ts);
+        });
+    }
+
     setInterval(pollPendingApprovalCards, APPROVAL_POLL_MS);
+    setInterval(tickApprovalRefreshMetas, APPROVAL_META_TICK_MS);
     document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') pollPendingApprovalCards();
+        if (document.visibilityState === 'visible') {
+            pollPendingApprovalCards();
+            tickApprovalRefreshMetas();
+        }
     });
 
     function riskBadgeClass(risk) {
@@ -1835,7 +1885,7 @@
      *  so a Quality Manager keeping the chat open sees other reviewers
      *  appear without needing to act on the card first.
      * ------------------------------------------------------------------ */
-    function renderPriorViewers(viewers) {
+    function renderPriorViewers(viewers, refreshedAt) {
         // Always emit the wrapper element (even when empty) so the silent
         // poll in Task #631 can grow the chip strip from zero in place,
         // without having to insert a brand-new node into the card body.
@@ -1859,8 +1909,25 @@
                 chips +
                 (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '');
         }
-        return '<div class="flex flex-wrap items-center gap-1' + (hasViewers ? ' mb-2' : '') + '" data-prior-viewers data-testid="section-prior-viewers">' +
+        // Task #733 — append a small, right-aligned "Updated <relative>"
+        // hint inside the same flex strip so it never adds a new row and
+        // therefore cannot cause vertical layout shift. The hint is only
+        // rendered when the caller provides a refreshedAt timestamp (i.e.
+        // for pending cards being polled); resolved cards render no hint
+        // because they no longer auto-refresh.
+        var metaHtml = '';
+        if (refreshedAt) {
+            var rel = formatUpdatedRelative(refreshedAt);
+            var fullTs = new Date(refreshedAt).toLocaleString();
+            metaHtml = '<span class="ml-auto text-[11px] text-gray-400 shrink-0" ' +
+                'data-refresh-meta data-refreshed-at="' + refreshedAt + '" ' +
+                'title="Last refreshed at ' + escapeHtml(fullTs) + '" ' +
+                'data-testid="text-approval-card-updated">Updated ' + escapeHtml(rel) + '</span>';
+        }
+        var showSpacing = hasViewers || !!refreshedAt;
+        return '<div class="flex flex-wrap items-center gap-1' + (showSpacing ? ' mb-2' : '') + '" data-prior-viewers data-testid="section-prior-viewers">' +
             inner +
+            metaHtml +
             '</div>';
     }
 
@@ -1932,7 +1999,7 @@
               '<div class="text-sm font-medium text-gray-800 mb-1">' + escapeHtml(a.tool_label) + '</div>' +
               '<div class="text-xs text-gray-600 mb-2 bg-gray-50 p-2 rounded border border-gray-100 prose prose-sm max-w-none">' + previewHtml + '</div>' +
               (refsHtml ? '<div class="mb-2"><div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Compliance references</div>' + refsHtml + '</div>' : '') +
-              renderPriorViewers(data.prior_viewers) +
+              renderPriorViewers(data.prior_viewers, a.status === 'pending' ? Date.now() : null) +
               '<div class="flex items-center justify-between border-t border-gray-100 pt-2 mt-1">' +
                 '<div class="text-xs text-gray-500">' +
                   'Requested by ' + escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown') +
