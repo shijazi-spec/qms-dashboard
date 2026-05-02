@@ -33,7 +33,7 @@ const FRAUD_WRITE_ROLES: UserRole[] = [
 
 async function requireFraudReadAuth(
   c: any,
-): Promise<{ ok: boolean; res?: any }> {
+): Promise<{ ok: boolean; res?: any; user?: any }> {
   const {
     getSessionUser,
     requireRoleOrKey,
@@ -44,7 +44,7 @@ async function requireFraudReadAuth(
   if (!session) return { ok: false, res: unauthorizedResponse(c) };
   const allowed = await requireRoleOrKey(c, FRAUD_READ_ROLES);
   if (!allowed) return { ok: false, res: forbiddenResponse(c) };
-  return { ok: true };
+  return { ok: true, user: session };
 }
 
 async function requireFraudWriteAuth(
@@ -97,6 +97,34 @@ function obfuscateRule(row: any): any {
 
 function obfuscateRuleList(rows: any[]): any[] {
   return rows.map(obfuscateRule);
+}
+
+/**
+ * Cross-cutting helper — write a fraud-module audit entry to event_logs.
+ * Failures are swallowed so that audit logging never blocks the API response.
+ * Pass entityName (e.g. "fraud_rules") and a human-readable description.
+ */
+async function auditFraudEvent(params: {
+  actionType: "CREATE" | "UPDATE" | "DELETE" | "EXPORT" | "ESCALATE" | "CLOSE";
+  entityName: string;
+  description: string;
+  userEmail?: string;
+  severity?: "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+}): Promise<void> {
+  try {
+    const { logEvent } = await import("../../utils/eventLogsDatabase");
+    await logEvent({
+      actionType: params.actionType as any,
+      entityType: "SYSTEM" as any,
+      entityName: params.entityName,
+      description: params.description,
+      module: "fraud",
+      severity: params.severity || "INFO",
+      userEmail: params.userEmail,
+    });
+  } catch {
+    // never block API on audit-logging failures
+  }
 }
 
 export const fraudRoutes = [
@@ -264,6 +292,13 @@ export const fraudRoutes = [
             created_by: auth.user?.email ?? "unknown",
           });
 
+          await auditFraudEvent({
+            actionType: "CREATE",
+            entityName: "fraud_rules",
+            description: `Created fraud rule ${created.rule_id} (${created.rule_name})`,
+            userEmail: auth.user?.email,
+          });
+
           return c.json({ rule: obfuscateRule(created) }, 201);
         } catch (error: any) {
           if (
@@ -313,6 +348,12 @@ export const fraudRoutes = [
             updated_by: auth.user?.email ?? "unknown",
           });
           if (!updated) return c.json({ error: "Rule not found" }, 404);
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_rules",
+            description: `Updated fraud rule ${updated.rule_id} (id ${id})`,
+            userEmail: auth.user?.email,
+          });
           return c.json({ rule: obfuscateRule(updated) });
         } catch (error) {
           safeLogger.error(
@@ -355,6 +396,13 @@ export const fraudRoutes = [
 
           const ok = await softDeleteFraudRule(id, auth.user?.email ?? "unknown");
           if (!ok) return c.json({ error: "Rule not found" }, 404);
+          await auditFraudEvent({
+            actionType: "DELETE",
+            entityName: "fraud_rules",
+            description: `Soft-deleted fraud rule (internal id ${id})`,
+            userEmail: auth.user?.email,
+            severity: "WARNING",
+          });
           return c.json({ success: true });
         } catch (error) {
           safeLogger.error(
@@ -368,25 +416,74 @@ export const fraudRoutes = [
   },
 
   // ───────────────────────────────────────────────────────────────────────────
-  // GET /api/fraud/rules/export/pdf — placeholder until cross-cutting commit
-  // (the cross-cutting work item adds the real PDFKit implementation)
+  // GET /api/fraud/rules/export/pdf — PDFKit implementation (cross-cutting)
   // ───────────────────────────────────────────────────────────────────────────
   {
     path: "/api/fraud/rules/export/pdf",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const auth = await requireFraudReadAuth(c);
-        if (!auth.ok) return auth.res;
-        return c.json(
-          {
-            error: "Not yet implemented",
-            message:
-              "PDF export for fraud rules ships in the cross-cutting commit. " +
-              "Use GET /api/fraud/rules to retrieve data, or wait for the PDF endpoint.",
-          },
-          501,
-        );
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getAllFraudRules, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          const { generateFraudPdfReport } = await import(
+            "../../utils/fraudPdfHelper"
+          );
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          const { bufferResponseWithRange } = await import(
+            "../../utils/excelExport"
+          );
+          await initFraudTables();
+          const rules = await getAllFraudRules({});
+          const buf = await generateFraudPdfReport({
+            title: "Fraud Rules Register",
+            subtitle: "PRD-FRD-001 Feature 1",
+            meta: [
+              { label: "Total Rules", value: String(rules.length) },
+              {
+                label: "Misconfigured",
+                value: String(rules.filter((r: any) => r.test_status === "misconfiguration").length),
+              },
+            ],
+            columns: [
+              { key: "rule_id", label: "ID", width: 50 },
+              { key: "rule_name", label: "Rule", width: 130 },
+              { key: "transaction_type", label: "Type", width: 70 },
+              { key: "owner", label: "Owner", width: 70 },
+              { key: "test_status", label: "Status", width: 70 },
+              {
+                key: "next_review",
+                label: "Next Review",
+                width: 70,
+                format: (v) => (v ? String(v).slice(0, 10) : "—"),
+              },
+              { key: "current_setting", label: "Current", width: 60 },
+            ],
+            rows: rules as any,
+            footer: "Generated by WalaPlus QMS Platform — Confidential",
+          });
+          await logEvent({
+            actionType: "EXPORT",
+            entityType: "SYSTEM" as any,
+            entityName: "fraud_rules",
+            description: `Exported ${rules.length} fraud rule(s) to PDF`,
+            module: "fraud",
+            severity: "INFO",
+            userEmail: auth.user?.email,
+          }).catch(() => {});
+          return bufferResponseWithRange(
+            buf,
+            "application/pdf",
+            "fraud_rules.pdf",
+            { range: c.req.header("Range"), "if-range": c.req.header("If-Range") },
+          );
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] export rules PDF failed:", error);
+          return c.json({ error: "Failed to export PDF", details: String(error) }, 500);
+        }
       };
     },
   },
@@ -591,6 +688,16 @@ export const fraudRoutes = [
             ...body,
             created_by: auth.user?.email ?? "unknown",
           });
+          await auditFraudEvent({
+            actionType: "CREATE",
+            entityName: "fraud_incidents",
+            description: `Created fraud incident ${created.incident_code} (${created.severity}/${created.incident_type})`,
+            userEmail: auth.user?.email,
+            severity:
+              created.severity === "P1" || created.severity === "P2"
+                ? "WARNING"
+                : "INFO",
+          });
           return c.json({ incident: obfuscateRule(created) }, 201);
         } catch (error) {
           safeLogger.error(
@@ -641,6 +748,12 @@ export const fraudRoutes = [
             updated_by: auth.user?.email ?? "unknown",
           });
           if (!updated) return c.json({ error: "Incident not found" }, 404);
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_incidents",
+            description: `Updated fraud incident ${updated.incident_code} (id ${id})`,
+            userEmail: auth.user?.email,
+          });
           return c.json({ incident: obfuscateRule(updated) });
         } catch (error) {
           safeLogger.error(
@@ -704,6 +817,13 @@ export const fraudRoutes = [
           if (result.error) {
             return c.json({ error: result.error }, result.code ?? 400);
           }
+          await auditFraudEvent({
+            actionType: "CLOSE",
+            entityName: "fraud_incidents",
+            description: `Closed fraud incident ${result.incident?.incident_code} (id ${id})`,
+            userEmail: auth.user?.email,
+            severity: "INFO",
+          });
           return c.json({ incident: obfuscateRule(result.incident) });
         } catch (error) {
           safeLogger.error(
@@ -716,22 +836,87 @@ export const fraudRoutes = [
     },
   },
 
-  // GET /api/fraud/incidents/export/pdf — placeholder, real PDF in cross-cutting
+  // GET /api/fraud/incidents/export/pdf — PDFKit (cross-cutting)
   {
     path: "/api/fraud/incidents/export/pdf",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const auth = await requireFraudReadAuth(c);
-        if (!auth.ok) return auth.res;
-        return c.json(
-          {
-            error: "Not yet implemented",
-            message:
-              "PDF export for fraud incidents ships in the cross-cutting commit.",
-          },
-          501,
-        );
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getAllFraudIncidents, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          const { generateFraudPdfReport } = await import(
+            "../../utils/fraudPdfHelper"
+          );
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          const { bufferResponseWithRange } = await import(
+            "../../utils/excelExport"
+          );
+          await initFraudTables();
+          const incidents = await getAllFraudIncidents({ limit: 1000 });
+          const buf = await generateFraudPdfReport({
+            title: "Fraud Incident Register",
+            subtitle: "PRD-FRD-001 Feature 2",
+            meta: [
+              { label: "Total Incidents", value: String(incidents.length) },
+              {
+                label: "P1 Open",
+                value: String(
+                  incidents.filter((i: any) => i.severity === "P1" && i.status !== "closed" && i.status !== "resolved").length,
+                ),
+              },
+            ],
+            columns: [
+              { key: "incident_code", label: "Code", width: 60 },
+              {
+                key: "date_detected",
+                label: "Date",
+                width: 60,
+                format: (v) => (v ? String(v).slice(0, 10) : "—"),
+              },
+              { key: "severity", label: "Sev", width: 35 },
+              { key: "incident_type", label: "Type", width: 80 },
+              { key: "status", label: "Status", width: 70 },
+              { key: "affected_customers", label: "Cust.", width: 40, align: "right" },
+              {
+                key: "amount_sar",
+                label: "Amount (SAR)",
+                width: 80,
+                align: "right",
+                format: (v) => (v != null ? Number(v).toLocaleString("en-US") : "—"),
+              },
+              {
+                key: "sama_reported",
+                label: "SAMA",
+                width: 50,
+                format: (v) => (v === true ? "Yes" : v === false ? "No" : "—"),
+              },
+            ],
+            rows: incidents as any,
+            footer: "Generated by WalaPlus QMS Platform — Confidential",
+          });
+          await logEvent({
+            actionType: "EXPORT",
+            entityType: "SYSTEM" as any,
+            entityName: "fraud_incidents",
+            description: `Exported ${incidents.length} fraud incident(s) to PDF`,
+            module: "fraud",
+            severity: "INFO",
+            userEmail: auth.user?.email,
+          }).catch(() => {});
+          return bufferResponseWithRange(
+            buf,
+            "application/pdf",
+            "fraud_incidents.pdf",
+            { range: c.req.header("Range"), "if-range": c.req.header("If-Range") },
+          );
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] export incidents PDF failed:", error);
+          return c.json({ error: "Failed to export PDF", details: String(error) }, 500);
+        }
       };
     },
   },
@@ -818,6 +1003,13 @@ export const fraudRoutes = [
             updated_by: auth.user?.email ?? "unknown",
           });
           if (!updated) return c.json({ error: "Trigger not found" }, 404);
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_escalation_matrix",
+            description: `Updated escalation matrix row ${triggerId}`,
+            userEmail: auth.user?.email,
+            severity: "WARNING",
+          });
           return c.json({ row: obfuscateRule(updated) });
         } catch (error) {
           safeLogger.error(
@@ -982,6 +1174,14 @@ export const fraudRoutes = [
             ...body,
             approved_by: auth.user?.email ?? "unknown",
           });
+          await auditFraudEvent({
+            actionType: "CREATE",
+            entityName: "fraud_country_risk",
+            description: `Created country risk entry ${created.iso_code} (${created.country_name})`,
+            userEmail: auth.user?.email,
+            severity:
+              created.fatf_status === "black_list" ? "WARNING" : "INFO",
+          });
           return c.json({ country: obfuscateRule(created) }, 201);
         } catch (error: any) {
           if (
@@ -1026,6 +1226,14 @@ export const fraudRoutes = [
             auth.user?.email ?? "unknown",
           );
           if (!updated) return c.json({ error: "Country not found" }, 404);
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_country_risk",
+            description: `Updated country risk ${updated.iso_code} (${updated.country_name})`,
+            userEmail: auth.user?.email,
+            severity:
+              updated.fatf_status === "black_list" ? "WARNING" : "INFO",
+          });
           return c.json({ country: obfuscateRule(updated) });
         } catch (error) {
           safeLogger.error(
@@ -1058,22 +1266,82 @@ export const fraudRoutes = [
     },
   },
 
-  // GET /api/fraud/countries/export/pdf — placeholder
+  // GET /api/fraud/countries/export/pdf — PDFKit (cross-cutting)
   {
     path: "/api/fraud/countries/export/pdf",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const auth = await requireFraudReadAuth(c);
-        if (!auth.ok) return auth.res;
-        return c.json(
-          {
-            error: "Not yet implemented",
-            message:
-              "PDF export for country risk ships in the cross-cutting commit.",
-          },
-          501,
-        );
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getAllCountryRisk, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          const { generateFraudPdfReport } = await import(
+            "../../utils/fraudPdfHelper"
+          );
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          const { bufferResponseWithRange } = await import(
+            "../../utils/excelExport"
+          );
+          await initFraudTables();
+          const countries = await getAllCountryRisk({});
+          const buf = await generateFraudPdfReport({
+            title: "Country Risk Assessment",
+            subtitle: "PRD-FRD-001 Feature 3",
+            meta: [
+              { label: "Total Countries", value: String(countries.length) },
+              {
+                label: "FATF Black-list",
+                value: String(countries.filter((c2: any) => c2.fatf_status === "black_list").length),
+              },
+            ],
+            columns: [
+              { key: "iso_code", label: "ISO", width: 35 },
+              { key: "country_name", label: "Country", width: 130 },
+              {
+                key: "fatf_status",
+                label: "FATF",
+                width: 90,
+                format: (v) => String(v || "").replace(/_/g, " "),
+              },
+              { key: "risk_rating", label: "Rating", width: 55 },
+              {
+                key: "bin_status",
+                label: "BIN",
+                width: 90,
+                format: (v) => String(v || "").replace(/_/g, " "),
+              },
+              {
+                key: "edd_required",
+                label: "EDD",
+                width: 35,
+                format: (v) => (v === true ? "Yes" : v === false ? "No" : "—"),
+              },
+            ],
+            rows: countries as any,
+            footer: "Generated by WalaPlus QMS Platform — Confidential",
+          });
+          await logEvent({
+            actionType: "EXPORT",
+            entityType: "SYSTEM" as any,
+            entityName: "fraud_country_risk",
+            description: `Exported ${countries.length} country risk row(s) to PDF`,
+            module: "fraud",
+            severity: "INFO",
+            userEmail: auth.user?.email,
+          }).catch(() => {});
+          return bufferResponseWithRange(
+            buf,
+            "application/pdf",
+            "country_risk.pdf",
+            { range: c.req.header("Range"), "if-range": c.req.header("If-Range") },
+          );
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] export countries PDF failed:", error);
+          return c.json({ error: "Failed to export PDF", details: String(error) }, 500);
+        }
       };
     },
   },
@@ -1143,6 +1411,12 @@ export const fraudRoutes = [
             auth.user?.email ?? "unknown",
           );
           if (!updated) return c.json({ error: "Metric not found" }, 404);
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_kpi_thresholds",
+            description: `Updated KPI threshold for ${metric}`,
+            userEmail: auth.user?.email,
+          });
           return c.json({ threshold: updated });
         } catch (error) {
           safeLogger.error(
@@ -1228,6 +1502,12 @@ export const fraudRoutes = [
           }
           const calc = await autoCalculateKpisForMonth(month);
           const persisted = await upsertFraudKpi(month, calc, auth.user?.email ?? "system:auto-calc");
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_kpis",
+            description: `Auto-calculated KPIs for month ${month}`,
+            userEmail: auth.user?.email,
+          });
           return c.json({ kpi: persisted, source: "auto" });
         } catch (error) {
           safeLogger.error(
@@ -1260,6 +1540,12 @@ export const fraudRoutes = [
             body,
             auth.user?.email ?? "unknown",
           );
+          await auditFraudEvent({
+            actionType: "UPDATE",
+            entityName: "fraud_kpis",
+            description: `Manually upserted KPI snapshot for month ${month}`,
+            userEmail: auth.user?.email,
+          });
           return c.json({ kpi: persisted, source: "manual" });
         } catch (error) {
           safeLogger.error("❌ [FraudAPI] PUT /api/fraud/kpis/:month failed:", error);
@@ -1348,21 +1634,129 @@ export const fraudRoutes = [
     },
   },
 
-  // GET /api/fraud/kpis/export/pdf — placeholder, real PDF in cross-cutting
+  // GET /api/fraud/kpis/export/pdf — PDFKit (cross-cutting)
   {
     path: "/api/fraud/kpis/export/pdf",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const auth = await requireFraudReadAuth(c);
-        if (!auth.ok) return auth.res;
-        return c.json(
-          {
-            error: "Not yet implemented",
-            message: "PDF export for KPIs ships in the cross-cutting commit.",
-          },
-          501,
-        );
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getKpisForRange, getAllKpiThresholds, initFraudTables } =
+            await import("../../utils/fraudDatabase");
+          const { generateFraudPdfReport } = await import(
+            "../../utils/fraudPdfHelper"
+          );
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          const { bufferResponseWithRange } = await import(
+            "../../utils/excelExport"
+          );
+          await initFraudTables();
+
+          const url = new URL(c.req.url);
+          const monthsParam = parseInt(
+            url.searchParams.get("months") || "12",
+            10,
+          );
+          const months = Math.max(
+            1,
+            Math.min(36, isNaN(monthsParam) ? 12 : monthsParam),
+          );
+          const now = new Date();
+          const start = new Date(
+            now.getFullYear(),
+            now.getMonth() - (months - 1),
+            1,
+          );
+          const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+          const endKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+          const kpis = await getKpisForRange(startKey, endKey);
+          const thresholds = await getAllKpiThresholds();
+
+          const buf = await generateFraudPdfReport({
+            title: "Fraud KPI Dashboard",
+            subtitle: `PRD-FRD-001 Feature 5 — ${startKey} to ${endKey}`,
+            meta: [
+              { label: "Months Reported", value: String(kpis.length) },
+              {
+                label: "KPI Thresholds Defined",
+                value: String(thresholds.length),
+              },
+            ],
+            columns: [
+              { key: "month", label: "Month", width: 60 },
+              {
+                key: "total_incidents",
+                label: "Total Inc.",
+                width: 60,
+                align: "right",
+              },
+              { key: "p1_incidents", label: "P1", width: 35, align: "right" },
+              { key: "p2_incidents", label: "P2", width: 35, align: "right" },
+              {
+                key: "fraud_amount_attempted",
+                label: "Attempt SAR",
+                width: 75,
+                align: "right",
+                format: (v) => (v == null ? "—" : Number(v).toLocaleString()),
+              },
+              {
+                key: "fraud_amount_prevented",
+                label: "Prev SAR",
+                width: 75,
+                align: "right",
+                format: (v) => (v == null ? "—" : Number(v).toLocaleString()),
+              },
+              {
+                key: "fraud_amount_lost",
+                label: "Loss SAR",
+                width: 75,
+                align: "right",
+                format: (v) => (v == null ? "—" : Number(v).toLocaleString()),
+              },
+              {
+                key: "sama_reported_within_24h",
+                label: "SAMA OK",
+                width: 60,
+                align: "right",
+              },
+              {
+                key: "sama_reported_late",
+                label: "SAMA Late",
+                width: 60,
+                align: "right",
+              },
+            ],
+            rows: kpis as any,
+            footer: "Generated by WalaPlus QMS Platform — Confidential",
+          });
+          await logEvent({
+            actionType: "EXPORT",
+            entityType: "SYSTEM" as any,
+            entityName: "fraud_kpis",
+            description: `Exported ${kpis.length} fraud KPI month(s) to PDF`,
+            module: "fraud",
+            severity: "INFO",
+            userEmail: auth.user?.email,
+          }).catch(() => {});
+          return bufferResponseWithRange(
+            buf,
+            "application/pdf",
+            "fraud_kpis.pdf",
+            {
+              range: c.req.header("Range"),
+              "if-range": c.req.header("If-Range"),
+            },
+          );
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] export KPI PDF failed:", error);
+          return c.json(
+            { error: "Failed to export PDF", details: String(error) },
+            500,
+          );
+        }
       };
     },
   },
