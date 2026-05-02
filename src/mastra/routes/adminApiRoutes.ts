@@ -1023,9 +1023,9 @@ export const adminApiRoutes = [
                   }
                 }
               } catch (joinErr) {
-                console.warn(
-                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing):',
-                  joinErr,
+                logger.warn(
+                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing)',
+                  { error: joinErr instanceof Error ? joinErr.message : String(joinErr) },
                 );
               }
             }

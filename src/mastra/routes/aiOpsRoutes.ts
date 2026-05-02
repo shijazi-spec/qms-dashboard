@@ -2301,9 +2301,9 @@ export const aiOpsRoutes = [
               audit_id,
             });
           } catch (notifyErr) {
-            console.error(
-              "[AI-Ops] metrics-retention prune-now notify error (best-effort):",
-              notifyErr,
+            logger.error(
+              "[AI-Ops] metrics-retention prune-now notify error (best-effort)",
+              { error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr) },
             );
           }
 
