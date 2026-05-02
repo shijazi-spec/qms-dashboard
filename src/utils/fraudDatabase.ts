@@ -240,6 +240,7 @@ export async function initFraudTables(): Promise<void> {
   await seedFraudRules();
   await seedEscalationMatrix();
   await seedCountryRisk();
+  await seedKpiThresholds();
 
   initialized = true;
   logger.info("✅ [FraudDB] Fraud management tables initialized");
@@ -1720,4 +1721,312 @@ export async function getBlackListedCountryCount(): Promise<number> {
     `SELECT COUNT(*)::int AS n FROM fraud_country_risk WHERE fatf_status = 'black_list'`,
   );
   return result.rows[0]?.n ?? 0;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Feature 5 — KPI Dashboard (PRD-FRD-001 §5.5)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Direction of the threshold comparison:
+ *   - "lower_is_better": value > target → warn; value > alert → red
+ *     (e.g. fraud_rate, chargeback_ratio, false_positive_rate)
+ *   - "higher_is_better": value < target → warn; value < alert → red
+ *     (e.g. resolved_within_30d_pct, sama_reports_filed)
+ */
+export type KpiDirection = "lower_is_better" | "higher_is_better";
+
+export interface FraudKpiThreshold {
+  id?: number;
+  metric_name: string;
+  target_value: number;
+  alert_value: number;
+  direction: KpiDirection;
+  updated_by?: string;
+  updated_at?: Date;
+}
+
+export interface FraudKpi {
+  id?: number;
+  month: string; // YYYY-MM-01
+  total_transactions?: number | null;
+  total_rejections?: number | null;
+  fraud_rate_pct?: number | null;
+  false_positive_rate_pct?: number | null;
+  confirmed_incidents?: number | null;
+  fraud_loss_sar?: number | null;
+  chargeback_count?: number | null;
+  chargeback_amount_sar?: number | null;
+  chargeback_ratio_pct?: number | null;
+  avg_detection_to_contain_hrs?: number | null;
+  customer_complaints?: number | null;
+  resolved_within_30d_pct?: number | null;
+  sama_reports_filed?: number | null;
+  notes?: string;
+  updated_by?: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+/**
+ * Threshold seeds — values follow PRD-FRD-001 §5.5 KPI table targets.
+ * Numbers and direction can be tuned later via the threshold-editor UI;
+ * the seed is just a sane baseline so the dashboard isn't blank on day 1.
+ */
+export const KPI_THRESHOLD_DEFINITIONS: FraudKpiThreshold[] = [
+  { metric_name: "fraud_rate_pct", target_value: 0.05, alert_value: 0.1, direction: "lower_is_better" },
+  { metric_name: "false_positive_rate_pct", target_value: 5.0, alert_value: 10.0, direction: "lower_is_better" },
+  { metric_name: "confirmed_incidents", target_value: 5, alert_value: 20, direction: "lower_is_better" },
+  { metric_name: "fraud_loss_sar", target_value: 50000, alert_value: 200000, direction: "lower_is_better" },
+  { metric_name: "chargeback_count", target_value: 10, alert_value: 50, direction: "lower_is_better" },
+  { metric_name: "chargeback_amount_sar", target_value: 10000, alert_value: 50000, direction: "lower_is_better" },
+  { metric_name: "chargeback_ratio_pct", target_value: 1.0, alert_value: 2.0, direction: "lower_is_better" },
+  { metric_name: "avg_detection_to_contain_hrs", target_value: 4, alert_value: 24, direction: "lower_is_better" },
+  { metric_name: "customer_complaints", target_value: 10, alert_value: 50, direction: "lower_is_better" },
+  { metric_name: "resolved_within_30d_pct", target_value: 95, alert_value: 80, direction: "higher_is_better" },
+  { metric_name: "sama_reports_filed", target_value: 100, alert_value: 100, direction: "higher_is_better" },
+];
+
+export async function seedKpiThresholds(): Promise<void> {
+  const existing = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM fraud_kpi_thresholds`,
+  );
+  if ((existing.rows[0]?.n ?? 0) > 0) return;
+  logger.info(
+    `🌱 [FraudDB] Seeding ${KPI_THRESHOLD_DEFINITIONS.length} KPI thresholds...`,
+  );
+  for (const t of KPI_THRESHOLD_DEFINITIONS) {
+    await pool.query(
+      `INSERT INTO fraud_kpi_thresholds (metric_name, target_value, alert_value, direction, updated_by)
+       VALUES ($1,$2,$3,$4,'system:seed')
+       ON CONFLICT (metric_name) DO NOTHING`,
+      [t.metric_name, t.target_value, t.alert_value, t.direction],
+    );
+  }
+  logger.info("✅ [FraudDB] KPI thresholds seeded");
+}
+
+export async function getAllKpiThresholds(): Promise<FraudKpiThreshold[]> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_kpi_thresholds ORDER BY metric_name ASC`,
+  );
+  return result.rows;
+}
+
+export async function updateKpiThreshold(
+  metricName: string,
+  updates: Pick<FraudKpiThreshold, "target_value" | "alert_value" | "direction">,
+  updatedBy: string,
+): Promise<FraudKpiThreshold | null> {
+  const result = await pool.query(
+    `UPDATE fraud_kpi_thresholds
+     SET target_value = $1, alert_value = $2, direction = $3,
+         updated_by = $4, updated_at = NOW()
+     WHERE metric_name = $5
+     RETURNING *`,
+    [updates.target_value, updates.alert_value, updates.direction, updatedBy, metricName],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Compute traffic-light color for a metric reading given its threshold.
+ *
+ *   green  — meets target (better than or equal)
+ *   amber  — between target and alert
+ *   red    — past alert threshold
+ *   gray   — value is null/undefined
+ */
+export type KpiColor = "green" | "amber" | "red" | "gray";
+
+export function evaluateKpiColor(
+  value: number | null | undefined,
+  threshold: Pick<FraudKpiThreshold, "target_value" | "alert_value" | "direction">,
+): KpiColor {
+  if (value == null) return "gray";
+  if (threshold.direction === "lower_is_better") {
+    if (value <= threshold.target_value) return "green";
+    if (value <= threshold.alert_value) return "amber";
+    return "red";
+  }
+  if (value >= threshold.target_value) return "green";
+  if (value >= threshold.alert_value) return "amber";
+  return "red";
+}
+
+function normalizeMonth(input: string): string {
+  // Accepts YYYY-MM or YYYY-MM-DD; returns YYYY-MM-01.
+  if (/^\d{4}-\d{2}$/.test(input)) return `${input}-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return `${input.slice(0, 7)}-01`;
+  throw new Error(`Invalid month: ${input}`);
+}
+
+/**
+ * Auto-derive month KPI values from fraud_incidents data. Returns the
+ * computed object — does NOT persist. Manual fields (total_transactions,
+ * total_rejections, customer_complaints) are not touched and must be
+ * filled in via PUT.
+ */
+export async function autoCalculateKpisForMonth(
+  month: string,
+): Promise<Partial<FraudKpi>> {
+  const m = normalizeMonth(month);
+  const result = await pool.query(
+    `WITH bounds AS (
+       SELECT $1::DATE AS first_day,
+              ($1::DATE + INTERVAL '1 month')::DATE AS next_month
+     )
+     SELECT
+       (SELECT COUNT(*)::int
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.date_detected >= b.first_day AND fi.date_detected < b.next_month
+       ) AS confirmed_incidents,
+       (SELECT COALESCE(SUM(amount_sar),0)::numeric(12,2)
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.date_detected >= b.first_day AND fi.date_detected < b.next_month
+       ) AS fraud_loss_sar,
+       (SELECT COUNT(*)::int
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.incident_type = 'chargeback'
+           AND fi.date_detected >= b.first_day
+           AND fi.date_detected < b.next_month
+       ) AS chargeback_count,
+       (SELECT COALESCE(SUM(amount_sar),0)::numeric(12,2)
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.incident_type = 'chargeback'
+           AND fi.date_detected >= b.first_day
+           AND fi.date_detected < b.next_month
+       ) AS chargeback_amount_sar,
+       (SELECT COUNT(*)::int
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.severity = 'P1'
+           AND fi.sama_reported = TRUE
+           AND fi.date_detected >= b.first_day
+           AND fi.date_detected < b.next_month
+       ) AS sama_reports_filed,
+       (SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (contained_at - created_at)) / 3600.0), 0)::numeric(10,2)
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.contained_at IS NOT NULL
+           AND fi.date_detected >= b.first_day
+           AND fi.date_detected < b.next_month
+       ) AS avg_detection_to_contain_hrs,
+       (SELECT (
+            CASE WHEN COUNT(*) = 0 THEN NULL
+                 ELSE ROUND(
+                   100.0 * COUNT(*) FILTER (
+                     WHERE resolution_date IS NOT NULL
+                       AND resolution_date - date_detected <= 30
+                   ) / NULLIF(COUNT(*),0),
+                   2
+                 )
+            END
+          )
+          FROM fraud_incidents fi, bounds b
+         WHERE fi.date_detected >= b.first_day AND fi.date_detected < b.next_month
+       ) AS resolved_within_30d_pct
+    `,
+    [m],
+  );
+
+  const row = result.rows[0] ?? {};
+  return {
+    month: m,
+    confirmed_incidents: row.confirmed_incidents ?? 0,
+    fraud_loss_sar: Number(row.fraud_loss_sar ?? 0),
+    chargeback_count: row.chargeback_count ?? 0,
+    chargeback_amount_sar: Number(row.chargeback_amount_sar ?? 0),
+    sama_reports_filed: row.sama_reports_filed ?? 0,
+    avg_detection_to_contain_hrs: Number(row.avg_detection_to_contain_hrs ?? 0),
+    resolved_within_30d_pct:
+      row.resolved_within_30d_pct == null
+        ? null
+        : Number(row.resolved_within_30d_pct),
+  };
+}
+
+export async function upsertFraudKpi(
+  month: string,
+  fields: Partial<FraudKpi>,
+  updatedBy: string,
+): Promise<FraudKpi> {
+  const m = normalizeMonth(month);
+
+  const cols = [
+    "total_transactions",
+    "total_rejections",
+    "fraud_rate_pct",
+    "false_positive_rate_pct",
+    "confirmed_incidents",
+    "fraud_loss_sar",
+    "chargeback_count",
+    "chargeback_amount_sar",
+    "chargeback_ratio_pct",
+    "avg_detection_to_contain_hrs",
+    "customer_complaints",
+    "resolved_within_30d_pct",
+    "sama_reports_filed",
+    "notes",
+  ];
+
+  // Compute derived ratios IF the inputs are present.
+  const fraudRate =
+    fields.fraud_rate_pct != null
+      ? Number(fields.fraud_rate_pct)
+      : fields.total_transactions && fields.total_transactions > 0 && fields.confirmed_incidents != null
+        ? Number(((fields.confirmed_incidents / fields.total_transactions) * 100).toFixed(4))
+        : null;
+  const cbRatio =
+    fields.chargeback_ratio_pct != null
+      ? Number(fields.chargeback_ratio_pct)
+      : fields.total_transactions && fields.total_transactions > 0 && fields.chargeback_count != null
+        ? Number(((fields.chargeback_count / fields.total_transactions) * 100).toFixed(4))
+        : null;
+
+  const merged: any = { ...fields };
+  if (fraudRate !== null) merged.fraud_rate_pct = fraudRate;
+  if (cbRatio !== null) merged.chargeback_ratio_pct = cbRatio;
+
+  const placeholders: string[] = [];
+  const updates: string[] = [];
+  const params: any[] = [m];
+  let i = 2;
+  for (const col of cols) {
+    placeholders.push(`$${i}`);
+    updates.push(`${col} = EXCLUDED.${col}`);
+    params.push(merged[col] === undefined ? null : merged[col]);
+    i++;
+  }
+  params.push(updatedBy);
+
+  const result = await pool.query(
+    `INSERT INTO fraud_kpis (month, ${cols.join(", ")}, updated_by)
+     VALUES ($1, ${placeholders.join(", ")}, $${i})
+     ON CONFLICT (month) DO UPDATE
+       SET ${updates.join(", ")}, updated_by = EXCLUDED.updated_by, updated_at = NOW()
+     RETURNING *`,
+    params,
+  );
+  return result.rows[0];
+}
+
+export async function getKpiForMonth(month: string): Promise<FraudKpi | null> {
+  const m = normalizeMonth(month);
+  const result = await pool.query(
+    `SELECT * FROM fraud_kpis WHERE month = $1`,
+    [m],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getKpisForRange(
+  fromMonth: string,
+  toMonth: string,
+): Promise<FraudKpi[]> {
+  const f = normalizeMonth(fromMonth);
+  const t = normalizeMonth(toMonth);
+  const result = await pool.query(
+    `SELECT * FROM fraud_kpis WHERE month BETWEEN $1 AND $2 ORDER BY month ASC`,
+    [f, t],
+  );
+  return result.rows;
 }

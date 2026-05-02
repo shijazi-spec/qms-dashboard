@@ -1077,4 +1077,293 @@ export const fraudRoutes = [
       };
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Feature 5 — KPI Dashboard (PRD-FRD-001 §5.5)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // GET /api/fraud/kpis/thresholds — list all thresholds
+  {
+    path: "/api/fraud/kpis/thresholds",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, getAllKpiThresholds } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const rows = await getAllKpiThresholds();
+          return c.json({ thresholds: rows });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/kpis/thresholds failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch thresholds" }, 500);
+        }
+      };
+    },
+  },
+
+  // PUT /api/fraud/kpis/thresholds/:metric — edit threshold
+  {
+    path: "/api/fraud/kpis/thresholds/:metric",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, updateKpiThreshold } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const metric = c.req.param("metric");
+          const body = await c.req.json();
+          if (
+            body.target_value == null ||
+            body.alert_value == null ||
+            !body.direction
+          ) {
+            return c.json(
+              { error: "target_value, alert_value, direction are required" },
+              400,
+            );
+          }
+          const updated = await updateKpiThreshold(
+            metric,
+            {
+              target_value: Number(body.target_value),
+              alert_value: Number(body.alert_value),
+              direction: body.direction,
+            },
+            auth.user?.email ?? "unknown",
+          );
+          if (!updated) return c.json({ error: "Metric not found" }, 404);
+          return c.json({ threshold: updated });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] PUT /api/fraud/kpis/thresholds/:metric failed:",
+            error,
+          );
+          return c.json({ error: "Failed to update threshold" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/kpis — list KPIs across a date range (default last 12 months)
+  {
+    path: "/api/fraud/kpis",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, getKpisForRange } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const url = new URL(c.req.url);
+          const today = new Date();
+          const from = url.searchParams.get("from") || `${today.getFullYear() - 1}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+          const to = url.searchParams.get("to") || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+          const rows = await getKpisForRange(from, to);
+          return c.json({ kpis: rows, from, to });
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] GET /api/fraud/kpis failed:", error);
+          return c.json({ error: "Failed to fetch KPIs" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/kpis/:month — single month KPI snapshot
+  {
+    path: "/api/fraud/kpis/:month",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, getKpiForMonth } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const month = c.req.param("month");
+          if (!/^\d{4}-\d{2}(-\d{2})?$/.test(month)) {
+            return c.json({ error: "month must be YYYY-MM or YYYY-MM-DD" }, 400);
+          }
+          const row = await getKpiForMonth(month);
+          if (!row) return c.json({ error: "No KPI snapshot for that month" }, 404);
+          return c.json({ kpi: row });
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] GET /api/fraud/kpis/:month failed:", error);
+          return c.json({ error: "Failed to fetch KPI" }, 500);
+        }
+      };
+    },
+  },
+
+  // POST /api/fraud/kpis/:month/auto-calculate — recompute from incidents data
+  {
+    path: "/api/fraud/kpis/:month/auto-calculate",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, autoCalculateKpisForMonth, upsertFraudKpi } =
+            await import("../../utils/fraudDatabase");
+          await initFraudTables();
+          const month = c.req.param("month");
+          if (!/^\d{4}-\d{2}(-\d{2})?$/.test(month)) {
+            return c.json({ error: "month must be YYYY-MM or YYYY-MM-DD" }, 400);
+          }
+          const calc = await autoCalculateKpisForMonth(month);
+          const persisted = await upsertFraudKpi(month, calc, auth.user?.email ?? "system:auto-calc");
+          return c.json({ kpi: persisted, source: "auto" });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] POST /api/fraud/kpis/:month/auto-calculate failed:",
+            error,
+          );
+          return c.json({ error: "Failed to auto-calculate KPIs" }, 500);
+        }
+      };
+    },
+  },
+
+  // PUT /api/fraud/kpis/:month — manual upsert (also recomputes ratios if data is sufficient)
+  {
+    path: "/api/fraud/kpis/:month",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, upsertFraudKpi } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const month = c.req.param("month");
+          const body = await c.req.json();
+          const persisted = await upsertFraudKpi(
+            month,
+            body,
+            auth.user?.email ?? "unknown",
+          );
+          return c.json({ kpi: persisted, source: "manual" });
+        } catch (error) {
+          safeLogger.error("❌ [FraudAPI] PUT /api/fraud/kpis/:month failed:", error);
+          return c.json({ error: "Failed to update KPI" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/kpis/current/summary — current month with computed colors
+  {
+    path: "/api/fraud/kpis/current/summary",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const {
+            initFraudTables,
+            getKpiForMonth,
+            autoCalculateKpisForMonth,
+            getAllKpiThresholds,
+            evaluateKpiColor,
+          } = await import("../../utils/fraudDatabase");
+          await initFraudTables();
+          const today = new Date();
+          const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+          let kpi: any = await getKpiForMonth(month);
+          if (!kpi) {
+            // Lazily compute if not present (no-write, just preview)
+            kpi = { month, ...(await autoCalculateKpisForMonth(month)) };
+          }
+          const thresholds = await getAllKpiThresholds();
+          const tMap = new Map(thresholds.map((t) => [t.metric_name, t]));
+          const colors: Record<string, string> = {};
+          for (const t of thresholds) {
+            colors[t.metric_name] = evaluateKpiColor(
+              kpi[t.metric_name] == null ? null : Number(kpi[t.metric_name]),
+              tMap.get(t.metric_name)!,
+            );
+          }
+          return c.json({ month, kpi, thresholds, colors });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/kpis/current/summary failed:",
+            error,
+          );
+          return c.json({ error: "Failed to load KPI summary" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/kpis/trend/:metric — trailing 12-month series for one metric
+  {
+    path: "/api/fraud/kpis/trend/:metric",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { initFraudTables, getKpisForRange } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const metric = c.req.param("metric");
+          const today = new Date();
+          const from = `${today.getFullYear() - 1}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+          const to = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+          const rows = await getKpisForRange(from, to);
+          const series = rows.map((r: any) => ({
+            month: r.month,
+            value: r[metric] == null ? null : Number(r[metric]),
+          }));
+          return c.json({ metric, series });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/kpis/trend/:metric failed:",
+            error,
+          );
+          return c.json({ error: "Failed to load trend" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/kpis/export/pdf — placeholder, real PDF in cross-cutting
+  {
+    path: "/api/fraud/kpis/export/pdf",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const auth = await requireFraudReadAuth(c);
+        if (!auth.ok) return auth.res;
+        return c.json(
+          {
+            error: "Not yet implemented",
+            message: "PDF export for KPIs ships in the cross-cutting commit.",
+          },
+          501,
+        );
+      };
+    },
+  },
 ];

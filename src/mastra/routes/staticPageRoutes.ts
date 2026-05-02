@@ -512,6 +512,19 @@ export const staticPageRoutes = [
         `To access the Country Risk Assessment, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /fraud-dashboard → /api/fraud/kpis* — Fraud KPI Dashboard
+  // (PRD-FRD-001 Feature 5).
+  {
+    path: "/fraud-dashboard",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "fraud-dashboard.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Fraud KPI Dashboard Setup Required",
+        `To access the Fraud KPI Dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /grc → cross-module GRC dashboard (audits, compliance, risks, etc.).
   {
     path: "/grc",
@@ -828,6 +841,11 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     path: "/fraud-country-risk",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/fraud/countries",
+  },
+  {
+    path: "/fraud-dashboard",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/fraud/kpis",
   },
   // /grc aggregates audits + compliance + risks + reviews; all share the
   // same governance+executive read allowlist, so /api/audits is a faithful

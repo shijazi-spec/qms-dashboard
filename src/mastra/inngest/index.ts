@@ -1406,6 +1406,68 @@ const fraudCountryReviewReminderFunction = inngest.createFunction(
 );
 inngestFunctions.push(fraudCountryReviewReminderFunction);
 
+/**
+ * fraud-kpi-monthly-reminder — 1st business day of each month at 09:00 UTC.
+ *
+ * On the 1st of each month, auto-calculate the *previous* month's KPIs
+ * from incidents data (so the dashboard shows real numbers immediately)
+ * and notify the GRQ team to fill in the manual fields
+ * (total_transactions, total_rejections, customer_complaints).
+ *
+ * Cron is "0 9 1 * *" (1st of every month). Calling this on a Sunday is
+ * fine; the notification just lands in inboxes ahead of business hours.
+ */
+const fraudKpiMonthlyReminderFunction = inngest.createFunction(
+  { id: "fraud-kpi-monthly-reminder" },
+  { cron: process.env.FRAUD_KPI_MONTHLY_CRON || "0 9 1 * *" },
+  async ({ step }) => {
+    return await step.run("auto-calc-and-remind", async () => {
+      const { initFraudTables, autoCalculateKpisForMonth, upsertFraudKpi } =
+        await import("../../utils/fraudDatabase");
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+
+      // Compute previous month YYYY-MM-01.
+      const today = new Date();
+      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`;
+
+      let result: any = null;
+      try {
+        const calc = await autoCalculateKpisForMonth(prevMonth);
+        result = await upsertFraudKpi(prevMonth, calc, "system:monthly-cron");
+      } catch (err) {
+        logger.error(
+          `[FraudKpiMonthly] auto-calc failed for ${prevMonth}:`,
+          err,
+        );
+      }
+
+      const recipient =
+        process.env.FRAUD_KPI_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      try {
+        await createNotification({
+          title: `Fraud KPI snapshot ready: ${prevMonth.slice(0, 7)}`,
+          message: `Previous-month KPIs auto-calculated from incidents data. Please fill in total_transactions, total_rejections, and customer_complaints in the dashboard.`,
+          module: "fraud",
+          priority: "medium",
+          channel: "in_app",
+          recipient,
+          related_entity_type: "fraud_kpi",
+          related_entity_id: prevMonth,
+          action_url: "/fraud-dashboard",
+        });
+      } catch (err) {
+        logger.error(`[FraudKpiMonthly] notify failed:`, err);
+      }
+
+      logger.info(`[FraudKpiMonthly] processed ${prevMonth}`);
+      return { month: prevMonth, kpi_id: result?.id ?? null };
+    });
+  },
+);
+inngestFunctions.push(fraudKpiMonthlyReminderFunction);
+
 export function inngestServe({
   mastra,
   inngest,
