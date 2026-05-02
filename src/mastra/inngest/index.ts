@@ -1180,6 +1180,194 @@ const fraudRuleReviewReminderFunction = inngest.createFunction(
 );
 inngestFunctions.push(fraudRuleReviewReminderFunction);
 
+/**
+ * fraud-sama-deadline-check — hourly.
+ *
+ * P1 incidents must be reported to SAMA within 72 hours of detection. This
+ * cron alerts the Head of GRQ + admin recipients when an open P1 hits the
+ * 12-hour-remaining threshold (i.e. >=60h elapsed and sama_reported is
+ * still null/false). Re-runs are safe — same dedup posture as the rule
+ * review reminder.
+ */
+const fraudSamaDeadlineCheckFunction = inngest.createFunction(
+  { id: "fraud-sama-deadline-check" },
+  { cron: process.env.FRAUD_SAMA_DEADLINE_CRON || "5 * * * *" },
+  async ({ step }) => {
+    return await step.run("notify-on-sama-deadline-approaching", async () => {
+      const { getSamaDeadlineApproaching, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const candidates = await getSamaDeadlineApproaching(60);
+      if (candidates.length === 0) {
+        return { notified: 0 };
+      }
+      const recipients = (
+        process.env.FRAUD_SAMA_NOTIFY_EMAILS ||
+        "head.grq@walaplus.com,admin@walaplus.com"
+      )
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
+      let notified = 0;
+      for (const inc of candidates) {
+        for (const recipient of recipients) {
+          try {
+            await createNotification({
+              title: `URGENT — SAMA 72h deadline approaching: ${inc.incident_code}`,
+              message: `P1 incident ${inc.incident_code} detected ${String(inc.date_detected).slice(0, 10)} is not yet SAMA-reported. Take action within 12 hours.`,
+              module: "fraud",
+              priority: "critical",
+              channel: "in_app",
+              recipient,
+              related_entity_type: "fraud_incident",
+              related_entity_id: String(inc.id),
+              action_url: "/fraud-incidents",
+            });
+            notified++;
+          } catch (err) {
+            logger.error(
+              `[FraudSamaDeadline] Failed to notify ${recipient} for ${inc.incident_code}:`,
+              err,
+            );
+          }
+        }
+      }
+      logger.info(
+        `[FraudSamaDeadline] ${candidates.length} P1 incidents approaching deadline; ${notified} notifications dispatched`,
+      );
+      return { notified, candidates: candidates.length };
+    });
+  },
+);
+inngestFunctions.push(fraudSamaDeadlineCheckFunction);
+
+/**
+ * fraud-incident-overdue-check — daily 09:00 UTC.
+ *
+ * Incidents older than 30 days without a `resolution_date` violate the
+ * SAMA consumer-protection 30-day resolution requirement. Notify the
+ * Head of GRQ so escalation can be triggered.
+ */
+const fraudIncidentOverdueCheckFunction = inngest.createFunction(
+  { id: "fraud-incident-overdue-check" },
+  { cron: process.env.FRAUD_INCIDENT_OVERDUE_CRON || "0 9 * * *" },
+  async ({ step }) => {
+    return await step.run("notify-on-overdue-incidents", async () => {
+      const { getOverdueFraudIncidents, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const overdue = await getOverdueFraudIncidents(30);
+      if (overdue.length === 0) {
+        return { notified: 0 };
+      }
+      const recipient =
+        process.env.FRAUD_OVERDUE_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      let notified = 0;
+      for (const inc of overdue) {
+        try {
+          await createNotification({
+            title: `Fraud incident overdue (>30 days): ${inc.incident_code}`,
+            message: `Incident ${inc.incident_code} (${inc.severity}) detected ${String(inc.date_detected).slice(0, 10)} has no resolution_date. Status: ${inc.status}.`,
+            module: "fraud",
+            priority: "high",
+            channel: "in_app",
+            recipient,
+            related_entity_type: "fraud_incident",
+            related_entity_id: String(inc.id),
+            action_url: "/fraud-incidents",
+          });
+          notified++;
+        } catch (err) {
+          logger.error(
+            `[FraudIncidentOverdue] Failed to notify for ${inc.incident_code}:`,
+            err,
+          );
+        }
+      }
+      logger.info(
+        `[FraudIncidentOverdue] ${overdue.length} overdue; ${notified} notifications dispatched`,
+      );
+      return { notified, overdue: overdue.length };
+    });
+  },
+);
+inngestFunctions.push(fraudIncidentOverdueCheckFunction);
+
+/**
+ * fraud-incident-sla-check — hourly.
+ *
+ * Surfaces open incidents that have no `contained_at` after the severity-
+ * based SLA window has elapsed. SLA is defined per severity; this function
+ * uses inline thresholds matching the escalation matrix Excel
+ * (P1=4h, P2=24h, P3=72h, P4=168h) until Feature 4 wires the matrix as
+ * the canonical source.
+ */
+const fraudIncidentSlaCheckFunction = inngest.createFunction(
+  { id: "fraud-incident-sla-check" },
+  { cron: process.env.FRAUD_INCIDENT_SLA_CRON || "10 * * * *" },
+  async ({ step }) => {
+    return await step.run("notify-on-sla-breach", async () => {
+      const { getOpenFraudIncidents, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const open = await getOpenFraudIncidents();
+
+      const SLA_HOURS: Record<string, number> = {
+        P1: 4,
+        P2: 24,
+        P3: 72,
+        P4: 168,
+      };
+      const now = Date.now();
+      const breaches = open.filter((inc: any) => {
+        if (inc.contained_at) return false;
+        const detected = new Date(inc.created_at ?? inc.date_detected).getTime();
+        const sla = SLA_HOURS[inc.severity] ?? 168;
+        return now - detected > sla * 3600 * 1000;
+      });
+
+      if (breaches.length === 0) {
+        return { notified: 0, open: open.length };
+      }
+      const recipient =
+        process.env.FRAUD_SLA_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      let notified = 0;
+      for (const inc of breaches as any[]) {
+        try {
+          await createNotification({
+            title: `SLA breach — ${inc.severity} incident ${inc.incident_code}`,
+            message: `Incident ${inc.incident_code} (${inc.severity}) is open past its containment SLA. Status: ${inc.status}.`,
+            module: "fraud",
+            priority: inc.severity === "P1" ? "critical" : "high",
+            channel: "in_app",
+            recipient,
+            related_entity_type: "fraud_incident",
+            related_entity_id: String(inc.id),
+            action_url: "/fraud-incidents",
+          });
+          notified++;
+        } catch (err) {
+          logger.error(
+            `[FraudSlaCheck] Failed to notify for ${inc.incident_code}:`,
+            err,
+          );
+        }
+      }
+      logger.info(
+        `[FraudSlaCheck] ${breaches.length} SLA breaches; ${notified} notifications dispatched`,
+      );
+      return { notified, breaches: breaches.length, open: open.length };
+    });
+  },
+);
+inngestFunctions.push(fraudIncidentSlaCheckFunction);
+
 export function inngestServe({
   mastra,
   inngest,

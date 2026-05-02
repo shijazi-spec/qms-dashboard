@@ -486,6 +486,19 @@ export const staticPageRoutes = [
         `To access the Fraud Rules Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /fraud-incidents → /api/fraud/incidents GET — Fraud Management Module
+  // (PRD-FRD-001 Feature 2). Same governance allowlist as fraud-rules.
+  {
+    path: "/fraud-incidents",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "fraud-incidents.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Fraud Incidents Setup Required",
+        `To access the Fraud Incident Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /grc → cross-module GRC dashboard (audits, compliance, risks, etc.).
   {
     path: "/grc",
@@ -792,6 +805,11 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     path: "/fraud-rules",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/fraud/rules",
+  },
+  {
+    path: "/fraud-incidents",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/fraud/incidents",
   },
   // /grc aggregates audits + compliance + risks + reviews; all share the
   // same governance+executive read allowlist, so /api/audits is a faithful

@@ -716,3 +716,383 @@ export async function getMisconfiguredFraudRules(): Promise<FraudRule[]> {
   );
   return result.rows;
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Feature 2 — Fraud Incidents (PRD-FRD-001 §5.2)
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type FraudIncidentSeverity = "P1" | "P2" | "P3" | "P4";
+
+export type FraudIncidentType =
+  | "account_takeover"
+  | "chargeback"
+  | "card_testing"
+  | "internal_fraud"
+  | "aml_sar"
+  | "other";
+
+export type FraudIncidentDetectionSource =
+  | "hyperpay_alert"
+  | "customer_report"
+  | "it_monitoring"
+  | "bank_claim"
+  | "internal_discovery"
+  | "regulatory_inquiry";
+
+export type FraudIncidentStatus =
+  | "open"
+  | "investigating"
+  | "contained"
+  | "resolved"
+  | "closed";
+
+export interface FraudIncident {
+  id?: number;
+  public_id?: string;
+  incident_code?: string;
+  date_detected: string | Date;
+  severity: FraudIncidentSeverity;
+  incident_type: FraudIncidentType;
+  detection_source: FraudIncidentDetectionSource;
+  affected_customers?: number;
+  amount_sar?: number;
+  actions_taken?: string;
+  account_frozen?: boolean;
+  resolution_date?: string | Date | null;
+  root_cause?: string;
+  sama_reported?: boolean | null;
+  status?: FraudIncidentStatus;
+  contained_at?: string | Date | null;
+  notes?: string;
+  linked_rule_id?: string | null;
+  linked_enterprise_risk_id?: number | null;
+  created_by: string;
+  updated_by?: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+/**
+ * Generates the next sequential incident code (INC-001, INC-002, …) using
+ * a SELECT-MAX strategy against `incident_code`. Race-safe enough for the
+ * expected fraud-incident volume; if simultaneous creates ever collide, the
+ * UNIQUE constraint will reject the duplicate and the API layer can retry.
+ */
+async function generateNextIncidentCode(): Promise<string> {
+  const result = await pool.query<{ max_n: number | null }>(
+    `SELECT MAX(NULLIF(regexp_replace(incident_code, '[^0-9]', '', 'g'), '')::int) AS max_n FROM fraud_incidents`,
+  );
+  const next = (result.rows[0]?.max_n ?? 0) + 1;
+  return `INC-${String(next).padStart(3, "0")}`;
+}
+
+/**
+ * Creates a fraud incident and (for P1/P2) auto-creates a linked
+ * enterprise_risks row so the cross-module Risk register reflects the
+ * fraud event without manual data entry. Returns the created incident
+ * with both `incident_code` and `linked_enterprise_risk_id` populated.
+ *
+ * Why P1/P2 only: per PRD §5.2 these are the severity bands that map to
+ * material financial / reputational risk worth tracking in the enterprise
+ * Risk register. P3/P4 stay in the Fraud module only to avoid noise.
+ */
+export async function createFraudIncident(
+  input: FraudIncident,
+): Promise<FraudIncident> {
+  const code = input.incident_code || (await generateNextIncidentCode());
+
+  // 1. Insert the fraud incident first so we have its id.
+  const insertResult = await pool.query(
+    `INSERT INTO fraud_incidents (
+      incident_code, date_detected, severity, incident_type, detection_source,
+      affected_customers, amount_sar, actions_taken, account_frozen,
+      resolution_date, root_cause, sama_reported, status, contained_at,
+      notes, linked_rule_id, created_by
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
+    ) RETURNING *`,
+    [
+      code,
+      input.date_detected,
+      input.severity,
+      input.incident_type,
+      input.detection_source,
+      input.affected_customers ?? 0,
+      input.amount_sar ?? 0,
+      input.actions_taken ?? null,
+      input.account_frozen ?? false,
+      input.resolution_date ?? null,
+      input.root_cause ?? null,
+      input.sama_reported ?? null,
+      input.status ?? "open",
+      input.contained_at ?? null,
+      input.notes ?? null,
+      input.linked_rule_id ?? null,
+      input.created_by,
+    ],
+  );
+  const incident = insertResult.rows[0] as FraudIncident;
+
+  // 2. For P1/P2, mirror into enterprise_risks via linked_incident_id.
+  // We tolerate failures here so the fraud incident is still created even
+  // if the enterprise_risks table isn't available; the link can be backfilled.
+  if (incident.severity === "P1" || incident.severity === "P2") {
+    try {
+      const riskResult = await pool.query<{ id: number }>(
+        `INSERT INTO enterprise_risks (
+          risk_title, risk_description, risk_category, risk_source,
+          identified_date, identified_by, owner_department,
+          impact_score, likelihood_score, status, linked_incident_id
+        ) VALUES ($1,$2,'fraud',$3, $4, $5, $6, $7, $8, 'open', $9)
+        RETURNING id`,
+        [
+          `Fraud incident ${incident.incident_code} (${incident.severity})`,
+          `Auto-created from fraud module. Type: ${incident.incident_type}, source: ${incident.detection_source}. ${incident.actions_taken ?? ""}`,
+          `fraud_module:${incident.detection_source}`,
+          incident.date_detected,
+          incident.created_by,
+          "GRQ",
+          incident.severity === "P1" ? 5 : 4,
+          incident.severity === "P1" ? 5 : 3,
+          incident.id,
+        ],
+      );
+      const linkedId = riskResult.rows[0]?.id;
+      if (linkedId) {
+        await pool.query(
+          `UPDATE fraud_incidents SET linked_enterprise_risk_id = $1, updated_at = NOW() WHERE id = $2`,
+          [linkedId, incident.id],
+        );
+        incident.linked_enterprise_risk_id = linkedId;
+      }
+    } catch (err) {
+      logger.warn(
+        `[FraudDB] Could not mirror incident ${incident.incident_code} to enterprise_risks (continuing):`,
+        err,
+      );
+    }
+  }
+
+  return incident;
+}
+
+export async function getAllFraudIncidents(filters?: {
+  status?: FraudIncidentStatus;
+  severity?: FraudIncidentSeverity;
+  incident_type?: FraudIncidentType;
+  open_only?: boolean;
+  limit?: number;
+}): Promise<FraudIncident[]> {
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+  if (filters?.status) {
+    conditions.push(`status = $${i++}`);
+    params.push(filters.status);
+  }
+  if (filters?.severity) {
+    conditions.push(`severity = $${i++}`);
+    params.push(filters.severity);
+  }
+  if (filters?.incident_type) {
+    conditions.push(`incident_type = $${i++}`);
+    params.push(filters.incident_type);
+  }
+  if (filters?.open_only) {
+    conditions.push(`status NOT IN ('resolved','closed')`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const limit = Math.max(
+    1,
+    Math.min(1000, Math.floor(Number(filters?.limit) || 200)),
+  );
+  const result = await pool.query(
+    `SELECT * FROM fraud_incidents ${where}
+     ORDER BY date_detected DESC, id DESC
+     LIMIT ${limit}`,
+    params,
+  );
+  return result.rows;
+}
+
+export async function getFraudIncidentById(
+  id: number,
+): Promise<FraudIncident | null> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_incidents WHERE id = $1`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getFraudIncidentByPublicId(
+  publicId: string,
+): Promise<FraudIncident | null> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_incidents WHERE public_id = $1`,
+    [publicId],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function updateFraudIncident(
+  id: number,
+  updates: Partial<FraudIncident>,
+): Promise<FraudIncident | null> {
+  const allowed: (keyof FraudIncident)[] = [
+    "date_detected",
+    "severity",
+    "incident_type",
+    "detection_source",
+    "affected_customers",
+    "amount_sar",
+    "actions_taken",
+    "account_frozen",
+    "resolution_date",
+    "root_cause",
+    "sama_reported",
+    "status",
+    "contained_at",
+    "notes",
+    "linked_rule_id",
+    "updated_by",
+  ];
+  const setClauses: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+  for (const key of allowed) {
+    if (updates[key] !== undefined) {
+      setClauses.push(`${key} = $${i++}`);
+      params.push((updates as any)[key]);
+    }
+  }
+  if (setClauses.length === 0) {
+    return getFraudIncidentById(id);
+  }
+  // Auto-stamp contained_at when transitioning to "contained" status
+  // unless caller explicitly supplied a value.
+  if (
+    updates.status === "contained" &&
+    updates.contained_at === undefined
+  ) {
+    setClauses.push(`contained_at = COALESCE(contained_at, NOW())`);
+  }
+  setClauses.push(`updated_at = NOW()`);
+  params.push(id);
+  const result = await pool.query(
+    `UPDATE fraud_incidents SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING *`,
+    params,
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Closes a fraud incident with the SAMA-reported gate enforced for P1/P2.
+ * Returns { incident } on success, { error, code } on validation failure.
+ *
+ * Per PRD §5.2 + AC-5: a P1 or P2 incident cannot be closed unless the
+ * `sama_reported` field has been explicitly set to true or false. This
+ * keeps SAMA reporting evidence auditable: even a "no, not reportable"
+ * decision must be recorded.
+ */
+export async function closeFraudIncident(
+  id: number,
+  closedBy: string,
+  opts: {
+    sama_reported?: boolean;
+    resolution_date?: string;
+    root_cause?: string;
+  } = {},
+): Promise<{ incident?: FraudIncident; error?: string; code?: number }> {
+  const current = await getFraudIncidentById(id);
+  if (!current) return { error: "Incident not found", code: 404 };
+
+  const isCritical = current.severity === "P1" || current.severity === "P2";
+  const samaValue =
+    opts.sama_reported !== undefined ? opts.sama_reported : current.sama_reported;
+  if (isCritical && (samaValue === null || samaValue === undefined)) {
+    return {
+      error:
+        "Cannot close P1/P2 incident without sama_reported value (true or false). " +
+        "PRD-FRD-001 §5.2 / AC-5.",
+      code: 400,
+    };
+  }
+
+  const result = await pool.query(
+    `UPDATE fraud_incidents
+       SET status = 'closed',
+           sama_reported = $1,
+           resolution_date = COALESCE($2, resolution_date, CURRENT_DATE),
+           root_cause = COALESCE($3, root_cause),
+           updated_by = $4,
+           updated_at = NOW()
+     WHERE id = $5
+     RETURNING *`,
+    [
+      samaValue ?? null,
+      opts.resolution_date ?? null,
+      opts.root_cause ?? null,
+      closedBy,
+      id,
+    ],
+  );
+  return { incident: result.rows[0] };
+}
+
+// ── Cron-helper queries (used by Inngest jobs in Feature 2 + Feature 4) ────
+
+/**
+ * Open or investigating incidents. Drives the dashboard "Open" tab and
+ * the SLA-check cron's candidate set.
+ */
+export async function getOpenFraudIncidents(): Promise<FraudIncident[]> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_incidents
+     WHERE status NOT IN ('resolved','closed')
+     ORDER BY date_detected DESC, id DESC`,
+  );
+  return result.rows;
+}
+
+/**
+ * P1 incidents that are NOT yet sama_reported AND were detected more than
+ * `hoursAhead` hours ago (i.e. the 72-hour SAMA reporting deadline is
+ * within the next `72 - hoursAhead` hours).
+ *
+ * Default hoursAhead = 60: alert when 12h or less remain on the 72h clock.
+ */
+export async function getSamaDeadlineApproaching(
+  hoursAhead: number = 60,
+): Promise<FraudIncident[]> {
+  const safe = Math.max(1, Math.min(72, Math.floor(Number(hoursAhead) || 60)));
+  const result = await pool.query(
+    `SELECT * FROM fraud_incidents
+     WHERE severity = 'P1'
+       AND status != 'closed'
+       AND (sama_reported IS NULL OR sama_reported = FALSE)
+       AND created_at <= NOW() - ($1::INT) * INTERVAL '1 hour'
+     ORDER BY created_at ASC`,
+    [safe],
+  );
+  return result.rows;
+}
+
+/**
+ * Open incidents with no resolution_date that are older than `days` days.
+ * SAMA consumer-protection compliance requires resolution within 30 days.
+ */
+export async function getOverdueFraudIncidents(
+  days: number = 30,
+): Promise<FraudIncident[]> {
+  const safe = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
+  const result = await pool.query(
+    `SELECT * FROM fraud_incidents
+     WHERE status NOT IN ('resolved','closed')
+       AND resolution_date IS NULL
+       AND date_detected <= CURRENT_DATE - ($1::INT) * INTERVAL '1 day'
+     ORDER BY date_detected ASC`,
+    [safe],
+  );
+  return result.rows;
+}

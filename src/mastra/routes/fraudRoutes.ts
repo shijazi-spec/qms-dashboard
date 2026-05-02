@@ -390,4 +390,349 @@ export const fraudRoutes = [
       };
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Feature 2 — Fraud Incident Register (PRD-FRD-001 §5.2)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // GET /api/fraud/incidents — list with filters
+  {
+    path: "/api/fraud/incidents",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getAllFraudIncidents, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const url = new URL(c.req.url);
+          const status = (url.searchParams.get("status") as any) || undefined;
+          const severity =
+            (url.searchParams.get("severity") as any) || undefined;
+          const incident_type =
+            (url.searchParams.get("incident_type") as any) || undefined;
+          const open_only =
+            url.searchParams.get("open_only") === "true" ? true : undefined;
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] GET /api/fraud/incidents", {
+            status,
+            severity,
+            incident_type,
+            open_only,
+          });
+          const incidents = await getAllFraudIncidents({
+            status,
+            severity,
+            incident_type,
+            open_only,
+          });
+          return c.json({ incidents: obfuscateRuleList(incidents) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/incidents failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch incidents" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/incidents/open — alias for status NOT IN (resolved,closed)
+  {
+    path: "/api/fraud/incidents/open",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getOpenFraudIncidents, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const incidents = await getOpenFraudIncidents();
+          return c.json({
+            incidents: obfuscateRuleList(incidents),
+            count: incidents.length,
+          });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/incidents/open failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch open incidents" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/incidents/sama-overdue — P1 approaching 72h deadline
+  {
+    path: "/api/fraud/incidents/sama-overdue",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getSamaDeadlineApproaching, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const url = new URL(c.req.url);
+          const ahead = parseInt(
+            url.searchParams.get("hours_ahead") || "60",
+            10,
+          );
+          const incidents = await getSamaDeadlineApproaching(ahead);
+          return c.json({
+            incidents: obfuscateRuleList(incidents),
+            count: incidents.length,
+            window_hours_ahead: ahead,
+          });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/incidents/sama-overdue failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch sama-overdue incidents" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/incidents/:id
+  {
+    path: "/api/fraud/incidents/:id",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const {
+            initFraudTables,
+            getFraudIncidentById,
+            getFraudIncidentByPublicId,
+          } = await import("../../utils/fraudDatabase");
+          await initFraudTables();
+          const raw = c.req.param("id");
+          let incident: any = null;
+          if (/^\d+$/.test(raw)) {
+            incident = await getFraudIncidentById(parseInt(raw, 10));
+          } else if (
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              raw,
+            )
+          ) {
+            incident = await getFraudIncidentByPublicId(raw);
+          }
+          if (!incident) return c.json({ error: "Incident not found" }, 404);
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] GET /api/fraud/incidents/:id", {
+            id: incident.id,
+          });
+          return c.json({ incident: obfuscateRule(incident) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/incidents/:id failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch incident" }, 500);
+        }
+      };
+    },
+  },
+
+  // POST /api/fraud/incidents — create + auto-mirror to enterprise_risks for P1/P2
+  // Note: notification dispatch (Feature 4 escalation matrix) is wired in
+  // commit #3, after the matrix table has data.
+  {
+    path: "/api/fraud/incidents",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { createFraudIncident, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const body = await c.req.json();
+          const required = [
+            "date_detected",
+            "severity",
+            "incident_type",
+            "detection_source",
+          ];
+          const missing = required.filter((k) => !body[k]);
+          if (missing.length > 0) {
+            return c.json(
+              { error: `Missing required fields: ${missing.join(", ")}` },
+              400,
+            );
+          }
+          const validSeverity = ["P1", "P2", "P3", "P4"];
+          if (!validSeverity.includes(body.severity)) {
+            return c.json({ error: "severity must be P1, P2, P3 or P4" }, 400);
+          }
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] POST /api/fraud/incidents", {
+            severity: body.severity,
+            type: body.incident_type,
+            by: auth.user?.email,
+          });
+          const created = await createFraudIncident({
+            ...body,
+            created_by: auth.user?.email ?? "unknown",
+          });
+          return c.json({ incident: obfuscateRule(created) }, 201);
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] POST /api/fraud/incidents failed:",
+            error,
+          );
+          return c.json({ error: "Failed to create incident" }, 500);
+        }
+      };
+    },
+  },
+
+  // PUT /api/fraud/incidents/:id — generic update
+  {
+    path: "/api/fraud/incidents/:id",
+    method: "PUT" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const {
+            initFraudTables,
+            updateFraudIncident,
+            getFraudIncidentByPublicId,
+          } = await import("../../utils/fraudDatabase");
+          await initFraudTables();
+          const raw = c.req.param("id");
+          let id: number | null = null;
+          if (/^\d+$/.test(raw)) id = parseInt(raw, 10);
+          else if (
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              raw,
+            )
+          ) {
+            const found = await getFraudIncidentByPublicId(raw);
+            id = found?.id ?? null;
+          }
+          if (id == null) return c.json({ error: "Incident not found" }, 404);
+          const body = await c.req.json();
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] PUT /api/fraud/incidents/:id", {
+            id,
+            by: auth.user?.email,
+          });
+          const updated = await updateFraudIncident(id, {
+            ...body,
+            updated_by: auth.user?.email ?? "unknown",
+          });
+          if (!updated) return c.json({ error: "Incident not found" }, 404);
+          return c.json({ incident: obfuscateRule(updated) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] PUT /api/fraud/incidents/:id failed:",
+            error,
+          );
+          return c.json({ error: "Failed to update incident" }, 500);
+        }
+      };
+    },
+  },
+
+  // PUT /api/fraud/incidents/:id/close — closure with sama_reported gate
+  // Per PRD §5.2 / AC-5: P1/P2 cannot close without sama_reported value.
+  {
+    path: "/api/fraud/incidents/:id/close",
+    method: "PUT" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          // PRD §5.2 specifies "Head of GRQ only" for close; we currently
+          // gate to the standard fraud-write set (admin /
+          // head_of_operations_quality / grc_manager). If the alignment
+          // meeting tightens to "head_of_operations_quality + admin only",
+          // change the auth helper invoked here.
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const {
+            initFraudTables,
+            closeFraudIncident,
+            getFraudIncidentByPublicId,
+          } = await import("../../utils/fraudDatabase");
+          await initFraudTables();
+          const raw = c.req.param("id");
+          let id: number | null = null;
+          if (/^\d+$/.test(raw)) id = parseInt(raw, 10);
+          else if (
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              raw,
+            )
+          ) {
+            const found = await getFraudIncidentByPublicId(raw);
+            id = found?.id ?? null;
+          }
+          if (id == null) return c.json({ error: "Incident not found" }, 404);
+          const body = await c.req.json().catch(() => ({}));
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] PUT /api/fraud/incidents/:id/close", {
+            id,
+            by: auth.user?.email,
+          });
+          const result = await closeFraudIncident(
+            id,
+            auth.user?.email ?? "unknown",
+            {
+              sama_reported: body.sama_reported,
+              resolution_date: body.resolution_date,
+              root_cause: body.root_cause,
+            },
+          );
+          if (result.error) {
+            return c.json({ error: result.error }, result.code ?? 400);
+          }
+          return c.json({ incident: obfuscateRule(result.incident) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] PUT /api/fraud/incidents/:id/close failed:",
+            error,
+          );
+          return c.json({ error: "Failed to close incident" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/incidents/export/pdf — placeholder, real PDF in cross-cutting
+  {
+    path: "/api/fraud/incidents/export/pdf",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const auth = await requireFraudReadAuth(c);
+        if (!auth.ok) return auth.res;
+        return c.json(
+          {
+            error: "Not yet implemented",
+            message:
+              "PDF export for fraud incidents ships in the cross-cutting commit.",
+          },
+          501,
+        );
+      };
+    },
+  },
 ];
