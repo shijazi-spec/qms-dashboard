@@ -859,7 +859,28 @@ function stagedExportTtlMs(): number {
 
 async function ensureStagedExportDir(): Promise<string> {
   const dir = stagedExportCacheDir();
-  await fsPromises.mkdir(dir, { recursive: true });
+  // Create owner-only (0o700) so other OS users on the same host can't
+  // list the cache directory and discover staged export filenames.
+  // Staged files contain sensitive data (risk registers, audit findings,
+  // vendor records, PDPL data) and live on disk for up to an hour.
+  await fsPromises.mkdir(dir, { recursive: true, mode: 0o700 });
+  // mkdir's `mode` is only applied when the directory is created — if it
+  // pre-existed (e.g. created by an older build with default umask 0o755)
+  // we still need to tighten it. chmod is best-effort: we swallow EPERM
+  // so that pointing STREAMING_EXPORT_CACHE_DIR at a directory owned by
+  // another user (rare ops scenario) doesn't break the export pipeline.
+  try {
+    await fsPromises.chmod(dir, 0o700);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "EPERM" && code !== "ENOENT") throw err;
+    if (code === "EPERM") {
+      logger.warn(
+        "[stagedExport] could not chmod cache dir to 0o700 (not owner) — staged files are still 0o600",
+        dir,
+      );
+    }
+  }
   return dir;
 }
 
@@ -957,12 +978,17 @@ async function drainResponseBodyToFile(
 ): Promise<number> {
   if (!response.body) {
     // Empty body — write a 0-byte file so `serveFromStagedEntry` can still
-    // open it for a Range read without an ENOENT race.
-    await fsPromises.writeFile(filePath, Buffer.alloc(0));
+    // open it for a Range read without an ENOENT race. Mode 0o600 so the
+    // staged file is readable only by the process owner.
+    await fsPromises.writeFile(filePath, Buffer.alloc(0), { mode: 0o600 });
     return 0;
   }
   const reader = response.body.getReader();
-  const fh = await fsPromises.open(filePath, "w");
+  // Open with mode 0o600 (owner-read/write only). The third arg to
+  // fsPromises.open is the creation mode — it's only honoured on create,
+  // and `mintStagedFilePath` always returns a generation-unique path so
+  // the file is guaranteed fresh.
+  const fh = await fsPromises.open(filePath, "w", 0o600);
   let size = 0;
   try {
     // eslint-disable-next-line no-constant-condition
