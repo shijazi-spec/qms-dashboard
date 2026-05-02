@@ -5,6 +5,7 @@ import {
   unauthorizedResponse,
 } from "../../utils/rbacMiddleware";
 import { logger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -57,13 +58,20 @@ export const exportDownloadRoutes = [
         try {
           const body = await c.req.json();
           const entries = Array.isArray(body.entries) ? body.entries : [];
+          // Scrub deny-list keys / credential-shaped strings out of the JSONB
+          // blob BEFORE persisting. The endpoint stores arbitrary client-side
+          // download metadata (filename, URL, agent-supplied notes), and a
+          // misbehaving caller could otherwise drop a `password_hash`,
+          // `access_token`, JWT or `ghp_…` PAT into a nested field where it
+          // would survive verbatim into Postgres.
+          const safeEntries = redactSensitiveDeep(entries);
           await ensureTable();
           await pool.query(
             `INSERT INTO user_recent_downloads (user_id, entries, updated_at)
              VALUES ($1, $2::jsonb, NOW())
              ON CONFLICT (user_id) DO UPDATE
              SET entries = $2::jsonb, updated_at = NOW()`,
-            [user.userId, JSON.stringify(entries)],
+            [user.userId, JSON.stringify(safeEntries)],
           );
           return c.json({ success: true });
         } catch (error) {

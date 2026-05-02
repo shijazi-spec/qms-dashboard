@@ -93,6 +93,7 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/pdpl.html",
   "dashboard/policies.html",
   "dashboard/projects.html",
+  "dashboard/qms-docs.html",
   "dashboard/qms.html",
   "dashboard/reviews.html",
   "dashboard/risks.html",
@@ -101,6 +102,7 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/sop.html",
   "dashboard/tablef.html",
   "dashboard/team.html",
+  "dashboard/triggers.html",
   "dashboard/users.html",
   "dashboard/vendors.html",
 ]);

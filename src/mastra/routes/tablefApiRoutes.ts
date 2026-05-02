@@ -1,5 +1,6 @@
 import type { UserRole } from "../../utils/rbacDatabase";
 import { requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 
 import { logger } from "../../utils/logger";
 const TABLEF_READ_ROLES: UserRole[] = [
@@ -99,7 +100,12 @@ export const tablefApiRoutes = [
         try {
           const { Pool } = await import("pg");
           const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-          const data = await c.req.json();
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // user-supplied KPI payload BEFORE it touches Postgres. KPI rows
+          // store free-text columns (description, calculation_definition,
+          // owner_email, …) where a misbehaving operator could otherwise
+          // paste a JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc.
+          const data = redactSensitiveDeep(await c.req.json());
           let result;
           if (data.kpi_id) {
             result = await pool.query(
@@ -179,7 +185,10 @@ export const tablefApiRoutes = [
         try {
           const { Pool } = await import("pg");
           const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-          const data = await c.req.json();
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // user-supplied performance payload (comment, evidence_link, …)
+          // BEFORE it reaches the SQL layer.
+          const data = redactSensitiveDeep(await c.req.json());
           const variance = data.achieved - data.target;
           const variancePercent =
             data.target !== 0

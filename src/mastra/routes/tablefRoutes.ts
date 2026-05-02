@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { Pool } from "pg";
 
 import { logger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -205,7 +206,12 @@ export function createTableFRoutes() {
 
   app.post("/kpis", async (c) => {
     try {
-      const data = await c.req.json();
+      // Scrub deny-list keys / credential-shaped strings out of the
+      // user-supplied KPI payload BEFORE it touches Postgres. Free-text
+      // columns (description, calculation_definition, owner_email, …)
+      // are otherwise prime targets for accidentally pasted JWTs, GitHub
+      // PATs (`ghp_…`), bcrypt hashes, OpenAI keys (`sk-…`), etc.
+      const data = redactSensitiveDeep(await c.req.json());
 
       if (data.kpi_id) {
         const result = await pool.query(
@@ -313,7 +319,10 @@ export function createTableFRoutes() {
 
   app.post("/performance", async (c) => {
     try {
-      const data = await c.req.json();
+      // Scrub deny-list keys / credential-shaped strings out of the
+      // user-supplied performance payload (comment, evidence_link, …)
+      // BEFORE it reaches the SQL layer.
+      const data = redactSensitiveDeep(await c.req.json());
 
       const variance = data.achieved - data.target;
       const variancePercent =
@@ -532,7 +541,12 @@ export function createTableFRoutes() {
 
   app.post("/users", async (c) => {
     try {
-      const data = await c.req.json();
+      // Scrub deny-list keys / credential-shaped strings out of the
+      // user-supplied profile payload (name, email, role, departments)
+      // BEFORE persisting. Operators occasionally paste secret-shaped
+      // tokens into the `name` or `email` fields — `redactSensitiveDeep`
+      // swaps them for `***REDACTED***`.
+      const data = redactSensitiveDeep(await c.req.json());
 
       if (data.user_id) {
         await pool.query(

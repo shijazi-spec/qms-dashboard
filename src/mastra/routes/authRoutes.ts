@@ -2,6 +2,7 @@ import crypto from "crypto";
 import * as client from "openid-client";
 import pg from "pg";
 import { logger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 const { Pool } = pg;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -118,7 +119,18 @@ async function initAuthTables(): Promise<void> {
     });
 }
 
-async function upsertOidcUser(profile: {
+/**
+ * Upsert a platform_users row from an OIDC profile callback.
+ *
+ * Exported so the secret-leak gate test (`./authRoutes.test.ts`) can drive
+ * the write paths directly instead of having to spin up an OIDC server. The
+ * function still passes every persisted profile field through
+ * `redactSensitiveDeep()` first so a hostile or misconfigured upstream IdP
+ * cannot smuggle a `password_hash`, `access_token`, JWT, GitHub PAT or
+ * `sk-…` token into `platform_users.full_name` / `picture` (the two free-form
+ * columns the upsert writes).
+ */
+export async function upsertOidcUser(profile: {
   sub: string;
   email: string;
   name: string;
@@ -126,9 +138,13 @@ async function upsertOidcUser(profile: {
 }) {
   await initAuthTables();
 
+  // Scrub deny-list keys and credential-shaped strings out of every
+  // free-text field BEFORE it touches the SELECT/INSERT/UPDATE params.
+  const safeProfile = redactSensitiveDeep(profile) as typeof profile;
+
   const existing = await pool.query(
     "SELECT * FROM platform_users WHERE email = $1",
-    [profile.email],
+    [safeProfile.email],
   );
 
   if (existing.rows.length > 0) {
@@ -142,7 +158,7 @@ async function upsertOidcUser(profile: {
            last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
        WHERE email = $4 AND status = 'active'
        RETURNING *`,
-      [profile.sub, profile.name, profile.picture, profile.email],
+      [safeProfile.sub, safeProfile.name, safeProfile.picture, safeProfile.email],
     );
     return result.rows[0] || existingUser;
   } else {
@@ -150,7 +166,7 @@ async function upsertOidcUser(profile: {
       `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
        VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'pending_approval', false, 0, NOW())
        RETURNING *`,
-      [profile.email, profile.name, profile.sub, profile.picture],
+      [safeProfile.email, safeProfile.name, safeProfile.sub, safeProfile.picture],
     );
     return result.rows[0];
   }

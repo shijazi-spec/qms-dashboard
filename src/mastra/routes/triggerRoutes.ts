@@ -1,4 +1,6 @@
-import { logger as safeLogger } from "../../utils/logger"; // Roles that can see all triggers/notifications and action any trigger regardless of assigned_role
+import { logger as safeLogger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
+// Roles that can see all triggers/notifications and action any trigger regardless of assigned_role
 const TRIGGER_ADMIN_ROLES = new Set(["admin", "head_of_operations_quality"]);
 
 // Roles permitted to participate in trigger review workflows
@@ -193,8 +195,15 @@ export const triggerRoutes = [
               );
             }
             status = "dismissed";
+            // Scrub deny-list keys / credential-shaped strings out of the
+            // free-text justification before it is persisted onto the
+            // audit_triggers row. Reviewers occasionally paste log excerpts
+            // into the dismissal reason — `redactSensitiveDeep` swaps in
+            // `***REDACTED***` for any embedded JWT, GitHub PAT (`ghp_…`),
+            // OpenAI key (`sk-…`), bcrypt hash, etc.
+            const safeReason = redactSensitiveDeep(reason) as string;
             extraUpdates = {
-              dismiss_reason: reason,
+              dismiss_reason: safeReason,
               dismissed_at: "NOW()",
               dismissed_by_email: user.email,
               // Re-evaluate in 24h — if the signal is still triggering, the

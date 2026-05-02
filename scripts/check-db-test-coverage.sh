@@ -115,18 +115,10 @@ GRANDFATHERED["src/utils/rateLimiter.ts"]=1
 GRANDFATHERED["src/utils/redactHistoricalLogs.ts"]=1
 GRANDFATHERED["src/utils/scheduledJobs.ts"]=1
 
-# Express route modules under src/mastra/routes/ that issue INSERT/UPDATE
-# directly. Long-term these should be refactored to go through a *Database.ts
-# module (which then carries the secret-leak test); for now each route file
-# needs its own companion test.
-GRANDFATHERED["src/mastra/routes/authRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/callIntelligenceRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/exportDownloadRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/i18nRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/qmsEnhancedRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/tablefApiRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/tablefRoutes.ts"]=1
-GRANDFATHERED["src/mastra/routes/triggerRoutes.ts"]=1
+# All Express route modules under src/mastra/routes/ that previously
+# appeared on this list now ship with co-located <basename>.test.ts
+# secret-leak companions (Task #740). The 12 src/utils/* entries above
+# remain — they are tracked separately for follow-up tasks.
 
 PASS=0
 FAIL=0

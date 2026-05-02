@@ -7,6 +7,7 @@ import {
 } from "../../utils/rbacMiddleware";
 
 import { logger as safeLogger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 const CALL_READ_ROLES = [
   "admin",
   "ai_specialist",
@@ -1373,6 +1374,17 @@ ${transcriptText}
             )
           `);
 
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // free-text Five9 config blob BEFORE persisting it as JSONB.
+          // The endpoint deliberately drops the raw password (it is not
+          // included in the persisted object), but `domain`/`username`
+          // are still operator-controlled and could otherwise smuggle a
+          // JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc. into Postgres.
+          const safeConfig = redactSensitiveDeep({
+            domain: body.domain,
+            username: body.username,
+            configured_at: new Date().toISOString(),
+          });
           await pool.query(
             `
             INSERT INTO integration_config (integration_type, config, is_active)
@@ -1380,13 +1392,7 @@ ${transcriptText}
             ON CONFLICT (integration_type) 
             DO UPDATE SET config = $1, updated_at = NOW()
           `,
-            [
-              JSON.stringify({
-                domain: body.domain,
-                username: body.username,
-                configured_at: new Date().toISOString(),
-              }),
-            ],
+            [JSON.stringify(safeConfig)],
           );
 
           logger?.info("✅ [API] Five9 configuration saved");

@@ -1467,6 +1467,16 @@ const _qmsEnhancedRoutesRaw = [
               400,
             );
           }
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // user-supplied status value BEFORE it touches the SQL UPDATE.
+          // `status` is meant to be a short enum like "open"/"closed", but
+          // the endpoint never validated it, so a misbehaving client could
+          // otherwise paste a JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc.
+          // straight into nonconformance_records.status.
+          const { redactSensitiveDeep: redact } = await import(
+            "../../utils/sensitiveRedaction"
+          );
+          const safeStatus = redact(status) as string;
           const pg = await import("pg");
           const pool = new pg.default.Pool({
             connectionString: process.env.DATABASE_URL,
@@ -1477,7 +1487,7 @@ const _qmsEnhancedRoutesRaw = [
               .join(",");
             const result = await pool.query(
               `UPDATE nonconformance_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
-              [status, ...ids],
+              [safeStatus, ...ids],
             );
             try {
               const { logEvent } =
@@ -1515,6 +1525,11 @@ const _qmsEnhancedRoutesRaw = [
               400,
             );
           }
+          // See nc/bulk-update above — same redaction rationale.
+          const { redactSensitiveDeep: redact } = await import(
+            "../../utils/sensitiveRedaction"
+          );
+          const safeStatus = redact(status) as string;
           const pg = await import("pg");
           const pool = new pg.default.Pool({
             connectionString: process.env.DATABASE_URL,
@@ -1525,7 +1540,7 @@ const _qmsEnhancedRoutesRaw = [
               .join(",");
             const result = await pool.query(
               `UPDATE capa_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
-              [status, ...ids],
+              [safeStatus, ...ids],
             );
             try {
               const { logEvent } =
