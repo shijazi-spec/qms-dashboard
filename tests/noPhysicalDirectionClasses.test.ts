@@ -60,7 +60,10 @@ console.log("\n▶ RTL physical-direction guardrail (scripts/check-rtl-classes.c
 // ---------------------------------------------------------------------------
 // Test 1 — current dashboard/ tree must pass the guardrail.
 // ---------------------------------------------------------------------------
-const result = spawnSync("node", [SCRIPT], { stdio: "pipe", encoding: "utf8" });
+const result = spawnSync("node", [SCRIPT], {
+  stdio: "pipe",
+  encoding: "utf8",
+});
 
 if (result.error) {
   console.error(`  ✗ Failed to execute guardrail script: ${result.error.message}`);
@@ -90,6 +93,17 @@ if (result.error) {
 // override or CLI flag needed.
 // ---------------------------------------------------------------------------
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "rtl-guard-"));
+// The script `require("acorn")`s for the JS-string pass (Task #743). When
+// the script is copied to a tmp dir, Node's normal `node_modules`
+// resolution can't find acorn — point it back at the real repo's
+// `node_modules` via NODE_PATH so the copied script behaves like the
+// in-repo one.
+const REPO_NODE_MODULES = path.resolve(
+  new URL(".", import.meta.url).pathname,
+  "..",
+  "node_modules",
+);
+const TMP_RUN_ENV = { ...process.env, NODE_PATH: REPO_NODE_MODULES };
 try {
   const tmpScripts = path.join(tmpRoot, "scripts");
   const tmpDashboard = path.join(tmpRoot, "dashboard");
@@ -148,7 +162,7 @@ try {
   const negative = spawnSync(
     "node",
     [path.join(tmpScripts, "check-rtl-classes.cjs")],
-    { stdio: "pipe", encoding: "utf8", cwd: tmpRoot },
+    { stdio: "pipe", encoding: "utf8", cwd: tmpRoot, env: TMP_RUN_ENV },
   );
 
   const out = `${negative.stdout ?? ""}\n${negative.stderr ?? ""}`;
@@ -208,6 +222,148 @@ try {
     !/Header-only.*\[textLRNonTh\]/s.test(out) &&
       !/\[textLRNonTh\].*Header-only/s.test(out),
     "textLRNonTh does NOT double-fire on <th> elements (thTextAlign owns those)",
+  );
+
+  // -------------------------------------------------------------------------
+  // Test 3 (Task #743) — JS-string pass: synthesise a fresh page whose ONLY
+  // violations live inside `<script>` template strings (not in static HTML
+  // tags), and assert the new pass surfaces every JS-rule ID. Also asserts
+  // the negative cases that distinguish the JS pass from the HTML pass:
+  //   • literals inside JS comments don't fire (acorn strips comments)
+  //   • the per-line opt-out marker still works on JS strings
+  //   • non-JS <script type="application/json"> bodies are NOT scanned
+  //   • bare identifiers / regex literals / numbers don't trip rules
+  //   • unparseable JS still gets a regex-fallback sweep (no silent drop)
+  // -------------------------------------------------------------------------
+  const fs2 = await import("node:fs");
+  fs2.writeFileSync(
+    path.join(tmpDashboard, "synthetic-js-page.html"),
+    [
+      "<!doctype html><html><body>",
+      "<div id=\"root\"></div>",
+      "<script>",
+      // jsTextLR — `text-right` inside a string literal (rendered as a <td>).
+      "  const cell = '<td class=\"px-4 text-right\">Total</td>';",
+      // jsBorderLR4 — `border-l-4` inside a template-literal quasi.
+      "  const card = `<div class=\"border-l-4 border-blue-500 p-4\">card</div>`;",
+      // jsMlMr — `mr-2` inside a string literal building a <button>.
+      "  const btn = '<button class=\"text-blue-600 mr-2\">Edit</button>';",
+      // jsMlMr (keyword + arbitrary variants) — must also fire.
+      "  const btn2 = '<button class=\"ml-auto\">Save</button>';",
+      "  const btn3 = '<button class=\"mr-[3px]\">Pin</button>';",
+      // jsSpaceX — `space-x-2` inside a flex container template string.
+      "  const flex = `<div class=\"flex space-x-2\">a b</div>`;",
+      // jsRoundedLR — `rounded-l-lg` inside a string literal.
+      "  const img = '<img class=\"rounded-l-lg\" alt=\"left\" />';",
+      // Per-line opt-out: same `mr-2` in a string MUST be skipped because of
+      // the trailing `rtl-safe-physical:` marker on the same line.
+      "  const docked = '<button class=\"mr-2\">Cancel</button>'; // rtl-safe-physical: docked in fixed LTR utility row",
+      // Negative: a comment containing a forbidden token must NOT fire,
+      // because acorn strips comments before string extraction.
+      "  // legacy class names like text-right and border-l-4 documented in comment",
+      "  /* block comment also mentions rounded-l-lg and space-x-2 */",
+      // Negative: bare identifier `text_left` (underscore, not hyphen) must
+      // NOT match because the rule regex is anchored to the hyphenated form.
+      "  const ident = 'no_violation_here';",
+      // Negative: a number / regex / boolean must NOT trigger.",
+      "  const n = 42; const re = /text-right/; const b = true;",
+      "</script>",
+      // Non-JS script body — JSON contents must NOT be scanned by the JS pass.
+      "<script type=\"application/json\" id=\"data\">",
+      "  {\"copy\": \"This text-left text-right border-l-4 mr-2 string lives in a JSON blob\"}",
+      "</script>",
+      "</body></html>",
+    ].join("\n"),
+  );
+
+  const jsPass = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-rtl-classes.cjs")],
+    { stdio: "pipe", encoding: "utf8", cwd: tmpRoot, env: TMP_RUN_ENV },
+  );
+  const jsOut = `${jsPass.stdout ?? ""}\n${jsPass.stderr ?? ""}`;
+
+  assert(
+    jsPass.status === 1,
+    "JS-string pass exits 1 when a fresh page has violations only inside <script> strings",
+  );
+  assert(
+    jsOut.includes("[jsTextLR]"),
+    "JS-string pass surfaces the jsTextLR rule",
+  );
+  assert(
+    jsOut.includes("[jsBorderLR4]"),
+    "JS-string pass surfaces the jsBorderLR4 rule",
+  );
+  assert(
+    jsOut.includes("[jsMlMr]"),
+    "JS-string pass surfaces the jsMlMr rule",
+  );
+  assert(
+    jsOut.includes("[jsSpaceX]"),
+    "JS-string pass surfaces the jsSpaceX rule",
+  );
+  assert(
+    jsOut.includes("[jsRoundedLR]"),
+    "JS-string pass surfaces the jsRoundedLR rule",
+  );
+  // jsMlMr must catch numeric, keyword, and arbitrary-value variants.
+  const jsMlMrCount = (jsOut.match(/\[jsMlMr\]/g) ?? []).length;
+  assert(
+    jsMlMrCount >= 3,
+    `jsMlMr matches numeric (mr-2), keyword (ml-auto), and arbitrary (mr-[3px]) variants in JS strings (saw ${jsMlMrCount}/3)`,
+  );
+  // The opt-out marker on the JS line must suppress the violation.
+  assert(
+    !/docked in fixed LTR utility row/.test(jsOut),
+    "rtl-safe-physical opt-out marker suppresses the violation on JS-string lines",
+  );
+  // Comments must NOT be scanned (acorn drops them before string extraction).
+  assert(
+    !/legacy class names like text-right/.test(jsOut),
+    "JS line comments are NOT scanned by the JS-string pass",
+  );
+  assert(
+    !/block comment also mentions/.test(jsOut),
+    "JS block comments are NOT scanned by the JS-string pass",
+  );
+  // JSON `<script type="application/json">` bodies must NOT be scanned.
+  assert(
+    !/JSON blob/.test(jsOut),
+    "non-JS <script> bodies (e.g. type=\"application/json\") are NOT scanned",
+  );
+
+  // -------------------------------------------------------------------------
+  // Test 4 (Task #743) — JS-string pass acorn fallback: a script with a
+  // syntax error MUST still be scanned (regex fallback) so a typo can't
+  // smuggle in an RTL violation by crashing the parser.
+  // -------------------------------------------------------------------------
+  fs2.writeFileSync(
+    path.join(tmpDashboard, "synthetic-js-broken.html"),
+    [
+      "<!doctype html><html><body>",
+      "<script>",
+      // Deliberate syntax error (unclosed function), then a violation.
+      "  function broken( {",
+      "  const html = '<div class=\"text-right\">fallback ok</div>';",
+      "</script>",
+      "</body></html>",
+    ].join("\n"),
+  );
+
+  const jsBroken = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-rtl-classes.cjs")],
+    { stdio: "pipe", encoding: "utf8", cwd: tmpRoot, env: TMP_RUN_ENV },
+  );
+  const jsBrokenOut = `${jsBroken.stdout ?? ""}\n${jsBroken.stderr ?? ""}`;
+  assert(
+    jsBroken.status === 1,
+    "JS-string pass still flags violations when acorn cannot parse the script (regex fallback)",
+  );
+  assert(
+    /synthetic-js-broken\.html.*\[jsTextLR\]/s.test(jsBrokenOut),
+    "regex-fallback sweep catches `text-right` inside an unparseable <script> body",
   );
 } finally {
   rmSync(tmpRoot, { recursive: true, force: true });

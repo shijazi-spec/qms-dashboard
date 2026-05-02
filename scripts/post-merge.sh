@@ -101,10 +101,10 @@ bash scripts/check-console-logs.sh
 npx tsx tests/safeLoggerRedaction.test.ts
 
 # ----------------------------------------------------------------------------
-# CI gate — dashboard RTL physical-direction class guard (Task #315)
+# CI gate — dashboard RTL physical-direction class guard (Tasks #315 / #628 / #743)
 #
 # Blocks merges that reintroduce physical-direction Tailwind classes on the
-# the highest-impact dashboard surfaces (Tasks #315 / #628):
+# the highest-impact dashboard surfaces:
 #   * `<th>` headers using `text-left` / `text-right`
 #   * stat-card borders using `border-l-4` / `border-r-4`
 #   * `<button>` icon gutters using `ml-<n>` / `mr-<n>`
@@ -121,11 +121,20 @@ npx tsx tests/safeLoggerRedaction.test.ts
 # `border-s-4`, `ms-<n>`, `me-<n>`, `gap-<n>`, `rounded-s-*` (see
 # replit.md → "RTL Layout Convention").
 #
+# Task #743 extends the gate with a SECOND PASS that parses every inline
+# `<script>` body with acorn and re-applies the forbidden-class rules to
+# every JS string literal + template-literal quasi. The dashboard renders
+# most of its row-level UI from JS template strings, so without this pass
+# a `mr-2` dropped into a button template would ship silently. Running the
+# script with no flags executes both passes (HTML + JS-string) — there is
+# no separate command to wire in.
+#
 # All currently-violating pages are grandfathered via per-rule allowlists in
-# the script; new dashboard HTML files (or removing one from the allowlist)
-# are subject to the full rule. Also covered by
+# the script (HTML rules: `ALLOWLISTS`; JS-string rules: `JS_ALLOWLISTS`);
+# new dashboard HTML files (or removing one from an allowlist) are subject
+# to the full rule. Also covered by
 # `tests/noPhysicalDirectionClasses.test.ts` (auto-discovered by `npm test`).
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: dashboard RTL physical-direction class guard (Tasks #315 / #628)"
+echo "▶ CI gate: dashboard RTL physical-direction class guard (Tasks #315 / #628 / #743)"
 node scripts/check-rtl-classes.cjs

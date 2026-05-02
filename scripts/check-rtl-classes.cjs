@@ -40,9 +40,26 @@
  *
  * The scan is HTML-tag aware (the same tokeniser used by
  * `scripts/check-handlers.cjs`): only attributes inside real opening tags
- * are inspected, so a JS string like `'border-l-4'` inside a `<script>`
- * block, or a `text-left` inside an inline `<style>` block, will never be
- * flagged.
+ * are inspected by the HTML pass, so a `text-left` inside an inline
+ * `<style>` block will never be flagged. A separate **JS-string pass**
+ * (Task #743) handles `<script>` bodies — see below.
+ *
+ * JS-string pass (Task #743)
+ * --------------------------
+ * The dashboard renders most of its row-level UI from JS template strings
+ * inside `<script>` blocks (e.g. a button HTML built up with backticks and
+ * `${…}` interpolation). If a developer drops `mr-2` into one of those
+ * template strings, the HTML pass — which deliberately skips `<script>`
+ * bodies — would never see it, and the RTL regression would ship.
+ *
+ * To close that gap, every inline `<script>` block (no `src=`, JS type) is
+ * additionally parsed with `acorn`. Every string literal and template-
+ * literal quasi is extracted from the AST and re-checked against tag-
+ * agnostic versions of the same forbidden-class regexes (`JS_RULES`).
+ * Acorn parse failures fall back to a regex-only literal sweep so we never
+ * silently lose coverage. Per-rule allowlists (`JS_ALLOWLISTS`)
+ * grandfather the pages that violate today; new dashboard files land
+ * under the full rule.
  *
  * Allowlists
  * ----------
@@ -80,6 +97,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const acorn = require("acorn");
 
 const ROOT = path.resolve(__dirname, "..");
 const SCAN_DIR = path.join(ROOT, "dashboard");
@@ -177,6 +195,97 @@ const ALLOWLISTS = {
   ]),
 };
 
+/**
+ * Per-rule allowlist for the JS-string pass (Task #743). The dashboard
+ * renders a great deal of its row-level UI from JS template strings inside
+ * `<script>` blocks (and from `dashboard/js/*.js` modules), so a forbidden
+ * physical-direction class can ship without ever appearing in static HTML.
+ * The HTML pass deliberately skips `<script>` bodies to avoid false
+ * positives on real JS code (variables named `text-left`, regexes, …); the
+ * JS pass instead extracts string literals + template-literal quasis from
+ * each script body and applies the same forbidden-class rules to those
+ * extracted strings.
+ *
+ * The current dashboard tree already contains many such violations — they
+ * are tracked separately in Task #685. The per-rule allowlists below
+ * grandfather every file that ships violations today, so the new pass can
+ * land green and act as a hard gate against NEW JS-string violations.
+ * Removing a file from an allowlist (or adding a new file to dashboard/)
+ * applies the full rule.
+ *
+ * NOTE: each entry below is paired with Task #685 (the cleanup task) and
+ * should be drained as that task migrates the page off physical-direction
+ * classes. When a page is fully migrated, delete it from the allowlist.
+ */
+const JS_ALLOWLISTS = {
+  // TODO(Task #685): drain as the cleanup task migrates each page off
+  // physical-direction classes inside JS template strings. The pages below
+  // are the baseline captured at the time Task #743 landed the JS-string
+  // pass — every NEW dashboard file (or any file removed from these
+  // allowlists) is subject to the full rule.
+  jsTextLR: new Set([
+    "dashboard/admin.html",
+    "dashboard/ai-ops.html",
+    "dashboard/calls.html",
+    "dashboard/consultant.html",
+    "dashboard/crm.html",
+    "dashboard/duplicates.html",
+    "dashboard/executive.html",
+    "dashboard/external-audits.html",
+    "dashboard/feedback.html",
+    "dashboard/grc.html",
+    "dashboard/index.html",
+    "dashboard/intake.html",
+    "dashboard/logs.html",
+    "dashboard/migration.html",
+    "dashboard/qms-docs.html",
+    "dashboard/qms.html",
+    "dashboard/reviews.html",
+    "dashboard/roi.html",
+    "dashboard/scorecard.html",
+    "dashboard/tablef.html",
+    "dashboard/team.html",
+    "dashboard/users.html",
+  ]),
+  jsBorderLR4: new Set([
+    "dashboard/index.html",
+    "dashboard/intake.html",
+    "dashboard/scorecard.html",
+    "dashboard/tablef.html",
+  ]),
+  jsMlMr: new Set([
+    "dashboard/admin.html",
+    "dashboard/ai-approvals.html",
+    "dashboard/ai-ops.html",
+    "dashboard/consultant.html",
+    "dashboard/duplicates.html",
+    "dashboard/projects.html",
+    "dashboard/qms-docs.html",
+    "dashboard/qms.html",
+    "dashboard/reviews.html",
+    "dashboard/roi.html",
+    "dashboard/scorecard.html",
+    "dashboard/tablef.html",
+    "dashboard/team.html",
+    "dashboard/triggers.html",
+    "dashboard/users.html",
+  ]),
+  jsSpaceX: new Set([
+    "dashboard/admin.html",
+    "dashboard/executive.html",
+    "dashboard/feedback.html",
+    "dashboard/index.html",
+    "dashboard/qms.html",
+    "dashboard/roi.html",
+    "dashboard/scorecard.html",
+    "dashboard/team.html",
+  ]),
+  // No legacy violators today — left intentionally empty so the very
+  // first new `rounded-l-*` / `rounded-r-*` to land in a JS template string
+  // is caught by CI.
+  jsRoundedLR: new Set([]),
+};
+
 const TAG_OPEN_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b/;
 const CLASS_ATTR_RE = /\sclass\s*=\s*"([^"]*)"|\sclass\s*=\s*'([^']*)'/i;
 
@@ -247,6 +356,63 @@ const RULES = [
   },
 ];
 
+/**
+ * JS-string rules (Task #743). Applied to string literals + template-
+ * literal quasis extracted from `<script>` bodies. We can't observe a
+ * destination DOM tag from inside a JS string, so the JS pass uses tag-
+ * agnostic versions of the HTML rules:
+ *
+ *   • `jsTextLR` collapses `thTextAlign` + `textLRNonTh` (no tag axis).
+ *   • `jsMlMr` covers ml-/mr- regardless of the eventual element (the
+ *     HTML rule scopes it to `<button>` to bound false positives, but
+ *     dashboard JS strings build buttons, badges, links, and table cells
+ *     interchangeably — flagging them all is the safer default).
+ *
+ * The class regex bodies match the HTML rules exactly so a developer
+ * cannot bypass the gate by promoting a static class into a JS template
+ * string.
+ */
+const JS_RULES = [
+  {
+    id: "jsTextLR",
+    label: "JS string literal contains physical text-left/text-right",
+    classRegex: /\b(text-left|text-right)\b/,
+    fix: "Use `text-start` / `text-end` (logical) so the text alignment mirrors in Arabic RTL.",
+  },
+  {
+    id: "jsBorderLR4",
+    label: "JS string literal contains physical border-l-4/border-r-4",
+    classRegex: /\b(border-l-4|border-r-4)\b/,
+    fix: "Use `border-s-4` / `border-e-4` (logical) so the accent border appears on the correct edge in Arabic RTL.",
+  },
+  // The HTML rules apply to a `class="..."` attribute value where Tailwind
+  // tokens are guaranteed to be separated by whitespace; whitespace
+  // boundaries are sufficient. The JS rules instead apply to the WHOLE
+  // string literal, which usually contains a fragment of HTML markup
+  // (`'<button class="… mr-2">Edit</button>'`). The forbidden token can
+  // therefore be flanked by quote / angle-bracket characters when it sits
+  // at the end of a class attribute, so the boundary lookarounds must
+  // accept those characters too.
+  {
+    id: "jsMlMr",
+    label: "JS string literal contains physical ml-/mr- margin",
+    classRegex: /(?<=^|[\s"'>])(m[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|reverse|\[[^\]]+\]))(?=[\s"'<]|$)/,
+    fix: "Use `ms-…` / `me-…` (logical) so the margin flips with writing direction.",
+  },
+  {
+    id: "jsSpaceX",
+    label: "JS string literal contains physical space-x- (margin-left between children)",
+    classRegex: /(?<=^|[\s"'>])(space-x-(?:[0-9]+(?:\.[0-9]+)?|px|reverse|\[[^\]]+\]))(?=[\s"'<]|$)/,
+    fix: "Use `gap-…` on a `flex` / `grid` container instead — `space-x-*` compiles to physical `margin-left` between children and does not flip in RTL.",
+  },
+  {
+    id: "jsRoundedLR",
+    label: "JS string literal contains physical rounded-l-/rounded-r- corner radius",
+    classRegex: /(?<=^|[\s"'>])(rounded-[lr](?:-(?:none|sm|md|lg|xl|2xl|3xl|full|[0-9]+(?:\.[0-9]+)?|\[[^\]]+\]))?)(?=[\s"'<]|$)/,
+    fix: "Use `rounded-s-…` / `rounded-e-…` (logical) so the rounded edge lands on the inline-start / inline-end side in Arabic RTL.",
+  },
+];
+
 function listHtmlFiles() {
   if (!fs.existsSync(SCAN_DIR)) return [];
   return fs
@@ -258,9 +424,17 @@ function listHtmlFiles() {
 
 /**
  * Walk the HTML linearly and yield region tokens. Only `tag` regions are
- * inspected by the rule engine; `<script>` and `<style>` bodies are
+ * inspected by the HTML rule engine; `<script>` and `<style>` bodies are
  * fast-forwarded so JS / CSS that mentions a forbidden class string is
- * never flagged.
+ * never flagged by the HTML pass.
+ *
+ * In addition to `tag` tokens, `tokenize()` emits a `scriptBody` token for
+ * every inline `<script>` block (no `src=`, not self-closing, not a non-JS
+ * type). The JS-string pass (Task #743) consumes those tokens to extract
+ * string literals + template-literal quasis from the script body and
+ * re-runs the forbidden-class rules against the extracted strings — so a
+ * `text-left` that lives inside a JS template string is still caught at
+ * CI time.
  */
 function tokenize(html) {
   const tokens = [];
@@ -304,13 +478,52 @@ function tokenize(html) {
       const closeRe = new RegExp(`</${tagName}\\s*>`, "i");
       const rest = html.slice(gt + 1);
       const closeMatch = rest.match(closeRe);
-      i = closeMatch ? gt + 1 + closeMatch.index + closeMatch[0].length : len;
+      const bodyEnd = closeMatch ? gt + 1 + closeMatch.index : len;
+
+      // Emit a `scriptBody` token for inline JS script blocks so the JS-
+      // string pass can scan them. Skip external scripts (`src=...`) and
+      // non-JS types (`type="application/json"`, `text/template`, …).
+      if (tagName === "script" && isInlineJsScript(tagText)) {
+        tokens.push({
+          kind: "scriptBody",
+          start: gt + 1,
+          end: bodyEnd,
+          openTag: tagText,
+        });
+      }
+
+      i = closeMatch ? bodyEnd + closeMatch[0].length : len;
       continue;
     }
 
     i = gt + 1;
   }
   return tokens;
+}
+
+/**
+ * Returns true if the `<script …>` opening tag is an inline JS script
+ * (no `src=` attribute, no non-JS `type=` attribute). External scripts
+ * have nothing to scan; non-JS types (JSON, HTML templates, etc.) would
+ * crash acorn and produce noisy false positives if scanned as JS.
+ */
+function isInlineJsScript(openTag) {
+  if (/\ssrc\s*=/i.test(openTag)) return false;
+  const typeMatch = openTag.match(/\stype\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  if (typeMatch) {
+    const value = (typeMatch[2] || typeMatch[3] || typeMatch[4] || "").trim().toLowerCase();
+    if (value === "" || value === "module") return true;
+    if (
+      value === "text/javascript" ||
+      value === "application/javascript" ||
+      value === "application/ecmascript" ||
+      value === "text/ecmascript"
+    ) {
+      return true;
+    }
+    return false;
+  }
+  return true;
 }
 
 function lineColAt(html, offset) {
@@ -344,6 +557,143 @@ function extractClassValue(tagText) {
   return m[1] != null ? m[1] : m[2];
 }
 
+/**
+ * Walk an acorn AST visiting every node. Returns nothing — the visitor is
+ * called for its side effects (collecting string literals).
+ */
+function walkAst(node, visit) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const item of node) walkAst(item, visit);
+    return;
+  }
+  if (typeof node.type === "string") visit(node);
+  for (const key of Object.keys(node)) {
+    if (key === "loc" || key === "start" || key === "end" || key === "range") continue;
+    const child = node[key];
+    if (child && typeof child === "object") walkAst(child, visit);
+  }
+}
+
+/**
+ * Fallback string-literal extractor used when acorn can't parse a script
+ * (rare — usually a syntax error introduced by a copy/paste mistake).
+ * We must NOT silently lose RTL coverage on those files, so we sweep the
+ * raw script body for quoted/template-literal contents with a tolerant
+ * regex. Comments inside the script body are stripped first so a class
+ * name that only appears in `// rounded-l-2 (legacy)` doesn't fire.
+ *
+ * Limitations vs. acorn: this fallback can't follow `${...}` interpolation
+ * boundaries inside template literals, so a `${expr}` containing a quote
+ * will desynchronise the scanner. We accept that in exchange for never
+ * dropping a violation on un-parseable files.
+ */
+function regexExtractStrings(scriptBody, bodyStart) {
+  const stripped = scriptBody
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + " ".repeat(m.length - p1.length));
+  const out = [];
+  const re = /'((?:\\.|[^'\\\n])*)'|"((?:\\.|[^"\\\n])*)"|`((?:\\.|[^`\\])*)`/g;
+  let m;
+  while ((m = re.exec(stripped)) !== null) {
+    const content = m[1] != null ? m[1] : m[2] != null ? m[2] : m[3];
+    if (content == null) continue;
+    out.push({
+      content,
+      start: bodyStart + m.index + 1, // skip opening quote
+    });
+  }
+  return out;
+}
+
+/**
+ * Extract every string literal + template-literal quasi from a `<script>`
+ * body. Each result has the literal's text and its absolute character
+ * offset in the source HTML file (used for line/col reporting and for the
+ * per-line opt-out marker).
+ */
+function extractScriptStrings(scriptBody, bodyStart) {
+  let ast;
+  // Try `module` first — it's a strict superset for our purposes (we only
+  // care about literal nodes and modules support top-level await /
+  // `import` / `export`). Fall back to `script` for the rare file where
+  // module-only constructs throw.
+  try {
+    ast = acorn.parse(scriptBody, {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      locations: false,
+      allowReturnOutsideFunction: true,
+      allowAwaitOutsideFunction: true,
+      allowImportExportEverywhere: true,
+      allowHashBang: true,
+    });
+  } catch (_err) {
+    try {
+      ast = acorn.parse(scriptBody, {
+        ecmaVersion: "latest",
+        sourceType: "script",
+        locations: false,
+        allowReturnOutsideFunction: true,
+        allowAwaitOutsideFunction: true,
+        allowImportExportEverywhere: true,
+        allowHashBang: true,
+      });
+    } catch (_err2) {
+      // Acorn can't parse this script body — fall back to regex sweep so
+      // we don't silently drop coverage.
+      return regexExtractStrings(scriptBody, bodyStart);
+    }
+  }
+
+  const out = [];
+  walkAst(ast, (node) => {
+    if (node.type === "Literal" && typeof node.value === "string") {
+      // node.start points at the opening quote; +1 to land on the first
+      // character of the string body (mirrors regexExtractStrings()).
+      out.push({ content: node.value, start: bodyStart + node.start + 1 });
+    } else if (node.type === "TemplateElement") {
+      const cooked = node.value && typeof node.value.cooked === "string"
+        ? node.value.cooked
+        : (node.value && node.value.raw) || "";
+      out.push({ content: cooked, start: bodyStart + node.start });
+    }
+  });
+  return out;
+}
+
+function scanScriptStrings(html, scriptToken, rel) {
+  const violations = [];
+  const body = html.slice(scriptToken.start, scriptToken.end);
+  const literals = extractScriptStrings(body, scriptToken.start);
+
+  for (const lit of literals) {
+    if (!lit.content) continue;
+    for (const rule of JS_RULES) {
+      const allowlist = JS_ALLOWLISTS[rule.id];
+      if (allowlist && allowlist.has(rel)) continue;
+      const m = lit.content.match(rule.classRegex);
+      if (!m) continue;
+      const lineText = lineTextAt(html, lit.start);
+      if (lineText.includes(OPT_OUT_MARKER)) continue;
+      const { line, col } = lineColAt(html, lit.start);
+      const snippet = lit.content.length > 200
+        ? lit.content.slice(0, 197) + "…"
+        : lit.content;
+      violations.push({
+        file: rel,
+        line,
+        col,
+        ruleId: rule.id,
+        message: `${rule.label} (\`${m[1]}\`).`,
+        fix: rule.fix,
+        snippet,
+      });
+    }
+  }
+  return violations;
+}
+
 function scanFile(absPath) {
   const rel = path.relative(ROOT, absPath).split(path.sep).join("/");
   const html = fs.readFileSync(absPath, "utf8");
@@ -351,6 +701,10 @@ function scanFile(absPath) {
   const violations = [];
 
   for (const tok of tokens) {
+    if (tok.kind === "scriptBody") {
+      violations.push(...scanScriptStrings(html, tok, rel));
+      continue;
+    }
     const classValue = extractClassValue(tok.text);
     if (!classValue) continue;
     for (const rule of RULES) {
@@ -398,7 +752,7 @@ function main() {
 
   if (allViolations.length === 0) {
     console.log(
-      `✓ RTL physical-direction guardrail PASS — scanned ${files.length} dashboard HTML file(s); no forbidden physical-direction classes found (text-left/right on <th> or other tags, border-l-4/r-4, <button> ml-/mr-, space-x-, or rounded-l-/r-).`,
+      `✓ RTL physical-direction guardrail PASS — scanned ${files.length} dashboard HTML file(s) (HTML tags + JS template strings inside <script> bodies); no forbidden physical-direction classes found (text-left/right on <th> or other tags, border-l-4/r-4, <button> ml-/mr-, space-x-, or rounded-l-/r-).`,
     );
     process.exit(0);
   }
