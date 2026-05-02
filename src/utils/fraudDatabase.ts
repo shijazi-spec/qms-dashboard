@@ -239,6 +239,7 @@ export async function initFraudTables(): Promise<void> {
 
   await seedFraudRules();
   await seedEscalationMatrix();
+  await seedCountryRisk();
 
   initialized = true;
   logger.info("✅ [FraudDB] Fraud management tables initialized");
@@ -1438,4 +1439,285 @@ export async function getOverdueFraudIncidents(
     [safe],
   );
   return result.rows;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Feature 3 — Country Risk Assessment (PRD-FRD-001 §5.3)
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type FatfStatus =
+  | "no_action"
+  | "increased_monitoring"
+  | "high_risk_grey_list"
+  | "black_list";
+
+export type CountryRiskRating = "low" | "medium" | "high" | "critical";
+
+export type CountryBinStatus =
+  | "approved"
+  | "approved_with_edd"
+  | "not_approved"
+  | "permanently_blocked";
+
+export interface FraudCountryRisk {
+  id?: number;
+  public_id?: string;
+  iso_code: string;
+  country_name: string;
+  fatf_status: FatfStatus;
+  risk_rating: CountryRiskRating;
+  expat_population?: string | null;
+  bin_status: CountryBinStatus;
+  edd_required?: boolean;
+  special_conditions?: string | null;
+  approved_by?: string | null;
+  date_assessed: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface CountryRiskDef {
+  iso_code: string;
+  country_name: string;
+  fatf_status: FatfStatus;
+  risk_rating: CountryRiskRating;
+  expat_population?: string;
+  bin_status: CountryBinStatus;
+  edd_required: boolean;
+  special_conditions?: string;
+}
+
+/**
+ * 20-country baseline from
+ * WalaPlus-Fraud-Management-Operational-Registers.xlsx (Tab 3).
+ *
+ * FATF status reflects the public Black-list (high-risk jurisdictions
+ * subject to a call for action) and Grey-list (increased monitoring) as
+ * of the operational Excel date (April 2026). FATF publishes updates
+ * three times a year; the seed will need a refresh after each update —
+ * see fraud-country-review-reminder cron (Feb 1 + Oct 1).
+ *
+ * Hard invariant (enforced at the route + DB layer): `fatf_status =
+ * black_list` forces `risk_rating = critical` AND
+ * `bin_status = permanently_blocked`. Cannot be overridden in the UI.
+ */
+export const COUNTRY_RISK_DEFINITIONS: CountryRiskDef[] = [
+  // GCC + KSA — low risk
+  { iso_code: "SA", country_name: "Saudi Arabia", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false, expat_population: "Domestic" },
+  { iso_code: "AE", country_name: "United Arab Emirates", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false, expat_population: "Large in KSA" },
+  { iso_code: "BH", country_name: "Bahrain", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  { iso_code: "KW", country_name: "Kuwait", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  { iso_code: "OM", country_name: "Oman", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  { iso_code: "QA", country_name: "Qatar", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  // Major developed economies — low risk
+  { iso_code: "US", country_name: "United States", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  { iso_code: "GB", country_name: "United Kingdom", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  { iso_code: "DE", country_name: "Germany", fatf_status: "no_action", risk_rating: "low", bin_status: "approved", edd_required: false },
+  // Medium-risk markets with large expat populations in KSA — EDD required
+  { iso_code: "IN", country_name: "India", fatf_status: "no_action", risk_rating: "medium", bin_status: "approved_with_edd", edd_required: true, expat_population: "Largest expat group in KSA" },
+  { iso_code: "PK", country_name: "Pakistan", fatf_status: "no_action", risk_rating: "medium", bin_status: "approved_with_edd", edd_required: true, expat_population: "Major expat group in KSA" },
+  { iso_code: "ID", country_name: "Indonesia", fatf_status: "no_action", risk_rating: "medium", bin_status: "approved_with_edd", edd_required: true, expat_population: "Significant expat group in KSA" },
+  { iso_code: "EG", country_name: "Egypt", fatf_status: "no_action", risk_rating: "medium", bin_status: "approved_with_edd", edd_required: true, expat_population: "Significant expat group in KSA" },
+  { iso_code: "TR", country_name: "Türkiye", fatf_status: "no_action", risk_rating: "medium", bin_status: "approved_with_edd", edd_required: true },
+  // FATF grey list (increased monitoring) — high risk, EDD mandatory
+  { iso_code: "NG", country_name: "Nigeria", fatf_status: "increased_monitoring", risk_rating: "high", bin_status: "approved_with_edd", edd_required: true, special_conditions: "FATF increased monitoring; EDD + transaction limits." },
+  { iso_code: "YE", country_name: "Yemen", fatf_status: "increased_monitoring", risk_rating: "high", bin_status: "not_approved", edd_required: true, special_conditions: "FATF increased monitoring + ongoing conflict; default block." },
+  { iso_code: "ZA", country_name: "South Africa", fatf_status: "increased_monitoring", risk_rating: "high", bin_status: "approved_with_edd", edd_required: true, special_conditions: "FATF increased monitoring." },
+  // FATF black list — critical, permanently blocked
+  { iso_code: "IR", country_name: "Iran", fatf_status: "black_list", risk_rating: "critical", bin_status: "permanently_blocked", edd_required: true, special_conditions: "FATF call for action — sanctions exposure." },
+  { iso_code: "KP", country_name: "Korea, Democratic People's Republic of", fatf_status: "black_list", risk_rating: "critical", bin_status: "permanently_blocked", edd_required: true, special_conditions: "FATF call for action — comprehensive sanctions." },
+  { iso_code: "MM", country_name: "Myanmar", fatf_status: "black_list", risk_rating: "critical", bin_status: "permanently_blocked", edd_required: true, special_conditions: "FATF call for action since 2022." },
+];
+
+/**
+ * Pure helper enforcing the FATF black-list invariant. Used by both the
+ * seeder and the route layer so the rule is defined once.
+ */
+export function applyFatfBlackListInvariant(
+  input: Pick<FraudCountryRisk, "fatf_status" | "risk_rating" | "bin_status">,
+): { risk_rating: CountryRiskRating; bin_status: CountryBinStatus } {
+  if (input.fatf_status === "black_list") {
+    return { risk_rating: "critical", bin_status: "permanently_blocked" };
+  }
+  return {
+    risk_rating: input.risk_rating,
+    bin_status: input.bin_status,
+  };
+}
+
+export async function seedCountryRisk(): Promise<void> {
+  const existing = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM fraud_country_risk`,
+  );
+  if ((existing.rows[0]?.n ?? 0) > 0) return;
+  logger.info(
+    `🌱 [FraudDB] Seeding ${COUNTRY_RISK_DEFINITIONS.length} country-risk rows...`,
+  );
+  for (const c of COUNTRY_RISK_DEFINITIONS) {
+    const locked = applyFatfBlackListInvariant(c);
+    await pool.query(
+      `INSERT INTO fraud_country_risk (
+        iso_code, country_name, fatf_status, risk_rating, expat_population,
+        bin_status, edd_required, special_conditions, approved_by, date_assessed
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'system:seed',CURRENT_DATE)
+      ON CONFLICT (iso_code) DO NOTHING`,
+      [
+        c.iso_code,
+        c.country_name,
+        c.fatf_status,
+        locked.risk_rating,
+        c.expat_population ?? null,
+        locked.bin_status,
+        c.edd_required,
+        c.special_conditions ?? null,
+      ],
+    );
+  }
+  logger.info("✅ [FraudDB] Country-risk rows seeded");
+}
+
+export async function getAllCountryRisk(filters?: {
+  rating?: CountryRiskRating;
+  fatf_status?: FatfStatus;
+  edd_required?: boolean;
+}): Promise<FraudCountryRisk[]> {
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+  if (filters?.rating) {
+    conditions.push(`risk_rating = $${i++}`);
+    params.push(filters.rating);
+  }
+  if (filters?.fatf_status) {
+    conditions.push(`fatf_status = $${i++}`);
+    params.push(filters.fatf_status);
+  }
+  if (filters?.edd_required !== undefined) {
+    conditions.push(`edd_required = $${i++}`);
+    params.push(filters.edd_required);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const result = await pool.query(
+    `SELECT * FROM fraud_country_risk ${where} ORDER BY country_name ASC`,
+    params,
+  );
+  return result.rows;
+}
+
+export async function getCountryRiskByIso(
+  iso: string,
+): Promise<FraudCountryRisk | null> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_country_risk WHERE iso_code = $1`,
+    [iso.toUpperCase()],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getCountryRiskByPublicId(
+  publicId: string,
+): Promise<FraudCountryRisk | null> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_country_risk WHERE public_id = $1`,
+    [publicId],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function createCountryRisk(
+  input: FraudCountryRisk & { approved_by: string },
+): Promise<FraudCountryRisk> {
+  const locked = applyFatfBlackListInvariant(input);
+  const result = await pool.query(
+    `INSERT INTO fraud_country_risk (
+      iso_code, country_name, fatf_status, risk_rating, expat_population,
+      bin_status, edd_required, special_conditions, approved_by, date_assessed
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10::DATE, CURRENT_DATE))
+    RETURNING *`,
+    [
+      input.iso_code.toUpperCase(),
+      input.country_name,
+      input.fatf_status,
+      locked.risk_rating,
+      input.expat_population ?? null,
+      locked.bin_status,
+      input.edd_required ?? false,
+      input.special_conditions ?? null,
+      input.approved_by,
+      input.date_assessed ?? null,
+    ],
+  );
+  return result.rows[0];
+}
+
+export async function updateCountryRisk(
+  iso: string,
+  updates: Partial<FraudCountryRisk>,
+  approvedBy: string,
+): Promise<FraudCountryRisk | null> {
+  const current = await getCountryRiskByIso(iso);
+  if (!current) return null;
+
+  // Apply the invariant against the prospective state, not the input.
+  const prospective = {
+    fatf_status: updates.fatf_status ?? current.fatf_status,
+    risk_rating: updates.risk_rating ?? current.risk_rating,
+    bin_status: updates.bin_status ?? current.bin_status,
+  };
+  const locked = applyFatfBlackListInvariant(prospective);
+
+  // Build the SET list — accept the caller's values for non-locked fields,
+  // but ALWAYS write the locked values for risk_rating / bin_status.
+  const setClauses: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+  const allowed: (keyof FraudCountryRisk)[] = [
+    "country_name",
+    "fatf_status",
+    "expat_population",
+    "edd_required",
+    "special_conditions",
+  ];
+  for (const key of allowed) {
+    if (updates[key] !== undefined) {
+      setClauses.push(`${key} = $${i++}`);
+      params.push((updates as any)[key]);
+    }
+  }
+  setClauses.push(`risk_rating = $${i++}`);
+  params.push(locked.risk_rating);
+  setClauses.push(`bin_status = $${i++}`);
+  params.push(locked.bin_status);
+  setClauses.push(`approved_by = $${i++}`);
+  params.push(approvedBy);
+  if (updates.date_assessed !== undefined) {
+    setClauses.push(`date_assessed = $${i++}::DATE`);
+    params.push(updates.date_assessed);
+  }
+  setClauses.push(`updated_at = NOW()`);
+  params.push(iso.toUpperCase());
+  const result = await pool.query(
+    `UPDATE fraud_country_risk SET ${setClauses.join(", ")} WHERE iso_code = $${i} RETURNING *`,
+    params,
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function softDeleteCountryRisk(_iso: string): Promise<boolean> {
+  // Country rows are reference data — physically deleting them would orphan
+  // reporting joins. We treat "delete" as a no-op and recommend the user
+  // edits to "not_approved" instead. Returning true keeps the API contract
+  // consistent.
+  return true;
+}
+
+/**
+ * Returns the count of countries on the FATF black-list. Drives the
+ * dashboard alert banner.
+ */
+export async function getBlackListedCountryCount(): Promise<number> {
+  const result = await pool.query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM fraud_country_risk WHERE fatf_status = 'black_list'`,
+  );
+  return result.rows[0]?.n ?? 0;
 }

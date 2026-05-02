@@ -1368,6 +1368,44 @@ const fraudIncidentSlaCheckFunction = inngest.createFunction(
 );
 inngestFunctions.push(fraudIncidentSlaCheckFunction);
 
+/**
+ * fraud-country-review-reminder — twice a year on Feb 1 and Oct 1 at 09:00.
+ *
+ * FATF publishes plenary updates 3x/year (typically Feb, Jun, Oct); this
+ * cron prompts the GRQ team to refresh the country-risk register against
+ * the latest FATF black/grey lists and any sanctions changes. Single
+ * notification to the head of GRQ — the team owns the data refresh.
+ */
+const fraudCountryReviewReminderFunction = inngest.createFunction(
+  { id: "fraud-country-review-reminder" },
+  { cron: process.env.FRAUD_COUNTRY_REVIEW_CRON || "0 9 1 2,10 *" },
+  async ({ step }) => {
+    return await step.run("notify-grq-of-country-review-due", async () => {
+      const { initFraudTables, getBlackListedCountryCount } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const blacklisted = await getBlackListedCountryCount();
+      const recipient =
+        process.env.FRAUD_COUNTRY_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      await createNotification({
+        title: "Country Risk Register — semi-annual review due",
+        message: `FATF publishes updates 3x/year. Refresh country-risk ratings against the latest plenary outcomes. Currently ${blacklisted} country/countries are on the FATF black-list.`,
+        module: "fraud",
+        priority: "medium",
+        channel: "in_app",
+        recipient,
+        related_entity_type: "fraud_country_risk",
+        related_entity_id: "review",
+        action_url: "/fraud-country-risk",
+      });
+      return { notified: 1, blacklisted };
+    });
+  },
+);
+inngestFunctions.push(fraudCountryReviewReminderFunction);
+
 export function inngestServe({
   mastra,
   inngest,

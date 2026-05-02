@@ -72,6 +72,7 @@ const WalaPlusNav = {
         // Subsequent features add: Country Risk, Fraud KPI Dashboard.
         { label: 'Fraud Rules', href: '/fraud-rules', icon: 'shield-check', id: 'fraud-rules' },
         { label: 'Fraud Incidents', href: '/fraud-incidents', icon: 'exclamation-triangle', id: 'fraud-incidents' },
+        { label: 'Country Risk', href: '/fraud-country-risk', icon: 'globe', id: 'fraud-country-risk' },
         // QMS document library — categorised upload boxes for Documents,
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the

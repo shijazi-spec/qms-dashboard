@@ -829,4 +829,252 @@ export const fraudRoutes = [
       };
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Feature 3 — Country Risk Assessment (PRD-FRD-001 §5.3)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // GET /api/fraud/countries — list with filters
+  {
+    path: "/api/fraud/countries",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getAllCountryRisk, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const url = new URL(c.req.url);
+          const rating = (url.searchParams.get("rating") as any) || undefined;
+          const fatf_status =
+            (url.searchParams.get("fatf_status") as any) || undefined;
+          const eddRaw = url.searchParams.get("edd_required");
+          const edd_required =
+            eddRaw === "true" ? true : eddRaw === "false" ? false : undefined;
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] GET /api/fraud/countries", {
+            rating,
+            fatf_status,
+            edd_required,
+          });
+          const rows = await getAllCountryRisk({
+            rating,
+            fatf_status,
+            edd_required,
+          });
+          return c.json({ countries: obfuscateRuleList(rows) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/countries failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch country risk list" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/countries/blacklisted — count + list of FATF black-list rows
+  {
+    path: "/api/fraud/countries/blacklisted",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getAllCountryRisk, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const rows = await getAllCountryRisk({ fatf_status: "black_list" });
+          return c.json({ countries: obfuscateRuleList(rows), count: rows.length });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/countries/blacklisted failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch blacklisted countries" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/countries/:iso — single country by ISO-2 code or public_id
+  {
+    path: "/api/fraud/countries/:iso",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const {
+            initFraudTables,
+            getCountryRiskByIso,
+            getCountryRiskByPublicId,
+          } = await import("../../utils/fraudDatabase");
+          await initFraudTables();
+          const raw = c.req.param("iso");
+          let row: any = null;
+          if (
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              raw,
+            )
+          ) {
+            row = await getCountryRiskByPublicId(raw);
+          } else {
+            row = await getCountryRiskByIso(raw);
+          }
+          if (!row) return c.json({ error: "Country not found" }, 404);
+          return c.json({ country: obfuscateRule(row) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/countries/:iso failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch country" }, 500);
+        }
+      };
+    },
+  },
+
+  // POST /api/fraud/countries — create a new country row
+  {
+    path: "/api/fraud/countries",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { createCountryRisk, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const body = await c.req.json();
+          const required = [
+            "iso_code",
+            "country_name",
+            "fatf_status",
+            "risk_rating",
+            "bin_status",
+          ];
+          const missing = required.filter((k) => !body[k]);
+          if (missing.length > 0) {
+            return c.json(
+              { error: `Missing required fields: ${missing.join(", ")}` },
+              400,
+            );
+          }
+          if (typeof body.iso_code !== "string" || body.iso_code.length !== 2) {
+            return c.json({ error: "iso_code must be ISO-3166-1 alpha-2" }, 400);
+          }
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] POST /api/fraud/countries", {
+            iso: body.iso_code,
+            by: auth.user?.email,
+          });
+          const created = await createCountryRisk({
+            ...body,
+            approved_by: auth.user?.email ?? "unknown",
+          });
+          return c.json({ country: obfuscateRule(created) }, 201);
+        } catch (error: any) {
+          if (
+            typeof error?.message === "string" &&
+            error.message.includes("duplicate key")
+          ) {
+            return c.json({ error: "Country with this iso_code already exists" }, 409);
+          }
+          safeLogger.error(
+            "❌ [FraudAPI] POST /api/fraud/countries failed:",
+            error,
+          );
+          return c.json({ error: "Failed to create country" }, 500);
+        }
+      };
+    },
+  },
+
+  // PUT /api/fraud/countries/:iso — update; FATF black-list invariant enforced
+  {
+    path: "/api/fraud/countries/:iso",
+    method: "PUT" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { updateCountryRisk, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const iso = c.req.param("iso");
+          const body = await c.req.json();
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] PUT /api/fraud/countries/:iso", {
+            iso,
+            by: auth.user?.email,
+          });
+          const updated = await updateCountryRisk(
+            iso,
+            body,
+            auth.user?.email ?? "unknown",
+          );
+          if (!updated) return c.json({ error: "Country not found" }, 404);
+          return c.json({ country: obfuscateRule(updated) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] PUT /api/fraud/countries/:iso failed:",
+            error,
+          );
+          return c.json({ error: "Failed to update country" }, 500);
+        }
+      };
+    },
+  },
+
+  // DELETE /api/fraud/countries/:iso — no-op (reference data; see helper)
+  {
+    path: "/api/fraud/countries/:iso",
+    method: "DELETE" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const auth = await requireFraudWriteAuth(c);
+        if (!auth.ok) return auth.res;
+        return c.json(
+          {
+            success: true,
+            warning:
+              "Country rows are reference data — DELETE is a no-op. Edit bin_status to 'not_approved' to disable a country.",
+          },
+          200,
+        );
+      };
+    },
+  },
+
+  // GET /api/fraud/countries/export/pdf — placeholder
+  {
+    path: "/api/fraud/countries/export/pdf",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const auth = await requireFraudReadAuth(c);
+        if (!auth.ok) return auth.res;
+        return c.json(
+          {
+            error: "Not yet implemented",
+            message:
+              "PDF export for country risk ships in the cross-cutting commit.",
+          },
+          501,
+        );
+      };
+    },
+  },
 ];
