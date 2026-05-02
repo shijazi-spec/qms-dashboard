@@ -147,12 +147,16 @@ if ! command -v rg >/dev/null 2>&1; then
   exit 1
 fi
 
-# `npm test` (via tests/runIntegrationTests.ts) recursively discovers every
-# src/**/*.test.ts file. If the post-merge script invokes `npm test`, any
-# companion test placed alongside its source under src/ is wired in by
-# construction.
+# `tests/runIntegrationTests.ts` recursively discovers every src/**/*.test.ts
+# file. Historically the post-merge script invoked the runner via the
+# `npm test` package script; Task #741 swapped that for a direct
+# `npx tsx tests/runIntegrationTests.ts` call (because the project's
+# package.json never had a `test` script). Either form provides the same
+# auto-discovery guarantee, so we accept both.
 POST_MERGE_RUNS_NPM_TEST=0
 if grep -qE '^[[:space:]]*npm[[:space:]]+test([[:space:]]|$)' "$POST_MERGE"; then
+  POST_MERGE_RUNS_NPM_TEST=1
+elif grep -qE 'tests/runIntegrationTests\.ts' "$POST_MERGE"; then
   POST_MERGE_RUNS_NPM_TEST=1
 fi
 
@@ -238,9 +242,9 @@ for src_file in "${WRITER_PATHS[@]}"; do
   if grep -qF "$test_file" "$POST_MERGE"; then
     ok "$src_file → $test_file (explicitly invoked in $POST_MERGE)"
   elif [ "$POST_MERGE_RUNS_NPM_TEST" -eq 1 ]; then
-    ok "$src_file → $test_file (auto-discovered by 'npm test' in $POST_MERGE)"
+    ok "$src_file → $test_file (auto-discovered by tests/runIntegrationTests.ts in $POST_MERGE)"
   else
-    fail "$src_file → $test_file exists but is not wired into $POST_MERGE. Either add 'npx tsx $test_file' or ensure 'npm test' is invoked."
+    fail "$src_file → $test_file exists but is not wired into $POST_MERGE. Either add 'npx tsx $test_file' or ensure 'npx tsx tests/runIntegrationTests.ts' (or 'npm test') is invoked."
   fi
 done
 
