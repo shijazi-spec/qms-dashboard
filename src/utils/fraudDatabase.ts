@@ -238,6 +238,7 @@ export async function initFraudTables(): Promise<void> {
   `);
 
   await seedFraudRules();
+  await seedEscalationMatrix();
 
   initialized = true;
   logger.info("✅ [FraudDB] Fraud management tables initialized");
@@ -833,7 +834,19 @@ export async function createFraudIncident(
   );
   const incident = insertResult.rows[0] as FraudIncident;
 
-  // 2. For P1/P2, mirror into enterprise_risks via linked_incident_id.
+  // 2. Dispatch escalation notifications per the matrix (Feature 4 hook).
+  // Wrapped so a notification-layer failure does not roll back the
+  // incident creation.
+  try {
+    await dispatchEscalationForIncident(incident);
+  } catch (err) {
+    logger.warn(
+      `[FraudDB] Escalation dispatch failed for ${incident.incident_code} (continuing):`,
+      err,
+    );
+  }
+
+  // 3. For P1/P2, mirror into enterprise_risks via linked_incident_id.
   // We tolerate failures here so the fraud incident is still created even
   // if the enterprise_risks table isn't available; the link can be backfilled.
   if (incident.severity === "P1" || incident.severity === "P2") {
@@ -1076,6 +1089,336 @@ export async function getSamaDeadlineApproaching(
     [safe],
   );
   return result.rows;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Feature 4 — Escalation Matrix (PRD-FRD-001 §5.4)
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface FraudEscalationRow {
+  id?: number;
+  public_id?: string;
+  trigger_id: string;
+  trigger_definition: string;
+  severity?: string | null;
+  notify_immediately: string[];
+  notify_within_4h?: string[];
+  external_party?: string | null;
+  external_contact?: string | null;
+  response_sla: string;
+  response_sla_hours: number;
+  is_active?: boolean;
+  updated_by?: string;
+  updated_at?: Date;
+}
+
+export interface EscalationDefinition {
+  trigger_id: string;
+  trigger_definition: string;
+  severity: string | null;
+  notify_immediately: string[];
+  notify_within_4h: string[];
+  external_party: string | null;
+  external_contact: string | null;
+  response_sla: string;
+  response_sla_hours: number;
+}
+
+/**
+ * 6-row escalation matrix from
+ * WalaPlus-Fraud-Management-Operational-Registers.xlsx (Tab 4) +
+ * PRD-FRD-001 §5.4. The seed is idempotent (UNIQUE on trigger_id).
+ *
+ * AML / SAR special handling (per PRD §5.4 + Saudi reg framework): the
+ * customer must NOT be notified, ever — `notify_immediately` and
+ * `notify_within_4h` must contain ZERO customer-facing roles. The
+ * external party is SAFIU (Saudi Arabia Financial Intelligence Unit).
+ * Enforcement is in `dispatchEscalationForIncident()` — see that
+ * function for the no-tipping-off invariant.
+ */
+export const ESCALATION_MATRIX_DEFINITIONS: EscalationDefinition[] = [
+  {
+    trigger_id: "ESC-P1",
+    trigger_definition:
+      "P1 fraud incident (≥10 affected customers OR ≥50,000 SAR loss).",
+    severity: "P1",
+    notify_immediately: [
+      "ceo@walaplus.com",
+      "head.grq@walaplus.com",
+      "head.it@walaplus.com",
+    ],
+    notify_within_4h: ["grc.team@walaplus.com", "compliance@walaplus.com"],
+    external_party: "SAMA",
+    external_contact: "Submit via SAMA RegPortal within 72 hours.",
+    response_sla: "Containment within 4 hours",
+    response_sla_hours: 4,
+  },
+  {
+    trigger_id: "ESC-P2",
+    trigger_definition:
+      "P2 fraud incident (3-9 affected customers OR 10,000-50,000 SAR loss).",
+    severity: "P2",
+    notify_immediately: ["head.grq@walaplus.com", "head.it@walaplus.com"],
+    notify_within_4h: ["grc.team@walaplus.com"],
+    external_party: null,
+    external_contact: null,
+    response_sla: "Containment within 24 hours",
+    response_sla_hours: 24,
+  },
+  {
+    trigger_id: "ESC-P3",
+    trigger_definition:
+      "P3 fraud incident (1-2 affected customers, <10,000 SAR loss).",
+    severity: "P3",
+    notify_immediately: ["grc.team@walaplus.com"],
+    notify_within_4h: [],
+    external_party: null,
+    external_contact: null,
+    response_sla: "Containment within 72 hours",
+    response_sla_hours: 72,
+  },
+  {
+    trigger_id: "ESC-P4",
+    trigger_definition:
+      "P4 informational / suspicious-only event with no customer impact.",
+    severity: "P4",
+    notify_immediately: [],
+    notify_within_4h: ["grc.team@walaplus.com"],
+    external_party: null,
+    external_contact: null,
+    response_sla: "Log only; weekly review",
+    response_sla_hours: 168,
+  },
+  {
+    trigger_id: "ESC-CB",
+    trigger_definition:
+      "Chargeback dispute initiated by acquiring bank (any severity).",
+    severity: null,
+    notify_immediately: ["finance@walaplus.com", "head.grq@walaplus.com"],
+    notify_within_4h: ["grc.team@walaplus.com"],
+    external_party: "Acquiring bank",
+    external_contact: "Reply via bank chargeback portal.",
+    response_sla: "Bank response within 72 hours (3 calendar days)",
+    response_sla_hours: 72,
+  },
+  {
+    trigger_id: "ESC-AML",
+    trigger_definition:
+      "Suspicious activity (AML / SAR) — customer behavior indicating money laundering or terrorism financing.",
+    severity: null,
+    // AML/SAR has a hard "no tipping off" rule. notify_immediately and
+    // notify_within_4h MUST NOT include customer or customer-facing roles.
+    // dispatchEscalationForIncident() asserts this invariant.
+    notify_immediately: ["head.grq@walaplus.com", "compliance@walaplus.com"],
+    notify_within_4h: [],
+    external_party: "SAFIU",
+    external_contact:
+      "File SAR via SAFIU goAML within statutory window. NEVER notify the customer (no tipping off).",
+    response_sla: "SAR filed within 24 hours of detection",
+    response_sla_hours: 24,
+  },
+];
+
+export async function seedEscalationMatrix(): Promise<void> {
+  const existing = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM fraud_escalation_matrix",
+  );
+  if ((existing.rows[0]?.n ?? 0) > 0) {
+    return;
+  }
+  logger.info(
+    `🌱 [FraudDB] Seeding ${ESCALATION_MATRIX_DEFINITIONS.length} escalation matrix rows...`,
+  );
+  for (const e of ESCALATION_MATRIX_DEFINITIONS) {
+    await pool.query(
+      `INSERT INTO fraud_escalation_matrix (
+        trigger_id, trigger_definition, severity, notify_immediately,
+        notify_within_4h, external_party, external_contact,
+        response_sla, response_sla_hours, updated_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'system:seed')
+      ON CONFLICT (trigger_id) DO NOTHING`,
+      [
+        e.trigger_id,
+        e.trigger_definition,
+        e.severity,
+        e.notify_immediately,
+        e.notify_within_4h,
+        e.external_party,
+        e.external_contact,
+        e.response_sla,
+        e.response_sla_hours,
+      ],
+    );
+  }
+  logger.info("✅ [FraudDB] Escalation matrix seeded");
+}
+
+export async function getEscalationMatrix(): Promise<FraudEscalationRow[]> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_escalation_matrix WHERE is_active = TRUE ORDER BY trigger_id ASC`,
+  );
+  return result.rows;
+}
+
+export async function getEscalationByTriggerId(
+  triggerId: string,
+): Promise<FraudEscalationRow | null> {
+  const result = await pool.query(
+    `SELECT * FROM fraud_escalation_matrix WHERE trigger_id = $1`,
+    [triggerId],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function updateEscalationRow(
+  triggerId: string,
+  updates: Partial<FraudEscalationRow>,
+): Promise<FraudEscalationRow | null> {
+  const allowed: (keyof FraudEscalationRow)[] = [
+    "trigger_definition",
+    "severity",
+    "notify_immediately",
+    "notify_within_4h",
+    "external_party",
+    "external_contact",
+    "response_sla",
+    "response_sla_hours",
+    "is_active",
+    "updated_by",
+  ];
+  const setClauses: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+  for (const key of allowed) {
+    if (updates[key] !== undefined) {
+      setClauses.push(`${key} = $${i++}`);
+      params.push((updates as any)[key]);
+    }
+  }
+  if (setClauses.length === 0) {
+    return getEscalationByTriggerId(triggerId);
+  }
+  setClauses.push(`updated_at = NOW()`);
+  params.push(triggerId);
+  const result = await pool.query(
+    `UPDATE fraud_escalation_matrix SET ${setClauses.join(", ")} WHERE trigger_id = $${i} RETURNING *`,
+    params,
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Resolve the escalation row that applies to a given incident. Selection
+ * rule (PRD §5.4):
+ *   - Chargeback type → ESC-CB
+ *   - AML / SAR type  → ESC-AML
+ *   - else → ESC-{severity} (e.g. ESC-P1)
+ */
+export function resolveEscalationTriggerForIncident(
+  incident: Pick<FraudIncident, "incident_type" | "severity">,
+): string {
+  if (incident.incident_type === "chargeback") return "ESC-CB";
+  if (incident.incident_type === "aml_sar") return "ESC-AML";
+  return `ESC-${incident.severity}`;
+}
+
+/**
+ * Dispatches notifications for a freshly-created incident based on the
+ * escalation matrix. Returns the count of notifications enqueued.
+ *
+ * Hard constraints enforced here (NOT delegated to the data — the matrix
+ * row could be edited via the admin UI; this is the runtime guard):
+ *   - For ESC-AML, no notification recipient may be a customer or a
+ *     customer-facing channel. PRD §5.4 + AML/SAR no-tipping-off rule.
+ *
+ * Failures of individual notifications are logged but do NOT throw, so
+ * one bad recipient does not block the rest.
+ */
+export async function dispatchEscalationForIncident(
+  incident: FraudIncident,
+): Promise<{ enqueued: number; trigger_id: string; skipped: number }> {
+  const triggerId = resolveEscalationTriggerForIncident(incident);
+  const row = await getEscalationByTriggerId(triggerId);
+  if (!row) {
+    logger.warn(
+      `[FraudDispatch] No escalation matrix row for trigger ${triggerId}; nothing dispatched`,
+    );
+    return { enqueued: 0, trigger_id: triggerId, skipped: 0 };
+  }
+
+  // Hard constraint: AML/SAR no tipping off.
+  if (triggerId === "ESC-AML") {
+    const allRecipients = [
+      ...(row.notify_immediately || []),
+      ...(row.notify_within_4h || []),
+    ];
+    const forbidden = allRecipients.filter(
+      (r) =>
+        /customer/i.test(r) ||
+        /client/i.test(r) ||
+        /^cust\./i.test(r) ||
+        /@customers\./i.test(r),
+    );
+    if (forbidden.length > 0) {
+      logger.error(
+        `[FraudDispatch] BLOCKED — ESC-AML row contains forbidden recipients (no tipping off): ${forbidden.join(", ")}. Filing nothing.`,
+      );
+      return { enqueued: 0, trigger_id: triggerId, skipped: forbidden.length };
+    }
+  }
+
+  const { createNotification } = await import("./notificationHub");
+
+  let enqueued = 0;
+  let skipped = 0;
+  for (const recipient of row.notify_immediately || []) {
+    try {
+      await createNotification({
+        title: `Fraud incident ${incident.incident_code} — immediate escalation (${triggerId})`,
+        message: `${incident.severity ? `[${incident.severity}] ` : ""}${incident.incident_type} detected. SLA: ${row.response_sla}. ${row.external_party ? `External: ${row.external_party}.` : ""}`,
+        module: "fraud",
+        priority: incident.severity === "P1" ? "critical" : "high",
+        channel: "in_app",
+        recipient,
+        related_entity_type: "fraud_incident",
+        related_entity_id: String(incident.id),
+        action_url: "/fraud-incidents",
+      });
+      enqueued++;
+    } catch (err) {
+      skipped++;
+      logger.error(
+        `[FraudDispatch] Notify-immediate failed for ${recipient} on ${incident.incident_code}:`,
+        err,
+      );
+    }
+  }
+  for (const recipient of row.notify_within_4h || []) {
+    try {
+      // Within-4h notifications still go through the notification hub now.
+      // A scheduled-delivery channel would be a future enhancement; the
+      // priority differentiation already lets recipients filter.
+      await createNotification({
+        title: `Fraud incident ${incident.incident_code} — escalation (${triggerId})`,
+        message: `${incident.severity ? `[${incident.severity}] ` : ""}${incident.incident_type} — review within 4 hours. SLA: ${row.response_sla}.`,
+        module: "fraud",
+        priority: "medium",
+        channel: "in_app",
+        recipient,
+        related_entity_type: "fraud_incident",
+        related_entity_id: String(incident.id),
+        action_url: "/fraud-incidents",
+      });
+      enqueued++;
+    } catch (err) {
+      skipped++;
+      logger.error(
+        `[FraudDispatch] Notify-within-4h failed for ${recipient} on ${incident.incident_code}:`,
+        err,
+      );
+    }
+  }
+  return { enqueued, trigger_id: triggerId, skipped };
 }
 
 /**

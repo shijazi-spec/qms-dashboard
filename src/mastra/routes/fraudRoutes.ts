@@ -735,4 +735,98 @@ export const fraudRoutes = [
       };
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Feature 4 — Escalation Matrix (PRD-FRD-001 §5.4)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // GET /api/fraud/escalation — list active matrix rows
+  {
+    path: "/api/fraud/escalation",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getEscalationMatrix, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const rows = await getEscalationMatrix();
+          return c.json({ matrix: obfuscateRuleList(rows) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/escalation failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch escalation matrix" }, 500);
+        }
+      };
+    },
+  },
+
+  // GET /api/fraud/escalation/:triggerId — single matrix row
+  {
+    path: "/api/fraud/escalation/:triggerId",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudReadAuth(c);
+          if (!auth.ok) return auth.res;
+          const { getEscalationByTriggerId, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const row = await getEscalationByTriggerId(c.req.param("triggerId"));
+          if (!row) return c.json({ error: "Trigger not found" }, 404);
+          return c.json({ row: obfuscateRule(row) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] GET /api/fraud/escalation/:triggerId failed:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch trigger" }, 500);
+        }
+      };
+    },
+  },
+
+  // PUT /api/fraud/escalation/:triggerId — edit a matrix row
+  {
+    path: "/api/fraud/escalation/:triggerId",
+    method: "PUT" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const auth = await requireFraudWriteAuth(c);
+          if (!auth.ok) return auth.res;
+          const { updateEscalationRow, initFraudTables } = await import(
+            "../../utils/fraudDatabase"
+          );
+          await initFraudTables();
+          const triggerId = c.req.param("triggerId");
+          const body = await c.req.json();
+          const logger = mastra?.getLogger();
+          logger?.info("🛡️  [FraudAPI] PUT /api/fraud/escalation/:triggerId", {
+            triggerId,
+            by: auth.user?.email,
+          });
+          const updated = await updateEscalationRow(triggerId, {
+            ...body,
+            updated_by: auth.user?.email ?? "unknown",
+          });
+          if (!updated) return c.json({ error: "Trigger not found" }, 404);
+          return c.json({ row: obfuscateRule(updated) });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [FraudAPI] PUT /api/fraud/escalation/:triggerId failed:",
+            error,
+          );
+          return c.json({ error: "Failed to update trigger" }, 500);
+        }
+      };
+    },
+  },
 ];
