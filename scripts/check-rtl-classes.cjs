@@ -811,6 +811,90 @@ const SCRIPT_RULES = [
 
 const SCRIPT_BLOCK_RE = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 
+/**
+ * Replace every JS line comment (`// …`) and block comment (`/* … *\/`) in
+ * `body` with same-length whitespace (preserving newlines) so byte offsets
+ * downstream — used by `lineColAt` / `lineTextAt` to point at the original
+ * source — stay correct. Quoted strings and template literals are walked
+ * literally so a `//` or `/*` *inside* a string isn't mistaken for a comment
+ * marker; this is the same shape acorn uses internally.
+ *
+ * Why this exists: the companion regex pass below would otherwise surface
+ * forbidden tokens that live ONLY inside comments (e.g. a `// text-right
+ * deprecated` annotation), even though acorn's JS-string pass correctly
+ * strips them. Without this helper the two passes disagree and the gate
+ * leaks comment-only false positives.
+ */
+function blankCommentsPreservingOffsets(body) {
+  const out = body.split("");
+  const n = out.length;
+  let i = 0;
+  while (i < n) {
+    const ch = out[i];
+    const next = i + 1 < n ? out[i + 1] : "";
+
+    // Single-line comment — blank to end of line.
+    if (ch === "/" && next === "/") {
+      out[i] = " ";
+      out[i + 1] = " ";
+      let j = i + 2;
+      while (j < n && out[j] !== "\n") {
+        out[j] = " ";
+        j++;
+      }
+      i = j;
+      continue;
+    }
+
+    // Block comment — blank everything except embedded newlines.
+    if (ch === "/" && next === "*") {
+      out[i] = " ";
+      out[i + 1] = " ";
+      let j = i + 2;
+      while (j < n - 1 && !(out[j] === "*" && out[j + 1] === "/")) {
+        if (out[j] !== "\n") out[j] = " ";
+        j++;
+      }
+      if (j < n - 1) {
+        out[j] = " ";
+        out[j + 1] = " ";
+        j += 2;
+      } else {
+        // Unterminated block comment — blank to EOF.
+        j = n;
+      }
+      i = j;
+      continue;
+    }
+
+    // String / template literal — walk literally so an embedded "//" or
+    // "/*" doesn't get treated as a comment marker. Handles backslash
+    // escapes; gives up on the quote-mode at the end of the line so a
+    // syntax error (unclosed string) cannot blank out half the file.
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const quote = ch;
+      let j = i + 1;
+      while (j < n) {
+        if (out[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (out[j] === quote) {
+          j++;
+          break;
+        }
+        if (quote !== "`" && out[j] === "\n") break; // unterminated, abort
+        j++;
+      }
+      i = j;
+      continue;
+    }
+
+    i++;
+  }
+  return out.join("");
+}
+
 function scanFileScripts(absPath) {
   const rel = path.relative(ROOT, absPath).split(path.sep).join("/");
   const html = fs.readFileSync(absPath, "utf8");
@@ -818,7 +902,21 @@ function scanFileScripts(absPath) {
 
   let blockMatch;
   while ((blockMatch = SCRIPT_BLOCK_RE.exec(html)) !== null) {
-    const body = blockMatch[1];
+    const openTag = blockMatch[0].slice(0, blockMatch[0].indexOf(">") + 1);
+
+    // Skip external scripts (no body to scan) and non-JS scripts
+    // (`type="application/json"`, `text/template`, …) — those bodies are
+    // not Tailwind class strings and would produce noisy false positives.
+    // The acorn-based JS-string pass uses the same predicate; without it,
+    // this companion pass would disagree and re-surface JSON-blob copy.
+    if (!isInlineJsScript(openTag)) continue;
+
+    const rawBody = blockMatch[1];
+    // Strip JS comments before regex-scanning so a comment containing a
+    // forbidden Tailwind token (e.g. `// legacy text-right`) does not
+    // produce a warning. Offsets are preserved (whitespace fill) so the
+    // line/col reports below still match the original source.
+    const body = blankCommentsPreservingOffsets(rawBody);
     const bodyOffset = blockMatch.index + blockMatch[0].indexOf(">") + 1;
     for (const rule of SCRIPT_RULES) {
       // Reset regex state for safety (we use /g)
